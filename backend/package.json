@@ -1,0 +1,23 @@
+{
+  "name": "bullrun-paywall",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Управление подписками BullRun (Backend)",
+  "scripts": {
+    "deploy": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='logs' --exclude='uploads' ./ root@64.188.70.180:/var/www/backend/",
+    "pull": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='logs' --exclude='uploads' root@64.188.70.180:/var/www/backend/ ./"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.3",
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "qrcode": "^1.5.4",
+    "socks-proxy-agent": "^9.0.0",
+    "sqlite3": "^6.0.1",
+    "telegraf": "^4.16.3",
+    "telegram": "^2.26.22"
+  }
+}

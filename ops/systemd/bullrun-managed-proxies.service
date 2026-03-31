@@ -1,0 +1,15 @@
+[Unit]
+Description=BullRun managed proxy runtime restore
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/www/backend
+ExecStart=/usr/bin/node /var/www/backend/scripts/restore-managed-proxies.mjs
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+

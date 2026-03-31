@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="160" x2="1060" y1="120" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D8598"/>
+      <stop offset="1" stop-color="#597183"/>
+    </linearGradient>
+    <linearGradient id="phone" x1="600" x2="600" y1="170" y2="735" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1F2B37"/>
+      <stop offset="1" stop-color="#2E3E4B"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="433" x2="767" y1="205" y2="697" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FAFCFF"/>
+      <stop offset="1" stop-color="#EEF3F8"/>
+    </linearGradient>
+    <filter id="shadow" width="450" height="640" x="375" y="135" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" result="hardAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/>
+      <feOffset dy="16"/>
+      <feGaussianBlur stdDeviation="16"/>
+      <feColorMatrix values="0 0 0 0 0.06 0 0 0 0 0.1 0 0 0 0 0.14 0 0 0 0.22 0"/>
+      <feBlend in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="900" fill="url(#bg)" rx="34"/>
+  <ellipse cx="600" cy="690" fill="#445A69" opacity=".35" rx="250" ry="38"/>
+
+  <g filter="url(#shadow)">
+    <rect width="360" height="600" x="420" y="155" fill="url(#phone)" rx="46"/>
+    <rect width="314" height="522" x="443" y="190" fill="url(#screen)" rx="22"/>
+    <rect width="72" height="8" x="564" y="176" fill="#0F172A" opacity=".55" rx="4"/>
+    <circle cx="600" cy="731" r="7" fill="#D7E1EA" opacity=".7"/>
+  </g>
+
+  <rect width="314" height="70" x="443" y="190" fill="#FFFFFF" rx="22"/>
+  <circle cx="474" cy="225" r="12" fill="#E6EDF5"/>
+  <path d="m477 225-7 4 2-4-2-4 7 4Z" fill="#64748B"/>
+  <text x="510" y="231" fill="#1E293B" font-family="Arial, sans-serif" font-size="20" font-weight="700">BullRun Channel</text>
+  <text x="510" y="252" fill="#64748B" font-family="Arial, sans-serif" font-size="12">бот принимает оплату и продлевает доступ</text>
+
+  <rect width="270" height="76" x="465" y="284" fill="#FFFFFF" rx="18"/>
+  <circle cx="495" cy="322" r="14" fill="#D9C59A"/>
+  <path d="M487 322h16m-8-8v16" stroke="#6B5A35" stroke-linecap="round" stroke-width="2.5"/>
+  <text x="525" y="314" fill="#0F172A" font-family="Arial, sans-serif" font-size="15" font-weight="700">Подписка на канал</text>
+  <text x="525" y="336" fill="#64748B" font-family="Arial, sans-serif" font-size="12">30 дней доступа · TON / карта</text>
+  <rect width="88" height="24" x="525" y="345" fill="#E8F0FF" rx="12"/>
+  <text x="540" y="361" fill="#2563EB" font-family="Arial, sans-serif" font-size="11" font-weight="700">Активно</text>
+
+  <rect width="270" height="92" x="465" y="374" fill="#FFFFFF" rx="18"/>
+  <circle cx="495" cy="412" r="14" fill="#D8E8F8"/>
+  <path d="M489 412h12m-6-6v12" stroke="#2563EB" stroke-linecap="round" stroke-width="2.5"/>
+  <text x="525" y="404" fill="#0F172A" font-family="Arial, sans-serif" font-size="15" font-weight="700">Новый платеж подтвержден</text>
+  <text x="525" y="426" fill="#64748B" font-family="Arial, sans-serif" font-size="12">TON успешно принят. Пользователь добавлен в канал.</text>
+  <text x="525" y="446" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">2 минуты назад</text>
+
+  <rect width="230" height="64" x="505" y="480" fill="#EAF3FF" rx="18"/>
+  <text x="527" y="507" fill="#2563EB" font-family="Arial, sans-serif" font-size="14" font-weight="700">Продление через 3 дня</text>
+  <text x="527" y="528" fill="#5B6B7C" font-family="Arial, sans-serif" font-size="12">Авто-напоминание уже запланировано</text>
+
+  <rect width="270" height="88" x="465" y="560" fill="#FFFFFF" rx="18"/>
+  <text x="490" y="590" fill="#0F172A" font-family="Arial, sans-serif" font-size="15" font-weight="700">Тарифы</text>
+  <text x="490" y="612" fill="#64748B" font-family="Arial, sans-serif" font-size="12">1 месяц</text>
+  <text x="675" y="612" fill="#0F172A" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="end">2 490 ₽</text>
+  <text x="490" y="632" fill="#64748B" font-family="Arial, sans-serif" font-size="12">3 месяца</text>
+  <text x="675" y="632" fill="#0F172A" font-family="Arial, sans-serif" font-size="12" font-weight="700" text-anchor="end">5 990 ₽</text>
+
+  <rect width="314" height="44" x="443" y="668" fill="#FFFFFF" rx="0"/>
+  <text x="470" y="696" fill="#94A3B8" font-family="Arial, sans-serif" font-size="11">магазин · оплаты · доступы · продления</text>
+</svg>

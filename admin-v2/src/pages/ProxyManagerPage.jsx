@@ -1,0 +1,2103 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useTonConnectModal, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { apiRequest } from '../api/client.js';
+import { getProductTierRules } from '../app/productTier.js';
+import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { APP_CONFIG } from '../config.js';
+import { buildTonConnectTransaction, normalizeTonConnectError } from '../utils/ton-checkout.js';
+import { LoadingState } from '../ui/LoadingState.jsx';
+
+const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
+
+function resolveBackendAssetUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  if (url.startsWith('/')) return `${APP_CONFIG.backendUrl}${url}`;
+  return `${APP_CONFIG.backendUrl}/${url}`;
+}
+
+function formatWhen(value) {
+  if (!value) return 'Еще не проверялся';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Дата неизвестна';
+  return date.toLocaleString('ru-RU');
+}
+
+function countryFlag(countryCode) {
+  if (!countryCode || typeof countryCode !== 'string') return '';
+  return countryCode
+    .trim()
+    .toUpperCase()
+    .split('')
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join('');
+}
+
+function proxyHealthMode(proxy) {
+  if (proxy?.status === 'checking') return 'checking';
+  if (proxy?.is_working == null && (proxy?.last_check_error || '').includes('фоновую проверку Telegram')) return 'warming_up';
+  if (proxy?.is_working !== true) return proxy?.is_working === false ? 'broken' : 'unchecked';
+  if (!proxy?.last_check_ip && !proxy?.last_check_country && !proxy?.last_check_city) {
+    return 'telegram_only';
+  }
+  return 'full';
+}
+
+function proxyBadge(proxy) {
+  const mode = proxyHealthMode(proxy);
+  if (mode === 'checking') return { text: 'Проверяется', className: 'pill pill--warning' };
+  if (mode === 'warming_up') return { text: 'Поднимается', className: 'pill pill--warning' };
+  if (mode === 'telegram_only') return { text: 'Рабочий для Telegram', className: 'pill pill--ok' };
+  if (mode === 'full') return { text: 'Работает', className: 'pill pill--ok' };
+  if (mode === 'broken') return { text: 'Ошибка', className: 'pill pill--danger' };
+  return { text: 'Не проверен', className: 'pill' };
+}
+
+function getProxyLoad(proxy) {
+  const linked = Array.isArray(proxy?.linked_userbots) ? proxy.linked_userbots : [];
+  if (!linked.length) {
+    return 'На этом прокси сейчас никто не сидит.';
+  }
+  const labels = linked
+    .map((account) => account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`)
+    .join(', ');
+  if (linked.length === 1) {
+    return `На нем сидит 1 юзербот: ${labels}`;
+  }
+  return `Опасная связка: на нем сидит ${linked.length} юзербота: ${labels}`;
+}
+
+function buildServerProxyName(inventoryGroup, existingNames = []) {
+  const prefix = inventoryGroup === 'self_use' ? 'Прокси сервера' : 'Прокси для Shop';
+  const normalized = new Set(existingNames.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+  let index = 1;
+  while (normalized.has(`${prefix.toLowerCase()} ${index}`)) {
+    index += 1;
+  }
+  return `${prefix} ${index}`;
+}
+
+function formatTon(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function formatRub(value) {
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function isProxyShopItem(item) {
+  if (!item) return false;
+  return item.item_type === 'proxy';
+}
+
+function isProxyPurchase(purchase) {
+  if (!purchase) return false;
+  return purchase.item?.item_type === 'proxy';
+}
+
+function isOpenProxyPurchase(purchase) {
+  if (!isProxyPurchase(purchase)) return false;
+  if (purchase.status === 'awaiting_receipt') return true;
+  if (purchase.status === 'pending') return true;
+  if (purchase.status === 'paid' && purchase.ownership_transfer_status !== 'completed') return true;
+  return false;
+}
+
+function normalizeOpenProxyPurchaseGroup(rows = []) {
+  if (!rows.length) return null;
+  const first = rows[0];
+  const status = rows.some((purchase) => purchase.status === 'awaiting_receipt')
+    ? 'awaiting_receipt'
+    : rows.some((purchase) => purchase.status === 'paid' && purchase.ownership_transfer_status !== 'completed')
+      ? 'paid'
+      : 'pending';
+  const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
+  const amountRub = rows.reduce((sum, purchase) => sum + Number(purchase.amount_rub || 0), 0);
+  const assets = rows.flatMap((purchase) => purchase.assets || []);
+  const uniqueLabels = Array.from(new Set(assets.map((asset) => asset.label || 'Proxy')));
+  const sellerWallet = first.payload?.seller_wallet || '';
+  const memo = first.payload?.memo || '';
+  const expiresAt = rows
+    .map((purchase) => purchase.expires_at ? new Date(purchase.expires_at).getTime() : null)
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)[0];
+
+  return {
+    id: first.payload?.batch_token || first.id,
+    purchase_ids: rows.map((purchase) => purchase.id),
+    status,
+    amount_ton: amountTon,
+    amount_rub: amountRub,
+    ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
+    created_at: first.created_at,
+    expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
+    payload: {
+      ...(first.payload || {}),
+      seller_wallet: sellerWallet,
+      memo,
+      ton_uri: sellerWallet ? `ton://transfer/${sellerWallet}?amount=${Math.round(amountTon * 1000000000)}&text=${encodeURIComponent(memo)}` : '',
+      trust_wallet_uri: sellerWallet ? `https://link.trustwallet.com/send?${new URLSearchParams({
+        asset: 'c607',
+        address: sellerWallet,
+        amount: String(amountTon),
+        ...(memo ? { memo } : {})
+      }).toString()}` : ''
+    },
+    item: {
+      ...(first.item || {}),
+      title: rows.length > 1 ? `Прокси x${rows.length}` : (first.item?.title || 'Прокси')
+    },
+    assets: uniqueLabels.map((label) => ({ label })),
+    batch: rows.length > 1 || !!first.payload?.batch_token
+  };
+}
+
+function itemPaymentMethods(item) {
+  const source = Array.isArray(item?.available_payment_methods) && item.available_payment_methods.length
+    ? item.available_payment_methods
+    : Array.isArray(item?.payment_methods) && item.payment_methods.length
+      ? item.payment_methods
+      : ['ton', 'p2p'];
+  return source.filter((method) => method === 'ton' || method === 'p2p');
+}
+
+function paymentMethodLabel(value) {
+  return value === 'p2p' ? 'СБП' : 'TON';
+}
+
+function purchaseStatusMeta(status) {
+  if (status === 'awaiting_receipt') {
+    return { text: 'Чек отправлен', className: 'pill pill--warning' };
+  }
+  if (status === 'paid') {
+    return { text: 'Оплата есть', className: 'pill pill--ok' };
+  }
+  return { text: 'Ждет оплату', className: 'pill pill--info' };
+}
+
+function itemPriceSummary(item) {
+  const methods = itemPaymentMethods(item);
+  const parts = [];
+  if (methods.includes('ton') && Number(item?.price_ton || 0) > 0) {
+    parts.push(`${formatTon(item.price_ton)} TON`);
+  }
+  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
+    parts.push(`${formatRub(item.price_rub)} RUB`);
+  }
+  return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
+}
+
+function purchaseAmountSummary(purchase) {
+  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p') {
+    const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
+    return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
+  }
+  return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
+}
+
+function isImageLikeUrl(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.startsWith('data:image/')
+    || normalized.endsWith('.png')
+    || normalized.endsWith('.jpg')
+    || normalized.endsWith('.jpeg')
+    || normalized.endsWith('.webp')
+    || normalized.endsWith('.gif');
+}
+
+function inventoryGroupActionLabel(value) {
+  if (value === 'self_use') return 'Использую сам';
+  return 'На продажу';
+}
+
+function summaryTone(value, { danger = false, warning = false } = {}) {
+  if (danger) return 'danger';
+  if (warning) return 'warning';
+  return value > 0 ? 'ok' : 'neutral';
+}
+
+function proxyEgressSummary(proxy) {
+  if (proxy?.ipv6) return `IPv6 ${proxy.ipv6}`;
+  if (proxy?.last_check_ip) return proxy.last_check_ip;
+  return 'IP не зафиксирован';
+}
+
+export function ProxyManagerPage() {
+  const { accessToken, profilePlan } = useAuth();
+  const [tonConnectUI] = useTonConnectUI();
+  const tonWallet = useTonWallet();
+  const tonModal = useTonConnectModal();
+  const [filter, setFilter] = useState('all');
+  const [proxyBuyQuantity, setProxyBuyQuantity] = useState(1);
+  const [formState, setFormState] = useState({
+    id: '',
+    name: '',
+    host: '',
+    port: '1080',
+    username: '',
+    password: '',
+    inventory_group: 'self_use'
+  });
+  const [state, setState] = useState({
+    loading: true,
+    refreshing: false,
+    saving: false,
+    movingProxyId: '',
+    error: '',
+    notice: '',
+    proxies: [],
+    support: null,
+    updatedAt: null
+  });
+  const [shopState, setShopState] = useState({
+    loading: true,
+    error: '',
+    items: [],
+    sellerItems: [],
+    purchases: []
+  });
+  const [checkoutState, setCheckoutState] = useState({
+    item: null,
+    purchase: null,
+    paymentMethod: 'ton',
+    loading: false,
+    checking: false,
+    error: ''
+  });
+  const [receiptNote, setReceiptNote] = useState('');
+  const [receiptFile, setReceiptFile] = useState(null);
+  const hasPendingProxyChecks = state.proxies.some((proxy) => {
+    const mode = proxyHealthMode(proxy);
+    return mode === 'checking' || mode === 'warming_up';
+  });
+
+  function sourceBadge(proxy) {
+    const source = proxy?.provision_source || 'manual_free';
+    if (source === 'manual_admin') {
+      return { text: 'Инвентарь админа', className: 'pill pill--warning' };
+    }
+    if (source === 'purchased') {
+      return { text: 'Купленный', className: 'pill pill--ok' };
+    }
+    if (source === 'manual_owned') {
+      return { text: 'Свой', className: 'pill pill--info' };
+    }
+    if (source === 'manual_trial') {
+      return { text: 'Старый trial', className: 'pill pill--warning' };
+    }
+    return { text: 'Временный', className: 'pill' };
+  }
+
+  function inventoryGroupBadge(proxy) {
+    if (proxy?.inventory_group === 'self_use') {
+      return { text: 'Использую сам', className: 'pill' };
+    }
+    if (proxy?.inventory_group === 'shop_sale') {
+      return { text: 'На продажу', className: 'pill pill--warning' };
+    }
+    return null;
+  }
+
+  async function payCheckoutInBrowser() {
+    const purchase = checkoutState.purchase;
+    if (!purchase || purchase.payment_method !== 'ton' || !purchase.seller_wallet) {
+      return;
+    }
+
+    try {
+      if (!tonWallet) {
+        await tonModal.open();
+        return;
+      }
+
+      const transaction = await buildTonConnectTransaction({
+        address: purchase.seller_wallet,
+        amountTon: purchase.amount_ton,
+        memo: purchase.memo
+      });
+
+      await tonConnectUI.sendTransaction(transaction);
+    } catch (error) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        error: normalizeTonConnectError(error)
+      }));
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProxies({ silent = false } = {}) {
+      if (!silent) {
+        setState((prev) => ({
+          ...prev,
+            loading: !prev.updatedAt,
+            refreshing: !!prev.updatedAt,
+            error: ''
+        }));
+      }
+
+      try {
+        const data = await apiRequest('/api/userbot/proxies', { accessToken });
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            refreshing: false,
+            error: '',
+            proxies: data.proxies || [],
+            support: data.support || null,
+            updatedAt: new Date().toISOString()
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setState({
+            loading: false,
+            refreshing: false,
+            error: error.message,
+            notice: '',
+            proxies: [],
+            support: null,
+            updatedAt: null
+          });
+        }
+      }
+    }
+
+    if (accessToken) {
+      loadProxies();
+    }
+
+    const refreshIntervalMs = hasPendingProxyChecks ? 10_000 : 60_000;
+    const intervalId = accessToken
+      ? window.setInterval(() => {
+          loadProxies({ silent: true });
+        }, refreshIntervalMs)
+      : null;
+
+    return () => {
+      cancelled = true;
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [accessToken, hasPendingProxyChecks]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadShopItems() {
+      try {
+        const requests = [];
+        if (state.support?.profile_role === 'admin') {
+          requests.push(apiRequest('/api/shop/public/items'));
+        } else if (accessToken) {
+          requests.push(apiRequest('/api/shop/app/items', { accessToken }));
+          requests.push(apiRequest('/api/shop/public/my-purchases', { accessToken }));
+        } else {
+          requests.push(apiRequest('/api/shop/public/items'));
+        }
+        if (state.support?.profile_role === 'admin' && accessToken) {
+          requests.push(apiRequest('/api/shop/seller/items', { accessToken }));
+        }
+        const [publicData, secondData, thirdData] = await Promise.all(requests);
+        const purchasesData = state.support?.profile_role === 'admin' ? null : secondData;
+        const sellerData = state.support?.profile_role === 'admin' ? secondData : thirdData;
+        if (cancelled) return;
+        setShopState({
+          loading: false,
+          error: '',
+          items: (publicData.items || []).filter(isProxyShopItem),
+          sellerItems: sellerData?.items || [],
+          purchases: purchasesData?.purchases || []
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setShopState({
+          loading: false,
+          error: error.message,
+          items: [],
+          sellerItems: [],
+          purchases: []
+        });
+      }
+    }
+
+    loadShopItems();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, state.support?.profile_role]);
+
+  const stats = {
+    total: state.proxies.length,
+    working: state.proxies.filter((proxy) => proxy.is_working === true).length,
+    broken: state.proxies.filter((proxy) => proxy.is_working === false).length,
+    unchecked: state.proxies.filter((proxy) => proxy.is_working !== true && proxy.is_working !== false).length,
+    shared: state.proxies.filter((proxy) => Number(proxy.userbot_count || 0) > 1).length,
+    purchasedReady: state.proxies.filter((proxy) => proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0).length
+  };
+  const isAdmin = state.support?.profile_role === 'admin';
+
+  function matchesStatusFilter(proxy) {
+    if (filter === 'working') {
+      return proxy.is_working === true;
+    }
+    if (filter === 'broken') {
+      return proxy.is_working === false;
+    }
+    if (filter === 'shared_proxy') {
+      return Number(proxy.userbot_count || 0) > 1;
+    }
+    if (filter === 'manual_free') {
+      return ['manual_free', 'manual_trial'].includes(proxy.provision_source || 'manual_free');
+    }
+    if (filter === 'purchased') {
+      return proxy.provision_source === 'purchased';
+    }
+    return true;
+  }
+
+  const filteredProxies = state.proxies.filter(matchesStatusFilter);
+  const adminInventoryProxies = filteredProxies.filter((proxy) => proxy.provision_source === 'manual_admin');
+  const selfUseProxies = adminInventoryProxies.filter((proxy) => (proxy.inventory_group || 'shop_sale') === 'self_use');
+  const shopSaleProxies = adminInventoryProxies.filter((proxy) => (proxy.inventory_group || 'shop_sale') === 'shop_sale');
+  const nonAdminInventoryProxies = filteredProxies.filter((proxy) => proxy.provision_source !== 'manual_admin');
+  const visibleProxyItems = shopState.items.slice(0, 6);
+  const proxyBatchOffer = useMemo(() => {
+    if (!visibleProxyItems.length) return null;
+    const first = visibleProxyItems[0];
+    const paymentSignature = JSON.stringify(itemPaymentMethods(first));
+    const samePrice = visibleProxyItems.every((item) =>
+      Number(item.price_ton || 0) === Number(first.price_ton || 0)
+      && Number(item.price_rub || 0) === Number(first.price_rub || 0)
+      && JSON.stringify(itemPaymentMethods(item)) === paymentSignature
+    );
+
+    const tonValues = visibleProxyItems.map((item) => Number(item.price_ton || 0)).filter((value) => value > 0);
+    const rubValues = visibleProxyItems.map((item) => Number(item.price_rub || 0)).filter((value) => value > 0);
+
+    return {
+      title: 'Прокси BullRun',
+      previewText: 'Один живой seller-лот с выбором количества. После брони оплаты появятся ниже в блоке «Нужно оплатить».',
+      items: visibleProxyItems,
+      unitPriceText: samePrice
+        ? itemPriceSummary(first)
+        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}${tonValues.length && rubValues.length ? ' / ' : ''}${rubValues.length ? `от ${formatRub(Math.min(...rubValues))} RUB` : ''}`,
+      paymentMethods: itemPaymentMethods(first),
+      samePrice
+    };
+  }, [visibleProxyItems]);
+  const openProxyPurchases = useMemo(() => (
+    (() => {
+      const rows = (shopState.purchases || []).filter(isOpenProxyPurchase);
+      const grouped = new Map();
+      for (const purchase of rows) {
+        const key = purchase.payload?.batch_token || purchase.id;
+        const bucket = grouped.get(key) || [];
+        bucket.push(purchase);
+        grouped.set(key, bucket);
+      }
+      return Array.from(grouped.values()).map((bucket) => normalizeOpenProxyPurchaseGroup(bucket)).filter(Boolean);
+    })()
+  ), [shopState.purchases]);
+  const sellerProxyItemMap = useMemo(() => {
+    const map = new Map();
+    for (const item of shopState.sellerItems || []) {
+      for (const asset of item.assets || []) {
+        if (asset.asset_type !== 'proxy') continue;
+        const key = String(asset.asset_id);
+        const bucket = map.get(key) || [];
+        bucket.push(item);
+        map.set(key, bucket);
+      }
+    }
+    return map;
+  }, [shopState.sellerItems]);
+  const createdForSaleProxies = useMemo(() => (
+    shopSaleProxies.filter((proxy) => {
+      const items = sellerProxyItemMap.get(String(proxy.id)) || [];
+      if (items.length === 0) return true;
+      return items.every((item) => item.status === 'draft' || item.visibility === 'private');
+    })
+  ), [sellerProxyItemMap, shopSaleProxies]);
+  const listedForSaleProxies = useMemo(() => (
+    shopSaleProxies.filter((proxy) => {
+      const items = sellerProxyItemMap.get(String(proxy.id)) || [];
+      return items.some((item) => item.status === 'published' && item.visibility !== 'private');
+    })
+  ), [sellerProxyItemMap, shopSaleProxies]);
+  const soldProxyItems = useMemo(() => (
+    (shopState.sellerItems || []).filter((item) =>
+      item.status === 'sold' && (item.assets || []).some((asset) => asset.asset_type === 'proxy')
+    )
+  ), [shopState.sellerItems]);
+  const proxySummaryCards = useMemo(() => {
+    if (isAdmin) {
+      return [
+        {
+          label: 'Использую сам',
+          value: selfUseProxies.length,
+          hint: 'Живые прокси под свои userbot-задачи.',
+          tone: summaryTone(selfUseProxies.length)
+        },
+        {
+          label: 'На продаже',
+          value: listedForSaleProxies.length,
+          hint: 'Уже опубликованы в shop и готовы к оплате.',
+          tone: summaryTone(listedForSaleProxies.length)
+        },
+        {
+          label: 'С ошибкой',
+          value: stats.broken,
+          hint: 'Эти прокси надо перепроверить или убрать из контура.',
+          tone: summaryTone(stats.broken, { danger: stats.broken > 0 })
+        }
+      ];
+    }
+
+    const planRules = getProductTierRules(profilePlan);
+    const planHint = Number.isFinite(state.support?.owned_proxy_quota_total)
+      ? `На вашем тарифе только ${state.support?.owned_proxy_quota_total} proxy.`
+      : 'На вашем тарифе лимит по proxy не режет базовую работу.';
+
+    return [
+      {
+        label: 'Мои прокси',
+        value: filteredProxies.length,
+        hint: 'Все прокси, которые сейчас закреплены за тобой.',
+        tone: summaryTone(filteredProxies.length)
+      },
+      {
+        label: 'Нужно оплатить',
+        value: openProxyPurchases.length,
+        hint: 'Открытые покупки, которые еще ждут TON или СБП чек.',
+        tone: summaryTone(openProxyPurchases.length, { warning: openProxyPurchases.length > 0 })
+      },
+      {
+        label: 'Тариф',
+        value: planRules.label,
+        hint: planHint,
+        tone: summaryTone(Number.isFinite(state.support?.owned_proxy_quota_total) ? state.support.owned_proxy_quota_total : 1)
+      },
+    ];
+  }, [
+    filteredProxies.length,
+    isAdmin,
+    listedForSaleProxies.length,
+    openProxyPurchases.length,
+    profilePlan,
+    selfUseProxies.length,
+    state.support?.max_owned_userbots,
+    state.support?.owned_proxy_quota_total,
+    state.support?.owned_proxy_quota_used,
+    stats.broken,
+  ]);
+
+  const manualQuotaText = !state.support
+    ? null
+    : state.support.profile_role === 'admin'
+      ? null
+      : (() => {
+          const total = Number(state.support.owned_proxy_quota_total || 0);
+          const used = Number(state.support.owned_proxy_quota_used || 0);
+          if (!total) return null;
+          if (profilePlan === 'trial') {
+            return `На Trial: ${used}/${total} свой proxy. Дальше либо покупай прокси, либо переходи на Normal.`;
+          }
+          return `Своих proxy: ${used}/${total}.`;
+        })();
+
+  const canCreateManualProxy = !!state.support?.can_create_manual_proxy;
+  const canEditProxy = state.support?.profile_role === 'admin';
+  const showQuotaLock = !formState.id && state.support?.profile_role !== 'admin' && !canCreateManualProxy;
+  const proxyBuyLimit = useMemo(() => {
+    if (!proxyBatchOffer) return 1;
+    if (state.support?.profile_role === 'admin') return proxyBatchOffer.items.length;
+    if (profilePlan !== 'trial') return proxyBatchOffer.items.length;
+    return Math.max(0, Math.min(proxyBatchOffer.items.length, 1 - state.proxies.length));
+  }, [profilePlan, proxyBatchOffer, state.proxies.length, state.support?.profile_role]);
+
+  useEffect(() => {
+    if (!proxyBatchOffer) {
+      setProxyBuyQuantity(1);
+      return;
+    }
+    setProxyBuyQuantity((prev) => Math.min(Math.max(prev, 1), Math.max(proxyBuyLimit, 1)));
+  }, [proxyBatchOffer, proxyBuyLimit]);
+  const latestServerProxy = useMemo(() => {
+    return state.proxies.find((proxy) => proxy.provision_source === 'manual_admin') || null;
+  }, [state.proxies]);
+  const suggestedServerProxyName = useMemo(() => {
+    return buildServerProxyName(
+      formState.inventory_group,
+      state.proxies
+        .filter((proxy) => proxy.provision_source === 'manual_admin')
+        .map((proxy) => proxy.name)
+    );
+  }, [formState.inventory_group, state.proxies]);
+
+  useEffect(() => {
+    if (state.support?.profile_role !== 'admin') return;
+    if (formState.id) return;
+
+    setFormState((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      if (!next.name.trim()) {
+        next.name = buildServerProxyName(
+          next.inventory_group,
+          state.proxies
+            .filter((proxy) => proxy.provision_source === 'manual_admin')
+            .map((proxy) => proxy.name)
+        );
+        changed = true;
+      }
+
+      if (!next.port) {
+        next.port = latestServerProxy?.port ? String(latestServerProxy.port) : '1080';
+        changed = true;
+      }
+
+      if (!next.username && latestServerProxy?.username) {
+        next.username = latestServerProxy.username;
+        changed = true;
+      }
+
+      if (!next.password && latestServerProxy?.password) {
+        next.password = latestServerProxy.password;
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [formState.id, latestServerProxy, state.proxies, state.support?.profile_role]);
+
+  async function checkProxy(proxyId) {
+    try {
+      setState((prev) => ({
+        ...prev,
+        proxies: prev.proxies.map((proxy) => (
+          proxy.id === proxyId ? { ...proxy, status: 'checking' } : proxy
+        ))
+      }));
+      await apiRequest(`/api/userbot/proxies/check/${proxyId}`, { accessToken });
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      window.alert(error.message);
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+    }
+  }
+
+  async function saveProxy() {
+    setState((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
+      const normalizedName = formState.name.trim();
+      const normalizedHost = formState.host.trim();
+      const normalizedPort = Number.parseInt(formState.port, 10);
+
+      if (!normalizedName) {
+        throw new Error('Сначала задай имя прокси.');
+      }
+      if (!isAdminCreate && !normalizedHost) {
+        throw new Error('Сначала укажи host или IP прокси.');
+      }
+      if (!isAdminCreate && (!Number.isInteger(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535)) {
+        throw new Error('Укажи корректный порт прокси.');
+      }
+
+      const result = await apiRequest('/api/userbot/proxies', {
+        accessToken,
+        method: 'POST',
+        body: {
+          id: formState.id || undefined,
+          name: normalizedName,
+          host: normalizedHost || undefined,
+          port: Number.isInteger(normalizedPort) ? normalizedPort : undefined,
+          username: formState.username.trim() || null,
+          password: formState.password.trim() || null,
+          inventory_group: formState.inventory_group
+        }
+      });
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setFormState({
+        id: '',
+        name: '',
+        host: '',
+        port: '',
+        username: '',
+        password: '',
+        inventory_group: 'self_use'
+      });
+      setState((prev) => ({
+        ...prev,
+        saving: false,
+        notice: result?.message || 'Прокси сохранен.',
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      setState((prev) => ({ ...prev, saving: false, error: error.message, notice: '' }));
+      window.alert(error.message);
+    }
+  }
+
+  function editProxy(proxy) {
+    if (!canEditProxy) {
+      return;
+    }
+    setFormState({
+      id: proxy.id,
+      name: proxy.name || '',
+      host: proxy.host || '',
+      port: proxy.port ? String(proxy.port) : '',
+      username: proxy.username || '',
+      password: proxy.password || '',
+      inventory_group: proxy.inventory_group || 'shop_sale'
+    });
+  }
+
+  function resetForm() {
+    setFormState({
+      id: '',
+      name: '',
+      host: '',
+      port: latestServerProxy?.port ? String(latestServerProxy.port) : '1080',
+      username: '',
+      password: '',
+      inventory_group: 'self_use'
+    });
+  }
+
+  function fillFromLatestServerProxy() {
+    if (!latestServerProxy) {
+      window.alert('Серверных прокси пока нет. Нечего брать как шаблон.');
+      return;
+    }
+
+    setFormState((prev) => ({
+      ...prev,
+      name: buildServerProxyName(
+        prev.inventory_group,
+        state.proxies
+          .filter((proxy) => proxy.provision_source === 'manual_admin')
+          .map((proxy) => proxy.name)
+      ),
+      port: latestServerProxy.port ? String(latestServerProxy.port) : '1080',
+      username: latestServerProxy.username || '',
+      password: latestServerProxy.password || ''
+    }));
+  }
+
+  async function deleteProxy(proxyId) {
+    if (!window.confirm('Удалить прокси? Если он уже привязан к юзерботу, сначала перепривяжи аккаунт.')) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/api/userbot/proxies/${proxyId}`, {
+        accessToken,
+        method: 'DELETE'
+      });
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      if (String(formState.id) === String(proxyId)) {
+        resetForm();
+      }
+      setState((prev) => ({
+        ...prev,
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      window.alert(error.message);
+    }
+  }
+
+  async function moveProxyToGroup(proxy, targetGroup) {
+    if (!canEditProxy) return;
+    if (!ADMIN_PROXY_GROUPS.includes(targetGroup)) return;
+    if ((proxy.inventory_group || 'shop_sale') === targetGroup) return;
+
+    setState((prev) => ({ ...prev, movingProxyId: String(proxy.id), error: '', notice: '' }));
+    try {
+      await apiRequest('/api/userbot/proxies', {
+        accessToken,
+        method: 'POST',
+        body: {
+          id: proxy.id,
+          name: proxy.name,
+          host: proxy.host,
+          port: proxy.port,
+          username: proxy.username || null,
+          password: proxy.password || null,
+          inventory_group: targetGroup
+        }
+      });
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        movingProxyId: '',
+        notice: `Прокси "${proxy.name}" перенесен в новую группу.`,
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        movingProxyId: '',
+        error: error.message,
+        notice: ''
+      }));
+    }
+  }
+
+  async function openCheckout(item, preferredPaymentMethod = null) {
+    const selectedPaymentMethod = itemPaymentMethods(item).includes(preferredPaymentMethod)
+      ? preferredPaymentMethod
+      : itemPaymentMethods(item).includes(checkoutState.paymentMethod)
+        ? checkoutState.paymentMethod
+      : (itemPaymentMethods(item)[0] || 'ton');
+
+    if (!accessToken) {
+      setCheckoutState({
+        item,
+        purchase: null,
+        paymentMethod: selectedPaymentMethod,
+        loading: false,
+        checking: false,
+        error: 'Сначала войди через Google, чтобы купить прокси.'
+      });
+      return;
+    }
+
+    setCheckoutState({
+      item,
+      purchase: null,
+      paymentMethod: selectedPaymentMethod,
+      loading: true,
+      checking: false,
+      error: ''
+    });
+
+    try {
+      const data = await apiRequest('/api/shop/public/purchase', {
+        accessToken,
+        method: 'POST',
+        body: {
+          item_id: item.id,
+          payment_method: selectedPaymentMethod
+        }
+      });
+      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
+      setShopState((prev) => ({
+        ...prev,
+        purchases: purchasesData.purchases || prev.purchases
+      }));
+
+      setCheckoutState({
+        item,
+        paymentMethod: selectedPaymentMethod,
+        loading: false,
+        checking: false,
+        error: '',
+        purchase: {
+          id: data.purchase_id,
+          amount_ton: data.amount_ton,
+          amount_rub: data.amount_rub || item.price_rub || 0,
+          payment_method: data.payment_method || selectedPaymentMethod,
+          seller_wallet: data.seller_wallet,
+          memo: data.memo,
+          ton_uri: data.ton_uri,
+          trust_wallet_uri: data.trust_wallet_uri || '',
+          trust_wallet_qr: data.trust_wallet_qr || '',
+          ton_qr: data.ton_qr,
+          expires_at: data.expires_at,
+          sbp_phone: data.sbp_phone || '',
+          sbp_bank: data.sbp_bank || '',
+          sbp_fio: data.sbp_fio || '',
+          sbp_qr_url: data.sbp_qr_url || '',
+          sbp_payment_url: data.sbp_payment_url || ''
+        }
+      });
+    } catch (error) {
+      let existingPurchase = null;
+      if (accessToken) {
+        try {
+          const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
+          existingPurchase = (purchasesData.purchases || []).find((purchase) => (
+            String(purchase.item?.id || '') === String(item.id) &&
+            (purchase.status === 'pending' || purchase.status === 'awaiting_receipt' || purchase.status === 'paid')
+          )) || null;
+        } catch {
+          existingPurchase = null;
+        }
+      }
+
+      setCheckoutState({
+        item,
+        paymentMethod: selectedPaymentMethod,
+        purchase: existingPurchase ? {
+          id: existingPurchase.id,
+          amount_ton: existingPurchase.amount_ton,
+          amount_rub: existingPurchase.amount_rub || 0,
+          payment_method: existingPurchase.payload?.payment_method || selectedPaymentMethod,
+          seller_wallet: existingPurchase.payload?.seller_wallet || '',
+          memo: existingPurchase.payload?.memo || '',
+          ton_uri: existingPurchase.payload?.ton_uri || '',
+          trust_wallet_uri: existingPurchase.payload?.trust_wallet_uri || '',
+          trust_wallet_qr: existingPurchase.payload?.trust_wallet_qr || '',
+          ton_qr: existingPurchase.payload?.ton_qr || '',
+          expires_at: existingPurchase.expires_at || null,
+          status: existingPurchase.status,
+          sbp_phone: existingPurchase.payload?.sbp_phone || '',
+          sbp_bank: existingPurchase.payload?.sbp_bank || '',
+          sbp_fio: existingPurchase.payload?.sbp_fio || '',
+          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
+          sbp_qr_url: existingPurchase.payload?.sbp_qr_url || '',
+          sbp_payment_url: existingPurchase.payload?.sbp_payment_url || ''
+        } : null,
+        loading: false,
+        checking: false,
+        error: error.message
+      });
+    }
+  }
+
+  async function createProxyBatchCheckout(preferredPaymentMethod) {
+    if (!proxyBatchOffer?.items?.length) return;
+
+    if (proxyBuyLimit <= 0) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        error: 'На Trial ты уже упёрся в лимит по прокси. Сначала перейди на Normal или освободи текущий proxy.'
+      }));
+      return;
+    }
+
+    const quantity = Math.min(Math.max(Number(proxyBuyQuantity || 1), 1), Math.max(proxyBuyLimit, 1));
+    const batchItems = proxyBatchOffer.items.slice(0, quantity);
+    const selectedPaymentMethod = proxyBatchOffer.paymentMethods.includes(preferredPaymentMethod)
+      ? preferredPaymentMethod
+      : (proxyBatchOffer.paymentMethods[0] || 'ton');
+
+    if (batchItems.length === 1) {
+      await openCheckout(batchItems[0], selectedPaymentMethod);
+      return;
+    }
+
+    setCheckoutState({
+      item: null,
+      purchase: null,
+      paymentMethod: selectedPaymentMethod,
+      loading: true,
+      checking: false,
+      error: ''
+    });
+
+    try {
+      const data = await apiRequest('/api/shop/public/purchase/batch', {
+        accessToken,
+        method: 'POST',
+        body: {
+          item_ids: batchItems.map((item) => item.id),
+          payment_method: selectedPaymentMethod
+        }
+      });
+      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
+      setShopState((prev) => ({
+        ...prev,
+        purchases: purchasesData.purchases || prev.purchases
+      }));
+      setCheckoutState({
+        item: {
+          title: `Прокси x${batchItems.length}`
+        },
+        purchase: {
+          id: data.batch_token || data.purchase_ids?.[0] || '',
+          purchase_ids: data.purchase_ids || [],
+          amount_ton: data.amount_ton,
+          amount_rub: data.amount_rub || 0,
+          payment_method: data.payment_method || selectedPaymentMethod,
+          seller_wallet: data.seller_wallet || '',
+          memo: data.memo || '',
+          ton_uri: data.ton_uri || '',
+          trust_wallet_uri: data.trust_wallet_uri || '',
+          trust_wallet_qr: data.trust_wallet_qr || '',
+          ton_qr: data.ton_qr || '',
+          expires_at: data.expires_at || null,
+          sbp_phone: data.sbp_phone || '',
+          sbp_bank: data.sbp_bank || '',
+          sbp_fio: data.sbp_fio || '',
+          sbp_qr_url: data.sbp_qr_url || '',
+          sbp_payment_url: data.sbp_payment_url || '',
+          status: 'pending',
+          batch: true
+        },
+        paymentMethod: selectedPaymentMethod,
+        loading: false,
+        checking: false,
+        error: ''
+      });
+    } catch (error) {
+      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken }).catch(() => null);
+      if (purchasesData?.purchases) {
+        setShopState((prev) => ({
+          ...prev,
+          purchases: purchasesData.purchases
+        }));
+      }
+      setCheckoutState({
+        item: null,
+        purchase: null,
+        paymentMethod: selectedPaymentMethod,
+        loading: false,
+        checking: false,
+        error: error.message || 'Не удалось создать покупки по прокси.'
+      });
+    }
+  }
+
+  async function checkCheckout() {
+    if (!checkoutState.purchase?.id) return;
+
+    setCheckoutState((prev) => ({
+      ...prev,
+      checking: true,
+      error: ''
+    }));
+
+    try {
+      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
+        await apiRequest('/api/shop/public/purchase/check-batch', {
+          accessToken,
+          method: 'POST',
+          body: {
+            purchase_ids: checkoutState.purchase.purchase_ids
+          }
+        });
+      } else {
+        await apiRequest('/api/shop/public/purchase/check', {
+          accessToken,
+          method: 'POST',
+          body: {
+            purchase_id: checkoutState.purchase.id
+          }
+        });
+      }
+      const [data, purchasesData] = await Promise.all([
+        apiRequest('/api/userbot/proxies', { accessToken }),
+        apiRequest('/api/shop/public/my-purchases', { accessToken })
+      ]);
+      setState((prev) => ({
+        ...prev,
+        notice: 'Оплата найдена. Прокси скоро появится в кабинете.',
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+      setShopState((prev) => ({
+        ...prev,
+        purchases: purchasesData.purchases || prev.purchases
+      }));
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false,
+        item: null,
+        purchase: null,
+        paymentMethod: 'ton',
+        error: ''
+      }));
+      setReceiptNote('');
+      setReceiptFile(null);
+    } catch (error) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false,
+        error: error.message
+      }));
+    }
+  }
+
+  function showPurchaseInline(purchase) {
+    setCheckoutState({
+      item: purchase.item || null,
+      purchase: {
+        id: purchase.id,
+        purchase_ids: purchase.purchase_ids || [purchase.id],
+        amount_ton: purchase.amount_ton,
+        amount_rub: purchase.amount_rub || 0,
+        payment_method: purchase.payload?.payment_method || 'ton',
+        seller_wallet: purchase.payload?.seller_wallet || '',
+        memo: purchase.payload?.memo || '',
+        ton_uri: purchase.payload?.ton_uri || '',
+        trust_wallet_uri: purchase.payload?.trust_wallet_uri || '',
+        trust_wallet_qr: purchase.payload?.trust_wallet_qr || '',
+        ton_qr: purchase.payload?.ton_qr || '',
+        expires_at: purchase.expires_at || null,
+        status: purchase.status,
+        sbp_phone: purchase.payload?.sbp_phone || '',
+        sbp_bank: purchase.payload?.sbp_bank || '',
+        sbp_fio: purchase.payload?.sbp_fio || '',
+        receipt_file_url: purchase.payload?.receipt_file_url || '',
+        sbp_qr_url: purchase.payload?.sbp_qr_url || '',
+        sbp_payment_url: purchase.payload?.sbp_payment_url || '',
+        batch: !!purchase.batch
+      },
+      paymentMethod: purchase.payload?.payment_method || 'ton',
+      loading: false,
+      checking: false,
+      error: ''
+    });
+  }
+
+  async function markCheckoutPaid() {
+    if (!checkoutState.purchase?.id) return;
+
+    setCheckoutState((prev) => ({
+      ...prev,
+      checking: true,
+      error: ''
+    }));
+
+    try {
+      const formData = new FormData();
+      formData.append('receipt_note', receiptNote);
+      if (receiptFile) {
+        formData.append('receipt_file', receiptFile);
+      }
+      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
+        formData.append('purchase_ids', checkoutState.purchase.purchase_ids.join(','));
+        await apiRequest('/api/shop/public/purchase/mark-paid-batch', {
+          accessToken,
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        formData.append('purchase_id', checkoutState.purchase.id);
+        await apiRequest('/api/shop/public/purchase/mark-paid', {
+          accessToken,
+          method: 'POST',
+          body: formData
+        });
+      }
+      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
+      const refreshed = (purchasesData.purchases || []).filter((purchase) =>
+        (checkoutState.purchase.purchase_ids || [checkoutState.purchase.id]).includes(purchase.id)
+      );
+      setShopState((prev) => ({
+        ...prev,
+        purchases: purchasesData.purchases || prev.purchases
+      }));
+      setReceiptNote('');
+      setReceiptFile(null);
+      if (refreshed.length === 1) {
+        showPurchaseInline(refreshed[0]);
+      } else if (refreshed.length > 1) {
+        showPurchaseInline(normalizeOpenProxyPurchaseGroup(refreshed));
+      }
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false
+      }));
+    } catch (error) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false,
+        error: error.message
+      }));
+    }
+  }
+
+  async function cancelCheckoutPurchase(target = checkoutState.purchase) {
+    const targetIds = Array.isArray(target?.purchase_ids) && target.purchase_ids.length
+      ? target.purchase_ids
+      : [target?.id].filter(Boolean);
+    if (!targetIds.length) return;
+
+    try {
+      if (targetIds.length > 1) {
+        await apiRequest('/api/shop/public/purchase/cancel-batch', {
+          accessToken,
+          method: 'POST',
+          body: {
+            purchase_ids: targetIds
+          }
+        });
+      } else {
+        await apiRequest('/api/shop/public/purchase/cancel', {
+          accessToken,
+          method: 'POST',
+          body: {
+            purchase_id: targetIds[0]
+          }
+        });
+      }
+
+      const [data, purchasesData] = await Promise.all([
+        apiRequest('/api/userbot/proxies', { accessToken }),
+        apiRequest('/api/shop/public/my-purchases', { accessToken })
+      ]);
+
+      setState((prev) => ({
+        ...prev,
+        notice: 'Бронь снята.',
+        error: '',
+        proxies: data.proxies || [],
+        support: data.support || prev.support,
+        updatedAt: new Date().toISOString()
+      }));
+      setShopState((prev) => ({
+        ...prev,
+        purchases: purchasesData.purchases || prev.purchases
+      }));
+      setCheckoutState((prev) => (
+        targetIds.includes(String(prev.purchase?.id || '')) || targetIds.some((id) => (prev.purchase?.purchase_ids || []).includes(id))
+          ? {
+              item: null,
+              purchase: null,
+              paymentMethod: 'ton',
+              loading: false,
+              checking: false,
+              error: ''
+            }
+          : prev
+      ));
+      setReceiptNote('');
+      setReceiptFile(null);
+    } catch (error) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        error: error.message || 'Не удалось снять бронь.'
+      }));
+    }
+  }
+
+function renderOpenProxyPurchases(rows) {
+    return (
+      <div className="toolbar-card proxy-surface-card">
+        <div className="proxy-surface-card__head">
+          <div>
+            <div className="toolbar-card__title">Нужно оплатить</div>
+            <div className="table-subtext">Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.</div>
+          </div>
+          <span className="pill">{rows.length}</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="empty-inline" style={{ marginTop: 12 }}>Открытых покупок по прокси сейчас нет.</div>
+        ) : (
+          <table className="table" style={{ marginTop: 16 }}>
+            <thead>
+              <tr>
+                <th>Лот</th>
+                <th>Сумма</th>
+                <th>Статус</th>
+                <th>Дедлайн</th>
+                <th>Дальше</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((purchase) => (
+                <tr key={purchase.id}>
+                  <td>
+                    <div className="table-primary">{purchase.item?.title || 'Прокси'}</div>
+                    <div className="table-subtext">
+                      {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="table-primary">{purchaseAmountSummary(purchase)}</div>
+                    <div className="table-subtext">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</div>
+                  </td>
+                  <td>
+                    <span className={purchaseStatusMeta(purchase.status).className}>
+                      {purchaseStatusMeta(purchase.status).text}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="table-primary">{formatWhen(purchase.expires_at)}</div>
+                  </td>
+                  <td>
+                    <div className="proxy-row-actions proxy-row-actions--stack">
+                      <div className="proxy-row-actions__main">
+                        <button
+                          className="inline-action inline-action--chip inline-action--accent"
+                          type="button"
+                          onClick={() => showPurchaseInline(purchase)}
+                        >
+                          Открыть оплату
+                        </button>
+                        <button
+                          className="inline-action inline-action--chip"
+                          type="button"
+                          onClick={() => cancelCheckoutPurchase(purchase)}
+                        >
+                          Снять бронь
+                        </button>
+                        {purchase.payload?.ton_uri ? (
+                          <a className="inline-action inline-action--chip" href={purchase.payload.ton_uri}>
+                            TON
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  function renderProxyTable(rows, emptyText, { title, description } = {}) {
+    return (
+      <div className={`table-card proxy-lane${rows.length === 0 ? ' proxy-lane--empty' : ''}`}>
+        {(title || description) ? (
+          <div className="proxy-surface-card__head">
+            <div>
+              {title ? <div className="table-card__title">{title}</div> : null}
+              {description ? <p className="table-subtext" style={{ marginTop: 0 }}>{description}</p> : null}
+            </div>
+            <span className="pill pill--info">{rows.length}</span>
+          </div>
+        ) : null}
+        {rows.length === 0 ? (
+          <div className="empty-inline">{emptyText}</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Название</th>
+                <th>Точка входа / гео</th>
+                <th>Проверка</th>
+                <th>Статус</th>
+                <th>Нагрузка</th>
+                <th>Дальше</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((proxy) => {
+                const badge = proxyBadge(proxy);
+                const mode = proxyHealthMode(proxy);
+                const geo = proxy.last_check_country
+                  ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
+                  : mode === 'telegram_only'
+                    ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
+                    : 'Гео отсутствует';
+                return (
+                  <tr key={proxy.id}>
+                    <td>
+                      <div className="table-primary">{proxy.name}</div>
+                      {Number(proxy.userbot_count || 0) > 1 ? (
+                        <div className="table-subtext table-subtext--danger">Опасная shared-связка</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <div className="table-primary table-mono">{proxy.host}:{proxy.port}</div>
+                      <div className="table-subtext">Адрес, куда подключается юзербот.</div>
+                      <div className="table-subtext">{geo}</div>
+                    </td>
+                    <td>
+                      <div className="table-primary table-mono">{proxyEgressSummary(proxy)}</div>
+                      <div className="table-subtext">{formatWhen(proxy.last_checked_at)}</div>
+                      {proxy.ipv6 ? (
+                        <div className="table-subtext">Это исходящий IPv6. Он может отличаться от точки входа `host:port`.</div>
+                      ) : null}
+                      {mode === 'telegram_only' ? (
+                        <div className="table-subtext">Прокси рабочий именно для Telegram-подключений. Обычный web-check не смог вытащить IP/гео.</div>
+                      ) : null}
+                      {proxy.last_check_error ? <div className="table-subtext table-subtext--danger">{proxy.last_check_error}</div> : null}
+                    </td>
+                    <td><span className={badge.className}>{badge.text}</span></td>
+                    <td>
+                      <div className="table-primary">{Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}</div>
+                      <div className="table-subtext">{getProxyLoad(proxy)}</div>
+                    </td>
+                    <td>
+                      <div className="proxy-row-actions proxy-row-actions--stack">
+                        <div className="proxy-row-actions__main">
+                          <button className="inline-action inline-action--chip" onClick={() => checkProxy(proxy.id)}>Проверить</button>
+                          {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
+                            <select
+                              className="field field--compact field--compact-select"
+                              value={proxy.inventory_group || 'shop_sale'}
+                              disabled={state.movingProxyId === String(proxy.id)}
+                              onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
+                            >
+                              {ADMIN_PROXY_GROUPS.map((group) => (
+                                <option key={group} value={group}>
+                                  {inventoryGroupActionLabel(group)}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
+                          {state.support?.profile_role !== 'admin' ? (
+                            <a className="inline-action inline-action--chip inline-action--accent" href="/app/shop" target="_blank" rel="noreferrer">Купить еще</a>
+                          ) : null}
+                        </div>
+                        <button className="inline-action inline-action--danger-text proxy-row-actions__danger" onClick={() => deleteProxy(proxy.id)}>Удалить</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  function renderSoldProxyItems(rows) {
+    return (
+      <div className={`table-card proxy-lane${rows.length === 0 ? ' proxy-lane--empty' : ''}`}>
+        <div className="proxy-surface-card__head">
+          <div className="table-card__title">Продано</div>
+          <span className="pill">{rows.length}</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="empty-inline">Проданных прокси пока нет.</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Лот</th>
+                <th>Прокси</th>
+                <th>Продажи</th>
+                <th>Дальше</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((item) => {
+                const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
+                return (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="table-primary">{item.title}</div>
+                      <div className="table-subtext">TON {formatTon(item.price_ton)}</div>
+                    </td>
+                    <td>
+                      <div className="table-primary">{proxyAssets.map((asset) => asset.label || 'Proxy').join(', ') || 'Proxy'}</div>
+                      <div className="table-subtext">Лот снят с витрины после продажи</div>
+                    </td>
+                    <td>
+                      <div className="table-primary">{item.stats?.paid_purchases || 0}</div>
+                      <div className="table-subtext">Handoff ok: {item.stats?.completed_transfers || 0}</div>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <a className="inline-action inline-action--chip inline-action--accent" href="/app/shop" target="_blank" rel="noreferrer">Shop</a>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  if (state.loading) {
+    return <LoadingState text="Загружаем прокси..." />;
+  }
+
+  return (
+    <section className="page proxy-page">
+      <div className="proxy-overview proxy-surface-card">
+        <div className="proxy-overview__top">
+          <div className="proxy-overview__copy">
+            <div className="proxy-page__eyebrow">Telegram infra</div>
+            <div className="page__header">
+              <h1>Прокси</h1>
+            </div>
+            <p className="proxy-page__intro">
+              {isAdmin
+                ? 'Один экран для серверного пула: поднимаешь прокси, раскладываешь их по группам и держишь под контролем продажи, trial-выдачу и свои рабочие связки.'
+                : 'Здесь живут твои proxy: свой и купленный. Для постоянной работы используй личный или купленный контур.'}
+            </p>
+          </div>
+          <div className="proxy-overview__rule">
+            <div className="proxy-overview__rule-label">Главное правило</div>
+            <div className="proxy-overview__rule-title">1 proxy = 1 userbot</div>
+            <div className="proxy-overview__rule-text">
+              Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
+            </div>
+          </div>
+        </div>
+        <div className="proxy-summary-grid">
+          {proxySummaryCards.map((card) => (
+            <div key={card.label} className={`proxy-summary-card proxy-summary-card--${card.tone}`}>
+              <div className="proxy-summary-card__label">{card.label}</div>
+              <div className="proxy-summary-card__value">{card.value}</div>
+              <div className="proxy-summary-card__hint">{card.hint}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
+
+      {manualQuotaText && state.support?.profile_role === 'admin' ? (
+        <div className="toolbar-card proxy-surface-card">
+          <div className="proxy-surface-card__head">
+            <div className="toolbar-card__title">Правило по прокси</div>
+          </div>
+          <p style={{ margin: 0 }}>{manualQuotaText}</p>
+          {state.support?.profile_role === 'admin' ? (
+            <p className="table-subtext" style={{ marginTop: 8 }}>
+              Следующее имя для выбранной группы: <strong>{suggestedServerProxyName}</strong>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {state.support?.profile_role !== 'admin' ? (
+        checkoutState.item ? (
+          <div className="toolbar-card proxy-surface-card">
+            <div className="proxy-surface-card__head">
+              <div className="toolbar-card__title">Оплата прокси</div>
+            </div>
+            <div className="shop-inline-checkout__head">
+              <div>
+                <div className="shop-inline-checkout__title">{checkoutState.item?.title || 'Прокси'}</div>
+                <div className="table-subtext">{itemPriceSummary(checkoutState.item)}</div>
+              </div>
+              <div className="payment-method-row__options">
+                {itemPaymentMethods(checkoutState.item).map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    className={`inline-action inline-action--chip${checkoutState.paymentMethod === method ? ' inline-action--accent' : ''}`}
+                    disabled={checkoutState.loading}
+                    onClick={() => {
+                      openCheckout(checkoutState.item, method);
+                    }}
+                  >
+                    {paymentMethodLabel(method)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {checkoutState.loading ? (
+              <div className="empty-inline" style={{ marginTop: 16 }}>Готовим оплату...</div>
+            ) : checkoutState.error && !checkoutState.purchase ? (
+              <div className="error-inline" style={{ marginTop: 16 }}>{checkoutState.error}</div>
+            ) : checkoutState.purchase ? (
+              <>
+                {checkoutState.error ? (
+                  <div className="error-inline" style={{ marginTop: 16 }}>{checkoutState.error}</div>
+                ) : null}
+                <div className="shop-inline-checkout__meta">
+                  <div><strong>Метод:</strong> {paymentMethodLabel(checkoutState.purchase.payment_method)}</div>
+                  {checkoutState.purchase.payment_method !== 'ton' ? (
+                    <div><strong>Сумма:</strong> {purchaseAmountSummary(checkoutState.purchase)}</div>
+                  ) : null}
+                  <div><strong>Дедлайн:</strong> {formatWhen(checkoutState.purchase.expires_at)}</div>
+                </div>
+                {checkoutState.purchase.payment_method === 'ton' ? (
+                  <div className="shop-inline-checkout__panel">
+                    <div><strong>Сумма:</strong> {purchaseAmountSummary(checkoutState.purchase)}</div>
+                    {checkoutState.purchase.seller_wallet ? (
+                      <div><strong>TON wallet:</strong> <code>{checkoutState.purchase.seller_wallet}</code></div>
+                    ) : null}
+                    <div><strong>Memo:</strong> <code>{checkoutState.purchase.memo || '—'}</code></div>
+                    {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) ? (
+                      <img
+                        className="checkout-modal__qr"
+                        style={{ marginTop: 16 }}
+                        src={checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr}
+                        alt="TON QR"
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="shop-inline-checkout__panel">
+                    <div><strong>СБП:</strong> {checkoutState.purchase.sbp_phone || '—'}</div>
+                    {checkoutState.purchase.sbp_fio ? (
+                      <div><strong>Получатель:</strong> {checkoutState.purchase.sbp_fio}</div>
+                    ) : null}
+                    <div><strong>Банк:</strong> {checkoutState.purchase.sbp_bank || 'СБП'}</div>
+                    {checkoutState.purchase.sbp_qr_url ? (
+                      <img
+                        className="checkout-modal__qr"
+                        style={{ marginTop: 16 }}
+                        src={resolveBackendAssetUrl(checkoutState.purchase.sbp_qr_url)}
+                        alt="СБП QR"
+                      />
+                    ) : null}
+                    {checkoutState.purchase.sbp_payment_url ? (
+                        <a
+                          className="ghost-button ghost-button--primary"
+                          href={checkoutState.purchase.sbp_payment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ marginTop: 16 }}
+                        >
+                          Открыть оплату в банке
+                        </a>
+                    ) : null}
+                    {checkoutState.purchase.receipt_file_url ? (
+                      <div>
+                        <strong>Чек:</strong>{' '}
+                        <a href={resolveBackendAssetUrl(checkoutState.purchase.receipt_file_url)} target="_blank" rel="noreferrer">открыть файл</a>
+                      </div>
+                    ) : null}
+                    {checkoutState.purchase.status === 'pending' ? (
+                      <div className="shop-inline-checkout__receipt">
+                        <div className="table-card__title" style={{ marginBottom: 4 }}>Отправь чек продавцу</div>
+                        <div className="table-subtext">После перевода по СБП приложи скрин или PDF чека. Без этого продавец оплату не подтвердит.</div>
+                        <textarea
+                          className="field"
+                          rows="3"
+                          placeholder="Банк, сумма, время перевода"
+                          value={receiptNote}
+                          onChange={(event) => setReceiptNote(event.target.value)}
+                        />
+                        <input
+                          className="field"
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
+                        />
+                        <div className="table-subtext">Подойдут скриншот оплаты или PDF-чек.</div>
+                      </div>
+                    ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
+                      <div className="table-subtext">Чек уже отправлен. Продавец проверит его вручную на странице проверки чеков.</div>
+                    ) : null}
+                  </div>
+                )}
+                <div className="toolbar-card__body">
+                  {checkoutState.purchase.payment_method === 'ton' ? (
+                    <button
+                      className="ghost-button ghost-button--primary"
+                      type="button"
+                      onClick={payCheckoutInBrowser}
+                    >
+                      {tonWallet ? 'Оплатить в Chrome' : 'Подключить кошелек в Chrome'}
+                    </button>
+                  ) : null}
+                  {checkoutState.purchase.payment_method === 'ton' && (checkoutState.purchase.trust_wallet_uri || checkoutState.purchase.ton_uri) ? (
+                    <a className="ghost-button ghost-button--primary" href={checkoutState.purchase.trust_wallet_uri || checkoutState.purchase.ton_uri}>
+                      Оплатить в Trust Wallet
+                    </a>
+                  ) : null}
+                  {checkoutState.purchase.payment_method === 'ton' ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={checkoutState.checking}
+                      onClick={checkCheckout}
+                    >
+                      {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
+                    </button>
+                  ) : checkoutState.purchase.status === 'pending' ? (
+                    <button
+                      className="ghost-button ghost-button--primary"
+                      type="button"
+                      disabled={checkoutState.checking}
+                      onClick={markCheckoutPaid}
+                    >
+                      {checkoutState.checking ? 'Отправляем...' : 'Отправить чек продавцу'}
+                    </button>
+                  ) : null}
+                  {(checkoutState.purchase.status === 'pending' || checkoutState.purchase.status === 'awaiting_receipt') ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => cancelCheckoutPurchase(checkoutState.purchase)}
+                    >
+                      Снять бронь
+                    </button>
+                  ) : null}
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => setCheckoutState({
+                      item: null,
+                      purchase: null,
+                      paymentMethod: 'ton',
+                      loading: false,
+                      checking: false,
+                      error: ''
+                    })}
+                  >
+                    Скрыть
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null
+      ) : null}
+
+      {state.support?.profile_role !== 'admin' ? (
+        <div className="toolbar-card proxy-surface-card">
+          <div className="proxy-surface-card__head">
+            <div>
+              <div className="toolbar-card__title">Купить прокси</div>
+              <div className="table-subtext">Один seller-лот, но можно сразу выбрать, сколько прокси забронировать. Все оплаты потом окажутся в блоке ниже.</div>
+            </div>
+          </div>
+          {shopState.loading ? (
+            <div className="empty-inline" style={{ marginTop: 12 }}>Загружаем лоты...</div>
+          ) : shopState.error ? (
+            <div className="error-inline" style={{ marginTop: 12 }}>{shopState.error}</div>
+          ) : !proxyBatchOffer ? (
+            <div className="empty-inline" style={{ marginTop: 12 }}>Сейчас готовых лотов нет.</div>
+          ) : (
+            <div className="list-stack" style={{ marginTop: 16 }}>
+              <div className="list-item">
+                <div>
+                  <div className="list-item__title">{proxyBatchOffer.title}</div>
+                  <div className="list-item__meta">{proxyBatchOffer.unitPriceText} за 1 шт.</div>
+                  <div className="list-item__body">{proxyBatchOffer.previewText}</div>
+                  <div className="table-subtext" style={{ marginTop: 8 }}>
+                    Свободно сейчас: <strong>{proxyBatchOffer.items.length}</strong>{profilePlan === 'trial' ? ` • можешь взять сейчас: ${proxyBuyLimit}` : ''}
+                  </div>
+                </div>
+                <div className="hero-actions proxy-buy-actions" style={{ alignItems: 'stretch' }}>
+                  <label className="field-group proxy-quantity-field">
+                    <span>Сколько купить</span>
+                    <div className="proxy-quantity-stepper">
+                      <button
+                        className="ghost-button proxy-quantity-stepper__button"
+                        type="button"
+                        disabled={proxyBuyQuantity <= 1}
+                        onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
+                      >
+                        -
+                      </button>
+                      <input
+                        className="field proxy-quantity-stepper__input"
+                        type="number"
+                        min="1"
+                        max={Math.max(proxyBuyLimit, 1)}
+                        value={proxyBuyQuantity}
+                        disabled={proxyBuyLimit <= 0}
+                        onChange={(event) => {
+                          const next = Number.parseInt(event.target.value, 10);
+                          if (Number.isNaN(next)) {
+                            setProxyBuyQuantity(1);
+                            return;
+                          }
+                          setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
+                        }}
+                      />
+                      <button
+                        className="ghost-button proxy-quantity-stepper__button"
+                        type="button"
+                        disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
+                        onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </label>
+                </div>
+                <div className="list-item__footer proxy-buy-footer">
+                  <div className="proxy-buy-footer__title">Купить</div>
+                  <div className="proxy-buy-footer__actions">
+                    {proxyBatchOffer.paymentMethods.map((method) => (
+                      <button
+                        key={method}
+                        className={`ghost-button${method === 'ton' ? ' ghost-button--primary' : ''}`}
+                        type="button"
+                        disabled={checkoutState.loading || proxyBuyLimit <= 0}
+                        onClick={() => createProxyBatchCheckout(method)}
+                      >
+                        {checkoutState.loading ? 'Создаем бронь...' : paymentMethodLabel(method)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {state.support?.profile_role !== 'admin' ? (
+        renderOpenProxyPurchases(openProxyPurchases)
+      ) : null}
+
+      {state.proxies.length > 0 && state.support?.profile_role !== 'admin' ? (
+      <div className="toolbar-card proxy-surface-card">
+        <div className="proxy-surface-card__head">
+          <div>
+            <div className="toolbar-card__title">Фильтр</div>
+            <div className="table-subtext">Быстро отрежь битые, shared и купленные хвосты.</div>
+          </div>
+        </div>
+        <div className="filter-strip">
+          {[
+            { id: 'all', label: 'Все' },
+            { id: 'working', label: 'Работают' },
+            { id: 'broken', label: 'С ошибкой' },
+            { id: 'shared_proxy', label: 'Shared-хвост' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
+              onClick={() => setFilter(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+          <button
+            className={`filter-chip${filter === 'manual_free' ? ' filter-chip--active' : ''}`}
+            onClick={() => setFilter('manual_free')}
+          >
+            Временные
+          </button>
+          <button
+            className={`filter-chip${filter === 'purchased' ? ' filter-chip--active' : ''}`}
+            onClick={() => setFilter('purchased')}
+          >
+            Купленные
+          </button>
+        </div>
+      </div>
+      ) : null}
+
+      {state.support?.profile_role !== 'admin' && state.proxies.length > 0 ? (
+        renderProxyTable(filteredProxies, 'У тебя пока нет прокси.', {
+          title: 'Мои прокси'
+        })
+      ) : null}
+
+      {state.support?.profile_role === 'admin' ? (
+      <div className="proxy-top-grid">
+        <div className="toolbar-card proxy-surface-card proxy-setup-card">
+          <div className="proxy-surface-card__head">
+            <div>
+              <div className="toolbar-card__title">{formState.id ? 'Редактировать proxy' : (state.support?.profile_role === 'admin' ? 'Поднять серверный прокси' : 'Добавить свой proxy')}</div>
+              <div className="table-subtext">
+                {state.support?.profile_role === 'admin'
+                  ? 'Сначала имя и доступ, потом выбираешь, куда этот прокси пойдёт: себе, в продажу или в trial пул.'
+                  : 'Это твой личный proxy для постоянной работы.'}
+              </div>
+            </div>
+            {!formState.id ? <span className="pill pill--info">{suggestedServerProxyName}</span> : null}
+          </div>
+          {state.notice ? (
+            <div className="success-inline" style={{ marginBottom: 16 }}>
+              {state.notice}
+            </div>
+          ) : null}
+          {showQuotaLock ? (
+            <div className="error-card" style={{ marginBottom: 16 }}>
+              На Trial можно держать только один свой proxy. Чтобы добавить следующий, сначала перейди на Normal.
+            </div>
+          ) : null}
+          {state.support?.profile_role === 'admin' && !formState.id ? (
+            <div className="table-subtext" style={{ marginBottom: 16 }}>
+              Оставь host пустым для автоподнятия на сервере.
+            </div>
+          ) : null}
+          <div className="proxy-form-grid">
+            <label className="proxy-field proxy-field--name">
+              <span className="proxy-field__label">Название</span>
+              <input
+                className="field"
+                type="text"
+                value={formState.name}
+                onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                placeholder="Название"
+              />
+            </label>
+            <label className="proxy-field proxy-field--host">
+              <span className="proxy-field__label">Host / IP</span>
+              <input
+                className="field"
+                type="text"
+                value={formState.host}
+                onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
+                placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым для автоподнятия' : 'Host / IP'}
+              />
+            </label>
+            <label className="proxy-field proxy-field--port">
+              <span className="proxy-field__label">Порт</span>
+              <input
+                className="field"
+                type="number"
+                min="1"
+                value={formState.port}
+                onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
+                placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : 'Port'}
+              />
+            </label>
+            <label className="proxy-field proxy-field--username">
+              <span className="proxy-field__label">Username</span>
+              <input
+                className="field"
+                type="text"
+                value={formState.username}
+                onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
+                placeholder="Если нужен"
+              />
+            </label>
+            <label className="proxy-field proxy-field--password">
+              <span className="proxy-field__label">Password</span>
+              <input
+                className="field"
+                type="text"
+                value={formState.password}
+                onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                placeholder="Если нужен"
+              />
+            </label>
+            {state.support?.profile_role === 'admin' ? (
+              <label className="proxy-field proxy-field--group">
+                <span className="proxy-field__label">Группа</span>
+                <select
+                  className="field"
+                  value={formState.inventory_group}
+                  onChange={(event) => setFormState((prev) => ({
+                    ...prev,
+                    inventory_group: event.target.value,
+                    name: prev.id ? prev.name : buildServerProxyName(
+                      event.target.value,
+                      state.proxies
+                        .filter((proxy) => proxy.provision_source === 'manual_admin')
+                        .map((proxy) => proxy.name)
+                    )
+                  }))}
+                >
+                  <option value="shop_sale">На продажу в shop</option>
+                  <option value="self_use">Использую сам</option>
+                </select>
+              </label>
+            ) : null}
+          </div>
+          <div className="toolbar-card__body proxy-setup-card__actions">
+            {state.support?.profile_role === 'admin' && !formState.id ? (
+              <button className="ghost-button" type="button" onClick={fillFromLatestServerProxy}>
+                Взять из последнего серверного
+              </button>
+            ) : null}
+            <button className="ghost-button ghost-button--primary" onClick={saveProxy} disabled={state.saving || showQuotaLock}>
+              {state.saving ? 'Сохраняем...' : (state.support?.profile_role === 'admin' ? (formState.host.trim() ? 'Сохранить внешний прокси' : 'Поднять прокси на сервере') : 'Сохранить прокси')}
+            </button>
+            {formState.id ? (
+              <button className="ghost-button" onClick={resetForm}>
+                Сбросить форму
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <div className="toolbar-card proxy-surface-card proxy-side-note">
+          <div className="proxy-surface-card__head">
+            <div className="toolbar-card__title">Как раскладывать прокси</div>
+          </div>
+          <div className="proxy-side-note__stack">
+            <div className="proxy-side-note__item">
+              <div className="proxy-side-note__label">Использую сам</div>
+              <div className="proxy-side-note__text">Прокси для твоего рабочего userbot-контура и внутренних задач.</div>
+            </div>
+            <div className="proxy-side-note__item">
+              <div className="proxy-side-note__label">На продажу</div>
+              <div className="proxy-side-note__text">Инвентарь под shop. Сначала сюда, потом уже публикуй лот.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      ) : null}
+
+      {state.proxies.length > 0 && state.support?.profile_role === 'admin' ? (
+      <div className="toolbar-card proxy-surface-card">
+        <div className="proxy-surface-card__head">
+          <div>
+            <div className="toolbar-card__title">Фильтр</div>
+            <div className="table-subtext">Быстро отрежь битые, shared и купленные хвосты.</div>
+          </div>
+        </div>
+        <div className="filter-strip">
+          {[
+            { id: 'all', label: 'Все' },
+            { id: 'working', label: 'Работают' },
+            { id: 'broken', label: 'С ошибкой' },
+            { id: 'shared_proxy', label: 'Shared-хвост' }
+          ].map((item) => (
+            <button
+              key={item.id}
+            className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
+            onClick={() => setFilter(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+          <button
+            className={`filter-chip${filter === 'manual_free' ? ' filter-chip--active' : ''}`}
+            onClick={() => setFilter('manual_free')}
+          >
+            Временные
+          </button>
+          <button
+            className={`filter-chip${filter === 'purchased' ? ' filter-chip--active' : ''}`}
+            onClick={() => setFilter('purchased')}
+          >
+            Купленные
+          </button>
+        </div>
+      </div>
+      ) : null}
+
+      {state.support?.profile_role === 'admin' ? (
+        <>
+          <div className="proxy-section-head">
+            <div>
+              <div className="proxy-section-head__eyebrow">Inventory</div>
+              <div className="proxy-section-head__title">Инвентарь прокси</div>
+            </div>
+            <div className="proxy-section-head__hint">
+              Сначала своя работа, потом продажи. Так легче держать контур чистым.
+            </div>
+          </div>
+          <div className="proxy-lanes">
+          {renderProxyTable(selfUseProxies, 'В своей группе пока пусто.', {
+            title: 'Использую сам',
+            description: 'Рабочий контур для собственных userbot-задач.'
+          })}
+          {renderProxyTable(createdForSaleProxies, 'Здесь пока пусто.', {
+            title: 'Создано для продажи',
+            description: 'Прокси уже лежат в продажной группе, но лот ещё не опубликован.'
+          })}
+          {renderProxyTable(listedForSaleProxies, 'На витрине сейчас ничего нет.', {
+            title: 'Выставлено на продажу',
+            description: 'Эти прокси уже попали в shop и ждут покупателя.'
+          })}
+          {renderSoldProxyItems(soldProxyItems)}
+          {renderProxyTable(nonAdminInventoryProxies, 'Купленных или уже выданных прокси под текущий фильтр нет.', {
+            title: 'Купленные и выданные',
+            description: 'Прокси, которые уже ушли пользователям или достались извне, включая старые trial-хвосты.'
+          })}
+          </div>
+        </>
+      ) : null}
+
+    </section>
+  );
+}
