@@ -434,9 +434,13 @@ export function OpsChecklistRail() {
           </div>
         </div>
         <div className="sidebar-profile__plan">
-          <span className={`sidebar-profile__plan-value ${currentPlan?.pillClass || 'pill pill--info'}`}>
-            {planText}
-          </span>
+          <div className="sidebar-profile__plan-label">Тарифный план</div>
+          <div className="sidebar-profile__plan-row">
+            <span className={`sidebar-profile__plan-value ${currentPlan?.pillClass || 'pill pill--info'}`}>
+              {planText}
+            </span>
+          </div>
+          <div className="sidebar-profile__plan-hint">{currentPlan?.hint || 'План еще не подтянулся из профиля.'}</div>
         </div>
         <a className="checklist__link" href="/pricing">
           Изменить тариф

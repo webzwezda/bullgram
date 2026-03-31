@@ -167,7 +167,10 @@ a {
 }
 
 .sidebar-profile__plan {
-  margin-top: 12px;
+  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  align-items: start;
 }
 
 .sidebar-profile__plan-label {
@@ -178,12 +181,26 @@ a {
   color: var(--muted);
 }
 
+.sidebar-profile__plan-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .sidebar-profile__plan-value {
-  margin-top: 8px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-height: 30px;
   font-size: 12px;
   font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+}
+
+.sidebar-profile__plan-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .sidebar-profile__logout {
