@@ -34,7 +34,7 @@ function planMeta(plan, trialEndsAt) {
   if (plan === 'normal') {
     return {
       title: 'Текущий план: Normal',
-      hint: 'Основной рабочий контур. Trial уже не держит тебя за горло по базовым ограничениям.',
+      hint: null,
       pillClass: 'pill pill--ok',
       pillText: 'Normal'
     };
@@ -217,7 +217,7 @@ export function OpsChecklistRail() {
               ...(data.paymentReadiness || {}),
               hasSettings: true,
               hasTon: !!settings.ton_wallet,
-              hasSbp: !!(settings.sbp_phone || settings.sbp_bank),
+              hasSbp: !!settings.sbp_phone,
               adminTgId: settings.admin_tg_id ? String(settings.admin_tg_id) : ''
             }
           : (data.paymentReadiness || {});
@@ -352,23 +352,21 @@ export function OpsChecklistRail() {
     const steps = [
       {
         key: 'payments',
-        done: !!payment.hasTon && !!payment.hasSbp,
-        title: 'Заполни реквизиты',
-        hint: (!!payment.hasTon && !!payment.hasSbp)
-          ? 'TON и СБП уже на месте. Покупателю будет куда платить.'
-          : 'Сначала укажи TON-кошелек и СБП. Без этого checkout будет пустым.',
+        done: !!payment.hasTon || !!payment.hasSbp,
+        title: 'Реквизиты',
+        hint: '',
         href: '/app/payments',
-        actionLabel: 'Открыть реквизиты'
+        actionLabel: 'Настройки реквизитов'
       },
       {
         key: 'official-bot',
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
-        title: 'Добавь official bot',
+        title: 'Добавь бота продаж',
         hint: ((summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0)
           ? 'Official bot уже подключен и участвует в доступе.'
-          : 'Добавь official bot и доведи его до админа в группах, где будут продажи и доступ.',
-        href: '/app/admin-groups',
-        actionLabel: 'Открыть группы и права'
+          : 'Добавь бота продаж и доведи его до админа в группах, где будут продажи и доступ.',
+        href: '/app/botfather',
+        actionLabel: 'Открыть бота продаж'
       },
       {
         key: 'proxy',
@@ -416,8 +414,6 @@ export function OpsChecklistRail() {
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
   const planText = currentPlan?.pillText || 'План не определен';
   const summary = state.summary || {};
-  const completedChecklistCount = checklist.filter((item) => item.state === 'done').length;
-  const activeChecklistItem = checklist.find((item) => item.state === 'active');
 
   return (
     <aside className="ops-rail">
@@ -434,17 +430,18 @@ export function OpsChecklistRail() {
           </div>
         </div>
         <div className="sidebar-profile__plan">
-          <div className="sidebar-profile__plan-label">Тарифный план</div>
           <div className="sidebar-profile__plan-row">
-            <span className={`sidebar-profile__plan-value ${currentPlan?.pillClass || 'pill pill--info'}`}>
+            <a
+              className={`sidebar-profile__plan-value ${currentPlan?.pillClass || 'pill pill--info'}`}
+              href="/pricing"
+            >
               {planText}
-            </span>
+            </a>
           </div>
-          <div className="sidebar-profile__plan-hint">{currentPlan?.hint || 'План еще не подтянулся из профиля.'}</div>
+          {currentPlan?.hint ? (
+            <div className="sidebar-profile__plan-hint">{currentPlan.hint}</div>
+          ) : null}
         </div>
-        <a className="checklist__link" href="/pricing">
-          Изменить тариф
-        </a>
         {user ? (
           <button className="sidebar-profile__logout sidebar-profile__logout--dark" onClick={logout}>
             Выйти из системы
@@ -457,23 +454,6 @@ export function OpsChecklistRail() {
       </div>
 
       <div className="ops-rail__card ops-rail__card--surface ops-rail__card--checklist">
-        <div className="ops-rail__card-head">
-          <div>
-          </div>
-          <span className="pill pill--info">{completedChecklistCount}/{checklist.length}</span>
-        </div>
-        <div className="ops-rail__text">
-          Сначала реквизиты, потом official bot, потом прокси и только после этого юзербот.
-        </div>
-        {activeChecklistItem ? (
-          <div className="ops-rail__meta">
-            Сейчас главный следующий шаг: <strong>{activeChecklistItem.title.toLowerCase()}</strong>
-          </div>
-        ) : (
-          <div className="ops-rail__meta">
-            Базовый контур уже собран. Дальше можно спокойно дожимать shop, доступ и продажи.
-          </div>
-        )}
         <div className="ops-rail__stack">
           {checklist.map((item) => (
             <ChecklistItem key={item.key} item={item} />

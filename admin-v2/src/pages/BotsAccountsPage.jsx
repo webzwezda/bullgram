@@ -17,16 +17,6 @@ function formatWhen(value) {
   }).format(new Date(value));
 }
 
-function runtimeBadge(account) {
-  if (account.runtime_status === 'online') return { text: 'Проверен', className: 'pill pill--info' };
-  if (account.runtime_status === 'pending_activation') return { text: 'Ждет активации', className: 'pill pill--warning' };
-  if (account.runtime_status === 'restricted') return { text: 'Ограничен', className: 'pill pill--danger' };
-  if (account.runtime_status === 'dead_proxy') return { text: 'Прокси умер', className: 'pill pill--danger' };
-  if (account.runtime_status === 'expired') return { text: 'Сессия умерла', className: 'pill pill--danger' };
-  if (account.runtime_status === 'error') return { text: 'Проверка упала', className: 'pill pill--warning' };
-  return { text: 'Еще не проверяли', className: 'pill' };
-}
-
 function summarizeCheckStatus(result = {}, fallbackAccount = null) {
   const status = String(result?.status || fallbackAccount?.runtime_status || '').trim().toLowerCase();
   if (status === 'online') return { tone: 'success', title: 'Сессия жива' };
@@ -98,10 +88,6 @@ function restrictedMarker(account) {
     detail: 'Аккаунт ограничен Telegram. В работу его пускать не надо.',
     className: 'pill pill--danger'
   };
-}
-
-function botRoleLabel(account) {
-  return (account.bot_role || 'sales') === 'ops' ? 'Админ юзерботов' : 'Платежи и продажи';
 }
 
 function proxySourceBadge(proxy) {
@@ -216,17 +202,6 @@ function userbotPurchaseAmountSummary(purchase) {
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
-function isImageLikeUrl(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return false;
-  return normalized.startsWith('data:image/')
-    || normalized.endsWith('.png')
-    || normalized.endsWith('.jpg')
-    || normalized.endsWith('.jpeg')
-    || normalized.endsWith('.webp')
-    || normalized.endsWith('.gif');
-}
-
 function purchaseStatusMeta(status) {
   if (status === 'awaiting_receipt') {
     return { text: 'Ждет чек', className: 'pill pill--warning' };
@@ -297,9 +272,7 @@ function normalizeOpenUserbotPurchaseGroup(rows = []) {
       ton_qr: first.payload?.ton_qr || '',
       sbp_phone: first.payload?.sbp_phone || '',
       sbp_bank: first.payload?.sbp_bank || '',
-      sbp_fio: first.payload?.sbp_fio || '',
-      sbp_qr_url: first.payload?.sbp_qr_url || '',
-      sbp_payment_url: first.payload?.sbp_payment_url || ''
+      sbp_fio: first.payload?.sbp_fio || ''
     },
     item: {
       ...(first.item || {}),
@@ -410,6 +383,16 @@ function saleTitleForAccount(account) {
   return 'Аккаунт';
 }
 
+function botGroupsMeta(channels = []) {
+  if (!Array.isArray(channels) || !channels.length) return 'Админ в группе не назначен';
+  const titles = channels
+    .map((channel) => String(channel?.title || channel?.tg_chat_id || '').trim())
+    .filter(Boolean);
+  if (!titles.length) return 'Админ в группе не назначен';
+  const summary = titles.length <= 2 ? titles.join(', ') : `${titles.slice(0, 2).join(', ')} +${titles.length - 2}`;
+  return `${titles.length > 1 ? 'Админ в группах' : 'Админ в группе'}: ${summary}`;
+}
+
 function BotsAccountsPageContent({ mode = 'userbots' }) {
   const { accessToken, user, profilePlan } = useAuth();
   const [tonConnectUI] = useTonConnectUI();
@@ -494,7 +477,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     loading: true,
     refreshing: false,
     savingBot: false,
-    changingRoleId: '',
     checkingAccountId: '',
     togglingSafeModeId: '',
     bindingAccountId: '',
@@ -508,6 +490,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     reservedUserbotIds: [],
     reservedItemsByAsset: {},
     sellerItemsById: {},
+    channels: [],
     paymentAdminTgId: '',
     recoveryMap: {},
     recoverySupported: true,
@@ -555,7 +538,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       }
 
       try {
-        const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp] = await Promise.all([
+        const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp, channelsResp] = await Promise.all([
           supabase
             .from('tg_accounts')
             .select('*')
@@ -572,11 +555,16 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
           apiRequest('/api/userbot/recovery-status', { accessToken }).catch(() => ({
             support: { recovery: false },
             rows: []
-          }))
+          })),
+          supabase
+            .from('channels')
+            .select('id, title, tg_chat_id, bot_id')
+            .eq('owner_id', user.id)
         ]);
 
         if (accountsResp.error) throw accountsResp.error;
         if (paymentResp.error) throw paymentResp.error;
+        if (channelsResp.error) throw channelsResp.error;
 
         if (!cancelled) {
           setState({
@@ -589,6 +577,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
             reservedUserbotIds: (reservedResp.userbot_ids || []).map(String),
             reservedItemsByAsset: Object.fromEntries((reservedResp.entries || []).map((entry) => [entry.key, entry])),
             sellerItemsById: Object.fromEntries((sellerItemsResp.items || []).map((item) => [String(item.id), item])),
+            channels: channelsResp.data || [],
             paymentAdminTgId: paymentResp.data?.admin_tg_id || '',
             recoveryMap: Object.fromEntries((recoveryResp.rows || []).map((row) => [String(row.account_id), row])),
             recoverySupported: recoveryResp.support?.recovery !== false,
@@ -607,6 +596,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
             reservedUserbotIds: [],
             reservedItemsByAsset: {},
             sellerItemsById: {},
+            channels: [],
             paymentAdminTgId: '',
             recoveryMap: {},
             recoverySupported: true,
@@ -723,8 +713,18 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   ), [fingerprintProfilesState.profiles]);
 
   const officialBots = useMemo(() => {
-    return state.accounts.filter((account) => account.account_type === 'bot');
+    return state.accounts.filter((account) => account.account_type === 'bot' && (account.bot_role || 'sales') !== 'ops');
   }, [state.accounts]);
+
+  const channelsByBotId = useMemo(() => {
+    return (state.channels || []).reduce((acc, channel) => {
+      const key = String(channel.bot_id || '').trim();
+      if (!key) return acc;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(channel);
+      return acc;
+    }, {});
+  }, [state.channels]);
 
   const listedShopUserbots = useMemo(() => {
     return userbots.filter((account) => state.reservedUserbotIds.includes(String(account.id)));
@@ -751,7 +751,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     });
   }, [liveUserbots, state.proxies]);
 
-  const opsBots = useMemo(() => officialBots.filter((account) => (account.bot_role || 'sales') === 'ops'), [officialBots]);
   const usedUserbotProxyIds = useMemo(() => {
     return new Set(
       userbots
@@ -777,7 +776,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   const brokenSelfUseProxies = useMemo(() => {
     return selfUseProxies.filter((proxy) => proxy.is_working === false);
   }, [selfUseProxies]);
-  const needsSignalSetup = !state.paymentAdminTgId || opsBots.length === 0;
   const canSellUserbotAssets = state.proxySupport?.profile_role === 'admin';
   const openUserbotPurchases = useMemo(() => (
     (() => {
@@ -1009,7 +1007,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   async function addOfficialBot() {
     if (!botForm.botToken.trim()) {
-      showUiMessage('Вставь токен official-бота.', 'error');
+      showUiMessage('Вставь токен бота.', 'error');
       return;
     }
 
@@ -1020,35 +1018,16 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         method: 'POST',
         body: {
           botToken: botForm.botToken.trim(),
-          botRole: botForm.botRole
+          botRole: 'sales'
         }
       });
       setBotForm({ botToken: '', botRole: 'sales' });
       await reloadAccounts();
-      showUiMessage('Official-бот подключен.', 'success');
+      showUiMessage('Бот подключен.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, savingBot: false }));
-    }
-  }
-
-  async function updateBotRole(accountId, botRole) {
-    setState((prev) => ({ ...prev, changingRoleId: String(accountId) }));
-    try {
-      await apiRequest('/api/official-bot/role', {
-        accessToken,
-        method: 'POST',
-        body: {
-          account_id: accountId,
-          bot_role: botRole
-        }
-      });
-      await reloadAccounts();
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    } finally {
-      setState((prev) => ({ ...prev, changingRoleId: '' }));
     }
   }
 
@@ -1373,8 +1352,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
-          sbp_qr_url: data.sbp_qr_url || '',
-          sbp_payment_url: data.sbp_payment_url || '',
           receipt_file_url: ''
         }
       });
@@ -1413,9 +1390,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
           sbp_phone: existingPurchase.payload?.sbp_phone || '',
           sbp_bank: existingPurchase.payload?.sbp_bank || '',
           sbp_fio: existingPurchase.payload?.sbp_fio || '',
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
-          sbp_qr_url: existingPurchase.payload?.sbp_qr_url || '',
-          sbp_payment_url: existingPurchase.payload?.sbp_payment_url || ''
+          receipt_file_url: existingPurchase.payload?.receipt_file_url || ''
         } : null,
         loading: false,
         checking: false,
@@ -1486,8 +1461,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
-          sbp_qr_url: data.sbp_qr_url || '',
-          sbp_payment_url: data.sbp_payment_url || '',
           receipt_file_url: '',
           batch: true
         },
@@ -1588,8 +1561,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         sbp_bank: purchase.payload?.sbp_bank || '',
         sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
-        sbp_qr_url: purchase.payload?.sbp_qr_url || '',
-        sbp_payment_url: purchase.payload?.sbp_payment_url || '',
         batch: !!purchase.batch
       },
       paymentMethod: purchase.payload?.payment_method || 'ton',
@@ -2109,7 +2080,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
                 ) : null}
                 {checkoutState.purchase.sbp_bank ? (
                   <div className="rounded-[14px] bg-slate-50 px-4 py-3">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-400">Банк</div>
+                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-400">Банки</div>
                     <div className="mt-1 text-[15px] font-semibold text-slate-900">{checkoutState.purchase.sbp_bank}</div>
                   </div>
                 ) : null}
@@ -2120,26 +2091,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
                   </div>
                 ) : null}
               </div>
-              {checkoutState.purchase.sbp_qr_url && isImageLikeUrl(checkoutState.purchase.sbp_qr_url) ? (
-                <div className="flex items-center justify-center rounded-[16px] border border-slate-200 bg-slate-50 p-3">
-                  <img
-                    src={resolveBackendAssetUrl(checkoutState.purchase.sbp_qr_url)}
-                    alt="СБП QR"
-                    className="w-full max-w-[180px]"
-                  />
-                </div>
-              ) : null}
             </div>
-            {checkoutState.purchase.sbp_payment_url ? (
-              <a
-                className="inline-flex h-11 items-center justify-center rounded-[14px] bg-blue-600 px-5 text-[14px] font-semibold text-white transition hover:bg-blue-700"
-                href={resolveBackendAssetUrl(checkoutState.purchase.sbp_payment_url)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Открыть оплату в банке
-              </a>
-            ) : null}
             {checkoutState.purchase.status === 'awaiting_receipt' ? (
               <div className="rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
                 Чек уже отправлен. Жди ручную проверку.
@@ -2447,12 +2399,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   return (
     <section className="page page--flush">
-      {isOfficialMode ? (
-        <div className="page__header">
-          <h1>BotFather и official bot</h1>
-        </div>
-      ) : null}
-
       {uiMessage.text ? (
         <div className={`userbots-status-note userbots-status-note--${uiMessage.tone || 'default'}`}>
           {uiMessage.text}
@@ -2462,136 +2408,59 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       {isOfficialMode ? (
         <>
           <div className="toolbar-card">
-            <div className="toolbar-card__title">Подключить official-бота</div>
-            <div className="table-subtext">Вставь токен из BotFather, выбери роль и подключи бота в контур.</div>
+            <div className="toolbar-card__title">
+              Подключить{' '}
+              <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">
+                @BotFather
+              </a>
+            </div>
             <div className="toolbar-card__body">
               <input
                 className="field"
                 type="text"
                 value={botForm.botToken}
                 onChange={(event) => setBotForm((prev) => ({ ...prev, botToken: event.target.value }))}
-                placeholder="BotFather token"
+                placeholder="8123456789:AAE_x7v9Kq2LmN4pR8sTuVwXyZ0abCDeFg"
               />
-              <select
-                className="field"
-                value={botForm.botRole}
-                onChange={(event) => setBotForm((prev) => ({ ...prev, botRole: event.target.value }))}
-              >
-                <option value="sales">Платежи и продажи</option>
-                <option value="ops">Админ юзерботов</option>
-              </select>
               <button className="ghost-button ghost-button--primary" onClick={addOfficialBot} disabled={state.savingBot}>
-                {state.savingBot ? 'Подключаем...' : 'Подключить official-бота'}
+                {state.savingBot ? 'Подключаем...' : 'Подключить'}
               </button>
             </div>
           </div>
 
-          <div className="grid grid--double">
-            <div className="toolbar-card">
-              <div className="toolbar-card__title">Контур сигналов</div>
-              <div className="list-stack">
-                <div className="list-item">
-                  <div className="list-item__title">Получатель сигналов</div>
-                  <div className="list-item__meta">
-                    {state.paymentAdminTgId
-                      ? `Новые горячие входящие юзерботов летят на TG ID ${state.paymentAdminTgId}.`
-                      : 'admin_tg_id не задан. Пропиши его в реквизитах.'}
-                  </div>
-                </div>
-                <div className="list-item">
-                  <div className="list-item__title">Ops-боты</div>
-                  <div className="list-item__meta">
-                    {opsBots.length
-                      ? opsBots.map((account) => account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`).join(', ')
-                      : 'Ops-бот пока не подключен.'}
-                  </div>
-                </div>
-              </div>
-              <div className="toolbar-card__body">
-                <a className="ghost-button" href="/app/admin-groups">Группы и права</a>
-                <a className="ghost-button" href="/app/payments">Реквизиты</a>
-              </div>
-            </div>
-
-            <div className="toolbar-card">
-              <div className="toolbar-card__title">Что дальше</div>
-              <div className="list-stack">
-                <div className="list-item">
-                  <div className="list-item__title">После подключения</div>
-                  <div className="list-item__meta">
-                    Доведи official bot до прав в группах и проверь, что он видит реквизиты и checkout.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="section">
-            <div className="section__title">Official-боты</div>
-            <div className="table-card">
-              {officialBots.length === 0 ? (
-                <div className="empty-inline">Official-ботов пока нет.</div>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Бот</th>
-                      <th>Роль</th>
-                      <th>Runtime</th>
-                      <th>Дальше</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {officialBots.map((account) => {
-                      const badge = runtimeBadge(account);
-                      return (
-                        <tr key={account.id}>
-                          <td>
-                            <div>@{account.tg_username || 'без username'}</div>
-                            <div className="table-subtext">TG ID {account.tg_account_id}</div>
-                          </td>
-                          <td>
-                            <span className="pill pill--info">{botRoleLabel(account)}</span>
-                            <div className="table-subtext">
-                              {(account.bot_role || 'sales') === 'ops'
-                                ? 'Этот бот следит за горячими личками и пингует админа.'
-                                : 'Этот бот продает, принимает оплату и выдает контур.'}
-                            </div>
-                            <div className="table-subtext" style={{ marginTop: 8 }}>
-                              <select
-                                className="field"
-                                value={account.bot_role || 'sales'}
-                                onChange={(event) => updateBotRole(account.id, event.target.value)}
-                                disabled={state.changingRoleId === String(account.id)}
-                              >
-                                <option value="sales">Платежи и продажи</option>
-                                <option value="ops">Админ юзерботов</option>
-                              </select>
-                            </div>
-                          </td>
-                          <td>
-                            <span className={badge.className}>{badge.text}</span>
-                            <div className="table-subtext">{account.runtime_error || 'Без runtime-ошибок'}</div>
-                          </td>
-                          <td>
-                            <div className="table-actions">
-                              <a className="inline-action" href="/app/admin-groups">Группы</a>
-                              <button
-                                className="inline-action inline-action--danger"
-                                onClick={() => deleteAccount(account)}
-                                disabled={state.deletingAccountId === String(account.id)}
-                              >
-                                {state.deletingAccountId === String(account.id) ? 'Удаляем...' : 'Удалить'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <div className="section__title">Подключенные боты</div>
+            {officialBots.length === 0 ? (
+              <div className="table-card">
+                <div className="empty-inline">Ботов пока нет.</div>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {officialBots.map((account) => (
+                  <div key={account.id} className="list-item">
+                    <div className="list-item__head">
+                      <div>
+                        <div className="list-item__title">@{account.tg_username || 'без username'}</div>
+                        <div className="list-item__meta">
+                          {botGroupsMeta(channelsByBotId[String(account.id)] || [])}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="list-item__footer">
+                      <div className="table-actions">
+                        <button
+                          className="inline-action inline-action--danger"
+                          onClick={() => deleteAccount(account)}
+                          disabled={state.deletingAccountId === String(account.id)}
+                        >
+                          {state.deletingAccountId === String(account.id) ? 'Удаляем...' : 'Удалить'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       ) : !canSellUserbotAssets ? (

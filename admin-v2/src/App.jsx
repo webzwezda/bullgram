@@ -36,9 +36,8 @@ export function App() {
       items: [
         { to: '/proxies', label: 'Прокси' },
         { to: '/userbots', label: 'Юзерботы' },
-        { to: '/botfather', label: 'BotFather / official bot' },
+        { to: '/botfather', label: 'Бот продаж' },
         { to: '/admin-groups', label: 'Группы и права' },
-        { to: '/payments', label: 'Реквизиты' },
         { to: '/claw', label: 'Клешня / MCP' },
         { to: '/billing', label: 'Касса / webhook' },
         { to: '/plans', label: 'Тарифы и планы' },

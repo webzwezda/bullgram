@@ -3,6 +3,8 @@ import { apiRequest } from '../api/client.js';
 import { APP_CONFIG } from '../config.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
 
@@ -11,8 +13,6 @@ const DEFAULT_SETTINGS = {
   sbp_phone: '',
   sbp_bank: '',
   sbp_fio: '',
-  sbp_qr_url: '',
-  sbp_payment_url: '',
   admin_tg_id: '',
   billing_provider: 'generic',
   billing_mode: 'manual',
@@ -34,6 +34,41 @@ const DEFAULT_NEW_TARIFF = {
   upsell_tariff_id: '',
   trial_label: ''
 };
+
+const SBP_BANK_OPTIONS = [
+  { value: 'Сбербанк', label: 'Сбербанк' },
+  { value: 'Т-Банк', label: 'Т-Банк' }
+];
+
+const AUTOFILL_BLOCK_PROPS = {
+  autoComplete: 'off',
+  spellCheck: false,
+  'data-lpignore': 'true',
+  'data-1p-ignore': 'true',
+  'data-bwignore': 'true'
+};
+
+function parseSbpBanks(value) {
+  const raw = Array.isArray(value)
+    ? value
+    : String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  const normalized = SBP_BANK_OPTIONS
+    .map((option) => option.value)
+    .filter((option) => raw.includes(option));
+
+  return normalized.length > 0 ? normalized : ['Т-Банк'];
+}
+
+function serializeSbpBanks(values) {
+  return SBP_BANK_OPTIONS
+    .map((option) => option.value)
+    .filter((option) => values.includes(option))
+    .join(', ');
+}
 
 function normalizePhone(value) {
   const raw = String(value || '').trim();
@@ -133,17 +168,14 @@ function downloadCsv(filename, header, rows) {
   URL.revokeObjectURL(url);
 }
 
-function resolveBackendAssetUrl(value) {
-  const url = String(value || '').trim();
-  if (!url) return '';
-  if (/^(https?:|data:|blob:)/i.test(url)) return url;
-  if (url.startsWith('/')) return `${APP_CONFIG.backendUrl}${url}`;
-  return `${APP_CONFIG.backendUrl}/${url}`;
+function requisitesStatusBadgeClass(isReady) {
+  return isReady
+    ? 'border border-emerald-200/80 bg-emerald-50 text-emerald-700'
+    : 'border border-amber-200/80 bg-amber-50 text-amber-700';
 }
 
 export function PaymentSettingsPage({ mode = 'requisites' }) {
-  const { user, accessToken, profileRole } = useAuth();
-  const [sbpQrFile, setSbpQrFile] = useState(null);
+  const { user, accessToken } = useAuth();
   const [selectedUserbotId, setSelectedUserbotId] = useState('');
   const [paymentEventFilter, setPaymentEventFilter] = useState('all');
   const [newTariff, setNewTariff] = useState(DEFAULT_NEW_TARIFF);
@@ -434,35 +466,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
   const isRequisitesMode = mode === 'requisites';
   const isPlansMode = mode === 'plans';
   const isBillingMode = mode === 'billing';
-  const requisitesSummaryCards = useMemo(() => ([
-    {
-      label: 'TON',
-      value: state.settings.ton_wallet ? 'Готов' : 'Пусто',
-      hint: state.settings.ton_wallet ? 'TON-кошелек уже сохранен для сайта и shop.' : 'Пока TON платить некуда.',
-      tone: state.settings.ton_wallet ? 'ok' : 'warning'
-    },
-    {
-      label: 'СБП',
-      value: state.settings.sbp_phone ? 'Готово' : 'Не задано',
-      hint: state.settings.sbp_phone ? 'Ручной СБП checkout можно показать покупателю.' : 'СБП-реквизиты еще не заполнены.',
-      tone: state.settings.sbp_phone ? 'ok' : 'neutral'
-    },
-    {
-      label: 'QR / ссылка',
-      value: state.settings.sbp_qr_url || state.settings.sbp_payment_url ? 'Есть' : 'Нет',
-      hint: state.settings.sbp_qr_url || state.settings.sbp_payment_url
-        ? 'Покупателю есть куда перейти или что сканировать.'
-        : 'Для СБП лучше сразу добавить QR или deeplink банка.',
-      tone: state.settings.sbp_qr_url || state.settings.sbp_payment_url ? 'ok' : 'neutral'
-    },
-    {
-      label: 'Первый запуск',
-      value: isFirstRun ? 'Да' : 'Нет',
-      hint: isFirstRun ? 'Сейчас нужен только кошелек и базовые СБП-реквизиты.' : 'База уже собрана, тут можно просто поддерживать реквизиты в порядке.',
-      tone: isFirstRun ? 'warning' : 'neutral'
-    }
-  ]), [isFirstRun, state.settings]);
-
   const pageCopy = useMemo(() => {
     if (isPlansMode) {
       return {
@@ -532,6 +535,21 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     }));
   }
 
+  function toggleSbpBank(bank) {
+    const selectedBanks = parseSbpBanks(state.settings.sbp_bank);
+    const isEnabled = selectedBanks.includes(bank);
+
+    if (isEnabled && selectedBanks.length === 1) {
+      return;
+    }
+
+    const nextBanks = isEnabled
+      ? selectedBanks.filter((item) => item !== bank)
+      : [...selectedBanks, bank];
+
+    patchSettings({ sbp_bank: serializeSbpBanks(nextBanks) });
+  }
+
   function validatePaymentFields(partialSettings = state.settings) {
     const nextErrors = {};
     const tonWallet = normalizeTonWallet(partialSettings.ton_wallet);
@@ -586,7 +604,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           detail: {
             paymentReadiness: {
               hasTon: !!savedSettings.ton_wallet,
-              hasSbp: !!(savedSettings.sbp_phone || savedSettings.sbp_bank),
+              hasSbp: !!savedSettings.sbp_phone,
               adminTgId: savedSettings.admin_tg_id ? String(savedSettings.admin_tg_id) : ''
             }
           }
@@ -596,43 +614,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     } catch (error) {
       setState((prev) => ({ ...prev, saving: false, error: error.message }));
     }
-  }
-
-  async function saveTonSettings() {
-    await saveSettings();
-  }
-
-  async function saveSbpSettings() {
-    let nextSettings = null;
-
-    if (profileRole === 'admin' && sbpQrFile) {
-      try {
-        const formData = new FormData();
-        formData.append('file', sbpQrFile);
-        const uploadResult = await apiRequest('/api/payment-settings/sbp-qr', {
-          accessToken,
-          method: 'POST',
-          body: formData
-        });
-        nextSettings = {
-          ...state.settings,
-          sbp_qr_url: uploadResult.url || state.settings.sbp_qr_url || ''
-        };
-        setState((prev) => ({
-          ...prev,
-          settings: {
-            ...prev.settings,
-            sbp_qr_url: uploadResult.url || prev.settings.sbp_qr_url || ''
-          }
-        }));
-        setSbpQrFile(null);
-      } catch (error) {
-        setState((prev) => ({ ...prev, saving: false, error: error.message }));
-        return;
-      }
-    }
-
-    await saveSettings(nextSettings);
   }
 
   async function sendWebhookTest() {
@@ -785,39 +766,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
 
   return (
     <section className={`page${isRequisitesMode ? ' payment-page' : ''}`}>
-      {isRequisitesMode ? (
-        <>
-          <div className="payment-overview proxy-surface-card">
-            <div className="payment-overview__top">
-              <div className="payment-overview__copy">
-                <div className="proxy-page__eyebrow">Payments</div>
-                <div className="page__header">
-                  <h1>{pageCopy.title}</h1>
-                </div>
-                <p className="proxy-page__intro">
-                  Тут держим только чистые реквизиты для первого checkout: TON, СБП, QR и deeplink. Без billing-каши и служебного шума.
-                </p>
-              </div>
-              <div className="payment-overview__rule">
-                <div className="payment-overview__rule-label">Что нужно на старте</div>
-                <div className="payment-overview__rule-title">TON + СБП</div>
-                <div className="payment-overview__rule-text">
-                  Для MVP хватает TON-кошелька и базовых СБП-реквизитов. Остальное можно докрутить позже, когда уже пойдут оплаты.
-                </div>
-              </div>
-            </div>
-            <div className="payment-summary-grid">
-              {requisitesSummaryCards.map((card) => (
-                <div key={card.label} className={`proxy-summary-card proxy-summary-card--${card.tone}`}>
-                  <div className="proxy-summary-card__label">{card.label}</div>
-                  <div className="proxy-summary-card__value">{card.value}</div>
-                  <div className="proxy-summary-card__hint">{card.hint}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : (
+      {!isRequisitesMode ? (
         <div className="page__header">
           <h1>{pageCopy.title}</h1>
           <p>{pageCopy.description}</p>
@@ -826,7 +775,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             <span>{state.refreshing ? 'Обновляем фон...' : pageCopy.refreshHint}</span>
           </div>
         </div>
-      )}
+      ) : null}
 
       {!isRequisitesMode && prioritySignals.length > 0 ? (
         <div className="priority-grid section">
@@ -850,164 +799,167 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       ) : null}
 
       {isRequisitesMode ? (
-          <div className="payment-form-grid">
-        <div className="table-card proxy-surface-card payment-card payment-card--ton">
-          <div className="payment-card__header">
-            <div>
-              <div className="payment-card__eyebrow">Основной checkout</div>
-              <div className="table-card__title">TON</div>
-              <div className="table-subtext payment-card__intro">Сюда будут приходить TON-оплаты из сайта и из shop.</div>
-            </div>
-            <span className={`pill ${state.settings.ton_wallet ? 'pill--ok' : 'pill--warning'}`}>
-              {state.settings.ton_wallet ? 'Готов' : 'Пусто'}
-            </span>
-          </div>
-          <div className="form-grid form-grid--stacked payment-card__form">
-            <label className="field-group">
-              <span>TON-кошелек</span>
-              <input
-                className="field"
-                value={state.settings.ton_wallet || ''}
-                onChange={(event) => {
-                  const normalized = normalizeTonWallet(event.target.value);
-                  patchSettings({ ton_wallet: normalized });
-                  validatePaymentFields({ ...state.settings, ton_wallet: normalized });
-                }}
-                onBlur={(event) => {
-                  const value = normalizeTonWallet(event.target.value);
-                  patchSettings({ ton_wallet: value });
-                  validatePaymentFields({ ...state.settings, ton_wallet: value });
-                }}
-                placeholder="UQA..."
-                autoComplete="off"
-              />
-              <div className="table-subtext">Кошелек проверяем сразу, без пробелов и лишнего мусора.</div>
-              {fieldErrors.ton_wallet ? <div className="error-inline">{fieldErrors.ton_wallet}</div> : null}
-            </label>
-          </div>
-          <div className="payment-card__note">
-            Покупатель увидит только checkout и сумму. Здесь важен один чистый TON-кошелек без ручной путаницы.
-          </div>
-          <div className="table-actions" style={{ marginTop: 14 }}>
-            <button className="ghost-button ghost-button--primary" type="button" onClick={saveTonSettings} disabled={state.saving}>
-              {state.saving ? 'Сохраняем...' : 'Сохранить TON'}
-            </button>
-          </div>
-        </div>
-        <div className="table-card proxy-surface-card payment-card payment-card--sbp">
-          <div className="payment-card__header">
-            <div>
-              <div className="payment-card__eyebrow">Ручная оплата</div>
-              <div className="table-card__title">СБП / карта</div>
-              <div className="table-subtext payment-card__intro">Покупатель увидит эти реквизиты в ручном СБП checkout.</div>
-            </div>
-            <span className={`pill ${state.settings.sbp_phone ? 'pill--ok' : 'pill--warning'}`}>
-              {state.settings.sbp_phone ? 'Готово' : 'Не задано'}
-            </span>
-          </div>
-          <div className="payment-card__section-title">Реквизиты</div>
-          <div className="payment-card__subgrid payment-card__subgrid--details">
-            <label className="field-group">
-              <span>Номер для СБП</span>
-              <input
-                className="field"
-                value={state.settings.sbp_phone || ''}
-                onChange={(event) => {
-                  const normalized = normalizePhoneLive(event.target.value);
-                  patchSettings({ sbp_phone: normalized });
-                  validatePaymentFields({ ...state.settings, sbp_phone: normalized });
-                }}
-                onBlur={(event) => {
-                  const normalized = normalizePhone(event.target.value);
-                  patchSettings({ sbp_phone: normalized });
-                  validatePaymentFields({ ...state.settings, sbp_phone: normalized });
-                }}
-                placeholder="+7..."
-                inputMode="tel"
-                autoComplete="tel"
-              />
-              <div className="table-subtext">Например: +7 999 123-45-67</div>
-              {fieldErrors.sbp_phone ? <div className="error-inline">{fieldErrors.sbp_phone}</div> : null}
-            </label>
-            <label className="field-group">
-              <span>ФИО получателя</span>
-              <input
-                className="field"
-                value={state.settings.sbp_fio || ''}
-                onChange={(event) => patchSettings({ sbp_fio: event.target.value })}
-                onBlur={(event) => patchSettings({ sbp_fio: event.target.value.trim() })}
-                placeholder="Иванов Иван Иванович"
-                autoComplete="name"
-              />
-              <div className="table-subtext">Покажем покупателю рядом с номером СБП.</div>
-            </label>
-            <label className="field-group payment-field payment-field--wide">
-              <span>Банк</span>
-              <input
-                className="field"
-                value={state.settings.sbp_bank || ''}
-                onChange={(event) => patchSettings({ sbp_bank: event.target.value })}
-                onBlur={(event) => patchSettings({ sbp_bank: event.target.value.trim() })}
-                placeholder="Т-Банк, Сбер..."
-                autoComplete="organization"
-              />
-              <div className="table-subtext">Укажи банк, чтобы покупателю не пришлось гадать, куда переводить.</div>
-            </label>
-          </div>
-          {profileRole === 'admin' ? (
-            <>
-            <div className="payment-card__section-title payment-card__section-title--spaced">QR и deeplink</div>
-            <div className="payment-assets-panel">
-              <div className="payment-card__subgrid payment-card__subgrid--assets">
-                <label className="field-group">
-                  <span>Ссылка на оплату</span>
-                  <input
-                    className="field"
-                    value={state.settings.sbp_payment_url || ''}
-                    onChange={(event) => patchSettings({ sbp_payment_url: event.target.value })}
-                    onBlur={(event) => patchSettings({ sbp_payment_url: event.target.value.trim() })}
-                    placeholder="https://t.tb.ru/..."
-                    autoComplete="off"
-                  />
-                  <div className="table-subtext">Deeplink банка. Нужен, если человек платит не по картинке QR, а через кнопку.</div>
-                </label>
-                <label className="field-group payment-upload">
-                  <span>Картинка QR</span>
-                  <input
-                    className="field"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
-                    onChange={(event) => setSbpQrFile(event.target.files?.[0] || null)}
-                  />
-                  <div className="table-subtext">Отдельная картинка QR для checkout. Лучше `png` или `jpg`.</div>
-                  {sbpQrFile ? (
-                    <div className="payment-upload__meta">Выбран файл: <strong>{sbpQrFile.name}</strong></div>
-                  ) : null}
-                  {state.settings.sbp_qr_url ? (
-                    <div className="payment-qr-preview">
-                      <div className="payment-qr-preview__label">Текущий QR</div>
-                      <img
-                        src={resolveBackendAssetUrl(state.settings.sbp_qr_url)}
-                        alt="СБП QR"
-                        className="payment-qr-preview__image"
-                      />
-                    </div>
-                  ) : null}
-                </label>
+        <div className="space-y-6">
+          <div className="grid gap-5 xl:items-start xl:grid-cols-[minmax(0,1.18fr)_minmax(290px,0.82fr)]">
+            <section className="rounded-[28px] border border-amber-200/70 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(255,251,245,0.97)_100%)] p-6 shadow-[0_18px_50px_rgba(148,101,40,0.08)] sm:p-7">
+              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <div className="-ml-[5px] inline-flex w-fit items-center rounded-full border border-amber-200/80 bg-amber-50 pl-2 pr-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
+                    Банковские реквизиты
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold tracking-tight text-slate-950">СБП / карта</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                      Банковские реквизиты для получения оплаты в системе быстрых платежей.
+                    </p>
+                  </div>
+                </div>
+                <div className={cn('inline-flex w-fit items-center rounded-full px-3 py-1 text-sm font-medium', requisitesStatusBadgeClass(!!state.settings.sbp_phone))}>
+                  {state.settings.sbp_phone ? 'Готов' : 'Пусто'}
+                </div>
               </div>
+
+              <div className="mt-6 grid gap-6">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">1</div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">Выбор банков</div>
+                      <div className="text-sm text-slate-500">Включи один банк или оба сразу. На них покупатель сможет отправить оплату.</div>
+                    </div>
+                  </div>
+                  <div className="field-group">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                      {SBP_BANK_OPTIONS.map((option) => {
+                        const isActive = parseSbpBanks(state.settings.sbp_bank).includes(option.value);
+                        return (
+                          <label
+                            key={option.value}
+                            className="checkbox-pill"
+                          >
+                            <span className="text-sm font-semibold text-slate-950">{option.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={isActive}
+                              onChange={() => toggleSbpBank(option.value)}
+                              aria-label={option.label}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">2</div>
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">Номер телефона и ФИО</div>
+                      <div className="text-sm text-slate-500">После выбора банков укажи номер СБП и имя получателя.</div>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="field-group">
+                      <span>Номер для СБП</span>
+                      <input
+                        {...AUTOFILL_BLOCK_PROPS}
+                        className={cn('field h-12 rounded-2xl border-slate-200 bg-white/92 text-[15px] shadow-none', fieldErrors.sbp_phone && 'border-rose-300')}
+                        value={state.settings.sbp_phone || ''}
+                        name="sbp_recipient_phone"
+                        onChange={(event) => {
+                          const normalized = normalizePhoneLive(event.target.value);
+                          patchSettings({ sbp_phone: normalized });
+                          validatePaymentFields({ ...state.settings, sbp_phone: normalized });
+                        }}
+                        onBlur={(event) => {
+                          const normalized = normalizePhone(event.target.value);
+                          patchSettings({ sbp_phone: normalized });
+                          validatePaymentFields({ ...state.settings, sbp_phone: normalized });
+                        }}
+                        placeholder="+7 999 123-45-67"
+                        inputMode="tel"
+                        aria-invalid={fieldErrors.sbp_phone ? 'true' : 'false'}
+                      />
+                      {fieldErrors.sbp_phone ? <div className="error-inline">{fieldErrors.sbp_phone}</div> : null}
+                    </label>
+                    <label className="field-group">
+                      <span>ФИО получателя</span>
+                      <input
+                        {...AUTOFILL_BLOCK_PROPS}
+                        className="field h-12 rounded-2xl border-slate-200 bg-white/92 text-[15px] shadow-none"
+                        value={state.settings.sbp_fio || ''}
+                        name="sbp_recipient_fio"
+                        onChange={(event) => patchSettings({ sbp_fio: event.target.value })}
+                        onBlur={(event) => patchSettings({ sbp_fio: event.target.value.trim() })}
+                        placeholder="Иванов Иван Иванович"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-sky-200/80 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,250,255,0.98)_100%)] p-6 shadow-[0_18px_50px_rgba(37,99,235,0.08)] sm:p-7">
+              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-2">
+                  <div className="-ml-[5px] inline-flex w-fit items-center rounded-full border border-sky-200/80 bg-sky-50 pl-2 pr-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-700">
+                    Криптокошелёк
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-semibold tracking-tight text-slate-950">TON</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      TON адрес на который будет приходить оплата.
+                    </p>
+                  </div>
+                </div>
+                <div className={cn('inline-flex w-fit items-center rounded-full px-3 py-1 text-sm font-medium', requisitesStatusBadgeClass(!!state.settings.ton_wallet))}>
+                  {state.settings.ton_wallet ? 'Готов' : 'Пусто'}
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <label className="field-group">
+                  <span>TON-кошелек</span>
+                  <input
+                    {...AUTOFILL_BLOCK_PROPS}
+                    className={cn('field h-12 rounded-2xl border-slate-200 bg-white/92 text-[15px] shadow-none', fieldErrors.ton_wallet && 'border-rose-300')}
+                    value={state.settings.ton_wallet || ''}
+                    name="ton_payout_wallet"
+                    onChange={(event) => {
+                      const normalized = normalizeTonWallet(event.target.value);
+                      patchSettings({ ton_wallet: normalized });
+                      validatePaymentFields({ ...state.settings, ton_wallet: normalized });
+                    }}
+                    onBlur={(event) => {
+                      const value = normalizeTonWallet(event.target.value);
+                      patchSettings({ ton_wallet: value });
+                      validatePaymentFields({ ...state.settings, ton_wallet: value });
+                    }}
+                    placeholder="UQA..."
+                    aria-invalid={fieldErrors.ton_wallet ? 'true' : 'false'}
+                  />
+                  <div className="table-subtext">Кошелек проверяем сразу, без пробелов и лишнего мусора.</div>
+                  {fieldErrors.ton_wallet ? <div className="error-inline">{fieldErrors.ton_wallet}</div> : null}
+                </label>
+
+              </div>
+            </section>
+
+            <div className="flex justify-start xl:col-start-1">
+              <Button
+                type="button"
+                className="h-11 w-full rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto sm:min-w-[220px]"
+                onClick={() => saveSettings()}
+                disabled={state.saving}
+              >
+                {state.saving ? 'Сохраняем...' : 'Сохранить все реквизиты'}
+              </Button>
             </div>
-            </>
-          ) : null}
-          <div className="payment-card__note">
-            Для ручного СБП checkout лучше держать и deeplink банка, и отдельный QR. Тогда у покупателя будет оба пути оплаты.
           </div>
-          <div className="table-actions" style={{ marginTop: 14 }}>
-            <button className="ghost-button ghost-button--primary" type="button" onClick={saveSbpSettings} disabled={state.saving}>
-              {state.saving ? 'Сохраняем...' : 'Сохранить реквизиты СБП'}
-            </button>
-          </div>
+
         </div>
-      </div>
       ) : null}
 
       {isBillingMode ? (
@@ -1101,7 +1053,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             </label>
           </div>
           <div className="table-subtext" style={{ marginTop: 14, lineHeight: 1.8 }}>
-            Webhook URL: <strong>{state.billingHealth?.webhook_url || 'https://bullrun.ru/api/payment/webhook/generic'}</strong>
+            Webhook URL: <strong>{state.billingHealth?.webhook_url || `${APP_CONFIG.backendUrl}/api/payment/webhook/generic`}</strong>
           </div>
           <div className="table-actions" style={{ marginTop: 14 }}>
             <button className="inline-action" onClick={sendWebhookTest}>Тест webhook-а</button>
