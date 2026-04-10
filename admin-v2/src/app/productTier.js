@@ -27,7 +27,7 @@ export function getProductTierRules(plan = 'trial') {
       canCreateMultipleOwnedProxies: true,
       canUseTrialProxy: false,
       canBuyAssets: true,
-      summary: 'Основной рабочий контур. Trial уже не держит тебя за горло базовыми ограничениями.'
+      summary: 'Рабочий тариф BullRun.'
     };
   }
 

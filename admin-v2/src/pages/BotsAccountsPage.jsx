@@ -393,6 +393,35 @@ function botGroupsMeta(channels = []) {
   return `${titles.length > 1 ? 'Админ в группах' : 'Админ в группе'}: ${summary}`;
 }
 
+function adminContextMeta(adminTgId) {
+  return adminTgId ? `TG ID ${adminTgId}` : 'Не указан';
+}
+
+function officialBotRoleMeta(botRole) {
+  if (botRole === 'placeholder') {
+    return {
+      title: 'Заготовка',
+      lines: [
+        'Это заготовка под следующую роль official-бота. Здесь позже можно будет подключать отдельного бота под постинг, антиспам или составные сценарии доступа.',
+        'Пока эта роль только резервирует место в интерфейсе и не подключается в рабочий контур.'
+      ]
+    };
+  }
+
+  return {
+    title: 'Продажи доступа',
+    lines: [
+      'Принятие оплат и выдача однаразовой ссылки доступа в группу',
+      'Выдача цыфровых материалов, доступ в чат и закрытую группу',
+      'Авто удаление клиента если закончился срок купленного тарифа',
+      'Узнает своего админа и отдает ему чеки СБП',
+      'Добавление покупателя в CRM',
+      'Авто напоминание о продление тарифа',
+      'Предоставление скидки если человек посмотрел но не оплатил в течении двух часов'
+    ]
+  };
+}
+
 function BotsAccountsPageContent({ mode = 'userbots' }) {
   const { accessToken, user, profilePlan } = useAuth();
   const [tonConnectUI] = useTonConnectUI();
@@ -404,6 +433,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     botToken: '',
     botRole: 'sales'
   });
+  const [botAdminDrafts, setBotAdminDrafts] = useState({});
+  const [selectedOfficialBotId, setSelectedOfficialBotId] = useState('');
   const [onboarding, setOnboarding] = useState({
     proxyId: '',
     qrFingerprintProfileId: QR_FINGERPRINT_PROFILES[0].id,
@@ -477,6 +508,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     loading: true,
     refreshing: false,
     savingBot: false,
+    savingBotAdminId: '',
     checkingAccountId: '',
     togglingSafeModeId: '',
     bindingAccountId: '',
@@ -726,6 +758,15 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     }, {});
   }, [state.channels]);
 
+  const selectedOfficialBotRoleMeta = useMemo(
+    () => officialBotRoleMeta(botForm.botRole),
+    [botForm.botRole]
+  );
+  const selectedOfficialBot = useMemo(() => {
+    if (!officialBots.length) return null;
+    return officialBots.find((account) => String(account.id) === String(selectedOfficialBotId)) || officialBots[0];
+  }, [officialBots, selectedOfficialBotId]);
+
   const listedShopUserbots = useMemo(() => {
     return userbots.filter((account) => state.reservedUserbotIds.includes(String(account.id)));
   }, [state.reservedUserbotIds, userbots]);
@@ -941,8 +982,22 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     });
   }, [openUserbotPurchases]);
 
+  useEffect(() => {
+    if (!officialBots.length) {
+      setSelectedOfficialBotId('');
+      return;
+    }
+
+    setSelectedOfficialBotId((prev) => {
+      if (prev && officialBots.some((account) => String(account.id) === String(prev))) {
+        return prev;
+      }
+      return String(officialBots[0].id);
+    });
+  }, [officialBots]);
+
   async function reloadAccounts() {
-    const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp] = await Promise.all([
+    const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp, channelsResp] = await Promise.all([
       supabase
         .from('tg_accounts')
         .select('*')
@@ -959,11 +1014,16 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       apiRequest('/api/userbot/recovery-status', { accessToken }).catch(() => ({
         support: { recovery: false },
         rows: []
-      }))
+      })),
+      supabase
+        .from('channels')
+        .select('id, title, tg_chat_id, bot_id')
+        .eq('owner_id', user.id)
     ]);
 
     if (accountsResp.error) throw accountsResp.error;
     if (paymentResp.error) throw paymentResp.error;
+    if (channelsResp.error) throw channelsResp.error;
 
     setState((prev) => ({
       ...prev,
@@ -973,6 +1033,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       reservedUserbotIds: (reservedResp.userbot_ids || []).map(String),
       reservedItemsByAsset: Object.fromEntries((reservedResp.entries || []).map((entry) => [entry.key, entry])),
       sellerItemsById: Object.fromEntries((sellerItemsResp.items || []).map((item) => [String(item.id), item])),
+      channels: channelsResp.data || [],
       paymentAdminTgId: paymentResp.data?.admin_tg_id || '',
       recoveryMap: Object.fromEntries((recoveryResp.rows || []).map((row) => [String(row.account_id), row])),
       recoverySupported: recoveryResp.support?.recovery !== false,
@@ -1010,6 +1071,10 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       showUiMessage('Вставь токен бота.', 'error');
       return;
     }
+    if (botForm.botRole === 'placeholder') {
+      showUiMessage('Заготовка пока не подключается. Выбери рабочую роль бота.', 'error');
+      return;
+    }
 
     setState((prev) => ({ ...prev, savingBot: true }));
     try {
@@ -1018,16 +1083,46 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         method: 'POST',
         body: {
           botToken: botForm.botToken.trim(),
-          botRole: 'sales'
+          botRole: botForm.botRole,
+          admin_tg_id: state.paymentAdminTgId || ''
         }
       });
-      setBotForm({ botToken: '', botRole: 'sales' });
+      setBotForm((prev) => ({ ...prev, botToken: '' }));
       await reloadAccounts();
       showUiMessage('Бот подключен.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, savingBot: false }));
+    }
+  }
+
+  async function saveBotAdmin(account) {
+    const accountId = String(account?.id || '');
+    if (!accountId) return;
+
+    const adminTgId = String(
+      Object.prototype.hasOwnProperty.call(botAdminDrafts, accountId)
+        ? botAdminDrafts[accountId]
+        : account.admin_tg_id || ''
+    ).trim();
+
+    setState((prev) => ({ ...prev, savingBotAdminId: accountId }));
+    try {
+      await apiRequest('/api/official-bot/admin', {
+        accessToken,
+        method: 'POST',
+        body: {
+          account_id: account.id,
+          admin_tg_id: adminTgId
+        }
+      });
+      await reloadAccounts();
+      showUiMessage(adminTgId ? 'Telegram ID админа бота сохранен.' : 'Telegram ID админа у бота очищен.', 'success');
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    } finally {
+      setState((prev) => ({ ...prev, savingBotAdminId: '' }));
     }
   }
 
@@ -2407,7 +2502,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
       {isOfficialMode ? (
         <>
-          <div className="toolbar-card">
+          <div className="toolbar-card section section--first">
             <div className="toolbar-card__title">
               Подключить{' '}
               <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">
@@ -2422,9 +2517,80 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
                 onChange={(event) => setBotForm((prev) => ({ ...prev, botToken: event.target.value }))}
                 placeholder="8123456789:AAE_x7v9Kq2LmN4pR8sTuVwXyZ0abCDeFg"
               />
+              <select
+                className="field"
+                value={botForm.botRole}
+                onChange={(event) => setBotForm((prev) => ({ ...prev, botRole: event.target.value }))}
+              >
+                <option value="sales">Продажи доступа</option>
+                <option value="placeholder">Заготовка</option>
+              </select>
               <button className="ghost-button ghost-button--primary" onClick={addOfficialBot} disabled={state.savingBot}>
                 {state.savingBot ? 'Подключаем...' : 'Подключить'}
               </button>
+            </div>
+          </div>
+
+          <div className="grid grid--double section">
+            <div className="table-card">
+              <div className="table-card__title">{selectedOfficialBotRoleMeta.title}</div>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-[14px] leading-6 text-slate-600">
+                {selectedOfficialBotRoleMeta.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="table-card">
+              <div className="table-card__title">Админ бота</div>
+              {!selectedOfficialBot ? (
+                <div className="table-subtext">
+                  Сначала подключи бота. После этого здесь можно будет назначить пользователя, который получает чеки и видит админку внутри бота.
+                </div>
+              ) : (
+                <>
+                  <select
+                    className="field"
+                    value={selectedOfficialBot ? String(selectedOfficialBot.id) : ''}
+                    onChange={(event) => setSelectedOfficialBotId(event.target.value)}
+                  >
+                    {officialBots.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        @{account.tg_username || `bot-${String(account.tg_account_id || account.id)}`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="table-subtext">
+                    Текущий бот: @{selectedOfficialBot.tg_username || 'без username'}
+                  </div>
+                  <input
+                    className="field"
+                    type="text"
+                    value={Object.prototype.hasOwnProperty.call(botAdminDrafts, String(selectedOfficialBot.id))
+                      ? botAdminDrafts[String(selectedOfficialBot.id)]
+                      : selectedOfficialBot.admin_tg_id || ''}
+                    onChange={(event) => setBotAdminDrafts((prev) => ({
+                      ...prev,
+                      [String(selectedOfficialBot.id)]: event.target.value
+                    }))}
+                    placeholder={state.paymentAdminTgId
+                      ? `Например: ${state.paymentAdminTgId}`
+                      : 'TG ID пользователя-админа'}
+                  />
+                  <div className="table-subtext">
+                    Этот пользователь получает чеки, видит админский контур внутри бота и здесь же может быть переназначен позже.
+                  </div>
+                  <div className="table-actions">
+                    <button
+                      className="inline-action"
+                      onClick={() => saveBotAdmin(selectedOfficialBot)}
+                      disabled={state.savingBotAdminId === String(selectedOfficialBot.id)}
+                    >
+                      {state.savingBotAdminId === String(selectedOfficialBot.id) ? 'Сохраняем...' : 'Сохранить админа'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -2441,9 +2607,18 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
                     <div className="list-item__head">
                       <div>
                         <div className="list-item__title">@{account.tg_username || 'без username'}</div>
+                        <div className="list-item__meta">Роль: продажи и доступ</div>
                         <div className="list-item__meta">
                           {botGroupsMeta(channelsByBotId[String(account.id)] || [])}
                         </div>
+                        <div className="list-item__meta">
+                          Админ бота: {adminContextMeta(account.admin_tg_id)}
+                        </div>
+                        {!account.admin_tg_id && state.paymentAdminTgId ? (
+                          <div className="list-item__meta">
+                            Временно взят из Billing: {adminContextMeta(state.paymentAdminTgId)}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="list-item__footer">

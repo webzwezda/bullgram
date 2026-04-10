@@ -18,3 +18,15 @@
 - Показать `admin_tg_id` там, где админ ожидает его увидеть, но не плодить второй источник истины:
   - либо отдельным компактным блоком на `/app/botfather`, сохранением в тот же `payment_settings.admin_tg_id`
   - либо оставить хранение в `Billing`, но дать явный переход/ссылку с `/app/botfather`.
+
+## Update
+
+- Для official-ботов добавлено отдельное поле `tg_accounts.admin_tg_id`. Оно хранит Telegram ID человека, который получает чеки и видит админский контур внутри этого конкретного бота.
+- `Billing` пока оставлен как fallback. Если у бота свой `admin_tg_id` пустой, runtime временно падает назад на `payment_settings.admin_tg_id`, чтобы ручная оплата не перестала работать на переходе.
+- На `/app/botfather` этот ID теперь задается при подключении бота и редактируется прямо на карточке подключенного бота.
+
+## Review
+
+- Backend updated: `official-bot.routes` принимает и обновляет `admin_tg_id`, `official-bot.service` шлет чеки и строит admin hint от bot-level поля.
+- Admin UI updated: `/app/botfather` больше не показывает misleading общий блок `Главный админ контура`, вместо этого редактирует admin TG ID на уровне каждого бота.
+- Verification: `node --check backend/routes/official-bot.routes.js`, `node --check backend/services/official-bot.service.js`, `cd admin-v2 && npm run build`.

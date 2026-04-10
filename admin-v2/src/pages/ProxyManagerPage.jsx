@@ -196,17 +196,6 @@ function purchaseAmountSummary(purchase) {
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
-function isImageLikeUrl(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return false;
-  return normalized.startsWith('data:image/')
-    || normalized.endsWith('.png')
-    || normalized.endsWith('.jpg')
-    || normalized.endsWith('.jpeg')
-    || normalized.endsWith('.webp')
-    || normalized.endsWith('.gif');
-}
-
 function inventoryGroupActionLabel(value) {
   if (value === 'self_use') return 'Использую сам';
   return 'На продажу';
@@ -934,9 +923,7 @@ export function ProxyManagerPage() {
           expires_at: data.expires_at,
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || '',
-          sbp_qr_url: data.sbp_qr_url || '',
-          sbp_payment_url: data.sbp_payment_url || ''
+          sbp_fio: data.sbp_fio || ''
         }
       });
     } catch (error) {
@@ -972,9 +959,7 @@ export function ProxyManagerPage() {
           sbp_phone: existingPurchase.payload?.sbp_phone || '',
           sbp_bank: existingPurchase.payload?.sbp_bank || '',
           sbp_fio: existingPurchase.payload?.sbp_fio || '',
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
-          sbp_qr_url: existingPurchase.payload?.sbp_qr_url || '',
-          sbp_payment_url: existingPurchase.payload?.sbp_payment_url || ''
+          receipt_file_url: existingPurchase.payload?.receipt_file_url || ''
         } : null,
         loading: false,
         checking: false,
@@ -1048,8 +1033,6 @@ export function ProxyManagerPage() {
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
-          sbp_qr_url: data.sbp_qr_url || '',
-          sbp_payment_url: data.sbp_payment_url || '',
           status: 'pending',
           batch: true
         },
@@ -1159,8 +1142,6 @@ export function ProxyManagerPage() {
         sbp_bank: purchase.payload?.sbp_bank || '',
         sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
-        sbp_qr_url: purchase.payload?.sbp_qr_url || '',
-        sbp_payment_url: purchase.payload?.sbp_payment_url || '',
         batch: !!purchase.batch
       },
       paymentMethod: purchase.payload?.payment_method || 'ton',
@@ -1639,26 +1620,7 @@ function renderOpenProxyPurchases(rows) {
                     {checkoutState.purchase.sbp_fio ? (
                       <div><strong>Получатель:</strong> {checkoutState.purchase.sbp_fio}</div>
                     ) : null}
-                    <div><strong>Банк:</strong> {checkoutState.purchase.sbp_bank || 'СБП'}</div>
-                    {checkoutState.purchase.sbp_qr_url ? (
-                      <img
-                        className="checkout-modal__qr"
-                        style={{ marginTop: 16 }}
-                        src={resolveBackendAssetUrl(checkoutState.purchase.sbp_qr_url)}
-                        alt="СБП QR"
-                      />
-                    ) : null}
-                    {checkoutState.purchase.sbp_payment_url ? (
-                        <a
-                          className="ghost-button ghost-button--primary"
-                          href={checkoutState.purchase.sbp_payment_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ marginTop: 16 }}
-                        >
-                          Открыть оплату в банке
-                        </a>
-                    ) : null}
+                    <div><strong>Банки:</strong> {checkoutState.purchase.sbp_bank || 'СБП'}</div>
                     {checkoutState.purchase.receipt_file_url ? (
                       <div>
                         <strong>Чек:</strong>{' '}

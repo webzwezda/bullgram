@@ -2176,7 +2176,7 @@ export function ShopPage() {
                           {activePurchase.payload?.sbp_fio ? (
                             <div><strong>Получатель:</strong> {activePurchase.payload.sbp_fio}</div>
                           ) : null}
-                          <div><strong>Банк:</strong> {activePurchase.payload?.sbp_bank || 'СБП'}</div>
+                          <div><strong>Банки:</strong> {activePurchase.payload?.sbp_bank || 'СБП'}</div>
                           <div><strong>Комментарий / memo:</strong> <code>{activePurchase.payload?.memo || '—'}</code></div>
                           {activePurchase.payload?.receipt_file_url ? (
                             <div>

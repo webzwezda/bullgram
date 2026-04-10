@@ -327,6 +327,72 @@ export class OfficialBotService {
         }
     }
 
+    async getBotAdminContext(botId, ownerIdFallback = null) {
+        try {
+            const { data: botAccount, error: botError } = await this.supabase
+                .from('tg_accounts')
+                .select('owner_id, admin_tg_id')
+                .eq('id', botId)
+                .maybeSingle();
+
+            if (botError) throw botError;
+
+            const ownerId = botAccount?.owner_id || ownerIdFallback || null;
+
+            if (!ownerId) {
+                const botAdminTgId = botAccount?.admin_tg_id ? String(botAccount.admin_tg_id) : '';
+                return {
+                    ownerId: null,
+                    botAdminTgId,
+                    fallbackAdminTgId: '',
+                    adminTgId: botAdminTgId,
+                    adminLabel: botAdminTgId ? `TG ID ${botAdminTgId}` : 'Админ проекта',
+                    referralEnabled: false
+                };
+            }
+
+            const [settingsResp, profileResp] = await Promise.all([
+                this.supabase
+                    .from('payment_settings')
+                    .select('admin_tg_id, referral_enabled')
+                    .eq('owner_id', ownerId)
+                    .maybeSingle(),
+                this.supabase
+                    .from('profiles')
+                    .select('full_name, email')
+                    .eq('id', ownerId)
+                    .maybeSingle()
+            ]);
+
+            const botAdminTgId = botAccount?.admin_tg_id ? String(botAccount.admin_tg_id) : '';
+            const fallbackAdminTgId = settingsResp.data?.admin_tg_id ? String(settingsResp.data.admin_tg_id) : '';
+            const adminTgId = botAdminTgId || fallbackAdminTgId;
+            const profile = profileResp.data || null;
+            const adminLabel = adminTgId
+                ? `TG ID ${adminTgId}`
+                : profile?.full_name || profile?.email || 'Админ проекта';
+
+            return {
+                ownerId,
+                botAdminTgId,
+                fallbackAdminTgId,
+                adminTgId,
+                adminLabel,
+                referralEnabled: !!settingsResp.data?.referral_enabled
+            };
+        } catch (error) {
+            console.error('Ошибка загрузки bot admin context для official bot:', error);
+            return {
+                ownerId: ownerIdFallback || null,
+                botAdminTgId: '',
+                fallbackAdminTgId: '',
+                adminTgId: '',
+                adminLabel: 'Админ проекта',
+                referralEnabled: false
+            };
+        }
+    }
+
     buildAdminOwnershipHint(context, role = 'sales') {
         if (!context) return '';
 
@@ -640,16 +706,15 @@ export class OfficialBotService {
         // --- Главное меню ---
         const sendMainMenu = async (ctx) => {
             if (normalizedRole === 'ops') {
-                const ownerId = await this.getBotOwner(botId);
-                const adminContext = ownerId ? await this.getOwnerAdminContext(ownerId) : null;
+                const adminContext = await this.getBotAdminContext(botId);
                 const text = `🧭 <b>Бот-админ юзерботов</b>\n\nСюда прилетают сигналы о новых личках и мутных входящих от юзерботов.\n\nЕсли тут тишина, значит никто ничего не написал или сигналов пока нет.\n\n${this.buildAdminOwnershipHint(adminContext, 'ops')}\n\nОткрывай веб-панель и смотри <b>Центр юзербота</b>, когда надо быстро ответить человеку.`;
                 return ctx.reply(text, { parse_mode: 'HTML' });
             }
 
             try {
-                const ownerId = await this.getBotOwner(botId);
+                const adminContext = await this.getBotAdminContext(botId);
+                const ownerId = adminContext?.ownerId;
                 if (!ownerId) return;
-                const adminContext = await this.getOwnerAdminContext(ownerId);
 
                 const { data: tariffs, error } = await this.supabase.from('tariffs')
                     .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
@@ -927,9 +992,9 @@ export class OfficialBotService {
                 }
 
                 const ownerId = await this.getBotOwner(botId);
-                const { data: settings } = await this.supabase.from('payment_settings').select('admin_tg_id').eq('owner_id', ownerId).single();
+                const adminContext = await this.getBotAdminContext(botId, ownerId);
 
-                if (!settings || !settings.admin_tg_id) return ctx.reply('❌ Ошибка системы: Администратор не указал свой ID.');
+                if (!adminContext?.adminTgId) return ctx.reply('❌ Ошибка системы: у этого бота не указан Telegram ID админа.');
 
                 await this.supabase.from('invoices').update({ status: 'wait_admin' }).eq('id', invoice.id);
                 await this.logPaymentEvent({
@@ -946,7 +1011,7 @@ export class OfficialBotService {
 
                 const captionForAdmin = `🔔 **Новый чек на проверку!**\n\nПокупатель: @${ctx.from.username || 'Без юзернейма'} (ID: \`${userId}\`)\nТариф: **${tariffName}**\nСумма: **${invoice.amount} RUB**\n\nНажмите кнопку ниже после проверки.`;
 
-                await ctx.telegram.copyMessage(settings.admin_tg_id, ctx.chat.id, ctx.message.message_id, {
+                await ctx.telegram.copyMessage(adminContext.adminTgId, ctx.chat.id, ctx.message.message_id, {
                     caption: captionForAdmin, parse_mode: 'Markdown',
                     reply_markup: { inline_keyboard: [[{ text: '✅ Одобрить и выдать доступ', callback_data: `admin_approve_${invoice.memo}` }], [{ text: '❌ Отклонить (Фейк)', callback_data: `admin_reject_${invoice.memo}` }]]}
                 });

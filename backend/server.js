@@ -2,10 +2,9 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import fs from 'fs';
 import path from 'path';
-import multer from 'multer';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
+import { normalizeSbpBankSelection } from './utils/payment-settings.js';
 
 // Импортируем роуты
 import userbotRoutes from './routes/userbot.routes.js';
@@ -34,6 +33,11 @@ import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
 // ==========================================
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+const corsOrigins = Array.from(new Set([
+    publicAppOrigin,
+    'http://localhost:8080'
+]));
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -51,16 +55,8 @@ process.on('unhandledRejection', (reason, promise) => {
 // ==========================================
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: ['https://bullrun.ru', 'http://localhost:8080'] }));
+app.use(cors({ origin: corsOrigins }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-const PAYMENT_ASSETS_DIR = path.join(process.cwd(), 'uploads', 'payment-assets');
-fs.mkdirSync(PAYMENT_ASSETS_DIR, { recursive: true });
-const sbpQrUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: {
-        fileSize: 8 * 1024 * 1024
-    }
-});
 
 // ==========================================
 // МИДДЛВАР: ПРОВЕРКА АВТОРИЗАЦИИ
@@ -101,15 +97,13 @@ app.use('/api/mcp', agentMcpRoutes(supabase));
 // РОУТЫ НАСТРОЕК КАССЫ (Остались локально)
 // ==========================================
 app.post('/api/payment-settings', authenticateUser, async (req, res) => {
-    const {
-        sbp_phone,
-        sbp_bank,
-        sbp_fio,
-        sbp_qr_url,
-        sbp_payment_url,
-        ton_wallet,
-        admin_tg_id,
-        reminder_text,
+        const {
+            sbp_phone,
+            sbp_bank,
+            sbp_fio,
+            ton_wallet,
+            admin_tg_id,
+            reminder_text,
         billing_provider,
         billing_mode,
         billing_webhook_secret,
@@ -123,10 +117,8 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
         const legacyPayload = {
             owner_id: req.user.id,
             sbp_phone,
-            sbp_bank,
+            sbp_bank: normalizeSbpBankSelection(sbp_bank),
             sbp_fio,
-            sbp_qr_url,
-            sbp_payment_url,
             ton_wallet,
             admin_tg_id,
             reminder_text
@@ -153,9 +145,7 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
 
         if (error && (
             (error.message || '').includes('billing_') ||
-            (error.message || '').includes('referral_') ||
-            (error.message || '').includes('sbp_qr_url') ||
-            (error.message || '').includes('sbp_payment_url')
+            (error.message || '').includes('referral_')
         )) {
             const legacyResult = await supabase
                 .from('payment_settings')
@@ -180,44 +170,6 @@ app.get('/api/payment-settings', authenticateUser, async (req, res) => {
         res.json({ settings: data || {} });
     } catch (err) {
         res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/payment-settings/sbp-qr', authenticateUser, sbpQrUpload.single('file'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'Файл QR не передан' });
-    }
-
-    try {
-        console.log(`📥 SBP QR upload route hit: user=${req.user.id}, name=${req.file.originalname || 'unknown'}, size=${req.file.size || 0}`);
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', req.user.id)
-            .maybeSingle();
-
-        if (profileError) throw profileError;
-        if (profile?.role !== 'admin') {
-            return res.status(403).json({ error: 'Только admin может загружать СБП QR' });
-        }
-
-        const originalName = String(req.file.originalname || 'sbp-qr.png');
-        const ext = path.extname(originalName).toLowerCase() || '.png';
-        const fileName = `sbp-qr-${req.user.id}-${Date.now()}${ext}`;
-        const filePath = path.join(PAYMENT_ASSETS_DIR, fileName);
-
-        fs.mkdirSync(PAYMENT_ASSETS_DIR, { recursive: true });
-        fs.writeFileSync(filePath, req.file.buffer);
-
-        console.log(`✅ SBP QR saved locally: ${filePath}`);
-
-        return res.json({
-            success: true,
-            url: `/uploads/payment-assets/${fileName}`
-        });
-    } catch (err) {
-        console.error('Ошибка загрузки СБП QR:', err);
-        return res.status(500).json({ error: 'Не удалось загрузить СБП QR' });
     }
 });
 

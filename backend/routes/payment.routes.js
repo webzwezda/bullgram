@@ -2,6 +2,8 @@ import express from 'express';
 import { OfficialBotService } from '../services/official-bot.service.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+
 function normalizeWebhookPayload(provider, body = {}) {
     const payload = body || {};
     const status = String(
@@ -52,7 +54,7 @@ export default function paymentRoutes(supabase, getBotById) {
             res.json({
                 success: true,
                 settings: data || {},
-                webhook_url: 'https://bullrun.ru/api/payment/webhook/generic'
+                webhook_url: `${publicAppOrigin}/api/payment/webhook/generic`
             });
         } catch (error) {
             res.status(500).json({ error: 'Не удалось загрузить настройки кассы' });

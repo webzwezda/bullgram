@@ -19,7 +19,7 @@ export default function (supabase) {
     // ДОБАВЛЕНИЕ БОТА ПО ТОКЕНУ
     // ==========================================
     router.post('/add', authenticateUser, async (req, res) => {
-        const { botToken, botRole } = req.body;
+        const { botToken, botRole, admin_tg_id } = req.body;
         if (!botToken) return res.status(400).json({ error: 'Токен не передан' });
 
         try {
@@ -27,6 +27,7 @@ export default function (supabase) {
             const botInfo = await bot.telegram.getMe();
             const encryptedToken = encrypt(botToken);
             const normalizedRole = botRole === 'ops' ? 'ops' : 'sales';
+            const normalizedAdminTgId = String(admin_tg_id || '').trim() || null;
 
             const { data: insertedAccount, error } = await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
@@ -34,7 +35,8 @@ export default function (supabase) {
                 tg_account_id: botInfo.id.toString(),
                 tg_username: botInfo.username,
                 session_data: encryptedToken,
-                bot_role: normalizedRole
+                bot_role: normalizedRole,
+                admin_tg_id: normalizedAdminTgId
             }, { onConflict: 'owner_id, tg_account_id' }).select().single();
 
             if (error) throw error;
@@ -46,6 +48,40 @@ export default function (supabase) {
         } catch (err) {
             console.error('Ошибка добавления бота:', err.message);
             res.status(400).json({ error: 'Неверный токен' });
+        }
+    });
+
+    router.post('/admin', authenticateUser, async (req, res) => {
+        const { account_id, admin_tg_id } = req.body;
+        if (!account_id) return res.status(400).json({ error: 'Не передан бот для обновления админа' });
+
+        try {
+            const normalizedAdminTgId = String(admin_tg_id || '').trim() || null;
+
+            const { data: account, error: accountError } = await supabase
+                .from('tg_accounts')
+                .select('id')
+                .eq('id', account_id)
+                .eq('owner_id', req.user.id)
+                .eq('account_type', 'bot')
+                .single();
+
+            if (accountError || !account) {
+                return res.status(404).json({ error: 'Бот не найден' });
+            }
+
+            const { error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({ admin_tg_id: normalizedAdminTgId })
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id);
+
+            if (updateError) throw updateError;
+
+            res.json({ success: true, admin_tg_id: normalizedAdminTgId });
+        } catch (error) {
+            console.error('Ошибка обновления admin_tg_id бота:', error.message);
+            res.status(500).json({ error: 'Не получилось обновить Telegram ID админа бота' });
         }
     });
 

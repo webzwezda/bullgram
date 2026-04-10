@@ -221,5 +221,5 @@ pm2 logs bullrun-tg-backend --lines 100
 
 **Проверка здоровья API:**
 ```bash
-curl https://bullrun.ru/api/userbot/check/:id
+curl https://prsng.ru/api/userbot/check/:id
 ```

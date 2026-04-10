@@ -6,6 +6,7 @@ import path from 'path';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
+import { normalizeSbpBankSelection } from '../utils/payment-settings.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -149,11 +150,6 @@ function isMissingPriceRubColumn(error) {
 function isMissingSalesChannelColumn(error) {
     const message = error?.message || '';
     return message.includes('sales_channel');
-}
-
-function isMissingSbpQrColumn(error) {
-    const message = error?.message || '';
-    return message.includes('sbp_qr_url') || message.includes('sbp_payment_url');
 }
 
 function buildShopMemo() {
@@ -364,19 +360,16 @@ async function createOrRefreshBuyerPurchase({
 
     let { data: settings, error: settingsError } = await supabase
         .from('payment_settings')
-        .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio, sbp_qr_url, sbp_payment_url')
+        .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio')
         .eq('owner_id', item.owner_id)
         .maybeSingle();
-    if (settingsError && isMissingSbpQrColumn(settingsError)) {
-        const fallbackSettings = await supabase
-            .from('payment_settings')
-            .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio')
-            .eq('owner_id', item.owner_id)
-            .maybeSingle();
-        settingsError = fallbackSettings.error;
-        settings = fallbackSettings.data ? { ...fallbackSettings.data, sbp_qr_url: null, sbp_payment_url: null } : null;
-    }
     if (settingsError) throw settingsError;
+    settings = settings
+        ? {
+            ...settings,
+            sbp_bank: normalizeSbpBankSelection(settings.sbp_bank, { fallbackToDefault: false })
+        }
+        : null;
 
     const availablePaymentMethods = buildAvailablePaymentMethods(item, settings);
     if (!availablePaymentMethods.includes(paymentMethod)) {
@@ -408,8 +401,6 @@ async function createOrRefreshBuyerPurchase({
         sbp_phone: settings.sbp_phone || null,
         sbp_bank: settings.sbp_bank || null,
         sbp_fio: settings.sbp_fio || null,
-        sbp_qr_url: settings.sbp_qr_url || null,
-        sbp_payment_url: settings.sbp_payment_url || null,
         post_purchase_message: item.post_purchase_message || null,
         batch_token: batchToken || null
     };
@@ -2469,8 +2460,6 @@ export default function shopRoutes(supabase) {
                 sbp_phone: settings.sbp_phone || null,
                 sbp_bank: settings.sbp_bank || null,
                 sbp_fio: settings.sbp_fio || null,
-                sbp_qr_url: settings.sbp_qr_url || null,
-                sbp_payment_url: settings.sbp_payment_url || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,
@@ -2560,8 +2549,6 @@ export default function shopRoutes(supabase) {
                 sbp_phone: first.settings.sbp_phone || null,
                 sbp_bank: first.settings.sbp_bank || null,
                 sbp_fio: first.settings.sbp_fio || null,
-                sbp_qr_url: first.settings.sbp_qr_url || null,
-                sbp_payment_url: first.settings.sbp_payment_url || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,

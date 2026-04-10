@@ -1,6 +1,8 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+
 function isUserbotInboxWatchEnabled() {
     return String(process.env.USERBOT_INBOX_WATCH_ENABLED || '').trim().toLowerCase() === 'true';
 }
@@ -123,7 +125,7 @@ export const startUserbotInboxWatch = (supabase, getBotFunction) => {
                             const safeDisplayName = escapeHtml(displayName);
                             const safeUsername = entity.username ? escapeHtml(entity.username) : '';
                             const safePreview = escapeHtml(preview || 'Telegram не отдал текст сообщения.');
-                            const deepLink = `https://bullrun.ru/app/userbot-center?userbot_id=${encodeURIComponent(userbot.id)}`;
+                            const deepLink = `${publicAppOrigin}/app/userbot-center?userbot_id=${encodeURIComponent(userbot.id)}`;
 
                             await bot.telegram.sendMessage(
                                 adminTgId,
