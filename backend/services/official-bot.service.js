@@ -894,133 +894,30 @@ export class OfficialBotService {
                 const ownerId = adminContext?.ownerId;
                 if (!ownerId) return;
 
-                const { data: tariffs, error } = await this.supabase.from('tariffs')
-                    .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+                const userRole = await this.getUserRole(ctx, botId);
+                const isAdmin = userRole === 'admin';
 
-                if (error || !tariffs || tariffs.length === 0) {
-                    const msg = '😔 К сожалению, сейчас нет доступных тарифов.';
-                    return ctx.callbackQuery ? await ctx.editMessageText(msg) : await ctx.reply(msg);
+                const inlineKeyboard = [];
+
+                if (isAdmin) {
+                    inlineKeyboard.push([{ text: '🔧 Админка', callback_data: 'admin_panel' }]);
                 }
 
-                const tariffGroups = this.buildTariffPaymentGroups(tariffs);
-                const totalTariffs = tariffGroups.length;
+                inlineKeyboard.push([{ text: '💳 Покупка тарифа', callback_data: 'buy_tariff' }]);
 
-                // Трехуровневая логика отображения
-                if (totalTariffs > 10) {
-                    // Пагинация для >10 тарифов
-                    return sendPaginatedTariffsMenu(ctx, tariffGroups, ownerId, adminContext, 0);
-                }
-
-                if (totalTariffs > 3) {
-                    // Категории для 4-10 тарифов
-                    return sendCategorizedTariffsMenu(ctx, tariffGroups, ownerId, adminContext);
-                }
-
-                // Компактный вид для ≤3 тарифов
-                const tariffsWithBundles = await Promise.all(tariffGroups.map(async group => ({
-                    group,
-                    tariff: group.lead,
-                    bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
-                })));
-
-                const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
-                    const icon = this.getTariffGroupIcon(group);
-                    const paymentOptions = this.formatTariffPaymentOptions(group.variants);
-                    return [
-                        [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
-                        [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
-                    ];
-                });
-                inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
                 if (adminContext.referralEnabled) {
-                    inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
+                    inlineKeyboard.push([{ text: '🤝 Стать партнером', callback_data: 'referral_info' }]);
                 }
 
-                const text = `👋 Привет! Выберите тариф для доступа в закрытый канал 👇\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+                inlineKeyboard.push([{ text: '👤 Мой статус', callback_data: 'my_status' }]);
+
+                const text = `👋 <b>Главное меню</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
                 if (ctx.callbackQuery) {
-                    await ctx.deleteMessage().catch(() => {});
-                    await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
                 } else {
-                    await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
                 }
             } catch (error) { console.error('Ошибка меню:', error); }
-        };
-
-        // --- Меню с категориями ---
-        const sendCategorizedTariffsMenu = async (ctx, tariffGroups, ownerId, adminContext) => {
-            const categories = this.buildTariffCategories(tariffGroups.map(g => g.lead));
-            const categoryLabels = {
-                trial: '🧪 Пробные',
-                regular: '📦 Обычные',
-                bundle: '🎁 Комплекты',
-                premium: '💎 Премиум',
-                lifetime: '♾️ Навсегда'
-            };
-
-            const inlineKeyboard = [];
-
-            for (const { category, items } of categories) {
-                const label = categoryLabels[category] || '📦 Тарифы';
-                inlineKeyboard.push([{ text: `${label} (${items.length})`, callback_data: `category_${category}` }]);
-            }
-
-            inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
-            if (adminContext.referralEnabled) {
-                inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
-            }
-            inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
-
-            const text = `📂 <b>Тарифы по категориям</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
-            if (ctx.callbackQuery) {
-                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
-            } else {
-                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
-            }
-        };
-
-        // --- Пагинация тарифов ---
-        const sendPaginatedTariffsMenu = async (ctx, tariffGroups, ownerId, adminContext, page = 0) => {
-            const paginatedData = this.buildPaginatedTariffMenu(tariffGroups, page, 5);
-            const { tariffs: pageTariffs, currentPage, totalPages } = paginatedData;
-
-            const tariffsWithBundles = await Promise.all(pageTariffs.map(async group => ({
-                group,
-                tariff: group.lead,
-                bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
-            })));
-
-            const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
-                const icon = this.getTariffGroupIcon(group);
-                const paymentOptions = this.formatTariffPaymentOptions(group.variants);
-                return [
-                    [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
-                    [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
-                ];
-            });
-
-            // Навигация
-            const navRow = [];
-            if (currentPage > 0) {
-                navRow.push({ text: '⬅️ Назад', callback_data: `tariffs_page_${currentPage - 1}` });
-            }
-            navRow.push({ text: `📄 Стр. ${currentPage + 1}/${totalPages}`, callback_data: 'current_page' });
-            if (currentPage < totalPages - 1) {
-                navRow.push({ text: 'Вперед ➡️', callback_data: `tariffs_page_${currentPage + 1}` });
-            }
-            if (navRow.length > 0) inlineKeyboard.push(navRow);
-
-            inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
-            if (adminContext.referralEnabled) {
-                inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
-            }
-            inlineKeyboard.push([{ text: '🔙 В начало', callback_data: 'back_to_main' }]);
-
-            const text = `📦 <b>Тарифы (стр. ${currentPage + 1}/${totalPages})</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
-            if (ctx.callbackQuery) {
-                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
-            } else {
-                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
-            }
         };
 
         // --- Главное меню ---
@@ -1554,6 +1451,50 @@ export class OfficialBotService {
         bot.action('user_menu', async (ctx) => {
             await ctx.answerCbQuery();
             await sendUserMainMenu(ctx);
+        });
+
+        bot.action('admin_panel', async (ctx) => {
+            await ctx.answerCbQuery();
+            await sendAdminMenu(ctx);
+        });
+
+        bot.action('buy_tariff', async (ctx) => {
+            await ctx.answerCbQuery();
+            try {
+                const adminContext = await this.getBotAdminContext(botId);
+                const ownerId = adminContext?.ownerId;
+                if (!ownerId) return;
+
+                const { data: tariffs, error } = await this.supabase.from('tariffs')
+                    .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+
+                if (error || !tariffs || tariffs.length === 0) {
+                    const msg = '😔 К сожалению, сейчас нет доступных тарифов.';
+                    return ctx.reply(msg);
+                }
+
+                const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                const tariffsWithBundles = await Promise.all(tariffGroups.map(async group => ({
+                    group,
+                    tariff: group.lead,
+                    bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
+                })));
+
+                const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
+                    const icon = this.getTariffGroupIcon(group);
+                    const paymentOptions = this.formatTariffPaymentOptions(group.variants);
+                    return [
+                        [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
+                        [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
+                    ];
+                });
+                inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+                const text = `💳 <b>Выберите тариф</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            } catch (error) {
+                console.error('Ошибка покупки тарифа:', error);
+            }
         });
 
         bot.action('admin_tariffs', async (ctx) => {
