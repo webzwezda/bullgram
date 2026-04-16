@@ -3,10 +3,11 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
+import { Button } from '@/components/ui/button';
 
 const FILTERS = [
   { id: 'all', label: 'Все' },
-  { id: 'with_balance', label: 'Хвост к выплате' },
+  { id: 'with_balance', label: 'С балансом' },
   { id: 'rewards', label: 'Начисления' },
   { id: 'payouts', label: 'Выплаты' }
 ];
@@ -20,8 +21,8 @@ function formatWhen(value) {
 }
 
 function eventBadge(event) {
-  if (event?.event_type === 'reward_granted') return { text: 'Начислили бонус', className: 'pill pill--ok' };
-  if (event?.event_type === 'payout_marked') return { text: 'Пометили выплату', className: 'pill pill--info' };
+  if (event?.event_type === 'reward_granted') return { text: 'Начисление', className: 'pill pill--ok' };
+  if (event?.event_type === 'payout_marked') return { text: 'Выплата', className: 'pill pill--info' };
   return { text: event?.event_type || '—', className: 'pill' };
 }
 
@@ -150,38 +151,21 @@ export function ReferralsPage() {
     return state.recentEvents;
   }, [filter, state.recentEvents]);
 
-  const segmentStats = useMemo(() => {
-    return filteredPartners.reduce((acc, row) => {
-      acc.count += 1;
-      acc.balanceRub += Number(row.balance_rub || 0);
-      acc.balanceTon += Number(row.balance_ton || 0);
-      acc.balanceUsdt += Number(row.balance_usdt || 0);
-      return acc;
-    }, { count: 0, balanceRub: 0, balanceTon: 0, balanceUsdt: 0 });
-  }, [filteredPartners]);
-
   const prioritySignals = useMemo(() => {
     const signals = [];
     if (!state.settings?.referral_enabled) {
       signals.push({
         tone: 'warning',
-        title: 'Партнерка сейчас выключена',
-        text: 'Пользователи не должны видеть ее в боте. Если канал продаж через рефку нужен, включай здесь и проверяй welcome-текст.'
+        title: 'Партнерка выключена',
+        text: 'Включите настройки, чтобы пользователи видели партнерку в боте'
       });
     }
     const totalOutstanding = Number(state.summary.outstandingRub || 0) + Number(state.summary.outstandingTon || 0) + Number(state.summary.outstandingUsdt || 0);
     if (totalOutstanding > 0) {
       signals.push({
         tone: 'danger',
-        title: 'Есть хвост к выплате',
-        text: 'По партнерке уже накопился долг. Закрывай выплаты, чтобы не копить токсичный хвост у активных партнеров.'
-      });
-    }
-    if ((state.summary.paidReferrals || 0) === 0 && state.settings?.referral_enabled) {
-      signals.push({
-        tone: 'info',
-        title: 'Рефка включена, но денег пока нет',
-        text: 'Либо трафик еще не пришел, либо партнерский контур не прогрет. Проверь seller flow и bot UX.'
+        title: 'К выплате',
+        text: `Накоплено ${state.summary.outstandingRub || 0} RUB, ${state.summary.outstandingTon || 0} TON, ${state.summary.outstandingUsdt || 0} USDT`
       });
     }
     return signals;
@@ -201,7 +185,6 @@ export function ReferralsPage() {
         settings: { ...settingsDraft },
         updatedAt: new Date().toISOString()
       }));
-      window.alert('Настройки рефералки сохранены.');
     } catch (error) {
       setState((prev) => ({ ...prev, savingSettings: false, error: error.message }));
     }
@@ -217,12 +200,12 @@ export function ReferralsPage() {
     const currentBalance = Number(row?.[balanceField] || 0);
 
     if (currentBalance <= 0) {
-      window.alert(`У этого партнера нет хвоста к выплате в ${normalizedCurrency}.`);
+      window.alert(`У партнера нет баланса в ${normalizedCurrency}.`);
       return;
     }
 
     const rawAmount = window.prompt(
-      `Сколько пометить как выплаченное для ${row.display_name || row.username || row.tg_user_id}?\nНа балансе сейчас ${currentBalance} ${normalizedCurrency}.`,
+      `Сколько выплатить ${row.display_name || row.username || row.tg_user_id}?\nБаланс: ${currentBalance} ${normalizedCurrency}`,
       String(currentBalance)
     );
 
@@ -233,7 +216,7 @@ export function ReferralsPage() {
       return;
     }
 
-    const note = window.prompt('Можешь дописать примечание: карта, кошелек, дата, кто занес.', '') || '';
+    const note = window.prompt('Примечание (карта, кошелек, дата):', '') || '';
     setState((prev) => ({ ...prev, payouting: true }));
     try {
       await apiRequest('/api/referrals/payout', {
@@ -257,7 +240,6 @@ export function ReferralsPage() {
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
-      window.alert(`Выплату пометили в ${normalizedCurrency}.`);
     } catch (error) {
       setState((prev) => ({ ...prev, payouting: false }));
       window.alert(error.message);
@@ -266,10 +248,10 @@ export function ReferralsPage() {
 
   async function sendMessagePrompt(row) {
     if (!row?.tg_user_id) {
-      window.alert('У строки нет Telegram ID. Писать некому.');
+      window.alert('Нет Telegram ID.');
       return;
     }
-    const message = window.prompt(`Что написать ${row.display_name || row.username || row.tg_user_id}?\nСообщение уйдет от юзербота.`);
+    const message = window.prompt(`Сообщение для ${row.display_name || row.username || row.tg_user_id}:`);
     if (!message || !message.trim()) return;
 
     try {
@@ -281,14 +263,14 @@ export function ReferralsPage() {
           message: message.trim()
         }
       });
-      window.alert('Сообщение отправлено.');
+      window.alert('Отправлено.');
     } catch (error) {
-      window.alert(`Ошибка отправки: ${error.message}`);
+      window.alert(`Ошибка: ${error.message}`);
     }
   }
 
   if (state.loading) {
-    return <LoadingState text="Тянем рефералку..." />;
+    return <LoadingState text="Загружаем рефералку..." />;
   }
 
   if (state.error) {
@@ -296,7 +278,6 @@ export function ReferralsPage() {
       <section className="page">
         <div className="page__header">
           <h1>Рефералка</h1>
-          <p>Экран уже сидит на живом backend, но загрузка партнерки вернула ошибку.</p>
         </div>
         <div className="error-card">{state.error}</div>
       </section>
@@ -307,91 +288,64 @@ export function ReferralsPage() {
     <section className="page">
       <div className="page__header">
         <h1>Рефералка</h1>
-        <p>
-          Read-first экран по партнерке. Здесь видно, кто реально приводит деньги, где висит хвост к выплате
-          и какие начисления уже прошли. Выплаты и настройки уже можно править прямо тут.
-        </p>
-        <div className="page__meta">
-          <span>Последнее обновление: {formatWhen(state.updatedAt)}</span>
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Экран обновляется сам раз в минуту.'}</span>
-          <span>Партнерка: {state.settings?.referral_enabled ? 'включена' : 'выключена'}</span>
-        </div>
+        <p className="text-sm text-slate-600">Партнеры, выплаты и начисления</p>
       </div>
 
-      <section className="hero-panel">
-        <div>
-          <span className="eyebrow">Referrals / Partner Ops</span>
-          <h2>Кто реально приводит деньги и кому ты уже должен</h2>
-          <p>
-            Это не просто список партнеров. Здесь видно, где рефка тащит продажи, где копится хвост к выплате и кого
-            надо закрывать первым, пока партнерка не стала токсичной.
-          </p>
-        </div>
-        <div className="hero-actions">
-          <button className="ghost-button ghost-button--primary" onClick={saveSettings} disabled={state.savingSettings}>
-            {state.savingSettings ? 'Сохраняем...' : 'Сохранить реф-контур'}
-          </button>
-          <a className="ghost-button" href="/app/shop" target="_blank" rel="noreferrer">
-            Открыть shop admin
-          </a>
-        </div>
-      </section>
-
-      {prioritySignals.length > 0 ? (
-        <div className="priority-grid section">
+      {/* Priority Signals */}
+      {prioritySignals.length > 0 && (
+        <div className="grid gap-3">
           {prioritySignals.map((signal) => (
-            <article key={signal.title} className={`priority-card priority-card--${signal.tone}`}>
-              <h3>{signal.title}</h3>
-              <p>{signal.text}</p>
+            <article key={signal.title} className={`rounded-2xl border p-4 text-sm ${
+              signal.tone === 'danger' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'
+            }`}>
+              <p className={`font-semibold ${signal.tone === 'danger' ? 'text-red-900' : 'text-amber-900'}`}>
+                {signal.title}
+              </p>
+              <p className={`mt-1 ${signal.tone === 'danger' ? 'text-red-700' : 'text-amber-700'}`}>
+                {signal.text}
+              </p>
             </article>
           ))}
         </div>
-      ) : null}
+      )}
 
-      {!state.support.referralTables || !state.support.referralSettings ? (
-        <div className="error-inline">SQL под рефералку не применен до конца. Этот экран будет полупустым.</div>
-      ) : null}
-
-      <div className="grid">
-        <StatCard title="Партнеров" value={state.summary.partners || 0} hint="Сколько партнеров уже заведено в системе." />
-        <StatCard title="Лидов" value={state.summary.leads || 0} hint="Сколько людей пришло по реф-ссылкам." />
-        <StatCard title="Оплат по рефке" value={state.summary.paidReferrals || 0} hint="Сколько оплат реально закрыто по партнерке." />
-        <StatCard title="Хвост к выплате" value={`${state.summary.outstandingRub || 0} RUB`} hint={`TON ${state.summary.outstandingTon || 0} • USDT ${state.summary.outstandingUsdt || 0}`} tone={(state.summary.outstandingRub || state.summary.outstandingTon || state.summary.outstandingUsdt) ? 'warning' : 'default'} />
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard title="Партнеров" value={state.summary.partners || 0} />
+        <StatCard title="Лидов" value={state.summary.leads || 0} />
+        <StatCard title="Оплат" value={state.summary.paidReferrals || 0} />
+        <StatCard
+          title="К выплате"
+          value={`${state.summary.outstandingRub || 0} RUB`}
+          hint={`${state.summary.outstandingTon || 0} TON • ${state.summary.outstandingUsdt || 0} USDT`}
+          tone={(state.summary.outstandingRub || state.summary.outstandingTon || state.summary.outstandingUsdt) ? 'warning' : 'default'}
+        />
       </div>
 
-      <div className="grid grid--double">
-        <div className="toolbar-card">
-          <div className="toolbar-card__title">Настройки и контур</div>
-          <div className="list-stack">
-            <div className="list-item">
-              <div className="list-item__title">Статус</div>
-              <div className="list-item__meta">
-                {state.settings?.referral_enabled
-                  ? `Партнерка включена. Награда: ${state.settings?.referral_reward_percent || 20}%`
-                  : 'Партнерка выключена. Пользователь не должен видеть ее в bot UI.'}
-              </div>
-            </div>
-            <div className="list-item">
-              <div className="list-item__title">Приветствие</div>
-              <div className="list-item__meta">{state.settings?.referral_welcome_text || 'Отдельный welcome-текст не задан.'}</div>
-            </div>
-          </div>
-          <div className="toolbar-card__body">
+      {/* Settings */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-950">Настройки партнерки</h3>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
             <label className="field-group">
-              <span>Партнерка включена</span>
+              <span className="text-sm">Статус</span>
               <select
-                className="field"
+                className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
                 value={settingsDraft.referral_enabled ? 'yes' : 'no'}
                 onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
               >
-                <option value="no">Нет</option>
-                <option value="yes">Да</option>
+                <option value="no">Выключена</option>
+                <option value="yes">Включена</option>
               </select>
             </label>
+          </div>
+
+          <div>
             <label className="field-group">
-              <span>Награда, %</span>
+              <span className="text-sm">Награда, %</span>
               <input
-                className="field"
+                className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
                 type="number"
                 min="0"
                 max="100"
@@ -399,141 +353,173 @@ export function ReferralsPage() {
                 onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_reward_percent: Number(event.target.value || 0) }))}
               />
             </label>
+          </div>
+
+          <div className="sm:col-span-2">
             <label className="field-group">
-              <span>Welcome-текст</span>
+              <span className="text-sm">Приветствие для партнеров</span>
               <textarea
-                className="field"
-                rows="4"
+                className="field min-h-[80px] rounded-xl border-slate-200 bg-slate-50 text-[14px]"
                 value={settingsDraft.referral_welcome_text}
                 onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_welcome_text: event.target.value }))}
+                placeholder="Текст приветствия для новых партнеров..."
               />
             </label>
-            <button className="ghost-button ghost-button--primary" onClick={saveSettings} disabled={state.savingSettings}>
-              {state.savingSettings ? 'Сохраняем...' : 'Сохранить настройки'}
-            </button>
-            <a className="ghost-button" href="/app/shop" target="_blank" rel="noreferrer">
-              Открыть shop admin
-            </a>
           </div>
         </div>
 
-        <div className="toolbar-card">
-          <div className="toolbar-card__title">Текущий сегмент</div>
-          <div className="grid">
-            <StatCard title="Людей" value={segmentStats.count} hint="Сколько партнеров попало под текущий фильтр." />
-            <StatCard title="RUB хвост" value={segmentStats.balanceRub} hint="Сколько еще висит к выплате." />
-            <StatCard title="TON хвост" value={segmentStats.balanceTon} hint="Для крипто-выплат." />
-            <StatCard title="USDT хвост" value={segmentStats.balanceUsdt} hint="Если закрываешь USDT." />
-          </div>
+        <div className="mt-4 flex justify-end">
+          <Button
+            className="h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
+            onClick={saveSettings}
+            disabled={state.savingSettings}
+          >
+            {state.savingSettings ? 'Сохраняем...' : 'Сохранить'}
+          </Button>
         </div>
-      </div>
+      </section>
 
-      <div className="toolbar-card section">
-        <div className="toolbar-card__title">Быстрый разбор</div>
-        <div className="toolbar-card__body">
+      {/* Filters */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <input
-            className="field"
+            className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px] flex-1"
             type="text"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="TG ID, @username или referral code"
+            placeholder="TG ID, @username или код"
           />
-          <a className="ghost-button" href="/app/broadcast" target="_blank" rel="noreferrer">
-            Пнуть сегмент
-          </a>
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((item) => (
+              <button
+                key={item.id}
+                className={`h-9 rounded-lg px-3 text-xs font-medium transition-colors ${
+                  filter === item.id
+                    ? 'bg-slate-950 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+                onClick={() => setFilter(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="filter-strip">
-          {FILTERS.map((item) => (
-            <button
-              key={item.id}
-              className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
-              onClick={() => setFilter(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      </section>
 
-      <div className="grid grid--double section">
-        <div className="table-card">
-          <div className="table-card__title">Кто реально приводит деньги</div>
+      {/* Tables */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Partners Table */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-950 mb-4">Партнеры</h3>
+
           {filteredPartners.length === 0 ? (
-            <div className="empty-inline">Под текущий фильтр никто не попал.</div>
+            <p className="text-sm text-slate-500 text-center py-8">По фильтру никого нет</p>
           ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Партнер</th>
-                  <th>Оплат</th>
-                  <th>Баланс</th>
-                  <th>Дальше</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPartners.slice(0, 30).map((row) => (
-                  <tr key={row.tg_user_id}>
-                    <td>
-                      <div>{row.display_name || row.username || row.tg_user_id}</div>
-                      <div className="table-subtext">TG ID {row.tg_user_id} • Код: {row.referral_code}</div>
-                    </td>
-                    <td>{row.total_referrals || 0}</td>
-                    <td>
-                      <div>RUB {row.balance_rub || 0}</div>
-                      <div className="table-subtext">TON {row.balance_ton || 0} • USDT {row.balance_usdt || 0}</div>
-                    </td>
-                    <td>
-                      <div className="table-actions">
-                        <button className="inline-action" onClick={() => sendMessagePrompt(row)}>Написать</button>
-                        <button className="inline-action" onClick={() => markPayout(row, 'RUB')} disabled={state.payouting}>RUB</button>
-                        <button className="inline-action" onClick={() => markPayout(row, 'TON')} disabled={state.payouting}>TON</button>
-                        <button className="inline-action" onClick={() => markPayout(row, 'USDT')} disabled={state.payouting}>USDT</button>
-                        <a
-                          href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Досье
-                        </a>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-3 text-left font-medium text-slate-700">Партнер</th>
+                    <th className="pb-3 text-left font-medium text-slate-700">Оплат</th>
+                    <th className="pb-3 text-left font-medium text-slate-700">Баланс</th>
+                    <th className="pb-3 text-right font-medium text-slate-700">Действия</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="table-card">
-          <div className="table-card__title">Последние начисления</div>
-          {filteredEvents.length === 0 ? (
-            <div className="empty-inline">Событий по текущему фильтру нет.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Когда</th>
-                  <th>Событие</th>
-                  <th>Партнер</th>
-                  <th>Сумма</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredEvents.slice(0, 30).map((event) => {
-                  const badge = eventBadge(event);
-                  return (
-                    <tr key={event.id}>
-                      <td>{formatWhen(event.created_at)}</td>
-                      <td><span className={badge.className}>{badge.text}</span></td>
-                      <td>{event.referrer_tg_user_id}</td>
-                      <td>{event.reward_amount || 0} {event.reward_currency || ''}</td>
+                </thead>
+                <tbody>
+                  {filteredPartners.slice(0, 30).map((row) => (
+                    <tr key={row.tg_user_id} className="border-b border-slate-100 last:border-0">
+                      <td className="py-3">
+                        <div className="font-medium text-slate-950">{row.display_name || row.username || row.tg_user_id}</div>
+                        <div className="text-xs text-slate-500">ID: {row.tg_user_id} • {row.referral_code}</div>
+                      </td>
+                      <td className="py-3">{row.total_referrals || 0}</td>
+                      <td className="py-3">
+                        <div className="font-medium text-slate-950">{row.balance_rub || 0} RUB</div>
+                        <div className="text-xs text-slate-500">{row.balance_ton || 0} TON • {row.balance_usdt || 0} USDT</div>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            className="text-xs text-sky-600 hover:text-sky-700 font-medium px-2 py-1 rounded hover:bg-sky-50"
+                            onClick={() => sendMessagePrompt(row)}
+                          >
+                            Написать
+                          </button>
+                          <button
+                            className="text-xs text-slate-600 hover:text-slate-700 font-medium px-2 py-1 rounded hover:bg-slate-100"
+                            onClick={() => markPayout(row, 'RUB')}
+                            disabled={state.payouting}
+                          >
+                            RUB
+                          </button>
+                          <button
+                            className="text-xs text-slate-600 hover:text-slate-700 font-medium px-2 py-1 rounded hover:bg-slate-100"
+                            onClick={() => markPayout(row, 'TON')}
+                            disabled={state.payouting}
+                          >
+                            TON
+                          </button>
+                          <a
+                            className="text-xs text-sky-600 hover:text-sky-700 font-medium px-2 py-1 rounded hover:bg-sky-50"
+                            href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Досье
+                          </a>
+                        </div>
+                      </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
+        </section>
+
+        {/* Events Table */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-950 mb-4">События</h3>
+
+          {filteredEvents.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-8">Событий нет</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-3 text-left font-medium text-slate-700">Когда</th>
+                    <th className="pb-3 text-left font-medium text-slate-700">Тип</th>
+                    <th className="pb-3 text-left font-medium text-slate-700">Партнер</th>
+                    <th className="pb-3 text-right font-medium text-slate-700">Сумма</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEvents.slice(0, 30).map((event) => {
+                    const badge = eventBadge(event);
+                    return (
+                      <tr key={event.id} className="border-b border-slate-100 last:border-0">
+                        <td className="py-3 text-slate-600">{formatWhen(event.created_at)}</td>
+                        <td className="py-3">
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                            badge.className === 'pill pill--ok' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {badge.text}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-600">{event.referrer_tg_user_id}</td>
+                        <td className="py-3 text-right font-medium text-slate-950">
+                          {event.reward_amount || 0} {event.reward_currency || ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </div>
     </section>
   );
