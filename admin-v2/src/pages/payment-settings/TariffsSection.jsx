@@ -542,149 +542,127 @@ export function TariffsSection({
         />
 
         {tariffGroups.length === 0 ? (
-          <div className="empty-inline">Пока нет тарифов. Создай первый прямо тут.</div>
+          <div className="empty-state">
+            <div className="empty-state__icon">📦</div>
+            <div className="empty-state__title">Пока нет тарифов</div>
+            <div className="empty-state__hint">Создай первый тариф с помощью формы выше</div>
+          </div>
         ) : (
-          <div className="plans-tariff-grid">
+          <div className="tariffs-grid">
             {tariffGroups.map((group) => {
               const tariff = group.lead;
-              const draft = bundleDrafts[group.key] || { item_type: 'channel', channel_id: '', resource_title: '', resource_url: '' };
               const bundleItems = dedupeBundleItems(getTariffBundleItems(group.tariffIds));
+              const hasGroup = tariff.channel_id || tariff.channels;
+              const hasBundleItems = bundleItems.length > 0;
+
               return (
-                <div key={group.key} className="table-card plans-tariff-card">
-                  <div className="plans-tariff-head">
-                    <div className="plans-tariff-head__copy">
-                      <div className="table-card__title">{tariff.title}</div>
-                      <div className="table-subtext">
-                        {tariff.channels?.title || 'Без основной группы'} • {formatPaymentVariants(group.variants)} • {tariff.duration_days} дн.
+                <div key={group.key} className="tariff-card">
+                  {/* Header */}
+                  <div className="tariff-card__header">
+                    <div className="tariff-card__title-section">
+                      <h3 className="tariff-card__title">{tariff.title}</h3>
+                      <div className="tariff-card__meta">
+                        {tariff.channels?.title ? (
+                          <span className="tariff-card__channel">{tariff.channels.title}</span>
+                        ) : (
+                          <span className="tariff-card__channel tariff-card__channel--none">Без группы</span>
+                        )}
+                        <span className="tariff-card__separator">•</span>
+                        <span className="tariff-card__duration">{tariff.duration_days} дн.</span>
                       </div>
                     </div>
-                    <div className="plans-tariff-head__badges">
-                      {bundleItems.length > 0 ? <span className="pill pill--ok">Пакет</span> : null}
-                      {group.variants.length > 1 ? <span className="pill pill--info">{group.variants.length} способа оплаты</span> : null}
+
+                    <div className="tariff-card__actions">
+                      <button
+                        className="tariff-card__delete"
+                        onClick={() => deleteTariff(group.tariffIds)}
+                        title="Удалить тариф"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M19 7l-.867 12.142A2 2 0 0118.001 20.001l-6-6.001 6.001 6.001a2 2 0 01-2.829-2.829L7.17 4.17a2 2 0 0 012.828-2.829l6-6a2 2 0 002.829 2.829l-6 6.001a2 2 0 01-2.828 2.829l6-6.001a2 2 0 002 2.001L17 15l5 5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Удалить
+                      </button>
                     </div>
                   </div>
 
-                  <div className="table-subtext" style={{ marginTop: 12 }}>{getBundleSummaryForItems(tariff, bundleItems)}</div>
+                  {/* Payment Methods */}
+                  <div className="tariff-card__section">
+                    <div className="tariff-card__section-title">Способы оплаты</div>
+                    <div className="payment-methods-list">
+                      {group.variants.map((variant) => (
+                        <div key={variant.id} className="payment-method-pill">
+                          <span className="payment-method-pill__currency">{variant.currency}</span>
+                          <span className="payment-method-pill__price">{variant.price}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                  {bundleSupport ? (
-                    <div className="plans-bundle-panel">
-                      <div className="toolbar-card__title">Состав пакета</div>
-                      {bundleItems.length === 0 ? (
-                        <div className="empty-inline">Пока пусто. Есть только основной канал.</div>
-                      ) : (
-                        <div className="list-stack">
-                          {bundleItems.map((item) => (
-                            <div key={item.id} className="plans-bundle-item">
-                              <div className="plans-bundle-item__copy">
-                                <strong>{item.item_type === 'channel' ? 'Telegram-цель' : 'Материал'}</strong>
-                                <div className="table-subtext">
-                                  {item.item_type === 'channel' ? item.channels?.title || 'Канал не найден' : `${item.resource_title || 'Без названия'} • ${item.resource_url || ''}`}
-                                </div>
-                              </div>
-                              <button className="inline-action" onClick={() => deleteBundleItem(item.itemIds || [item.id])}>Убрать</button>
-                            </div>
-                          ))}
+                  {/* Access Methods */}
+                  <div className="tariff-card__section">
+                    <div className="tariff-card__section-title">Что выдаётся</div>
+                    <div className="access-methods-list">
+                      {hasGroup && (
+                        <div className="access-method-item">
+                          <div className="access-method-item__icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2a2 2 0 002 2h2a2 2 0 002-2zm-10 0H5a2 2 0 00-2 2v2a2 2 0 002 2h5m-7-4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h2m-7-4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </div>
+                          <div className="access-method-item__content">
+                            <div className="access-method-item__title">Закрытая группа</div>
+                            <div className="access-method-item__detail">{tariff.channels?.title || 'Основной канал'}</div>
+                          </div>
                         </div>
                       )}
 
-                      <div className="form-grid plans-form-grid plans-bundle-form">
-                        <label className="field-group">
-                          <span>Что добавить</span>
-                          <select
-                            className="field"
-                            value={draft.item_type}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              ensureBundleDraft(group.key);
-                              setBundleDrafts((prev) => ({
-                                ...prev,
-                                [group.key]: {
-                                  ...prev[group.key],
-                                  item_type: value
-                                }
-                              }));
-                            }}
-                          >
-                            <option value="channel">Канал / чат</option>
-                            <option value="resource">Материал / ссылка</option>
-                          </select>
-                        </label>
-
-                        {draft.item_type === 'channel' ? (
-                          <label className="field-group">
-                            <span>Канал / чат</span>
-                            <select
-                              className="field"
-                              value={draft.channel_id}
-                              onChange={(event) => {
-                                ensureBundleDraft(group.key);
-                                setBundleDrafts((prev) => ({
-                                  ...prev,
-                                  [group.key]: {
-                                    ...prev[group.key],
-                                    channel_id: event.target.value
-                                  }
-                                }));
-                              }}
-                            >
-                              <option value="">Выбери цель</option>
-                              {channels.map((channel) => (
-                                <option key={channel.id} value={channel.id}>{channel.title}</option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : (
-                          <>
-                            <label className="field-group">
-                              <span>Название материала</span>
-                              <input
-                                className="field"
-                                value={draft.resource_title}
-                                onChange={(event) => {
-                                  ensureBundleDraft(group.key);
-                                  setBundleDrafts((prev) => ({
-                                    ...prev,
-                                    [group.key]: {
-                                      ...prev[group.key],
-                                      resource_title: event.target.value
-                                    }
-                                  }));
-                                }}
-                                placeholder="Гайд / курс / ссылка"
-                              />
-                            </label>
-                            <label className="field-group">
-                              <span>URL</span>
-                              <input
-                                className="field"
-                                value={draft.resource_url}
-                                onChange={(event) => {
-                                  ensureBundleDraft(group.key);
-                                  setBundleDrafts((prev) => ({
-                                    ...prev,
-                                    [group.key]: {
-                                      ...prev[group.key],
-                                      resource_url: event.target.value
-                                    }
-                                  }));
-                                }}
-                                placeholder="https://..."
-                              />
-                            </label>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="table-actions" style={{ marginTop: 12 }}>
-                        <button className="ghost-button" type="button" onClick={() => addBundleItem(tariff, group.key, group.tariffIds)}>
-                          Добавить в пакет
-                        </button>
-                      </div>
+                      {bundleItems.map((item, idx) => {
+                        if (item.item_type === 'channel') {
+                          return (
+                            <div key={item.id} className="access-method-item">
+                              <div className="access-method-item__icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </div>
+                              <div className="access-method-item__content">
+                                <div className="access-method-item__title">Telegram</div>
+                                <div className="access-method-item__detail">{item.channels?.title || 'Канал/чат'}</div>
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div key={item.id} className="access-method-item">
+                              <div className="access-method-item__icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102 1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656 0l4 4a4 4 0 105.656 5.656l-1.101 1.101m0-4.899L19.07 4.93a4 4 0 00-5.656 0l-4 4a4 4 0 00-5.656 0l4 4a4 4 0 005.656 5.656l-1.101 1.101M7 17h.01" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </div>
+                              <div className="access-method-item__content">
+                                <div className="access-method-item__title">Материал</div>
+                                <div className="access-method-item__detail">{item.resource_title || 'Без названия'}</div>
+                              </div>
+                            </div>
+                          );
+                        }
+                      })}
                     </div>
-                  ) : null}
+                  </div>
 
-                  <div className="table-actions" style={{ marginTop: 14 }}>
-                    <button className="inline-action" onClick={() => deleteTariff(group.tariffIds)}>Выключить тариф</button>
+                  {/* Footer Stats */}
+                  <div className="tariff-card__footer">
+                    {group.variants.length > 1 && (
+                      <div className="tariff-card__badge">
+                        {group.variants.length} {group.variants.length === 1 ? 'способ оплаты' : 'способа оплаты'}
+                      </div>
+                    )}
+                    {hasBundleItems && (
+                      <div className="tariff-card__badge tariff-card__badge--bundle">
+                        Пакет ({bundleItems.length + (hasGroup ? 1 : 0)} {bundleItems.length + (hasGroup ? 1 : 0) === 1 ? 'элемент' : 'элемента'})
+                      </div>
+                    )}
                   </div>
                 </div>
               );
