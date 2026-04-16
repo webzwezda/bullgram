@@ -606,7 +606,7 @@ export function TariffsSection({
                             <circle cx="12" cy="12" r="10" />
                             <polyline points="12 6 12 12 16 14" />
                           </svg>
-                          {tariff.duration_days ? `${tariff.duration_days} дней` : 'Навсегда'}
+                          {tariff.duration_days === 0 || !tariff.duration_days ? 'Навсегда' : `${tariff.duration_days} дней`}
                         </span>
                       </div>
                     </div>

@@ -97,7 +97,7 @@ export function useTariffsController({
         channel_id: groupAccess.enabled ? newTariff.channel_id : null,
         title: newTariff.title,
         price: parseFloat(method.price),
-        duration_days: isLifetime ? null : parseInt(newTariff.duration_days, 10),
+        duration_days: isLifetime ? 0 : parseInt(newTariff.duration_days, 10),
         currency: method.currency,
         is_active: true
       }));
