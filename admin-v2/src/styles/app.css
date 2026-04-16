@@ -1535,17 +1535,25 @@ a {
   padding: 14px 16px;
   background: #f8fafc;
   border-radius: 12px;
-  cursor: default;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .create-tariff-option--active .create-tariff-option__head {
   background: #eff6ff;
 }
 
+.create-tariff-option__head:hover {
+  background: #f1f5f9;
+}
+
+.create-tariff-option--active .create-tariff-option__head:hover {
+  background: #dbeafe;
+}
+
 .create-tariff-option__info {
   flex: 1;
   min-width: 0;
-  pointer-events: none;
 }
 
 .create-tariff-option__title {
@@ -1581,10 +1589,19 @@ a {
   background: #f8fafc;
   border-radius: 14px;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .create-tariff-payment-option--active {
   background: #fefce8;
+}
+
+.create-tariff-payment-option:hover {
+  background: #f1f5f9;
+}
+
+.create-tariff-payment-option--active:hover {
+  background: #fef08a;
 }
 
 .create-tariff-payment-option__head {
@@ -1621,19 +1638,14 @@ a {
   background: #cbd5e1;
   border-radius: 13px;
   cursor: pointer;
-  transition: background 0.25s ease, transform 0.1s ease;
+  transition: background 0.25s ease;
   flex-shrink: 0;
   border: none;
   padding: 0;
 }
 
 .toggle-switch:hover {
-  transform: scale(1.05);
   background: #94a3b8;
-}
-
-.toggle-switch:active {
-  transform: scale(0.95);
 }
 
 .toggle-switch--on {

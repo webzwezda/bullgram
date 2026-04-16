@@ -268,18 +268,22 @@ function CreateTariffForm({
             <div className="create-tariff-section__body">
               {/* Закрытая группа */}
               <div className={`create-tariff-option ${groupAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div className="create-tariff-option__head">
+                <div
+                  className="create-tariff-option__head"
+                  onClick={() => updateAccessMethod('group', { enabled: !groupAccess.enabled })}
+                >
                   <div className="create-tariff-option__info">
                     <div className="create-tariff-option__title">Закрытая группа</div>
                     <div className="create-tariff-option__hint">Бот отправит ссылку на вступление</div>
                   </div>
-                  <button
-                    type="button"
+                  <div
                     className={`toggle-switch ${groupAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    onClick={() => updateAccessMethod('group', { enabled: !groupAccess.enabled })}
+                    role="switch"
+                    aria-checked={groupAccess.enabled}
+                    aria-label="Закрытая группа"
                   >
                     <span className="toggle-switch__thumb" />
-                  </button>
+                  </div>
                 </div>
                 {groupAccess.enabled && (
                   <div className="create-tariff-option__body">
@@ -307,18 +311,22 @@ function CreateTariffForm({
 
               {/* Чат */}
               <div className={`create-tariff-option ${chatAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div className="create-tariff-option__head">
+                <div
+                  className="create-tariff-option__head"
+                  onClick={() => updateAccessMethod('chat', { enabled: !chatAccess.enabled })}
+                >
                   <div className="create-tariff-option__info">
                     <div className="create-tariff-option__title">Чат</div>
                     <div className="create-tariff-option__hint">Бот отправит ссылку на вступление в чат</div>
                   </div>
-                  <button
-                    type="button"
+                  <div
                     className={`toggle-switch ${chatAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    onClick={() => updateAccessMethod('chat', { enabled: !chatAccess.enabled })}
+                    role="switch"
+                    aria-checked={chatAccess.enabled}
+                    aria-label="Чат"
                   >
                     <span className="toggle-switch__thumb" />
-                  </button>
+                  </div>
                 </div>
                 {chatAccess.enabled && (
                   <div className="create-tariff-option__body">
@@ -346,18 +354,22 @@ function CreateTariffForm({
 
               {/* Ссылка / текст */}
               <div className={`create-tariff-option ${resourceAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div className="create-tariff-option__head">
+                <div
+                  className="create-tariff-option__head"
+                  onClick={() => updateAccessMethod('resource', { enabled: !resourceAccess.enabled })}
+                >
                   <div className="create-tariff-option__info">
                     <div className="create-tariff-option__title">Ссылка / текст</div>
                     <div className="create-tariff-option__hint">Бот отправит материал после оплаты</div>
                   </div>
-                  <button
-                    type="button"
+                  <div
                     className={`toggle-switch ${resourceAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    onClick={() => updateAccessMethod('resource', { enabled: !resourceAccess.enabled })}
+                    role="switch"
+                    aria-checked={resourceAccess.enabled}
+                    aria-label="Ссылка / текст"
                   >
                     <span className="toggle-switch__thumb" />
-                  </button>
+                  </div>
                 </div>
                 {resourceAccess.enabled && (
                   <div className="create-tariff-option__body">
@@ -405,17 +417,21 @@ function CreateTariffForm({
             <div className="create-tariff-section__body">
               <div className="create-tariff-payment">
                 <div className={`create-tariff-payment-option ${tonPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
-                  <div className="create-tariff-payment-option__head">
+                  <div
+                    className="create-tariff-payment-option__head"
+                    onClick={() => updatePaymentMethod('ton', { enabled: !tonPayment.enabled })}
+                  >
                     <div className="create-tariff-payment-option__info">
                       <div className="create-tariff-payment-option__currency">TON</div>
                     </div>
-                    <button
-                      type="button"
+                    <div
                       className={`toggle-switch ${tonPayment.enabled ? 'toggle-switch--on' : ''}`}
-                      onClick={() => updatePaymentMethod('ton', { enabled: !tonPayment.enabled })}
+                      role="switch"
+                      aria-checked={tonPayment.enabled}
+                      aria-label="TON"
                     >
                       <span className="toggle-switch__thumb" />
-                    </button>
+                    </div>
                   </div>
                   {tonPayment.enabled && (
                     <div className="create-tariff-payment-option__body">
@@ -436,17 +452,21 @@ function CreateTariffForm({
                 </div>
 
                 <div className={`create-tariff-payment-option ${rubPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
-                  <div className="create-tariff-payment-option__head">
+                  <div
+                    className="create-tariff-payment-option__head"
+                    onClick={() => updatePaymentMethod('rub', { enabled: !rubPayment.enabled })}
+                  >
                     <div className="create-tariff-payment-option__info">
                       <div className="create-tariff-payment-option__currency">RUB / СБП</div>
                     </div>
-                    <button
-                      type="button"
+                    <div
                       className={`toggle-switch ${rubPayment.enabled ? 'toggle-switch--on' : ''}`}
-                      onClick={() => updatePaymentMethod('rub', { enabled: !rubPayment.enabled })}
+                      role="switch"
+                      aria-checked={rubPayment.enabled}
+                      aria-label="RUB / СБП"
                     >
                       <span className="toggle-switch__thumb" />
-                    </button>
+                    </div>
                   </div>
                   {rubPayment.enabled && (
                     <div className="create-tariff-payment-option__body">
