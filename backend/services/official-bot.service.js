@@ -911,10 +911,13 @@ export class OfficialBotService {
 
                 inlineKeyboard.push([{ text: '👤 Мой статус', callback_data: 'my_status' }]);
 
+                const firstName = ctx.from?.first_name || '';
+                const welcomeText = firstName ? `Добро пожаловать, ${firstName}!` : 'Добро пожаловать!';
+
                 if (ctx.callbackQuery) {
-                    await ctx.editMessageText('Выберите действие:', { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.editMessageText(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard } });
                 } else {
-                    await ctx.reply('Выберите действие:', { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.reply(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard } });
                 }
             } catch (error) {
                 console.error('Ошибка меню:', error);
