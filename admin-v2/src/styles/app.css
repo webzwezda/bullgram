@@ -1583,6 +1583,7 @@ a {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
+  align-items: start;
 }
 
 .create-tariff-payment-option {
@@ -1597,11 +1598,11 @@ a {
 }
 
 .create-tariff-payment-option:hover {
-  background: #f1f5f9;
+  background: #fafafa;
 }
 
 .create-tariff-payment-option--active:hover {
-  background: #fef08a;
+  background: #fefef0;
 }
 
 .create-tariff-payment-option__head {
