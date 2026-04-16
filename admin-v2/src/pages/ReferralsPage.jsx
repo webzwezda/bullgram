@@ -277,7 +277,6 @@ export function ReferralsPage() {
     return (
       <section className="page">
         <div className="page__header">
-          <h1>Рефералка</h1>
         </div>
         <div className="error-card">{state.error}</div>
       </section>
@@ -287,7 +286,6 @@ export function ReferralsPage() {
   return (
     <section className="page">
       <div className="page__header">
-        <h1>Рефералка</h1>
       </div>
 
       {/* Priority Signals */}
