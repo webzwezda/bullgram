@@ -6,6 +6,20 @@ import { authenticateUser } from '../middlewares/auth.middleware.js';
 
 const officialBotService = new OfficialBotService(null); // Supabase будет установлен позже через init
 
+async function resolveBotAdminUsername(botToken, adminTgId) {
+    const normalizedAdminTgId = String(adminTgId || '').trim();
+    if (!botToken || !normalizedAdminTgId) return null;
+
+    try {
+        const bot = new Telegraf(botToken);
+        const chat = await bot.telegram.getChat(normalizedAdminTgId);
+        return chat?.username ? String(chat.username).replace(/^@/, '') : null;
+    } catch (error) {
+        console.warn(`Не удалось резолвить username админа ${normalizedAdminTgId}:`, error.message);
+        return null;
+    }
+}
+
 /**
  * Роуты для официальных ботов
  */
@@ -28,6 +42,7 @@ export default function (supabase) {
             const encryptedToken = encrypt(botToken);
             const normalizedRole = botRole === 'ops' ? 'ops' : 'sales';
             const normalizedAdminTgId = String(admin_tg_id || '').trim() || null;
+            const adminTgUsername = await resolveBotAdminUsername(botToken, normalizedAdminTgId);
 
             const { data: insertedAccount, error } = await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
@@ -36,7 +51,8 @@ export default function (supabase) {
                 tg_username: botInfo.username,
                 session_data: encryptedToken,
                 bot_role: normalizedRole,
-                admin_tg_id: normalizedAdminTgId
+                admin_tg_id: normalizedAdminTgId,
+                admin_tg_username: adminTgUsername
             }, { onConflict: 'owner_id, tg_account_id' }).select().single();
 
             if (error) throw error;
@@ -60,7 +76,7 @@ export default function (supabase) {
 
             const { data: account, error: accountError } = await supabase
                 .from('tg_accounts')
-                .select('id')
+                .select('id, session_data')
                 .eq('id', account_id)
                 .eq('owner_id', req.user.id)
                 .eq('account_type', 'bot')
@@ -70,15 +86,25 @@ export default function (supabase) {
                 return res.status(404).json({ error: 'Бот не найден' });
             }
 
+            const botToken = account.session_data ? decrypt(account.session_data) : '';
+            const adminTgUsername = await resolveBotAdminUsername(botToken, normalizedAdminTgId);
+
             const { error: updateError } = await supabase
                 .from('tg_accounts')
-                .update({ admin_tg_id: normalizedAdminTgId })
+                .update({
+                    admin_tg_id: normalizedAdminTgId,
+                    admin_tg_username: normalizedAdminTgId ? adminTgUsername : null
+                })
                 .eq('id', account.id)
                 .eq('owner_id', req.user.id);
 
             if (updateError) throw updateError;
 
-            res.json({ success: true, admin_tg_id: normalizedAdminTgId });
+            res.json({
+                success: true,
+                admin_tg_id: normalizedAdminTgId,
+                admin_tg_username: normalizedAdminTgId ? adminTgUsername : null
+            });
         } catch (error) {
             console.error('Ошибка обновления admin_tg_id бота:', error.message);
             res.status(500).json({ error: 'Не получилось обновить Telegram ID админа бота' });

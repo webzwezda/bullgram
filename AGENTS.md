@@ -128,8 +128,10 @@ For Codex work in this repo:
 
 - use the main Codex session as the orchestrator
 - global custom agents live in `~/.codex/agents/`
+- before starting non-trivial work, first review which global subagents are available and choose the best candidates for the task
 - custom agents do not auto-run; delegate explicitly in prompts
 - we already have many global subagents available, so prefer delegating as much scoped work as possible to them
+- when a task can be split into isolated slices, proactively assign those slices to subagents instead of keeping all implementation in the main session
 - the main Codex workflow should spend most of its time on orchestration: scoping, agent selection, task splitting, integration, conflict resolution, and final synthesis
 - push exploration, isolated implementation, focused verification, and review work down into subagents whenever the scope is clear
 - keep architecture decisions, cross-runtime integration, and final verification in the main Codex session
@@ -260,3 +262,29 @@ Core execution principles:
 - simplicity first: make every change as simple as possible and touch the minimum necessary code
 - no laziness: find root causes and avoid temporary fixes
 - minimal impact: only change what is necessary and avoid introducing regressions
+
+## Removable Codex Orchestration Addendum
+
+This block is intentionally placed at the end so it can be removed cleanly if the workflow changes.
+
+- Codex may act as the primary orchestrator for both native Codex subagents and Claude terminal workers when the user asks for delegation, parallel agent work, Claude coordination, or multi-agent workflow.
+- Keep the distinction explicit:
+  - native Codex subagents are delegated through Codex subagent tooling;
+  - Claude workers are terminal processes coordinated through `cmux`;
+  - a `cmux` pane, split, browser surface, or terminal surface is not itself a Codex subagent.
+- The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means Codex must not confuse terminal UI state with native subagent state.
+- For Claude work, prefer the project agent file `.claude/agents/bullrun-codex-worker.md` and launch Claude with `claude --agent bullrun-codex-worker` when a bounded worker is useful.
+- Use `cmux help` whenever command syntax is uncertain. The main commands for orchestration are:
+  - `cmux tree`
+  - `cmux list-panes`
+  - `cmux list-pane-surfaces`
+  - `cmux new-split`
+  - `cmux new-pane`
+  - `cmux new-surface`
+  - `cmux send`
+  - `cmux send-key`
+  - `cmux read-screen`
+- Codex owns task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, and user-facing summary.
+- Claude workers should receive narrow prompts with exact scope, allowed files or write boundaries, expected validation, and required return format.
+- Do not let Claude deploy, rollback, run destructive commands, or broaden architecture unless Codex explicitly assigns that scope.
+- When Claude or a subagent finishes, Codex must read the result, inspect the diff locally, reconcile conflicts, run final checks, and only then report completion.

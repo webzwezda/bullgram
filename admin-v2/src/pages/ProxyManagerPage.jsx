@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useTonConnectModal, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { APP_CONFIG } from '../config.js';
-import { buildTonConnectTransaction, normalizeTonConnectError } from '../utils/ton-checkout.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
@@ -213,11 +211,14 @@ function proxyEgressSummary(proxy) {
   return 'IP не зафиксирован';
 }
 
+function preferredTonCheckoutView(purchase) {
+  if (purchase?.trust_wallet_qr || purchase?.trust_wallet_uri) return 'trust';
+  if (purchase?.ton_qr || purchase?.ton_uri) return 'ton';
+  return 'trust';
+}
+
 export function ProxyManagerPage() {
   const { accessToken, profilePlan } = useAuth();
-  const [tonConnectUI] = useTonConnectUI();
-  const tonWallet = useTonWallet();
-  const tonModal = useTonConnectModal();
   const [filter, setFilter] = useState('all');
   const [proxyBuyQuantity, setProxyBuyQuantity] = useState(1);
   const [formState, setFormState] = useState({
@@ -257,6 +258,7 @@ export function ProxyManagerPage() {
   });
   const [receiptNote, setReceiptNote] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
+  const [tonCheckoutView, setTonCheckoutView] = useState('trust');
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
@@ -287,33 +289,6 @@ export function ProxyManagerPage() {
       return { text: 'На продажу', className: 'pill pill--warning' };
     }
     return null;
-  }
-
-  async function payCheckoutInBrowser() {
-    const purchase = checkoutState.purchase;
-    if (!purchase || purchase.payment_method !== 'ton' || !purchase.seller_wallet) {
-      return;
-    }
-
-    try {
-      if (!tonWallet) {
-        await tonModal.open();
-        return;
-      }
-
-      const transaction = await buildTonConnectTransaction({
-        address: purchase.seller_wallet,
-        amountTon: purchase.amount_ton,
-        memo: purchase.memo
-      });
-
-      await tonConnectUI.sendTransaction(transaction);
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        error: normalizeTonConnectError(error)
-      }));
-    }
   }
 
   useEffect(() => {
@@ -506,6 +481,16 @@ export function ProxyManagerPage() {
     }
     return map;
   }, [shopState.sellerItems]);
+
+  useEffect(() => {
+    setTonCheckoutView(preferredTonCheckoutView(checkoutState.purchase));
+  }, [
+    checkoutState.purchase?.id,
+    checkoutState.purchase?.trust_wallet_qr,
+    checkoutState.purchase?.trust_wallet_uri,
+    checkoutState.purchase?.ton_qr,
+    checkoutState.purchase?.ton_uri
+  ]);
   const createdForSaleProxies = useMemo(() => (
     shopSaleProxies.filter((proxy) => {
       const items = sellerProxyItemMap.get(String(proxy.id)) || [];
@@ -1606,12 +1591,38 @@ function renderOpenProxyPurchases(rows) {
                     ) : null}
                     <div><strong>Memo:</strong> <code>{checkoutState.purchase.memo || '—'}</code></div>
                     {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) ? (
-                      <img
-                        className="checkout-modal__qr"
-                        style={{ marginTop: 16 }}
-                        src={checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr}
-                        alt="TON QR"
-                      />
+                      <div style={{ marginTop: 16 }}>
+                        {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr ? (
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                            <button
+                              className={`inline-action inline-action--chip${tonCheckoutView === 'trust' ? ' inline-action--accent' : ''}`}
+                              type="button"
+                              onClick={() => setTonCheckoutView('trust')}
+                              style={{ flex: 1 }}
+                            >
+                              Trust Wallet
+                            </button>
+                            <button
+                              className={`inline-action inline-action--chip${tonCheckoutView === 'ton' ? ' inline-action--accent' : ''}`}
+                              type="button"
+                              onClick={() => setTonCheckoutView('ton')}
+                              style={{ flex: 1 }}
+                            >
+                              TON
+                            </button>
+                          </div>
+                        ) : null}
+                        <div className="table-subtext" style={{ marginBottom: 8 }}>
+                          {tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                        </div>
+                        <img
+                          className="checkout-modal__qr"
+                          src={tonCheckoutView === 'ton'
+                            ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
+                            : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
+                          alt={tonCheckoutView === 'ton' ? 'QR для TON-кошелька' : 'QR для Trust Wallet'}
+                        />
+                      </div>
                     ) : null}
                   </div>
                 ) : (
@@ -1652,18 +1663,14 @@ function renderOpenProxyPurchases(rows) {
                   </div>
                 )}
                 <div className="toolbar-card__body">
-                  {checkoutState.purchase.payment_method === 'ton' ? (
-                    <button
-                      className="ghost-button ghost-button--primary"
-                      type="button"
-                      onClick={payCheckoutInBrowser}
-                    >
-                      {tonWallet ? 'Оплатить в Chrome' : 'Подключить кошелек в Chrome'}
-                    </button>
+                  {checkoutState.purchase.payment_method === 'ton' && checkoutState.purchase.trust_wallet_uri ? (
+                    <a className="ghost-button" href={checkoutState.purchase.trust_wallet_uri}>
+                      Trust Wallet
+                    </a>
                   ) : null}
-                  {checkoutState.purchase.payment_method === 'ton' && (checkoutState.purchase.trust_wallet_uri || checkoutState.purchase.ton_uri) ? (
-                    <a className="ghost-button ghost-button--primary" href={checkoutState.purchase.trust_wallet_uri || checkoutState.purchase.ton_uri}>
-                      Оплатить в Trust Wallet
+                  {checkoutState.purchase.payment_method === 'ton' && checkoutState.purchase.ton_uri ? (
+                    <a className="ghost-button" href={checkoutState.purchase.ton_uri}>
+                      TON
                     </a>
                   ) : null}
                   {checkoutState.purchase.payment_method === 'ton' ? (

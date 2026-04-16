@@ -20,7 +20,7 @@ export class OfficialBotService {
         try {
             const { data, error } = await this.supabase
                 .from('tariff_bundle_items')
-                .select('id, tariff_id, item_type, channel_id, resource_title, resource_url, sort_order, is_active, channels(id, title, tg_chat_id, owner_id)')
+                .select('id, tariff_id, item_type, channel_id, resource_title, resource_url, sort_order, is_active, channels(id, title, tg_chat_id, owner_id, chat_type)')
                 .eq('owner_id', ownerId)
                 .eq('tariff_id', tariff.id)
                 .eq('is_active', true)
@@ -110,6 +110,10 @@ export class OfficialBotService {
 
         const parts = [];
 
+        if (tariff.channel_id) {
+            parts.push('основная группа');
+        }
+
         if (channelItems.length > 0) {
             parts.push(channelItems.map(item => item.channels.title).join(', '));
         }
@@ -126,6 +130,93 @@ export class OfficialBotService {
             return tariff.trial_label || `${tariff.title} (пробник)`;
         }
         return tariff?.title || 'Тариф';
+    }
+
+    buildTelegramTargets(primaryChannel, channelTargets = []) {
+        const targetsById = new Map();
+        [primaryChannel, ...channelTargets].filter(Boolean).forEach((channel) => {
+            const key = String(channel.id || channel.tg_chat_id || '').trim();
+            if (!key || targetsById.has(key)) return;
+            targetsById.set(key, channel);
+        });
+        return Array.from(targetsById.values());
+    }
+
+    escapeMarkdownText(value) {
+        return String(value || '').replace(/([_*[\]()`])/g, '\\$1');
+    }
+
+    formatResourceLine(item, index) {
+        const title = this.escapeMarkdownText(item.title || 'Материал');
+        const value = this.escapeMarkdownText(item.url || '');
+        return `${index + 1}. **${title}**\n${value}`;
+    }
+
+    getTariffPaymentGroupKey(tariff) {
+        return [
+            tariff?.owner_id || '',
+            tariff?.channel_id || '',
+            String(tariff?.title || '').trim().toLowerCase(),
+            String(tariff?.duration_days || ''),
+            tariff?.is_trial ? 'trial' : 'regular',
+            String(tariff?.trial_label || '').trim().toLowerCase(),
+            tariff?.upsell_tariff_id || ''
+        ].join('|');
+    }
+
+    sortTariffPaymentVariants(variants = []) {
+        const currencyOrder = { TON: 1, RUB: 2, USDT: 3 };
+        return [...variants].sort((left, right) => {
+            const leftCurrency = String(left.currency || '').toUpperCase();
+            const rightCurrency = String(right.currency || '').toUpperCase();
+            const byCurrency = (currencyOrder[leftCurrency] || 99) - (currencyOrder[rightCurrency] || 99);
+            if (byCurrency !== 0) return byCurrency;
+            return Number(left.price || 0) - Number(right.price || 0);
+        });
+    }
+
+    buildTariffPaymentGroups(tariffs = []) {
+        const groupsByKey = new Map();
+        tariffs.forEach((tariff) => {
+            const key = this.getTariffPaymentGroupKey(tariff);
+            if (!groupsByKey.has(key)) {
+                groupsByKey.set(key, { key, variants: [] });
+            }
+            groupsByKey.get(key).variants.push(tariff);
+        });
+
+        return Array.from(groupsByKey.values())
+            .map((group) => {
+                const variants = this.sortTariffPaymentVariants(group.variants);
+                return {
+                    ...group,
+                    lead: variants[0],
+                    variants
+                };
+            })
+            .sort((left, right) => Number(left.lead?.price || 0) - Number(right.lead?.price || 0));
+    }
+
+    findTariffPaymentGroup(tariffs = [], sourceTariff) {
+        const sourceKey = this.getTariffPaymentGroupKey(sourceTariff);
+        return this.buildTariffPaymentGroups(tariffs).find((group) => group.key === sourceKey)
+            || { key: sourceKey, lead: sourceTariff, variants: [sourceTariff] };
+    }
+
+    formatTariffPaymentOptions(variants = []) {
+        return this.sortTariffPaymentVariants(variants)
+            .map((variant) => `${variant.price} ${variant.currency || 'TON'}`)
+            .join(' / ');
+    }
+
+    getTariffCurrencyIcon(currency) {
+        return String(currency || '').toUpperCase() === 'RUB' ? '💳' : '💎';
+    }
+
+    getTariffGroupIcon(group) {
+        const currencies = new Set((group?.variants || []).map((variant) => String(variant.currency || '').toUpperCase()));
+        if (currencies.has('TON') && currencies.has('RUB')) return '💎💳';
+        return this.getTariffCurrencyIcon(group?.lead?.currency);
     }
 
     async logAccessEvent({
@@ -724,15 +815,18 @@ export class OfficialBotService {
                     return ctx.callbackQuery ? await ctx.editMessageText(msg) : await ctx.reply(msg);
                 }
 
-                const tariffsWithBundles = await Promise.all(tariffs.map(async tariff => ({
-                    tariff,
-                    bundleItems: await this.getTariffBundleItems(tariff, ownerId)
+                const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                const tariffsWithBundles = await Promise.all(tariffGroups.map(async group => ({
+                    group,
+                    tariff: group.lead,
+                    bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
                 })));
 
-                const inlineKeyboard = tariffsWithBundles.flatMap(({ tariff, bundleItems }) => {
-                    let icon = tariff.currency === 'RUB' ? '💳' : '💎';
+                const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
+                    const icon = this.getTariffGroupIcon(group);
+                    const paymentOptions = this.formatTariffPaymentOptions(group.variants);
                     return [
-                        [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${tariff.price} ${tariff.currency}`, callback_data: `buy_${tariff.id}` }],
+                        [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
                         [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
                     ];
                 });
@@ -828,19 +922,33 @@ export class OfficialBotService {
             try {
                 const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
                 if (!tariff) return ctx.reply('❌ Тариф не найден.');
+                const { data: siblingTariffs } = await this.supabase.from('tariffs')
+                    .select('*')
+                    .eq('owner_id', tariff.owner_id)
+                    .eq('is_active', true);
+                const paymentGroup = this.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+                const paymentLines = this.sortTariffPaymentVariants(paymentGroup.variants)
+                    .map((variant) => `• **${variant.price} ${variant.currency || 'TON'}**`)
+                    .join('\n');
 
                 const bundleItems = await this.getTariffBundleItems(tariff, tariff.owner_id);
                 const channelItems = bundleItems.filter(item => item.item_type === 'channel' && item.channels);
                 const resourceItems = bundleItems.filter(item => item.item_type === 'resource');
                 const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
+                let primaryChannel = null;
+                if (tariff.channel_id) {
+                    const { data } = await this.supabase.from('channels').select('id, title, tg_chat_id').eq('id', tariff.channel_id).single();
+                    primaryChannel = data || null;
+                }
+                const telegramTargets = this.buildTelegramTargets(primaryChannel, channelItems.map(item => item.channels));
 
                 const lines = [];
-                if (channelItems.length > 0) {
+                if (telegramTargets.length > 0) {
                     lines.push('**Что входит в Telegram:**');
-                    channelItems.forEach((item, index) => lines.push(`${index + 1}. ${item.channels.title}`));
+                    telegramTargets.forEach((channel, index) => lines.push(`${index + 1}. ${channel.title}`));
                 } else {
                     lines.push('**Что входит:**');
-                    lines.push('1. Основной канал из тарифа');
+                    lines.push('1. Материалы после оплаты');
                 }
 
                 if (resourceItems.length > 0) {
@@ -850,7 +958,7 @@ export class OfficialBotService {
                 }
 
                 await ctx.reply(
-                    `📦 **${this.getTariffDisplayTitle(tariff)}**\n\nЦена: **${tariff.price} ${tariff.currency}**\nСрок: **${durationText}**\n\n${lines.join('\n')}`,
+                    `📦 **${this.getTariffDisplayTitle(tariff)}**\n\nЦена:\n${paymentLines}\nСрок: **${durationText}**\n\n${lines.join('\n')}`,
                     { parse_mode: 'Markdown' }
                 );
             } catch (error) {
@@ -860,13 +968,8 @@ export class OfficialBotService {
         });
 
         // --- Генерация счета ---
-        bot.action(/^buy_(.+)$/, async (ctx) => {
-            const tariffId = ctx.match[1];
-            await ctx.answerCbQuery();
-
+        const createInvoiceForTariff = async (ctx, tariff) => {
             try {
-                const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
-                if (!tariff) return ctx.reply('❌ Тариф не найден.');
                 const bundleItems = await this.getTariffBundleItems(tariff, tariff.owner_id);
                 const bundleSummary = this.formatTariffBundleSummary(tariff, bundleItems);
 
@@ -931,6 +1034,50 @@ export class OfficialBotService {
                     });
                 }
             } catch (err) { console.error('Ошибка счета:', err); }
+        };
+
+        bot.action(/^buy_(.+)$/, async (ctx) => {
+            const tariffId = ctx.match[1];
+            await ctx.answerCbQuery();
+
+            try {
+                const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
+                if (!tariff) return ctx.reply('❌ Тариф не найден.');
+                const { data: siblingTariffs } = await this.supabase.from('tariffs')
+                    .select('*')
+                    .eq('owner_id', tariff.owner_id)
+                    .eq('is_active', true);
+                const paymentGroup = this.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+
+                if (paymentGroup.variants.length > 1) {
+                    const keyboard = this.sortTariffPaymentVariants(paymentGroup.variants)
+                        .map((variant) => ([{
+                            text: `${this.getTariffCurrencyIcon(variant.currency)} ${variant.price} ${variant.currency || 'TON'}`,
+                            callback_data: `pay_tariff_${variant.id}`
+                        }]));
+                    keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+                    await ctx.deleteMessage().catch(() => {});
+                    await ctx.reply(
+                        `Выберите способ оплаты для «${this.getTariffDisplayTitle(paymentGroup.lead)}»:`,
+                        { reply_markup: { inline_keyboard: keyboard } }
+                    );
+                    return;
+                }
+
+                await createInvoiceForTariff(ctx, tariff);
+            } catch (err) { console.error('Ошибка выбора способа оплаты:', err); }
+        });
+
+        bot.action(/^pay_tariff_(.+)$/, async (ctx) => {
+            const tariffId = ctx.match[1];
+            await ctx.answerCbQuery();
+
+            try {
+                const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
+                if (!tariff) return ctx.reply('❌ Тариф не найден.');
+                await createInvoiceForTariff(ctx, tariff);
+            } catch (err) { console.error('Ошибка выбранного способа оплаты:', err); }
         });
 
         // --- Кнопка "Я оплатил" ---
@@ -1124,7 +1271,7 @@ export class OfficialBotService {
             } catch (err) { console.error('Ошибка статуса:', err); }
         });
 
-        // --- Слухач добавления в канал ---
+        // --- Слухач назначения bot-админом в канал/группу/чат ---
         bot.on('my_chat_member', async (ctx) => {
             const chat = ctx.myChatMember.chat;
             const newStatus = ctx.myChatMember.new_chat_member.status;
@@ -1133,7 +1280,13 @@ export class OfficialBotService {
                     const ownerId = await this.getBotOwner(botId);
                     if (ownerId) {
                         await this.supabase.from('channels').upsert(
-                            { owner_id: ownerId, bot_id: botId, tg_chat_id: chat.id, title: chat.title },
+                            {
+                                owner_id: ownerId,
+                                bot_id: botId,
+                                tg_chat_id: chat.id,
+                                title: chat.title || String(chat.id),
+                                chat_type: chat.type || 'channel'
+                            },
                             { onConflict: 'tg_chat_id' }
                         );
                     }
@@ -1276,8 +1429,12 @@ export class OfficialBotService {
     async activateSubscription(bot, invoice) {
         try {
             const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', invoice.tariff_id).single();
-            const { data: primaryChannel } = await this.supabase.from('channels').select('*').eq('id', tariff.channel_id).single();
-            const ownerId = primaryChannel.owner_id;
+            let primaryChannel = null;
+            if (tariff.channel_id) {
+                const { data } = await this.supabase.from('channels').select('*').eq('id', tariff.channel_id).single();
+                primaryChannel = data || null;
+            }
+            const ownerId = primaryChannel?.owner_id || tariff.owner_id;
             const bundleItems = await this.getTariffBundleItems(tariff, ownerId);
 
             const channelTargets = bundleItems
@@ -1291,7 +1448,7 @@ export class OfficialBotService {
                     url: item.resource_url
                 }));
 
-            const telegramTargets = channelTargets.length > 0 ? channelTargets : [primaryChannel];
+            const telegramTargets = this.buildTelegramTargets(primaryChannel, channelTargets);
             const inviteLinks = [];
             let finalExpiresAt = null;
 
@@ -1355,21 +1512,26 @@ export class OfficialBotService {
                 });
             }
 
-            const expText = finalExpiresAt
-                ? `Продлен до: **${new Date(finalExpiresAt).toLocaleDateString('ru-RU')}**`
-                : `Доступ: **Навсегда**`;
+            const expText = telegramTargets.length === 0
+                ? `Материалы: **отправлены**`
+                : finalExpiresAt
+                    ? `Продлен до: **${new Date(finalExpiresAt).toLocaleDateString('ru-RU')}**`
+                    : `Доступ: **Навсегда**`;
 
             const accessLines = inviteLinks
                 .map((item, index) => `${index + 1}. **${item.title}**\n👉 ${item.url}`)
-                .join('\n\n');
+                .join('\n\n') || 'Telegram-доступ в этом тарифе не включен.';
 
             const resourceLines = resourceTargets.length > 0
-                ? `\n\n**Доп. материалы:**\n${resourceTargets.map((item, index) => `${index + 1}. [${item.title || 'Материал'}](${item.url})`).join('\n')}`
+                ? `\n\n**Доп. материалы:**\n${resourceTargets.map((item, index) => this.formatResourceLine(item, index)).join('\n\n')}`
+                : '';
+            const deliveryNote = telegramTargets.length > 0
+                ? '\n\nВсе ссылки работают через запрос на вступление. Бот пропустит только аккаунт с активной подпиской.'
                 : '';
 
             await bot.telegram.sendMessage(
                 invoice.tg_user_id,
-                `🎉 **Оплата успешно подтверждена!**\n\nТариф: «${this.getTariffDisplayTitle(tariff)}»\n⏳ ${expText}\n\n**Что ты получил:**\n${accessLines}${resourceLines}\n\nВсе ссылки работают через запрос на вступление. Бот пропустит только аккаунт с активной подпиской.`,
+                `🎉 **Оплата успешно подтверждена!**\n\nТариф: «${this.getTariffDisplayTitle(tariff)}»\n⏳ ${expText}\n\n**Что ты получил:**\n${accessLines}${resourceLines}${deliveryNote}`,
                 { parse_mode: 'Markdown', disable_web_page_preview: true }
             );
 

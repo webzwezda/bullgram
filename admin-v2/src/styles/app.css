@@ -547,6 +547,13 @@ a {
   line-height: 1.4;
 }
 
+.checklist__title-link {
+  color: #0f766e;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
 .checklist__hint {
   color: var(--muted);
   font-size: 12px;
@@ -752,10 +759,6 @@ a {
 .field--textarea {
   min-height: 96px;
   resize: vertical;
-}
-
-.page {
-  margin-top: 24px;
 }
 
 .page.payment-page {
@@ -1138,6 +1141,262 @@ a {
 .toolbar-card {
   margin-top: 0;
   background: #ffffff;
+}
+
+.plans-tariffs-section {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.plans-tariffs-section__head .table-card__title {
+  margin-bottom: 0;
+}
+
+.plans-create-panel {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.plans-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-top: 14px;
+}
+
+.plans-form-grid__channel {
+  grid-column: 1 / -1;
+  width: min(100%, 280px);
+}
+
+.plans-form-grid__title {
+  grid-column: 1 / -1;
+  width: min(100%, 360px);
+}
+
+.plans-access-methods {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  max-width: 620px;
+}
+
+.plans-access-method {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.plans-access-method:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.plans-access-method__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.plans-access-method__title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.plans-access-method__hint {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.plans-access-method__fields {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.textarea-field {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.plans-payment-methods {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(240px, 280px);
+  gap: 12px;
+  align-items: start;
+}
+
+.plans-payment-method {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 81px;
+  align-content: start;
+}
+
+.plans-payment-method__head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.plans-payment-method__title {
+  min-height: 31px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.plans-payment-method__price {
+  min-height: 42px;
+  width: 100%;
+}
+
+.ios-switch {
+  flex: 0 0 51px;
+  width: 51px;
+  height: 31px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: #e5e5ea;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: background 0.18s ease;
+}
+
+.ios-switch--on {
+  background: #34c759;
+}
+
+.ios-switch__thumb {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.24);
+  transform: translateX(0);
+  transition: transform 0.18s ease;
+}
+
+.ios-switch--on .ios-switch__thumb {
+  transform: translateX(20px);
+}
+
+.ios-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.24);
+}
+
+.plans-tariffs-section .field-group {
+  min-width: 0;
+  align-content: start;
+}
+
+.plans-tariffs-section .field-group span {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.plans-tariffs-section .field {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.plans-tariff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+
+.plans-tariff-card {
+  min-width: 0;
+  overflow: visible;
+}
+
+.plans-tariff-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.plans-tariff-head__copy {
+  min-width: 0;
+}
+
+.plans-tariff-head__copy .table-card__title,
+.plans-tariff-head__copy .table-subtext {
+  overflow-wrap: anywhere;
+}
+
+.plans-tariff-head__badges {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.plans-bundle-panel {
+  min-width: 0;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #edf2f7;
+}
+
+.plans-bundle-panel .empty-inline {
+  margin-top: 10px;
+}
+
+.plans-bundle-form {
+  margin-top: 14px;
+}
+
+.plans-bundle-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.plans-bundle-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.plans-bundle-item__copy {
+  min-width: 0;
+}
+
+.plans-bundle-item__copy .table-subtext {
+  overflow-wrap: anywhere;
 }
 
 .proxy-page {
@@ -1796,6 +2055,148 @@ a {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.official-bot-admin-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.official-bot-admin-form__field {
+  min-width: 0;
+}
+
+.official-bot-admin-form__field .field {
+  min-width: 0;
+  width: 100%;
+}
+
+.official-bot-admin-form__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.official-bot-admin-form__actions .ghost-button {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+.official-bot-admin-help {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e7edf4;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #526173;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.official-bot-admin-help a {
+  color: var(--brand);
+  font-weight: 800;
+}
+
+.official-bot-card {
+  padding: 16px;
+  border: 1px solid #e7edf4;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.06), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.official-bot-card__main {
+  min-width: 0;
+}
+
+.official-bot-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.official-bot-card__identity {
+  display: grid;
+  gap: 4px;
+  min-width: min(100%, 280px);
+}
+
+.official-bot-card__select {
+  min-width: 0;
+  width: 100%;
+  max-width: 360px;
+  min-height: 42px;
+  padding-block: 9px;
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.official-bot-card__subtitle {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.official-bot-card__facts {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.official-bot-card__fact {
+  padding: 12px 14px;
+  border: 1px solid #edf2f7;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #526173;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.official-bot-card__fact--ok {
+  background: #f7fdf9;
+  border-color: #d9f2e2;
+}
+
+.official-bot-card__fact--warning {
+  background: #fffaf0;
+  border-color: #f6e4b7;
+}
+
+.official-bot-card__fact-label {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.official-bot-card__fact-text {
+  margin-top: 4px;
+  color: #526173;
+}
+
+.official-bot-card__delete {
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fff7f7;
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.official-bot-card__delete:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.official-bot-card__delete:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .userbots-footer-toggle {
@@ -3140,6 +3541,26 @@ a {
     font-size: 16px;
   }
 
+  .plans-create-panel,
+  .plans-tariff-card {
+    padding: 14px;
+  }
+
+  .plans-form-grid,
+  .plans-tariff-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plans-tariff-head,
+  .plans-bundle-item {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .plans-tariff-head__badges {
+    justify-content: flex-start;
+  }
+
   .proxy-page__intro,
   .ops-rail__text,
   .ops-rail__meta,
@@ -3157,6 +3578,21 @@ a {
   .toolbar-card__body > a.ghost-button,
   .toolbar-card__body > button.ghost-button,
   .toolbar-card__body > .field-group {
+    width: 100%;
+  }
+
+  .official-bot-card {
+    grid-template-columns: 1fr;
+  }
+
+  .official-bot-card__head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .official-bot-card__select,
+  .official-bot-card__delete {
+    max-width: none;
     width: 100%;
   }
 

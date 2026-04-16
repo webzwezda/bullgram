@@ -2555,7 +2555,13 @@ export default function (supabase) {
                                 const matchedBot = myBots.find(b => String(b.tg_account_id) === String(admin.id));
                                 if (matchedBot) {
                                     const chatIdStr = String(dialog.id);
-                                    await supabase.from('channels').upsert({ owner_id: req.user.id, bot_id: matchedBot.id, tg_chat_id: chatIdStr, title: dialog.title }, { onConflict: 'tg_chat_id' });
+                                    await supabase.from('channels').upsert({
+                                        owner_id: req.user.id,
+                                        bot_id: matchedBot.id,
+                                        tg_chat_id: chatIdStr,
+                                        title: dialog.title,
+                                        chat_type: dialog.isGroup ? 'supergroup' : 'channel'
+                                    }, { onConflict: 'tg_chat_id' });
                                     if (!syncResults.find(r => r.chat_id === chatIdStr)) syncResults.push({ chat_id: chatIdStr, chat_name: dialog.title, bot_name: matchedBot.tg_username });
                                 }
                             }

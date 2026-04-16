@@ -6,14 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "analyze": "ANALYZE=true vite build"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
     "@supabase/supabase-js": "^2.97.0",
     "@tailwindcss/vite": "^4.2.2",
-    "@ton/ton": "^16.2.2",
-    "@tonconnect/ui-react": "^2.4.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
@@ -28,6 +27,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.0",
+    "rollup-plugin-visualizer": "^7.0.1",
     "vite": "^6.2.0"
   }
 }

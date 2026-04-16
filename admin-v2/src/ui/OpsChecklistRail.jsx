@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { supabase } from '../lib/supabase.js';
 
 function formatDateOnly(value) {
   if (!value) return '—';
@@ -143,33 +144,29 @@ function packageSignalHref(signal, profilePlan) {
 function ChecklistItem({ item }) {
   const stateClass = item.state === 'done'
     ? 'checklist__item checklist__item--ok'
-    : item.state === 'active'
-      ? 'checklist__item checklist__item--active'
-      : 'checklist__item checklist__item--warn';
+    : 'checklist__item checklist__item--warn';
+  const indexState = item.state === 'done' ? 'done' : 'todo';
 
   return (
     <div className={stateClass}>
       <div className="checklist__row">
         <div className="checklist__step">
-          <span className={`checklist__index checklist__index--${item.state}`}>{item.index}</span>
-          <div className="checklist__title">{item.title}</div>
+          <span className={`checklist__index checklist__index--${indexState}`}>{item.index}</span>
+          {item.linkInTitle && item.href ? (
+            <a className="checklist__title checklist__title-link" href={item.href}>
+              {item.title}
+            </a>
+          ) : (
+            <div className="checklist__title">{item.title}</div>
+          )}
         </div>
-        <span className={`pill ${
-          item.state === 'done'
-            ? 'pill--ok'
-            : item.state === 'active'
-              ? 'pill--warning'
-              : 'pill--info'
-        }`}>
-          {item.state === 'done' ? 'Готово' : item.state === 'active' ? 'Следующий' : 'Потом'}
-        </span>
       </div>
-      <div className="checklist__hint">{item.hint}</div>
-      {item.onClick ? (
+      {item.hint ? <div className="checklist__hint">{item.hint}</div> : null}
+      {!item.linkInTitle && item.onClick ? (
         <button className="checklist__link checklist__link--button" onClick={item.onClick}>
           {item.actionLabel || 'Открыть'}
         </button>
-      ) : item.href ? (
+      ) : !item.linkInTitle && item.href ? (
         <a className="checklist__link" href={item.href}>
           {item.actionLabel || 'Открыть'}
         </a>
@@ -205,12 +202,20 @@ export function OpsChecklistRail() {
     async function loadData() {
       if (!accessToken) return;
       try {
-        const [data, settingsResponse] = await Promise.all([
+        const [data, settingsResponse, tariffCountResponse] = await Promise.all([
           apiRequest('/api/dashboard', { accessToken }),
-          apiRequest('/api/payment-settings', { accessToken }).catch(() => null)
+          apiRequest('/api/payment-settings', { accessToken }).catch(() => null),
+          user?.id
+            ? supabase
+                .from('tariffs')
+                .select('id', { count: 'exact', head: true })
+                .eq('owner_id', user.id)
+                .eq('is_active', true)
+            : Promise.resolve({ count: 0, error: null })
         ]);
 
         const settings = settingsResponse?.settings || null;
+        const tariffCount = tariffCountResponse?.error ? 0 : (tariffCountResponse?.count || 0);
 
         const paymentReadiness = settings
           ? {
@@ -225,7 +230,10 @@ export function OpsChecklistRail() {
         setState({
           loading: false,
           error: '',
-          summary: data.summary || {},
+          summary: {
+            ...(data.summary || {}),
+            tariffCount
+          },
           paymentReadiness,
           buyerPackageSignals: data.buyerPackageSignals || [],
           updatedAt: new Date().toISOString()
@@ -268,7 +276,7 @@ export function OpsChecklistRail() {
         window.removeEventListener('bullrun:payment-settings-updated', refreshHandler);
       }
     };
-  }, [accessToken]);
+  }, [accessToken, user?.id]);
 
   const currentPlan = useMemo(() => planMeta(profilePlan, trialEndsAt), [profilePlan, trialEndsAt]);
   const trialHoursLeft = useMemo(() => getTrialHoursLeft(trialEndsAt), [trialEndsAt]);
@@ -353,20 +361,26 @@ export function OpsChecklistRail() {
       {
         key: 'payments',
         done: !!payment.hasTon || !!payment.hasSbp,
-        title: 'Реквизиты',
+        title: 'Заполнить реквизиты',
         hint: '',
         href: '/app/payments',
-        actionLabel: 'Настройки реквизитов'
+        linkInTitle: true
       },
       {
         key: 'official-bot',
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
-        title: 'Добавь бота продаж',
-        hint: ((summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0)
-          ? 'Official bot уже подключен и участвует в доступе.'
-          : 'Добавь бота продаж и доведи его до админа в группах, где будут продажи и доступ.',
+        title: 'Создать бота',
+        hint: '',
         href: '/app/botfather',
-        actionLabel: 'Открыть бота продаж'
+        linkInTitle: true
+      },
+      {
+        key: 'plans',
+        done: (summary.tariffCount || 0) > 0,
+        title: 'Заполнить тарифы',
+        hint: '',
+        href: '/app/plans',
+        linkInTitle: true
       },
       {
         key: 'proxy',
