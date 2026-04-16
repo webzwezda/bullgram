@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 function getTariffPaymentGroupKey(tariff) {
   return [
@@ -100,6 +100,19 @@ function CreateTariffForm({
   const groupChannels = channels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
   const chatChannels = channels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
 
+  // Автоматически выбираем первый вариант, если значение не задано
+  useEffect(() => {
+    if (groupAccess.enabled && !newTariff.channel_id && groupChannels.length > 0) {
+      setNewTariff((prev) => ({ ...prev, channel_id: groupChannels[0].id }));
+    }
+  }, [groupAccess.enabled, groupChannels.length]);
+
+  useEffect(() => {
+    if (chatAccess.enabled && !chatAccess.channel_id && chatChannels.length > 0) {
+      updateAccessMethod('chat', { channel_id: chatChannels[0].id });
+    }
+  }, [chatAccess.enabled, chatChannels.length]);
+
   const updatePaymentMethod = (method, patch) => {
     setNewTariff((prev) => ({
       ...prev,
@@ -143,11 +156,19 @@ function CreateTariffForm({
     }
 
     if (groupAccess.enabled && !newTariff.channel_id) {
-      newErrors.group_channel = 'Выбери закрытую группу';
+      if (groupChannels.length === 0) {
+        newErrors.group_channel = 'Нет доступных закрытых групп';
+      } else {
+        newErrors.group_channel = 'Выбери закрытую группу';
+      }
     }
 
     if (chatAccess.enabled && !chatAccess.channel_id) {
-      newErrors.chat_channel = 'Выбери чат';
+      if (chatChannels.length === 0) {
+        newErrors.chat_channel = 'Нет доступных чатов';
+      } else {
+        newErrors.chat_channel = 'Выбери чат';
+      }
     }
 
     if (resourceAccess.enabled && !resourceAccess.text?.trim()) {
@@ -263,16 +284,21 @@ function CreateTariffForm({
                 {groupAccess.enabled && (
                   <div className="create-tariff-option__body">
                     <label className={`field-group ${errors.group_channel ? 'field-group--error' : ''}`}>
-                      <select
-                        className="field"
-                        value={newTariff.channel_id}
-                        onChange={(e) => setNewTariff((prev) => ({ ...prev, channel_id: e.target.value }))}
-                      >
-                        <option value="">Выбери закрытую группу</option>
-                        {groupChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>{channel.title}</option>
-                        ))}
-                      </select>
+                      {groupChannels.length > 0 ? (
+                        <select
+                          className="field"
+                          value={newTariff.channel_id}
+                          onChange={(e) => setNewTariff((prev) => ({ ...prev, channel_id: e.target.value }))}
+                        >
+                          {groupChannels.map((channel) => (
+                            <option key={channel.id} value={channel.id}>{channel.title}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select className="field" disabled>
+                          <option value="">Нет доступных групп</option>
+                        </select>
+                      )}
                       {errors.group_channel && <div className="error-text">{errors.group_channel}</div>}
                     </label>
                   </div>
@@ -297,16 +323,21 @@ function CreateTariffForm({
                 {chatAccess.enabled && (
                   <div className="create-tariff-option__body">
                     <label className={`field-group ${errors.chat_channel ? 'field-group--error' : ''}`}>
-                      <select
-                        className="field"
-                        value={chatAccess.channel_id || ''}
-                        onChange={(e) => updateAccessMethod('chat', { channel_id: e.target.value })}
-                      >
-                        <option value="">Выбери чат</option>
-                        {chatChannels.map((channel) => (
-                          <option key={channel.id} value={channel.id}>{channel.title}</option>
-                        ))}
-                      </select>
+                      {chatChannels.length > 0 ? (
+                        <select
+                          className="field"
+                          value={chatAccess.channel_id || ''}
+                          onChange={(e) => updateAccessMethod('chat', { channel_id: e.target.value })}
+                        >
+                          {chatChannels.map((channel) => (
+                            <option key={channel.id} value={channel.id}>{channel.title}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select className="field" disabled>
+                          <option value="">Нет доступных чатов</option>
+                        </select>
+                      )}
                       {errors.chat_channel && <div className="error-text">{errors.chat_channel}</div>}
                     </label>
                   </div>
