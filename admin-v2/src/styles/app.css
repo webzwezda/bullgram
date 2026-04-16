@@ -1765,7 +1765,6 @@ a {
 .button--primary:hover {
   background: linear-gradient(135deg, #059669 0%, #047857 100%);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-  transform: translateY(-1px);
 }
 
 .button--primary:active {
