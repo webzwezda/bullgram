@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { StatCard } from '../ui/StatCard.jsx';
 import { Button } from '@/components/ui/button';
 
 const FILTERS = [
@@ -286,37 +285,6 @@ export function ReferralsPage() {
   return (
     <section className="page">
       <div className="page__header">
-      </div>
-
-      {/* Priority Signals */}
-      {prioritySignals.length > 0 && (
-        <div className="grid gap-3">
-          {prioritySignals.map((signal) => (
-            <article key={signal.title} className={`rounded-2xl border p-4 text-sm ${
-              signal.tone === 'danger' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'
-            }`}>
-              <p className={`font-semibold ${signal.tone === 'danger' ? 'text-red-900' : 'text-amber-900'}`}>
-                {signal.title}
-              </p>
-              <p className={`mt-1 ${signal.tone === 'danger' ? 'text-red-700' : 'text-amber-700'}`}>
-                {signal.text}
-              </p>
-            </article>
-          ))}
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard title="Партнеров" value={state.summary.partners || 0} />
-        <StatCard title="Лидов" value={state.summary.leads || 0} />
-        <StatCard title="Оплат" value={state.summary.paidReferrals || 0} />
-        <StatCard
-          title="К выплате"
-          value={`${state.summary.outstandingRub || 0} RUB`}
-          hint={`${state.summary.outstandingTon || 0} TON • ${state.summary.outstandingUsdt || 0} USDT`}
-          tone={(state.summary.outstandingRub || state.summary.outstandingTon || state.summary.outstandingUsdt) ? 'warning' : 'default'}
-        />
       </div>
 
       {/* Settings */}
