@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 function getTariffPaymentGroupKey(tariff) {
   return [
@@ -84,6 +84,356 @@ function getBundleSummaryForItems(tariff, items = []) {
   return parts.join(' + ');
 }
 
+function CreateTariffForm({
+  newTariff,
+  setNewTariff,
+  channels,
+  onCreate
+}) {
+  const [errors, setErrors] = useState({});
+  const groupAccess = newTariff.access_methods?.group || { enabled: true };
+  const chatAccess = newTariff.access_methods?.chat || { enabled: false, channel_id: '' };
+  const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
+  const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
+  const rubPayment = newTariff.payment_methods?.rub || { enabled: false, price: '' };
+
+  const groupChannels = channels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
+  const chatChannels = channels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
+
+  const updatePaymentMethod = (method, patch) => {
+    setNewTariff((prev) => ({
+      ...prev,
+      payment_methods: {
+        ...prev.payment_methods,
+        [method]: {
+          ...prev.payment_methods?.[method],
+          ...patch
+        }
+      }
+    }));
+  };
+
+  const updateAccessMethod = (method, patch) => {
+    setNewTariff((prev) => ({
+      ...prev,
+      access_methods: {
+        ...prev.access_methods,
+        [method]: {
+          ...prev.access_methods?.[method],
+          ...patch
+        }
+      }
+    }));
+  };
+
+  const validateAndCreate = () => {
+    const newErrors = {};
+
+    if (!newTariff.title?.trim()) {
+      newErrors.title = 'Укажи название тарифа';
+    }
+
+    if (!newTariff.duration_days || Number(newTariff.duration_days) <= 0) {
+      newErrors.duration_days = 'Укажи срок действия';
+    }
+
+    const hasAnyAccess = groupAccess.enabled || chatAccess.enabled || resourceAccess.enabled;
+    if (!hasAnyAccess) {
+      newErrors.access = 'Выбери хотя бы один метод выдачи';
+    }
+
+    if (groupAccess.enabled && !newTariff.channel_id) {
+      newErrors.group_channel = 'Выбери закрытую группу';
+    }
+
+    if (chatAccess.enabled && !chatAccess.channel_id) {
+      newErrors.chat_channel = 'Выбери чат';
+    }
+
+    if (resourceAccess.enabled && !resourceAccess.text?.trim()) {
+      newErrors.resource_text = 'Заполни ссылку или текст';
+    }
+
+    const hasAnyPayment = tonPayment.enabled || rubPayment.enabled;
+    if (!hasAnyPayment) {
+      newErrors.payment = 'Включи хотя бы один способ оплаты';
+    }
+
+    if (tonPayment.enabled && (!tonPayment.price || Number(tonPayment.price) <= 0)) {
+      newErrors.ton_price = 'Укажи стоимость в TON';
+    }
+
+    if (rubPayment.enabled && (!rubPayment.price || Number(rubPayment.price) <= 0)) {
+      newErrors.rub_price = 'Укажи стоимость в RUB';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    onCreate();
+  };
+
+  const getAccessCount = () => {
+    let count = 0;
+    if (groupAccess.enabled) count++;
+    if (chatAccess.enabled) count++;
+    if (resourceAccess.enabled) count++;
+    return count;
+  };
+
+  return (
+    <div className="create-tariff-form">
+      {/* Базовые настройки */}
+      <div className="create-tariff-card">
+        <div className="create-tariff-card__head">
+          <div className="create-tariff-card__title">Базовые настройки</div>
+          <div className="create-tariff-card__hint">Название и срок действия тарифа</div>
+        </div>
+        <div className="create-tariff-card__body">
+          <div className="form-grid">
+            <div className={`field-group ${errors.title ? 'field-group--error' : ''}`}>
+              <label className="field-label">Название тарифа</label>
+              <input
+                className="field"
+                value={newTariff.title}
+                onChange={(e) => setNewTariff((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="VIP месяц"
+              />
+              {errors.title && <div className="error-text">{errors.title}</div>}
+            </div>
+            <div className={`field-group ${errors.duration_days ? 'field-group--error' : ''}`}>
+              <label className="field-label">Срок (дни)</label>
+              <input
+                className="field"
+                type="number"
+                min="1"
+                value={newTariff.duration_days}
+                onChange={(e) => setNewTariff((prev) => ({ ...prev, duration_days: e.target.value }))}
+                placeholder="30"
+              />
+              {errors.duration_days && <div className="error-text">{errors.duration_days}</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Методы доступа */}
+      <div className="create-tariff-card">
+        <div className="create-tariff-card__head">
+          <div className="create-tariff-card__title">
+            Что выдаём после оплаты
+            <span className="create-tariff-badge">{getAccessCount()} опций</span>
+          </div>
+          <div className="create-tariff-card__hint">Выбери одну или несколько опций для пакета</div>
+        </div>
+        <div className="create-tariff-card__body">
+          {/* Закрытая группа */}
+          <div className={`create-tariff-option ${groupAccess.enabled ? 'create-tariff-option--active' : ''}`}>
+            <div className="create-tariff-option__head">
+              <div className="create-tariff-option__info">
+                <div className="create-tariff-option__title">Закрытая группа</div>
+                <div className="create-tariff-option__hint">Бот отправит ссылку на вступление</div>
+              </div>
+              <button
+                type="button"
+                className={`toggle-switch ${groupAccess.enabled ? 'toggle-switch--on' : ''}`}
+                onClick={() => updateAccessMethod('group', { enabled: !groupAccess.enabled })}
+              >
+                <span className="toggle-switch__thumb" />
+              </button>
+            </div>
+            {groupAccess.enabled && (
+              <div className="create-tariff-option__body">
+                <label className={`field-group ${errors.group_channel ? 'field-group--error' : ''}`}>
+                  <select
+                    className="field"
+                    value={newTariff.channel_id}
+                    onChange={(e) => setNewTariff((prev) => ({ ...prev, channel_id: e.target.value }))}
+                  >
+                    <option value="">Выбери закрытую группу</option>
+                    {groupChannels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>{channel.title}</option>
+                    ))}
+                  </select>
+                  {errors.group_channel && <div className="error-text">{errors.group_channel}</div>}
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Чат */}
+          <div className={`create-tariff-option ${chatAccess.enabled ? 'create-tariff-option--active' : ''}`}>
+            <div className="create-tariff-option__head">
+              <div className="create-tariff-option__info">
+                <div className="create-tariff-option__title">Чат</div>
+                <div className="create-tariff-option__hint">Бот отправит ссылку на вступление в чат</div>
+              </div>
+              <button
+                type="button"
+                className={`toggle-switch ${chatAccess.enabled ? 'toggle-switch--on' : ''}`}
+                onClick={() => updateAccessMethod('chat', { enabled: !chatAccess.enabled })}
+              >
+                <span className="toggle-switch__thumb" />
+              </button>
+            </div>
+            {chatAccess.enabled && (
+              <div className="create-tariff-option__body">
+                <label className={`field-group ${errors.chat_channel ? 'field-group--error' : ''}`}>
+                  <select
+                    className="field"
+                    value={chatAccess.channel_id || ''}
+                    onChange={(e) => updateAccessMethod('chat', { channel_id: e.target.value })}
+                  >
+                    <option value="">Выбери чат</option>
+                    {chatChannels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>{channel.title}</option>
+                    ))}
+                  </select>
+                  {errors.chat_channel && <div className="error-text">{errors.chat_channel}</div>}
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* Ссылка / текст */}
+          <div className={`create-tariff-option ${resourceAccess.enabled ? 'create-tariff-option--active' : ''}`}>
+            <div className="create-tariff-option__head">
+              <div className="create-tariff-option__info">
+                <div className="create-tariff-option__title">Ссылка / текст</div>
+                <div className="create-tariff-option__hint">Бот отправит материал после оплаты</div>
+              </div>
+              <button
+                type="button"
+                className={`toggle-switch ${resourceAccess.enabled ? 'toggle-switch--on' : ''}`}
+                onClick={() => updateAccessMethod('resource', { enabled: !resourceAccess.enabled })}
+              >
+                <span className="toggle-switch__thumb" />
+              </button>
+            </div>
+            {resourceAccess.enabled && (
+              <div className="create-tariff-option__body">
+                <div className="form-grid">
+                  <div className="field-group">
+                    <label className="field-label">Название материала</label>
+                    <input
+                      className="field"
+                      value={resourceAccess.title || ''}
+                      onChange={(e) => updateAccessMethod('resource', { title: e.target.value })}
+                      placeholder="Гайд / курс / ссылка"
+                    />
+                  </div>
+                  <div className={`field-group ${errors.resource_text ? 'field-group--error' : ''}`}>
+                    <label className="field-label">URL или текст</label>
+                    <textarea
+                      className="field textarea-field"
+                      value={resourceAccess.text || ''}
+                      onChange={(e) => updateAccessMethod('resource', { text: e.target.value })}
+                      placeholder="https://... или текст, который получит покупатель"
+                      rows={2}
+                    />
+                    {errors.resource_text && <div className="error-text">{errors.resource_text}</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {errors.access && <div className="error-text">{errors.access}</div>}
+        </div>
+      </div>
+
+      {/* Способы оплаты */}
+      <div className="create-tariff-card">
+        <div className="create-tariff-card__head">
+          <div className="create-tariff-card__title">Способы оплаты</div>
+          <div className="create-tariff-card__hint">Включи один или оба способа</div>
+        </div>
+        <div className="create-tariff-card__body">
+          <div className="create-tariff-payment">
+            <div className={`create-tariff-payment-option ${tonPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
+              <div className="create-tariff-payment-option__head">
+                <div className="create-tariff-payment-option__info">
+                  <div className="create-tariff-payment-option__currency">TON</div>
+                </div>
+                <button
+                  type="button"
+                  className={`toggle-switch ${tonPayment.enabled ? 'toggle-switch--on' : ''}`}
+                  onClick={() => updatePaymentMethod('ton', { enabled: !tonPayment.enabled })}
+                >
+                  <span className="toggle-switch__thumb" />
+                </button>
+              </div>
+              {tonPayment.enabled && (
+                <div className="create-tariff-payment-option__body">
+                  <div className={`field-group ${errors.ton_price ? 'field-group--error' : ''}`}>
+                    <input
+                      className="field"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={tonPayment.price}
+                      onChange={(e) => updatePaymentMethod('ton', { price: e.target.value })}
+                      placeholder="Стоимость в TON"
+                    />
+                    {errors.ton_price && <div className="error-text">{errors.ton_price}</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={`create-tariff-payment-option ${rubPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
+              <div className="create-tariff-payment-option__head">
+                <div className="create-tariff-payment-option__info">
+                  <div className="create-tariff-payment-option__currency">RUB / СБП</div>
+                </div>
+                <button
+                  type="button"
+                  className={`toggle-switch ${rubPayment.enabled ? 'toggle-switch--on' : ''}`}
+                  onClick={() => updatePaymentMethod('rub', { enabled: !rubPayment.enabled })}
+                >
+                  <span className="toggle-switch__thumb" />
+                </button>
+              </div>
+              {rubPayment.enabled && (
+                <div className="create-tariff-payment-option__body">
+                  <div className={`field-group ${errors.rub_price ? 'field-group--error' : ''}`}>
+                    <input
+                      className="field"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rubPayment.price}
+                      onChange={(e) => updatePaymentMethod('rub', { price: e.target.value })}
+                      placeholder="Стоимость в RUB"
+                    />
+                    {errors.rub_price && <div className="error-text">{errors.rub_price}</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {errors.payment && <div className="error-text">{errors.payment}</div>}
+        </div>
+      </div>
+
+      {/* Кнопка создания */}
+      <div className="create-tariff-actions">
+        <button
+          type="button"
+          className="button button--primary button--large"
+          onClick={validateAndCreate}
+        >
+          Создать тариф
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function TariffsSection({
   addBundleItem,
   bundleDrafts,
@@ -99,37 +449,6 @@ export function TariffsSection({
   setNewTariff,
   tariffs
 }) {
-  const updatePaymentMethod = (method, patch) => {
-    setNewTariff((prev) => ({
-      ...prev,
-      payment_methods: {
-        ...prev.payment_methods,
-        [method]: {
-          ...prev.payment_methods?.[method],
-          ...patch
-        }
-      }
-    }));
-  };
-  const updateAccessMethod = (method, patch) => {
-    setNewTariff((prev) => ({
-      ...prev,
-      access_methods: {
-        ...prev.access_methods,
-        [method]: {
-          ...prev.access_methods?.[method],
-          ...patch
-        }
-      }
-    }));
-  };
-  const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
-  const rubPayment = newTariff.payment_methods?.rub || { enabled: false, price: '' };
-  const groupAccess = newTariff.access_methods?.group || { enabled: true };
-  const chatAccess = newTariff.access_methods?.chat || { enabled: false, channel_id: '' };
-  const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
-  const groupChannels = channels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
-  const chatChannels = channels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
   const tariffGroups = useMemo(() => buildTariffGroups(tariffs), [tariffs]);
 
   return (
@@ -141,172 +460,13 @@ export function TariffsSection({
           </div>
         ) : null}
 
-        <div className="plans-create-panel">
-          <div className="toolbar-card__title">Создать тариф</div>
-          <div className="form-grid plans-form-grid">
-            <div className="plans-access-methods">
-              <div className="plans-access-method">
-                <div className="plans-access-method__head">
-                  <div>
-                    <div className="plans-access-method__title">Закрытая группа</div>
-                    <div className="plans-access-method__hint">Бот выдаст одноразовую ссылку на вступление.</div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`ios-switch${groupAccess.enabled ? ' ios-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={groupAccess.enabled}
-                    aria-label="Закрытая группа"
-                    onClick={() => updateAccessMethod('group', { enabled: !groupAccess.enabled })}
-                  >
-                    <span className="ios-switch__thumb" />
-                  </button>
-                </div>
-                {groupAccess.enabled ? (
-                  <label className="field-group plans-form-grid__channel">
-                    <select className="field" value={newTariff.channel_id} onChange={(event) => setNewTariff((prev) => ({ ...prev, channel_id: event.target.value }))}>
-                      <option value="">Выбери группу</option>
-                      {groupChannels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>{channel.title}</option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-
-              <label className="field-group plans-form-grid__title">
-                <span>Название</span>
-                <input className="field" value={newTariff.title} onChange={(event) => setNewTariff((prev) => ({ ...prev, title: event.target.value }))} placeholder="VIP месяц" />
-              </label>
-
-              <div className="plans-access-method">
-                <div className="plans-access-method__head">
-                  <div>
-                    <div className="plans-access-method__title">Чат</div>
-                    <div className="plans-access-method__hint">Бот выдаст ссылку на вступление в чат.</div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`ios-switch${chatAccess.enabled ? ' ios-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={chatAccess.enabled}
-                    aria-label="Чат"
-                    onClick={() => updateAccessMethod('chat', { enabled: !chatAccess.enabled })}
-                  >
-                    <span className="ios-switch__thumb" />
-                  </button>
-                </div>
-                {chatAccess.enabled ? (
-                  <label className="field-group plans-form-grid__channel">
-                    <select className="field" value={chatAccess.channel_id || ''} onChange={(event) => updateAccessMethod('chat', { channel_id: event.target.value })}>
-                      <option value="">Выбери чат</option>
-                      {chatChannels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>{channel.title}</option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
-
-              <div className="plans-access-method">
-                <div className="plans-access-method__head">
-                  <div>
-                    <div className="plans-access-method__title">Ссылка / текст</div>
-                    <div className="plans-access-method__hint">Бот отправит материал после оплаты.</div>
-                  </div>
-                  <button
-                    type="button"
-                    className={`ios-switch${resourceAccess.enabled ? ' ios-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={resourceAccess.enabled}
-                    aria-label="Ссылка / текст"
-                    onClick={() => updateAccessMethod('resource', { enabled: !resourceAccess.enabled })}
-                  >
-                    <span className="ios-switch__thumb" />
-                  </button>
-                </div>
-                {resourceAccess.enabled ? (
-                  <div className="plans-access-method__fields">
-                    <input
-                      className="field"
-                      value={resourceAccess.title || ''}
-                      onChange={(event) => updateAccessMethod('resource', { title: event.target.value })}
-                      placeholder="Название"
-                    />
-                    <textarea
-                      className="field textarea-field"
-                      value={resourceAccess.text || ''}
-                      onChange={(event) => updateAccessMethod('resource', { text: event.target.value })}
-                      placeholder="https://... или текст, который получит покупатель"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="plans-payment-methods">
-              <div className="plans-payment-method">
-                <div className="plans-payment-method__head">
-                  <div className="plans-payment-method__title">TON</div>
-                  <button
-                    type="button"
-                    className={`ios-switch${tonPayment.enabled ? ' ios-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={tonPayment.enabled}
-                    aria-label="TON"
-                    onClick={() => updatePaymentMethod('ton', { enabled: !tonPayment.enabled })}
-                  >
-                    <span className="ios-switch__thumb" />
-                  </button>
-                </div>
-                {tonPayment.enabled ? (
-                  <input
-                    className="field plans-payment-method__price"
-                    type="number"
-                    min="0"
-                    value={tonPayment.price}
-                    onChange={(event) => updatePaymentMethod('ton', { price: event.target.value })}
-                    placeholder="Стоимость в TON"
-                  />
-                ) : null}
-              </div>
-
-              <div className="plans-payment-method">
-                <div className="plans-payment-method__head">
-                  <div className="plans-payment-method__title">RUB / СБП</div>
-                  <button
-                    type="button"
-                    className={`ios-switch${rubPayment.enabled ? ' ios-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={rubPayment.enabled}
-                    aria-label="RUB / СБП"
-                    onClick={() => updatePaymentMethod('rub', { enabled: !rubPayment.enabled })}
-                  >
-                    <span className="ios-switch__thumb" />
-                  </button>
-                </div>
-                {rubPayment.enabled ? (
-                  <input
-                    className="field plans-payment-method__price"
-                    type="number"
-                    min="0"
-                    value={rubPayment.price}
-                    onChange={(event) => updatePaymentMethod('rub', { price: event.target.value })}
-                    placeholder="Стоимость в RUB"
-                  />
-                ) : null}
-              </div>
-            </div>
-
-            <label className="field-group">
-              <span>Срок в днях</span>
-              <input className="field" type="number" min="1" value={newTariff.duration_days} onChange={(event) => setNewTariff((prev) => ({ ...prev, duration_days: event.target.value }))} placeholder="30" />
-            </label>
-          </div>
-          <div className="table-actions" style={{ marginTop: 14 }}>
-            <button className="ghost-button" type="button" onClick={createTariff}>Создать тариф</button>
-          </div>
-        </div>
+        {/* Новая форма создания тарифа */}
+        <CreateTariffForm
+          newTariff={newTariff}
+          setNewTariff={setNewTariff}
+          channels={channels}
+          onCreate={createTariff}
+        />
 
         {tariffGroups.length === 0 ? (
           <div className="empty-inline">Пока нет тарифов. Создай первый прямо тут.</div>
