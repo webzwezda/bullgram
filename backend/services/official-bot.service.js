@@ -544,7 +544,7 @@ export class OfficialBotService {
             : 'Этот бот обслуживает оплату и доступ по подпискам.';
 
         if (context.adminTgId) {
-            return `${roleText}\nТвой админ: ${context.adminLabel} • TG ID ${context.adminTgId}`;
+            return `${roleText}\nТвой админ: ${context.adminLabel}`;
         }
 
         return `${roleText}\nТвой админ: ${context.adminLabel}`;
