@@ -912,11 +912,15 @@ export class OfficialBotService {
                 inlineKeyboard.push([{ text: '👤 Мой статус', callback_data: 'my_status' }]);
 
                 if (ctx.callbackQuery) {
-                    await ctx.editMessageText(' ', { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.editMessageText('Выберите действие:', { reply_markup: { inline_keyboard: inlineKeyboard } });
                 } else {
-                    await ctx.reply(' ', { reply_markup: { inline_keyboard: inlineKeyboard } });
+                    await ctx.reply('Выберите действие:', { reply_markup: { inline_keyboard: inlineKeyboard } });
                 }
-            } catch (error) { console.error('Ошибка меню:', error); }
+            } catch (error) {
+                console.error('Ошибка меню:', error);
+                console.error('Error details:', error.message);
+                console.error('Stack:', error.stack);
+            }
         };
 
         // --- Главное меню ---
