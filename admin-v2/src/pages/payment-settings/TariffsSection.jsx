@@ -559,31 +559,37 @@ export function TariffsSection({
                 <div key={group.key} className="tariff-card">
                   {/* Header */}
                   <div className="tariff-card__header">
-                    <div className="tariff-card__title-section">
+                    <div className="tariff-card__title-block">
                       <h3 className="tariff-card__title">{tariff.title}</h3>
                       <div className="tariff-card__meta">
-                        {tariff.channels?.title ? (
-                          <span className="tariff-card__channel">{tariff.channels.title}</span>
-                        ) : (
-                          <span className="tariff-card__channel tariff-card__channel--none">Без группы</span>
-                        )}
-                        <span className="tariff-card__separator">•</span>
-                        <span className="tariff-card__duration">{tariff.duration_days} дн.</span>
+                        <span className="tariff-card__meta-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          {tariff.channels?.title || 'Нет группы'}
+                        </span>
+                        <span className="tariff-card__meta-item">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                          {tariff.duration_days} дней
+                        </span>
                       </div>
                     </div>
 
-                    <div className="tariff-card__actions">
-                      <button
-                        className="tariff-card__delete"
-                        onClick={() => deleteTariff(group.tariffIds)}
-                        title="Удалить тариф"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M19 7l-.867 12.142A2 2 0 0118.001 20.001l-6-6.001 6.001 6.001a2 2 0 01-2.829-2.829L7.17 4.17a2 2 0 0 012.828-2.829l6-6a2 2 0 002.829 2.829l-6 6.001a2 2 0 01-2.828 2.829l6-6.001a2 2 0 002 2.001L17 15l5 5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Удалить
-                      </button>
-                    </div>
+                    <button
+                      className="tariff-card__delete"
+                      onClick={() => deleteTariff(group.tariffIds)}
+                      title="Удалить тариф"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                    </button>
                   </div>
 
                   {/* Payment Methods */}
@@ -591,9 +597,9 @@ export function TariffsSection({
                     <div className="tariff-card__section-title">Способы оплаты</div>
                     <div className="payment-methods-list">
                       {group.variants.map((variant) => (
-                        <div key={variant.id} className="payment-method-pill">
-                          <span className="payment-method-pill__currency">{variant.currency}</span>
-                          <span className="payment-method-pill__price">{variant.price}</span>
+                        <div key={variant.id} className="payment-method-item">
+                          <span className="payment-method-item__currency">{variant.currency}</span>
+                          {variant.price}
                         </div>
                       ))}
                     </div>
@@ -607,17 +613,18 @@ export function TariffsSection({
                         <div className="access-method-item">
                           <div className="access-method-item__icon">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2a2 2 0 002 2h2a2 2 0 002-2zm-10 0H5a2 2 0 00-2 2v2a2 2 0 002 2h5m-7-4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h2m-7-4h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+                              <circle cx="9" cy="7" r="4" />
                             </svg>
                           </div>
                           <div className="access-method-item__content">
-                            <div className="access-method-item__title">Закрытая группа</div>
-                            <div className="access-method-item__detail">{tariff.channels?.title || 'Основной канал'}</div>
+                            <div className="access-method-item__label">Основная группа</div>
+                            <div className="access-method-item__value">{tariff.channels?.title || 'Закрытый канал'}</div>
                           </div>
                         </div>
                       )}
 
-                      {bundleItems.map((item, idx) => {
+                      {bundleItems.map((item) => {
                         if (item.item_type === 'channel') {
                           return (
                             <div key={item.id} className="access-method-item">
@@ -627,8 +634,8 @@ export function TariffsSection({
                                 </svg>
                               </div>
                               <div className="access-method-item__content">
-                                <div className="access-method-item__title">Telegram</div>
-                                <div className="access-method-item__detail">{item.channels?.title || 'Канал/чат'}</div>
+                                <div className="access-method-item__label">Доп. чат</div>
+                                <div className="access-method-item__value">{item.channels?.title || 'Telegram-чат'}</div>
                               </div>
                             </div>
                           );
@@ -641,8 +648,8 @@ export function TariffsSection({
                                 </svg>
                               </div>
                               <div className="access-method-item__content">
-                                <div className="access-method-item__title">Материал</div>
-                                <div className="access-method-item__detail">{item.resource_title || 'Без названия'}</div>
+                                <div className="access-method-item__label">Материал</div>
+                                <div className="access-method-item__value">{item.resource_title || 'Ссылка или текст'}</div>
                               </div>
                             </div>
                           );
@@ -654,13 +661,20 @@ export function TariffsSection({
                   {/* Footer Stats */}
                   <div className="tariff-card__footer">
                     {group.variants.length > 1 && (
-                      <div className="tariff-card__badge">
-                        {group.variants.length} {group.variants.length === 1 ? 'способ оплаты' : 'способа оплаты'}
+                      <div className="tariff-badge">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="5" width="20" height="14" rx="2" />
+                          <line x1="2" y1="10" x2="22" y2="10" />
+                        </svg>
+                        {group.variants.length} {group.variants.length === 1 ? 'способ оплаты' : group.variants.length > 1 && group.variants.length < 5 ? 'способа оплаты' : 'способов оплаты'}
                       </div>
                     )}
                     {hasBundleItems && (
-                      <div className="tariff-card__badge tariff-card__badge--bundle">
-                        Пакет ({bundleItems.length + (hasGroup ? 1 : 0)} {bundleItems.length + (hasGroup ? 1 : 0) === 1 ? 'элемент' : 'элемента'})
+                      <div className="tariff-badge tariff-badge--bundle">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                        </svg>
+                        Пакет из {bundleItems.length + (hasGroup ? 1 : 0)} {bundleItems.length + (hasGroup ? 1 : 0) === 1 ? 'элемента' : (bundleItems.length + (hasGroup ? 1 : 0)) < 5 ? 'элементов' : 'элементов'}
                       </div>
                     )}
                   </div>
