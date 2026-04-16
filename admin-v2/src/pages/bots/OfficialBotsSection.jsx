@@ -16,32 +16,28 @@ function isChatTarget(target) {
 function botGroupMeta(targets = []) {
   if (!Array.isArray(targets) || !targets.length) {
     return {
-      status: 'Группа не подключена',
-      text: 'Назначьте бота админом в закрытой группе или канале, чтобы Telegram прислал событие.',
-      tone: 'warning'
+      status: 'Не подключена',
+      text: 'Назначьте бота админом в закрытой группе или канале'
     };
   }
 
   return {
-    status: targets.length > 1 ? 'Админ в группах' : 'Админ в группе',
-    text: summarizeTargets(targets),
-    tone: 'ok'
+    status: 'Подключена',
+    text: summarizeTargets(targets)
   };
 }
 
 function botChatMeta(targets = []) {
   if (!Array.isArray(targets) || !targets.length) {
     return {
-      status: 'Чат не подключен',
-      text: 'Назначьте бота админом в чате, если тариф должен выдавать доступ еще и туда.',
-      tone: 'warning'
+      status: 'Не подключен',
+      text: 'Назначьте бота админом в чате'
     };
   }
 
   return {
-    status: targets.length > 1 ? 'Админ в чатах' : 'Админ в чате',
-    text: summarizeTargets(targets),
-    tone: 'ok'
+    status: 'Подключен',
+    text: summarizeTargets(targets)
   };
 }
 
@@ -60,7 +56,7 @@ function adminContextMeta(accountOrAdminTgId) {
 function botAdminMeta(account, fallbackAdminTgId) {
   if (account?.admin_tg_id) {
     return {
-      status: 'Админ назначен',
+      status: 'Назначен',
       text: adminContextMeta(account),
       tone: 'ok'
     };
@@ -68,41 +64,16 @@ function botAdminMeta(account, fallbackAdminTgId) {
 
   if (fallbackAdminTgId) {
     return {
-      status: 'Админ из Billing',
+      status: 'Из Billing',
       text: adminContextMeta(fallbackAdminTgId),
       tone: 'warning'
     };
   }
 
   return {
-    status: 'Админ не назначен',
-    text: 'Укажите Telegram ID в блоке выше, чтобы бот знал, кому отдавать чеки и админские сигналы.',
+    status: 'Не назначен',
+    text: 'Укажите Telegram ID',
     tone: 'warning'
-  };
-}
-
-function officialBotRoleMeta(botRole) {
-  if (botRole === 'placeholder') {
-    return {
-      title: 'Заготовка',
-      lines: [
-        'Это заготовка под следующую роль official-бота. Здесь позже можно будет подключать отдельного бота под постинг, антиспам или составные сценарии доступа.',
-        'Пока эта роль только резервирует место в интерфейсе и не подключается в рабочий контур.'
-      ]
-    };
-  }
-
-  return {
-    title: 'Продажи доступа',
-    lines: [
-      'Принятие оплат и выдача однаразовой ссылки доступа в группу',
-      'Выдача цыфровых материалов, доступ в чат и закрытую группу',
-      'Узнает своего админа и отдает ему чеки СБП',
-      'Авто удаление клиента если закончился срок купленного тарифа',
-      'Добавление покупателя в CRM',
-      'Авто напоминание о продление тарифа',
-      'Предоставление скидки если человек посмотрел но не оплатил в течении двух часов'
-    ]
   };
 }
 
@@ -121,175 +92,184 @@ export function OfficialBotsSection({
   deleteAccount,
   channelsByBotId
 }) {
-  const selectedOfficialBotRoleMeta = useMemo(
-    () => officialBotRoleMeta(botForm.botRole),
-    [botForm.botRole]
-  );
-
   return (
-    <>
-      <div className="toolbar-card section section--first">
-        <div className="toolbar-card__title">
-          Подключить{' '}
-          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer">
+    <div className="space-y-5">
+      {/* Подключение бота */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold text-slate-950">Подключить бота</h3>
+        <p className="mb-4 text-sm text-slate-500">
+          Получи токен у{' '}
+          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">
             @BotFather
           </a>
-        </div>
-        <div className="toolbar-card__body">
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:gap-3">
           <input
-            className="field"
+            className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
             type="text"
             value={botForm.botToken}
             onChange={(event) => setBotForm((prev) => ({ ...prev, botToken: event.target.value }))}
             placeholder="8123456789:AAE_x7v9Kq2LmN4pR8sTuVwXyZ0abCDeFg"
           />
           <select
-            className="field"
+            className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
             value={botForm.botRole}
             onChange={(event) => setBotForm((prev) => ({ ...prev, botRole: event.target.value }))}
           >
             <option value="sales">Продажи доступа</option>
             <option value="placeholder">Заготовка</option>
           </select>
-          <button className="ghost-button ghost-button--primary" onClick={addOfficialBot} disabled={state.savingBot}>
+          <button
+            className="h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            onClick={addOfficialBot}
+            disabled={state.savingBot}
+          >
             {state.savingBot ? 'Подключаем...' : 'Подключить'}
           </button>
         </div>
-      </div>
 
-      <div className="grid grid--double section">
-        <div className="table-card">
-          <div className="table-card__title">{selectedOfficialBotRoleMeta.title}</div>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-[14px] leading-6 text-slate-600">
-            {selectedOfficialBotRoleMeta.lines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="table-card">
-          <div className="table-card__title">Админ бота</div>
-          {!selectedOfficialBot ? (
-            <div className="table-subtext">
-              Сначала подключи бота. После этого можно назначить админа.
-            </div>
-          ) : (
-            <>
-              <div className="official-bot-admin-form">
-                <label className="field-group official-bot-admin-form__field">
-                  <span>Бот</span>
-                  <select
-                    className="field"
-                    value={selectedOfficialBot ? String(selectedOfficialBot.id) : ''}
-                    onChange={(event) => setSelectedOfficialBotId(event.target.value)}
-                  >
-                    {officialBots.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        @{account.tg_username || `bot-${String(account.tg_account_id || account.id)}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-group official-bot-admin-form__field">
-                  <span>Админ</span>
-                  <input
-                    className="field"
-                    type="text"
-                    value={Object.prototype.hasOwnProperty.call(botAdminDrafts, String(selectedOfficialBot.id))
-                      ? botAdminDrafts[String(selectedOfficialBot.id)]
-                      : selectedOfficialBot.admin_tg_id || ''}
-                    onChange={(event) => setBotAdminDrafts((prev) => ({
-                      ...prev,
-                      [String(selectedOfficialBot.id)]: event.target.value
-                    }))}
-                    placeholder={state.paymentAdminTgId
-                      ? `Например: ${state.paymentAdminTgId}`
-                      : '488609412'}
-                  />
-                </label>
-                <div className="official-bot-admin-form__actions">
-                  <button
-                    className="ghost-button ghost-button--primary"
-                    onClick={() => saveBotAdmin(selectedOfficialBot)}
-                    disabled={state.savingBotAdminId === String(selectedOfficialBot.id)}
-                  >
-                    {state.savingBotAdminId === String(selectedOfficialBot.id) ? 'Сохраняем...' : 'Назначить'}
-                  </button>
-                </div>
-              </div>
-              <div className="official-bot-admin-help">
-                <div>Нужен числовой Telegram ID, не @username.</div>
-                <div>
-                  Узнай свой ID{' '}
-                  <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer">
-                    @userinfobot
-                  </a>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="section">
-        {officialBots.length === 0 ? (
-          <div className="table-card">
-            <div className="empty-inline">Ботов пока нет.</div>
+        {botForm.botRole === 'sales' && (
+          <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+            <p className="font-medium text-slate-700">Роль: продажи доступа</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs">
+              <li>Принятие оплат и выдача доступа</li>
+              <li>Авто удаление клиента после окончания тарифа</li>
+              <li>Добавление покупателей в CRM</li>
+              <li>Авто напоминания о продлении</li>
+            </ul>
           </div>
-        ) : (() => {
-          const account = selectedOfficialBot || officialBots[0];
-          const botTargets = channelsByBotId[String(account.id)] || [];
-          const chatTargets = botTargets.filter(isChatTarget);
-          const groupTargets = botTargets.filter((target) => !isChatTarget(target));
-          const groupsMeta = botGroupMeta(groupTargets);
-          const chatsMeta = botChatMeta(chatTargets);
-          const adminMeta = botAdminMeta(account, state.paymentAdminTgId);
+        )}
+      </section>
 
-          return (
-            <div className="official-bot-card">
-              <div className="official-bot-card__main">
-                <div className="official-bot-card__head">
-                  <div className="official-bot-card__identity">
-                    <select
-                      className="field official-bot-card__select"
-                      value={String(account.id)}
-                      onChange={(event) => setSelectedOfficialBotId(event.target.value)}
-                    >
-                      {officialBots.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          @{item.tg_username || `bot-${String(item.tg_account_id || item.id)}`}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="official-bot-card__subtitle">Роль: продажи и доступ</div>
+      {/* Назначение админа */}
+      {selectedOfficialBot && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="mb-4 text-lg font-semibold text-slate-950">Админ бота</h3>
+
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div>
+              <label className="field-group">
+                <span className="text-sm">Бот</span>
+                <select
+                  className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
+                  value={selectedOfficialBot ? String(selectedOfficialBot.id) : ''}
+                  onChange={(event) => setSelectedOfficialBotId(event.target.value)}
+                >
+                  {officialBots.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      @{account.tg_username || `bot-${String(account.tg_account_id || account.id)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div>
+              <label className="field-group">
+                <span className="text-sm">Telegram ID админа</span>
+                <input
+                  className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
+                  type="text"
+                  value={Object.prototype.hasOwnProperty.call(botAdminDrafts, String(selectedOfficialBot.id))
+                    ? botAdminDrafts[String(selectedOfficialBot.id)]
+                    : selectedOfficialBot.admin_tg_id || ''}
+                  onChange={(event) => setBotAdminDrafts((prev) => ({
+                    ...prev,
+                    [String(selectedOfficialBot.id)]: event.target.value
+                  }))}
+                  placeholder={state.paymentAdminTgId
+                    ? `${state.paymentAdminTgId}`
+                    : '488609412'}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-xs text-slate-500">
+              Узнай свой ID у{' '}
+              <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">
+                @userinfobot
+              </a>
+            </p>
+            <button
+              className="h-9 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              onClick={() => saveBotAdmin(selectedOfficialBot)}
+              disabled={state.savingBotAdminId === String(selectedOfficialBot.id)}
+            >
+              {state.savingBotAdminId === String(selectedOfficialBot.id) ? 'Сохраняем...' : 'Сохранить'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* Список ботов */}
+      {officialBots.length === 0 ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-sm text-slate-500">Ботов пока нет. Подключи первого бота выше.</p>
+        </section>
+      ) : (
+        <section className="space-y-3">
+          {officialBots.map((account) => {
+            const botTargets = channelsByBotId[String(account.id)] || [];
+            const chatTargets = botTargets.filter(isChatTarget);
+            const groupTargets = botTargets.filter((target) => !isChatTarget(target));
+            const groupsMeta = botGroupMeta(groupTargets);
+            const chatsMeta = botChatMeta(chatTargets);
+            const adminMeta = botAdminMeta(account, state.paymentAdminTgId);
+
+            return (
+              <article key={account.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <h4 className="text-base font-semibold text-slate-950">
+                        @{account.tg_username || `bot-${String(account.tg_account_id || account.id)}`}
+                      </h4>
+                      <span className="text-xs text-slate-500">Роль: продажи</span>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs text-slate-500">Группа/канал</p>
+                        <p className={`text-sm font-medium ${groupsMeta.status === 'Подключена' ? 'text-green-600' : 'text-slate-700'}`}>
+                          {groupsMeta.status}
+                        </p>
+                        <p className="text-xs text-slate-600">{groupsMeta.text}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-500">Чат</p>
+                        <p className={`text-sm font-medium ${chatsMeta.status === 'Подключен' ? 'text-green-600' : 'text-slate-700'}`}>
+                          {chatsMeta.status}
+                        </p>
+                        <p className="text-xs text-slate-600">{chatsMeta.text}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-xs text-slate-500">Админ</p>
+                        <p className={`text-sm font-medium ${adminMeta.status === 'Назначен' ? 'text-green-600' : 'text-slate-700'}`}>
+                          {adminMeta.status}
+                        </p>
+                        <p className="text-xs text-slate-600">{adminMeta.text}</p>
+                      </div>
+                    </div>
                   </div>
+
                   <button
-                    className="official-bot-card__delete"
+                    className="text-sm text-red-600 hover:text-red-700 disabled:opacity-50"
                     onClick={() => deleteAccount(account)}
                     disabled={state.deletingAccountId === String(account.id)}
                   >
-                    {state.deletingAccountId === String(account.id) ? 'Удаляем...' : 'Удалить бота'}
+                    {state.deletingAccountId === String(account.id) ? 'Удаляем...' : 'Удалить'}
                   </button>
                 </div>
-                <div className="official-bot-card__facts">
-                  <div className={`official-bot-card__fact official-bot-card__fact--${groupsMeta.tone}`}>
-                    <div className="official-bot-card__fact-label">{groupsMeta.status}</div>
-                    <div className="official-bot-card__fact-text">{groupsMeta.text}</div>
-                  </div>
-                  <div className={`official-bot-card__fact official-bot-card__fact--${chatsMeta.tone}`}>
-                    <div className="official-bot-card__fact-label">{chatsMeta.status}</div>
-                    <div className="official-bot-card__fact-text">{chatsMeta.text}</div>
-                  </div>
-                  <div className={`official-bot-card__fact official-bot-card__fact--${adminMeta.tone}`}>
-                    <div className="official-bot-card__fact-label">{adminMeta.status}</div>
-                    <div className="official-bot-card__fact-text">{adminMeta.text}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-    </>
+              </article>
+            );
+          })}
+        </section>
+      )}
+    </div>
   );
 }
