@@ -911,11 +911,10 @@ export class OfficialBotService {
 
                 inlineKeyboard.push([{ text: '👤 Мой статус', callback_data: 'my_status' }]);
 
-                const text = `👋 <b>Главное меню</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
                 if (ctx.callbackQuery) {
-                    await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+                    await ctx.editMessageText('Главное меню', { reply_markup: { inline_keyboard: inlineKeyboard } });
                 } else {
-                    await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+                    await ctx.reply('Главное меню', { reply_markup: { inline_keyboard: inlineKeyboard } });
                 }
             } catch (error) { console.error('Ошибка меню:', error); }
         };
