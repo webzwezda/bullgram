@@ -219,6 +219,58 @@ export class OfficialBotService {
         return this.getTariffCurrencyIcon(group?.lead?.currency);
     }
 
+    getTariffCategory(tariff) {
+        if (!tariff) return 'regular';
+
+        const title = String(tariff.title || '').toLowerCase();
+        const price = Number(tariff.price) || 0;
+        const durationDays = Number(tariff.duration_days) || 0;
+
+        if (title.includes('trial') || title.includes('проб') || price === 0) return 'trial';
+        if (title.includes('bundle') || title.includes('комплект') || title.includes('набор')) return 'bundle';
+        if (title.includes('premium') || title.includes('vip') || title.includes('про')) return 'premium';
+        if (durationDays === 0) return 'lifetime';
+
+        return 'regular';
+    }
+
+    buildTariffCategories(tariffs = []) {
+        const categories = {
+            trial: [],
+            regular: [],
+            bundle: [],
+            premium: [],
+            lifetime: []
+        };
+
+        tariffs.forEach((tariff) => {
+            const category = this.getTariffCategory(tariff);
+            if (categories[category]) {
+                categories[category].push(tariff);
+            }
+        });
+
+        return Object.entries(categories)
+            .filter(([_, items]) => items.length > 0)
+            .map(([category, items]) => ({ category, items }));
+    }
+
+    buildPaginatedTariffMenu(tariffs = [], page = 0, perPage = 5) {
+        const totalPages = Math.ceil(tariffs.length / perPage);
+        const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+        const startIndex = currentPage * perPage;
+        const endIndex = startIndex + perPage;
+        const pageTariffs = tariffs.slice(startIndex, endIndex);
+
+        return {
+            tariffs: pageTariffs,
+            currentPage,
+            totalPages,
+            hasNextPage: currentPage < totalPages - 1,
+            hasPrevPage: currentPage > 0
+        };
+    }
+
     async logAccessEvent({
         ownerId,
         channelId = null,
@@ -496,6 +548,28 @@ export class OfficialBotService {
         }
 
         return `${roleText}\nТвой админ: ${context.adminLabel}`;
+    }
+
+    async getUserRole(ctx, botId) {
+        try {
+            const tgUserId = String(ctx.from?.id || '');
+            if (!tgUserId) return 'user';
+
+            const adminContext = await this.getBotAdminContext(botId);
+            if (!adminContext) return 'user';
+
+            const botAdminId = adminContext.botAdminTgId ? String(adminContext.botAdminTgId) : '';
+            const fallbackAdminId = adminContext.fallbackAdminTgId ? String(adminContext.fallbackAdminTgId) : '';
+
+            if (tgUserId === botAdminId || tgUserId === fallbackAdminId) {
+                return 'admin';
+            }
+
+            return 'user';
+        } catch (error) {
+            console.error('Ошибка определения роли пользователя:', error);
+            return 'user';
+        }
     }
 
     async ensureReferralProfile(ownerId, tgUserId, username = null, displayName = null) {
@@ -794,14 +868,27 @@ export class OfficialBotService {
         const self = this;
         const normalizedRole = role === 'ops' ? 'ops' : 'sales';
 
-        // --- Главное меню ---
-        const sendMainMenu = async (ctx) => {
-            if (normalizedRole === 'ops') {
-                const adminContext = await this.getBotAdminContext(botId);
-                const text = `🧭 <b>Бот-админ юзерботов</b>\n\nСюда прилетают сигналы о новых личках и мутных входящих от юзерботов.\n\nЕсли тут тишина, значит никто ничего не написал или сигналов пока нет.\n\n${this.buildAdminOwnershipHint(adminContext, 'ops')}\n\nОткрывай веб-панель и смотри <b>Центр юзербота</b>, когда надо быстро ответить человеку.`;
-                return ctx.reply(text, { parse_mode: 'HTML' });
-            }
+        // --- Админ-меню ---
+        const sendAdminMenu = async (ctx) => {
+            const adminContext = await this.getBotAdminContext(botId);
+            const inlineKeyboard = [
+                [{ text: '⚙️ Управление тарифами', callback_data: 'admin_tariffs' }],
+                [{ text: '💸 Партнерка', callback_data: 'admin_referral' }],
+                [{ text: '👤 Профиль администратора', callback_data: 'admin_profile' }],
+                [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
+                [{ text: '🔙 Режим пользователя', callback_data: 'user_menu' }]
+            ];
 
+            const text = `🔧 <b>Панель администратора</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}\n\nВыберите действие:`;
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            } else {
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            }
+        };
+
+        // --- Пользовательское меню ---
+        const sendUserMainMenu = async (ctx) => {
             try {
                 const adminContext = await this.getBotAdminContext(botId);
                 const ownerId = adminContext?.ownerId;
@@ -816,6 +903,20 @@ export class OfficialBotService {
                 }
 
                 const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                const totalTariffs = tariffGroups.length;
+
+                // Трехуровневая логика отображения
+                if (totalTariffs > 10) {
+                    // Пагинация для >10 тарифов
+                    return sendPaginatedTariffsMenu(ctx, tariffGroups, ownerId, adminContext, 0);
+                }
+
+                if (totalTariffs > 3) {
+                    // Категории для 4-10 тарифов
+                    return sendCategorizedTariffsMenu(ctx, tariffGroups, ownerId, adminContext);
+                }
+
+                // Компактный вид для ≤3 тарифов
                 const tariffsWithBundles = await Promise.all(tariffGroups.map(async group => ({
                     group,
                     tariff: group.lead,
@@ -830,9 +931,9 @@ export class OfficialBotService {
                         [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
                     ];
                 });
-                inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'check_status' }]);
+                inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
                 if (adminContext.referralEnabled) {
-                    inlineKeyboard.push([{ text: '💸 Заработать / рефералка', callback_data: 'open_referral' }]);
+                    inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
                 }
 
                 const text = `👋 Привет! Выберите тариф для доступа в закрытый канал 👇\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
@@ -843,6 +944,98 @@ export class OfficialBotService {
                     await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
                 }
             } catch (error) { console.error('Ошибка меню:', error); }
+        };
+
+        // --- Меню с категориями ---
+        const sendCategorizedTariffsMenu = async (ctx, tariffGroups, ownerId, adminContext) => {
+            const categories = this.buildTariffCategories(tariffGroups.map(g => g.lead));
+            const categoryLabels = {
+                trial: '🧪 Пробные',
+                regular: '📦 Обычные',
+                bundle: '🎁 Комплекты',
+                premium: '💎 Премиум',
+                lifetime: '♾️ Навсегда'
+            };
+
+            const inlineKeyboard = [];
+
+            for (const { category, items } of categories) {
+                const label = categoryLabels[category] || '📦 Тарифы';
+                inlineKeyboard.push([{ text: `${label} (${items.length})`, callback_data: `category_${category}` }]);
+            }
+
+            inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
+            if (adminContext.referralEnabled) {
+                inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
+            }
+            inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+            const text = `📂 <b>Тарифы по категориям</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            } else {
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            }
+        };
+
+        // --- Пагинация тарифов ---
+        const sendPaginatedTariffsMenu = async (ctx, tariffGroups, ownerId, adminContext, page = 0) => {
+            const paginatedData = this.buildPaginatedTariffMenu(tariffGroups, page, 5);
+            const { tariffs: pageTariffs, currentPage, totalPages } = paginatedData;
+
+            const tariffsWithBundles = await Promise.all(pageTariffs.map(async group => ({
+                group,
+                tariff: group.lead,
+                bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
+            })));
+
+            const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
+                const icon = this.getTariffGroupIcon(group);
+                const paymentOptions = this.formatTariffPaymentOptions(group.variants);
+                return [
+                    [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
+                    [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
+                ];
+            });
+
+            // Навигация
+            const navRow = [];
+            if (currentPage > 0) {
+                navRow.push({ text: '⬅️ Назад', callback_data: `tariffs_page_${currentPage - 1}` });
+            }
+            navRow.push({ text: `📄 Стр. ${currentPage + 1}/${totalPages}`, callback_data: 'current_page' });
+            if (currentPage < totalPages - 1) {
+                navRow.push({ text: 'Вперед ➡️', callback_data: `tariffs_page_${currentPage + 1}` });
+            }
+            if (navRow.length > 0) inlineKeyboard.push(navRow);
+
+            inlineKeyboard.push([{ text: '❓ Мой статус', callback_data: 'my_status' }]);
+            if (adminContext.referralEnabled) {
+                inlineKeyboard.push([{ text: '💸 Партнерская программа', callback_data: 'referral_info' }]);
+            }
+            inlineKeyboard.push([{ text: '🔙 В начало', callback_data: 'back_to_main' }]);
+
+            const text = `📦 <b>Тарифы (стр. ${currentPage + 1}/${totalPages})</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+            if (ctx.callbackQuery) {
+                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            } else {
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            }
+        };
+
+        // --- Главное меню ---
+        const sendMainMenu = async (ctx) => {
+            if (normalizedRole === 'ops') {
+                const adminContext = await this.getBotAdminContext(botId);
+                const text = `🧭 <b>Бот-админ юзерботов</b>\n\nСюда прилетают сигналы о новых личках и мутных входящих от юзерботов.\n\nЕсли тут тишина, значит никто ничего не написал или сигналов пока нет.\n\n${this.buildAdminOwnershipHint(adminContext, 'ops')}\n\nОткрывай веб-панель и смотри <b>Центр юзербота</b>, когда надо быстро ответить человеку.`;
+                return ctx.reply(text, { parse_mode: 'HTML' });
+            }
+
+            const userRole = await this.getUserRole(ctx, botId);
+            if (userRole === 'admin') {
+                return sendAdminMenu(ctx);
+            }
+            return sendUserMainMenu(ctx);
         };
 
         bot.start(async (ctx) => {
@@ -1269,6 +1462,237 @@ export class OfficialBotService {
                 }
                 await ctx.reply(message, { parse_mode: 'Markdown' });
             } catch (err) { console.error('Ошибка статуса:', err); }
+        });
+
+        // --- Обновленный мой статус ---
+        bot.action('my_status', async (ctx) => {
+            await ctx.answerCbQuery();
+            try {
+                const adminContext = await this.getBotAdminContext(botId);
+                const ownerId = adminContext?.ownerId;
+                if (!ownerId) return;
+
+                const { data: subs, error } = await this.supabase
+                    .from('subscriptions')
+                    .select('*, channels(title)')
+                    .eq('tg_user_id', ctx.from.id)
+                    .eq('status', 'active');
+
+                if (error || !subs || subs.length === 0) {
+                    const msg = '📭 <b>Мой статус</b>\n\nУ вас пока нет активных подписок.\n\nВыберите тариф в главном меню, чтобы получить доступ к закрытым каналам и материалам.';
+                    return ctx.reply(msg, { parse_mode: 'HTML' });
+                }
+
+                let message = '📭 <b>Мой статус</b>\n\n✅ <b>Ваши активные подписки:</b>\n\n';
+                for (const sub of subs) {
+                    const channelName = sub.channels?.title || 'Закрытый канал';
+                    let expDate = '♾️ Навсегда';
+                    if (sub.expires_at) {
+                        const exp = new Date(sub.expires_at);
+                        const now = new Date();
+                        const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+                        if (daysLeft <= 0) {
+                            expDate = '⚠️ Истек';
+                        } else if (daysLeft === 1) {
+                            expDate = 'Завтра истекает';
+                        } else if (daysLeft <= 7) {
+                            expDate = `${daysLeft} дн.`;
+                        } else {
+                            expDate = exp.toLocaleDateString('ru-RU');
+                        }
+                    }
+                    message += `🔹 ${channelName}\n   ⏳ До: ${expDate}\n\n`;
+                }
+
+                message += `${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+                await ctx.reply(message, { parse_mode: 'HTML' });
+            } catch (err) {
+                console.error('Ошибка my_status:', err);
+                await ctx.reply('Не удалось загрузить статус.');
+            }
+        });
+
+        // --- Информация о партнерке (из open_referral) ---
+        bot.action('referral_info', async (ctx) => {
+            await ctx.answerCbQuery();
+
+            try {
+                const ownerId = await this.getBotOwner(botId);
+                if (!ownerId) return;
+                const settings = await this.getReferralSettings(ownerId);
+                if (!settings.referral_enabled) {
+                    return ctx.reply('💸 Партнерская программа сейчас выключена. Если админ ее включит, кнопка появится сама.');
+                }
+
+                const displayName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() || null;
+                const profile = await this.ensureReferralProfile(
+                    ownerId,
+                    ctx.from.id,
+                    ctx.from?.username || null,
+                    displayName
+                );
+
+                if (!profile) {
+                    return ctx.reply('💸 Партнерка пока не включена или SQL под нее еще не применен.');
+                }
+
+                const snapshot = await this.getReferralSnapshot(ownerId, ctx.from.id);
+                const paidCount = (snapshot?.events || []).filter(event => event.event_type === 'reward_granted' && event.status === 'completed').length;
+                const leadsCount = snapshot?.leads?.length || 0;
+
+                await ctx.reply(
+                    `💸 <b>Партнерская программа</b>\n\nТвоя партнерская ссылка:\n<code>t.me/${username}?start=ref_${profile.referral_code}</code>\n\n📊 Статистика:\n   Привлечено лидов: <b>${leadsCount}</b>\n   Закрыто оплат: <b>${paidCount}</b>\n\n💰 Балансы:\n   RUB: <b>${Number(profile.balance_rub || 0)}</b>\n   TON: <b>${Number(profile.balance_ton || 0)}</b>\n   USDT: <b>${Number(profile.balance_usdt || 0)}</b>\n\nШли эту ссылку тем, кому нужен продукт. Бонус прилетит автоматически после первой оплаты.`,
+                    { parse_mode: 'HTML', disable_web_page_preview: true }
+                );
+            } catch (error) {
+                console.error('Ошибка открытия рефералки:', error);
+                await ctx.reply('Не получилось открыть партнерку.');
+            }
+        });
+
+        // --- Админ-меню обработчики ---
+        bot.action('user_menu', async (ctx) => {
+            await ctx.answerCbQuery();
+            await sendUserMainMenu(ctx);
+        });
+
+        bot.action('admin_tariffs', async (ctx) => {
+            await ctx.answerCbQuery();
+            await ctx.reply('⚙️ <b>Управление тарифами</b>\n\nДля управления тарифами используйте веб-панель:\n\n📱 Откройте <b>/app/plans</b> в админке\n\nТам можно:\n• Создавать и удалять тарифы\n• Менять цены и сроки\n• Настраивать комплекты\n\nИзменения сразу применяются в боте.', { parse_mode: 'HTML' });
+        });
+
+        bot.action('admin_referral', async (ctx) => {
+            await ctx.answerCbQuery();
+            try {
+                const ownerId = await this.getBotOwner(botId);
+                if (!ownerId) return;
+
+                const snapshot = await this.getReferralSnapshot(ownerId, null);
+                const totalEvents = snapshot?.events?.length || 0;
+                const completedRewards = (snapshot?.events || []).filter(e => e.event_type === 'reward_granted' && e.status === 'completed').length;
+                const totalLeads = snapshot?.leads?.length || 0;
+
+                await ctx.reply(
+                    `💸 <b>Статистика партнерки</b>\n\n📊 Общая статистика:\n   Всего лидов: <b>${totalLeads}</b>\n   Начислено бонусов: <b>${completedRewards}</b>\n   Всего событий: <b>${totalEvents}</b>\n\nДля управления партнеркой:\n📱 Откройте <b>/app/referrals</b> в админке`,
+                    { parse_mode: 'HTML' }
+                );
+            } catch (error) {
+                console.error('Ошибка admin_referral:', error);
+                await ctx.reply('Не удалось загрузить статистику партнерки.');
+            }
+        });
+
+        bot.action('admin_profile', async (ctx) => {
+            await ctx.answerCbQuery();
+            const adminContext = await this.getBotAdminContext(botId);
+            await ctx.reply(
+                `👤 <b>Профиль администратора</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}\n\nДля управления профилем:\n📱 Откройте <b>/app/botfather</b> в админке`,
+                { parse_mode: 'HTML' }
+            );
+        });
+
+        bot.action('admin_stats', async (ctx) => {
+            await ctx.answerCbQuery();
+            try {
+                const ownerId = await this.getBotOwner(botId);
+                if (!ownerId) return;
+
+                const { count: totalSubs } = await this.supabase
+                    .from('subscriptions')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'active');
+
+                const { count: totalTariffs } = await this.supabase
+                    .from('tariffs')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('is_active', true);
+
+                await ctx.reply(
+                    `📊 <b>Статистика</b>\n\n📦 Активных подписок: <b>${totalSubs || 0}</b>\n💳 Активных тарифов: <b>${totalTariffs || 0}</b>\n\nДля подробной статистики:\n📱 Откройте <b>/app/analytics</b> в админке`,
+                    { parse_mode: 'HTML' }
+                );
+            } catch (error) {
+                console.error('Ошибка admin_stats:', error);
+                await ctx.reply('Не удалось загрузить статистику.');
+            }
+        });
+
+        // --- Пагинация тарифов ---
+        bot.action(/^tariffs_page_(\d+)$/, async (ctx) => {
+            await ctx.answerCbQuery();
+            const page = parseInt(ctx.match[1], 10);
+            try {
+                const adminContext = await this.getBotAdminContext(botId);
+                const ownerId = adminContext?.ownerId;
+                if (!ownerId) return;
+
+                const { data: tariffs, error } = await this.supabase.from('tariffs')
+                    .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+
+                if (error || !tariffs) return;
+
+                const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                await sendPaginatedTariffsMenu(ctx, tariffGroups, ownerId, adminContext, page);
+            } catch (error) {
+                console.error('Ошибка пагинации:', error);
+            }
+        });
+
+        // --- Категории тарифов ---
+        bot.action(/^category_(.+)$/, async (ctx) => {
+            await ctx.answerCbQuery();
+            const category = ctx.match[1];
+            try {
+                const adminContext = await this.getBotAdminContext(botId);
+                const ownerId = adminContext?.ownerId;
+                if (!ownerId) return;
+
+                const { data: tariffs, error } = await this.supabase.from('tariffs')
+                    .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+
+                if (error || !tariffs) return;
+
+                const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                const categoryTariffs = tariffGroups.filter(group => this.getTariffCategory(group.lead) === category);
+
+                if (categoryTariffs.length === 0) {
+                    return ctx.reply('В этой категории пока нет тарифов.');
+                }
+
+                const tariffsWithBundles = await Promise.all(categoryTariffs.map(async group => ({
+                    group,
+                    tariff: group.lead,
+                    bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
+                })));
+
+                const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
+                    const icon = this.getTariffGroupIcon(group);
+                    const paymentOptions = this.formatTariffPaymentOptions(group.variants);
+                    return [
+                        [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
+                        [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
+                    ];
+                });
+                inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+                const categoryLabels = {
+                    trial: '🧪 Пробные',
+                    regular: '📦 Обычные',
+                    bundle: '🎁 Комплекты',
+                    premium: '💎 Премиум',
+                    lifetime: '♾️ Навсегда'
+                };
+                const label = categoryLabels[category] || '📦 Тарифы';
+
+                const text = `${label}\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+                if (ctx.callbackQuery) {
+                    await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                } else {
+                    await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                }
+            } catch (error) {
+                console.error('Ошибка категории:', error);
+            }
         });
 
         // --- Слухач назначения bot-админом в канал/группу/чат ---
