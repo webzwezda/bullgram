@@ -383,6 +383,14 @@ export function OpsChecklistRail() {
         linkInTitle: true
       },
       {
+        key: 'referrals',
+        done: false,
+        title: 'Рефералка',
+        hint: 'Настрой партнерскую программу для привлечения новых клиентов',
+        href: '/app/referrals',
+        linkInTitle: true
+      },
+      {
         key: 'proxy',
         done: (summary.proxyCount || 0) > 0,
         title: 'Создай прокси',

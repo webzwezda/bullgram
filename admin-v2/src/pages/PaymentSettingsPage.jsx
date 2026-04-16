@@ -11,7 +11,6 @@ import { BillingWebhookSection } from './payment-settings/BillingWebhookSection.
 import { FinalSettingsActions } from './payment-settings/FinalSettingsActions.jsx';
 import { PaymentEventsSection } from './payment-settings/PaymentEventsSection.jsx';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
-import { ReferralSettingsSection } from './payment-settings/ReferralSettingsSection.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
 import { TariffsSection } from './payment-settings/TariffsSection.jsx';
 import { useBillingSettingsController } from './payment-settings/useBillingSettingsController.js';
@@ -305,7 +304,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             setNewTariff={setNewTariff}
             tariffs={state.tariffs}
           />
-          <ReferralSettingsSection patchSettings={patchSettings} settings={state.settings} />
         </>
       ) : null}
 
