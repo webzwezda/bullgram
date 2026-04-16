@@ -928,10 +928,6 @@ export class OfficialBotService {
                 return ctx.reply(text, { parse_mode: 'HTML' });
             }
 
-            const userRole = await this.getUserRole(ctx, botId);
-            if (userRole === 'admin') {
-                return sendAdminMenu(ctx);
-            }
             return sendUserMainMenu(ctx);
         };
 
