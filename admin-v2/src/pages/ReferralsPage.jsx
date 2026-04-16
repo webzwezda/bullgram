@@ -288,7 +288,6 @@ export function ReferralsPage() {
     <section className="page">
       <div className="page__header">
         <h1>Рефералка</h1>
-        <p className="text-sm text-slate-600">Партнеры, выплаты и начисления</p>
       </div>
 
       {/* Priority Signals */}
