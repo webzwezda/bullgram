@@ -99,7 +99,7 @@ export function OfficialBotsSection({
         <h3 className="mb-4 text-lg font-semibold text-slate-950">Подключить бота</h3>
         <p className="mb-4 text-sm text-slate-500">
           Получи токен у{' '}
-          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">
+          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="font-semibold text-sky-600 underline">
             @BotFather
           </a>
         </p>
@@ -189,7 +189,7 @@ export function OfficialBotsSection({
           <div className="mt-3 flex items-center justify-between">
             <p className="text-xs text-slate-500">
               Узнай свой ID у{' '}
-              <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-sky-600 hover:underline">
+              <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="font-semibold text-sky-600 underline">
                 @userinfobot
               </a>
             </p>
