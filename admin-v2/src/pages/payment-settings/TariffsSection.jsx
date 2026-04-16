@@ -96,6 +96,7 @@ function CreateTariffForm({
   const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
   const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
   const rubPayment = newTariff.payment_methods?.rub || { enabled: false, price: '' };
+  const isLifetime = newTariff.is_lifetime || false;
 
   const groupChannels = channels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
   const chatChannels = channels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
@@ -146,7 +147,7 @@ function CreateTariffForm({
       newErrors.title = 'Укажи название тарифа';
     }
 
-    if (!newTariff.duration_days || Number(newTariff.duration_days) <= 0) {
+    if (!isLifetime && (!newTariff.duration_days || Number(newTariff.duration_days) <= 0)) {
       newErrors.duration_days = 'Укажи срок действия';
     }
 
@@ -237,17 +238,47 @@ function CreateTariffForm({
                   />
                   {errors.title && <div className="error-text">{errors.title}</div>}
                 </div>
-                <div className={`field-group ${errors.duration_days ? 'field-group--error' : ''}`}>
-                  <label className="field-label">Срок (дни)</label>
-                  <input
-                    className="field"
-                    type="number"
-                    min="1"
-                    value={newTariff.duration_days}
-                    onChange={(e) => setNewTariff((prev) => ({ ...prev, duration_days: e.target.value }))}
-                    placeholder="30"
-                  />
-                  {errors.duration_days && <div className="error-text">{errors.duration_days}</div>}
+                {!isLifetime ? (
+                  <div className={`field-group ${errors.duration_days ? 'field-group--error' : ''}`}>
+                    <label className="field-label">Срок (дни)</label>
+                    <input
+                      className="field"
+                      type="number"
+                      min="1"
+                      value={newTariff.duration_days}
+                      onChange={(e) => setNewTariff((prev) => ({ ...prev, duration_days: e.target.value }))}
+                      placeholder="30"
+                    />
+                    {errors.duration_days && <div className="error-text">{errors.duration_days}</div>}
+                  </div>
+                ) : (
+                  <div className="field-group">
+                    <label className="field-label">Срок доступа</label>
+                    <div className="field" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534', fontWeight: '600' }}>
+                      ✓ Навсегда
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Переключатель "Навсегда" */}
+              <div className="create-tariff-option" style={{ marginTop: '12px' }}>
+                <div
+                  className="create-tariff-option__head"
+                  onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: !prev.is_lifetime }))}
+                >
+                  <div className="create-tariff-option__info">
+                    <div className="create-tariff-option__title">Навсегда</div>
+                    <div className="create-tariff-option__hint">Пожизненный доступ без ограничения по сроку</div>
+                  </div>
+                  <div
+                    className={`toggle-switch ${isLifetime ? 'toggle-switch--on' : ''}`}
+                    role="switch"
+                    aria-checked={isLifetime}
+                    aria-label="Навсегда"
+                  >
+                    <span className="toggle-switch__thumb" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -575,7 +606,7 @@ export function TariffsSection({
                             <circle cx="12" cy="12" r="10" />
                             <polyline points="12 6 12 12 16 14" />
                           </svg>
-                          {tariff.duration_days} дней
+                          {tariff.duration_days ? `${tariff.duration_days} дней` : 'Навсегда'}
                         </span>
                       </div>
                     </div>

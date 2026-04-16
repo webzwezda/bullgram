@@ -41,7 +41,8 @@ export const DEFAULT_NEW_TARIFF = {
       price: ''
     }
   },
-  duration_days: ''
+  duration_days: '',
+  is_lifetime: false
 };
 
 export const SBP_BANK_OPTIONS = [

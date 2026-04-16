@@ -37,6 +37,7 @@ export function useTariffsController({
     const groupAccess = accessMethods.group || { enabled: true };
     const chatAccess = accessMethods.chat || { enabled: false, channel_id: '' };
     const resourceAccess = accessMethods.resource || { enabled: false, title: '', text: '' };
+    const isLifetime = newTariff.is_lifetime || false;
     const paymentMethods = [
       {
         currency: 'TON',
@@ -50,7 +51,7 @@ export function useTariffsController({
       }
     ].filter((method) => method.enabled);
 
-    if (!newTariff.title || !newTariff.duration_days) {
+    if (!newTariff.title || (!isLifetime && !newTariff.duration_days)) {
       window.alert('Заполни название и срок.');
       return;
     }
@@ -96,7 +97,7 @@ export function useTariffsController({
         channel_id: groupAccess.enabled ? newTariff.channel_id : null,
         title: newTariff.title,
         price: parseFloat(method.price),
-        duration_days: parseInt(newTariff.duration_days, 10),
+        duration_days: isLifetime ? null : parseInt(newTariff.duration_days, 10),
         currency: method.currency,
         is_active: true
       }));
