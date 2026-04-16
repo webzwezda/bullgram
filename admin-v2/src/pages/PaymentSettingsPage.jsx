@@ -307,7 +307,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
         </>
       ) : null}
 
-      {!isRequisitesMode ? (
+      {isBillingMode ? (
       <FinalSettingsActions isPlansMode={isPlansMode} onSave={saveSettings} saving={state.saving} />
       ) : null}
 
