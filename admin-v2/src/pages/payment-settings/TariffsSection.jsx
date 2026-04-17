@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { Users, Clock, Trash2, MessageCircle, Link2, CreditCard, Package } from 'lucide-react';
 
 function getTariffPaymentGroupKey(tariff) {
   return [
@@ -594,18 +595,11 @@ export function TariffsSection({
                       <h3 className="tariff-card__title">{tariff.title}</h3>
                       <div className="tariff-card__meta">
                         <span className="tariff-card__meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
+                          <Users size={14} />
                           {tariff.channels?.title || 'Нет группы'}
                         </span>
                         <span className="tariff-card__meta-item">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                          </svg>
+                          <Clock size={14} />
                           {tariff.duration_days === 0 || !tariff.duration_days ? 'Навсегда' : `${tariff.duration_days} дней`}
                         </span>
                       </div>
@@ -660,9 +654,7 @@ export function TariffsSection({
                           return (
                             <div key={item.id} className="access-method-item">
                               <div className="access-method-item__icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
+                                <MessageCircle size={16} />
                               </div>
                               <div className="access-method-item__content">
                                 <div className="access-method-item__label">Доп. чат</div>
