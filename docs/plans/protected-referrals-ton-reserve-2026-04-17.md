@@ -308,10 +308,11 @@ Statuses:
   - [ ] Generate isolated admin wallets/subwallets later if shared-wallet memo flow becomes too risky.
 
 - [ ] Phase 4: exchange rates.
-  - Add hourly job to fetch rates.
-  - Store TON/RUB and TON/USDT rates.
-  - Add conversion helper that returns the latest acceptable rate.
-  - If no acceptable rate exists during sale settlement, create a pending conversion state and retry later.
+  - [x] Add hourly job to fetch rates.
+  - [x] Store TON/RUB and TON/USDT rates.
+  - [x] Add conversion helper that returns the latest acceptable rate.
+  - [x] If no acceptable rate exists during sale settlement, refresh the rate immediately before failing.
+  - [ ] Add a pending conversion retry queue if the provider is down during a paid invoice.
 
 - [ ] Phase 5: referral attribution rules.
   - On `/start ref_...`, reject self-referrals.
@@ -595,3 +596,18 @@ Scenario checks:
   - PM2 restarted with `--update-env`
   - verified production log line: `[TonReserveWatch] started { interval_ms: 120000, provider: 'toncenter' }`
 - Do not commit or print the reserve wallet mnemonic. For future automated payouts, read the mnemonic only from the protected server file or move it to a proper secret manager before real customer money.
+- Added exchange rate refresh and TON settlement conversion:
+  - `backend/services/crypto-rates.service.js`
+  - `backend/jobs/crypto-rates.job.js`
+  - `startCryptoRatesRefresh(supabase)` in `backend/server.js`
+  - referral reward settlement now stores original sale/reward currency, but credits partner balance and reserve obligation in TON
+  - `USDT` is priced through CoinGecko `usd` as a stablecoin MVP approximation
+- Runtime env for exchange rates:
+  - `CRYPTO_RATES_ENABLED=true` by default
+  - `CRYPTO_RATES_INTERVAL_MS=3600000`
+  - `COINGECKO_API_BASE=https://api.coingecko.com/api/v3`
+  - `COINGECKO_API_KEY=<optional>`
+  - `COINGECKO_API_KEY_HEADER=x-cg-demo-api-key` by default
+- Verified CoinGecko fetch locally on April 17, 2026:
+  - TON/RUB returned a positive rate
+  - TON/USDT returned a positive rate

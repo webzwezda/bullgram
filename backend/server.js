@@ -29,6 +29,7 @@ import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
+import { startCryptoRatesRefresh } from './jobs/crypto-rates.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -192,7 +193,8 @@ app.listen(PORT, async () => {
         broadcast_enabled: envFlag('USERBOT_BROADCAST_ENABLED'),
         restricted_userbot_auto_delete_enabled: String(process.env.RESTRICTED_USERBOT_AUTO_DELETE_ENABLED || 'true').trim().toLowerCase() !== 'false',
         restricted_userbot_delete_after_hours: Number(process.env.RESTRICTED_USERBOT_DELETE_AFTER_HOURS || 72),
-        ton_reserve_watch_enabled: envFlag('TON_RESERVE_WATCH_ENABLED')
+        ton_reserve_watch_enabled: envFlag('TON_RESERVE_WATCH_ENABLED'),
+        crypto_rates_enabled: String(process.env.CRYPTO_RATES_ENABLED || 'true').trim().toLowerCase() !== 'false'
     });
 
     // Запускаем всех ботов из БД
@@ -205,4 +207,5 @@ app.listen(PORT, async () => {
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
     startTonReserveWatch(supabase);
+    startCryptoRatesRefresh(supabase);
 });

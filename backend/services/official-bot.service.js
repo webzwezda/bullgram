@@ -1,7 +1,8 @@
 import { Telegraf } from 'telegraf';
 import QRCode from 'qrcode';
 import { decrypt } from '../utils/crypto.js';
-import { getReferralEconomics, loadReferralReserveState } from './referral-reserve.service.js';
+import { getReferralEconomics, loadReferralReserveState, reconcileReferralReserveAccount } from './referral-reserve.service.js';
+import { convertAmountToTon } from './crypto-rates.service.js';
 
 // Импорты для Юзербота
 import { TelegramClient } from 'telegram';
@@ -857,26 +858,25 @@ export class OfficialBotService {
                 ? Number(rewardAmountRaw.toFixed(4))
                 : Number(rewardAmountRaw.toFixed(2));
             const clientDiscountAmount = Math.max(0, Number((rewardBaseAmount - paidAmount).toFixed(currency === 'RUB' ? 2 : 4)));
-            const bullrunFeeAmount = Number((rewardAmount * economics.bullrunFeePercent / 100).toFixed(currency === 'RUB' ? 2 : 4));
 
             if (rewardAmount <= 0) return null;
+            if (!['RUB', 'TON', 'USDT'].includes(currency)) return null;
+
+            const convertedReward = await convertAmountToTon(this.supabase, rewardAmount, currency);
+            if (!convertedReward?.amountTon) {
+                throw new Error(`Нет свежего курса TON для ${currency}`);
+            }
+
+            const rewardTonAmount = convertedReward.amountTon;
+            const bullrunFeeTonAmount = Number((rewardTonAmount * economics.bullrunFeePercent / 100).toFixed(6));
 
             const referrerProfile = await this.ensureReferralProfile(ownerId, attribution.referrer_tg_user_id);
             if (!referrerProfile) return null;
 
-            const updates = {};
-            if (currency === 'RUB') {
-                updates.balance_rub = Number(referrerProfile.balance_rub || 0) + rewardAmount;
-                updates.total_earned_rub = Number(referrerProfile.total_earned_rub || 0) + rewardAmount;
-            } else if (currency === 'TON') {
-                updates.balance_ton = Number(referrerProfile.balance_ton || 0) + rewardAmount;
-                updates.total_earned_ton = Number(referrerProfile.total_earned_ton || 0) + rewardAmount;
-            } else if (currency === 'USDT') {
-                updates.balance_usdt = Number(referrerProfile.balance_usdt || 0) + rewardAmount;
-                updates.total_earned_usdt = Number(referrerProfile.total_earned_usdt || 0) + rewardAmount;
-            } else {
-                return null;
-            }
+            const updates = {
+                balance_ton: Number((Number(referrerProfile.balance_ton || 0) + rewardTonAmount).toFixed(6)),
+                total_earned_ton: Number((Number(referrerProfile.total_earned_ton || 0) + rewardTonAmount).toFixed(6))
+            };
 
             await this.supabase
                 .from('referral_profiles')
@@ -893,17 +893,18 @@ export class OfficialBotService {
                     tariff_id: tariff.id,
                     event_type: 'reward_granted',
                     status: 'completed',
-                    reward_amount: rewardAmount,
-                    reward_currency: currency,
+                    reward_amount: rewardTonAmount,
+                    reward_currency: 'TON',
                     sale_original_amount: rewardBaseAmount,
                     sale_original_currency: currency,
                     client_discount_percent: clientDiscountPercent,
                     client_discount_original_amount: clientDiscountAmount,
                     reward_original_amount: rewardAmount,
                     reward_original_currency: currency,
-                    reward_ton_amount: currency === 'TON' ? rewardAmount : null,
-                    bullrun_fee_ton_amount: currency === 'TON' ? bullrunFeeAmount : null,
+                    reward_ton_amount: rewardTonAmount,
+                    bullrun_fee_ton_amount: bullrunFeeTonAmount,
                     network_fee_ton_amount: 0,
+                    exchange_rate_id: convertedReward.rate?.id || null,
                     reserve_account_id: reserve.id || null,
                     reserve_coverage_status: reserve.canAcceptNewPartners ? 'covered' : 'admin_debt',
                     payload: {
@@ -912,7 +913,20 @@ export class OfficialBotService {
                         client_discount_percent: clientDiscountPercent,
                         paid_amount: paidAmount,
                         bullrun_fee_percent: economics.bullrunFeePercent,
-                        bullrun_fee_amount: bullrunFeeAmount
+                        bullrun_fee_ton_amount: bullrunFeeTonAmount,
+                        reward_original_amount: rewardAmount,
+                        reward_original_currency: currency,
+                        reward_ton_amount: rewardTonAmount,
+                        exchange_rate: convertedReward.rate
+                            ? {
+                                id: convertedReward.rate.id || null,
+                                base_currency: convertedReward.rate.base_currency,
+                                quote_currency: convertedReward.rate.quote_currency,
+                                rate: convertedReward.rate.rate,
+                                provider: convertedReward.rate.provider,
+                                fetched_at: convertedReward.rate.fetched_at
+                            }
+                            : null
                     }
                 })
                 .select('id')
@@ -920,7 +934,7 @@ export class OfficialBotService {
 
             if (rewardEventError) throw rewardEventError;
 
-            if (reserve.id && currency === 'TON') {
+            if (reserve.id) {
                 await this.supabase
                     .from('referral_reserve_ledger')
                     .insert([
@@ -928,21 +942,43 @@ export class OfficialBotService {
                             owner_id: ownerId,
                             reserve_account_id: reserve.id,
                             entry_type: 'reward_obligation_created',
-                            amount_ton: rewardAmount,
+                            amount_ton: rewardTonAmount,
                             direction: 'debit',
                             related_referral_event_id: rewardEvent.id,
-                            payload: { invoice_id: invoice.id, referred_tg_user_id: String(invoice.tg_user_id) }
+                            payload: {
+                                invoice_id: invoice.id,
+                                referred_tg_user_id: String(invoice.tg_user_id),
+                                reward_original_amount: rewardAmount,
+                                reward_original_currency: currency,
+                                exchange_rate_id: convertedReward.rate?.id || null
+                            }
                         },
                         {
                             owner_id: ownerId,
                             reserve_account_id: reserve.id,
                             entry_type: 'bullrun_fee_created',
-                            amount_ton: bullrunFeeAmount,
+                            amount_ton: bullrunFeeTonAmount,
                             direction: 'debit',
                             related_referral_event_id: rewardEvent.id,
                             payload: { invoice_id: invoice.id, fee_percent: economics.bullrunFeePercent }
                         }
                     ]);
+
+                await reconcileReferralReserveAccount(this.supabase, {
+                    id: reserve.id,
+                    owner_id: ownerId,
+                    deposit_address: reserve.depositAddress || null,
+                    minimum_deposit_ton: reserve.minimumDepositTon,
+                    total_deposited_ton: reserve.totalDepositedTon,
+                    available_reserve_ton: reserve.availableReserveTon,
+                    reserved_obligations_ton: reserve.reservedObligationsTon,
+                    admin_debt_ton: reserve.adminDebtTon,
+                    bullrun_fee_accrued_ton: reserve.bullrunFeeTon,
+                    network_fee_accrued_ton: reserve.networkFeeTon,
+                    locked_until: reserve.lockedUntil || null,
+                    last_deposit_at: reserve.lastDepositAt || null,
+                    status: reserve.status
+                });
             }
 
             await this.supabase
@@ -955,13 +991,13 @@ export class OfficialBotService {
 
             await bot.telegram.sendMessage(
                 attribution.referrer_tg_user_id,
-                `💸 По твоей реф-ссылке закрылась оплата.\n\nКлиент: ${invoice.tg_user_id}\nТариф: ${this.getTariffDisplayTitle(tariff)}\nБонус: ${rewardAmount} ${currency}\n\nБаланс уже обновлен.`
+                `💸 По твоей реф-ссылке закрылась оплата.\n\nКлиент: ${invoice.tg_user_id}\nТариф: ${this.getTariffDisplayTitle(tariff)}\nБонус: ${rewardTonAmount} TON\n\nБаланс уже обновлен.`
             ).catch(() => {});
 
             return {
                 referrerTgUserId: String(attribution.referrer_tg_user_id),
-                rewardAmount,
-                rewardCurrency: currency
+                rewardAmount: rewardTonAmount,
+                rewardCurrency: 'TON'
             };
         } catch (error) {
             if ((error.message || '').includes('referral_')) return null;
