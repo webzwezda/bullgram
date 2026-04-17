@@ -30,6 +30,7 @@ import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
 import { startCryptoRatesRefresh } from './jobs/crypto-rates.job.js';
+import { startReferralSettlementRetry } from './jobs/referral-settlement-retry.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -194,7 +195,8 @@ app.listen(PORT, async () => {
         restricted_userbot_auto_delete_enabled: String(process.env.RESTRICTED_USERBOT_AUTO_DELETE_ENABLED || 'true').trim().toLowerCase() !== 'false',
         restricted_userbot_delete_after_hours: Number(process.env.RESTRICTED_USERBOT_DELETE_AFTER_HOURS || 72),
         ton_reserve_watch_enabled: envFlag('TON_RESERVE_WATCH_ENABLED'),
-        crypto_rates_enabled: String(process.env.CRYPTO_RATES_ENABLED || 'true').trim().toLowerCase() !== 'false'
+        crypto_rates_enabled: String(process.env.CRYPTO_RATES_ENABLED || 'true').trim().toLowerCase() !== 'false',
+        referral_settlement_retry_enabled: String(process.env.REFERRAL_SETTLEMENT_RETRY_ENABLED || 'true').trim().toLowerCase() !== 'false'
     });
 
     // Запускаем всех ботов из БД
@@ -208,4 +210,5 @@ app.listen(PORT, async () => {
     startRestrictedUserbotCleanup(supabase);
     startTonReserveWatch(supabase);
     startCryptoRatesRefresh(supabase);
+    startReferralSettlementRetry(supabase, getBotById);
 });

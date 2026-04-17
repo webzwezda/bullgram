@@ -312,7 +312,7 @@ Statuses:
   - [x] Store TON/RUB and TON/USDT rates.
   - [x] Add conversion helper that returns the latest acceptable rate.
   - [x] If no acceptable rate exists during sale settlement, refresh the rate immediately before failing.
-  - [ ] Add a pending conversion retry queue if the provider is down during a paid invoice.
+  - [x] Add a pending conversion retry queue if the provider is down during a paid invoice.
 
 - [ ] Phase 5: referral attribution rules.
   - On `/start ref_...`, reject self-referrals.
@@ -611,3 +611,15 @@ Scenario checks:
 - Verified CoinGecko fetch locally on April 17, 2026:
   - TON/RUB returned a positive rate
   - TON/USDT returned a positive rate
+- Added referral settlement retry job:
+  - `backend/jobs/referral-settlement-retry.job.js`
+  - `startReferralSettlementRetry(supabase, getBotById)` in `backend/server.js`
+  - scans unconverted referral attributions every 10 minutes
+  - finds paid invoices completed inside the attribution window
+  - reruns reward settlement after rates recover
+  - settlement expiry check now uses invoice `paid_at`, not retry time, so paid-in-window leads are still honored
+  - existing attributed leads no longer depend on current `referral_enabled`; reward snapshot and payment date decide settlement
+- Runtime env for retry:
+  - `REFERRAL_SETTLEMENT_RETRY_ENABLED=true` by default
+  - `REFERRAL_SETTLEMENT_RETRY_INTERVAL_MS=600000`
+  - `REFERRAL_SETTLEMENT_RETRY_BATCH_LIMIT=100`

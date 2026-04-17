@@ -812,7 +812,6 @@ export class OfficialBotService {
     async processReferralReward(bot, invoice, tariff, ownerId) {
         try {
             const settings = await this.getReferralSettings(ownerId);
-            if (!settings.referral_enabled || Number(settings.referral_reward_percent) <= 0) return null;
 
             const { data: attribution, error: attributionError } = await this.supabase
                 .from('referral_attributions')
@@ -829,7 +828,10 @@ export class OfficialBotService {
             if (!attribution) return null;
             if (String(attribution.referrer_tg_user_id) === String(invoice.tg_user_id)) return null;
             if (attribution.converted_at) return null;
-            if (attribution.expires_at && new Date(attribution.expires_at) < new Date()) return null;
+            if (attribution.discount_eligible === false) return null;
+
+            const settlementTime = invoice.paid_at ? new Date(invoice.paid_at) : new Date();
+            if (attribution.expires_at && new Date(attribution.expires_at) < settlementTime) return null;
 
             const { data: existingReward, error: rewardCheckError } = await this.supabase
                 .from('referral_events')
@@ -849,6 +851,8 @@ export class OfficialBotService {
             const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
             const economics = getReferralEconomics();
             const rewardPercent = Number(attribution.reward_percent_snapshot ?? settings.referral_reward_percent ?? 0);
+            if (rewardPercent <= 0) return null;
+
             const clientDiscountPercent = Number(attribution.client_discount_percent_snapshot ?? settings.referral_client_discount_percent ?? economics.clientDiscountPercent);
             const rewardBaseAmount = Number(tariff.price || invoice.amount || 0);
             const paidAmount = Number(invoice.amount || 0);
@@ -989,10 +993,12 @@ export class OfficialBotService {
                 })
                 .eq('id', attribution.id);
 
-            await bot.telegram.sendMessage(
-                attribution.referrer_tg_user_id,
-                `💸 По твоей реф-ссылке закрылась оплата.\n\nКлиент: ${invoice.tg_user_id}\nТариф: ${this.getTariffDisplayTitle(tariff)}\nБонус: ${rewardTonAmount} TON\n\nБаланс уже обновлен.`
-            ).catch(() => {});
+            if (bot?.telegram) {
+                await bot.telegram.sendMessage(
+                    attribution.referrer_tg_user_id,
+                    `💸 По твоей реф-ссылке закрылась оплата.\n\nКлиент: ${invoice.tg_user_id}\nТариф: ${this.getTariffDisplayTitle(tariff)}\nБонус: ${rewardTonAmount} TON\n\nБаланс уже обновлен.`
+                ).catch(() => {});
+            }
 
             return {
                 referrerTgUserId: String(attribution.referrer_tg_user_id),
