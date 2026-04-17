@@ -49,6 +49,8 @@ restore_backend() {
     test -d '$backup_dir'
     rsync -a --delete \
       --exclude 'node_modules' \
+      --exclude '.env' \
+      --exclude '.env.backup-*' \
       --exclude 'logs' \
       --exclude 'uploads' \
       '$backup_dir/' '$BACKEND_DIR/'

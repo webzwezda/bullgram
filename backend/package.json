@@ -4,8 +4,8 @@
   "type": "module",
   "description": "Управление подписками BullRun (Backend)",
   "scripts": {
-    "deploy": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='logs' --exclude='uploads' ./ root@64.188.70.180:/var/www/backend/",
-    "pull": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='logs' --exclude='uploads' root@64.188.70.180:/var/www/backend/ ./"
+    "deploy": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='.env.backup-*' --exclude='logs' --exclude='uploads' ./ root@64.188.70.180:/var/www/backend/",
+    "pull": "rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='.env.backup-*' --exclude='logs' --exclude='uploads' root@64.188.70.180:/var/www/backend/ ./"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",

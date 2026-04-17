@@ -29,6 +29,8 @@ ssh "$SERVER" "
   if [ -d '$BACKEND_DIR' ]; then
     rsync -a --delete \
       --exclude 'node_modules' \
+      --exclude '.env' \
+      --exclude '.env.backup-*' \
       --exclude 'logs' \
       --exclude 'uploads' \
       '$BACKEND_DIR/' '$BACKEND_BACKUP_DIR/'
