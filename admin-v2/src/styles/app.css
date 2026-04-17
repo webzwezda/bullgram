@@ -1821,6 +1821,703 @@ a {
   }
 }
 
+/* Referrals Control Window Styles */
+.referrals-control-window {
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.referrals-window__header {
+  padding: 28px 32px 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.referrals-window__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  margin-bottom: 6px;
+}
+
+.referrals-window__subtitle {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.referrals-window__sections {
+  padding: 28px 32px;
+}
+
+.referrals-section {
+  margin-bottom: 8px;
+}
+
+.referrals-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.referrals-section__header {
+  margin-bottom: 18px;
+}
+
+.referrals-section__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.referrals-section__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.referrals-section__hint {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin-left: 40px;
+}
+
+.referrals-section__body {
+  padding-left: 40px;
+}
+
+.referrals-divider {
+  height: 1px;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  margin: 24px 0;
+}
+
+.referrals-window__footer {
+  padding: 20px 32px 24px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.referrals-window__footer .button {
+  border-radius: 8px;
+}
+
+/* Referrals Status Badge */
+.referrals-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.referrals-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.referrals-status-dot--ok {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.referrals-status-dot--warning {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+}
+
+.referrals-status-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+/* Referrals Metrics Grid */
+.referrals-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.referrals-metric {
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.referrals-metric:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+.referrals-metric__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.referrals-metric__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.referrals-metric__value--highlight {
+  color: #22c55e;
+}
+
+.referrals-metric__value--danger {
+  color: #ef4444;
+}
+
+/* Referrals Deposit Grid */
+.referrals-deposit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.referrals-deposit-field {
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.referrals-deposit-field__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.referrals-deposit-field__value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.referrals-deposit-field__value--mono {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-size: 12px;
+}
+
+/* Referrals Signals Grid */
+.referrals-signals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.referrals-signal-card {
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid;
+  background: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.referrals-signal-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.referrals-signal-card--danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.referrals-signal-card--warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.referrals-signal-card--ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.referrals-signal-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.referrals-signal-card--danger .referrals-signal-card__title {
+  color: #991b1b;
+}
+
+.referrals-signal-card--warning .referrals-signal-card__title {
+  color: #92400e;
+}
+
+.referrals-signal-card--ok .referrals-signal-card__title {
+  color: #166534;
+}
+
+.referrals-signal-card__text {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+/* Read-only field variant */
+.field--readonly {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+  font-weight: 600;
+  cursor: default;
+  user-select: all;
+}
+
+.referrals-control-window .field {
+  border-radius: 8px;
+}
+
+/* Referrals Data Section */
+.referrals-data-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Referrals Filters Bar */
+.referrals-filters-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+}
+
+.referrals-filters-bar__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.referrals-filters-bar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.referrals-filter-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.referrals-filter-btn:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.referrals-filter-btn--active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+
+/* Referrals Tables Grid */
+.referrals-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 16px;
+}
+
+.referrals-table-card {
+  background: #ffffff;
+  border: 1px solid #e8edf3;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+.referrals-table-card__header {
+  padding: 16px 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.referrals-table-card__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.referrals-table-card__count {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.referrals-table-card__empty {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.referrals-table-card__body {
+  overflow-x: auto;
+}
+
+/* Referrals Table */
+.referrals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.referrals-table__head {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.referrals-table__th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.referrals-table__th--right {
+  text-align: right;
+}
+
+.referrals-table__row {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s ease;
+}
+
+.referrals-table__row:hover {
+  background: #f8fafc;
+}
+
+.referrals-table__row:last-child {
+  border-bottom: none;
+}
+
+.referrals-table__cell {
+  padding: 14px 16px;
+  color: #334155;
+  vertical-align: top;
+}
+
+.referrals-table__cell--right {
+  text-align: right;
+}
+
+.referrals-table__cell--secondary {
+  color: #64748b;
+}
+
+/* Referrals Partner Info */
+.referrals-partner-name {
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+
+.referrals-partner-meta {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.referrals-partner-code {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.referrals-partner-wallet {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.referrals-partner-wallet-value {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #334155;
+}
+
+.referrals-partner-pending {
+  display: inline-flex;
+  margin-top: 4px;
+  padding: 3px 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #fde68a;
+}
+
+/* Referrals Count Badge */
+.referrals-count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.referrals-count-badge--positive {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+/* Referrals Balance */
+.referrals-balance {
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.referrals-balance--active {
+  color: #22c55e;
+}
+
+.referrals-balance-secondary {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* Referrals Actions */
+.referrals-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.referrals-action-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  border: 1px solid;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.referrals-action-btn--message {
+  color: #0284c7;
+  background: transparent;
+  border-color: transparent;
+}
+
+.referrals-action-btn--message:hover {
+  background: #e0f2fe;
+  border-color: #bae6fd;
+}
+
+.referrals-action-btn--payout {
+  color: #16a34a;
+  background: transparent;
+  border-color: transparent;
+}
+
+.referrals-action-btn--payout:hover:not(:disabled) {
+  background: #dcfce7;
+  border-color: #bbf7d0;
+}
+
+.referrals-action-btn--payout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.referrals-action-btn--dossier {
+  color: #475569;
+  background: transparent;
+  border-color: transparent;
+}
+
+.referrals-action-btn--dossier:hover {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+/* Referrals Event Badge */
+.referrals-event-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid;
+}
+
+.referrals-event-badge--reward {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.referrals-event-badge--payout {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+/* Referrals Event Amount */
+.referrals-event-amount {
+  font-weight: 600;
+  color: #334155;
+}
+
+.referrals-event-amount--reward {
+  color: #22c55e;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .referrals-tables-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .referrals-control-window {
+    border-radius: 8px;
+  }
+
+  .referrals-window__header,
+  .referrals-window__sections,
+  .referrals-window__footer {
+    padding: 20px;
+  }
+
+  .referrals-window__title {
+    font-size: 18px;
+  }
+
+  .referrals-section__number {
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+  }
+
+  .referrals-section__hint {
+    margin-left: 0;
+  }
+
+  .referrals-section__body {
+    padding-left: 0;
+  }
+
+  .referrals-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .referrals-deposit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .referrals-filters-bar {
+    padding: 12px 16px;
+  }
+
+  .referrals-filters-bar__filters {
+    justify-content: stretch;
+  }
+
+  .referrals-filter-btn {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .referrals-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .referrals-table-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .referrals-table__cell {
+    padding: 10px 12px;
+  }
+
+  .referrals-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .referrals-action-btn {
+    text-align: center;
+  }
+}
+
 /* Tariff Card Styles */
 .tariff-card {
   background: #ffffff;

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { Button } from '@/components/ui/button';
 
 const FILTERS = [
   { id: 'all', label: 'Все' },
@@ -341,191 +340,190 @@ export function ReferralsPage() {
 
   return (
     <section className="page space-y-5">
-      {/* Reserve */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Партнерский резерв</div>
-            <h3 className="mt-1 text-xl font-semibold text-slate-950">
-              {state.reserve?.statusLabel || 'TON-резерв'}
-            </h3>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              {state.reserve?.reason || 'Админ пополняет резерв, BullRun держит учет выплат, партнер получает деньги без ручной каши.'}
-            </p>
-          </div>
-          <div className={`inline-flex w-fit items-center rounded-lg px-3 py-1 text-xs font-semibold ${
-            state.reserve?.canEnableReferrals ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-          }`}>
-            {state.reserve?.canEnableReferrals ? 'Можно включать' : 'Сначала депозит'}
-          </div>
+      <section className="referrals-control-window">
+        <div className="referrals-window__header">
+          <div className="referrals-window__title">Партнерская программа</div>
+          <div className="referrals-window__subtitle">Резерв, настройки, управление выплатами</div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Минимум</div>
-            <div className="mt-1 text-lg font-semibold text-slate-950">{formatTon(state.reserve?.minimumDepositTon || state.economics?.minimumDepositTon || 100)}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Пополнено</div>
-            <div className="mt-1 text-lg font-semibold text-slate-950">{formatTon(state.reserve?.totalDepositedTon)}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Доступно</div>
-            <div className="mt-1 text-lg font-semibold text-slate-950">{formatTon(state.reserve?.availableReserveTon)}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">Долг админа</div>
-            <div className={`mt-1 text-lg font-semibold ${Number(state.reserve?.adminDebtTon || 0) > 0 ? 'text-rose-600' : 'text-slate-950'}`}>
-              {formatTon(state.reserve?.adminDebtTon)}
+        <div className="referrals-window__sections">
+          <div className="referrals-section">
+            <div className="referrals-section__header">
+              <div className="referrals-section__title">
+                <span className="referrals-section__number">1</span>
+                Резервный фонд
+              </div>
+              <div className="referrals-section__hint">TON-резерв для защищенных выплат</div>
             </div>
-          </div>
-        </div>
+            <div className="referrals-section__body">
+              <div className="referrals-status-badge">
+                <div className={`referrals-status-dot ${state.reserve?.canEnableReferrals ? 'referrals-status-dot--ok' : 'referrals-status-dot--warning'}`} />
+                <span className="referrals-status-label">
+                  {state.reserve?.statusLabel || (state.reserve?.canEnableReferrals ? 'Резерв готов' : 'Резерв не готов')}
+                </span>
+              </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-lg border border-slate-200 p-3">
-            <div className="text-xs text-slate-500">Кошелек для депозита</div>
-            <div className="mt-1 break-all font-mono text-sm text-slate-800">
-              {state.reserve?.depositAddress || 'Кошелек еще не подключен в env'}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-3">
-            <div className="text-xs text-slate-500">Комментарий / memo</div>
-            <div className="mt-1 font-mono text-sm text-slate-800">{state.reserve?.depositMemo || '—'}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-3">
-            <div className="text-xs text-slate-500">Лок депозита</div>
-            <div className="mt-1 text-sm font-medium text-slate-800">{formatWhen(state.reserve?.lockedUntil)}</div>
-          </div>
-        </div>
-      </section>
+              <div className="referrals-metrics-grid">
+                <div className="referrals-metric">
+                  <div className="referrals-metric__label">Минимум</div>
+                  <div className="referrals-metric__value">{formatTon(state.reserve?.minimumDepositTon || state.economics?.minimumDepositTon || 100)}</div>
+                </div>
+                <div className="referrals-metric">
+                  <div className="referrals-metric__label">Пополнено</div>
+                  <div className="referrals-metric__value">{formatTon(state.reserve?.totalDepositedTon)}</div>
+                </div>
+                <div className="referrals-metric">
+                  <div className="referrals-metric__label">Доступно</div>
+                  <div className="referrals-metric__value referrals-metric__value--highlight">{formatTon(state.reserve?.availableReserveTon)}</div>
+                </div>
+                <div className="referrals-metric">
+                  <div className="referrals-metric__label">Долг админа</div>
+                  <div className={`referrals-metric__value ${Number(state.reserve?.adminDebtTon || 0) > 0 ? 'referrals-metric__value--danger' : ''}`}>
+                    {formatTon(state.reserve?.adminDebtTon)}
+                  </div>
+                </div>
+              </div>
 
-      {prioritySignals.length > 0 && (
-        <section className="grid gap-3 md:grid-cols-3">
-          {prioritySignals.slice(0, 3).map((signal) => (
-            <div
-              key={`${signal.title}-${signal.tone}`}
-              className={`rounded-lg border p-3 text-sm ${
-                signal.tone === 'danger'
-                  ? 'border-rose-200 bg-rose-50 text-rose-800'
-                  : signal.tone === 'ok'
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                    : 'border-amber-200 bg-amber-50 text-amber-800'
-              }`}
-            >
-              <div className="font-semibold">{signal.title}</div>
-              <div className="mt-1 text-xs opacity-80">{signal.text}</div>
-            </div>
-          ))}
-        </section>
-      )}
-
-      {/* Settings */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-950">Настройки партнерки</h3>
-        </div>
-
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            <label className="field-group">
-              <span className="text-sm font-medium text-slate-700">Статус</span>
-              <select
-                className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
-                value={settingsDraft.referral_enabled ? 'yes' : 'no'}
-                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
-              >
-                <option value="no">Выключена</option>
-                <option value="yes" disabled={!state.reserve?.canEnableReferrals}>Включена</option>
-              </select>
-              <p className="mt-1.5 text-xs text-slate-500">
-                {settingsDraft.referral_enabled
-                  ? 'Партнеры могут получать реферальные ссылки'
-                  : 'Реферальная программа отключена'}
-              </p>
-            </label>
-          </div>
-
-          <div>
-            <label className="field-group">
-              <span className="text-sm font-medium text-slate-700">Награда партнера, %</span>
-              <input
-                className="field h-11 rounded-xl border-slate-200 bg-slate-50 text-[14px]"
-                type="number"
-                min="0"
-                max="100"
-                value={settingsDraft.referral_reward_percent}
-                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_reward_percent: Number(event.target.value || 0) }))}
-              />
-              <p className="mt-1.5 text-xs text-slate-500">
-                От первой оплаты каждого приглашенного
-              </p>
-            </label>
-          </div>
-
-          <div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs text-slate-500">Скидка клиенту</div>
-              <div className="mt-1 text-lg font-semibold text-slate-950">{settingsDraft.referral_client_discount_percent || 10}%</div>
-              <p className="mt-1 text-xs text-slate-500">Фиксируем в MVP, чтобы партнеру было легко продавать.</p>
+              <div className="referrals-deposit-grid">
+                <div className="referrals-deposit-field">
+                  <div className="referrals-deposit-field__label">Кошелёк для депозита</div>
+                  <div className="referrals-deposit-field__value referrals-deposit-field__value--mono">
+                    {state.reserve?.depositAddress || 'Кошелёк ещё не подключен в env'}
+                  </div>
+                </div>
+                <div className="referrals-deposit-field">
+                  <div className="referrals-deposit-field__label">Комментарий / memo</div>
+                  <div className="referrals-deposit-field__value referrals-deposit-field__value--mono">
+                    {state.reserve?.depositMemo || '—'}
+                  </div>
+                </div>
+                <div className="referrals-deposit-field">
+                  <div className="referrals-deposit-field__label">Лок депозита</div>
+                  <div className="referrals-deposit-field__value">{formatWhen(state.reserve?.lockedUntil)}</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="text-xs text-slate-500">BullRun fee</div>
-              <div className="mt-1 text-lg font-semibold text-slate-950">{state.economics?.bullrunFeePercent || 1}%</div>
-              <p className="mt-1 text-xs text-slate-500">С партнерского вознаграждения, сверху с админа.</p>
+          <div className="referrals-divider" />
+
+          <div className="referrals-section">
+            <div className="referrals-section__header">
+              <div className="referrals-section__title">
+                <span className="referrals-section__number">2</span>
+                Настройки партнерки
+              </div>
+              <div className="referrals-section__hint">Включение и экономика</div>
+            </div>
+            <div className="referrals-section__body">
+              <div className="form-grid">
+                <div className="field-group">
+                  <label className="field-label">Статус</label>
+                  <select
+                    className="field"
+                    value={settingsDraft.referral_enabled ? 'yes' : 'no'}
+                    onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
+                  >
+                    <option value="no">Выключена</option>
+                    <option value="yes" disabled={!state.reserve?.canEnableReferrals}>Включена</option>
+                  </select>
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Награда партнера, %</label>
+                  <input
+                    className="field"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={settingsDraft.referral_reward_percent}
+                    onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_reward_percent: Number(event.target.value || 0) }))}
+                  />
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">Скидка клиенту</label>
+                  <div className="field field--readonly">
+                    {settingsDraft.referral_client_discount_percent || 10}%
+                  </div>
+                </div>
+
+                <div className="field-group">
+                  <label className="field-label">BullRun fee</label>
+                  <div className="field field--readonly">
+                    {state.economics?.bullrunFeePercent || 1}%
+                  </div>
+                </div>
+              </div>
+
+              <div className="field-group" style={{ marginTop: '14px' }}>
+                <label className="field-label">Приветствие для партнеров</label>
+                <textarea
+                  className="field textarea-field"
+                  value={settingsDraft.referral_welcome_text}
+                  onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_welcome_text: event.target.value }))}
+                  placeholder="Добро пожаловать в партнерскую программу! Ваша реферальная ссылка готова..."
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className="field-group">
-              <span className="text-sm font-medium text-slate-700">Приветствие для партнеров</span>
-              <textarea
-                className="field min-h-[100px] rounded-xl border-slate-200 bg-slate-50 text-[14px] resize-y"
-                value={settingsDraft.referral_welcome_text}
-                onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_welcome_text: event.target.value }))}
-                placeholder="Добро пожаловать в партнерскую программу! Ваша реферальная ссылка готова..."
-              />
-              <p className="mt-1.5 text-xs text-slate-500">
-                Этот текст увидит новый партнер после получения ссылки
-              </p>
-            </label>
-          </div>
+          {prioritySignals.length > 0 && (
+            <>
+              <div className="referrals-divider" />
+              <div className="referrals-section">
+                <div className="referrals-section__header">
+                  <div className="referrals-section__title">
+                    <span className="referrals-section__number">3</span>
+                    Уведомления
+                  </div>
+                  <div className="referrals-section__hint">Требует внимания</div>
+                </div>
+                <div className="referrals-section__body">
+                  <div className="referrals-signals-grid">
+                    {prioritySignals.slice(0, 3).map((signal) => (
+                      <div
+                        key={`${signal.title}-${signal.tone}`}
+                        className={`referrals-signal-card referrals-signal-card--${signal.tone}`}
+                      >
+                        <div className="referrals-signal-card__title">{signal.title}</div>
+                        <div className="referrals-signal-card__text">{signal.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
-          <Button
-            className="h-11 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800"
+        <div className="referrals-window__footer">
+          <button
+            type="button"
+            className="button button--primary button--large"
             onClick={saveSettings}
             disabled={state.savingSettings}
           >
-            {state.savingSettings ? 'Сохраняем...' : 'Сохранить'}
-          </Button>
+            {state.savingSettings ? 'Сохраняем...' : 'Сохранить настройки'}
+          </button>
         </div>
       </section>
 
-      {/* Filters */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex-1">
-            <input
-              className="field h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-[14px]"
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по TG ID, @username или коду"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <div className="referrals-data-section">
+        <div className="referrals-filters-bar">
+          <input
+            className="field referrals-filters-bar__search"
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Поиск по TG ID, @username или коду"
+          />
+          <div className="referrals-filters-bar__filters">
             {FILTERS.map((item) => (
               <button
                 key={item.id}
-                className={`h-9 rounded-lg px-3 text-xs font-medium transition-colors ${
-                  filter === item.id
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                className={`referrals-filter-btn ${filter === item.id ? 'referrals-filter-btn--active' : ''}`}
                 onClick={() => setFilter(item.id)}
               >
                 {item.label}
@@ -533,164 +531,161 @@ export function ReferralsPage() {
             ))}
           </div>
         </div>
-      </section>
 
-      {/* Tables */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Partners Table */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-950">Партнеры</h3>
-            <span className="text-xs text-slate-500">{filteredPartners.length} показано</span>
-          </div>
+        <div className="referrals-tables-grid">
+          <div className="referrals-table-card">
+            <div className="referrals-table-card__header">
+              <h3 className="referrals-table-card__title">Партнеры</h3>
+              <span className="referrals-table-card__count">{filteredPartners.length} показано</span>
+            </div>
 
-          {filteredPartners.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">По фильтру никого нет</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-3 text-left font-medium text-slate-700">Партнер</th>
-                    <th className="pb-3 text-left font-medium text-slate-700">Лидов</th>
-                    <th className="pb-3 text-left font-medium text-slate-700">Баланс</th>
-                    <th className="pb-3 text-right font-medium text-slate-700">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredPartners.map((row) => {
-                    const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
-                    return (
-                      <tr key={row.tg_user_id} className="border-b border-slate-100 last:border-0">
-                        <td className="py-3">
-                          <div className="font-medium text-slate-950">{row.display_name || row.username || row.tg_user_id}</div>
-                          <div className="text-xs text-slate-500">ID: {row.tg_user_id} • <span className="font-mono">{row.referral_code}</span></div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            Кошелек: {row.payout_wallet ? <span className="font-mono">{row.payout_wallet}</span> : 'не указан'}
-                          </div>
-                          {Number(row.pending_payout_ton || 0) > 0 && (
-                            <div className="mt-1 inline-flex rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                              Заявка: {formatTon(row.pending_payout_ton)}
+            {filteredPartners.length === 0 ? (
+              <p className="referrals-table-card__empty">По фильтру никого нет</p>
+            ) : (
+              <div className="referrals-table-card__body">
+                <table className="referrals-table">
+                  <thead>
+                    <tr className="referrals-table__head">
+                      <th className="referrals-table__th">Партнер</th>
+                      <th className="referrals-table__th">Лидов</th>
+                      <th className="referrals-table__th">Баланс</th>
+                      <th className="referrals-table__th referrals-table__th--right">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPartners.map((row) => {
+                      const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
+                      return (
+                        <tr key={row.tg_user_id} className="referrals-table__row">
+                          <td className="referrals-table__cell">
+                            <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
+                            <div className="referrals-partner-meta">ID: {row.tg_user_id} • <span className="referrals-partner-code">{row.referral_code}</span></div>
+                            <div className="referrals-partner-wallet">
+                              Кошелёк: {row.payout_wallet ? <span className="referrals-partner-wallet-value">{row.payout_wallet}</span> : 'не указан'}
                             </div>
-                          )}
-                        </td>
-                        <td className="py-3">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                            (row.total_referrals || 0) > 0 ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {row.total_referrals || 0}
-                          </span>
-                        </td>
-                        <td className="py-3">
-                          <div className={`font-medium ${hasBalance ? 'text-green-600' : 'text-slate-400'}`}>
-                            {row.balance_rub || 0} RUB
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {row.balance_ton || 0} TON • {row.balance_usdt || 0} USDT
-                          </div>
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              className="text-xs text-sky-600 hover:text-sky-700 font-medium px-2 py-1 rounded hover:bg-sky-50 transition-colors"
-                              onClick={() => sendMessagePrompt(row)}
-                            >
-                              Написать
-                            </button>
-                            {Number(row.balance_rub) > 0 && (
-                              <button
-                                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded hover:bg-emerald-50 transition-colors"
-                                onClick={() => markPayout(row, 'RUB')}
-                                disabled={state.payouting}
-                              >
-                                RUB
-                              </button>
+                            {Number(row.pending_payout_ton || 0) > 0 && (
+                              <div className="referrals-partner-pending">
+                                Заявка: {formatTon(row.pending_payout_ton)}
+                              </div>
                             )}
-                            {Number(row.balance_ton) > 0 && (
+                          </td>
+                          <td className="referrals-table__cell">
+                            <span className={`referrals-count-badge ${(row.total_referrals || 0) > 0 ? 'referrals-count-badge--positive' : ''}`}>
+                              {row.total_referrals || 0}
+                            </span>
+                          </td>
+                          <td className="referrals-table__cell">
+                            <div className={`referrals-balance ${hasBalance ? 'referrals-balance--active' : ''}`}>
+                              {row.balance_rub || 0} RUB
+                            </div>
+                            <div className="referrals-balance-secondary">
+                              {row.balance_ton || 0} TON • {row.balance_usdt || 0} USDT
+                            </div>
+                          </td>
+                          <td className="referrals-table__cell referrals-table__cell--right">
+                            <div className="referrals-actions">
                               <button
-                                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded hover:bg-emerald-50 transition-colors"
-                                onClick={() => markPayout(row, 'TON')}
-                                disabled={state.payouting}
+                                className="referrals-action-btn referrals-action-btn--message"
+                                onClick={() => sendMessagePrompt(row)}
                               >
-                                {Number(row.pending_payout_ton || 0) > 0 ? 'Заявка TON' : 'TON'}
+                                Написать
                               </button>
-                            )}
-                            {Number(row.balance_usdt) > 0 && (
-                              <button
-                                className="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded hover:bg-emerald-50 transition-colors"
-                                onClick={() => markPayout(row, 'USDT')}
-                                disabled={state.payouting}
+                              {Number(row.balance_rub) > 0 && (
+                                <button
+                                  className="referrals-action-btn referrals-action-btn--payout"
+                                  onClick={() => markPayout(row, 'RUB')}
+                                  disabled={state.payouting}
+                                >
+                                  RUB
+                                </button>
+                              )}
+                              {Number(row.balance_ton) > 0 && (
+                                <button
+                                  className="referrals-action-btn referrals-action-btn--payout"
+                                  onClick={() => markPayout(row, 'TON')}
+                                  disabled={state.payouting}
+                                >
+                                  {Number(row.pending_payout_ton || 0) > 0 ? 'Заявка TON' : 'TON'}
+                                </button>
+                              )}
+                              {Number(row.balance_usdt) > 0 && (
+                                <button
+                                  className="referrals-action-btn referrals-action-btn--payout"
+                                  onClick={() => markPayout(row, 'USDT')}
+                                  disabled={state.payouting}
+                                >
+                                  USDT
+                                </button>
+                              )}
+                              <a
+                                className="referrals-action-btn referrals-action-btn--dossier"
+                                href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
+                                target="_blank"
+                                rel="noreferrer"
                               >
-                                USDT
-                              </button>
-                            )}
-                            <a
-                              className="text-xs text-slate-600 hover:text-slate-700 font-medium px-2 py-1 rounded hover:bg-slate-100 transition-colors"
-                              href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Досье
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {/* Events Table */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-950">События</h3>
-            <span className="text-xs text-slate-500">{filteredEvents.length} показано</span>
+                                Досье
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {filteredEvents.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">Событий нет</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="pb-3 text-left font-medium text-slate-700">Когда</th>
-                    <th className="pb-3 text-left font-medium text-slate-700">Тип</th>
-                    <th className="pb-3 text-left font-medium text-slate-700">Партнер</th>
-                    <th className="pb-3 text-right font-medium text-slate-700">Сумма</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEvents.slice(0, 30).map((event) => {
-                    const badge = eventBadge(event);
-                    const isReward = badge.className === 'pill pill--ok';
-                    return (
-                      <tr key={event.id} className="border-b border-slate-100 last:border-0">
-                        <td className="py-3 text-slate-600 whitespace-nowrap">{formatWhen(event.created_at)}</td>
-                        <td className="py-3">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            isReward ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-700'
-                          }`}>
-                            {badge.text}
-                          </span>
-                        </td>
-                        <td className="py-3 text-slate-600">ID: {event.referrer_tg_user_id}</td>
-                        <td className="py-3 text-right">
-                          <span className={`font-medium ${isReward ? 'text-green-600' : 'text-slate-700'}`}>
-                            {event.reward_amount || 0} {event.reward_currency || ''}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="referrals-table-card">
+            <div className="referrals-table-card__header">
+              <h3 className="referrals-table-card__title">События</h3>
+              <span className="referrals-table-card__count">{filteredEvents.length} показано</span>
             </div>
-          )}
-        </section>
+
+            {filteredEvents.length === 0 ? (
+              <p className="referrals-table-card__empty">Событий нет</p>
+            ) : (
+              <div className="referrals-table-card__body">
+                <table className="referrals-table">
+                  <thead>
+                    <tr className="referrals-table__head">
+                      <th className="referrals-table__th">Когда</th>
+                      <th className="referrals-table__th">Тип</th>
+                      <th className="referrals-table__th">Партнер</th>
+                      <th className="referrals-table__th referrals-table__th--right">Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEvents.slice(0, 30).map((event) => {
+                      const badge = eventBadge(event);
+                      const isReward = badge.className === 'pill pill--ok';
+                      return (
+                        <tr key={event.id} className="referrals-table__row">
+                          <td className="referrals-table__cell referrals-table__cell--secondary">
+                            {formatWhen(event.created_at)}
+                          </td>
+                          <td className="referrals-table__cell">
+                            <span className={`referrals-event-badge ${isReward ? 'referrals-event-badge--reward' : 'referrals-event-badge--payout'}`}>
+                              {badge.text}
+                            </span>
+                          </td>
+                          <td className="referrals-table__cell referrals-table__cell--secondary">
+                            ID: {event.referrer_tg_user_id}
+                          </td>
+                          <td className="referrals-table__cell referrals-table__cell--right">
+                            <span className={`referrals-event-amount ${isReward ? 'referrals-event-amount--reward' : ''}`}>
+                              {event.reward_amount || 0} {event.reward_currency || ''}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </section>
   );
