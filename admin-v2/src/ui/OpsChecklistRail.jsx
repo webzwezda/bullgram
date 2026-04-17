@@ -152,25 +152,12 @@ function ChecklistItem({ item }) {
       <div className="checklist__row">
         <div className="checklist__step">
           <span className={`checklist__index checklist__index--${indexState}`}>{item.index}</span>
-          {item.linkInTitle && item.href ? (
-            <a className="checklist__title checklist__title-link" href={item.href}>
-              {item.title}
-            </a>
-          ) : (
-            <div className="checklist__title">{item.title}</div>
-          )}
+          <a className="checklist__title checklist__title-link" href={item.href}>
+            {item.title}
+          </a>
         </div>
       </div>
       {item.hint ? <div className="checklist__hint">{item.hint}</div> : null}
-      {!item.linkInTitle && item.onClick ? (
-        <button className="checklist__link checklist__link--button" onClick={item.onClick}>
-          {item.actionLabel || 'Открыть'}
-        </button>
-      ) : !item.linkInTitle && item.href ? (
-        <a className="checklist__link" href={item.href}>
-          {item.actionLabel || 'Открыть'}
-        </a>
-      ) : null}
     </div>
   );
 }
@@ -357,7 +344,7 @@ export function OpsChecklistRail() {
     const summary = state.summary || {};
     const payment = state.paymentReadiness || {};
 
-    const steps = [
+    const coreSteps = [
       {
         key: 'payments',
         done: !!payment.hasTon || !!payment.hasSbp,
@@ -386,19 +373,20 @@ export function OpsChecklistRail() {
         key: 'referrals',
         done: false,
         title: 'Рефералка',
-        hint: 'Настрой партнерскую программу для привлечения новых клиентов',
+        hint: '',
         href: '/app/referrals',
         linkInTitle: true
-      },
+      }
+    ];
+
+    const userbotSteps = [
       {
         key: 'proxy',
         done: (summary.proxyCount || 0) > 0,
         title: 'Создай прокси',
-        hint: (summary.proxyCount || 0) > 0
-          ? `Прокси уже есть: ${summary.proxyCount}. Можно сажать на него юзербота.`
-          : 'Подними первый прокси. У вас правило жесткое: один прокси = один юзербот.',
+        hint: '',
         href: '/app/proxies',
-        actionLabel: 'Открыть прокси'
+        linkInTitle: true
       },
       {
         key: 'userbot',
@@ -406,28 +394,35 @@ export function OpsChecklistRail() {
         title: 'Подключи юзербота',
         hint: (summary.userbotCount || 0) > 0
           ? 'Юзербот уже подключен. Telegram-контур начал собираться.'
-          : 'После прокси подключи первого юзербота. Без него не будет ручной работы и части Telegram-операционки.',
+          : '',
         href: '/app/userbots',
-        actionLabel: 'Открыть юзерботов'
+        linkInTitle: true
       }
     ];
 
-    let firstPendingFound = false;
-    return steps.map((item, index) => {
-      let state = 'todo';
-      if (item.done) {
-        state = 'done';
-      } else if (!firstPendingFound) {
-        state = 'active';
-        firstPendingFound = true;
-      }
+    const processSteps = (steps) => {
+      let firstPendingFound = false;
+      return steps.map((item, index) => {
+        let state = 'todo';
+        if (item.done) {
+          state = 'done';
+        } else if (!firstPendingFound) {
+          state = 'active';
+          firstPendingFound = true;
+        }
 
-      return {
-        ...item,
-        index: index + 1,
-        state
-      };
-    });
+        return {
+          ...item,
+          index: index + 1,
+          state
+        };
+      });
+    };
+
+    return {
+      core: processSteps(coreSteps),
+      userbots: processSteps(userbotSteps)
+    };
   }, [accessToken, login, state.paymentReadiness, state.summary, user]);
 
   const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор BullRun';
@@ -477,7 +472,15 @@ export function OpsChecklistRail() {
 
       <div className="ops-rail__card ops-rail__card--surface ops-rail__card--checklist">
         <div className="ops-rail__stack">
-          {checklist.map((item) => (
+          {checklist.core.map((item) => (
+            <ChecklistItem key={item.key} item={item} />
+          ))}
+        </div>
+
+        <div className="ops-rail__divider-text">Настройка юзербота</div>
+
+        <div className="ops-rail__stack">
+          {checklist.userbots.map((item) => (
             <ChecklistItem key={item.key} item={item} />
           ))}
         </div>

@@ -127,6 +127,7 @@ For BullRun agent work:
 For Codex work in this repo:
 
 - use the main Codex session as the orchestrator
+- treat this repository file as the user's standing instruction that Codex should orchestrate native Codex subagents and Claude CLI workers for BullRun work whenever the scope is clear
 - global custom agents live in `~/.codex/agents/`
 - before starting non-trivial work, first review which global subagents are available and choose the best candidates for the task
 - custom agents do not auto-run; delegate explicitly in prompts
@@ -136,6 +137,8 @@ For Codex work in this repo:
 - push exploration, isolated implementation, focused verification, and review work down into subagents whenever the scope is clear
 - keep architecture decisions, cross-runtime integration, and final verification in the main Codex session
 - do not split tightly coupled changes across multiple subagents without a clear merge plan
+- use Claude CLI workers through `cmux` for bounded terminal-based work when a parallel worker is useful, especially read-only discovery, scoped implementation, log inspection, and focused verification
+- keep all delegated workers narrow: exact scope, allowed files, validation expected, and return format
 
 Default delegation bias:
 
@@ -217,6 +220,10 @@ For `cmux` usage:
 - Codex runs inside `cmux` and may work with windows, workspaces, panes, and surfaces via `cmux` commands
 - use `cmux help` whenever the exact syntax or supported action is uncertain
 - this is especially relevant when the user asks to split the screen, open a new window or workspace, move focus, or open or call an agent in a neighboring window
+- for browser work in this repo, use `cmux browser` and browser surfaces by default; do not default to Playwright CLI for site/admin runtime checks
+- when verifying `admin-v2` or `site-v2`, keep the dev or preview server in a `cmux` terminal surface and open the route in a `cmux` browser surface so the user can see the same browser state
+- use `cmux browser snapshot`, `cmux browser console`, `cmux browser errors`, `cmux browser screenshot`, and `cmux browser eval` for browser evidence, console errors, screenshots, and runtime checks
+- only use Playwright outside `cmux` when the user explicitly asks for it, when a task requires a Playwright-specific capability, or when `cmux browser` is unavailable; state the reason before doing so
 
 Common terminal and `cmux` operations:
 
@@ -226,6 +233,7 @@ Common terminal and `cmux` operations:
 - send special keys with `cmux send-key`
 - create splits, panes, and surfaces with `cmux new-split`, `cmux new-pane`, `cmux new-surface`
 - inspect workspace structure with `cmux tree`, `cmux list-panes`, `cmux list-pane-surfaces`
+- open browser surfaces with `cmux browser open`, navigate with `cmux browser goto`, inspect with `cmux browser snapshot`, and check runtime failures with `cmux browser console` and `cmux browser errors`
 
 Plan and execution defaults:
 
@@ -263,17 +271,18 @@ Core execution principles:
 - no laziness: find root causes and avoid temporary fixes
 - minimal impact: only change what is necessary and avoid introducing regressions
 
-## Removable Codex Orchestration Addendum
+## Codex Orchestration Contract
 
-This block is intentionally placed at the end so it can be removed cleanly if the workflow changes.
+This block is the standing orchestration contract for this repo.
 
-- Codex may act as the primary orchestrator for both native Codex subagents and Claude terminal workers when the user asks for delegation, parallel agent work, Claude coordination, or multi-agent workflow.
+- Codex is the primary orchestrator for both native Codex subagents and Claude terminal workers during BullRun work.
 - Keep the distinction explicit:
   - native Codex subagents are delegated through Codex subagent tooling;
   - Claude workers are terminal processes coordinated through `cmux`;
   - a `cmux` pane, split, browser surface, or terminal surface is not itself a Codex subagent.
 - The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means Codex must not confuse terminal UI state with native subagent state.
 - For Claude work, prefer the project agent file `.claude/agents/bullrun-codex-worker.md` and launch Claude with `claude --agent bullrun-codex-worker` when a bounded worker is useful.
+- For frontend/browser debugging, use `cmux` browser surfaces as the default browser. Keep browser state, screenshots, console output, and runtime errors inside `cmux` unless the user asks for another browser automation path.
 - Use `cmux help` whenever command syntax is uncertain. The main commands for orchestration are:
   - `cmux tree`
   - `cmux list-panes`
@@ -284,6 +293,12 @@ This block is intentionally placed at the end so it can be removed cleanly if th
   - `cmux send`
   - `cmux send-key`
   - `cmux read-screen`
+  - `cmux browser open`
+  - `cmux browser goto`
+  - `cmux browser snapshot`
+  - `cmux browser console`
+  - `cmux browser errors`
+  - `cmux browser screenshot`
 - Codex owns task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, and user-facing summary.
 - Claude workers should receive narrow prompts with exact scope, allowed files or write boundaries, expected validation, and required return format.
 - Do not let Claude deploy, rollback, run destructive commands, or broaden architecture unless Codex explicitly assigns that scope.
