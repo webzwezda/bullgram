@@ -586,3 +586,12 @@ Scenario checks:
   - `node --check backend/services/referral-reserve.service.js`
   - `node --check backend/server.js`
   - `git diff --check`
+- Production TON reserve wallet setup completed on April 17, 2026:
+  - public deposit address: `UQBvr3KLWw6xt0DBrDSsDku5w9gxJiVh4J2AuvV57wJyr-40`
+  - server secret file: `/root/bullrun-ton-reserve/reserve-wallet.json`
+  - secret file permissions: `600`
+  - backend env backup before enabling: `/var/www/backend/.env.backup-20260417-ton-reserve`
+  - watcher env enabled in `/var/www/backend/.env`
+  - PM2 restarted with `--update-env`
+  - verified production log line: `[TonReserveWatch] started { interval_ms: 120000, provider: 'toncenter' }`
+- Do not commit or print the reserve wallet mnemonic. For future automated payouts, read the mnemonic only from the protected server file or move it to a proper secret manager before real customer money.
