@@ -342,8 +342,10 @@ Statuses:
   - [x] Add withdrawal request when partner balance is at least `5 TON`.
   - [x] Queue payout request in `referral_partner_payouts`.
   - [x] Let admin close an active TON request through manual payout marking.
+  - [x] Add manual payout lifecycle statuses before automatic sender.
+  - [x] Store manual TON tx hash and network fee on the payout request.
   - [ ] Send payout automatically from BullRun-controlled wallet.
-  - [ ] Charge network fee to admin reserve.
+  - [x] Charge manually entered network fee to admin reserve.
   - [ ] Update payout status by chain result.
   - [ ] Notify admin outside the dashboard when a payout request is created.
 
@@ -650,3 +652,10 @@ Scenario checks:
   - `/app/referrals` shows a wide lead table with dossier links
   - `/app/referrals` has a separate active payout request queue with partner, wallet, amount, status, and requested time
   - admin can move a payout request to `queued`, mark it `failed`, or `cancelled`; marking `sent` still goes through the existing manual payout path so partner balance is decremented
+- Added manual payout lifecycle groundwork:
+  - active payout requests now include `requested`, `queued`, and `sending`
+  - `/app/referrals` can move a request to `sending` before marking it sent
+  - manual TON payout marking can store `chain_tx_hash` and `network_fee_ton`
+  - manually entered network fee is written to the reserve ledger as `network_fee_reserved`
+  - the partner bot treats `sending` as an active request, so partners cannot change wallet or create a duplicate request while money is in flight
+  - automatic TON sending and blockchain confirmation remain intentionally unimplemented

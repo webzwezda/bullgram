@@ -2338,6 +2338,63 @@ a {
   border: 1px solid #fde68a;
 }
 
+.referrals-payout-status {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.referrals-payout-status--queued,
+.referrals-payout-status--sending {
+  background: #dbeafe;
+  color: #1e40af;
+  border-color: #bfdbfe;
+}
+
+.referrals-payout-status--sent {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.referrals-payout-status--failed {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.referrals-payout-status--cancelled {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.referrals-payout-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.referrals-table__cell--right .referrals-payout-chain {
+  align-items: flex-end;
+}
+
+.referrals-payout-chain__hash {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #334155;
+}
+
 /* Referrals Count Badge */
 .referrals-count-badge {
   display: inline-flex;

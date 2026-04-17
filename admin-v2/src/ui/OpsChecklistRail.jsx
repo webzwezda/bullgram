@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
+import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users } from 'lucide-react';
+
+const ICONS = {
+  CreditCard, Bot, LayoutList, Globe, Smartphone, Users
+};
 
 function formatDateOnly(value) {
   if (!value) return '—';
@@ -16,28 +21,20 @@ function getTrialDaysLeft(value) {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-function getTrialHoursLeft(value) {
-  if (!value) return null;
-  const diffMs = new Date(value).getTime() - Date.now();
-  return Math.ceil(diffMs / (1000 * 60 * 60));
-}
-
 function planMeta(plan, trialEndsAt) {
   if (plan === 'pro') {
     return {
-      title: 'Текущий план: Pro',
-      hint: 'Скрытый высокий контур. Тут уже не trial, а тяжелая операционка и более жирный стек.',
-      pillClass: 'pill pill--warning',
-      pillText: 'Pro'
+      title: 'Pro',
+      hint: 'Без лимитов',
+      pillClass: 'bg-amber-100 text-amber-800 border-amber-200'
     };
   }
 
   if (plan === 'normal') {
     return {
-      title: 'Текущий план: Normal',
-      hint: null,
-      pillClass: 'pill pill--ok',
-      pillText: 'Normal'
+      title: 'Normal',
+      hint: '',
+      pillClass: 'bg-emerald-100 text-emerald-800 border-emerald-200'
     };
   }
 
@@ -46,141 +43,99 @@ function planMeta(plan, trialEndsAt) {
   const dueSoon = daysLeft !== null && daysLeft <= 3;
 
   return {
-    title: 'Текущий план: Trial',
-    hint: trialEndsAt
-      ? expired
-        ? `Trial закончился ${formatDateOnly(trialEndsAt)}. Пора переводить контур на рабочий тариф.`
-        : dueSoon
-          ? `Trial до ${formatDateOnly(trialEndsAt)}. Осталось ${Math.max(daysLeft, 0)} дн.`
-          : `Trial до ${formatDateOnly(trialEndsAt)}. Пока есть время спокойно собрать контур.`
-      : 'Trial включен, но дата окончания пока не прописана.',
-    pillClass: dueSoon || expired ? 'pill pill--danger' : 'pill pill--info',
-    pillText: expired ? 'Trial истек' : 'Trial'
+    title: expired ? 'Trial истек' : 'Trial',
+    hint: trialEndsAt ? (expired ? `Истек ${formatDateOnly(trialEndsAt)}` : `До ${formatDateOnly(trialEndsAt)}`) : 'Активирован',
+    pillClass: dueSoon || expired ? 'bg-red-100 text-red-800 border-red-200' : 'bg-blue-100 text-blue-800 border-blue-200'
   };
 }
 
-function packageSignalStatusText(status) {
-  if (status === 'failed') return 'Handoff сломан';
-  if (status === 'awaiting_receipt') return 'Ждет ручную проверку';
-  if (status === 'pending') return 'Checkout открыт';
-  if (status === 'paid') return 'Уже куплено';
-  if (status === 'expired') return 'Протухший checkout';
-  return 'Есть движение';
-}
-
-function packageSignalPillClass(tone) {
-  if (tone === 'danger') return 'pill pill--danger';
-  if (tone === 'warning') return 'pill pill--warning';
-  if (tone === 'ok') return 'pill pill--ok';
-  return 'pill pill--info';
-}
-
-function packageSignalTitle(signal) {
-  if (signal.id === 'trial') return 'Trial';
-  if (signal.id === 'normal') return 'Normal';
-  return 'Seller mode';
-}
-
-function sellerModeTitle(sellerCanSellAssets) {
-  return sellerCanSellAssets ? 'Asset marketplace' : 'P2P seller';
-}
-
-function packageSignalHint(signal, profilePlan) {
-  if (signal.id === 'trial') {
-    if (signal.status === 'paid') {
-      return 'Trial уже куплен. Теперь не зависай в витрине: забери бесплатный прокси, подключи первого юзербота и собери первый рабочий контур.';
-    }
-    if (signal.status === 'pending') {
-      return 'Входной Trial checkout уже открыт. Сначала закрой его, а не запускай новый сценарий сверху.';
-    }
-    if (signal.status === 'awaiting_receipt') {
-      return 'Trial уже ждет ручной проверки. Не плодись новыми оплатами, пока этот хвост не разберут.';
-    }
-    if (signal.status === 'failed') {
-      return 'Оплата уже была, но handoff сломан. Сначала добей входной Trial, потом двигайся дальше.';
-    }
-    return 'Стартовый пакет BullRun: первый checkout, первый юзербот и первый money-ops контур.';
-  }
-
-  if (signal.id === 'normal') {
-    if (signal.status === 'paid' || profilePlan === 'normal' || profilePlan === 'pro') {
-      return 'Normal уже открыт. Следующий шаг — снять trial-стопоры и дожать CRM, рассылки, seller-flow и второй юзербот.';
-    }
-    if (signal.status === 'pending') {
-      return 'Апгрейд на Normal уже открыт. Закрой checkout и только потом расширяй рабочий контур.';
-    }
-    if (signal.status === 'awaiting_receipt') {
-      return 'Normal уже ждет ручной проверки. Не открывай новый апгрейд поверх этого хвоста.';
-    }
-    if (signal.status === 'failed') {
-      return 'Normal уже оплачен, но handoff сломан. Сначала почини апгрейд, потом двигайся в seller и масштабирование.';
-    }
-    return 'Основной рабочий пакет: снимает Trial-лимиты и открывает полноценный money ops stack.';
-  }
-
-  if (signal.status === 'paid') {
-    return 'Seller mode уже куплен. Теперь важны inventory, seller-аккаунт, публикация лотов и чистый handoff продаж.';
-  }
-  if (signal.status === 'pending') {
-    return 'Seller checkout уже открыт. Сначала добей его, потом открывай seller admin и собирай витрину.';
-  }
-  if (signal.status === 'awaiting_receipt') {
-    return 'Seller mode уже ждет ручной проверки. Не запускай новый seller-flow, пока этот checkout не разберут.';
-  }
-  if (signal.status === 'failed') {
-    return 'Seller уже оплачен, но передача прав сломалась. Сначала разбери handoff, потом открывай продажу лотов.';
-  }
-  return 'Seller mode нужен, когда Trial/Normal уже собраны и пора продавать офферы, активы и базы через BullRun.';
-}
-
-function packageSignalHref(signal, profilePlan) {
-  if (signal.id === 'trial') return signal.href || '/shop?offer=trial';
-  if (signal.id === 'normal') {
-    return signal.href || (profilePlan === 'trial' ? '/shop?offer=normal' : '/app/shop');
-  }
-  return signal.href || (profilePlan === 'normal' || profilePlan === 'pro' ? '/app/shop' : '/shop?offer=seller');
-}
-
-function ChecklistItem({ item }) {
-  const stateClass = item.state === 'done'
-    ? 'checklist__item checklist__item--ok'
-    : 'checklist__item checklist__item--warn';
-  const indexState = item.state === 'done' ? 'done' : 'todo';
+function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
+  const completed = steps.filter(s => s.state === 'done').length;
+  const total = steps.length;
+  const progress = Math.round((completed / total) * 100);
 
   return (
-    <div className={stateClass}>
-      <div className="checklist__row">
-        <div className="checklist__step">
-          <span className={`checklist__index checklist__index--${indexState}`}>{item.index}</span>
-          <a className="checklist__title checklist__title-link" href={item.href}>
-            {item.title}
-          </a>
+    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-2 relative overflow-hidden">
+      <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
+        <MainIcon className="w-32 h-32" />
+      </div>
+      
+      <div className="relative">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100">
+            <MainIcon className="w-5 h-5 text-slate-700" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 tracking-tight">{title}</h3>
+        </div>
+        
+        <p className="text-sm text-slate-500 leading-relaxed mb-5 pr-4">
+          {description}
+        </p>
+        
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out" 
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            {completed} / {total}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {steps.map((step) => {
+            const StepIcon = ICONS[step.icon];
+            const isDone = step.state === 'done';
+            
+            return (
+              <a 
+                key={step.id} 
+                href={step.href}
+                className={`
+                  group relative flex items-center gap-4 p-3.5 rounded-2xl transition-all duration-300 border
+                  ${isDone ? 'bg-slate-50/50 border-transparent hover:bg-slate-50' : 
+                    'bg-white border-slate-100 hover:border-slate-200 hover:shadow-sm'}
+                `}
+              >
+                <div className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
+                  {isDone ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-slate-200 group-hover:text-slate-300" />
+                  )}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className={`text-sm font-bold truncate transition-colors ${isDone ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  <p className={`text-xs mt-0.5 truncate transition-colors ${isDone ? 'text-slate-300' : 'text-slate-500 group-hover:text-slate-600'}`}>
+                    {step.hint}
+                  </p>
+                </div>
+
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-hover:bg-slate-50">
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                </div>
+              </a>
+            );
+          })}
         </div>
       </div>
-      {item.hint ? <div className="checklist__hint">{item.hint}</div> : null}
     </div>
   );
 }
 
 export function OpsChecklistRail() {
-  const {
-    accessToken,
-    loading,
-    user,
-    profileRole,
-    profilePlan,
-    trialStartedAt,
-    trialEndsAt,
-    login,
-    logout
-  } = useAuth();
+  const { accessToken, user, login, logout, profilePlan, trialEndsAt } = useAuth();
   const [state, setState] = useState({
     loading: true,
-    error: '',
     summary: null,
     paymentReadiness: null,
-    buyerPackageSignals: [],
-    updatedAt: null
   });
 
   useEffect(() => {
@@ -207,300 +162,174 @@ export function OpsChecklistRail() {
         const paymentReadiness = settings
           ? {
               ...(data.paymentReadiness || {}),
-              hasSettings: true,
               hasTon: !!settings.ton_wallet,
               hasSbp: !!settings.sbp_phone,
-              adminTgId: settings.admin_tg_id ? String(settings.admin_tg_id) : ''
             }
           : (data.paymentReadiness || {});
+
         if (cancelled) return;
         setState({
           loading: false,
-          error: '',
           summary: {
             ...(data.summary || {}),
             tariffCount
           },
           paymentReadiness,
-          buyerPackageSignals: data.buyerPackageSignals || [],
-          updatedAt: new Date().toISOString()
         });
       } catch (error) {
         if (cancelled) return;
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: error.message
-        }));
+        setState(prev => ({ ...prev, loading: false }));
       }
     }
 
     loadData();
     const intervalId = accessToken ? window.setInterval(loadData, 60_000) : null;
-    const refreshHandler = (event) => {
-      if (event?.detail?.paymentReadiness) {
-        setState((prev) => ({
-          ...prev,
-          paymentReadiness: {
-            ...(prev.paymentReadiness || {}),
-            ...event.detail.paymentReadiness
-          },
-          updatedAt: new Date().toISOString()
-        }));
-      }
-      window.setTimeout(() => {
-        loadData();
-      }, 150);
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('bullrun:payment-settings-updated', refreshHandler);
-    }
-
     return () => {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('bullrun:payment-settings-updated', refreshHandler);
-      }
     };
   }, [accessToken, user?.id]);
 
-  const currentPlan = useMemo(() => planMeta(profilePlan, trialEndsAt), [profilePlan, trialEndsAt]);
-  const trialHoursLeft = useMemo(() => getTrialHoursLeft(trialEndsAt), [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
-  const buyerPackageSignals = state.buyerPackageSignals || [];
-  const sellerCanSellAssets = profileRole === 'admin';
-  const sellerSignal = buyerPackageSignals.find((signal) => signal.id === 'seller');
-
-  const sellerPulse = useMemo(() => {
-    if (!sellerSignal && profilePlan === 'trial') return null;
-
-    if (!sellerSignal) {
-      return {
-        title: sellerModeTitle(sellerCanSellAssets),
-        hint: sellerCanSellAssets
-          ? 'Когда Trial и Normal уже собраны, следующий слой денег — собрать seller inventory, seller-аккаунт и handoff активов.'
-          : 'Когда Trial и Normal уже собраны, следующий слой денег — скрытые P2P-офферы, TON/P2P checkout и buyer-side handoff без ручной каши.',
-        href: sellerCanSellAssets ? '/shop?offer=seller' : '/shop?offer=seller',
-        pillClass: 'pill',
-        pillText: 'Следующий слой'
-      };
-    }
-
-    if (sellerSignal.status === 'paid') {
-      return {
-        title: sellerModeTitle(sellerCanSellAssets),
-        hint: sellerCanSellAssets
-          ? 'Seller mode уже открыт. Теперь важны inventory, seller-аккаунт, опубликованные лоты и чистый handoff активов.'
-          : 'P2P seller уже открыт. Теперь ключевые шаги — реквизиты, hidden-message оффер и buyer-side handoff без ручной возни.',
-        href: '/app/shop',
-        pillClass: 'pill pill--ok',
-        pillText: 'Открыт'
-      };
-    }
-
-    if (sellerSignal.status === 'pending') {
-      return {
-        title: sellerModeTitle(sellerCanSellAssets),
-        hint: 'Seller checkout уже открыт. Сначала добей текущую покупку, а не запускай новый seller-сценарий сверху.',
-        href: '/shop?offer=seller',
-        pillClass: 'pill pill--warning',
-        pillText: 'Checkout открыт'
-      };
-    }
-
-    if (sellerSignal.status === 'awaiting_receipt') {
-      return {
-        title: sellerModeTitle(sellerCanSellAssets),
-        hint: 'Seller checkout уже ждет ручной проверки. Не плодись новыми апгрейдами, пока этот хвост не закроют.',
-        href: '/shop?offer=seller',
-        pillClass: 'pill pill--warning',
-        pillText: 'Ждет чек'
-      };
-    }
-
-    if (sellerSignal.status === 'failed') {
-      return {
-        title: sellerModeTitle(sellerCanSellAssets),
-        hint: 'Seller mode уже оплачен, но handoff сломан. Сначала добей передачу прав, потом открывай seller-операционку.',
-        href: '/shop?offer=seller',
-        pillClass: 'pill pill--danger',
-        pillText: 'Handoff сломан'
-      };
-    }
-
-    return {
-      title: sellerModeTitle(sellerCanSellAssets),
-      hint: sellerCanSellAssets
-        ? 'Seller mode нужен, когда пора продавать активы BullRun: прокси, юзерботов, комплекты и базы.'
-        : 'Seller mode нужен, когда пора закрывать P2P/hidden-message офферы на сайте как отдельный денежный слой.',
-      href: '/shop?offer=seller',
-      pillClass: 'pill',
-      pillText: 'Следующий слой'
-    };
-  }, [profilePlan, sellerCanSellAssets, sellerSignal]);
-
-  const checklist = useMemo(() => {
+  const checklists = useMemo(() => {
     const summary = state.summary || {};
     const payment = state.paymentReadiness || {};
 
-    const coreSteps = [
+    const botSteps = [
       {
-        key: 'payments',
+        id: 'payments',
         done: !!payment.hasTon || !!payment.hasSbp,
-        title: 'Заполнить реквизиты',
-        hint: '',
+        title: 'Способы оплаты',
+        hint: 'Укажите реквизиты для приема платежей',
         href: '/app/payments',
-        linkInTitle: true
+        icon: 'CreditCard'
       },
       {
-        key: 'official-bot',
+        id: 'bot',
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
-        title: 'Создать бота',
-        hint: '',
+        title: 'Telegram бот',
+        hint: 'Создайте бота для автоматизации продаж',
         href: '/app/botfather',
-        linkInTitle: true
+        icon: 'Bot'
       },
       {
-        key: 'plans',
+        id: 'plans',
         done: (summary.tariffCount || 0) > 0,
-        title: 'Заполнить тарифы',
-        hint: '',
+        title: 'Тарифы и доступ',
+        hint: 'Настройте стоимость и сроки подписки',
         href: '/app/plans',
-        linkInTitle: true
+        icon: 'LayoutList'
       },
       {
-        key: 'referrals',
-        done: false,
+        id: 'referrals',
+        done: false, // Could be linked to state in future
         title: 'Рефералка',
-        hint: '',
+        hint: 'Настройте бонусную программу',
         href: '/app/referrals',
-        linkInTitle: true
+        icon: 'Users'
       }
     ];
 
     const userbotSteps = [
       {
-        key: 'proxy',
+        id: 'proxy',
         done: (summary.proxyCount || 0) > 0,
-        title: 'Создай прокси',
-        hint: '',
+        title: 'Прокси-сервер',
+        hint: 'Подключите IPv4 прокси',
         href: '/app/proxies',
-        linkInTitle: true
+        icon: 'Globe'
       },
       {
-        key: 'userbot',
+        id: 'userbot',
         done: (summary.userbotCount || 0) > 0,
-        title: 'Подключи юзербота',
-        hint: (summary.userbotCount || 0) > 0
-          ? 'Юзербот уже подключен. Telegram-контур начал собираться.'
-          : '',
+        title: 'Аккаунт юзербота',
+        hint: 'Авторизуйте рабочий Telegram аккаунт',
         href: '/app/userbots',
-        linkInTitle: true
+        icon: 'Smartphone'
       }
     ];
 
     const processSteps = (steps) => {
-      let firstPendingFound = false;
-      return steps.map((item, index) => {
-        let state = 'todo';
-        if (item.done) {
-          state = 'done';
-        } else if (!firstPendingFound) {
-          state = 'active';
-          firstPendingFound = true;
-        }
-
-        return {
-          ...item,
-          index: index + 1,
-          state
-        };
-      });
+      return steps.map((item) => ({
+        ...item,
+        state: item.done ? 'done' : 'todo'
+      }));
     };
 
     return {
-      core: processSteps(coreSteps),
+      bot: processSteps(botSteps),
       userbots: processSteps(userbotSteps)
     };
-  }, [accessToken, login, state.paymentReadiness, state.summary, user]);
+  }, [state.paymentReadiness, state.summary]);
 
   const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор BullRun';
   const profileEmail = user?.email || '';
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
-  const planText = currentPlan?.pillText || 'План не определен';
-  const summary = state.summary || {};
+
+  const currentPlan = useMemo(() => planMeta(profilePlan, trialEndsAt), [profilePlan, trialEndsAt]);
 
   return (
-    <aside className="ops-rail">
-      <div className="ops-rail__card ops-rail__card--profile ops-rail__card--surface">
-        <div className="sidebar-profile__head">
+    <aside className="ops-rail font-sans">
+      <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4">
+        <div className="flex items-center gap-3 mb-4">
           {avatarUrl ? (
-            <img className="sidebar-profile__avatar" src={avatarUrl} alt={profileName} />
+            <img src={avatarUrl} alt={profileName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
           ) : (
-            <div className="sidebar-profile__fallback">{profileInitial}</div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center text-white font-bold">
+              {profileInitial}
+            </div>
           )}
-          <div className="sidebar-profile__info">
-            <div className="sidebar-profile__name sidebar-profile__name--dark">{profileName}</div>
-            <div className="sidebar-profile__email sidebar-profile__email--dark">{profileEmail || 'Без email в профиле'}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-slate-900 truncate">{profileName}</div>
+            <div className="text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</div>
           </div>
         </div>
-        <div className="sidebar-profile__plan">
-          <div className="sidebar-profile__plan-row">
-            <a
-              className={`sidebar-profile__plan-value ${currentPlan?.pillClass || 'pill pill--info'}`}
-              href="/pricing"
-            >
-              {planText}
-            </a>
+
+        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+          <div className="flex items-center gap-2">
+            <Crown className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
           </div>
-          {currentPlan?.hint ? (
-            <div className="sidebar-profile__plan-hint">{currentPlan.hint}</div>
-          ) : null}
+          <div className="flex flex-col items-end">
+            <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
+              {currentPlan.title}
+            </span>
+            <span className="text-[10px] text-slate-400 mt-1 font-medium">{currentPlan.hint}</span>
+          </div>
         </div>
+
         {user ? (
-          <button className="sidebar-profile__logout sidebar-profile__logout--dark" onClick={logout}>
+          <button 
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm"
+          >
+            <LogOut className="w-3.5 h-3.5" />
             Выйти из системы
           </button>
         ) : (
-          <button className="sidebar-profile__logout sidebar-profile__logout--dark" onClick={login}>
+          <button 
+            onClick={login}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+          >
+            <LogIn className="w-3.5 h-3.5" />
             Войти через Google
           </button>
         )}
       </div>
 
-      <div className="ops-rail__card ops-rail__card--surface ops-rail__card--checklist">
-        <div className="ops-rail__stack">
-          {checklist.core.map((item) => (
-            <ChecklistItem key={item.key} item={item} />
-          ))}
-        </div>
+      <ChecklistGroup 
+        title="Продажа доступа" 
+        description="Настройка автоматической выдачи инвайтов в приватные группы после оплаты."
+        steps={checklists.bot}
+        icon={Bot}
+      />
 
-        <div className="ops-rail__divider-text">Настройка юзербота</div>
-
-        <div className="ops-rail__stack">
-          {checklist.userbots.map((item) => (
-            <ChecklistItem key={item.key} item={item} />
-          ))}
-        </div>
-      </div>
-
-      <div className="ops-rail__card ops-rail__card--profile ops-rail__card--surface">
-        <div className="ops-rail__text">
-          Проверка чеков:{' '}
-          <strong className="status-text status-text--ok">
-            под рукой
-          </strong>
-        </div>
-        <div className="ops-rail__text">
-          Сюда падают СБП-чеки, которые покупатель уже отправил и которые надо подтвердить или отклонить вручную.
-        </div>
-        <a className="checklist__link checklist__link--gradient" href="/app/shop-receipts">
-          Открыть проверку чеков
-        </a>
-      </div>
-
+      <ChecklistGroup 
+        title="Юзерботы" 
+        description="Инфраструктура для рассылок и инвайтинга с рабочих аккаунтов Telegram."
+        steps={checklists.userbots}
+        icon={Rocket}
+      />
     </aside>
   );
 }

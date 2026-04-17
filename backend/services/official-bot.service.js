@@ -699,7 +699,7 @@ export class OfficialBotService {
                 .select('*')
                 .eq('owner_id', ownerId)
                 .eq('tg_user_id', String(tgUserId))
-                .in('status', ['requested', 'queued'])
+                .in('status', ['requested', 'queued', 'sending'])
                 .order('requested_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();

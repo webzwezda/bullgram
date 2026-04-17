@@ -1,6 +1,10 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
-import { getReferralEconomics, loadReferralReserveState } from '../services/referral-reserve.service.js';
+import {
+    getReferralEconomics,
+    loadReferralReserveState,
+    reconcileReferralReserveAccount
+} from '../services/referral-reserve.service.js';
 
 function createEmptyResponse() {
     return {
@@ -38,15 +42,82 @@ function createEmptyResponse() {
 
 export default function referralRoutes(supabase) {
     const router = express.Router();
+    const ACTIVE_PAYOUT_REQUEST_STATUSES = ['requested', 'queued', 'sending'];
 
     function normalizeCurrencyAmount(currency, amount) {
         const decimals = currency === 'RUB' ? 2 : 6;
         return Number(Number(amount || 0).toFixed(decimals));
     }
 
-    async function markReferralPayout(ownerId, tgUserId, currency, amount, note, payoutRequestId = null) {
+    async function restoreReferralBalance(profileId, balanceField, expectedBalance, restoreBalance) {
+        const { error } = await supabase
+            .from('referral_profiles')
+            .update({ [balanceField]: restoreBalance })
+            .eq('id', profileId)
+            .eq(balanceField, expectedBalance);
+
+        return error;
+    }
+
+    async function recordReferralNetworkFee(ownerId, payoutRequest, networkFeeTon, chainTxHash = null) {
+        const feeTon = normalizeCurrencyAmount('TON', networkFeeTon);
+        if (!payoutRequest?.id || !Number.isFinite(feeTon) || feeTon <= 0) {
+            return null;
+        }
+
+        const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: false });
+        if (!reserve?.id) {
+            return null;
+        }
+
+        const { error: ledgerError } = await supabase
+            .from('referral_reserve_ledger')
+            .insert({
+                owner_id: ownerId,
+                reserve_account_id: reserve.id,
+                entry_type: 'network_fee_reserved',
+                amount_ton: feeTon,
+                direction: 'debit',
+                related_payout_id: payoutRequest.id,
+                chain_tx_hash: chainTxHash || null,
+                payload: {
+                    payout_request_id: payoutRequest.id,
+                    tg_user_id: String(payoutRequest.tg_user_id),
+                    ton_wallet: payoutRequest.ton_wallet,
+                    source: 'manual_payout_marked'
+                }
+            });
+
+        if (ledgerError) throw ledgerError;
+
+        await reconcileReferralReserveAccount(supabase, {
+            id: reserve.id,
+            owner_id: ownerId,
+            deposit_address: reserve.depositAddress || null,
+            minimum_deposit_ton: reserve.minimumDepositTon,
+            total_deposited_ton: reserve.totalDepositedTon,
+            available_reserve_ton: reserve.availableReserveTon,
+            reserved_obligations_ton: reserve.reservedObligationsTon,
+            admin_debt_ton: reserve.adminDebtTon,
+            bullrun_fee_accrued_ton: reserve.bullrunFeeTon,
+            network_fee_accrued_ton: reserve.networkFeeTon,
+            locked_until: reserve.lockedUntil || null,
+            last_deposit_at: reserve.lastDepositAt || null,
+            status: reserve.status
+        });
+
+        return { feeTon, reserveAccountId: reserve.id };
+    }
+
+    async function markReferralPayout(ownerId, tgUserId, currency, amount, note, payoutRequestId = null, payoutMeta = {}) {
         const normalizedCurrency = String(currency || '').toUpperCase();
         const amountNumber = Number(amount || 0);
+        const hasChainTxHash = Object.prototype.hasOwnProperty.call(payoutMeta || {}, 'chain_tx_hash');
+        const chainTxHash = hasChainTxHash ? String(payoutMeta.chain_tx_hash || '').trim() : '';
+        const hasNetworkFeeTon = Object.prototype.hasOwnProperty.call(payoutMeta || {}, 'network_fee_ton')
+            && payoutMeta.network_fee_ton !== null
+            && payoutMeta.network_fee_ton !== '';
+        const networkFeeTon = hasNetworkFeeTon ? normalizeCurrencyAmount('TON', payoutMeta.network_fee_ton) : 0;
 
         if (!tgUserId) {
             return { error: 'Не передан Telegram ID партнера', status: 400 };
@@ -58,6 +129,22 @@ export default function referralRoutes(supabase) {
 
         if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
             return { error: 'Сумма выплаты должна быть больше нуля', status: 400 };
+        }
+
+        if (chainTxHash && normalizedCurrency !== 'TON') {
+            return { error: 'chain_tx_hash можно указывать только для TON-выплаты', status: 400 };
+        }
+
+        if (chainTxHash.length > 256) {
+            return { error: 'chain_tx_hash слишком длинный', status: 400 };
+        }
+
+        if (hasNetworkFeeTon && normalizedCurrency !== 'TON') {
+            return { error: 'network_fee_ton можно указывать только для TON-выплаты', status: 400 };
+        }
+
+        if (hasNetworkFeeTon && (!Number.isFinite(networkFeeTon) || networkFeeTon < 0)) {
+            return { error: 'network_fee_ton должен быть числом не меньше нуля', status: 400 };
         }
 
         const { data: profile, error: profileError } = await supabase
@@ -93,7 +180,7 @@ export default function referralRoutes(supabase) {
                 .select('*')
                 .eq('owner_id', ownerId)
                 .eq('tg_user_id', String(tgUserId))
-                .in('status', ['requested', 'queued'])
+                .in('status', ACTIVE_PAYOUT_REQUEST_STATUSES)
                 .order('requested_at', { ascending: false })
                 .limit(1);
 
@@ -104,7 +191,7 @@ export default function referralRoutes(supabase) {
                     .eq('owner_id', ownerId)
                     .eq('tg_user_id', String(tgUserId))
                     .eq('id', payoutRequestId)
-                    .in('status', ['requested', 'queued'])
+                    .in('status', ACTIVE_PAYOUT_REQUEST_STATUSES)
                     .limit(1);
             }
 
@@ -127,6 +214,27 @@ export default function referralRoutes(supabase) {
                     };
                 }
             }
+
+            if ((chainTxHash || hasNetworkFeeTon) && !activePayoutRequest) {
+                return { error: 'chain_tx_hash и network_fee_ton можно писать только при закрытии TON-заявки', status: 400 };
+            }
+
+            if (chainTxHash) {
+                const { data: existingHashRows, error: hashError } = await supabase
+                    .from('referral_partner_payouts')
+                    .select('id')
+                    .eq('chain_tx_hash', chainTxHash)
+                    .limit(1);
+
+                if (hashError && !(hashError.message || '').includes('referral_partner_payouts')) {
+                    throw hashError;
+                }
+
+                const existingHash = existingHashRows?.[0] || null;
+                if (existingHash && existingHash.id !== activePayoutRequest.id) {
+                    return { error: 'Этот chain_tx_hash уже привязан к другой выплате', status: 409 };
+                }
+            }
         }
 
         if (normalizedAmount > currentBalance) {
@@ -138,12 +246,77 @@ export default function referralRoutes(supabase) {
 
         const nextBalance = normalizeCurrencyAmount(normalizedCurrency, currentBalance - normalizedAmount);
 
-        const { error: updateError } = await supabase
+        const { data: balanceUpdateRows, error: updateError } = await supabase
             .from('referral_profiles')
             .update({ [balanceField]: nextBalance })
-            .eq('id', profile.id);
+            .eq('id', profile.id)
+            .eq(balanceField, currentBalance)
+            .select('id')
+            .limit(1);
 
         if (updateError) throw updateError;
+
+        if (!balanceUpdateRows?.length) {
+            return { error: 'Баланс партнера изменился. Обнови экран и повтори выплату.', status: 409 };
+        }
+
+        const effectiveNetworkFeeTon = activePayoutRequest
+            ? (hasNetworkFeeTon ? networkFeeTon : normalizeCurrencyAmount('TON', activePayoutRequest.network_fee_ton || 0))
+            : 0;
+        const effectiveChainTxHash = activePayoutRequest
+            ? (chainTxHash || activePayoutRequest.chain_tx_hash || null)
+            : null;
+        const auditPayload = {
+            note: note || null,
+            balance_before: currentBalance,
+            balance_after: nextBalance,
+            payout_request_id: activePayoutRequest?.id || null,
+            payout_request_status_before: activePayoutRequest?.status || null,
+            payout_request_status_after: activePayoutRequest ? 'sent' : null,
+            chain_tx_hash: effectiveChainTxHash,
+            network_fee_ton: effectiveNetworkFeeTon,
+            manual_payout_path: true
+        };
+
+        let updatedPayoutRequest = null;
+
+        if (activePayoutRequest) {
+            const { data: requestUpdateRows, error: requestUpdateError } = await supabase
+                .from('referral_partner_payouts')
+                .update({
+                    status: 'sent',
+                    sent_at: new Date().toISOString(),
+                    failure_reason: null,
+                    chain_tx_hash: effectiveChainTxHash,
+                    network_fee_ton: effectiveNetworkFeeTon,
+                    payload: {
+                        ...(activePayoutRequest.payload || {}),
+                        settled_by_admin: true,
+                        settled_note: note || null,
+                        balance_before: currentBalance,
+                        balance_after: nextBalance,
+                        chain_tx_hash: effectiveChainTxHash,
+                        network_fee_ton: effectiveNetworkFeeTon,
+                        previous_status: activePayoutRequest.status,
+                        next_status: 'sent'
+                    }
+                })
+                .eq('id', activePayoutRequest.id)
+                .in('status', ACTIVE_PAYOUT_REQUEST_STATUSES)
+                .select('id, status, chain_tx_hash, network_fee_ton')
+                .limit(1);
+
+            if (requestUpdateError || !requestUpdateRows?.length) {
+                const rollbackError = await restoreReferralBalance(profile.id, balanceField, nextBalance, currentBalance);
+                if (rollbackError) {
+                    console.error('Ошибка отката баланса referral payout после request failure:', rollbackError);
+                }
+                if (requestUpdateError) throw requestUpdateError;
+                return { error: 'Статус заявки изменился. Обнови экран и повтори выплату.', status: 409 };
+            }
+
+            updatedPayoutRequest = requestUpdateRows[0];
+        }
 
         const { error: eventError } = await supabase
             .from('referral_events')
@@ -157,40 +330,41 @@ export default function referralRoutes(supabase) {
                 status: 'completed',
                 reward_amount: normalizedAmount,
                 reward_currency: normalizedCurrency,
-                payload: {
-                    note: note || null,
-                    balance_before: currentBalance,
-                    balance_after: nextBalance,
-                    payout_request_id: activePayoutRequest?.id || null
-                }
+                network_fee_ton_amount: normalizedCurrency === 'TON' ? effectiveNetworkFeeTon : null,
+                payload: auditPayload
             });
 
         if (eventError) {
+            const rollbackError = await restoreReferralBalance(profile.id, balanceField, nextBalance, currentBalance);
+            if (rollbackError) {
+                console.error('Ошибка отката баланса referral payout после event failure:', rollbackError);
+            }
+            if (activePayoutRequest && updatedPayoutRequest) {
+                const { error: requestRollbackError } = await supabase
+                    .from('referral_partner_payouts')
+                    .update({
+                        status: activePayoutRequest.status,
+                        sent_at: activePayoutRequest.sent_at || null,
+                        failure_reason: activePayoutRequest.failure_reason || null,
+                        chain_tx_hash: activePayoutRequest.chain_tx_hash || null,
+                        network_fee_ton: normalizeCurrencyAmount('TON', activePayoutRequest.network_fee_ton || 0),
+                        payload: activePayoutRequest.payload || {}
+                    })
+                    .eq('id', activePayoutRequest.id)
+                    .eq('status', 'sent');
+
+                if (requestRollbackError) {
+                    console.error('Ошибка отката referral payout request после event failure:', requestRollbackError);
+                }
+            }
             if ((eventError.message || '').includes('referral_events')) {
                 return { error: 'SQL под журнал выплат не применен до конца. Сначала добей базу.', status: 400 };
             }
             throw eventError;
         }
 
-        if (activePayoutRequest) {
-            const { error: requestUpdateError } = await supabase
-                .from('referral_partner_payouts')
-                .update({
-                    status: 'sent',
-                    sent_at: new Date().toISOString(),
-                    failure_reason: null,
-                    payload: {
-                        ...(activePayoutRequest.payload || {}),
-                        settled_by_admin: true,
-                        settled_note: note || null,
-                        balance_before: currentBalance,
-                        balance_after: nextBalance
-                    }
-                })
-                .eq('id', activePayoutRequest.id)
-                .in('status', ['requested', 'queued']);
-
-            if (requestUpdateError) throw requestUpdateError;
+        if (activePayoutRequest && effectiveNetworkFeeTon > 0) {
+            await recordReferralNetworkFee(ownerId, activePayoutRequest, effectiveNetworkFeeTon, effectiveChainTxHash);
         }
 
         return {
@@ -199,20 +373,22 @@ export default function referralRoutes(supabase) {
             currency: normalizedCurrency,
             amount: normalizedAmount,
             balance_after: nextBalance,
-            payout_request_id: activePayoutRequest?.id || null
+            payout_request_id: activePayoutRequest?.id || null,
+            chain_tx_hash: effectiveChainTxHash,
+            network_fee_ton: effectiveNetworkFeeTon
         };
     }
 
     async function updateReferralPayoutRequestStatus(ownerId, payoutRequestId, nextStatus, note = null) {
         const normalizedStatus = String(nextStatus || '').trim().toLowerCase();
-        const allowedStatuses = new Set(['queued', 'failed', 'cancelled']);
+        const allowedStatuses = new Set(['queued', 'sending', 'failed', 'cancelled']);
 
         if (!payoutRequestId) {
             return { error: 'Не передан ID заявки на выплату', status: 400 };
         }
 
         if (!allowedStatuses.has(normalizedStatus)) {
-            return { error: 'Заявку можно перевести только в queued, failed или cancelled. Sent закрывается через выплату.', status: 400 };
+            return { error: 'Заявку можно перевести только в queued, sending, failed или cancelled. Sent закрывается через выплату.', status: 400 };
         }
 
         const { data: request, error: requestError } = await supabase
@@ -233,7 +409,7 @@ export default function referralRoutes(supabase) {
             return { error: 'Заявка на выплату не найдена', status: 404 };
         }
 
-        if (!['requested', 'queued'].includes(String(request.status))) {
+        if (!ACTIVE_PAYOUT_REQUEST_STATUSES.includes(String(request.status))) {
             return { error: `Заявка уже в статусе ${request.status}`, status: 400 };
         }
 
@@ -253,14 +429,20 @@ export default function referralRoutes(supabase) {
             updatePayload.failed_at = now;
         }
 
-        const { error: updateError } = await supabase
+        const { data: statusUpdateRows, error: updateError } = await supabase
             .from('referral_partner_payouts')
             .update(updatePayload)
             .eq('id', request.id)
             .eq('owner_id', ownerId)
-            .in('status', ['requested', 'queued']);
+            .in('status', ACTIVE_PAYOUT_REQUEST_STATUSES)
+            .select('id')
+            .limit(1);
 
         if (updateError) throw updateError;
+
+        if (!statusUpdateRows?.length) {
+            return { error: 'Статус заявки изменился. Обнови экран и повтори действие.', status: 409 };
+        }
 
         const { error: eventError } = await supabase
             .from('referral_events')
@@ -278,6 +460,10 @@ export default function referralRoutes(supabase) {
                     payout_request_id: request.id,
                     previous_status: request.status,
                     next_status: normalizedStatus,
+                    manual_lifecycle_event: true,
+                    amount_ton: Number(request.amount_ton || 0),
+                    network_fee_ton: Number(request.network_fee_ton || 0),
+                    chain_tx_hash: request.chain_tx_hash || null,
                     ton_wallet: request.ton_wallet,
                     note: note || null
                 }
@@ -402,15 +588,20 @@ export default function referralRoutes(supabase) {
                 if (!latestPayoutByReferrer.has(key)) {
                     latestPayoutByReferrer.set(key, payout);
                 }
-                if (['requested', 'queued'].includes(String(payout.status))) {
+                if (ACTIVE_PAYOUT_REQUEST_STATUSES.includes(String(payout.status))) {
                     const current = pendingPayoutByReferrer.get(key);
+                    const currentNetworkFeeTon = Number(current?.network_fee_ton || 0);
+                    const payoutNetworkFeeTon = Number(payout.network_fee_ton || 0);
                     pendingPayoutByReferrer.set(key, {
                         id: current?.id || payout.id,
                         count: Number(current?.count || 0) + 1,
                         amount_ton: Number(current?.amount_ton || 0) + Number(payout.amount_ton || 0),
+                        network_fee_ton: currentNetworkFeeTon + payoutNetworkFeeTon,
                         status: current?.status || payout.status,
                         ton_wallet: current?.ton_wallet || payout.ton_wallet,
-                        requested_at: current?.requested_at || payout.requested_at
+                        chain_tx_hash: current?.chain_tx_hash || payout.chain_tx_hash || null,
+                        requested_at: current?.requested_at || payout.requested_at,
+                        sent_at: current?.sent_at || payout.sent_at || null
                     });
                 }
             }
@@ -467,8 +658,14 @@ export default function referralRoutes(supabase) {
                     pending_payout_count: pendingPayout?.count || 0,
                     pending_payout_wallet: pendingPayout?.ton_wallet || null,
                     pending_payout_requested_at: pendingPayout?.requested_at || null,
+                    pending_payout_sent_at: pendingPayout?.sent_at || null,
+                    pending_payout_chain_tx_hash: pendingPayout?.chain_tx_hash || null,
+                    pending_payout_network_fee_ton: pendingPayout ? Number(pendingPayout.network_fee_ton.toFixed(6)) : 0,
                     latest_payout_status: latestPayout?.status || null,
-                    latest_payout_requested_at: latestPayout?.requested_at || null
+                    latest_payout_requested_at: latestPayout?.requested_at || null,
+                    latest_payout_sent_at: latestPayout?.sent_at || null,
+                    latest_payout_chain_tx_hash: latestPayout?.chain_tx_hash || null,
+                    latest_payout_network_fee_ton: latestPayout ? normalizeCurrencyAmount('TON', latestPayout.network_fee_ton || 0) : 0
                 };
             });
 
@@ -604,10 +801,13 @@ export default function referralRoutes(supabase) {
 
     router.post('/payout', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
-        const { tg_user_id, currency, amount, note, payout_request_id } = req.body;
+        const { tg_user_id, currency, amount, note, payout_request_id, chain_tx_hash, network_fee_ton } = req.body;
 
         try {
-            const result = await markReferralPayout(ownerId, tg_user_id, currency, amount, note, payout_request_id);
+            const result = await markReferralPayout(ownerId, tg_user_id, currency, amount, note, payout_request_id, {
+                chain_tx_hash,
+                network_fee_ton
+            });
             if (result.error) {
                 return res.status(result.status || 400).json({ error: result.error });
             }
@@ -620,7 +820,13 @@ export default function referralRoutes(supabase) {
 
     router.post('/payout-request-status', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
-        const { payout_request_id, status, note } = req.body;
+        const { payout_request_id, status, note, chain_tx_hash, network_fee_ton } = req.body;
+
+        if (chain_tx_hash || network_fee_ton !== undefined) {
+            return res.status(400).json({
+                error: 'chain_tx_hash и network_fee_ton пишутся только через ручную отметку выплаты, не через смену статуса.'
+            });
+        }
 
         try {
             const result = await updateReferralPayoutRequestStatus(ownerId, payout_request_id, status, note);
@@ -652,7 +858,12 @@ export default function referralRoutes(supabase) {
                     payout?.tg_user_id,
                     payout?.currency,
                     payout?.amount,
-                    payout?.note || note || null
+                    payout?.note || note || null,
+                    payout?.payout_request_id || null,
+                    {
+                        chain_tx_hash: payout?.chain_tx_hash,
+                        network_fee_ton: payout?.network_fee_ton
+                    }
                 );
 
                 if (result.error) {

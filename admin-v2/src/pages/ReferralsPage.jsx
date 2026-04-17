@@ -27,6 +27,8 @@ function formatTon(value) {
 function eventBadge(event) {
   if (event?.event_type === 'reward_granted') return { text: 'Начисление', className: 'pill pill--ok' };
   if (event?.event_type === 'payout_marked') return { text: 'Выплата', className: 'pill pill--info' };
+  if (event?.event_type === 'payout_request_sending') return { text: 'Отправляется', className: 'pill pill--info' };
+  if (event?.event_type === 'payout_request_sent') return { text: 'Отправлена', className: 'pill pill--ok' };
   if (event?.event_type === 'payout_request_queued') return { text: 'В очереди', className: 'pill pill--info' };
   if (event?.event_type === 'payout_request_failed') return { text: 'Ошибка выплаты', className: 'pill pill--danger' };
   if (event?.event_type === 'payout_request_cancelled') return { text: 'Отклонена', className: 'pill pill--warning' };
@@ -41,11 +43,97 @@ function leadStatus(lead) {
 }
 
 function payoutStatusLabel(status) {
+  if (status === 'requested') return 'Запрошена';
   if (status === 'queued') return 'В очереди';
+  if (status === 'sending') return 'Отправляется';
   if (status === 'sent') return 'Отправлена';
   if (status === 'failed') return 'Ошибка';
   if (status === 'cancelled') return 'Отклонена';
   return 'Запрошена';
+}
+
+function payoutStatusTone(status) {
+  if (status === 'sent') return 'sent';
+  if (status === 'failed') return 'failed';
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'sending') return 'sending';
+  if (status === 'queued') return 'queued';
+  return 'requested';
+}
+
+function isPayoutEvent(event) {
+  return event?.event_type === 'payout_marked' || String(event?.event_type || '').startsWith('payout_request_');
+}
+
+function parsePayload(payload) {
+  if (!payload) return {};
+  if (typeof payload === 'object') return payload;
+  if (typeof payload !== 'string') return {};
+  try {
+    const parsed = JSON.parse(payload);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function firstPresent(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '');
+}
+
+function payoutTxHash(row) {
+  const payload = parsePayload(row?.payload);
+  return firstPresent(
+    row?.chain_tx_hash,
+    row?.pending_payout_chain_tx_hash,
+    row?.latest_payout_chain_tx_hash,
+    payload.chain_tx_hash,
+    payload.tx_hash,
+    payload.manual_sent?.chain_tx_hash,
+    payload.sender?.chain_tx_hash
+  );
+}
+
+function payoutNetworkFeeTon(row) {
+  const payload = parsePayload(row?.payload);
+  const fee = firstPresent(
+    row?.network_fee_ton,
+    row?.pending_payout_network_fee_ton,
+    row?.latest_payout_network_fee_ton,
+    payload.network_fee_ton,
+    payload.network_fee_ton_amount,
+    payload.manual_sent?.network_fee_ton,
+    payload.sender?.network_fee_ton
+  );
+  if (fee === undefined || fee === null || fee === '') return null;
+  const amount = Number(fee);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function shortTxHash(value) {
+  const hash = String(value || '').trim();
+  if (hash.length <= 22) return hash;
+  return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+}
+
+function PayoutChainDetails({ row }) {
+  const txHash = payoutTxHash(row);
+  const networkFeeTon = payoutNetworkFeeTon(row);
+
+  if (!txHash && networkFeeTon === null) return null;
+
+  return (
+    <div className="referrals-payout-chain">
+      {networkFeeTon !== null && (
+        <div className="referrals-payout-chain__item">Комиссия сети: {formatTon(networkFeeTon)}</div>
+      )}
+      {txHash && (
+        <div className="referrals-payout-chain__item">
+          Tx: <span className="referrals-payout-chain__hash" title={String(txHash)}>{shortTxHash(txHash)}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ReferralsPage() {
@@ -210,7 +298,7 @@ export function ReferralsPage() {
       return state.recentEvents.filter((event) => event.event_type === 'reward_granted');
     }
     if (filter === 'payouts') {
-      return state.recentEvents.filter((event) => event.event_type === 'payout_marked');
+      return state.recentEvents.filter(isPayoutEvent);
     }
     return state.recentEvents;
   }, [filter, state.recentEvents]);
@@ -311,6 +399,27 @@ export function ReferralsPage() {
       return;
     }
 
+    let chainTxHash = null;
+    let networkFeeTon = null;
+
+    if (normalizedCurrency === 'TON' && hasPendingTonRequest) {
+      const rawTxHash = window.prompt('Tx hash TON-перевода (если его нет — оставь пустым):', payoutTxHash(row) || '');
+      if (rawTxHash === null) return;
+
+      const defaultNetworkFee = payoutNetworkFeeTon(row) ?? '0';
+      const rawNetworkFee = window.prompt('Комиссия сети в TON:', String(defaultNetworkFee));
+      if (rawNetworkFee === null) return;
+
+      const parsedNetworkFee = Number(String(rawNetworkFee || '0').replace(',', '.'));
+      if (!Number.isFinite(parsedNetworkFee) || parsedNetworkFee < 0) {
+        window.alert('Комиссия сети должна быть числом не меньше нуля.');
+        return;
+      }
+
+      chainTxHash = rawTxHash.trim() || null;
+      networkFeeTon = parsedNetworkFee;
+    }
+
     const note = window.prompt('Примечание (карта, кошелек, дата):', '') || '';
     setState((prev) => ({ ...prev, payouting: true }));
     try {
@@ -322,6 +431,8 @@ export function ReferralsPage() {
           currency: normalizedCurrency,
           amount,
           note,
+          chain_tx_hash: chainTxHash,
+          network_fee_ton: networkFeeTon,
           payout_request_id: hasPendingTonRequest ? row.pending_payout_id : null
         }
       });
@@ -356,8 +467,10 @@ export function ReferralsPage() {
       ? 'ошибку выплаты'
       : nextStatus === 'cancelled'
         ? 'отклонение выплаты'
-        : 'перевод заявки в очередь';
-    const note = nextStatus === 'queued'
+        : nextStatus === 'sending'
+          ? 'начало отправки'
+          : 'перевод заявки в очередь';
+    const note = ['queued', 'sending'].includes(nextStatus)
       ? ''
       : window.prompt(`Комментарий про ${actionLabel}:`, '') || '';
 
@@ -626,57 +739,85 @@ export function ReferralsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.pendingPayouts.map((row) => (
-                    <tr key={row.pending_payout_id || row.tg_user_id} className="referrals-table__row">
-                      <td className="referrals-table__cell">
-                        <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
-                        <div className="referrals-partner-meta">ID: {row.tg_user_id}</div>
-                      </td>
-                      <td className="referrals-table__cell">
-                        <div className="referrals-partner-wallet-value">{row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}</div>
-                      </td>
-                      <td className="referrals-table__cell">
-                        <div className="referrals-balance referrals-balance--active">{formatTon(row.pending_payout_ton)}</div>
-                        <div className="referrals-balance-secondary">
-                          {payoutStatusLabel(row.pending_payout_status)} • {formatWhen(row.pending_payout_requested_at)}
-                        </div>
-                      </td>
-                      <td className="referrals-table__cell referrals-table__cell--right">
-                        <div className="referrals-actions">
-                          {row.pending_payout_status === 'requested' && (
-                            <button
-                              className="referrals-action-btn referrals-action-btn--payout"
-                              onClick={() => updatePayoutRequest(row, 'queued')}
-                              disabled={state.payouting}
-                            >
-                              В очередь
-                            </button>
-                          )}
-                          <button
-                            className="referrals-action-btn referrals-action-btn--payout"
-                            onClick={() => markPayout(row, 'TON')}
-                            disabled={state.payouting}
-                          >
-                            Отправлено
-                          </button>
-                          <button
-                            className="referrals-action-btn referrals-action-btn--warning"
-                            onClick={() => updatePayoutRequest(row, 'failed')}
-                            disabled={state.payouting}
-                          >
-                            Ошибка
-                          </button>
-                          <button
-                            className="referrals-action-btn referrals-action-btn--danger"
-                            onClick={() => updatePayoutRequest(row, 'cancelled')}
-                            disabled={state.payouting}
-                          >
-                            Отклонить
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {state.pendingPayouts.map((row) => {
+                    const payoutStatus = row.pending_payout_status || 'requested';
+                    const canQueue = payoutStatus === 'requested';
+                    const canStartSending = ['requested', 'queued'].includes(payoutStatus);
+                    const canMarkSent = ['requested', 'queued', 'sending'].includes(payoutStatus);
+                    const canFail = ['requested', 'queued', 'sending'].includes(payoutStatus);
+                    const canCancel = ['requested', 'queued'].includes(payoutStatus);
+
+                    return (
+                      <tr key={row.pending_payout_id || row.tg_user_id} className="referrals-table__row">
+                        <td className="referrals-table__cell">
+                          <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
+                          <div className="referrals-partner-meta">ID: {row.tg_user_id}</div>
+                        </td>
+                        <td className="referrals-table__cell">
+                          <div className="referrals-partner-wallet-value">{row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}</div>
+                          <PayoutChainDetails row={row} />
+                        </td>
+                        <td className="referrals-table__cell">
+                          <div className="referrals-balance referrals-balance--active">{formatTon(row.pending_payout_ton)}</div>
+                          <div className={`referrals-payout-status referrals-payout-status--${payoutStatusTone(payoutStatus)}`}>
+                            {payoutStatusLabel(payoutStatus)}
+                          </div>
+                          <div className="referrals-balance-secondary">
+                            {formatWhen(row.pending_payout_requested_at)}
+                          </div>
+                        </td>
+                        <td className="referrals-table__cell referrals-table__cell--right">
+                          <div className="referrals-actions">
+                            {canQueue && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--payout"
+                                onClick={() => updatePayoutRequest(row, 'queued')}
+                                disabled={state.payouting}
+                              >
+                                В очередь
+                              </button>
+                            )}
+                            {canStartSending && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--payout"
+                                onClick={() => updatePayoutRequest(row, 'sending')}
+                                disabled={state.payouting}
+                              >
+                                Отправляю
+                              </button>
+                            )}
+                            {canMarkSent && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--payout"
+                                onClick={() => markPayout(row, 'TON')}
+                                disabled={state.payouting}
+                              >
+                                Отправлено
+                              </button>
+                            )}
+                            {canFail && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--warning"
+                                onClick={() => updatePayoutRequest(row, 'failed')}
+                                disabled={state.payouting}
+                              >
+                                Ошибка
+                              </button>
+                            )}
+                            {canCancel && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--danger"
+                                onClick={() => updatePayoutRequest(row, 'cancelled')}
+                                disabled={state.payouting}
+                              >
+                                Отклонить
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -737,9 +878,15 @@ export function ReferralsPage() {
                             </div>
                             {Number(row.pending_payout_ton || 0) > 0 && (
                               <div className="referrals-partner-pending">
-                                Заявка: {formatTon(row.pending_payout_ton)}
+                                Заявка: {formatTon(row.pending_payout_ton)} • {payoutStatusLabel(row.pending_payout_status)}
                               </div>
                             )}
+                            {Number(row.pending_payout_ton || 0) <= 0 && row.latest_payout_status && (
+                              <div className={`referrals-payout-status referrals-payout-status--${payoutStatusTone(row.latest_payout_status)}`}>
+                                Последняя выплата: {payoutStatusLabel(row.latest_payout_status)}
+                              </div>
+                            )}
+                            <PayoutChainDetails row={row} />
                           </td>
                           <td className="referrals-table__cell">
                             <span className={`referrals-count-badge ${(row.total_referrals || 0) > 0 ? 'referrals-count-badge--positive' : ''}`}>
@@ -899,7 +1046,7 @@ export function ReferralsPage() {
                   <tbody>
                     {filteredEvents.slice(0, 30).map((event) => {
                       const badge = eventBadge(event);
-                      const isReward = badge.className === 'pill pill--ok';
+                      const isReward = event.event_type === 'reward_granted';
                       return (
                         <tr key={event.id} className="referrals-table__row">
                           <td className="referrals-table__cell referrals-table__cell--secondary">
@@ -917,6 +1064,7 @@ export function ReferralsPage() {
                             <span className={`referrals-event-amount ${isReward ? 'referrals-event-amount--reward' : ''}`}>
                               {event.reward_amount || 0} {event.reward_currency || ''}
                             </span>
+                            {!isReward && <PayoutChainDetails row={event} />}
                           </td>
                         </tr>
                       );
