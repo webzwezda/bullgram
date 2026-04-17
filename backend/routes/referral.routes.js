@@ -24,6 +24,7 @@ function createEmptyResponse() {
             paidOutUsdt: 0
         },
         topPartners: [],
+        leads: [],
         pendingPayouts: [],
         recentEvents: [],
         support: {
@@ -199,6 +200,98 @@ export default function referralRoutes(supabase) {
             amount: normalizedAmount,
             balance_after: nextBalance,
             payout_request_id: activePayoutRequest?.id || null
+        };
+    }
+
+    async function updateReferralPayoutRequestStatus(ownerId, payoutRequestId, nextStatus, note = null) {
+        const normalizedStatus = String(nextStatus || '').trim().toLowerCase();
+        const allowedStatuses = new Set(['queued', 'failed', 'cancelled']);
+
+        if (!payoutRequestId) {
+            return { error: 'Не передан ID заявки на выплату', status: 400 };
+        }
+
+        if (!allowedStatuses.has(normalizedStatus)) {
+            return { error: 'Заявку можно перевести только в queued, failed или cancelled. Sent закрывается через выплату.', status: 400 };
+        }
+
+        const { data: request, error: requestError } = await supabase
+            .from('referral_partner_payouts')
+            .select('*')
+            .eq('id', payoutRequestId)
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+
+        if (requestError) {
+            if ((requestError.message || '').includes('referral_partner_payouts')) {
+                return { error: 'SQL под заявки на выплаты еще не применен.', status: 400 };
+            }
+            throw requestError;
+        }
+
+        if (!request) {
+            return { error: 'Заявка на выплату не найдена', status: 404 };
+        }
+
+        if (!['requested', 'queued'].includes(String(request.status))) {
+            return { error: `Заявка уже в статусе ${request.status}`, status: 400 };
+        }
+
+        const now = new Date().toISOString();
+        const updatePayload = {
+            status: normalizedStatus,
+            failure_reason: normalizedStatus === 'failed' ? (note || 'Админ отметил ошибку выплаты') : null,
+            payload: {
+                ...(request.payload || {}),
+                manual_status: normalizedStatus,
+                manual_status_note: note || null,
+                manual_status_updated_at: now
+            }
+        };
+
+        if (normalizedStatus === 'failed') {
+            updatePayload.failed_at = now;
+        }
+
+        const { error: updateError } = await supabase
+            .from('referral_partner_payouts')
+            .update(updatePayload)
+            .eq('id', request.id)
+            .eq('owner_id', ownerId)
+            .in('status', ['requested', 'queued']);
+
+        if (updateError) throw updateError;
+
+        const { error: eventError } = await supabase
+            .from('referral_events')
+            .insert({
+                owner_id: ownerId,
+                referrer_tg_user_id: String(request.tg_user_id),
+                referred_tg_user_id: null,
+                invoice_id: null,
+                tariff_id: null,
+                event_type: `payout_request_${normalizedStatus}`,
+                status: 'completed',
+                reward_amount: Number(request.amount_ton || 0),
+                reward_currency: 'TON',
+                payload: {
+                    payout_request_id: request.id,
+                    previous_status: request.status,
+                    next_status: normalizedStatus,
+                    ton_wallet: request.ton_wallet,
+                    note: note || null
+                }
+            });
+
+        if (eventError && !(eventError.message || '').includes('referral_events')) {
+            throw eventError;
+        }
+
+        return {
+            success: true,
+            payout_request_id: request.id,
+            tg_user_id: String(request.tg_user_id),
+            status: normalizedStatus
         };
     }
 
@@ -379,6 +472,59 @@ export default function referralRoutes(supabase) {
                 };
             });
 
+            const partnerByTgId = new Map(
+                allPartnerRows.map(partner => [String(partner.tg_user_id), partner])
+            );
+
+            const rewardEventByInvoiceId = new Map();
+            const rewardEventByReferredId = new Map();
+            for (const event of completedRewards) {
+                if (event.invoice_id && !rewardEventByInvoiceId.has(String(event.invoice_id))) {
+                    rewardEventByInvoiceId.set(String(event.invoice_id), event);
+                }
+                if (event.referred_tg_user_id && !rewardEventByReferredId.has(String(event.referred_tg_user_id))) {
+                    rewardEventByReferredId.set(String(event.referred_tg_user_id), event);
+                }
+            }
+
+            payload.leads = attributions.map(attribution => {
+                const partner = partnerByTgId.get(String(attribution.referrer_tg_user_id)) || null;
+                const rewardEvent = attribution.paid_invoice_id
+                    ? rewardEventByInvoiceId.get(String(attribution.paid_invoice_id))
+                    : rewardEventByReferredId.get(String(attribution.referred_tg_user_id));
+                const expiresAt = attribution.expires_at || null;
+                const isExpired = expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
+                const converted = !!(attribution.converted_at || attribution.paid_invoice_id);
+
+                return {
+                    id: attribution.id,
+                    referred_tg_user_id: String(attribution.referred_tg_user_id),
+                    referred_username: attribution.referred_username || null,
+                    referred_display_name: attribution.referred_display_name || null,
+                    referrer_tg_user_id: String(attribution.referrer_tg_user_id),
+                    referrer_username: partner?.username || null,
+                    referrer_display_name: partner?.display_name || null,
+                    referral_code: attribution.referral_code || partner?.referral_code || null,
+                    first_seen_at: attribution.first_seen_at || attribution.created_at || null,
+                    last_seen_at: attribution.last_seen_at || null,
+                    expires_at: expiresAt,
+                    converted_at: attribution.converted_at || null,
+                    paid_invoice_id: attribution.paid_invoice_id || null,
+                    terms_status: attribution.terms_status || 'active',
+                    discount_eligible: !!attribution.discount_eligible && !isExpired,
+                    expired: isExpired,
+                    converted,
+                    reward_percent_snapshot: attribution.reward_percent_snapshot,
+                    client_discount_percent_snapshot: attribution.client_discount_percent_snapshot,
+                    reserve_status_snapshot: attribution.reserve_status_snapshot || null,
+                    reward_status: rewardEvent?.status || null,
+                    reward_amount: rewardEvent?.reward_amount || null,
+                    reward_currency: rewardEvent?.reward_currency || null,
+                    reward_ton_amount: rewardEvent?.reward_ton_amount || null,
+                    reserve_coverage_status: rewardEvent?.reserve_coverage_status || null
+                };
+            });
+
             const topPartners = [...allPartnerRows].sort((a, b) => {
                 const bPending = Number(b.pending_payout_ton || 0) > 0 ? 1 : 0;
                 const aPending = Number(a.pending_payout_ton || 0) > 0 ? 1 : 0;
@@ -469,6 +615,22 @@ export default function referralRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка payout по рефералке:', error);
             res.status(500).json({ error: 'Ошибка отметки выплаты партнеру' });
+        }
+    });
+
+    router.post('/payout-request-status', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+        const { payout_request_id, status, note } = req.body;
+
+        try {
+            const result = await updateReferralPayoutRequestStatus(ownerId, payout_request_id, status, note);
+            if (result.error) {
+                return res.status(result.status || 400).json({ error: result.error });
+            }
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка статуса referral payout request:', error);
+            res.status(500).json({ error: 'Ошибка обновления статуса заявки на выплату' });
         }
     });
 

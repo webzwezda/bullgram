@@ -27,7 +27,25 @@ function formatTon(value) {
 function eventBadge(event) {
   if (event?.event_type === 'reward_granted') return { text: 'Начисление', className: 'pill pill--ok' };
   if (event?.event_type === 'payout_marked') return { text: 'Выплата', className: 'pill pill--info' };
+  if (event?.event_type === 'payout_request_queued') return { text: 'В очереди', className: 'pill pill--info' };
+  if (event?.event_type === 'payout_request_failed') return { text: 'Ошибка выплаты', className: 'pill pill--danger' };
+  if (event?.event_type === 'payout_request_cancelled') return { text: 'Отклонена', className: 'pill pill--warning' };
   return { text: event?.event_type || '—', className: 'pill' };
+}
+
+function leadStatus(lead) {
+  if (lead?.converted) return { text: 'Оплатил', tone: 'reward' };
+  if (lead?.expired) return { text: 'Истекло', tone: 'muted' };
+  if (lead?.discount_eligible) return { text: 'Скидка жива', tone: 'ok' };
+  return { text: 'Без скидки', tone: 'warning' };
+}
+
+function payoutStatusLabel(status) {
+  if (status === 'queued') return 'В очереди';
+  if (status === 'sent') return 'Отправлена';
+  if (status === 'failed') return 'Ошибка';
+  if (status === 'cancelled') return 'Отклонена';
+  return 'Запрошена';
 }
 
 export function ReferralsPage() {
@@ -49,6 +67,7 @@ export function ReferralsPage() {
     settings: null,
     summary: {},
     topPartners: [],
+    leads: [],
     pendingPayouts: [],
     recentEvents: [],
     support: {},
@@ -82,6 +101,7 @@ export function ReferralsPage() {
             settings: data.settings || null,
             summary: data.summary || {},
             topPartners: data.topPartners || [],
+            leads: data.leads || [],
             pendingPayouts: data.pendingPayouts || [],
             recentEvents: data.recentEvents || [],
             support: data.support || {},
@@ -107,6 +127,7 @@ export function ReferralsPage() {
             settings: null,
             summary: {},
             topPartners: [],
+            leads: [],
             pendingPayouts: [],
             recentEvents: [],
             support: {},
@@ -160,6 +181,29 @@ export function ReferralsPage() {
       row.referral_code || ''
     ].join(' ').toLowerCase().includes(needle));
   }, [filter, search, state.topPartners]);
+
+  const filteredLeads = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    let rows = state.leads;
+
+    if (filter === 'rewards') {
+      rows = rows.filter((row) => row.converted || row.reward_status);
+    } else if (filter === 'payouts') {
+      rows = [];
+    }
+
+    if (!needle) return rows;
+
+    return rows.filter((row) => [
+      row.referred_tg_user_id,
+      row.referred_username || '',
+      row.referred_display_name || '',
+      row.referrer_tg_user_id || '',
+      row.referrer_username || '',
+      row.referrer_display_name || '',
+      row.referral_code || ''
+    ].join(' ').toLowerCase().includes(needle));
+  }, [filter, search, state.leads]);
 
   const filteredEvents = useMemo(() => {
     if (filter === 'rewards') {
@@ -288,7 +332,55 @@ export function ReferralsPage() {
         settings: data.settings || prev.settings,
         summary: data.summary || prev.summary,
         topPartners: data.topPartners || prev.topPartners,
+        leads: data.leads || prev.leads,
         pendingPayouts: data.pendingPayouts || prev.pendingPayouts,
+        recentEvents: data.recentEvents || prev.recentEvents,
+        support: data.support || prev.support,
+        reserve: data.reserve || prev.reserve,
+        economics: data.economics || prev.economics,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      setState((prev) => ({ ...prev, payouting: false }));
+      window.alert(error.message);
+    }
+  }
+
+  async function updatePayoutRequest(row, nextStatus) {
+    if (!row?.pending_payout_id) {
+      window.alert('У партнера нет активной заявки.');
+      return;
+    }
+
+    const actionLabel = nextStatus === 'failed'
+      ? 'ошибку выплаты'
+      : nextStatus === 'cancelled'
+        ? 'отклонение выплаты'
+        : 'перевод заявки в очередь';
+    const note = nextStatus === 'queued'
+      ? ''
+      : window.prompt(`Комментарий про ${actionLabel}:`, '') || '';
+
+    setState((prev) => ({ ...prev, payouting: true }));
+    try {
+      await apiRequest('/api/referrals/payout-request-status', {
+        accessToken,
+        method: 'POST',
+        body: {
+          payout_request_id: row.pending_payout_id,
+          status: nextStatus,
+          note
+        }
+      });
+      const data = await apiRequest('/api/referrals', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        payouting: false,
+        settings: data.settings || prev.settings,
+        summary: data.summary || prev.summary,
+        topPartners: data.topPartners || prev.topPartners,
+        leads: data.leads || prev.leads,
+        pendingPayouts: data.pendingPayouts || [],
         recentEvents: data.recentEvents || prev.recentEvents,
         support: data.support || prev.support,
         reserve: data.reserve || prev.reserve,
@@ -511,6 +603,86 @@ export function ReferralsPage() {
       </section>
 
       <div className="referrals-data-section">
+        <div className="referrals-table-card referrals-payout-queue">
+          <div className="referrals-table-card__header">
+            <div>
+              <h3 className="referrals-table-card__title">Заявки на выплату</h3>
+              <div className="referrals-table-card__count">Пока отправка TON ручная, этот блок держит очередь под будущий sender.</div>
+            </div>
+            <span className="referrals-table-card__count">{state.pendingPayouts.length} активных</span>
+          </div>
+
+          {state.pendingPayouts.length === 0 ? (
+            <p className="referrals-table-card__empty">Активных заявок на выплату нет</p>
+          ) : (
+            <div className="referrals-table-card__body">
+              <table className="referrals-table">
+                <thead>
+                  <tr className="referrals-table__head">
+                    <th className="referrals-table__th">Партнер</th>
+                    <th className="referrals-table__th">Кошелек</th>
+                    <th className="referrals-table__th">Заявка</th>
+                    <th className="referrals-table__th referrals-table__th--right">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.pendingPayouts.map((row) => (
+                    <tr key={row.pending_payout_id || row.tg_user_id} className="referrals-table__row">
+                      <td className="referrals-table__cell">
+                        <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
+                        <div className="referrals-partner-meta">ID: {row.tg_user_id}</div>
+                      </td>
+                      <td className="referrals-table__cell">
+                        <div className="referrals-partner-wallet-value">{row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}</div>
+                      </td>
+                      <td className="referrals-table__cell">
+                        <div className="referrals-balance referrals-balance--active">{formatTon(row.pending_payout_ton)}</div>
+                        <div className="referrals-balance-secondary">
+                          {payoutStatusLabel(row.pending_payout_status)} • {formatWhen(row.pending_payout_requested_at)}
+                        </div>
+                      </td>
+                      <td className="referrals-table__cell referrals-table__cell--right">
+                        <div className="referrals-actions">
+                          {row.pending_payout_status === 'requested' && (
+                            <button
+                              className="referrals-action-btn referrals-action-btn--payout"
+                              onClick={() => updatePayoutRequest(row, 'queued')}
+                              disabled={state.payouting}
+                            >
+                              В очередь
+                            </button>
+                          )}
+                          <button
+                            className="referrals-action-btn referrals-action-btn--payout"
+                            onClick={() => markPayout(row, 'TON')}
+                            disabled={state.payouting}
+                          >
+                            Отправлено
+                          </button>
+                          <button
+                            className="referrals-action-btn referrals-action-btn--warning"
+                            onClick={() => updatePayoutRequest(row, 'failed')}
+                            disabled={state.payouting}
+                          >
+                            Ошибка
+                          </button>
+                          <button
+                            className="referrals-action-btn referrals-action-btn--danger"
+                            onClick={() => updatePayoutRequest(row, 'cancelled')}
+                            disabled={state.payouting}
+                          >
+                            Отклонить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         <div className="referrals-filters-bar">
           <input
             className="field referrals-filters-bar__search"
@@ -626,6 +798,75 @@ export function ReferralsPage() {
                                 Досье
                               </a>
                             </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="referrals-table-card referrals-table-card--wide">
+            <div className="referrals-table-card__header">
+              <h3 className="referrals-table-card__title">Лиды</h3>
+              <span className="referrals-table-card__count">{filteredLeads.length} показано</span>
+            </div>
+
+            {filteredLeads.length === 0 ? (
+              <p className="referrals-table-card__empty">Лидов по фильтру нет</p>
+            ) : (
+              <div className="referrals-table-card__body">
+                <table className="referrals-table">
+                  <thead>
+                    <tr className="referrals-table__head">
+                      <th className="referrals-table__th">Лид</th>
+                      <th className="referrals-table__th">Партнер</th>
+                      <th className="referrals-table__th">Атрибуция</th>
+                      <th className="referrals-table__th referrals-table__th--right">Условия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.slice(0, 80).map((lead) => {
+                      const status = leadStatus(lead);
+                      const rewardAmount = lead.reward_ton_amount || lead.reward_amount;
+                      const rewardCurrency = lead.reward_ton_amount ? 'TON' : lead.reward_currency;
+                      return (
+                        <tr key={lead.id} className="referrals-table__row">
+                          <td className="referrals-table__cell">
+                            <div className="referrals-partner-name">{lead.referred_display_name || lead.referred_username || lead.referred_tg_user_id}</div>
+                            <div className="referrals-partner-meta">ID: {lead.referred_tg_user_id}</div>
+                            <a
+                              className="referrals-action-btn referrals-action-btn--dossier referrals-lead-dossier"
+                              href={`/app/dossier?tg=${encodeURIComponent(lead.referred_tg_user_id)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Досье
+                            </a>
+                          </td>
+                          <td className="referrals-table__cell">
+                            <div className="referrals-partner-name">{lead.referrer_display_name || lead.referrer_username || lead.referrer_tg_user_id}</div>
+                            <div className="referrals-partner-meta">
+                              ID: {lead.referrer_tg_user_id} • <span className="referrals-partner-code">{lead.referral_code || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="referrals-table__cell referrals-table__cell--secondary">
+                            <div>Первый вход: {formatWhen(lead.first_seen_at)}</div>
+                            <div>Истекает: {formatWhen(lead.expires_at)}</div>
+                            {lead.converted_at && <div>Оплатил: {formatWhen(lead.converted_at)}</div>}
+                          </td>
+                          <td className="referrals-table__cell referrals-table__cell--right">
+                            <div className={`referrals-lead-status referrals-lead-status--${status.tone}`}>{status.text}</div>
+                            <div className="referrals-balance-secondary">
+                              скидка {lead.client_discount_percent_snapshot ?? state.economics?.clientDiscountPercent ?? 10}% • награда {lead.reward_percent_snapshot ?? state.settings?.referral_reward_percent ?? 0}%
+                            </div>
+                            {rewardAmount ? (
+                              <div className="referrals-event-amount referrals-event-amount--reward">
+                                {rewardAmount} {rewardCurrency || ''}
+                              </div>
+                            ) : null}
                           </td>
                         </tr>
                       );

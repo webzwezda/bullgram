@@ -388,7 +388,12 @@ Statuses:
   - Withdrawable amount.
   - Last payout.
 
-- [ ] Add lead table or lead drawer.
+- [x] Add payout queue block.
+  - Active requested/queued TON payout requests.
+  - Partner, wallet, amount, requested time.
+  - Manual status actions for queued, failed, cancelled, and sent-through-manual-payout.
+
+- [x] Add lead table or lead drawer.
   - Partner.
   - Referred user.
   - First seen.
@@ -640,3 +645,8 @@ Scenario checks:
   - `/app/orders` has a `По рефке` filter for invoice triage
   - `/app/dossier` shows whether the client is a partner/referred user, who referred them, attribution expiry, discount snapshot, partner balance, and reward status per order
   - no referral settings, payout controls, or reserve controls were moved into orders/dossier
+- Added `/app/referrals` payout queue and lead visibility:
+  - backend `GET /api/referrals` returns normalized `leads` with partner, expiry, snapshot, discount eligibility, conversion, and reward context
+  - `/app/referrals` shows a wide lead table with dossier links
+  - `/app/referrals` has a separate active payout request queue with partner, wallet, amount, status, and requested time
+  - admin can move a payout request to `queued`, mark it `failed`, or `cancelled`; marking `sent` still goes through the existing manual payout path so partner balance is decremented
