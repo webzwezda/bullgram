@@ -65,6 +65,10 @@ create table if not exists public.referral_reserve_accounts (
 create index if not exists referral_reserve_accounts_owner_idx
   on public.referral_reserve_accounts (owner_id);
 
+create unique index if not exists referral_reserve_accounts_deposit_memo_unique
+  on public.referral_reserve_accounts (lower(deposit_memo))
+  where deposit_memo is not null;
+
 create table if not exists public.referral_reserve_ledger (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null,

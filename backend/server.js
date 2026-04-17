@@ -28,6 +28,7 @@ import { startRetention } from './jobs/retention.job.js';
 import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
+import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -190,7 +191,8 @@ app.listen(PORT, async () => {
         inbox_watch_enabled: envFlag('USERBOT_INBOX_WATCH_ENABLED'),
         broadcast_enabled: envFlag('USERBOT_BROADCAST_ENABLED'),
         restricted_userbot_auto_delete_enabled: String(process.env.RESTRICTED_USERBOT_AUTO_DELETE_ENABLED || 'true').trim().toLowerCase() !== 'false',
-        restricted_userbot_delete_after_hours: Number(process.env.RESTRICTED_USERBOT_DELETE_AFTER_HOURS || 72)
+        restricted_userbot_delete_after_hours: Number(process.env.RESTRICTED_USERBOT_DELETE_AFTER_HOURS || 72),
+        ton_reserve_watch_enabled: envFlag('TON_RESERVE_WATCH_ENABLED')
     });
 
     // Запускаем всех ботов из БД
@@ -202,4 +204,5 @@ app.listen(PORT, async () => {
     startAbandonedCart(supabase, getBotById); // Наша новая фича работает!
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
+    startTonReserveWatch(supabase);
 });

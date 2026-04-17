@@ -2,6 +2,7 @@ const DEFAULT_MINIMUM_DEPOSIT_TON = 100;
 const DEFAULT_CLIENT_DISCOUNT_PERCENT = 10;
 const DEFAULT_BULLRUN_FEE_PERCENT = 1;
 const DEFAULT_MIN_PAYOUT_TON = 5;
+const DEFAULT_DEPOSIT_LOCK_DAYS = 30;
 
 function numberOrZero(value) {
   const parsed = Number(value || 0);
@@ -12,12 +13,20 @@ function roundTon(value) {
   return Number(numberOrZero(value).toFixed(6));
 }
 
+function addDays(date, days) {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
 function getReserveDepositAddress() {
   return String(process.env.TON_RESERVE_DEPOSIT_ADDRESS || '').trim();
 }
 
+export function normalizeReferralDepositMemo(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 function buildDepositMemo(ownerId) {
-  return `br_${String(ownerId || '').replace(/-/g, '').slice(0, 12)}`;
+  return `br_${String(ownerId || '').replace(/-/g, '').slice(0, 24)}`;
 }
 
 function statusCopy(status) {
@@ -83,7 +92,136 @@ export function getReferralEconomics() {
     minimumDepositTon: DEFAULT_MINIMUM_DEPOSIT_TON,
     clientDiscountPercent: DEFAULT_CLIENT_DISCOUNT_PERCENT,
     bullrunFeePercent: DEFAULT_BULLRUN_FEE_PERCENT,
-    minPayoutTon: DEFAULT_MIN_PAYOUT_TON
+    minPayoutTon: DEFAULT_MIN_PAYOUT_TON,
+    depositLockDays: DEFAULT_DEPOSIT_LOCK_DAYS
+  };
+}
+
+export async function reconcileReferralReserveAccount(supabase, reserveAccount, options = {}) {
+  const { data: ledgerRows, error: ledgerError } = await supabase
+    .from('referral_reserve_ledger')
+    .select('entry_type, amount_ton, direction')
+    .eq('owner_id', reserveAccount.owner_id)
+    .eq('reserve_account_id', reserveAccount.id)
+    .limit(2000);
+
+  if (ledgerError) throw ledgerError;
+
+  const now = new Date();
+  const ledgerSummary = summarizeLedger(ledgerRows || []);
+  const minimumDepositTon = numberOrZero(reserveAccount.minimum_deposit_ton || DEFAULT_MINIMUM_DEPOSIT_TON);
+  const totalDepositedTon = roundTon(Math.max(numberOrZero(reserveAccount.total_deposited_ton), ledgerSummary.depositTon));
+  const bullrunFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.bullrun_fee_accrued_ton), ledgerSummary.bullrunFeeTon));
+  const networkFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.network_fee_accrued_ton), ledgerSummary.networkFeeTon));
+  const reservedObligationsTon = roundTon(Math.max(
+    numberOrZero(reserveAccount.reserved_obligations_ton),
+    ledgerSummary.rewardObligationTon + bullrunFeeTon + networkFeeTon
+  ));
+  const availableReserveTon = roundTon(
+    totalDepositedTon
+    - reservedObligationsTon
+    - ledgerSummary.partnerPayoutTon
+    - ledgerSummary.adminRefundTon
+  );
+  const adminDebtTon = roundTon(Math.max(0, availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
+  const shouldCreateLock = totalDepositedTon >= minimumDepositTon && !reserveAccount.locked_until;
+  const lockedUntil = shouldCreateLock
+    ? addDays(now, DEFAULT_DEPOSIT_LOCK_DAYS).toISOString()
+    : reserveAccount.locked_until || null;
+  const status = deriveStatus(
+    { ...reserveAccount, locked_until: lockedUntil },
+    {
+      minimumDepositTon,
+      totalDepositedTon,
+      availableReserveTon,
+      reservedObligationsTon,
+      adminDebtTon,
+      bullrunFeeTon,
+      networkFeeTon
+    }
+  );
+
+  const { data: updatedAccount, error: updateError } = await supabase
+    .from('referral_reserve_accounts')
+    .update({
+      deposit_address: options.depositAddress || reserveAccount.deposit_address || null,
+      total_deposited_ton: totalDepositedTon,
+      available_reserve_ton: availableReserveTon,
+      reserved_obligations_ton: reservedObligationsTon,
+      admin_debt_ton: adminDebtTon,
+      bullrun_fee_accrued_ton: bullrunFeeTon,
+      network_fee_accrued_ton: networkFeeTon,
+      locked_until: lockedUntil,
+      last_deposit_at: options.lastDepositAt || reserveAccount.last_deposit_at || now.toISOString(),
+      status,
+      updated_at: now.toISOString()
+    })
+    .eq('id', reserveAccount.id)
+    .select('*')
+    .single();
+
+  if (updateError) throw updateError;
+
+  return {
+    reserveAccount: updatedAccount,
+    lockCreated: shouldCreateLock
+  };
+}
+
+export async function recordReferralReserveDeposit(supabase, reserveAccount, deposit) {
+  const amountTon = roundTon(deposit?.amountTon);
+  const chainTxHash = String(deposit?.chainTxHash || '').trim();
+
+  if (!reserveAccount?.id || !reserveAccount?.owner_id) {
+    return { recorded: false, reason: 'reserve_account_missing' };
+  }
+
+  if (!chainTxHash) {
+    return { recorded: false, reason: 'chain_tx_hash_missing' };
+  }
+
+  if (!Number.isFinite(amountTon) || amountTon <= 0) {
+    return { recorded: false, reason: 'amount_invalid' };
+  }
+
+  const { error: ledgerError } = await supabase
+    .from('referral_reserve_ledger')
+    .insert({
+      owner_id: reserveAccount.owner_id,
+      reserve_account_id: reserveAccount.id,
+      entry_type: 'deposit_confirmed',
+      amount_ton: amountTon,
+      direction: 'credit',
+      chain_tx_hash: chainTxHash,
+      payload: deposit?.payload || {}
+    });
+
+  if (ledgerError) {
+    if (ledgerError.code === '23505' || (ledgerError.message || '').includes('duplicate key')) {
+      const synced = await reconcileReferralReserveAccount(supabase, reserveAccount, {
+        depositAddress: deposit?.depositAddress
+      });
+      return {
+        recorded: false,
+        duplicate: true,
+        reason: 'duplicate_tx',
+        reserveAccount: synced.reserveAccount
+      };
+    }
+    throw ledgerError;
+  }
+
+  const synced = await reconcileReferralReserveAccount(supabase, reserveAccount, {
+    depositAddress: deposit?.depositAddress,
+    lastDepositAt: deposit?.createdAt || new Date().toISOString()
+  });
+
+  return {
+    recorded: true,
+    amountTon,
+    chainTxHash,
+    reserveAccount: synced.reserveAccount,
+    lockCreated: synced.lockCreated
   };
 }
 
@@ -119,7 +257,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
       .insert({
         owner_id: ownerId,
         deposit_address: depositAddress || null,
-        deposit_memo: buildDepositMemo(ownerId),
+        deposit_memo: normalizeReferralDepositMemo(buildDepositMemo(ownerId)),
         minimum_deposit_ton: minimumDepositTon,
         status: 'deposit_required'
       })
@@ -128,6 +266,26 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
 
     if (createError) throw createError;
     account = created;
+  }
+
+  if (account && ensure) {
+    const nextDepositMemo = normalizeReferralDepositMemo(account.deposit_memo) || normalizeReferralDepositMemo(buildDepositMemo(ownerId));
+    const nextDepositAddress = depositAddress || account.deposit_address || null;
+    if (account.deposit_memo !== nextDepositMemo || account.deposit_address !== nextDepositAddress) {
+      const { data: updatedAccount, error: memoUpdateError } = await supabase
+        .from('referral_reserve_accounts')
+        .update({
+          deposit_memo: nextDepositMemo,
+          deposit_address: nextDepositAddress,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', account.id)
+        .select('*')
+        .single();
+
+      if (memoUpdateError) throw memoUpdateError;
+      account = updatedAccount;
+    }
   }
 
   const reserveAccountId = account?.id || null;
@@ -170,7 +328,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   };
 
   const status = deriveStatus(account, computed);
-  const depositConfigured = !!(account?.deposit_address || depositAddress);
+  const effectiveDepositAddress = depositAddress || account?.deposit_address || '';
+  const depositConfigured = !!effectiveDepositAddress;
   const hasMinimumDeposit = totalDepositedTon >= minimumDepositTon;
   const isClosedForNewPartners = ['over_limit', 'closed_for_new_partners', 'refund_requested', 'refund_available', 'refund_completed', 'paused'].includes(status);
   const canEnableReferrals = depositConfigured && hasMinimumDeposit && !['refund_completed', 'paused'].includes(status);
@@ -184,8 +343,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     canEnableReferrals,
     canAcceptNewPartners,
     depositConfigured,
-    depositAddress: account?.deposit_address || depositAddress || '',
-    depositMemo: account?.deposit_memo || buildDepositMemo(ownerId),
+    depositAddress: effectiveDepositAddress,
+    depositMemo: normalizeReferralDepositMemo(account?.deposit_memo) || normalizeReferralDepositMemo(buildDepositMemo(ownerId)),
     lockedUntil: account?.locked_until || null,
     lastDepositAt: account?.last_deposit_at || null,
     reason: !depositConfigured

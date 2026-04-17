@@ -298,11 +298,14 @@ Statuses:
   - Add reserve status transition rules.
 
 - [ ] Phase 3: TON deposit tracking.
-  - Generate or assign admin deposit addresses.
-  - Poll/subscribe for incoming TON transactions.
-  - Confirm deposits idempotently by chain transaction hash.
-  - When confirmed deposit total reaches `100 TON`, set `locked_until = now + 30 days`.
-  - Allow referral enablement immediately after confirmed deposit and lock creation.
+  - [x] Assign one shared reserve deposit address from server env for MVP.
+  - [x] Use per-admin `deposit_memo` to correlate incoming TON payments.
+  - [x] Poll incoming TON transactions through TON Center API with bounded pagination.
+  - [x] Confirm deposits idempotently by chain transaction hash.
+  - [x] Enforce unique case-insensitive deposit memo values.
+  - [x] When confirmed deposit total reaches `100 TON`, set `locked_until = now + 30 days`.
+  - [x] Allow referral enablement immediately after confirmed deposit and lock creation.
+  - [ ] Generate isolated admin wallets/subwallets later if shared-wallet memo flow becomes too risky.
 
 - [ ] Phase 4: exchange rates.
   - Add hourly job to fetch rates.
@@ -489,8 +492,8 @@ If `available_reserve_ton` is positive but below a future threshold, transition 
 
 ## Open Decisions
 
-- Exact TON infrastructure provider or self-hosted indexer for deposits and payouts.
-- Whether every admin gets a unique TON wallet, subwallet, or shared wallet with unique memo/comment.
+- Exact TON infrastructure provider or self-hosted indexer for automated payouts. Deposit watcher MVP uses TON Center API.
+- Whether every admin gets a unique TON wallet/subwallet later. MVP uses one shared BullRun reserve wallet plus unique memo/comment per admin.
 - Exact exchange rate provider and acceptable staleness window.
 - Whether partner reward is always paid only in TON for MVP. Current plan says yes.
 - Whether partner wallet changes require a cooldown before payouts.
@@ -562,3 +565,24 @@ Scenario checks:
 - Before continuing, split remaining work into backend schema/service, TON wallet/rates, official bot, admin UI, and reviewer passes.
 - Use Supabase MCP for schema inspection and migrations.
 - Use `backend-developer`, `frontend-developer`, `payment-integration`, `blockchain-developer`, and `reviewer` subagents or Claude workers for bounded implementation slices when implementation starts.
+- Added TON reserve deposit watcher:
+  - `backend/jobs/ton-reserve-watch.job.js`
+  - `startTonReserveWatch(supabase)` in `backend/server.js`
+  - `recordReferralReserveDeposit(...)` in `backend/services/referral-reserve.service.js`
+  - `referral_reserve_accounts_deposit_memo_unique` migration for memo lookup and collision protection
+- Runtime env for MVP deposit watcher:
+  - `TON_RESERVE_WATCH_ENABLED=true`
+  - `TON_RESERVE_DEPOSIT_ADDRESS=<BullRun controlled TON wallet>`
+  - `TON_RESERVE_API_BASE=https://toncenter.com/api/v2`
+  - `TON_RESERVE_API_KEY=<optional TON Center key>`
+  - `TON_RESERVE_POLL_INTERVAL_MS=120000`
+  - `TON_RESERVE_TX_LIMIT=50`
+  - `TON_RESERVE_MAX_PAGES=20`
+- Deposit watcher is off by default unless `TON_RESERVE_WATCH_ENABLED=true` and `TON_RESERVE_DEPOSIT_ADDRESS` are set.
+- TON deposits must include the admin memo like `br_...`; without memo the shared-wallet MVP cannot attribute the deposit to an admin.
+- A focused review found three blocker risks before commit: missed deposits without pagination, stale account totals after a partial ledger/account failure, and non-unique/case-sensitive memos. The implementation now paginates TON Center reads, reconciles known deposit accounts from ledger, normalizes memos, and adds a unique case-insensitive memo index.
+- Verified TON watcher changes:
+  - `node --check backend/jobs/ton-reserve-watch.job.js`
+  - `node --check backend/services/referral-reserve.service.js`
+  - `node --check backend/server.js`
+  - `git diff --check`
