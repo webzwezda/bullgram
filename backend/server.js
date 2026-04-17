@@ -111,6 +111,7 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
         billing_api_key,
         referral_enabled,
         referral_reward_percent,
+        referral_client_discount_percent,
         referral_welcome_text
     } = req.body;
     try {
@@ -134,6 +135,7 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
             billing_api_key,
             referral_enabled,
             referral_reward_percent,
+            referral_client_discount_percent,
             referral_welcome_text
         };
 

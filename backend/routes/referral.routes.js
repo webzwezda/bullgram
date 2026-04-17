@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
+import { getReferralEconomics, loadReferralReserveState } from '../services/referral-reserve.service.js';
 
 function createEmptyResponse() {
     return {
@@ -27,7 +28,9 @@ function createEmptyResponse() {
         support: {
             referralTables: true,
             referralSettings: true
-        }
+        },
+        reserve: null,
+        economics: getReferralEconomics()
     };
 }
 
@@ -134,10 +137,13 @@ export default function referralRoutes(supabase) {
         const payload = createEmptyResponse();
 
         try {
+            payload.reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
+            payload.economics = payload.reserve?.economics || getReferralEconomics();
+
             const [settingsResp, profilesResp, attributionsResp, eventsResp] = await Promise.all([
                 supabase
                     .from('payment_settings')
-                    .select('referral_enabled, referral_reward_percent, referral_welcome_text')
+                    .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent')
                     .eq('owner_id', ownerId)
                     .maybeSingle(),
                 supabase
@@ -185,6 +191,7 @@ export default function referralRoutes(supabase) {
             payload.settings = {
                 referral_enabled: settingsResp.data?.referral_enabled ?? false,
                 referral_reward_percent: Number(settingsResp.data?.referral_reward_percent ?? 20),
+                referral_client_discount_percent: Number(settingsResp.data?.referral_client_discount_percent ?? payload.economics.clientDiscountPercent),
                 referral_welcome_text: settingsResp.data?.referral_welcome_text || ''
             };
 
@@ -279,16 +286,27 @@ export default function referralRoutes(supabase) {
         const {
             referral_enabled,
             referral_reward_percent,
-            referral_welcome_text
+            referral_welcome_text,
+            referral_client_discount_percent
         } = req.body;
 
         try {
+            const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
+            if (referral_enabled && !reserve.canEnableReferrals) {
+                return res.status(400).json({
+                    error: reserve.reason || 'Сначала пополни партнерский резерв, потом включай партнерку.',
+                    reserve
+                });
+            }
+
+            const economics = getReferralEconomics();
             let { error } = await supabase
                 .from('payment_settings')
                 .upsert({
                     owner_id: ownerId,
                     referral_enabled: !!referral_enabled,
                     referral_reward_percent: Number(referral_reward_percent || 0),
+                    referral_client_discount_percent: Number(referral_client_discount_percent || economics.clientDiscountPercent),
                     referral_welcome_text: referral_welcome_text || null
                 }, { onConflict: 'owner_id' });
 

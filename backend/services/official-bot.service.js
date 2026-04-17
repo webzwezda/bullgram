@@ -1,6 +1,7 @@
 import { Telegraf } from 'telegraf';
 import QRCode from 'qrcode';
 import { decrypt } from '../utils/crypto.js';
+import { getReferralEconomics, loadReferralReserveState } from './referral-reserve.service.js';
 
 // Импорты для Юзербота
 import { TelegramClient } from 'telegram';
@@ -411,7 +412,7 @@ export class OfficialBotService {
         try {
             const { data, error } = await this.supabase
                 .from('payment_settings')
-                .select('referral_enabled, referral_reward_percent, referral_welcome_text, admin_tg_id')
+                .select('referral_enabled, referral_reward_percent, referral_client_discount_percent, referral_welcome_text, admin_tg_id')
                 .eq('owner_id', ownerId)
                 .maybeSingle();
 
@@ -425,6 +426,7 @@ export class OfficialBotService {
             return {
                 referral_enabled: !!data?.referral_enabled,
                 referral_reward_percent: Number(data?.referral_reward_percent ?? 20),
+                referral_client_discount_percent: Number(data?.referral_client_discount_percent ?? getReferralEconomics().clientDiscountPercent),
                 referral_welcome_text: data?.referral_welcome_text || '',
                 admin_tg_id: data?.admin_tg_id ? String(data.admin_tg_id) : ''
             };
@@ -631,12 +633,37 @@ export class OfficialBotService {
         }
     }
 
+    async getReferralProfile(ownerId, tgUserId) {
+        try {
+            const { data, error } = await this.supabase
+                .from('referral_profiles')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', String(tgUserId))
+                .maybeSingle();
+
+            if (error) {
+                if ((error.message || '').includes('referral_profiles')) return null;
+                throw error;
+            }
+
+            return data || null;
+        } catch (error) {
+            if ((error.message || '').includes('referral_profiles')) return null;
+            throw error;
+        }
+    }
+
     async registerReferralLead({
         ownerId,
         referralCode,
         referredTgUserId,
         referredUsername = null,
-        referredDisplayName = null
+        referredDisplayName = null,
+        rewardPercent = 20,
+        clientDiscountPercent = 10,
+        discountEligible = true,
+        reserveStatus = 'active'
     }) {
         try {
             const normalizedCode = String(referralCode || '').trim().toLowerCase();
@@ -674,6 +701,7 @@ export class OfficialBotService {
             }
 
             const nowIso = new Date().toISOString();
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             const { data: attribution, error: upsertError } = await this.supabase
                 .from('referral_attributions')
                 .upsert({
@@ -684,7 +712,13 @@ export class OfficialBotService {
                     referred_username: referredUsername || null,
                     referred_display_name: referredDisplayName || null,
                     first_seen_at: existing?.first_seen_at || nowIso,
-                    last_seen_at: nowIso
+                    last_seen_at: nowIso,
+                    expires_at: existing?.expires_at || expiresAt,
+                    reward_percent_snapshot: existing?.reward_percent_snapshot ?? Number(rewardPercent || 0),
+                    client_discount_percent_snapshot: existing?.client_discount_percent_snapshot ?? Number(clientDiscountPercent || 0),
+                    terms_status: existing?.terms_status || 'active',
+                    discount_eligible: existing?.discount_eligible ?? !!discountEligible,
+                    reserve_status_snapshot: existing?.reserve_status_snapshot || reserveStatus
                 }, { onConflict: 'owner_id,referred_tg_user_id' })
                 .select()
                 .single();
@@ -748,6 +782,32 @@ export class OfficialBotService {
         }
     }
 
+    async getActiveReferralAttribution(ownerId, tgUserId) {
+        try {
+            const { data, error } = await this.supabase
+                .from('referral_attributions')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('referred_tg_user_id', String(tgUserId))
+                .maybeSingle();
+
+            if (error) {
+                if ((error.message || '').includes('referral_attributions')) return null;
+                throw error;
+            }
+
+            if (!data) return null;
+            if (data.converted_at) return null;
+            if (data.discount_eligible === false) return null;
+            if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+
+            return data;
+        } catch (error) {
+            if ((error.message || '').includes('referral_attributions')) return null;
+            throw error;
+        }
+    }
+
     async processReferralReward(bot, invoice, tariff, ownerId) {
         try {
             const settings = await this.getReferralSettings(ownerId);
@@ -768,6 +828,7 @@ export class OfficialBotService {
             if (!attribution) return null;
             if (String(attribution.referrer_tg_user_id) === String(invoice.tg_user_id)) return null;
             if (attribution.converted_at) return null;
+            if (attribution.expires_at && new Date(attribution.expires_at) < new Date()) return null;
 
             const { data: existingReward, error: rewardCheckError } = await this.supabase
                 .from('referral_events')
@@ -784,12 +845,19 @@ export class OfficialBotService {
 
             if (existingReward) return null;
 
-            const rewardPercent = Number(settings.referral_reward_percent || 0);
-            const rewardAmountRaw = Number(invoice.amount || 0) * rewardPercent / 100;
+            const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
+            const economics = getReferralEconomics();
+            const rewardPercent = Number(attribution.reward_percent_snapshot ?? settings.referral_reward_percent ?? 0);
+            const clientDiscountPercent = Number(attribution.client_discount_percent_snapshot ?? settings.referral_client_discount_percent ?? economics.clientDiscountPercent);
+            const rewardBaseAmount = Number(tariff.price || invoice.amount || 0);
+            const paidAmount = Number(invoice.amount || 0);
+            const rewardAmountRaw = rewardBaseAmount * rewardPercent / 100;
             const currency = String(invoice.currency || '').toUpperCase();
             const rewardAmount = ['TON', 'USDT'].includes(currency)
                 ? Number(rewardAmountRaw.toFixed(4))
                 : Number(rewardAmountRaw.toFixed(2));
+            const clientDiscountAmount = Math.max(0, Number((rewardBaseAmount - paidAmount).toFixed(currency === 'RUB' ? 2 : 4)));
+            const bullrunFeeAmount = Number((rewardAmount * economics.bullrunFeePercent / 100).toFixed(currency === 'RUB' ? 2 : 4));
 
             if (rewardAmount <= 0) return null;
 
@@ -815,7 +883,7 @@ export class OfficialBotService {
                 .update(updates)
                 .eq('id', referrerProfile.id);
 
-            await this.supabase
+            const { data: rewardEvent, error: rewardEventError } = await this.supabase
                 .from('referral_events')
                 .insert({
                     owner_id: ownerId,
@@ -827,11 +895,55 @@ export class OfficialBotService {
                     status: 'completed',
                     reward_amount: rewardAmount,
                     reward_currency: currency,
+                    sale_original_amount: rewardBaseAmount,
+                    sale_original_currency: currency,
+                    client_discount_percent: clientDiscountPercent,
+                    client_discount_original_amount: clientDiscountAmount,
+                    reward_original_amount: rewardAmount,
+                    reward_original_currency: currency,
+                    reward_ton_amount: currency === 'TON' ? rewardAmount : null,
+                    bullrun_fee_ton_amount: currency === 'TON' ? bullrunFeeAmount : null,
+                    network_fee_ton_amount: 0,
+                    reserve_account_id: reserve.id || null,
+                    reserve_coverage_status: reserve.canAcceptNewPartners ? 'covered' : 'admin_debt',
                     payload: {
                         tariff_title: tariff.title,
-                        reward_percent: rewardPercent
+                        reward_percent: rewardPercent,
+                        client_discount_percent: clientDiscountPercent,
+                        paid_amount: paidAmount,
+                        bullrun_fee_percent: economics.bullrunFeePercent,
+                        bullrun_fee_amount: bullrunFeeAmount
                     }
-                });
+                })
+                .select('id')
+                .single();
+
+            if (rewardEventError) throw rewardEventError;
+
+            if (reserve.id && currency === 'TON') {
+                await this.supabase
+                    .from('referral_reserve_ledger')
+                    .insert([
+                        {
+                            owner_id: ownerId,
+                            reserve_account_id: reserve.id,
+                            entry_type: 'reward_obligation_created',
+                            amount_ton: rewardAmount,
+                            direction: 'debit',
+                            related_referral_event_id: rewardEvent.id,
+                            payload: { invoice_id: invoice.id, referred_tg_user_id: String(invoice.tg_user_id) }
+                        },
+                        {
+                            owner_id: ownerId,
+                            reserve_account_id: reserve.id,
+                            entry_type: 'bullrun_fee_created',
+                            amount_ton: bullrunFeeAmount,
+                            direction: 'debit',
+                            related_referral_event_id: rewardEvent.id,
+                            payload: { invoice_id: invoice.id, fee_percent: economics.bullrunFeePercent }
+                        }
+                    ]);
+            }
 
             await this.supabase
                 .from('referral_attributions')
@@ -947,18 +1059,28 @@ export class OfficialBotService {
 
                     if (startPayload.startsWith('ref_')) {
                         const settings = await this.getReferralSettings(ownerId);
-                        await this.registerReferralLead({
-                            ownerId,
-                            referralCode: startPayload.replace(/^ref_/, ''),
-                            referredTgUserId: ctx.from.id,
-                            referredUsername: ctx.from?.username || null,
-                            referredDisplayName: displayName
-                        });
+                        const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
 
-                        const welcomeText = settings.referral_welcome_text
-                            || 'Тебя привели по партнерской ссылке. Выбирай тариф и заходи в продукт без лишней ебли.';
+                        if (settings.referral_enabled && reserve.canAcceptNewPartners) {
+                            await this.registerReferralLead({
+                                ownerId,
+                                referralCode: startPayload.replace(/^ref_/, ''),
+                                referredTgUserId: ctx.from.id,
+                                referredUsername: ctx.from?.username || null,
+                                referredDisplayName: displayName,
+                                rewardPercent: settings.referral_reward_percent,
+                                clientDiscountPercent: settings.referral_client_discount_percent,
+                                discountEligible: true,
+                                reserveStatus: reserve.status
+                            });
 
-                        await ctx.reply(`🤝 ${welcomeText}`);
+                            const welcomeText = settings.referral_welcome_text
+                                || 'Тебя привели по партнерской ссылке. Скидка уже закреплена, выбирай тариф.';
+
+                            await ctx.reply(`🤝 ${welcomeText}`);
+                        } else {
+                            await ctx.reply('🤝 Партнерская скидка по новой ссылке сейчас на паузе. Если ты уже был закреплен раньше, старые условия сохранятся.');
+                        }
                     }
                 }
             } catch (error) {
@@ -981,7 +1103,14 @@ export class OfficialBotService {
                 }
 
                 const displayName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() || null;
-                const profile = await this.ensureReferralProfile(
+                const existingProfile = await this.getReferralProfile(ownerId, ctx.from.id);
+                const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
+
+                if (!existingProfile && !reserve.canAcceptNewPartners) {
+                    return ctx.reply('Партнерка сейчас не выдает новые ссылки: админ еще не пополнил резерв или резерв на паузе. Старые партнеры продолжают видеть свою статистику.');
+                }
+
+                const profile = existingProfile || await this.ensureReferralProfile(
                     ownerId,
                     ctx.from.id,
                     ctx.from?.username || null,
@@ -1070,9 +1199,16 @@ export class OfficialBotService {
 
                 const userId = ctx.from.id;
                 const memo = 'sub_' + Math.random().toString(36).substr(2, 6);
+                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, userId);
+                const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+                const originalAmount = Number(tariff.price || 0);
+                const invoiceAmount = referralDiscountPercent > 0
+                    ? Number((originalAmount * (100 - referralDiscountPercent) / 100).toFixed(tariff.currency === 'RUB' ? 2 : 4))
+                    : originalAmount;
+                const referralDiscountAmount = Number((originalAmount - invoiceAmount).toFixed(tariff.currency === 'RUB' ? 2 : 4));
 
                 const { error: insertErr } = await this.supabase.from('invoices').insert({
-                    tg_user_id: userId, tariff_id: tariff.id, amount: tariff.price, currency: tariff.currency, memo: memo, status: 'pending'
+                    tg_user_id: userId, tariff_id: tariff.id, amount: invoiceAmount, currency: tariff.currency, memo: memo, status: 'pending'
                 });
 
                 if (insertErr) return ctx.reply(`❌ Ошибка БД при создании счета:\n${insertErr.message}`);
@@ -1091,9 +1227,13 @@ export class OfficialBotService {
                     status: 'pending',
                     payload: {
                         tariff_id: tariff.id,
-                        amount: tariff.price,
+                        amount: invoiceAmount,
                         currency: tariff.currency,
-                        memo
+                        memo,
+                        referral_discount_percent: referralDiscountPercent,
+                        referral_discount_amount: referralDiscountAmount,
+                        original_amount: originalAmount,
+                        referral_code: referralAttribution?.referral_code || null
                     }
                 });
 
@@ -1104,7 +1244,10 @@ export class OfficialBotService {
                         settings.sbp_fio ? `👤 Получатель: **${settings.sbp_fio}**` : null,
                         `📞 Реквизиты: \`${settings.sbp_phone}\``
                     ].filter(Boolean).join('\n');
-                    const caption = `💳 **Оплата картой (СБП)**\n\nТариф: **${this.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**\nСумма: **${tariff.price} RUB**\n\n${sbpLines}\n\n⚠️ *Переведите точную сумму и нажмите «Я оплатил».*`;
+                    const discountLine = referralDiscountPercent > 0
+                        ? `\nСкидка по рефке: **-${referralDiscountPercent}%** (${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
+                        : '';
+                    const caption = `💳 **Оплата картой (СБП)**\n\nТариф: **${this.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**${discountLine}\nСумма: **${invoiceAmount} RUB**\n\n${sbpLines}\n\n⚠️ *Переведите точную сумму и нажмите «Я оплатил».*`;
 
                     await ctx.deleteMessage().catch(() => {});
                     await ctx.reply(caption, {
@@ -1113,11 +1256,14 @@ export class OfficialBotService {
                     });
                 } else {
                     if (!settings.ton_wallet) return ctx.reply('❌ TON-кошелек не указан.');
-                    const nanoTon = tariff.price * 1000000000;
+                    const nanoTon = Math.round(invoiceAmount * 1000000000);
                     const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
                     const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
-                    const caption = `💎 **Счет сформирован!**\n\nТариф: **${this.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**\nСумма: **${tariff.price} ${tariff.currency}**\nКошелек: \`${settings.ton_wallet}\`\nКомментарий: \`${memo}\``;
+                    const discountLine = referralDiscountPercent > 0
+                        ? `\nСкидка по рефке: **-${referralDiscountPercent}%** (${referralDiscountAmount} ${tariff.currency})\nЦена до скидки: **${originalAmount} ${tariff.currency}**`
+                        : '';
+                    const caption = `💎 **Счет сформирован!**\n\nТариф: **${this.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**${discountLine}\nСумма: **${invoiceAmount} ${tariff.currency}**\nКошелек: \`${settings.ton_wallet}\`\nКомментарий: \`${memo}\``;
 
                     await ctx.deleteMessage().catch(() => {});
                     await ctx.replyWithPhoto({ source: qrBuffer }, {
@@ -1424,7 +1570,14 @@ export class OfficialBotService {
                 }
 
                 const displayName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() || null;
-                const profile = await this.ensureReferralProfile(
+                const existingProfile = await this.getReferralProfile(ownerId, ctx.from.id);
+                const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
+
+                if (!existingProfile && !reserve.canAcceptNewPartners) {
+                    return ctx.reply('💸 Новые партнерские ссылки сейчас на паузе: админ еще не пополнил резерв или резерв закончился. Старые партнеры продолжают работать по своим условиям.');
+                }
+
+                const profile = existingProfile || await this.ensureReferralProfile(
                     ownerId,
                     ctx.from.id,
                     ctx.from?.username || null,
