@@ -338,12 +338,14 @@ Statuses:
   - If reserve is insufficient, record admin debt and transition reserve status to `over_limit` or `closed_for_new_partners`.
 
 - [ ] Phase 8: partner payout flow.
-  - Add bot flow for partner TON wallet entry.
-  - Add withdrawal request when partner balance is at least `5 TON`.
-  - Queue payout and send from BullRun-controlled wallet.
-  - Charge network fee to admin reserve.
-  - Update payout status by chain result.
-  - Notify partner and admin.
+  - [x] Add bot flow for partner TON wallet entry.
+  - [x] Add withdrawal request when partner balance is at least `5 TON`.
+  - [x] Queue payout request in `referral_partner_payouts`.
+  - [x] Let admin close an active TON request through manual payout marking.
+  - [ ] Send payout automatically from BullRun-controlled wallet.
+  - [ ] Charge network fee to admin reserve.
+  - [ ] Update payout status by chain result.
+  - [ ] Notify admin outside the dashboard when a payout request is created.
 
 - [ ] Phase 9: admin refund flow.
   - Allow refund request only after `locked_until`.
@@ -623,3 +625,13 @@ Scenario checks:
   - `REFERRAL_SETTLEMENT_RETRY_ENABLED=true` by default
   - `REFERRAL_SETTLEMENT_RETRY_INTERVAL_MS=600000`
   - `REFERRAL_SETTLEMENT_RETRY_BATCH_LIMIT=100`
+- Added partner payout request MVP:
+  - partners can save a TON wallet from the official bot partner screen
+  - wallet changes are blocked while a payout request is pending
+  - partners can create a payout request once `balance_ton >= 5`
+  - database allows only one active `requested`/`queued` payout per partner
+  - admin can manually close the active TON request from `/app/referrals`; this marks the request `sent` and decrements partner balance
+  - payout requests are not sent automatically yet
+  - `/app/referrals` shows partner payout wallet and pending requested TON amount
+  - admin/manual payout remains separate from automated payout sending
+  - TON payout accounting uses 6 decimal places

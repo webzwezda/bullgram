@@ -131,3 +131,7 @@ create unique index if not exists referral_partner_payouts_chain_tx_unique
 
 create index if not exists referral_partner_payouts_owner_status_idx
   on public.referral_partner_payouts (owner_id, status, requested_at desc);
+
+create unique index if not exists referral_partner_payouts_one_active_request
+  on public.referral_partner_payouts (owner_id, tg_user_id)
+  where status in ('requested', 'queued');

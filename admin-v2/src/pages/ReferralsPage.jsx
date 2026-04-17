@@ -50,6 +50,7 @@ export function ReferralsPage() {
     settings: null,
     summary: {},
     topPartners: [],
+    pendingPayouts: [],
     recentEvents: [],
     support: {},
     reserve: null,
@@ -82,6 +83,7 @@ export function ReferralsPage() {
             settings: data.settings || null,
             summary: data.summary || {},
             topPartners: data.topPartners || [],
+            pendingPayouts: data.pendingPayouts || [],
             recentEvents: data.recentEvents || [],
             support: data.support || {},
             reserve: data.reserve || null,
@@ -106,6 +108,7 @@ export function ReferralsPage() {
             settings: null,
             summary: {},
             topPartners: [],
+            pendingPayouts: [],
             recentEvents: [],
             support: {},
             reserve: null,
@@ -141,7 +144,12 @@ export function ReferralsPage() {
     } else if (filter === 'rewards') {
       rows = rows.filter((row) => Number(row.earnedRub) > 0 || Number(row.earnedTon) > 0 || Number(row.earnedUsdt) > 0);
     } else if (filter === 'payouts') {
-      rows = rows.filter((row) => Number(row.paid_out_rub) > 0 || Number(row.paid_out_ton) > 0 || Number(row.paid_out_usdt) > 0);
+      rows = rows.filter((row) => (
+        Number(row.pending_payout_ton) > 0 ||
+        Number(row.paid_out_rub) > 0 ||
+        Number(row.paid_out_ton) > 0 ||
+        Number(row.paid_out_usdt) > 0
+      ));
     }
 
     if (!needle) return rows;
@@ -230,15 +238,27 @@ export function ReferralsPage() {
         ? 'balance_ton'
         : 'balance_usdt';
     const currentBalance = Number(row?.[balanceField] || 0);
+    const pendingTon = Number(row?.pending_payout_ton || 0);
+    const hasPendingTonRequest = normalizedCurrency === 'TON' && pendingTon > 0 && row?.pending_payout_id;
 
     if (currentBalance <= 0) {
       window.alert(`У партнера нет баланса в ${normalizedCurrency}.`);
       return;
     }
 
+    const defaultAmount = hasPendingTonRequest ? pendingTon : currentBalance;
+    const promptLines = [
+      `Сколько выплатить ${row.display_name || row.username || row.tg_user_id}?`,
+      `Баланс: ${currentBalance} ${normalizedCurrency}`
+    ];
+    if (hasPendingTonRequest) {
+      promptLines.push(`Активная заявка: ${pendingTon} TON`);
+      promptLines.push('Для заявки нужно закрыть ровно эту сумму.');
+    }
+
     const rawAmount = window.prompt(
-      `Сколько выплатить ${row.display_name || row.username || row.tg_user_id}?\nБаланс: ${currentBalance} ${normalizedCurrency}`,
-      String(currentBalance)
+      promptLines.join('\n'),
+      String(defaultAmount)
     );
 
     if (rawAmount === null) return;
@@ -258,7 +278,8 @@ export function ReferralsPage() {
           tg_user_id: row.tg_user_id,
           currency: normalizedCurrency,
           amount,
-          note
+          note,
+          payout_request_id: hasPendingTonRequest ? row.pending_payout_id : null
         }
       });
       const data = await apiRequest('/api/referrals', { accessToken });
@@ -268,8 +289,11 @@ export function ReferralsPage() {
         settings: data.settings || prev.settings,
         summary: data.summary || prev.summary,
         topPartners: data.topPartners || prev.topPartners,
+        pendingPayouts: data.pendingPayouts || prev.pendingPayouts,
         recentEvents: data.recentEvents || prev.recentEvents,
         support: data.support || prev.support,
+        reserve: data.reserve || prev.reserve,
+        economics: data.economics || prev.economics,
         updatedAt: new Date().toISOString()
       }));
     } catch (error) {
@@ -534,13 +558,21 @@ export function ReferralsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPartners.slice(0, 30).map((row) => {
+                  {filteredPartners.map((row) => {
                     const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
                     return (
                       <tr key={row.tg_user_id} className="border-b border-slate-100 last:border-0">
                         <td className="py-3">
                           <div className="font-medium text-slate-950">{row.display_name || row.username || row.tg_user_id}</div>
                           <div className="text-xs text-slate-500">ID: {row.tg_user_id} • <span className="font-mono">{row.referral_code}</span></div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            Кошелек: {row.payout_wallet ? <span className="font-mono">{row.payout_wallet}</span> : 'не указан'}
+                          </div>
+                          {Number(row.pending_payout_ton || 0) > 0 && (
+                            <div className="mt-1 inline-flex rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              Заявка: {formatTon(row.pending_payout_ton)}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -580,7 +612,7 @@ export function ReferralsPage() {
                                 onClick={() => markPayout(row, 'TON')}
                                 disabled={state.payouting}
                               >
-                                TON
+                                {Number(row.pending_payout_ton || 0) > 0 ? 'Заявка TON' : 'TON'}
                               </button>
                             )}
                             {Number(row.balance_usdt) > 0 && (

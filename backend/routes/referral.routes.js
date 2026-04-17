@@ -24,6 +24,7 @@ function createEmptyResponse() {
             paidOutUsdt: 0
         },
         topPartners: [],
+        pendingPayouts: [],
         recentEvents: [],
         support: {
             referralTables: true,
@@ -37,7 +38,12 @@ function createEmptyResponse() {
 export default function referralRoutes(supabase) {
     const router = express.Router();
 
-    async function markReferralPayout(ownerId, tgUserId, currency, amount, note) {
+    function normalizeCurrencyAmount(currency, amount) {
+        const decimals = currency === 'RUB' ? 2 : 6;
+        return Number(Number(amount || 0).toFixed(decimals));
+    }
+
+    async function markReferralPayout(ownerId, tgUserId, currency, amount, note, payoutRequestId = null) {
         const normalizedCurrency = String(currency || '').toUpperCase();
         const amountNumber = Number(amount || 0);
 
@@ -77,9 +83,50 @@ export default function referralRoutes(supabase) {
                 ? 'balance_ton'
                 : 'balance_usdt';
         const currentBalance = Number(profile[balanceField] || 0);
-        const normalizedAmount = normalizedCurrency === 'RUB'
-            ? Number(amountNumber.toFixed(2))
-            : Number(amountNumber.toFixed(4));
+        const normalizedAmount = normalizeCurrencyAmount(normalizedCurrency, amountNumber);
+        let activePayoutRequest = null;
+
+        if (normalizedCurrency === 'TON') {
+            let requestQuery = supabase
+                .from('referral_partner_payouts')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', String(tgUserId))
+                .in('status', ['requested', 'queued'])
+                .order('requested_at', { ascending: false })
+                .limit(1);
+
+            if (payoutRequestId) {
+                requestQuery = supabase
+                    .from('referral_partner_payouts')
+                    .select('*')
+                    .eq('owner_id', ownerId)
+                    .eq('tg_user_id', String(tgUserId))
+                    .eq('id', payoutRequestId)
+                    .in('status', ['requested', 'queued'])
+                    .limit(1);
+            }
+
+            const { data: requestRows, error: requestError } = await requestQuery;
+            if (requestError && !(requestError.message || '').includes('referral_partner_payouts')) {
+                throw requestError;
+            }
+            activePayoutRequest = requestRows?.[0] || null;
+
+            if (payoutRequestId && !activePayoutRequest) {
+                return { error: 'Активная заявка на выплату не найдена или уже закрыта', status: 404 };
+            }
+
+            if (activePayoutRequest) {
+                const requestedAmount = normalizeCurrencyAmount('TON', activePayoutRequest.amount_ton);
+                if (requestedAmount !== normalizedAmount) {
+                    return {
+                        error: `У партнера есть активная заявка на ${requestedAmount} TON. Закрывай ровно эту сумму, чтобы не сломать учет.`,
+                        status: 400
+                    };
+                }
+            }
+        }
 
         if (normalizedAmount > currentBalance) {
             return {
@@ -88,7 +135,7 @@ export default function referralRoutes(supabase) {
             };
         }
 
-        const nextBalance = Number((currentBalance - normalizedAmount).toFixed(normalizedCurrency === 'RUB' ? 2 : 4));
+        const nextBalance = normalizeCurrencyAmount(normalizedCurrency, currentBalance - normalizedAmount);
 
         const { error: updateError } = await supabase
             .from('referral_profiles')
@@ -112,7 +159,8 @@ export default function referralRoutes(supabase) {
                 payload: {
                     note: note || null,
                     balance_before: currentBalance,
-                    balance_after: nextBalance
+                    balance_after: nextBalance,
+                    payout_request_id: activePayoutRequest?.id || null
                 }
             });
 
@@ -123,12 +171,34 @@ export default function referralRoutes(supabase) {
             throw eventError;
         }
 
+        if (activePayoutRequest) {
+            const { error: requestUpdateError } = await supabase
+                .from('referral_partner_payouts')
+                .update({
+                    status: 'sent',
+                    sent_at: new Date().toISOString(),
+                    failure_reason: null,
+                    payload: {
+                        ...(activePayoutRequest.payload || {}),
+                        settled_by_admin: true,
+                        settled_note: note || null,
+                        balance_before: currentBalance,
+                        balance_after: nextBalance
+                    }
+                })
+                .eq('id', activePayoutRequest.id)
+                .in('status', ['requested', 'queued']);
+
+            if (requestUpdateError) throw requestUpdateError;
+        }
+
         return {
             success: true,
             tg_user_id: String(tgUserId),
             currency: normalizedCurrency,
             amount: normalizedAmount,
-            balance_after: nextBalance
+            balance_after: nextBalance,
+            payout_request_id: activePayoutRequest?.id || null
         };
     }
 
@@ -140,7 +210,7 @@ export default function referralRoutes(supabase) {
             payload.reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
             payload.economics = payload.reserve?.economics || getReferralEconomics();
 
-            const [settingsResp, profilesResp, attributionsResp, eventsResp] = await Promise.all([
+            const [settingsResp, profilesResp, attributionsResp, eventsResp, payoutMethodsResp, payoutsResp] = await Promise.all([
                 supabase
                     .from('payment_settings')
                     .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent')
@@ -162,6 +232,16 @@ export default function referralRoutes(supabase) {
                     .select('*')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false })
+                    .limit(300),
+                supabase
+                    .from('referral_partner_payout_methods')
+                    .select('*')
+                    .eq('owner_id', ownerId),
+                supabase
+                    .from('referral_partner_payouts')
+                    .select('*')
+                    .eq('owner_id', ownerId)
+                    .order('requested_at', { ascending: false })
                     .limit(300)
             ]);
 
@@ -173,19 +253,26 @@ export default function referralRoutes(supabase) {
                 }
             }
 
-            if (profilesResp.error || attributionsResp.error || eventsResp.error) {
+            if (profilesResp.error || attributionsResp.error || eventsResp.error || payoutMethodsResp.error || payoutsResp.error) {
                 const joinedError = [
                     profilesResp.error?.message || '',
                     attributionsResp.error?.message || '',
-                    eventsResp.error?.message || ''
+                    eventsResp.error?.message || '',
+                    payoutMethodsResp.error?.message || '',
+                    payoutsResp.error?.message || ''
                 ].join(' ');
 
-                if (joinedError.includes('referral_profiles') || joinedError.includes('referral_attributions') || joinedError.includes('referral_events')) {
+                if (
+                    joinedError.includes('referral_profiles') ||
+                    joinedError.includes('referral_attributions') ||
+                    joinedError.includes('referral_events') ||
+                    joinedError.includes('referral_partner_payout')
+                ) {
                     payload.support.referralTables = false;
                     return res.json(payload);
                 }
 
-                throw profilesResp.error || attributionsResp.error || eventsResp.error;
+                throw profilesResp.error || attributionsResp.error || eventsResp.error || payoutMethodsResp.error || payoutsResp.error;
             }
 
             payload.settings = {
@@ -198,6 +285,8 @@ export default function referralRoutes(supabase) {
             const profiles = profilesResp.data || [];
             const attributions = attributionsResp.data || [];
             const events = eventsResp.data || [];
+            const payoutMethods = payoutMethodsResp.data || [];
+            const payouts = payoutsResp.data || [];
             const completedRewards = events.filter(event => event.event_type === 'reward_granted' && event.status === 'completed');
 
             const eventsByReferrer = new Map();
@@ -208,8 +297,36 @@ export default function referralRoutes(supabase) {
                 eventsByReferrer.set(key, bucket);
             }
 
-            const topPartners = profiles.map(profile => {
+            const payoutMethodByReferrer = new Map();
+            for (const method of payoutMethods) {
+                payoutMethodByReferrer.set(String(method.tg_user_id), method);
+            }
+
+            const pendingPayoutByReferrer = new Map();
+            const latestPayoutByReferrer = new Map();
+            for (const payout of payouts) {
+                const key = String(payout.tg_user_id);
+                if (!latestPayoutByReferrer.has(key)) {
+                    latestPayoutByReferrer.set(key, payout);
+                }
+                if (['requested', 'queued'].includes(String(payout.status))) {
+                    const current = pendingPayoutByReferrer.get(key);
+                    pendingPayoutByReferrer.set(key, {
+                        id: current?.id || payout.id,
+                        count: Number(current?.count || 0) + 1,
+                        amount_ton: Number(current?.amount_ton || 0) + Number(payout.amount_ton || 0),
+                        status: current?.status || payout.status,
+                        ton_wallet: current?.ton_wallet || payout.ton_wallet,
+                        requested_at: current?.requested_at || payout.requested_at
+                    });
+                }
+            }
+
+            const allPartnerRows = profiles.map(profile => {
                 const profileEvents = eventsByReferrer.get(String(profile.tg_user_id)) || [];
+                const payoutMethod = payoutMethodByReferrer.get(String(profile.tg_user_id)) || null;
+                const pendingPayout = pendingPayoutByReferrer.get(String(profile.tg_user_id)) || null;
+                const latestPayout = latestPayoutByReferrer.get(String(profile.tg_user_id)) || null;
                 const paidReferrals = profileEvents.filter(event => event.event_type === 'reward_granted').length;
 
                 const earnedRub = profileEvents
@@ -248,13 +365,30 @@ export default function referralRoutes(supabase) {
                     total_referrals: paidReferrals,
                     earnedRub,
                     earnedTon,
-                    earnedUsdt
+                    earnedUsdt,
+                    payout_wallet: payoutMethod?.ton_wallet || null,
+                    payout_wallet_status: payoutMethod?.status || null,
+                    pending_payout_id: pendingPayout?.id || null,
+                    pending_payout_ton: pendingPayout ? Number(pendingPayout.amount_ton.toFixed(6)) : 0,
+                    pending_payout_status: pendingPayout?.status || null,
+                    pending_payout_count: pendingPayout?.count || 0,
+                    pending_payout_wallet: pendingPayout?.ton_wallet || null,
+                    pending_payout_requested_at: pendingPayout?.requested_at || null,
+                    latest_payout_status: latestPayout?.status || null,
+                    latest_payout_requested_at: latestPayout?.requested_at || null
                 };
-            }).sort((a, b) => {
+            });
+
+            const topPartners = [...allPartnerRows].sort((a, b) => {
+                const bPending = Number(b.pending_payout_ton || 0) > 0 ? 1 : 0;
+                const aPending = Number(a.pending_payout_ton || 0) > 0 ? 1 : 0;
+                if (bPending !== aPending) return bPending - aPending;
                 const bTotal = b.earnedRub + b.earnedTon + b.earnedUsdt;
                 const aTotal = a.earnedRub + a.earnedTon + a.earnedUsdt;
                 return bTotal - aTotal;
-            }).slice(0, 20);
+            });
+
+            payload.pendingPayouts = topPartners.filter(row => Number(row.pending_payout_ton || 0) > 0);
 
             payload.summary = {
                 partners: profiles.length,
@@ -324,10 +458,10 @@ export default function referralRoutes(supabase) {
 
     router.post('/payout', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
-        const { tg_user_id, currency, amount, note } = req.body;
+        const { tg_user_id, currency, amount, note, payout_request_id } = req.body;
 
         try {
-            const result = await markReferralPayout(ownerId, tg_user_id, currency, amount, note);
+            const result = await markReferralPayout(ownerId, tg_user_id, currency, amount, note, payout_request_id);
             if (result.error) {
                 return res.status(result.status || 400).json({ error: result.error });
             }

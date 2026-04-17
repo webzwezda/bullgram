@@ -9,6 +9,22 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 
 const activeBots = new Map();
+const pendingReferralWalletInputs = new Map();
+
+function normalizeTonWallet(value) {
+    return String(value || '').trim();
+}
+
+function looksLikeTonWallet(value) {
+    const wallet = normalizeTonWallet(value);
+    if (/^[UEk]Q[A-Za-z0-9_-]{46}$/.test(wallet)) return true;
+    if (/^[0-9-]+:[a-fA-F0-9]{64}$/.test(wallet)) return true;
+    return false;
+}
+
+function pendingReferralWalletKey(botId, tgUserId) {
+    return `${botId}:${tgUserId}`;
+}
 
 /**
  * Сервис для работы с официальными ботами (Telegraf)
@@ -655,6 +671,139 @@ export class OfficialBotService {
         }
     }
 
+    async getReferralPayoutMethod(ownerId, tgUserId) {
+        try {
+            const { data, error } = await this.supabase
+                .from('referral_partner_payout_methods')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', String(tgUserId))
+                .maybeSingle();
+
+            if (error) {
+                if ((error.message || '').includes('referral_partner_payout_methods')) return null;
+                throw error;
+            }
+
+            return data || null;
+        } catch (error) {
+            if ((error.message || '').includes('referral_partner_payout_methods')) return null;
+            throw error;
+        }
+    }
+
+    async getPendingReferralPayout(ownerId, tgUserId) {
+        try {
+            const { data, error } = await this.supabase
+                .from('referral_partner_payouts')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', String(tgUserId))
+                .in('status', ['requested', 'queued'])
+                .order('requested_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                if ((error.message || '').includes('referral_partner_payouts')) return null;
+                throw error;
+            }
+
+            return data || null;
+        } catch (error) {
+            if ((error.message || '').includes('referral_partner_payouts')) return null;
+            throw error;
+        }
+    }
+
+    async saveReferralPayoutWallet(ownerId, tgUserId, tonWallet) {
+        const normalizedWallet = normalizeTonWallet(tonWallet);
+        if (!looksLikeTonWallet(normalizedWallet)) {
+            return { error: 'Похоже, это не TON-кошелек. Пришли адрес из Tonkeeper/Tonhub, который начинается на UQ/EQ, или raw-адрес вида 0:...' };
+        }
+
+        const pendingPayout = await this.getPendingReferralPayout(ownerId, tgUserId);
+        if (pendingPayout) {
+            return { error: 'У тебя уже есть заявка на выплату. Кошелек можно поменять после обработки этой заявки.' };
+        }
+
+        const now = new Date().toISOString();
+        const { data, error } = await this.supabase
+            .from('referral_partner_payout_methods')
+            .upsert({
+                owner_id: ownerId,
+                tg_user_id: String(tgUserId),
+                ton_wallet: normalizedWallet,
+                status: 'active',
+                verified_at: now,
+                last_changed_at: now,
+                updated_at: now
+            }, { onConflict: 'owner_id,tg_user_id' })
+            .select('*')
+            .single();
+
+        if (error) {
+            if ((error.message || '').includes('referral_partner_payout_methods')) {
+                return { error: 'SQL под payout-кошельки еще не применен.' };
+            }
+            throw error;
+        }
+
+        return { wallet: data };
+    }
+
+    async requestReferralPartnerPayout(ownerId, tgUserId) {
+        const economics = getReferralEconomics();
+        const minPayoutTon = Number(economics.minPayoutTon || 5);
+        const profile = await this.getReferralProfile(ownerId, tgUserId);
+        if (!profile) return { error: 'Сначала нужно открыть партнерку и получить ссылку.' };
+
+        const balanceTon = Number(profile.balance_ton || 0);
+        if (!Number.isFinite(balanceTon) || balanceTon < minPayoutTon) {
+            return { error: `Минимальная выплата ${minPayoutTon} TON. Сейчас на балансе ${balanceTon} TON.` };
+        }
+
+        const payoutMethod = await this.getReferralPayoutMethod(ownerId, tgUserId);
+        if (!payoutMethod?.ton_wallet || payoutMethod.status !== 'active') {
+            return { error: 'Сначала укажи TON-кошелек для выплаты.' };
+        }
+
+        const pendingPayout = await this.getPendingReferralPayout(ownerId, tgUserId);
+        if (pendingPayout) {
+            return { error: `Заявка уже создана: ${Number(pendingPayout.amount_ton || 0)} TON. Дождись обработки.` };
+        }
+
+        const amountTon = Number(balanceTon.toFixed(6));
+        const { data, error } = await this.supabase
+            .from('referral_partner_payouts')
+            .insert({
+                owner_id: ownerId,
+                tg_user_id: String(tgUserId),
+                amount_ton: amountTon,
+                network_fee_ton: 0,
+                status: 'requested',
+                ton_wallet: payoutMethod.ton_wallet,
+                payload: {
+                    source: 'partner_bot_request',
+                    balance_ton_at_request: balanceTon
+                }
+            })
+            .select('*')
+            .single();
+
+        if (error) {
+            if (error.code === '23505' || (error.message || '').includes('duplicate key')) {
+                return { error: 'Заявка уже создана. Дождись обработки.' };
+            }
+            if ((error.message || '').includes('referral_partner_payouts')) {
+                return { error: 'SQL под заявки на выплату еще не применен.' };
+            }
+            throw error;
+        }
+
+        return { payout: data };
+    }
+
     async registerReferralLead({
         ownerId,
         referralCode,
@@ -1059,7 +1208,11 @@ export class OfficialBotService {
 
                 inlineKeyboard.push([{ text: '💳 Покупка тарифа', callback_data: 'buy_tariff' }]);
 
-                if (adminContext.referralEnabled) {
+                const existingReferralProfile = adminContext.referralEnabled
+                    ? null
+                    : await this.getReferralProfile(ownerId, ctx.from.id).catch(() => null);
+
+                if (adminContext.referralEnabled || existingReferralProfile) {
                     inlineKeyboard.push([{ text: '🤝 Стать партнером', callback_data: 'referral_info' }]);
                 }
 
@@ -1400,6 +1553,35 @@ export class OfficialBotService {
 
         // --- Ловец чеков ---
         bot.on('message', async (ctx) => {
+            if (ctx.chat.type === 'private' && ctx.message?.text) {
+                const pendingWallet = pendingReferralWalletInputs.get(pendingReferralWalletKey(botId, ctx.from.id));
+                if (pendingWallet) {
+                    pendingReferralWalletInputs.delete(pendingReferralWalletKey(botId, ctx.from.id));
+
+                    if (Date.now() - Number(pendingWallet.requestedAt || 0) > 15 * 60 * 1000) {
+                        await ctx.reply('Ввод кошелька устарел. Нажми кнопку в партнерке еще раз.');
+                        return;
+                    }
+
+                    try {
+                        const result = await this.saveReferralPayoutWallet(pendingWallet.ownerId, ctx.from.id, ctx.message.text);
+                        if (result.error) {
+                            await ctx.reply(result.error);
+                            return;
+                        }
+
+                        await ctx.reply(`Готово. TON-кошелек для выплат сохранен:\n<code>${result.wallet.ton_wallet}</code>`, {
+                            parse_mode: 'HTML',
+                            reply_markup: { inline_keyboard: [[{ text: '💸 Открыть партнерку', callback_data: 'referral_info' }]] }
+                        });
+                    } catch (error) {
+                        console.error('Ошибка сохранения referral payout wallet:', error);
+                        await ctx.reply('Не получилось сохранить TON-кошелек.');
+                    }
+                    return;
+                }
+            }
+
             if (!ctx.message || (!ctx.message.photo && !ctx.message.document)) return;
             if (ctx.chat.type !== 'private') return;
 
@@ -1607,12 +1789,12 @@ export class OfficialBotService {
                 const ownerId = await this.getBotOwner(botId);
                 if (!ownerId) return;
                 const settings = await this.getReferralSettings(ownerId);
-                if (!settings.referral_enabled) {
+                const existingProfile = await this.getReferralProfile(ownerId, ctx.from.id);
+                if (!settings.referral_enabled && !existingProfile) {
                     return ctx.reply('💸 Партнерская программа сейчас выключена. Если админ ее включит, кнопка появится сама.');
                 }
 
                 const displayName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() || null;
-                const existingProfile = await this.getReferralProfile(ownerId, ctx.from.id);
                 const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
 
                 if (!existingProfile && !reserve.canAcceptNewPartners) {
@@ -1633,14 +1815,81 @@ export class OfficialBotService {
                 const snapshot = await this.getReferralSnapshot(ownerId, ctx.from.id);
                 const paidCount = (snapshot?.events || []).filter(event => event.event_type === 'reward_granted' && event.status === 'completed').length;
                 const leadsCount = snapshot?.leads?.length || 0;
+                const payoutMethod = await this.getReferralPayoutMethod(ownerId, ctx.from.id);
+                const pendingPayout = await this.getPendingReferralPayout(ownerId, ctx.from.id);
+                const minPayoutTon = getReferralEconomics().minPayoutTon;
+                const balanceTon = Number(profile.balance_ton || 0);
+                const walletText = payoutMethod?.ton_wallet
+                    ? `<code>${payoutMethod.ton_wallet}</code>`
+                    : 'не указан';
+                const payoutText = pendingPayout
+                    ? `\n⏳ Заявка на выплату: <b>${Number(pendingPayout.amount_ton || 0)} TON</b> (${pendingPayout.status})`
+                    : '';
+                const payoutKeyboard = [
+                    [{ text: payoutMethod?.ton_wallet ? '✏️ Поменять TON-кошелек' : '➕ Указать TON-кошелек', callback_data: 'referral_wallet_setup' }]
+                ];
+
+                if (balanceTon >= minPayoutTon && payoutMethod?.ton_wallet && !pendingPayout) {
+                    payoutKeyboard.push([{ text: `💸 Запросить выплату ${balanceTon} TON`, callback_data: 'referral_payout_request' }]);
+                }
+
+                payoutKeyboard.push([{ text: '🔄 Обновить', callback_data: 'referral_info' }]);
 
                 await ctx.reply(
-                    `💸 <b>Партнерская программа</b>\n\nТвоя партнерская ссылка:\n<code>t.me/${username}?start=ref_${profile.referral_code}</code>\n\n📊 Статистика:\n   Привлечено лидов: <b>${leadsCount}</b>\n   Закрыто оплат: <b>${paidCount}</b>\n\n💰 Балансы:\n   RUB: <b>${Number(profile.balance_rub || 0)}</b>\n   TON: <b>${Number(profile.balance_ton || 0)}</b>\n   USDT: <b>${Number(profile.balance_usdt || 0)}</b>\n\nШли эту ссылку тем, кому нужен продукт. Бонус прилетит автоматически после первой оплаты.`,
-                    { parse_mode: 'HTML', disable_web_page_preview: true }
+                    `💸 <b>Партнерская программа</b>\n\nТвоя партнерская ссылка:\n<code>t.me/${username}?start=ref_${profile.referral_code}</code>\n\n📊 Статистика:\n   Привлечено лидов: <b>${leadsCount}</b>\n   Закрыто оплат: <b>${paidCount}</b>\n\n💰 Баланс к выплате:\n   TON: <b>${balanceTon}</b>\n\n👛 Кошелек: ${walletText}${payoutText}\n\nМинимальная выплата: <b>${minPayoutTon} TON</b>. Шли ссылку тем, кому нужен продукт.`,
+                    { parse_mode: 'HTML', disable_web_page_preview: true, reply_markup: { inline_keyboard: payoutKeyboard } }
                 );
             } catch (error) {
                 console.error('Ошибка открытия рефералки:', error);
                 await ctx.reply('Не получилось открыть партнерку.');
+            }
+        });
+
+        bot.action('referral_wallet_setup', async (ctx) => {
+            await ctx.answerCbQuery();
+
+            try {
+                const ownerId = await this.getBotOwner(botId);
+                if (!ownerId) return;
+
+                const existingProfile = await this.getReferralProfile(ownerId, ctx.from.id);
+                if (!existingProfile) {
+                    return ctx.reply('Сначала открой партнерку и получи свою ссылку.');
+                }
+
+                const pendingPayout = await this.getPendingReferralPayout(ownerId, ctx.from.id);
+                if (pendingPayout) {
+                    return ctx.reply('У тебя уже есть заявка на выплату. Кошелек можно поменять после обработки заявки.');
+                }
+
+                pendingReferralWalletInputs.set(pendingReferralWalletKey(botId, ctx.from.id), {
+                    ownerId,
+                    requestedAt: Date.now()
+                });
+
+                await ctx.reply('Пришли TON-кошелек одним сообщением. Обычно он начинается на UQ или EQ. Выплаты ниже 5 TON пока не отправляем.');
+            } catch (error) {
+                console.error('Ошибка запуска ввода payout wallet:', error);
+                await ctx.reply('Не получилось открыть ввод кошелька.');
+            }
+        });
+
+        bot.action('referral_payout_request', async (ctx) => {
+            await ctx.answerCbQuery();
+
+            try {
+                const ownerId = await this.getBotOwner(botId);
+                if (!ownerId) return;
+
+                const result = await this.requestReferralPartnerPayout(ownerId, ctx.from.id);
+                if (result.error) {
+                    return ctx.reply(`💸 ${result.error}`);
+                }
+
+                await ctx.reply(`💸 Заявка создана: ${Number(result.payout.amount_ton || 0)} TON.\n\nАдмин увидит ее в партнерке и отправит выплату после проверки.`);
+            } catch (error) {
+                console.error('Ошибка создания payout request:', error);
+                await ctx.reply('Не получилось создать заявку на выплату.');
             }
         });
 
