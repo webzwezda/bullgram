@@ -154,9 +154,21 @@ export default function clientDossierRoutes(supabase) {
 
             const paymentEvents = paymentEventsResp.data || [];
             const latestPaymentByInvoice = latestBy(paymentEvents, row => row.invoice_id);
+            const invoiceCreatedByInvoice = latestBy(
+                paymentEvents.filter(row => row.event_type === 'invoice_created'),
+                row => row.invoice_id
+            );
             const latestInviteByInvoice = latestBy(invitesResp.data || [], row => row.invoice_id, 'issued_at');
             const latestAccessEventByInvoice = latestBy(eventsResp.data || [], row => row.invoice_id);
             const latestInvoiceByChannel = latestBy(invoices, row => row.channel_id);
+            const referralProfile = referralProfileResp.data || null;
+            const referralAttribution = referralAttributionResp.data || null;
+            const referralEventsAsReferrer = referralEventsAsReferrerResp.data || [];
+            const referralEventsAsReferred = referralEventsAsReferredResp.data || [];
+            const referralRewardByInvoice = latestBy(
+                referralEventsAsReferred.filter(event => event.event_type === 'reward_granted'),
+                event => event.invoice_id
+            );
 
             const invites = (invitesResp.data || []).map(invite => ({
                 ...invite,
@@ -174,8 +186,14 @@ export default function clientDossierRoutes(supabase) {
                     ? (subscriptions.find(sub => String(sub.channel_id) === String(invoice.channel_id)) || null)
                     : null;
                 const paymentEvent = latestPaymentByInvoice.get(invoice.id) || null;
+                const invoiceCreatedEvent = invoiceCreatedByInvoice.get(invoice.id) || null;
                 const invite = latestInviteByInvoice.get(invoice.id) || null;
                 const accessEvent = latestAccessEventByInvoice.get(invoice.id) || null;
+                const referralReward = referralRewardByInvoice.get(invoice.id) || null;
+                const invoicePayload = invoiceCreatedEvent?.payload || {};
+                const referralDiscountPercent = Number(invoicePayload.referral_discount_percent || referralReward?.client_discount_percent || 0);
+                const referralDiscountAmount = Number(invoicePayload.referral_discount_amount || referralReward?.client_discount_original_amount || 0);
+                const referralOriginalAmount = Number(invoicePayload.original_amount || referralReward?.sale_original_amount || 0);
 
                 return {
                     invoice_id: invoice.id,
@@ -190,6 +208,14 @@ export default function clientDossierRoutes(supabase) {
                     is_trial: !!invoice.tariffs?.is_trial,
                     trial_label: invoice.tariffs?.trial_label || null,
                     payment_event_type: paymentEvent?.event_type || null,
+                    referral_discount_percent: referralDiscountPercent,
+                    referral_discount_amount: referralDiscountAmount,
+                    referral_original_amount: referralOriginalAmount,
+                    referral_code: invoicePayload.referral_code || referralAttribution?.referral_code || null,
+                    referral_referrer_tg_user_id: referralReward?.referrer_tg_user_id || referralAttribution?.referrer_tg_user_id || null,
+                    referral_reward_status: referralReward?.status || null,
+                    referral_reward_ton: referralReward ? Number(referralReward.reward_ton_amount || referralReward.reward_amount || 0) : 0,
+                    referral_reserve_coverage_status: referralReward?.reserve_coverage_status || null,
                     access_invite_status: invite?.status || null,
                     last_access_event: accessEvent?.event_type || subscription?.last_access_event || null,
                     joined: !!subscription?.last_join_approved_at
@@ -206,10 +232,6 @@ export default function clientDossierRoutes(supabase) {
             const latestSubscription = subscriptions[0] || null;
             const latestAccessEvent = (eventsResp.data || [])[0] || null;
             const latestBaseMembership = baseMemberships[0] || null;
-            const referralProfile = referralProfileResp.data || null;
-            const referralAttribution = referralAttributionResp.data || null;
-            const referralEventsAsReferrer = referralEventsAsReferrerResp.data || [];
-            const referralEventsAsReferred = referralEventsAsReferredResp.data || [];
 
             let referralRole = 'none';
             if (referralProfile && referralAttribution) referralRole = 'both';
@@ -237,6 +259,11 @@ export default function clientDossierRoutes(supabase) {
                 referralBalanceTon: Number(referralProfile?.balance_ton || 0),
                 referralBalanceUsdt: Number(referralProfile?.balance_usdt || 0),
                 referredBy: referralAttribution?.referrer_tg_user_id || null,
+                referralCodeFromAttribution: referralAttribution?.referral_code || null,
+                referralAttributionExpiresAt: referralAttribution?.expires_at || null,
+                referralDiscountEligible: referralAttribution?.discount_eligible ?? null,
+                referralRewardPercentSnapshot: referralAttribution?.reward_percent_snapshot ?? null,
+                referralClientDiscountPercentSnapshot: referralAttribution?.client_discount_percent_snapshot ?? null,
                 referralConversions: referralEventsAsReferrer.filter(event => event.event_type === 'reward_granted' && event.status === 'completed').length
             };
 

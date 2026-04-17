@@ -408,9 +408,9 @@ Statuses:
 
 ### `/app/orders` and `/app/dossier`
 
-- [ ] Show referral discount metadata on orders.
-- [ ] Show partner attribution and expiry in dossier.
-- [ ] Show partner reward settlement status after purchase.
+- [x] Show referral discount metadata on orders.
+- [x] Show partner attribution and expiry in dossier.
+- [x] Show partner reward settlement status after purchase.
 - [ ] Keep legacy dossier labels compatible with existing referral profile/attribution data.
 
 ### `/app/plans` and Payment Settings
@@ -635,3 +635,8 @@ Scenario checks:
   - `/app/referrals` shows partner payout wallet and pending requested TON amount
   - admin/manual payout remains separate from automated payout sending
   - TON payout accounting uses 6 decimal places
+- Added read-only referral metadata outside `/app/referrals`:
+  - `/app/orders` shows referral discount, original price, partner reward TON, and reward status
+  - `/app/orders` has a `По рефке` filter for invoice triage
+  - `/app/dossier` shows whether the client is a partner/referred user, who referred them, attribution expiry, discount snapshot, partner balance, and reward status per order
+  - no referral settings, payout controls, or reserve controls were moved into orders/dossier

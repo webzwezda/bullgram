@@ -12,6 +12,12 @@ function formatWhen(value) {
   }).format(new Date(value));
 }
 
+function formatMoney(value, currency) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return `0 ${currency || ''}`.trim();
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: currency === 'RUB' ? 2 : 6 })} ${currency || ''}`.trim();
+}
+
 function invoiceBadge(status) {
   if (status === 'paid') return 'pill pill--ok';
   if (status === 'awaiting_receipt' || status === 'wait_admin') return 'pill pill--warning';
@@ -236,7 +242,17 @@ export function ClientDossierPage() {
                 </div>
                 <div className="list-item">
                   <div className="list-item__title">Рефералка</div>
-                  <div className="list-item__meta">{referralStatusText(state.summary.referralRole)}</div>
+                  <div className="list-item__meta">
+                    {referralStatusText(state.summary.referralRole)}
+                    {state.summary.referredBy ? ` • привел TG ${state.summary.referredBy}` : ''}
+                    {state.summary.referralClientDiscountPercentSnapshot ? ` • скидка ${state.summary.referralClientDiscountPercentSnapshot}%` : ''}
+                    {state.summary.referralAttributionExpiresAt ? ` • до ${formatWhen(state.summary.referralAttributionExpiresAt)}` : ''}
+                  </div>
+                  {state.summary.referralRole === 'partner' || state.summary.referralRole === 'both' ? (
+                    <div className="list-item__meta">
+                      Партнерский баланс: {formatMoney(state.summary.referralBalanceTon, 'TON')} • конверсий: {state.summary.referralConversions || 0}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -248,6 +264,7 @@ export function ClientDossierPage() {
                 <a className="ghost-button" href="/app/access" target="_blank" rel="noreferrer">Доступ</a>
                 <a className="ghost-button" href="/app/crm" target="_blank" rel="noreferrer">CRM</a>
                 <a className="ghost-button" href="/app/broadcast" target="_blank" rel="noreferrer">Рассылки</a>
+                <a className="ghost-button" href="/app/referrals" target="_blank" rel="noreferrer">Рефералка</a>
               </div>
             </div>
           </div>
@@ -285,9 +302,25 @@ export function ClientDossierPage() {
                       <td>
                         <div>{row.tariff_title}</div>
                         <div className="table-subtext">{row.channel_title}</div>
+                        {Number(row.referral_discount_percent || 0) > 0 ? (
+                          <div className="table-subtext">
+                            Рефка: -{row.referral_discount_percent}% • было {formatMoney(row.referral_original_amount, row.currency)}
+                          </div>
+                        ) : null}
                       </td>
                       <td><span className={invoiceBadge(row.invoice_status)}>{row.invoice_status}</span></td>
-                      <td>{row.payment_event_type || 'Нет сигнала кассы'}</td>
+                      <td>
+                        <div>{row.payment_event_type || 'Нет сигнала кассы'}</div>
+                        {Number(row.referral_reward_ton || 0) > 0 ? (
+                          <div className="table-subtext">
+                            Партнеру: {formatMoney(row.referral_reward_ton, 'TON')} • {row.referral_reward_status || 'ждет'}
+                          </div>
+                        ) : Number(row.referral_discount_percent || 0) > 0 ? (
+                          <div className="table-subtext">
+                            Партнер: {row.referral_referrer_tg_user_id ? `TG ${row.referral_referrer_tg_user_id}` : row.referral_code || 'по коду'}
+                          </div>
+                        ) : null}
+                      </td>
                       <td>{row.joined ? 'Зашел' : row.access_invite_status || row.last_access_event || 'Пока мутно'}</td>
                     </tr>
                   ))}

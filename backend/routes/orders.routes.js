@@ -50,7 +50,7 @@ export default function ordersRoutes(supabase) {
                 channel_id: invoice.tariffs.channel_id
             }));
 
-            const [{ data: paymentEvents, error: paymentEventsError }, { data: accessInvites, error: accessInvitesError }, { data: accessEvents, error: accessEventsError }, { data: subscriptions, error: subscriptionsError }] = await Promise.all([
+            const [{ data: paymentEvents, error: paymentEventsError }, { data: accessInvites, error: accessInvitesError }, { data: accessEvents, error: accessEventsError }, { data: subscriptions, error: subscriptionsError }, { data: referralEvents, error: referralEventsError }] = await Promise.all([
                 invoiceIds.length > 0
                     ? supabase
                         .from('payment_events')
@@ -81,6 +81,14 @@ export default function ordersRoutes(supabase) {
                         .select('id, tg_user_id, channel_id, status, expires_at, last_join_approved_at, last_access_event')
                         .in('channel_id', channelIds)
                         .order('created_at', { ascending: false })
+                    : Promise.resolve({ data: [], error: null }),
+                invoiceIds.length > 0
+                    ? supabase
+                        .from('referral_events')
+                        .select('id, invoice_id, referrer_tg_user_id, event_type, status, reward_amount, reward_currency, reward_ton_amount, client_discount_percent, client_discount_original_amount, sale_original_amount, sale_original_currency, reserve_coverage_status, created_at')
+                        .eq('owner_id', ownerId)
+                        .in('invoice_id', invoiceIds)
+                        .order('created_at', { ascending: false })
                     : Promise.resolve({ data: [], error: null })
             ]);
 
@@ -88,10 +96,19 @@ export default function ordersRoutes(supabase) {
             if (accessInvitesError && !(accessInvitesError.message || '').includes('access_invites')) throw accessInvitesError;
             if (accessEventsError && !(accessEventsError.message || '').includes('access_events')) throw accessEventsError;
             if (subscriptionsError) throw subscriptionsError;
+            if (referralEventsError && !(referralEventsError.message || '').includes('referral_events')) throw referralEventsError;
 
             const latestPaymentEventByInvoice = latestBy(paymentEvents || [], item => item.invoice_id);
+            const invoiceCreatedEventByInvoice = latestBy(
+                (paymentEvents || []).filter(item => item.event_type === 'invoice_created'),
+                item => item.invoice_id
+            );
             const latestInviteByInvoice = latestBy(accessInvites || [], item => item.invoice_id);
             const latestAccessEventByInvoice = latestBy(accessEvents || [], item => item.invoice_id);
+            const referralRewardByInvoice = latestBy(
+                (referralEvents || []).filter(item => item.event_type === 'reward_granted'),
+                item => item.invoice_id
+            );
             const subscriptionMap = new Map((subscriptions || []).map(sub => [`${sub.tg_user_id}:${sub.channel_id}`, sub]));
 
             const rows = invoices.map(invoice => {
@@ -99,8 +116,14 @@ export default function ordersRoutes(supabase) {
                 const subKey = `${invoice.tg_user_id}:${channelId}`;
                 const subscription = subscriptionMap.get(subKey) || null;
                 const paymentEvent = latestPaymentEventByInvoice.get(invoice.id) || null;
+                const invoiceCreatedEvent = invoiceCreatedEventByInvoice.get(invoice.id) || null;
                 const invite = latestInviteByInvoice.get(invoice.id) || null;
                 const accessEvent = latestAccessEventByInvoice.get(invoice.id) || null;
+                const referralReward = referralRewardByInvoice.get(invoice.id) || null;
+                const invoicePayload = invoiceCreatedEvent?.payload || {};
+                const referralDiscountPercent = Number(invoicePayload.referral_discount_percent || referralReward?.client_discount_percent || 0);
+                const referralDiscountAmount = Number(invoicePayload.referral_discount_amount || referralReward?.client_discount_original_amount || 0);
+                const referralOriginalAmount = Number(invoicePayload.original_amount || referralReward?.sale_original_amount || 0);
                 let problemReason = 'Все выглядит ровно';
 
                 if (invoice.status === 'awaiting_receipt') {
@@ -134,6 +157,15 @@ export default function ordersRoutes(supabase) {
                     channel_title: channelMap.get(channelId) || 'Неизвестный канал',
                     payment_event_type: paymentEvent?.event_type || null,
                     payment_event_status: paymentEvent?.status || null,
+                    referral_discount_percent: referralDiscountPercent,
+                    referral_discount_amount: referralDiscountAmount,
+                    referral_original_amount: referralOriginalAmount,
+                    referral_code: invoicePayload.referral_code || null,
+                    referral_reward_status: referralReward?.status || null,
+                    referral_reward_ton: referralReward ? Number(referralReward.reward_ton_amount || referralReward.reward_amount || 0) : 0,
+                    referral_reward_currency: referralReward?.reward_currency || null,
+                    referral_referrer_tg_user_id: referralReward?.referrer_tg_user_id || null,
+                    referral_reserve_coverage_status: referralReward?.reserve_coverage_status || null,
                     access_invite_status: invite?.status || null,
                     last_access_event: accessEvent?.event_type || subscription?.last_access_event || null,
                     subscription_status: subscription?.status || null,
@@ -147,6 +179,7 @@ export default function ordersRoutes(supabase) {
                 totalOrders: rows.length,
                 paidOrders: rows.filter(row => row.invoice_status === 'paid').length,
                 trialOrders: rows.filter(row => row.is_trial).length,
+                referralOrders: rows.filter(row => Number(row.referral_discount_percent || 0) > 0 || Number(row.referral_reward_ton || 0) > 0).length,
                 accessPending: rows.filter(row => row.invoice_status === 'paid' && !row.joined).length,
                 brokenOrders: rows.filter(row =>
                     row.invoice_status === 'paid' &&

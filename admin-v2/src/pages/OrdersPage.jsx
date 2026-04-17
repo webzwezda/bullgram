@@ -10,6 +10,7 @@ const FILTERS = [
   { id: 'all', label: 'Все' },
   { id: 'paid', label: 'Оплачено' },
   { id: 'access_pending', label: 'Оплатили, но не зашли' },
+  { id: 'referrals', label: 'По рефке' },
   { id: 'trial', label: 'Пробники' },
   { id: 'broken', label: 'Доступ мутный' }
 ];
@@ -20,6 +21,12 @@ function formatDate(value) {
     dateStyle: 'short',
     timeStyle: 'short'
   }).format(new Date(value));
+}
+
+function formatMoney(value, currency) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return `0 ${currency || ''}`.trim();
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: currency === 'RUB' ? 2 : 6 })} ${currency || ''}`.trim();
 }
 
 function invoiceBadgeClass(row) {
@@ -144,6 +151,7 @@ export function OrdersPage() {
     return state.rows.filter((row) => {
       if (filter === 'paid' && row.invoice_status !== 'paid') return false;
       if (filter === 'access_pending' && !(row.invoice_status === 'paid' && !row.joined)) return false;
+      if (filter === 'referrals' && !(Number(row.referral_discount_percent || 0) > 0 || Number(row.referral_reward_ton || 0) > 0)) return false;
       if (filter === 'trial' && !row.is_trial) return false;
       if (filter === 'broken' && !(row.invoice_status === 'paid' && !row.access_invite_status && !row.last_access_event)) return false;
 
@@ -153,6 +161,8 @@ export function OrdersPage() {
         row.tg_user_id || '',
         row.tariff_title || '',
         row.channel_title || '',
+        row.referral_code || '',
+        row.referral_referrer_tg_user_id || '',
         row.problem_reason || '',
         row.invoice_status || ''
       ].join(' ').toLowerCase().includes(normalizedSearch);
@@ -177,6 +187,12 @@ export function OrdersPage() {
       value: state.summary.brokenOrders || 0,
       tone: (state.summary.brokenOrders || 0) > 0 ? 'danger' : 'ok',
       hint: 'Оплата есть, а по доступу нет внятного движения'
+    },
+    {
+      title: 'По рефке',
+      value: state.summary.referralOrders || 0,
+      tone: (state.summary.referralOrders || 0) > 0 ? 'info' : 'default',
+      hint: 'Заказы со скидкой или начислением партнеру'
     },
     {
       title: 'Пробники',
@@ -332,6 +348,7 @@ export function OrdersPage() {
         <StatCard title="Всего заказов" value={state.summary.totalOrders || 0} hint="Все текущие заказы и счета." />
         <StatCard title="Оплачено" value={state.summary.paidOrders || 0} hint="Уже занесли деньги." />
         <StatCard title="Пробники" value={state.summary.trialOrders || 0} hint="Отдельный хвост для дожима в апселл." />
+        <StatCard title="По рефке" value={state.summary.referralOrders || 0} hint="Скидка клиенту или награда партнеру." />
         <StatCard title="Доступ висит" value={state.summary.accessPending || 0} hint="Оплата есть, а входа в группу еще нет." />
         <StatCard title="Сломанные" value={state.summary.brokenOrders || 0} hint="Оплата есть, а по доступу нет никакого движения." />
       </div>
@@ -398,10 +415,24 @@ export function OrdersPage() {
                   <td>
                     <div>{row.tariff_title}</div>
                     <div className="table-subtext">{row.is_trial ? (row.trial_label || 'Пробник') : 'Обычный тариф'}</div>
+                    {Number(row.referral_discount_percent || 0) > 0 ? (
+                      <div className="table-subtext">
+                        Рефка: -{row.referral_discount_percent}% • было {formatMoney(row.referral_original_amount, row.currency)}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <span className={invoiceBadgeClass(row)}>{row.invoice_status}</span>
                     <div className="table-subtext">{row.payment_event_type || 'Нет сигнала кассы'}</div>
+                    {Number(row.referral_reward_ton || 0) > 0 ? (
+                      <div className="table-subtext">
+                        Партнеру: {formatMoney(row.referral_reward_ton, 'TON')} • {row.referral_reward_status || 'ждет'}
+                      </div>
+                    ) : Number(row.referral_discount_percent || 0) > 0 ? (
+                      <div className="table-subtext">
+                        Партнер: {row.referral_referrer_tg_user_id ? `TG ${row.referral_referrer_tg_user_id}` : row.referral_code || 'по коду'}
+                      </div>
+                    ) : null}
                   </td>
                   <td>
                     <span className={accessBadgeClass(row)}>{row.joined ? 'Зашел' : 'Не зашел'}</span>
