@@ -739,10 +739,12 @@ a {
   gap: 8px;
   font-size: 13px;
   color: var(--muted);
+  min-width: 0;
 }
 
 .field-group .field {
   width: 100%;
+  min-width: 0;
 }
 
 .field-group textarea.field {
@@ -2107,7 +2109,31 @@ a {
 }
 
 .referrals-control-window .field {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border-radius: 8px;
+}
+
+.referrals-settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+
+.referrals-settings-grid .field-group,
+.referrals-settings-welcome {
+  min-width: 0;
+}
+
+.referrals-settings-welcome {
+  margin-top: 16px;
+}
+
+.referrals-settings-welcome .textarea-field {
+  width: 100%;
+  min-width: 0;
+  min-height: 128px;
+  box-sizing: border-box;
 }
 
 /* Referrals Data Section */
@@ -2475,6 +2501,10 @@ a {
   }
 
   .referrals-deposit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .referrals-settings-grid {
     grid-template-columns: 1fr;
   }
 

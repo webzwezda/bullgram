@@ -416,7 +416,7 @@ export function ReferralsPage() {
               <div className="referrals-section__hint">Включение и экономика</div>
             </div>
             <div className="referrals-section__body">
-              <div className="form-grid">
+              <div className="form-grid referrals-settings-grid">
                 <div className="field-group">
                   <label className="field-label">Статус</label>
                   <select
@@ -456,7 +456,7 @@ export function ReferralsPage() {
                 </div>
               </div>
 
-              <div className="field-group" style={{ marginTop: '14px' }}>
+              <div className="field-group referrals-settings-welcome">
                 <label className="field-label">Приветствие для партнеров</label>
                 <textarea
                   className="field textarea-field"
