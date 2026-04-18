@@ -98,35 +98,29 @@ export function OfficialBotsSection({
   channelsByBotId
 }) {
   return (
-    <div className="max-w-4xl pt-6 space-y-6">
+    <div className="pt-6 space-y-6">
 
       {/* Подключение бота */}
-      <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden transition-all hover:border-slate-300/60 flex flex-col">
-        <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
-          <Bot className="w-32 h-32" />
-        </div>
-
-        <div className="p-6 md:p-8 border-b border-slate-100 relative z-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white">
-                <Bot className="w-7 h-7" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">Подключить нового бота</h3>
-                <p className="text-sm text-slate-500 font-medium mt-1">Через официальный API Telegram</p>
-              </div>
+      <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
+        <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white relative z-10">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white shrink-0">
+              <Bot className="w-6 h-6" />
             </div>
-            <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-[13px] font-bold rounded-xl transition-colors border border-slate-200 hover:border-blue-200">
-              Открыть @BotFather <ExternalLink className="w-3.5 h-3.5"/>
-            </a>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Подключить нового бота</h3>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">Через официальный API Telegram</p>
+            </div>
           </div>
+          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-[13px] font-bold rounded-xl transition-colors border border-slate-200 hover:border-blue-200">
+            Открыть @BotFather <ExternalLink className="w-3.5 h-3.5"/>
+          </a>
         </div>
 
-        <div className="p-6 md:p-8 bg-slate-50/50 relative z-10">
-          <div className="flex flex-col lg:flex-row items-end gap-5">
-            <div className="flex-1 w-full min-w-0">
-              <label className="flex flex-col gap-2 min-w-0">
+        <div className="p-6 md:p-8 bg-slate-50/50">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+            <div className="md:col-span-7">
+              <label className="flex flex-col gap-2">
                 <span className="text-sm font-bold text-slate-700 flex items-center">
                   Bot Token
                   <span className="ml-2 text-[10px] font-bold tracking-wider uppercase text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-md border border-blue-200/50">Обязательно</span>
@@ -142,8 +136,8 @@ export function OfficialBotsSection({
               </label>
             </div>
 
-            <div className="w-full lg:w-48 shrink-0">
-              <label className="flex flex-col gap-2 min-w-0">
+            <div className="md:col-span-3">
+              <label className="flex flex-col gap-2">
                 <span className="text-sm font-bold text-slate-700">Роль бота</span>
                 <div className="relative">
                   <select
@@ -161,22 +155,22 @@ export function OfficialBotsSection({
               </label>
             </div>
 
-            <div className="w-full lg:w-auto shrink-0 pt-2 lg:pt-0">
+            <div className="md:col-span-2 flex items-end">
               <button
-                className="w-full lg:w-auto h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold shadow-sm shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-70 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:pointer-events-none"
+                className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[15px] font-bold shadow-sm shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-70 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:pointer-events-none"
                 onClick={addOfficialBot}
                 disabled={state.savingBot || !botForm.botToken.trim()}
               >
-                {state.savingBot ? 'Подключаем...' : 'Подключить'}
+                {state.savingBot ? '...' : 'Подключить'}
               </button>
             </div>
           </div>
 
           {botForm.botRole === 'sales' && (
-            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
+            <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
               <div className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>Принимает оплаты и выдает ссылки</span>
+                <span>Выдает ссылки после оплаты</span>
               </div>
               <div className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
@@ -188,7 +182,7 @@ export function OfficialBotsSection({
               </div>
               <div className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>Заносит профили в CRM</span>
+                <span>Заносит в CRM</span>
               </div>
             </div>
           )}
@@ -197,32 +191,26 @@ export function OfficialBotsSection({
 
       {/* Назначение админа */}
       {selectedOfficialBot && (
-        <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden transition-all hover:border-slate-300/60 flex flex-col">
-          <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
-            <ShieldAlert className="w-32 h-32" />
-          </div>
-
-          <div className="p-6 md:p-8 border-b border-slate-100 relative z-10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
-                  <ShieldAlert className="w-7 h-7" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Админ бота</h3>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Получатель сервисных уведомлений</p>
-                </div>
+        <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
+          <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white shrink-0">
+                <ShieldAlert className="w-6 h-6" />
               </div>
-              <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 text-[13px] font-bold rounded-xl transition-colors border border-slate-200 hover:border-indigo-200">
-                Узнать свой ID в @userinfobot <ExternalLink className="w-3.5 h-3.5"/>
-              </a>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Админ бота</h3>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">Получатель сервисных уведомлений</p>
+              </div>
             </div>
+            <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 text-[13px] font-bold rounded-xl transition-colors border border-slate-200 hover:border-indigo-200">
+              Узнать свой ID <ExternalLink className="w-3.5 h-3.5"/>
+            </a>
           </div>
 
-          <div className="p-6 md:p-8 bg-slate-50/50 relative z-10">
-            <div className="flex flex-col lg:flex-row items-end gap-5">
-              <div className="w-full lg:w-1/3 shrink-0">
-                <label className="flex flex-col gap-2 min-w-0">
+          <div className="p-6 md:p-8 bg-slate-50/50">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              <div className="md:col-span-5">
+                <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">Выберите бота</span>
                   <div className="relative">
                     <select
@@ -243,8 +231,8 @@ export function OfficialBotsSection({
                 </label>
               </div>
 
-              <div className="flex-1 w-full min-w-0">
-                <label className="flex flex-col gap-2 min-w-0">
+              <div className="md:col-span-5">
+                <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">Telegram ID админа</span>
                   <input
                     className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder:text-slate-400 shadow-sm"
@@ -263,20 +251,19 @@ export function OfficialBotsSection({
                 </label>
               </div>
 
-              <div className="w-full lg:w-auto shrink-0 pt-2 lg:pt-0">
+              <div className="md:col-span-2 flex items-end">
                 <button
-                  className="w-full lg:w-auto h-12 px-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[15px] font-bold shadow-sm transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
+                  className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[15px] font-bold shadow-sm transition-all active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none"
                   onClick={() => saveBotAdmin(selectedOfficialBot)}
                   disabled={state.savingBotAdminId === String(selectedOfficialBot.id)}
                 >
-                  {state.savingBotAdminId === String(selectedOfficialBot.id) ? 'Сохраняем...' : 'Сохранить'}
+                  {state.savingBotAdminId === String(selectedOfficialBot.id) ? '...' : 'Сохранить'}
                 </button>
               </div>
             </div>
           </div>
         </section>
       )}
-
       {/* Список ботов */}
       {officialBots.length === 0 ? (
         <section className="bg-slate-50/50 border border-slate-200 border-dashed rounded-3xl p-10 flex flex-col items-center justify-center text-center">
