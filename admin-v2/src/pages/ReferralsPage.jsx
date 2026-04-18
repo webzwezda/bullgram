@@ -81,6 +81,12 @@ function firstPresent(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== '');
 }
 
+function preferredDepositCheckoutView(reserve) {
+  if (reserve?.depositTrustWalletQr || reserve?.depositTrustWalletUri) return 'trust';
+  if (reserve?.depositTonQr || reserve?.depositTonUri) return 'ton';
+  return 'trust';
+}
+
 function payoutTxHash(row) {
   const payload = parsePayload(row?.payload);
   return firstPresent(
@@ -247,6 +253,104 @@ function RefundTransferBox({ reserve }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DepositTransferBox({ reserve }) {
+  const [checkoutView, setCheckoutView] = useState(preferredDepositCheckoutView(reserve));
+
+  useEffect(() => {
+    setCheckoutView(preferredDepositCheckoutView(reserve));
+  }, [
+    reserve?.depositAddress,
+    reserve?.depositMemo,
+    reserve?.depositTrustWalletQr,
+    reserve?.depositTrustWalletUri,
+    reserve?.depositTonQr,
+    reserve?.depositTonUri
+  ]);
+
+  const wallet = reserve?.depositAddress || '';
+  const memo = reserve?.depositMemo || '';
+  const suggestedAmount = Number(reserve?.depositSuggestedTon || 0);
+  const hasTrustQr = !!reserve?.depositTrustWalletQr;
+  const hasTonQr = !!reserve?.depositTonQr;
+  const hasTrustLink = !!reserve?.depositTrustWalletUri;
+  const hasTonLink = !!reserve?.depositTonUri;
+  const activeQrSrc = checkoutView === 'ton'
+    ? (reserve?.depositTonQr || reserve?.depositTrustWalletQr)
+    : (reserve?.depositTrustWalletQr || reserve?.depositTonQr);
+  const activeQrLabel = checkoutView === 'ton' ? 'QR для TON-кошелька' : 'QR для Trust Wallet';
+
+  if (!wallet && !memo && !activeQrSrc) return null;
+
+  async function copyValue(value, label) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      window.alert(`${label} скопирован.`);
+    } catch {
+      window.prompt(label, value);
+    }
+  }
+
+  return (
+    <div className="referrals-deposit-pay">
+      <div className="referrals-deposit-pay__content">
+        <div className="referrals-payout-transfer__title">Пополнение через кошелек</div>
+        <div className="referrals-deposit-pay__hint">
+          Переведи ровно с этим memo. QR ставит сумму {suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}.
+        </div>
+        <div className="referrals-payout-transfer__actions">
+          {hasTrustLink ? (
+            <a className="referrals-action-btn referrals-action-btn--payout" href={reserve.depositTrustWalletUri}>
+              Trust Wallet
+            </a>
+          ) : null}
+          {hasTonLink ? (
+            <a className="referrals-action-btn" href={reserve.depositTonUri}>
+              TON
+            </a>
+          ) : null}
+          {wallet ? (
+            <button type="button" className="referrals-action-btn" onClick={() => copyValue(wallet, 'Кошелек')}>
+              Кошелек
+            </button>
+          ) : null}
+          {memo ? (
+            <button type="button" className="referrals-action-btn" onClick={() => copyValue(memo, 'Memo')}>
+              Memo
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {activeQrSrc ? (
+        <div className="referrals-deposit-pay__qrbox">
+          {hasTrustQr && hasTonQr ? (
+            <div className="referrals-deposit-pay__tabs">
+              <button
+                type="button"
+                className={`referrals-deposit-pay__tab ${checkoutView === 'trust' ? 'referrals-deposit-pay__tab--active' : ''}`}
+                onClick={() => setCheckoutView('trust')}
+              >
+                Trust Wallet
+              </button>
+              <button
+                type="button"
+                className={`referrals-deposit-pay__tab ${checkoutView === 'ton' ? 'referrals-deposit-pay__tab--active' : ''}`}
+                onClick={() => setCheckoutView('ton')}
+              >
+                TON
+              </button>
+            </div>
+          ) : null}
+          <div className="referrals-deposit-pay__qr-label">
+            {checkoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+          </div>
+          <img className="referrals-deposit-pay__qr" src={activeQrSrc} alt={activeQrLabel} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -876,6 +980,8 @@ export function ReferralsPage() {
                   <div className="referrals-deposit-field__value">{formatWhen(state.reserve?.lockedUntil)}</div>
                 </div>
               </div>
+
+              <DepositTransferBox reserve={state.reserve} />
 
               <div className="referrals-refund-box">
                 <div>

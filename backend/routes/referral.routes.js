@@ -98,6 +98,28 @@ export default function referralRoutes(supabase) {
         return `ton://transfer/${normalizedWallet}?${params.toString()}`;
     }
 
+    function buildTrustWalletTonUri(wallet, amountTon, memo) {
+        const normalizedWallet = String(wallet || '').trim();
+        if (!normalizedWallet) return null;
+
+        const params = new URLSearchParams({
+            asset: 'c607',
+            address: normalizedWallet
+        });
+
+        const normalizedAmount = normalizeCurrencyAmount('TON', amountTon);
+        if (Number.isFinite(normalizedAmount) && normalizedAmount > 0) {
+            params.set('amount', String(normalizedAmount));
+        }
+
+        const normalizedMemo = String(memo || '').trim();
+        if (normalizedMemo) {
+            params.set('memo', normalizedMemo);
+        }
+
+        return `https://link.trustwallet.com/send?${params.toString()}`;
+    }
+
     async function addPayoutPaymentPayload(row) {
         const wallet = row.pending_payout_wallet || row.payout_wallet || '';
         const amountTon = normalizeCurrencyAmount('TON', row.pending_payout_ton);
@@ -150,6 +172,57 @@ export default function referralRoutes(supabase) {
             console.error('Ошибка генерации TON transfer QR:', error.message || error);
             return { uri, qr: null };
         }
+    }
+
+    async function buildReserveDepositPaymentPayload(wallet, amountTon, memo) {
+        const tonUri = buildTonTransferUri(wallet, amountTon, memo);
+        const trustWalletUri = buildTrustWalletTonUri(wallet, amountTon, memo);
+
+        async function toQr(uri, label) {
+            if (!uri) return null;
+            try {
+                return await QRCode.toDataURL(uri, {
+                    errorCorrectionLevel: 'H',
+                    margin: 2,
+                    width: 260
+                });
+            } catch (error) {
+                console.error(`Ошибка генерации referral deposit ${label} QR:`, error.message || error);
+                return null;
+            }
+        }
+
+        return {
+            tonUri,
+            tonQr: await toQr(tonUri, 'TON'),
+            trustWalletUri,
+            trustWalletQr: await toQr(trustWalletUri, 'Trust Wallet')
+        };
+    }
+
+    async function enrichReserveDepositPayload(reserve) {
+        if (!reserve?.depositAddress || !reserve?.depositMemo) {
+            return reserve;
+        }
+
+        const minimumDepositTon = normalizeCurrencyAmount('TON', reserve.minimumDepositTon || getReferralEconomics().minimumDepositTon || 100);
+        const totalDepositedTon = normalizeCurrencyAmount('TON', reserve.totalDepositedTon || 0);
+        const missingDepositTon = normalizeCurrencyAmount('TON', Math.max(0, minimumDepositTon - totalDepositedTon));
+        const suggestedAmountTon = missingDepositTon > 0 ? missingDepositTon : minimumDepositTon;
+        const payment = await buildReserveDepositPaymentPayload(
+            reserve.depositAddress,
+            suggestedAmountTon,
+            reserve.depositMemo
+        );
+
+        return {
+            ...reserve,
+            depositSuggestedTon: suggestedAmountTon,
+            depositTonUri: payment.tonUri,
+            depositTonQr: payment.tonQr,
+            depositTrustWalletUri: payment.trustWalletUri,
+            depositTrustWalletQr: payment.trustWalletQr
+        };
     }
 
     async function enrichReserveRefundPayload(ownerId, reserve) {
@@ -883,9 +956,11 @@ export default function referralRoutes(supabase) {
         const payload = createEmptyResponse();
 
         try {
-            payload.reserve = await enrichReserveRefundPayload(
-                ownerId,
-                await loadReferralReserveState(supabase, ownerId, { ensure: true })
+            payload.reserve = await enrichReserveDepositPayload(
+                await enrichReserveRefundPayload(
+                    ownerId,
+                    await loadReferralReserveState(supabase, ownerId, { ensure: true })
+                )
             );
             payload.economics = payload.reserve?.economics || getReferralEconomics();
 
