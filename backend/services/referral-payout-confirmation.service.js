@@ -163,6 +163,33 @@ function findConfirmationForPayout(payout, walletMessages) {
     }) || null;
 }
 
+function getAutoRefundMeta(entry) {
+    const payload = entry?.payload || {};
+    const transferRef = String(payload.transfer_ref || entry?.chain_tx_hash || '').trim();
+    const transferRefParts = transferRef.startsWith('ton:') ? transferRef.split(':') : [];
+    return {
+        payload,
+        transferRef,
+        walletAddress: normalizeAddress(payload.wallet_address || transferRefParts[1] || process.env.TON_RESERVE_DEPOSIT_ADDRESS),
+        memo: String(payload.refund_memo || '').trim(),
+        refundWallet: normalizeAddress(payload.refund_wallet)
+    };
+}
+
+function findConfirmationForRefund(entry, walletMessages) {
+    const meta = getAutoRefundMeta(entry);
+    if (!meta.memo) return null;
+
+    const expectedAmountTon = Number(entry.amount_ton || 0);
+
+    return walletMessages.find((message) => {
+        if (!String(message.comment || '').includes(meta.memo)) return false;
+        if (meta.refundWallet && message.destination && message.destination !== meta.refundWallet) return false;
+        if (expectedAmountTon > 0 && message.amountTon > 0 && Math.abs(message.amountTon - expectedAmountTon) > 0.000001) return false;
+        return true;
+    }) || null;
+}
+
 async function loadPendingAutoPayoutConfirmations(supabase) {
     const { data, error } = await supabase
         .from('referral_partner_payouts')
@@ -180,8 +207,24 @@ async function loadPendingAutoPayoutConfirmations(supabase) {
     return data || [];
 }
 
-export async function processReferralPayoutConfirmations(supabase) {
-    const payouts = await loadPendingAutoPayoutConfirmations(supabase);
+async function loadPendingAutoRefundConfirmations(supabase) {
+    const { data, error } = await supabase
+        .from('referral_reserve_ledger')
+        .select('*')
+        .eq('entry_type', 'admin_refund_sent')
+        .like('chain_tx_hash', 'ton:%')
+        .order('created_at', { ascending: true })
+        .limit(envNumber('TON_PAYOUT_CONFIRMATION_BATCH_LIMIT', 50, { min: 1, max: 200 }));
+
+    if (error) {
+        if ((error.message || '').includes('referral_reserve_ledger')) return [];
+        throw error;
+    }
+
+    return data || [];
+}
+
+async function confirmAutoPayouts(supabase, payouts) {
     if (payouts.length === 0) return { checked: 0, confirmed: 0 };
 
     const payoutsByWallet = new Map();
@@ -253,4 +296,109 @@ export async function processReferralPayoutConfirmations(supabase) {
     }
 
     return { checked, confirmed };
+}
+
+async function confirmAutoRefunds(supabase, entries) {
+    if (entries.length === 0) return { checked: 0, confirmed: 0 };
+
+    const refundsByWallet = new Map();
+    for (const entry of entries) {
+        const meta = getAutoRefundMeta(entry);
+        if (!meta.walletAddress || !meta.memo) continue;
+        const bucket = refundsByWallet.get(meta.walletAddress) || [];
+        bucket.push({ entry, meta });
+        refundsByWallet.set(meta.walletAddress, bucket);
+    }
+
+    let checked = 0;
+    let confirmed = 0;
+
+    for (const [walletAddress, bucket] of refundsByWallet.entries()) {
+        const transactions = await fetchWalletTransactions(walletAddress);
+        const walletMessages = transactions.flatMap(parseOutgoingMemoTransaction);
+
+        for (const { entry, meta } of bucket) {
+            checked += 1;
+            const confirmation = findConfirmationForRefund(entry, walletMessages);
+            if (!confirmation) continue;
+
+            const confirmedAt = confirmation.createdAt || new Date().toISOString();
+            const nextPayload = {
+                ...(entry.payload || {}),
+                confirmed_at: confirmedAt,
+                confirmed_chain_tx_hash: confirmation.chainTxHash,
+                confirmation_amount_ton: confirmation.amountTon,
+                confirmation_destination: confirmation.destination,
+                transfer_ref: meta.transferRef
+            };
+
+            const { data: updatedRows, error: updateError } = await supabase
+                .from('referral_reserve_ledger')
+                .update({
+                    chain_tx_hash: confirmation.chainTxHash,
+                    payload: nextPayload
+                })
+                .eq('id', entry.id)
+                .eq('chain_tx_hash', entry.chain_tx_hash)
+                .select('id')
+                .limit(1);
+
+            if (updateError) throw updateError;
+            if (!updatedRows?.length) continue;
+
+            confirmed += 1;
+
+            const { data: account, error: accountError } = await supabase
+                .from('referral_reserve_accounts')
+                .select('id,payload')
+                .eq('id', entry.reserve_account_id)
+                .maybeSingle();
+
+            if (accountError) throw accountError;
+            if (!account) continue;
+
+            const { error: accountUpdateError } = await supabase
+                .from('referral_reserve_accounts')
+                .update({
+                    payload: {
+                        ...(account.payload || {}),
+                        refund_sent: {
+                            ...(account.payload?.refund_sent || {}),
+                            chain_tx_hash: confirmation.chainTxHash,
+                            confirmed_at: confirmedAt
+                        },
+                        refund_auto_sender: {
+                            ...(account.payload?.refund_auto_sender || {}),
+                            confirmed_at: confirmedAt,
+                            confirmed_chain_tx_hash: confirmation.chainTxHash,
+                            confirmation_amount_ton: confirmation.amountTon,
+                            confirmation_destination: confirmation.destination,
+                            transfer_ref: meta.transferRef
+                        }
+                    },
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', account.id);
+
+            if (accountUpdateError) throw accountUpdateError;
+        }
+    }
+
+    return { checked, confirmed };
+}
+
+export async function processReferralPayoutConfirmations(supabase) {
+    const payouts = await loadPendingAutoPayoutConfirmations(supabase);
+    const refunds = await loadPendingAutoRefundConfirmations(supabase);
+    const payoutResult = await confirmAutoPayouts(supabase, payouts);
+    const refundResult = await confirmAutoRefunds(supabase, refunds);
+
+    return {
+        checked: payoutResult.checked + refundResult.checked,
+        confirmed: payoutResult.confirmed + refundResult.confirmed,
+        payoutChecked: payoutResult.checked,
+        payoutConfirmed: payoutResult.confirmed,
+        refundChecked: refundResult.checked,
+        refundConfirmed: refundResult.confirmed
+    };
 }

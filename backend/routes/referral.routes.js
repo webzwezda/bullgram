@@ -9,6 +9,10 @@ import {
 import { OfficialBotService } from '../services/official-bot.service.js';
 import { sendReferralPayoutRequest } from '../services/referral-payout-sender.service.js';
 import { getTonReserveSenderConfig } from '../services/ton-reserve-sender.service.js';
+import {
+    getReferralRefundSenderConfig,
+    sendReferralReserveRefund
+} from '../services/referral-refund-sender.service.js';
 
 function createEmptyResponse() {
     return {
@@ -38,7 +42,8 @@ function createEmptyResponse() {
         support: {
             referralTables: true,
             referralSettings: true,
-            automaticPayoutSender: getTonReserveSenderConfig().enabled
+            automaticPayoutSender: getTonReserveSenderConfig().enabled,
+            automaticRefundSender: getReferralRefundSenderConfig().enabled
         },
         reserve: null,
         economics: getReferralEconomics()
@@ -1211,6 +1216,21 @@ export default function referralRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка запроса возврата referral reserve:', error);
             res.status(500).json({ error: 'Ошибка запроса возврата резерва' });
+        }
+    });
+
+    router.post('/reserve/refund-send-auto', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+
+        try {
+            const result = await sendReferralReserveRefund(supabase, ownerId, { requestedBy: 'admin' });
+            if (result.error) {
+                return res.status(result.status || 400).json({ error: result.error });
+            }
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка автоматического возврата referral reserve:', error);
+            res.status(500).json({ error: 'Не получилось автоматически отправить возврат. Проверь статус и tx вручную.' });
         }
     });
 

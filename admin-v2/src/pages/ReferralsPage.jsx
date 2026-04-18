@@ -568,6 +568,29 @@ export function ReferralsPage() {
     }
   }
 
+  async function sendReserveRefundAutomatically() {
+    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
+    const refundWallet = state.reserve?.refundWallet || '';
+    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0 || !refundWallet) {
+      window.alert('Нет активного запроса на возврат с TON-кошельком.');
+      return;
+    }
+    const confirmed = window.confirm(`Автоматически отправить ${formatTon(requestedTon)} на ${refundWallet}?`);
+    if (!confirmed) return;
+
+    setState((prev) => ({ ...prev, refunding: true, error: '' }));
+    try {
+      await apiRequest('/api/referrals/reserve/refund-send-auto', {
+        accessToken,
+        method: 'POST'
+      });
+      await refreshReferralState({ refunding: false });
+    } catch (error) {
+      setState((prev) => ({ ...prev, refunding: false }));
+      window.alert(error.message);
+    }
+  }
+
   async function markPayout(row, currency) {
     const normalizedCurrency = String(currency || '').toUpperCase();
     const balanceField = normalizedCurrency === 'RUB'
@@ -868,13 +891,24 @@ export function ReferralsPage() {
                 </div>
                 <div className="referrals-refund-box__actions">
                   {state.reserve?.status === 'refund_requested' ? (
-                    <button
-                      className="referrals-action-btn referrals-action-btn--warning"
-                      onClick={markReserveRefundSent}
-                      disabled={state.refunding}
-                    >
-                      {state.refunding ? 'Закрываем...' : 'Отметить отправленным'}
-                    </button>
+                    <>
+                      {state.support?.automaticRefundSender ? (
+                        <button
+                          className="referrals-action-btn referrals-action-btn--payout"
+                          onClick={sendReserveRefundAutomatically}
+                          disabled={state.refunding}
+                        >
+                          {state.refunding ? 'Отправляем...' : 'Авто TON'}
+                        </button>
+                      ) : null}
+                      <button
+                        className="referrals-action-btn referrals-action-btn--warning"
+                        onClick={markReserveRefundSent}
+                        disabled={state.refunding}
+                      >
+                        {state.refunding ? 'Закрываем...' : 'Отметить отправленным'}
+                      </button>
+                    </>
                   ) : (
                     <button
                       className="referrals-action-btn referrals-action-btn--payout"

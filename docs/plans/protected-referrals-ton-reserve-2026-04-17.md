@@ -349,14 +349,14 @@ Statuses:
   - [x] Update payout status by chain result.
   - [ ] Notify admin outside the dashboard when a payout request is created.
 
-- [ ] Phase 9: admin refund flow.
+- [x] Phase 9: admin refund flow.
   - [x] Allow refund request only after `locked_until`.
   - [x] Calculate refundable amount from free reserve.
   - [x] If no referral sale happened, allow full free deposit refund.
   - [x] If sales happened, deduct obligations, BullRun fee, network fee, and pending payouts.
   - [x] Turning on refund flow should pause new partner onboarding.
-  - [ ] Send refund automatically from BullRun-controlled wallet.
-  - [ ] Confirm refund by blockchain result.
+  - [x] Send refund automatically from BullRun-controlled wallet.
+  - [x] Confirm refund by blockchain result.
 
 ## Admin UI Plan
 
@@ -712,7 +712,12 @@ Scenario checks:
   - refund request now requires the admin TON wallet for returning free reserve
   - refund request stores `refund_wallet` and `brr_...` memo in reserve ledger/account payload
   - `/app/referrals` shows refund QR, wallet, memo, open-wallet action, and copy buttons while refund is requested
-  - automatic admin refund sending is still intentionally separate from the manual helper
+  - automatic admin refund sending stays separate from the manual helper and is guarded by its own env flag
+- Added automatic admin refund sender:
+  - `POST /api/referrals/reserve/refund-send-auto` sends a requested refund from the BullRun reserve wallet only when `REFERRAL_REFUND_SENDER_ENABLED=true`
+  - `/app/referrals` shows `Авто TON` for reserve refunds only when the refund sender is enabled
+  - manual QR and manual tx-hash close remain available as the operational fallback
+  - TON Center confirmation now also resolves automatic refund transfers from temporary `ton:<wallet>:<seqno>` references to real chain tx hashes
 - Runtime env for payout confirmation:
   - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
   - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`
@@ -721,6 +726,7 @@ Scenario checks:
   - `TON_PAYOUT_CONFIRMATION_BATCH_LIMIT=50`
 - Runtime env for automatic partner payouts:
   - `REFERRAL_PAYOUT_SENDER_ENABLED=false` by default
+  - `REFERRAL_REFUND_SENDER_ENABLED=false` by default
   - `TON_RESERVE_WALLET_SECRET_FILE=/root/bullrun-ton-reserve/reserve-wallet.json`
   - `TON_RESERVE_SENDER_ENDPOINT=https://toncenter.com/api/v2/jsonRPC`
   - `TON_RESERVE_API_KEY=<optional TON Center key>`

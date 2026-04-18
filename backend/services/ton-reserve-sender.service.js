@@ -73,9 +73,10 @@ async function openReserveWallet() {
     };
 }
 
-export function getTonReserveSenderConfig() {
+export function getTonReserveSenderConfig(enabledFlagName = 'REFERRAL_PAYOUT_SENDER_ENABLED') {
     return {
-        enabled: envFlag('REFERRAL_PAYOUT_SENDER_ENABLED'),
+        enabled: envFlag(enabledFlagName),
+        enabledFlagName,
         endpoint: String(process.env.TON_RESERVE_SENDER_ENDPOINT || process.env.TON_RESERVE_JSONRPC_ENDPOINT || DEFAULT_ENDPOINT).trim(),
         walletSecretFile: String(process.env.TON_RESERVE_WALLET_SECRET_FILE || DEFAULT_WALLET_SECRET_FILE).trim(),
         estimatedNetworkFeeTon: envNumber('REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON', 0.05, { min: 0 }),
@@ -83,10 +84,10 @@ export function getTonReserveSenderConfig() {
     };
 }
 
-export async function sendTonFromReserve({ to, amountTon, comment = '' }) {
-    const config = getTonReserveSenderConfig();
+export async function sendTonFromReserve({ to, amountTon, comment = '', enabledFlagName = 'REFERRAL_PAYOUT_SENDER_ENABLED' }) {
+    const config = getTonReserveSenderConfig(enabledFlagName);
     if (!config.enabled) {
-        throw new Error('Referral payout sender is disabled by REFERRAL_PAYOUT_SENDER_ENABLED');
+        throw new Error(`TON reserve sender is disabled by ${config.enabledFlagName}`);
     }
 
     const normalizedAmountTon = normalizeTonAmount(amountTon);
