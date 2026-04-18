@@ -92,7 +92,7 @@ export default function referralRoutes(supabase) {
 
         if (ledgerError) throw ledgerError;
 
-        await reconcileReferralReserveAccount(supabase, {
+        const reconciled = await reconcileReferralReserveAccount(supabase, {
             id: reserve.id,
             owner_id: ownerId,
             deposit_address: reserve.depositAddress || null,
@@ -108,7 +108,13 @@ export default function referralRoutes(supabase) {
             status: reserve.status
         });
 
-        return { feeTon, reserveAccountId: reserve.id };
+        return {
+            feeTon,
+            reserveAccountId: reserve.id,
+            reserveAccount: reconciled.reserveAccount,
+            previousStatus: reconciled.previousStatus,
+            statusChanged: reconciled.statusChanged
+        };
     }
 
     async function markReferralPayout(ownerId, tgUserId, currency, amount, note, payoutRequestId = null, payoutMeta = {}) {
@@ -370,6 +376,15 @@ export default function referralRoutes(supabase) {
         if (activePayoutRequest && effectiveNetworkFeeTon > 0) {
             try {
                 networkFeeRecord = await recordReferralNetworkFee(ownerId, activePayoutRequest, effectiveNetworkFeeTon, effectiveChainTxHash);
+                if (networkFeeRecord?.statusChanged) {
+                    officialBotService.notifyReferralReserveStatus(
+                        ownerId,
+                        networkFeeRecord.reserveAccount,
+                        networkFeeRecord.previousStatus
+                    ).catch((notifyError) => {
+                        console.error('Ошибка уведомления о referral reserve status:', notifyError.message || notifyError);
+                    });
+                }
             } catch (error) {
                 networkFeeRecordError = 'Комиссия сети сохранена в выплате, но не попала в reserve ledger. Нужно проверить вручную.';
                 console.error('Ошибка записи network fee в referral reserve ledger:', error);

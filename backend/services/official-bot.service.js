@@ -629,6 +629,86 @@ export class OfficialBotService {
         return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
     }
 
+    async notifyReferralReserveStatus(ownerId, reserveAccount, previousStatus = null) {
+        const status = String(reserveAccount?.status || '');
+        if (!['reserve_low', 'over_limit', 'closed_for_new_partners'].includes(status)) {
+            return { admin: { sent: false, reason: 'status_not_notifiable' }, partners: null };
+        }
+
+        const availableReserveTon = Number(reserveAccount?.available_reserve_ton || 0);
+        const adminDebtTon = Number(reserveAccount?.admin_debt_ton || 0);
+        const reservedObligationsTon = Number(reserveAccount?.reserved_obligations_ton || 0);
+
+        const adminText = status === 'reserve_low'
+            ? [
+                '⚠️ TON-резерв партнерки на исходе.',
+                '',
+                `Свободно: ${availableReserveTon} TON`,
+                `Обязательства: ${reservedObligationsTon} TON`,
+                '',
+                'Пополни резерв, чтобы не закрывать новых партнеров.'
+            ].join('\n')
+            : [
+                '⛔ TON-резерв партнерки не покрывает обязательства.',
+                '',
+                `Свободно: ${availableReserveTon} TON`,
+                `Долг админа: ${adminDebtTon} TON`,
+                `Обязательства: ${reservedObligationsTon} TON`,
+                '',
+                'Новые партнеры и новые скидки по рефкам должны быть на паузе. Старые закрепленные лиды продолжают жить по своим условиям.'
+            ].join('\n');
+
+        const admin = await this.notifyOwnerAdmin(ownerId, adminText, { disable_web_page_preview: true });
+        let partners = null;
+
+        if (['over_limit', 'closed_for_new_partners'].includes(status)) {
+            partners = await this.notifyReferralPartnersProgramPaused(ownerId, previousStatus);
+        }
+
+        return { admin, partners };
+    }
+
+    async notifyReferralPartnersProgramPaused(ownerId, previousStatus = null) {
+        const notificationBot = await this.getOwnerNotificationBot(ownerId);
+        if (!notificationBot?.bot?.telegram) {
+            return { sent: 0, failed: 0, reason: 'active_bot_missing' };
+        }
+
+        const { data: partners, error } = await this.supabase
+            .from('referral_profiles')
+            .select('tg_user_id')
+            .eq('owner_id', ownerId)
+            .order('created_at', { ascending: true })
+            .limit(100);
+
+        if (error) {
+            console.error('Ошибка загрузки партнеров для reserve pause notification:', error.message || error);
+            return { sent: 0, failed: 0, reason: 'profiles_load_failed' };
+        }
+
+        const text = [
+            '⚠️ Партнерская программа временно на паузе для новых переходов.',
+            '',
+            'Старые закрепленные лиды остаются за тобой до конца своего окна. Новые переходы могут быть без скидки, пока админ не пополнит резерв.'
+        ].join('\n');
+
+        let sent = 0;
+        let failed = 0;
+        for (const partner of partners || []) {
+            const tgUserId = String(partner?.tg_user_id || '').trim();
+            if (!tgUserId) continue;
+            try {
+                await notificationBot.bot.telegram.sendMessage(tgUserId, text, { disable_web_page_preview: true });
+                sent += 1;
+            } catch (error) {
+                failed += 1;
+                console.error('Ошибка отправки partner reserve pause notification:', error.message || error);
+            }
+        }
+
+        return { sent, failed, previousStatus };
+    }
+
     async getBotAdminContext(botId, ownerIdFallback = null) {
         try {
             const { data: botAccount, error: botError } = await this.supabase
@@ -1261,7 +1341,7 @@ export class OfficialBotService {
                         }
                     ]);
 
-                await reconcileReferralReserveAccount(this.supabase, {
+                const reconciled = await reconcileReferralReserveAccount(this.supabase, {
                     id: reserve.id,
                     owner_id: ownerId,
                     deposit_address: reserve.depositAddress || null,
@@ -1276,6 +1356,16 @@ export class OfficialBotService {
                     last_deposit_at: reserve.lastDepositAt || null,
                     status: reserve.status
                 });
+
+                if (reconciled.statusChanged) {
+                    this.notifyReferralReserveStatus(
+                        ownerId,
+                        reconciled.reserveAccount,
+                        reconciled.previousStatus
+                    ).catch((notifyError) => {
+                        console.error('Ошибка уведомления о referral reserve status:', notifyError.message || notifyError);
+                    });
+                }
             }
 
             await this.supabase

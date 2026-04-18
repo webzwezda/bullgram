@@ -449,9 +449,11 @@ Statuses:
 - [ ] Notifications.
   - [x] Admin: deposit confirmed.
   - [x] Admin: payout request created, payout sent/failed/cancelled.
-  - [ ] Admin: reserve low, reserve over limit, refund requested.
+  - [x] Admin: reserve low, reserve over limit.
+  - [ ] Admin: refund requested.
   - [x] Partner: sale converted, payout queued/sending/sent/failed/cancelled.
-  - [ ] Partner: lead came in, payout available, program paused for new partners.
+  - [x] Partner: program paused for new partners.
+  - [ ] Partner: lead came in, payout available.
   - Buyer: discount applied, or discount unavailable for new referral entries.
 
 ## API Surface
@@ -668,3 +670,8 @@ Scenario checks:
   - admin gets Telegram updates for sent, failed, and cancelled payout outcomes
   - admin gets a Telegram notification when the TON reserve watcher confirms a deposit
   - all notification sends are best-effort and do not block payout accounting if Telegram delivery fails
+- Added reserve status notifications:
+  - `reconcileReferralReserveAccount` now returns previous status and `statusChanged`
+  - admin gets a Telegram notification when reserve moves to `reserve_low`, `over_limit`, or `closed_for_new_partners`
+  - partners get a Telegram pause notice when the reserve moves to `over_limit` or `closed_for_new_partners`
+  - notifications are triggered by real obligation changes, not every reserve watcher poll

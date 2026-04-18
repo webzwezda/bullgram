@@ -164,7 +164,9 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
 
   return {
     reserveAccount: updatedAccount,
-    lockCreated: shouldCreateLock
+    lockCreated: shouldCreateLock,
+    previousStatus: reserveAccount.status || null,
+    statusChanged: !!reserveAccount.status && reserveAccount.status !== status
   };
 }
 
