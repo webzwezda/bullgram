@@ -221,9 +221,28 @@ export class OfficialBotService {
             || { key: sourceKey, lead: sourceTariff, variants: [sourceTariff] };
     }
 
-    formatTariffPaymentOptions(variants = []) {
+    formatDiscountedAmount(amount, currency, discountPercent) {
+        const numericAmount = Number(amount || 0);
+        const percent = Number(discountPercent || 0);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0 || !Number.isFinite(percent) || percent <= 0) {
+            return numericAmount;
+        }
+
+        const precision = String(currency || '').toUpperCase() === 'RUB' ? 2 : 4;
+        return Number((numericAmount * (100 - percent) / 100).toFixed(precision));
+    }
+
+    formatTariffPaymentOptions(variants = [], discountPercent = 0) {
         return this.sortTariffPaymentVariants(variants)
-            .map((variant) => `${variant.price} ${variant.currency || 'TON'}`)
+            .map((variant) => {
+                const currency = variant.currency || 'TON';
+                const price = Number(variant.price || 0);
+                const discountedPrice = this.formatDiscountedAmount(price, currency, discountPercent);
+                if (Number(discountPercent || 0) > 0 && discountedPrice < price) {
+                    return `${discountedPrice} ${currency} вместо ${price}`;
+                }
+                return `${price} ${currency}`;
+            })
             .join(' / ');
     }
 
@@ -553,6 +572,79 @@ export class OfficialBotService {
         ].join('\n');
 
         return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
+    }
+
+    async notifyReferralLeadCreated(ownerId, attribution) {
+        const notificationBot = await this.getOwnerNotificationBot(ownerId);
+        if (!notificationBot?.bot?.telegram) {
+            return { sent: false, reason: 'active_bot_missing' };
+        }
+
+        const referrerTgUserId = String(attribution?.referrer_tg_user_id || '').trim();
+        if (!referrerTgUserId) return { sent: false, reason: 'referrer_missing' };
+
+        const discountPercent = Number(attribution?.client_discount_percent_snapshot || 0);
+        const eligible = attribution?.discount_eligible !== false;
+        const expiresAt = attribution?.expires_at
+            ? new Date(attribution.expires_at).toLocaleDateString('ru-RU')
+            : '';
+        const referredLabel = attribution?.referred_username
+            ? `@${attribution.referred_username}`
+            : `TG ${attribution?.referred_tg_user_id || 'неизвестен'}`;
+
+        const text = eligible
+            ? [
+                '🤝 Новый лид по твоей партнерской ссылке.',
+                '',
+                `Клиент: ${referredLabel}`,
+                discountPercent > 0 ? `Скидка клиента: ${discountPercent}%` : '',
+                expiresAt ? `Окно закрепления: до ${expiresAt}` : '',
+                '',
+                'Если клиент оплатит в это окно, бонус появится на твоем балансе.'
+            ].filter(Boolean).join('\n')
+            : [
+                '🤝 По твоей ссылке был новый переход.',
+                '',
+                `Клиент: ${referredLabel}`,
+                'Сейчас новые скидки на паузе из-за резерва админа.',
+                'Мы записали переход, но скидку для нового клиента не закрепили.'
+            ].join('\n');
+
+        try {
+            await notificationBot.bot.telegram.sendMessage(referrerTgUserId, text, { disable_web_page_preview: true });
+            return { sent: true };
+        } catch (error) {
+            console.error('Ошибка отправки referral lead notification:', error.message || error);
+            return { sent: false, reason: 'send_failed' };
+        }
+    }
+
+    async notifyReferralPayoutAvailable(ownerId, tgUserId, balanceTon) {
+        const notificationBot = await this.getOwnerNotificationBot(ownerId);
+        if (!notificationBot?.bot?.telegram) {
+            return { sent: false, reason: 'active_bot_missing' };
+        }
+
+        const targetTgUserId = String(tgUserId || '').trim();
+        if (!targetTgUserId) return { sent: false, reason: 'tg_user_id_missing' };
+
+        const minPayoutTon = Number(getReferralEconomics().minPayoutTon || 5);
+        const text = [
+            '💸 Выплата уже доступна.',
+            '',
+            `Баланс: ${Number(balanceTon || 0)} TON`,
+            `Минимум для вывода: ${minPayoutTon} TON`,
+            '',
+            'Открой партнерку в боте, укажи TON-кошелек и запроси выплату.'
+        ].join('\n');
+
+        try {
+            await notificationBot.bot.telegram.sendMessage(targetTgUserId, text, { disable_web_page_preview: true });
+            return { sent: true };
+        } catch (error) {
+            console.error('Ошибка отправки referral payout available notification:', error.message || error);
+            return { sent: false, reason: 'send_failed' };
+        }
     }
 
     async notifyReferralPayoutStatus(ownerId, payout, status, meta = {}) {
@@ -1122,6 +1214,12 @@ export class OfficialBotService {
                 throw upsertError;
             }
 
+            if (!existing?.id) {
+                this.notifyReferralLeadCreated(ownerId, attribution).catch((notifyError) => {
+                    console.error('Ошибка уведомления о referral lead:', notifyError.message || notifyError);
+                });
+            }
+
             return attribution;
         } catch (error) {
             if ((error.message || '').includes('referral_')) return null;
@@ -1270,8 +1368,9 @@ export class OfficialBotService {
             const referrerProfile = await this.ensureReferralProfile(ownerId, attribution.referrer_tg_user_id);
             if (!referrerProfile) return null;
 
+            const previousBalanceTon = Number(referrerProfile.balance_ton || 0);
             const updates = {
-                balance_ton: Number((Number(referrerProfile.balance_ton || 0) + rewardTonAmount).toFixed(6)),
+                balance_ton: Number((previousBalanceTon + rewardTonAmount).toFixed(6)),
                 total_earned_ton: Number((Number(referrerProfile.total_earned_ton || 0) + rewardTonAmount).toFixed(6))
             };
 
@@ -1403,6 +1502,13 @@ export class OfficialBotService {
                 ).catch(() => {});
             }
 
+            const minPayoutTon = Number(economics.minPayoutTon || 5);
+            if (previousBalanceTon < minPayoutTon && Number(updates.balance_ton || 0) >= minPayoutTon) {
+                this.notifyReferralPayoutAvailable(ownerId, attribution.referrer_tg_user_id, updates.balance_ton).catch((notifyError) => {
+                    console.error('Ошибка уведомления о доступной referral payout:', notifyError.message || notifyError);
+                });
+            }
+
             return {
                 referrerTgUserId: String(attribution.referrer_tg_user_id),
                 rewardAmount: rewardTonAmount,
@@ -1510,8 +1616,8 @@ export class OfficialBotService {
                         const settings = await this.getReferralSettings(ownerId);
                         const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
 
-                        if (settings.referral_enabled && reserve.canAcceptNewPartners) {
-                            await this.registerReferralLead({
+                        if (settings.referral_enabled) {
+                            const attribution = await this.registerReferralLead({
                                 ownerId,
                                 referralCode: startPayload.replace(/^ref_/, ''),
                                 referredTgUserId: ctx.from.id,
@@ -1519,16 +1625,25 @@ export class OfficialBotService {
                                 referredDisplayName: displayName,
                                 rewardPercent: settings.referral_reward_percent,
                                 clientDiscountPercent: settings.referral_client_discount_percent,
-                                discountEligible: true,
+                                discountEligible: reserve.canAcceptNewPartners,
                                 reserveStatus: reserve.status
                             });
 
-                            const welcomeText = settings.referral_welcome_text
-                                || 'Тебя привели по партнерской ссылке. Скидка уже закреплена, выбирай тариф.';
-
-                            await ctx.reply(`🤝 ${welcomeText}`);
+                            const discountEligible = attribution?.discount_eligible !== false
+                                && (!attribution?.expires_at || new Date(attribution.expires_at) >= new Date());
+                            if (discountEligible) {
+                                const discountPercent = Number(attribution?.client_discount_percent_snapshot || settings.referral_client_discount_percent || 0);
+                                const expiresAt = attribution?.expires_at
+                                    ? new Date(attribution.expires_at).toLocaleDateString('ru-RU')
+                                    : '';
+                                const welcomeText = settings.referral_welcome_text
+                                    || `Тебя привели по партнерской ссылке. Скидка ${discountPercent}% уже закреплена, выбирай тариф.`;
+                                await ctx.reply(`🤝 ${welcomeText}${expiresAt ? `\n\nСкидка действует до ${expiresAt}.` : ''}`);
+                            } else {
+                                await ctx.reply('🤝 Переход по партнерской ссылке записан, но скидка для новых клиентов сейчас на паузе. Если ты был закреплен раньше, старые условия сохранятся.');
+                            }
                         } else {
-                            await ctx.reply('🤝 Партнерская скидка по новой ссылке сейчас на паузе. Если ты уже был закреплен раньше, старые условия сохранятся.');
+                            await ctx.reply('🤝 Партнерская программа сейчас выключена. Если ты уже был закреплен раньше, старые условия сохранятся.');
                         }
                     }
                 }
@@ -1597,8 +1712,18 @@ export class OfficialBotService {
                     .eq('owner_id', tariff.owner_id)
                     .eq('is_active', true);
                 const paymentGroup = this.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
+                const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
                 const paymentLines = this.sortTariffPaymentVariants(paymentGroup.variants)
-                    .map((variant) => `• **${variant.price} ${variant.currency || 'TON'}**`)
+                    .map((variant) => {
+                        const currency = variant.currency || 'TON';
+                        const price = Number(variant.price || 0);
+                        const discountedPrice = this.formatDiscountedAmount(price, currency, referralDiscountPercent);
+                        const priceText = referralDiscountPercent > 0 && discountedPrice < price
+                            ? `${discountedPrice} ${currency} вместо ${price} ${currency}`
+                            : `${price} ${currency}`;
+                        return `• **${priceText}**`;
+                    })
                     .join('\n');
 
                 const bundleItems = await this.getTariffBundleItems(tariff, tariff.owner_id);
@@ -1627,8 +1752,12 @@ export class OfficialBotService {
                     resourceItems.forEach((item, index) => lines.push(`${index + 1}. ${item.resource_title}`));
                 }
 
+                const discountNote = referralDiscountPercent > 0
+                    ? `\n\nСкидка по рефке уже применится в счете: **-${referralDiscountPercent}%**.`
+                    : '';
+
                 await ctx.reply(
-                    `📦 **${this.getTariffDisplayTitle(tariff)}**\n\nЦена:\n${paymentLines}\nСрок: **${durationText}**\n\n${lines.join('\n')}`,
+                    `📦 **${this.getTariffDisplayTitle(tariff)}**\n\nЦена:\n${paymentLines}\nСрок: **${durationText}**${discountNote}\n\n${lines.join('\n')}`,
                     { parse_mode: 'Markdown' }
                 );
             } catch (error) {
@@ -1651,9 +1780,7 @@ export class OfficialBotService {
                 const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, userId);
                 const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
                 const originalAmount = Number(tariff.price || 0);
-                const invoiceAmount = referralDiscountPercent > 0
-                    ? Number((originalAmount * (100 - referralDiscountPercent) / 100).toFixed(tariff.currency === 'RUB' ? 2 : 4))
-                    : originalAmount;
+                const invoiceAmount = this.formatDiscountedAmount(originalAmount, tariff.currency, referralDiscountPercent);
                 const referralDiscountAmount = Number((originalAmount - invoiceAmount).toFixed(tariff.currency === 'RUB' ? 2 : 4));
 
                 const { error: insertErr } = await this.supabase.from('invoices').insert({
@@ -1735,11 +1862,13 @@ export class OfficialBotService {
                     .eq('owner_id', tariff.owner_id)
                     .eq('is_active', true);
                 const paymentGroup = this.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
+                const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
 
                 if (paymentGroup.variants.length > 1) {
                     const keyboard = this.sortTariffPaymentVariants(paymentGroup.variants)
                         .map((variant) => ([{
-                            text: `${this.getTariffCurrencyIcon(variant.currency)} ${variant.price} ${variant.currency || 'TON'}`,
+                            text: `${this.getTariffCurrencyIcon(variant.currency)} ${this.formatTariffPaymentOptions([variant], referralDiscountPercent)}`,
                             callback_data: `pay_tariff_${variant.id}`
                         }]));
                     keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
@@ -2179,10 +2308,12 @@ export class OfficialBotService {
                     tariff: group.lead,
                     bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
                 })));
+                const referralAttribution = await this.getActiveReferralAttribution(ownerId, ctx.from.id);
+                const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
 
                 const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
                     const icon = this.getTariffGroupIcon(group);
-                    const paymentOptions = this.formatTariffPaymentOptions(group.variants);
+                    const paymentOptions = this.formatTariffPaymentOptions(group.variants, referralDiscountPercent);
                     return [
                         [{ text: `${icon} ${this.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
                         [{ text: `📦 ${this.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
@@ -2190,7 +2321,10 @@ export class OfficialBotService {
                 });
                 inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
 
-                const text = `💳 <b>Выберите тариф</b>\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
+                const discountLine = referralDiscountPercent > 0
+                    ? `\n\n🤝 Твоя партнерская скидка: <b>-${referralDiscountPercent}%</b>. В счете уже будет цена со скидкой.`
+                    : '';
+                const text = `💳 <b>Выберите тариф</b>${discountLine}\n\n${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
                 await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             } catch (error) {
                 console.error('Ошибка покупки тарифа:', error);

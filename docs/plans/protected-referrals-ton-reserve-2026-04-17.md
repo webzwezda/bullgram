@@ -452,11 +452,11 @@ Statuses:
   - [x] Admin: deposit confirmed.
   - [x] Admin: payout request created, payout sent/failed/cancelled.
   - [x] Admin: reserve low, reserve over limit.
-  - [ ] Admin: refund requested.
+  - [x] Admin: refund requested.
   - [x] Partner: sale converted, payout queued/sending/sent/failed/cancelled.
   - [x] Partner: program paused for new partners.
-  - [ ] Partner: lead came in, payout available.
-  - Buyer: discount applied, or discount unavailable for new referral entries.
+  - [x] Partner: lead came in, payout available.
+  - [x] Buyer: discount applied, or discount unavailable for new referral entries.
 
 ## API Surface
 
@@ -683,3 +683,10 @@ Scenario checks:
   - `POST /api/referrals/reserve/refund-sent` marks the requested refund as sent with a TON tx hash
   - refund requests pause new partner onboarding through `refund_requested`
   - automatic refund sending and blockchain confirmation remain intentionally unimplemented
+- Added referral bot UX pass:
+  - new referral-link visitors are recorded even when reserve is paused, but without discount eligibility
+  - buyers see whether referral discount is applied or unavailable
+  - tariff lists and tariff details show discounted referral prices when an active attribution exists
+  - partners get a Telegram notification when a lead comes in
+  - partners get a Telegram notification when their TON balance first reaches the payout minimum
+  - active `/app/plans` no longer contains a referral settings editor; `/app/referrals` remains the referral control surface
