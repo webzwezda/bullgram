@@ -136,6 +136,62 @@ function PayoutChainDetails({ row }) {
   );
 }
 
+function PayoutTransferBox({ row }) {
+  const uri = row?.ton_transfer_uri || '';
+  const qr = row?.ton_transfer_qr || '';
+  const memo = row?.pending_payout_memo || '';
+  if (!uri && !memo) return null;
+
+  async function copyValue(value, label) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      window.alert(`${label} скопирован.`);
+    } catch {
+      window.prompt(label, value);
+    }
+  }
+
+  return (
+    <div className="referrals-payout-transfer">
+      {qr && <img className="referrals-payout-transfer__qr" src={qr} alt="QR для TON-выплаты" />}
+      <div className="referrals-payout-transfer__body">
+        <div className="referrals-payout-transfer__title">Оплата через кошелек</div>
+        {memo && (
+          <div className="referrals-payout-transfer__memo">
+            Memo: <span>{memo}</span>
+          </div>
+        )}
+        <div className="referrals-payout-transfer__actions">
+          {uri && (
+            <a className="referrals-action-btn referrals-action-btn--payout" href={uri}>
+              Открыть
+            </a>
+          )}
+          {memo && (
+            <button
+              type="button"
+              className="referrals-action-btn"
+              onClick={() => copyValue(memo, 'Memo')}
+            >
+              Memo
+            </button>
+          )}
+          {uri && (
+            <button
+              type="button"
+              className="referrals-action-btn"
+              onClick={() => copyValue(uri, 'TON-ссылка')}
+            >
+              Ссылка
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ReferralsPage() {
   const { accessToken } = useAuth();
   const [filter, setFilter] = useState('all');
@@ -909,6 +965,7 @@ export function ReferralsPage() {
                         </td>
                         <td className="referrals-table__cell">
                           <div className="referrals-partner-wallet-value">{row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}</div>
+                          <PayoutTransferBox row={row} />
                           <PayoutChainDetails row={row} />
                         </td>
                         <td className="referrals-table__cell">

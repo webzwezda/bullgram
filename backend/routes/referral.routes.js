@@ -1,4 +1,5 @@
 import express from 'express';
+import QRCode from 'qrcode';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import {
     getReferralEconomics,
@@ -52,6 +53,66 @@ export default function referralRoutes(supabase) {
     function normalizeCurrencyAmount(currency, amount) {
         const decimals = currency === 'RUB' ? 2 : 6;
         return Number(Number(amount || 0).toFixed(decimals));
+    }
+
+    function buildReferralPayoutMemo(payoutRequestId) {
+        return `brp_${String(payoutRequestId || '').replace(/-/g, '').slice(0, 24)}`;
+    }
+
+    function buildTonTransferUri(wallet, amountTon, memo) {
+        const normalizedWallet = String(wallet || '').trim();
+        const normalizedAmount = normalizeCurrencyAmount('TON', amountTon);
+        const normalizedMemo = String(memo || '').trim();
+        if (!normalizedWallet || !Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+            return null;
+        }
+
+        const nanoTon = Math.round(normalizedAmount * 1_000_000_000);
+        const params = new URLSearchParams({
+            amount: String(nanoTon)
+        });
+        if (normalizedMemo) {
+            params.set('text', normalizedMemo);
+        }
+
+        return `ton://transfer/${normalizedWallet}?${params.toString()}`;
+    }
+
+    async function addPayoutPaymentPayload(row) {
+        const wallet = row.pending_payout_wallet || row.payout_wallet || '';
+        const amountTon = normalizeCurrencyAmount('TON', row.pending_payout_ton);
+        const memo = buildReferralPayoutMemo(row.pending_payout_id);
+        const uri = buildTonTransferUri(wallet, amountTon, memo);
+        if (!uri) {
+            return {
+                ...row,
+                pending_payout_memo: memo,
+                ton_transfer_uri: null,
+                ton_transfer_qr: null
+            };
+        }
+
+        try {
+            const qr = await QRCode.toDataURL(uri, {
+                errorCorrectionLevel: 'M',
+                margin: 2,
+                width: 220
+            });
+            return {
+                ...row,
+                pending_payout_memo: memo,
+                ton_transfer_uri: uri,
+                ton_transfer_qr: qr
+            };
+        } catch (error) {
+            console.error('Ошибка генерации referral payout QR:', error.message || error);
+            return {
+                ...row,
+                pending_payout_memo: memo,
+                ton_transfer_uri: uri,
+                ton_transfer_qr: null
+            };
+        }
     }
 
     async function restoreReferralBalance(profileId, balanceField, expectedBalance, restoreBalance) {
@@ -995,7 +1056,11 @@ export default function referralRoutes(supabase) {
                 return bTotal - aTotal;
             });
 
-            payload.pendingPayouts = topPartners.filter(row => Number(row.pending_payout_ton || 0) > 0);
+            payload.pendingPayouts = await Promise.all(
+                topPartners
+                    .filter(row => Number(row.pending_payout_ton || 0) > 0)
+                    .map(addPayoutPaymentPayload)
+            );
 
             payload.summary = {
                 partners: profiles.length,

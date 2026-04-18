@@ -704,6 +704,10 @@ Scenario checks:
   - confirmed payouts replace the temporary transfer reference with the real chain tx hash
   - reserve ledger network-fee rows are updated with the same confirmed tx hash
   - confirmation is read-only and does not need the wallet mnemonic
+- Added manual TON payout helper for the MVP queue:
+  - backend now generates a `ton://transfer/...` deeplink, `brp_...` memo, and QR data URL for every active payout request
+  - `/app/referrals` shows the QR, memo, open-wallet action, and copy buttons in the payout queue
+  - this keeps manual payouts usable while the automatic sender remains disabled on production
 - Runtime env for payout confirmation:
   - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
   - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`

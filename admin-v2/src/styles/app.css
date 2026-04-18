@@ -2422,6 +2422,63 @@ a {
   color: #334155;
 }
 
+.referrals-payout-transfer {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px;
+  max-width: 360px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.referrals-payout-transfer__qr {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.referrals-payout-transfer__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.referrals-payout-transfer__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.referrals-payout-transfer__memo {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.referrals-payout-transfer__memo span {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #334155;
+  word-break: break-all;
+}
+
+.referrals-payout-transfer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.referrals-payout-transfer__actions .referrals-action-btn {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
 /* Referrals Count Badge */
 .referrals-count-badge {
   display: inline-flex;
