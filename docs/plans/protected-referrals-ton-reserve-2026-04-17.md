@@ -284,20 +284,20 @@ Statuses:
 
 ## Backend Phase Plan
 
-- [ ] Phase 1: schema and compatibility migration.
-  - Add protected reserve tables.
-  - Add attribution expiry and snapshots.
-  - Add settlement fields to referral events.
-  - Keep existing referral dashboard working with old rows.
-  - Fix current payout event nullability issue before adding payout automation.
+- [x] Phase 1: schema and compatibility migration.
+  - [x] Add protected reserve tables.
+  - [x] Add attribution expiry and snapshots.
+  - [x] Add settlement fields to referral events.
+  - [x] Keep existing referral dashboard working with old rows.
+  - [x] Fix current payout event nullability issue before adding payout automation.
 
-- [ ] Phase 2: reserve account service.
-  - Add service for loading reserve state by `owner_id`.
-  - Compute `available_reserve_ton`, `reserved_obligations_ton`, `admin_debt_ton`, and status from ledger/events.
-  - Add idempotent ledger entry helpers.
-  - Add reserve status transition rules.
+- [x] Phase 2: reserve account service.
+  - [x] Add service for loading reserve state by `owner_id`.
+  - [x] Compute `available_reserve_ton`, `reserved_obligations_ton`, `admin_debt_ton`, and status from ledger/events.
+  - [x] Add idempotent ledger entry helpers.
+  - [x] Add reserve status transition rules.
 
-- [ ] Phase 3: TON deposit tracking.
+- [x] Phase 3: TON deposit tracking.
   - [x] Assign one shared reserve deposit address from server env for MVP.
   - [x] Use per-admin `deposit_memo` to correlate incoming TON payments.
   - [x] Poll incoming TON transactions through TON Center API with bounded pagination.
@@ -307,37 +307,37 @@ Statuses:
   - [x] Allow referral enablement immediately after confirmed deposit and lock creation.
   - [ ] Generate isolated admin wallets/subwallets later if shared-wallet memo flow becomes too risky.
 
-- [ ] Phase 4: exchange rates.
+- [x] Phase 4: exchange rates.
   - [x] Add hourly job to fetch rates.
   - [x] Store TON/RUB and TON/USDT rates.
   - [x] Add conversion helper that returns the latest acceptable rate.
   - [x] If no acceptable rate exists during sale settlement, refresh the rate immediately before failing.
   - [x] Add a pending conversion retry queue if the provider is down during a paid invoice.
 
-- [ ] Phase 5: referral attribution rules.
-  - On `/start ref_...`, reject self-referrals.
-  - Preserve first-touch attribution.
-  - If reserve is healthy, create attribution with `expires_at = now + 30 days`, fixed reward and discount snapshots.
-  - If reserve is over limit or closed for new partners, do not grant new discount eligibility.
-  - For already attributed leads, preserve existing terms until `expires_at`.
+- [x] Phase 5: referral attribution rules.
+  - [x] On `/start ref_...`, reject self-referrals.
+  - [x] Preserve first-touch attribution.
+  - [x] If reserve is healthy, create attribution with `expires_at = now + 30 days`, fixed reward and discount snapshots.
+  - [x] If reserve is over limit or closed for new partners, do not grant new discount eligibility.
+  - [x] For already attributed leads, preserve existing terms until `expires_at`.
 
-- [ ] Phase 6: discounted tariff purchase flow.
-  - When a user with active eligible attribution views/buys tariffs, show discounted price.
-  - Invoice amount should use discounted price.
-  - Store discount metadata on the invoice or payment event so settlement can be audited.
-  - Preserve existing Trial -> Normal -> Seller flow.
+- [x] Phase 6: discounted tariff purchase flow.
+  - [x] When a user with active eligible attribution views/buys tariffs, show discounted price.
+  - [x] Invoice amount should use discounted price.
+  - [x] Store discount metadata on the invoice or payment event so settlement can be audited.
+  - [x] Preserve existing Trial -> Normal -> Seller flow.
 
-- [ ] Phase 7: reward settlement.
-  - After a paid invoice, find active attribution.
-  - Use attribution snapshots, not current admin settings.
-  - Calculate reward from original tariff price.
-  - Convert to TON if the sale was RUB or USDT.
-  - Add BullRun fee as `1%` of partner reward.
-  - Reserve network fee estimate against the admin reserve.
-  - Write reward event and reserve ledger entries idempotently.
-  - If reserve is insufficient, record admin debt and transition reserve status to `over_limit` or `closed_for_new_partners`.
+- [x] Phase 7: reward settlement.
+  - [x] After a paid invoice, find active attribution.
+  - [x] Use attribution snapshots, not current admin settings.
+  - [x] Calculate reward from original tariff price.
+  - [x] Convert to TON if the sale was RUB or USDT.
+  - [x] Add BullRun fee as `1%` of partner reward.
+  - [x] Reserve network fee estimate against the admin reserve.
+  - [x] Write reward event and reserve ledger entries idempotently.
+  - [x] If reserve is insufficient, record admin debt and transition reserve status to `over_limit` or `closed_for_new_partners`.
 
-- [ ] Phase 8: partner payout flow.
+- [x] Phase 8: partner payout flow.
   - [x] Add bot flow for partner TON wallet entry.
   - [x] Add withdrawal request when partner balance is at least `5 TON`.
   - [x] Queue payout request in `referral_partner_payouts`.
@@ -347,7 +347,7 @@ Statuses:
   - [x] Send payout automatically from BullRun-controlled wallet behind an explicit env flag.
   - [x] Charge manually entered network fee to admin reserve.
   - [x] Update payout status by chain result.
-  - [ ] Notify admin outside the dashboard when a payout request is created.
+  - [x] Notify admin outside the dashboard when a payout request is created.
 
 - [x] Phase 9: admin refund flow.
   - [x] Allow refund request only after `locked_until`.
@@ -358,39 +358,49 @@ Statuses:
   - [x] Send refund automatically from BullRun-controlled wallet.
   - [x] Confirm refund by blockchain result.
 
+## Remaining Activation Work
+
+The implementation is complete enough for MVP use, but real-money automation must stay behind runtime flags until these checks pass.
+
+- [ ] Run a controlled TON deposit test with a small amount and verify reserve watcher confirmation.
+- [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
+- [ ] Enable automatic payout sender only for a small controlled payout and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [ ] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [ ] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
+
 ## Admin UI Plan
 
 ### `/app/referrals`
 
-- [ ] Add top-level protected reserve card.
-  - Deposit address.
-  - Minimum required: `100 TON`.
-  - Total deposited.
-  - Locked until.
-  - Available reserve.
-  - Reserved obligations.
-  - Admin debt.
-  - BullRun fees.
-  - Network fees.
-  - Program status.
+- [x] Add top-level protected reserve card.
+  - [x] Deposit address.
+  - [x] Minimum required: `100 TON`.
+  - [x] Total deposited.
+  - [x] Locked until.
+  - [x] Available reserve.
+  - [x] Reserved obligations.
+  - [x] Admin debt.
+  - [x] BullRun fees.
+  - [x] Network fees.
+  - [x] Program status.
 
-- [ ] Gate referral enablement.
-  - If reserve deposit is below `100 TON`, disable `referral_enabled`.
-  - If deposit is confirmed and locked, allow enablement.
-  - If status is `closed_for_new_partners`, explain that old leads remain honored but new partners cannot join.
+- [x] Gate referral enablement.
+  - [x] If reserve deposit is below `100 TON`, disable `referral_enabled`.
+  - [x] If deposit is confirmed and locked, allow enablement.
+  - [x] If status is `closed_for_new_partners`, explain that old leads remain honored but new partners cannot join.
 
-- [ ] Add economics settings/readout.
-  - Partner reward percent.
-  - Fixed client discount: `10%`.
-  - BullRun fee: `1%` of partner reward.
-  - Show an example calculation using current settings.
+- [x] Add economics settings/readout.
+  - [x] Partner reward percent.
+  - [x] Fixed client discount: `10%`.
+  - [x] BullRun fee: `1%` of partner reward.
+  - [x] Show an example calculation using current settings.
 
-- [ ] Add partner table columns.
-  - TON payout wallet status.
-  - Current TON balance.
-  - Pending payout amount.
-  - Withdrawable amount.
-  - Last payout.
+- [x] Add partner table columns.
+  - [x] TON payout wallet status.
+  - [x] Current TON balance.
+  - [x] Pending payout amount.
+  - [x] Withdrawable amount.
+  - [x] Last payout.
 
 - [x] Add payout queue block.
   - Active requested/queued TON payout requests.
@@ -407,48 +417,48 @@ Statuses:
   - Snapshot discount percent.
   - Converted invoice.
 
-- [ ] Add reserve notifications and action banners.
-  - Deposit required.
-  - Reserve low.
-  - Reserve over limit.
-  - Closed for new partners.
-  - Refund available.
-  - Pending payout failures.
+- [x] Add reserve notifications and action banners.
+  - [x] Deposit required.
+  - [x] Reserve low.
+  - [x] Reserve over limit.
+  - [x] Closed for new partners.
+  - [x] Refund available.
+  - [x] Pending payout failures.
 
 ### `/app/orders` and `/app/dossier`
 
 - [x] Show referral discount metadata on orders.
 - [x] Show partner attribution and expiry in dossier.
 - [x] Show partner reward settlement status after purchase.
-- [ ] Keep legacy dossier labels compatible with existing referral profile/attribution data.
+- [x] Keep legacy dossier labels compatible with existing referral profile/attribution data.
 
 ### `/app/plans` and Payment Settings
 
-- [ ] Remove duplicated referral configuration from plans if `/app/referrals` becomes the single referral control surface.
-- [ ] If kept temporarily, make it link to `/app/referrals` and avoid conflicting saves.
+- [x] Remove duplicated referral configuration from plans if `/app/referrals` becomes the single referral control surface.
+- [x] If kept temporarily, make it link to `/app/referrals` and avoid conflicting saves.
 
 ## Telegram Bot Plan
 
-- [ ] Partner onboarding.
-  - If program is active, create partner profile and show referral link.
-  - If reserve is closed for new partners, explain that partner onboarding is paused.
-  - If partner already has a profile, keep showing their link if old links still have active leads.
+- [x] Partner onboarding.
+  - [x] If program is active, create partner profile and show referral link.
+  - [x] If reserve is closed for new partners, explain that partner onboarding is paused.
+  - [x] If partner already has a profile, keep showing their link if old links still have active leads.
 
-- [ ] Lead entry by referral link.
-  - If new attribution is allowed, record the lead and mention the discount.
-  - If new attribution is not allowed, tell the user the partner discount is temporarily unavailable.
-  - If the user already has active attribution, preserve old terms.
+- [x] Lead entry by referral link.
+  - [x] If new attribution is allowed, record the lead and mention the discount.
+  - [x] If new attribution is not allowed, tell the user the partner discount is temporarily unavailable.
+  - [x] If the user already has active attribution, preserve old terms.
 
-- [ ] Tariff display.
-  - Show original price and discounted referral price for eligible leads.
-  - Do not leak internal reserve/debt language to buyers.
+- [x] Tariff display.
+  - [x] Show original price and discounted referral price for eligible leads.
+  - [x] Do not leak internal reserve/debt language to buyers.
 
-- [ ] Partner account.
-  - Show leads, converted sales, TON balance, and withdrawable amount.
-  - Add TON wallet setup.
-  - Add withdraw button if balance is at least `5 TON`.
+- [x] Partner account.
+  - [x] Show leads, converted sales, TON balance, and withdrawable amount.
+  - [x] Add TON wallet setup.
+  - [x] Add withdraw button if balance is at least `5 TON`.
 
-- [ ] Notifications.
+- [x] Notifications.
   - [x] Admin: deposit confirmed.
   - [x] Admin: payout request created, payout sent/failed/cancelled.
   - [x] Admin: reserve low, reserve over limit.
@@ -645,7 +655,7 @@ Scenario checks:
   - partners can create a payout request once `balance_ton >= 5`
   - database allows only one active `requested`/`queued` payout per partner
   - admin can manually close the active TON request from `/app/referrals`; this marks the request `sent` and decrements partner balance
-  - payout requests are not sent automatically yet
+  - automatic payout sending was added later behind an explicit env flag
   - `/app/referrals` shows partner payout wallet and pending requested TON amount
   - admin/manual payout remains separate from automated payout sending
   - TON payout accounting uses 6 decimal places
@@ -682,7 +692,7 @@ Scenario checks:
   - `POST /api/referrals/reserve/refund-request` creates a manual refund request after the 30-day lock
   - `POST /api/referrals/reserve/refund-sent` marks the requested refund as sent with a TON tx hash
   - refund requests pause new partner onboarding through `refund_requested`
-  - automatic refund sending and blockchain confirmation remain intentionally unimplemented
+  - automatic refund sending and blockchain confirmation were added later behind explicit runtime controls
 - Added referral bot UX pass:
   - new referral-link visitors are recorded even when reserve is paused, but without discount eligibility
   - buyers see whether referral discount is applied or unavailable
