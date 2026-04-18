@@ -2479,6 +2479,10 @@ a {
   font-size: 11px;
 }
 
+.referrals-refund-transfer {
+  margin-top: 10px;
+}
+
 /* Referrals Count Badge */
 .referrals-count-badge {
   display: inline-flex;

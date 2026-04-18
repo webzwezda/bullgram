@@ -192,6 +192,65 @@ function PayoutTransferBox({ row }) {
   );
 }
 
+function RefundTransferBox({ reserve }) {
+  const uri = reserve?.refundTransferUri || '';
+  const qr = reserve?.refundTransferQr || '';
+  const memo = reserve?.refundMemo || '';
+  const wallet = reserve?.refundWallet || '';
+  if (!uri && !memo && !wallet) return null;
+
+  async function copyValue(value, label) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      window.alert(`${label} скопирован.`);
+    } catch {
+      window.prompt(label, value);
+    }
+  }
+
+  return (
+    <div className="referrals-payout-transfer referrals-refund-transfer">
+      {qr && <img className="referrals-payout-transfer__qr" src={qr} alt="QR для возврата TON-резерва" />}
+      <div className="referrals-payout-transfer__body">
+        <div className="referrals-payout-transfer__title">Возврат через TON-кошелек</div>
+        {wallet && (
+          <div className="referrals-payout-transfer__memo">
+            Кошелек: <span>{wallet}</span>
+          </div>
+        )}
+        {memo && (
+          <div className="referrals-payout-transfer__memo">
+            Memo: <span>{memo}</span>
+          </div>
+        )}
+        <div className="referrals-payout-transfer__actions">
+          {uri && (
+            <a className="referrals-action-btn referrals-action-btn--payout" href={uri}>
+              Открыть
+            </a>
+          )}
+          {wallet && (
+            <button type="button" className="referrals-action-btn" onClick={() => copyValue(wallet, 'Кошелек')}>
+              Кошелек
+            </button>
+          )}
+          {memo && (
+            <button type="button" className="referrals-action-btn" onClick={() => copyValue(memo, 'Memo')}>
+              Memo
+            </button>
+          )}
+          {uri && (
+            <button type="button" className="referrals-action-btn" onClick={() => copyValue(uri, 'TON-ссылка')}>
+              Ссылка
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ReferralsPage() {
   const { accessToken } = useAuth();
   const [filter, setFilter] = useState('all');
@@ -450,6 +509,13 @@ export function ReferralsPage() {
     }
     const confirmed = window.confirm(`Запросить возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`);
     if (!confirmed) return;
+    const rawWallet = window.prompt('TON-кошелек, куда вернуть свободный резерв:', state.reserve?.refundWallet || '');
+    if (rawWallet === null) return;
+    const refundWallet = rawWallet.trim();
+    if (!refundWallet) {
+      window.alert('Нужен TON-кошелек для возврата.');
+      return;
+    }
     const note = window.prompt('Комментарий к возврату:', '') || '';
 
     setState((prev) => ({ ...prev, refunding: true, error: '' }));
@@ -457,7 +523,10 @@ export function ReferralsPage() {
       await apiRequest('/api/referrals/reserve/refund-request', {
         accessToken,
         method: 'POST',
-        body: { note }
+        body: {
+          note,
+          refund_wallet: refundWallet
+        }
       });
       await refreshReferralState({ refunding: false });
     } catch (error) {
@@ -795,6 +864,7 @@ export function ReferralsPage() {
                         ? `Можно вернуть свободный остаток: ${formatTon(state.reserve?.refundableTon)}. Обязательства и комиссии останутся в резерве.`
                         : `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`}
                   </div>
+                  <RefundTransferBox reserve={state.reserve} />
                 </div>
                 <div className="referrals-refund-box__actions">
                   {state.reserve?.status === 'refund_requested' ? (

@@ -59,6 +59,21 @@ export default function referralRoutes(supabase) {
         return `brp_${String(payoutRequestId || '').replace(/-/g, '').slice(0, 24)}`;
     }
 
+    function buildReserveRefundMemo(reserveAccountId) {
+        return `brr_${String(reserveAccountId || '').replace(/-/g, '').slice(0, 24)}`;
+    }
+
+    function normalizeTonWallet(value) {
+        return String(value || '').trim();
+    }
+
+    function looksLikeTonWallet(value) {
+        const wallet = normalizeTonWallet(value);
+        if (/^[UEk]Q[A-Za-z0-9_-]{46}$/.test(wallet)) return true;
+        if (/^[0-9-]+:[a-fA-F0-9]{64}$/.test(wallet)) return true;
+        return false;
+    }
+
     function buildTonTransferUri(wallet, amountTon, memo) {
         const normalizedWallet = String(wallet || '').trim();
         const normalizedAmount = normalizeCurrencyAmount('TON', amountTon);
@@ -113,6 +128,44 @@ export default function referralRoutes(supabase) {
                 ton_transfer_qr: null
             };
         }
+    }
+
+    async function buildTonTransferPayload(wallet, amountTon, memo) {
+        const uri = buildTonTransferUri(wallet, amountTon, memo);
+        if (!uri) return { uri: null, qr: null };
+
+        try {
+            const qr = await QRCode.toDataURL(uri, {
+                errorCorrectionLevel: 'M',
+                margin: 2,
+                width: 220
+            });
+            return { uri, qr };
+        } catch (error) {
+            console.error('Ошибка генерации TON transfer QR:', error.message || error);
+            return { uri, qr: null };
+        }
+    }
+
+    async function enrichReserveRefundPayload(ownerId, reserve) {
+        if (!reserve?.id || reserve.status !== 'refund_requested') {
+            return reserve;
+        }
+
+        const account = await getReserveAccountByOwner(ownerId);
+        const refundRequest = account?.payload?.refund_request || {};
+        const refundWallet = normalizeTonWallet(refundRequest.refund_wallet);
+        const refundMemo = refundRequest.refund_memo || buildReserveRefundMemo(reserve.id);
+        const amountTon = normalizeCurrencyAmount('TON', refundRequest.amount_ton || reserve.refundRequestedTon);
+        const transfer = await buildTonTransferPayload(refundWallet, amountTon, refundMemo);
+
+        return {
+            ...reserve,
+            refundWallet: refundWallet || null,
+            refundMemo,
+            refundTransferUri: transfer.uri,
+            refundTransferQr: transfer.qr
+        };
     }
 
     async function restoreReferralBalance(profileId, balanceField, expectedBalance, restoreBalance) {
@@ -198,7 +251,12 @@ export default function referralRoutes(supabase) {
         return data || null;
     }
 
-    async function requestReserveRefund(ownerId, note = null) {
+    async function requestReserveRefund(ownerId, note = null, refundWallet = null) {
+        const normalizedRefundWallet = normalizeTonWallet(refundWallet);
+        if (!looksLikeTonWallet(normalizedRefundWallet)) {
+            return { error: 'Нужен TON-кошелек для возврата депозита.', status: 400 };
+        }
+
         const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
         if (!reserve.supported || !reserve.id) {
             return { error: 'Резерв еще не создан.', status: 400 };
@@ -223,6 +281,7 @@ export default function referralRoutes(supabase) {
         }
 
         const now = new Date().toISOString();
+        const refundMemo = buildReserveRefundMemo(reserve.id);
         const { error: ledgerError } = await supabase
             .from('referral_reserve_ledger')
             .insert({
@@ -233,6 +292,8 @@ export default function referralRoutes(supabase) {
                 direction: 'debit',
                 payload: {
                     note: note || null,
+                    refund_wallet: normalizedRefundWallet,
+                    refund_memo: refundMemo,
                     requested_at: now,
                     available_reserve_ton: reserve.availableReserveTon,
                     reserved_obligations_ton: reserve.reservedObligationsTon,
@@ -246,6 +307,8 @@ export default function referralRoutes(supabase) {
             ...(account.payload || {}),
             refund_request: {
                 amount_ton: amountTon,
+                refund_wallet: normalizedRefundWallet,
+                refund_memo: refundMemo,
                 note: note || null,
                 requested_at: now
             }
@@ -278,7 +341,9 @@ export default function referralRoutes(supabase) {
                 statusLabel: 'Возврат запрошен',
                 canAcceptNewPartners: false,
                 refundableTon: 0,
-                refundRequestedTon: amountTon
+                refundRequestedTon: amountTon,
+                refundWallet: normalizedRefundWallet,
+                refundMemo
             }
         };
     }
@@ -342,6 +407,8 @@ export default function referralRoutes(supabase) {
             ...(account.payload || {}),
             refund_sent: {
                 amount_ton: amountTon,
+                refund_wallet: account.payload?.refund_request?.refund_wallet || null,
+                refund_memo: account.payload?.refund_request?.refund_memo || null,
                 chain_tx_hash: normalizedChainTxHash,
                 note: note || null,
                 sent_at: now
@@ -811,7 +878,10 @@ export default function referralRoutes(supabase) {
         const payload = createEmptyResponse();
 
         try {
-            payload.reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
+            payload.reserve = await enrichReserveRefundPayload(
+                ownerId,
+                await loadReferralReserveState(supabase, ownerId, { ensure: true })
+            );
             payload.economics = payload.reserve?.economics || getReferralEconomics();
 
             const [settingsResp, profilesResp, attributionsResp, eventsResp, payoutMethodsResp, payoutsResp] = await Promise.all([
@@ -1130,10 +1200,10 @@ export default function referralRoutes(supabase) {
 
     router.post('/reserve/refund-request', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
-        const { note } = req.body || {};
+        const { note, refund_wallet } = req.body || {};
 
         try {
-            const result = await requestReserveRefund(ownerId, note);
+            const result = await requestReserveRefund(ownerId, note, refund_wallet);
             if (result.error) {
                 return res.status(result.status || 400).json({ error: result.error });
             }

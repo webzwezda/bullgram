@@ -708,6 +708,11 @@ Scenario checks:
   - backend now generates a `ton://transfer/...` deeplink, `brp_...` memo, and QR data URL for every active payout request
   - `/app/referrals` shows the QR, memo, open-wallet action, and copy buttons in the payout queue
   - this keeps manual payouts usable while the automatic sender remains disabled on production
+- Added manual admin refund helper:
+  - refund request now requires the admin TON wallet for returning free reserve
+  - refund request stores `refund_wallet` and `brr_...` memo in reserve ledger/account payload
+  - `/app/referrals` shows refund QR, wallet, memo, open-wallet action, and copy buttons while refund is requested
+  - automatic admin refund sending is still intentionally separate from the manual helper
 - Runtime env for payout confirmation:
   - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
   - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`
