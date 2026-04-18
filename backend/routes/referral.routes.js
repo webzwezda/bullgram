@@ -329,10 +329,25 @@ export default function referralRoutes(supabase) {
         return data || null;
     }
 
+    async function getPaymentTonWallet(ownerId) {
+        const { data, error } = await supabase
+            .from('payment_settings')
+            .select('ton_wallet')
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+
+        if (error) {
+            if ((error.message || '').includes('payment_settings')) return null;
+            throw error;
+        }
+
+        return normalizeTonWallet(data?.ton_wallet || '');
+    }
+
     async function requestReserveRefund(ownerId, note = null, refundWallet = null) {
-        const normalizedRefundWallet = normalizeTonWallet(refundWallet);
+        const normalizedRefundWallet = normalizeTonWallet(refundWallet) || await getPaymentTonWallet(ownerId);
         if (!looksLikeTonWallet(normalizedRefundWallet)) {
-            return { error: 'Нужен TON-кошелек для возврата депозита.', status: 400 };
+            return { error: 'В app/payments нужен TON-кошелек для возврата депозита.', status: 400 };
         }
 
         const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
@@ -340,7 +355,7 @@ export default function referralRoutes(supabase) {
             return { error: 'Резерв еще не создан.', status: 400 };
         }
 
-        if (!reserve.lockExpired) {
+        if (!reserve.canRequestRefund) {
             return { error: 'Депозит еще в локе. Возврат доступен только после 30 дней.', status: 400 };
         }
 
@@ -967,7 +982,7 @@ export default function referralRoutes(supabase) {
             const [settingsResp, profilesResp, attributionsResp, eventsResp, payoutMethodsResp, payoutsResp] = await Promise.all([
                 supabase
                     .from('payment_settings')
-                    .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent')
+                    .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent, ton_wallet')
                     .eq('owner_id', ownerId)
                     .maybeSingle(),
                 supabase
@@ -1035,6 +1050,12 @@ export default function referralRoutes(supabase) {
                 referral_client_discount_percent: Number(settingsResp.data?.referral_client_discount_percent ?? payload.economics.clientDiscountPercent),
                 referral_welcome_text: settingsResp.data?.referral_welcome_text || ''
             };
+            payload.reserve = payload.reserve
+                ? {
+                    ...payload.reserve,
+                    defaultRefundWallet: normalizeTonWallet(settingsResp.data?.ton_wallet || '') || null
+                }
+                : payload.reserve;
 
             const profiles = profilesResp.data || [];
             const attributions = attributionsResp.data || [];

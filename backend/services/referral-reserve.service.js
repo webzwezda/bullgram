@@ -138,11 +138,13 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
     - ledgerSummary.adminRefundTon
   );
   const adminDebtTon = roundTon(Math.max(0, availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
-  const shouldCreateLock = totalDepositedTon > 0 && !reserveAccount.locked_until;
+  const shouldCreateLock = totalDepositedTon >= minimumDepositTon && !reserveAccount.locked_until;
   const lockStart = ledgerSummary.firstDepositAt || now;
-  const lockedUntil = shouldCreateLock
+  const lockedUntil = totalDepositedTon >= minimumDepositTon && shouldCreateLock
     ? addDays(lockStart, DEFAULT_DEPOSIT_LOCK_DAYS).toISOString()
-    : reserveAccount.locked_until || null;
+    : totalDepositedTon >= minimumDepositTon
+      ? reserveAccount.locked_until || null
+      : null;
   const status = deriveStatus(
     { ...reserveAccount, locked_until: lockedUntil },
     {
@@ -334,7 +336,23 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const adminDebtTon = roundTon(Math.max(numberOrZero(account?.admin_debt_ton), availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
   let lockedUntil = account?.locked_until || null;
 
-  if (account && ensure && totalDepositedTon > 0 && !lockedUntil) {
+  if (account && ensure && totalDepositedTon < minimumDepositTon && lockedUntil) {
+    const { data: unlockedAccount, error: unlockError } = await supabase
+      .from('referral_reserve_accounts')
+      .update({
+        locked_until: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', account.id)
+      .select('*')
+      .single();
+
+    if (unlockError) throw unlockError;
+    lockedUntil = null;
+    account = unlockedAccount;
+  }
+
+  if (account && ensure && totalDepositedTon >= minimumDepositTon && !lockedUntil) {
     lockedUntil = addDays(ledgerSummary.firstDepositAt || new Date(), DEFAULT_DEPOSIT_LOCK_DAYS).toISOString();
     const { data: lockAccount, error: lockError } = await supabase
       .from('referral_reserve_accounts')
@@ -372,7 +390,9 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const canAcceptNewPartners = canEnableReferrals && !isClosedForNewPartners;
   const lockedUntilDate = validDateOrNull(lockedUntil);
   const lockExpired = !!lockedUntilDate && lockedUntilDate.toString() !== 'Invalid Date' && lockedUntilDate <= new Date();
-  const refundableTon = lockExpired && !['refund_requested', 'refund_completed', 'paused'].includes(status)
+  const partialDepositWithoutProgram = totalDepositedTon > 0 && totalDepositedTon < minimumDepositTon;
+  const canRequestRefund = (partialDepositWithoutProgram || lockExpired) && !['refund_requested', 'refund_completed', 'paused'].includes(status);
+  const refundableTon = canRequestRefund
     ? Math.max(0, availableReserveTon)
     : 0;
 
@@ -388,6 +408,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     depositMemo: normalizeReferralDepositMemo(account?.deposit_memo) || normalizeReferralDepositMemo(buildDepositMemo(ownerId)),
     lockedUntil,
     lockExpired,
+    partialDepositWithoutProgram,
+    canRequestRefund,
     refundableTon: roundTon(refundableTon),
     lastDepositAt: account?.last_deposit_at || null,
     reason: !depositConfigured

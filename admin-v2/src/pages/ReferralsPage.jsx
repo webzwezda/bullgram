@@ -603,7 +603,7 @@ export function ReferralsPage() {
 
   async function requestReserveRefund() {
     const refundableTon = Number(state.reserve?.refundableTon || 0);
-    if (!state.reserve?.lockExpired) {
+    if (!state.reserve?.canRequestRefund) {
       window.alert('Депозит еще в локе. Возврат доступен после 30 дней.');
       return;
     }
@@ -611,13 +611,18 @@ export function ReferralsPage() {
       window.alert('Свободного резерва для возврата нет.');
       return;
     }
-    const confirmed = window.confirm(`Запросить возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`);
+    const defaultRefundWallet = state.reserve?.defaultRefundWallet || state.reserve?.refundWallet || '';
+    const confirmed = window.confirm(
+      defaultRefundWallet
+        ? `Запросить возврат ${formatTon(refundableTon)} на кошелек из app/payments?\n${defaultRefundWallet}`
+        : `Запросить возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`
+    );
     if (!confirmed) return;
-    const rawWallet = window.prompt('TON-кошелек, куда вернуть свободный резерв:', state.reserve?.refundWallet || '');
+    const rawWallet = defaultRefundWallet || window.prompt('TON-кошелек, куда вернуть свободный резерв:', state.reserve?.refundWallet || '');
     if (rawWallet === null) return;
-    const refundWallet = rawWallet.trim();
+    const refundWallet = String(rawWallet || '').trim();
     if (!refundWallet) {
-      window.alert('Нужен TON-кошелек для возврата.');
+      window.alert('Нужен TON-кошелек для возврата. Укажи его в app/payments.');
       return;
     }
     const note = window.prompt('Комментарий к возврату:', '') || '';
@@ -989,9 +994,11 @@ export function ReferralsPage() {
                   <div className="referrals-refund-box__text">
                     {state.reserve?.status === 'refund_requested'
                       ? `Запрошен возврат ${formatTon(state.reserve?.refundRequestedTon)}. Новые партнеры на паузе до закрытия.`
-                      : state.reserve?.lockExpired
+                      : state.reserve?.canRequestRefund
                         ? `Можно вернуть свободный остаток: ${formatTon(state.reserve?.refundableTon)}. Обязательства и комиссии останутся в резерве.`
-                        : `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`}
+                        : state.reserve?.lockedUntil
+                          ? `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`
+                          : 'До 100 TON депозит можно вернуть сразу, если на нем нет обязательств.'}
                   </div>
                   <RefundTransferBox reserve={state.reserve} />
                 </div>
@@ -1019,7 +1026,7 @@ export function ReferralsPage() {
                     <button
                       className="referrals-action-btn referrals-action-btn--payout"
                       onClick={requestReserveRefund}
-                      disabled={state.refunding || !state.reserve?.lockExpired || Number(state.reserve?.refundableTon || 0) <= 0}
+                      disabled={state.refunding || !state.reserve?.canRequestRefund || Number(state.reserve?.refundableTon || 0) <= 0}
                     >
                       {state.refunding ? 'Запрашиваем...' : 'Запросить возврат'}
                     </button>
