@@ -22,7 +22,7 @@ export function RequisitesSection({
   validatePaymentFields
 }) {
   return (
-    <div className="max-w-5xl pt-6 space-y-6">
+    <div className="space-y-6">
       
       {/* TON Wallet */}
       <section className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden transition-all hover:border-slate-300/60">

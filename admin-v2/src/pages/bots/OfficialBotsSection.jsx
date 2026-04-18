@@ -98,7 +98,7 @@ export function OfficialBotsSection({
   channelsByBotId
 }) {
   return (
-    <div className="pt-6 space-y-6">
+    <div className="space-y-6">
 
       {/* Подключение бота */}
       <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
