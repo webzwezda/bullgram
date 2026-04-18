@@ -32,6 +32,7 @@ import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
 import { startCryptoRatesRefresh } from './jobs/crypto-rates.job.js';
 import { startReferralSettlementRetry } from './jobs/referral-settlement-retry.job.js';
 import { startReferralPayoutSender } from './jobs/referral-payout-sender.job.js';
+import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirmation.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -198,7 +199,8 @@ app.listen(PORT, async () => {
         ton_reserve_watch_enabled: envFlag('TON_RESERVE_WATCH_ENABLED'),
         crypto_rates_enabled: String(process.env.CRYPTO_RATES_ENABLED || 'true').trim().toLowerCase() !== 'false',
         referral_settlement_retry_enabled: String(process.env.REFERRAL_SETTLEMENT_RETRY_ENABLED || 'true').trim().toLowerCase() !== 'false',
-        referral_payout_sender_enabled: envFlag('REFERRAL_PAYOUT_SENDER_ENABLED')
+        referral_payout_sender_enabled: envFlag('REFERRAL_PAYOUT_SENDER_ENABLED'),
+        referral_payout_confirmation_enabled: String(process.env.REFERRAL_PAYOUT_CONFIRMATION_ENABLED || 'true').trim().toLowerCase() !== 'false'
     });
 
     // Запускаем всех ботов из БД
@@ -214,4 +216,5 @@ app.listen(PORT, async () => {
     startCryptoRatesRefresh(supabase);
     startReferralSettlementRetry(supabase, getBotById);
     startReferralPayoutSender(supabase);
+    startReferralPayoutConfirmation(supabase);
 });

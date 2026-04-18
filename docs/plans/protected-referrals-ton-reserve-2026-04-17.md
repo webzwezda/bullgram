@@ -346,7 +346,7 @@ Statuses:
   - [x] Store manual TON tx hash and network fee on the payout request.
   - [x] Send payout automatically from BullRun-controlled wallet behind an explicit env flag.
   - [x] Charge manually entered network fee to admin reserve.
-  - [ ] Update payout status by chain result.
+  - [x] Update payout status by chain result.
   - [ ] Notify admin outside the dashboard when a payout request is created.
 
 - [ ] Phase 9: admin refund flow.
@@ -665,7 +665,7 @@ Scenario checks:
   - manual TON payout marking can store `chain_tx_hash` and `network_fee_ton`
   - manually entered network fee is written to the reserve ledger as `network_fee_reserved`
   - the partner bot treats `sending` as an active request, so partners cannot change wallet or create a duplicate request while money is in flight
-  - automatic TON sending and blockchain confirmation remain intentionally unimplemented
+  - automatic TON sending and blockchain confirmation were added later behind explicit runtime controls
 - Added first notification layer:
   - admin gets a Telegram notification when a partner creates a payout request
   - partner gets Telegram updates for queued, sending, sent, failed, and cancelled payout statuses
@@ -697,7 +697,19 @@ Scenario checks:
   - `/api/referrals/payout-request-send` allows an admin-triggered automatic send from the payout queue
   - `/app/referrals` shows the `Авто TON` action only when the sender is enabled
   - automatic sender is off by default and requires `REFERRAL_PAYOUT_SENDER_ENABLED=true`
-  - current transfer reference is `ton:<wallet>:<seqno>`; true blockchain confirmation and final transaction hash lookup remain a separate unchecked step
+  - current transfer reference starts as `ton:<wallet>:<seqno>` and is later replaced by confirmation watcher with the real chain tx hash
+- Added automatic partner payout confirmation:
+  - `backend/services/referral-payout-confirmation.service.js` looks up outgoing reserve-wallet transactions through TON Center
+  - sent auto payouts with temporary `ton:<wallet>:<seqno>` references are matched by the `brp_...` memo
+  - confirmed payouts replace the temporary transfer reference with the real chain tx hash
+  - reserve ledger network-fee rows are updated with the same confirmed tx hash
+  - confirmation is read-only and does not need the wallet mnemonic
+- Runtime env for payout confirmation:
+  - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
+  - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`
+  - `TON_PAYOUT_CONFIRMATION_TX_LIMIT=50`
+  - `TON_PAYOUT_CONFIRMATION_MAX_PAGES=5`
+  - `TON_PAYOUT_CONFIRMATION_BATCH_LIMIT=50`
 - Runtime env for automatic partner payouts:
   - `REFERRAL_PAYOUT_SENDER_ENABLED=false` by default
   - `TON_RESERVE_WALLET_SECRET_FILE=/root/bullrun-ton-reserve/reserve-wallet.json`
