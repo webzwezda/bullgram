@@ -4,6 +4,7 @@ import {
     reconcileReferralReserveAccount,
     recordReferralReserveDeposit
 } from '../services/referral-reserve.service.js';
+import { OfficialBotService } from '../services/official-bot.service.js';
 
 const DEFAULT_TONCENTER_API_BASE = 'https://toncenter.com/api/v2';
 const DEFAULT_POLL_INTERVAL_MS = 2 * 60 * 1000;
@@ -219,6 +220,7 @@ export function startTonReserveWatch(supabase) {
     const pollIntervalMs = envNumber('TON_RESERVE_POLL_INTERVAL_MS', DEFAULT_POLL_INTERVAL_MS, {
         min: MIN_POLL_INTERVAL_MS
     });
+    const officialBotService = new OfficialBotService(supabase);
     let running = false;
 
     const runOnce = async () => {
@@ -270,6 +272,10 @@ export function startTonReserveWatch(supabase) {
                         owner_id: reserveAccount.owner_id,
                         amount_ton: result.amountTon,
                         lock_created: result.lockCreated
+                    });
+
+                    officialBotService.notifyReferralReserveDeposit(reserveAccount.owner_id, result).catch((notifyError) => {
+                        console.error('[TonReserveWatch] deposit notification failed:', notifyError.message || notifyError);
                     });
                 }
             }

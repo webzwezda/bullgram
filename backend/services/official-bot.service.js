@@ -489,6 +489,146 @@ export class OfficialBotService {
         }
     }
 
+    async getOwnerNotificationBot(ownerId) {
+        if (!ownerId) return null;
+
+        const { data: accounts, error } = await this.supabase
+            .from('tg_accounts')
+            .select('id, bot_role, tg_username')
+            .eq('owner_id', ownerId)
+            .eq('account_type', 'bot')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Ошибка загрузки бота для уведомлений:', error.message);
+            return null;
+        }
+
+        const candidates = [
+            ...(accounts || []).filter(account => (account.bot_role || 'sales') === 'sales'),
+            ...(accounts || [])
+        ];
+
+        for (const account of candidates) {
+            const bot = activeBots.get(account.id);
+            if (bot?.telegram) {
+                return { bot, account };
+            }
+        }
+
+        return null;
+    }
+
+    async notifyOwnerAdmin(ownerId, text, options = {}) {
+        try {
+            const adminContext = await this.getOwnerAdminContext(ownerId);
+            const adminTgId = String(adminContext?.adminTgId || '').trim();
+            if (!adminTgId) {
+                return { sent: false, reason: 'admin_tg_id_missing' };
+            }
+
+            const notificationBot = await this.getOwnerNotificationBot(ownerId);
+            if (!notificationBot?.bot?.telegram) {
+                return { sent: false, reason: 'active_bot_missing' };
+            }
+
+            await notificationBot.bot.telegram.sendMessage(adminTgId, text, options);
+            return { sent: true, bot_id: notificationBot.account?.id || null };
+        } catch (error) {
+            console.error('Ошибка отправки admin notification:', error.message || error);
+            return { sent: false, reason: 'send_failed' };
+        }
+    }
+
+    async notifyReferralPayoutRequested(ownerId, payout) {
+        const amountTon = Number(payout?.amount_ton || 0);
+        const text = [
+            '💸 Новая заявка на выплату по партнерке.',
+            '',
+            `Партнер: ${payout?.tg_user_id}`,
+            `Сумма: ${amountTon} TON`,
+            `Кошелек: ${payout?.ton_wallet || 'не указан'}`,
+            '',
+            'Открой /app/referrals и проверь очередь выплат.'
+        ].join('\n');
+
+        return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
+    }
+
+    async notifyReferralPayoutStatus(ownerId, payout, status, meta = {}) {
+        const notificationBot = await this.getOwnerNotificationBot(ownerId);
+        if (!notificationBot?.bot?.telegram) {
+            return { partner: { sent: false, reason: 'active_bot_missing' }, admin: null };
+        }
+
+        const tgUserId = String(payout?.tg_user_id || '').trim();
+        const amountTon = Number(payout?.amount_ton || 0);
+        const wallet = payout?.ton_wallet || '';
+        const txHash = meta.chainTxHash || payout?.chain_tx_hash || '';
+        const networkFeeTon = Number(meta.networkFeeTon ?? payout?.network_fee_ton ?? 0);
+
+        const partnerTexts = {
+            queued: `💸 Заявка на выплату ${amountTon} TON взята в очередь.`,
+            sending: `💸 Выплата ${amountTon} TON отправляется на твой кошелек.`,
+            sent: [
+                `✅ Выплата отправлена: ${amountTon} TON.`,
+                wallet ? `Кошелек: ${wallet}` : '',
+                txHash ? `Tx: ${txHash}` : ''
+            ].filter(Boolean).join('\n'),
+            failed: [
+                `⚠️ Выплата ${amountTon} TON не прошла.`,
+                meta.note ? `Причина: ${meta.note}` : 'Админ проверит и повторит обработку.'
+            ].join('\n'),
+            cancelled: [
+                `⚠️ Заявка на выплату ${amountTon} TON отклонена.`,
+                meta.note ? `Причина: ${meta.note}` : 'Свяжись с админом, если нужна проверка.'
+            ].join('\n')
+        };
+
+        const partnerText = partnerTexts[status];
+        let partnerResult = { sent: false, reason: 'unsupported_status' };
+        if (tgUserId && partnerText) {
+            try {
+                await notificationBot.bot.telegram.sendMessage(tgUserId, partnerText, { disable_web_page_preview: true });
+                partnerResult = { sent: true };
+            } catch (error) {
+                console.error('Ошибка отправки partner payout notification:', error.message || error);
+                partnerResult = { sent: false, reason: 'send_failed' };
+            }
+        }
+
+        let adminResult = null;
+        if (['sent', 'failed', 'cancelled'].includes(status)) {
+            const adminText = [
+                status === 'sent' ? '✅ Партнерская выплата отмечена отправленной.' : '⚠️ Статус партнерской выплаты изменен.',
+                '',
+                `Партнер: ${tgUserId || 'неизвестен'}`,
+                `Статус: ${status}`,
+                `Сумма: ${amountTon} TON`,
+                networkFeeTon > 0 ? `Комиссия сети: ${networkFeeTon} TON` : '',
+                txHash ? `Tx: ${txHash}` : '',
+                meta.note ? `Комментарий: ${meta.note}` : ''
+            ].filter(Boolean).join('\n');
+
+            adminResult = await this.notifyOwnerAdmin(ownerId, adminText, { disable_web_page_preview: true });
+        }
+
+        return { partner: partnerResult, admin: adminResult };
+    }
+
+    async notifyReferralReserveDeposit(ownerId, depositResult) {
+        const amountTon = Number(depositResult?.amountTon || 0);
+        const text = [
+            '✅ TON-резерв партнерки пополнен.',
+            '',
+            `Сумма: ${amountTon} TON`,
+            depositResult?.chainTxHash ? `Tx: ${depositResult.chainTxHash}` : '',
+            depositResult?.lockCreated ? 'Депозит заблокирован на 30 дней. Партнерку можно включать.' : 'Резерв пересчитан.'
+        ].filter(Boolean).join('\n');
+
+        return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
+    }
+
     async getBotAdminContext(botId, ownerIdFallback = null) {
         try {
             const { data: botAccount, error: botError } = await this.supabase
@@ -800,6 +940,10 @@ export class OfficialBotService {
             }
             throw error;
         }
+
+        this.notifyReferralPayoutRequested(ownerId, data).catch((notifyError) => {
+            console.error('Ошибка уведомления админа о referral payout request:', notifyError.message || notifyError);
+        });
 
         return { payout: data };
     }

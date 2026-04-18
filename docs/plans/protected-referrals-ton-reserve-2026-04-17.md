@@ -447,8 +447,11 @@ Statuses:
   - Add withdraw button if balance is at least `5 TON`.
 
 - [ ] Notifications.
-  - Admin: deposit confirmed, reserve low, reserve over limit, payout sent/failed, refund requested.
-  - Partner: lead came in, sale converted, payout available, payout sent/failed, program paused for new partners.
+  - [x] Admin: deposit confirmed.
+  - [x] Admin: payout request created, payout sent/failed/cancelled.
+  - [ ] Admin: reserve low, reserve over limit, refund requested.
+  - [x] Partner: sale converted, payout queued/sending/sent/failed/cancelled.
+  - [ ] Partner: lead came in, payout available, program paused for new partners.
   - Buyer: discount applied, or discount unavailable for new referral entries.
 
 ## API Surface
@@ -659,3 +662,9 @@ Scenario checks:
   - manually entered network fee is written to the reserve ledger as `network_fee_reserved`
   - the partner bot treats `sending` as an active request, so partners cannot change wallet or create a duplicate request while money is in flight
   - automatic TON sending and blockchain confirmation remain intentionally unimplemented
+- Added first notification layer:
+  - admin gets a Telegram notification when a partner creates a payout request
+  - partner gets Telegram updates for queued, sending, sent, failed, and cancelled payout statuses
+  - admin gets Telegram updates for sent, failed, and cancelled payout outcomes
+  - admin gets a Telegram notification when the TON reserve watcher confirms a deposit
+  - all notification sends are best-effort and do not block payout accounting if Telegram delivery fails

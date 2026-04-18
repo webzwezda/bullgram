@@ -5,6 +5,7 @@ import {
     loadReferralReserveState,
     reconcileReferralReserveAccount
 } from '../services/referral-reserve.service.js';
+import { OfficialBotService } from '../services/official-bot.service.js';
 
 function createEmptyResponse() {
     return {
@@ -43,6 +44,7 @@ function createEmptyResponse() {
 export default function referralRoutes(supabase) {
     const router = express.Router();
     const ACTIVE_PAYOUT_REQUEST_STATUSES = ['requested', 'queued', 'sending'];
+    const officialBotService = new OfficialBotService(supabase);
 
     function normalizeCurrencyAmount(currency, amount) {
         const decimals = currency === 'RUB' ? 2 : 6;
@@ -374,6 +376,26 @@ export default function referralRoutes(supabase) {
             }
         }
 
+        if (activePayoutRequest) {
+            officialBotService.notifyReferralPayoutStatus(
+                ownerId,
+                {
+                    ...activePayoutRequest,
+                    status: 'sent',
+                    chain_tx_hash: effectiveChainTxHash,
+                    network_fee_ton: effectiveNetworkFeeTon
+                },
+                'sent',
+                {
+                    chainTxHash: effectiveChainTxHash,
+                    networkFeeTon: effectiveNetworkFeeTon,
+                    note
+                }
+            ).catch((notifyError) => {
+                console.error('Ошибка уведомления о referral payout sent:', notifyError.message || notifyError);
+            });
+        }
+
         return {
             success: true,
             tg_user_id: String(tgUserId),
@@ -481,6 +503,15 @@ export default function referralRoutes(supabase) {
         if (eventError && !(eventError.message || '').includes('referral_events')) {
             throw eventError;
         }
+
+        officialBotService.notifyReferralPayoutStatus(
+            ownerId,
+            { ...request, status: normalizedStatus },
+            normalizedStatus,
+            { note }
+        ).catch((notifyError) => {
+            console.error('Ошибка уведомления о referral payout status:', notifyError.message || notifyError);
+        });
 
         return {
             success: true,
