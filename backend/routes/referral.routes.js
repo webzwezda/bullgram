@@ -363,8 +363,15 @@ export default function referralRoutes(supabase) {
             throw eventError;
         }
 
+        let networkFeeRecord = null;
+        let networkFeeRecordError = null;
         if (activePayoutRequest && effectiveNetworkFeeTon > 0) {
-            await recordReferralNetworkFee(ownerId, activePayoutRequest, effectiveNetworkFeeTon, effectiveChainTxHash);
+            try {
+                networkFeeRecord = await recordReferralNetworkFee(ownerId, activePayoutRequest, effectiveNetworkFeeTon, effectiveChainTxHash);
+            } catch (error) {
+                networkFeeRecordError = 'Комиссия сети сохранена в выплате, но не попала в reserve ledger. Нужно проверить вручную.';
+                console.error('Ошибка записи network fee в referral reserve ledger:', error);
+            }
         }
 
         return {
@@ -375,7 +382,9 @@ export default function referralRoutes(supabase) {
             balance_after: nextBalance,
             payout_request_id: activePayoutRequest?.id || null,
             chain_tx_hash: effectiveChainTxHash,
-            network_fee_ton: effectiveNetworkFeeTon
+            network_fee_ton: effectiveNetworkFeeTon,
+            network_fee_recorded: !!networkFeeRecord,
+            warning: networkFeeRecordError
         };
     }
 
