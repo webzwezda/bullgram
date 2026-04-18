@@ -344,7 +344,7 @@ Statuses:
   - [x] Let admin close an active TON request through manual payout marking.
   - [x] Add manual payout lifecycle statuses before automatic sender.
   - [x] Store manual TON tx hash and network fee on the payout request.
-  - [ ] Send payout automatically from BullRun-controlled wallet.
+  - [x] Send payout automatically from BullRun-controlled wallet behind an explicit env flag.
   - [x] Charge manually entered network fee to admin reserve.
   - [ ] Update payout status by chain result.
   - [ ] Notify admin outside the dashboard when a payout request is created.
@@ -690,3 +690,20 @@ Scenario checks:
   - partners get a Telegram notification when a lead comes in
   - partners get a Telegram notification when their TON balance first reaches the payout minimum
   - active `/app/plans` no longer contains a referral settings editor; `/app/referrals` remains the referral control surface
+- Added automatic partner payout sender groundwork:
+  - `backend/services/ton-reserve-sender.service.js` reads the protected reserve wallet secret file only at send time
+  - `backend/services/referral-payout-sender.service.js` moves a payout request to `sending`, sends TON from the BullRun reserve wallet, deducts partner balance, marks the request `sent`, stores transfer reference, records estimated network fee, and notifies the partner/admin
+  - `backend/jobs/referral-payout-sender.job.js` scans `requested`/`queued` payout requests when explicitly enabled
+  - `/api/referrals/payout-request-send` allows an admin-triggered automatic send from the payout queue
+  - `/app/referrals` shows the `Авто TON` action only when the sender is enabled
+  - automatic sender is off by default and requires `REFERRAL_PAYOUT_SENDER_ENABLED=true`
+  - current transfer reference is `ton:<wallet>:<seqno>`; true blockchain confirmation and final transaction hash lookup remain a separate unchecked step
+- Runtime env for automatic partner payouts:
+  - `REFERRAL_PAYOUT_SENDER_ENABLED=false` by default
+  - `TON_RESERVE_WALLET_SECRET_FILE=/root/bullrun-ton-reserve/reserve-wallet.json`
+  - `TON_RESERVE_SENDER_ENDPOINT=https://toncenter.com/api/v2/jsonRPC`
+  - `TON_RESERVE_API_KEY=<optional TON Center key>`
+  - `TON_RESERVE_SENDER_MIN_WALLET_BALANCE_TON=0.2`
+  - `REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON=0.05`
+  - `REFERRAL_PAYOUT_SENDER_INTERVAL_MS=60000`
+  - `REFERRAL_PAYOUT_SENDER_BATCH_LIMIT=5`

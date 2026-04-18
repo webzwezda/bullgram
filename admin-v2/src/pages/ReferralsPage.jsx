@@ -588,6 +588,45 @@ export function ReferralsPage() {
     }
   }
 
+  async function sendPayoutAutomatically(row) {
+    if (!row?.pending_payout_id) {
+      window.alert('У партнера нет активной заявки.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Автоматически отправить ${formatTon(row.pending_payout_ton)} на TON-кошелек партнера?`);
+    if (!confirmed) return;
+
+    setState((prev) => ({ ...prev, payouting: true }));
+    try {
+      await apiRequest('/api/referrals/payout-request-send', {
+        accessToken,
+        method: 'POST',
+        body: {
+          payout_request_id: row.pending_payout_id
+        }
+      });
+      const data = await apiRequest('/api/referrals', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        payouting: false,
+        settings: data.settings || prev.settings,
+        summary: data.summary || prev.summary,
+        topPartners: data.topPartners || prev.topPartners,
+        leads: data.leads || prev.leads,
+        pendingPayouts: data.pendingPayouts || [],
+        recentEvents: data.recentEvents || prev.recentEvents,
+        support: data.support || prev.support,
+        reserve: data.reserve || prev.reserve,
+        economics: data.economics || prev.economics,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      setState((prev) => ({ ...prev, payouting: false }));
+      window.alert(error.message);
+    }
+  }
+
   async function sendMessagePrompt(row) {
     if (!row?.tg_user_id) {
       window.alert('Нет Telegram ID.');
@@ -857,6 +896,7 @@ export function ReferralsPage() {
                     const payoutStatus = row.pending_payout_status || 'requested';
                     const canQueue = payoutStatus === 'requested';
                     const canStartSending = ['requested', 'queued'].includes(payoutStatus);
+                    const canAutoSend = state.support?.automaticPayoutSender && ['requested', 'queued'].includes(payoutStatus);
                     const canMarkSent = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canFail = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canCancel = ['requested', 'queued'].includes(payoutStatus);
@@ -898,6 +938,15 @@ export function ReferralsPage() {
                                 disabled={state.payouting}
                               >
                                 Отправляю
+                              </button>
+                            )}
+                            {canAutoSend && (
+                              <button
+                                className="referrals-action-btn referrals-action-btn--payout"
+                                onClick={() => sendPayoutAutomatically(row)}
+                                disabled={state.payouting}
+                              >
+                                Авто TON
                               </button>
                             )}
                             {canMarkSent && (

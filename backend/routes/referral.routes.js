@@ -6,6 +6,8 @@ import {
     reconcileReferralReserveAccount
 } from '../services/referral-reserve.service.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
+import { sendReferralPayoutRequest } from '../services/referral-payout-sender.service.js';
+import { getTonReserveSenderConfig } from '../services/ton-reserve-sender.service.js';
 
 function createEmptyResponse() {
     return {
@@ -34,7 +36,8 @@ function createEmptyResponse() {
         recentEvents: [],
         support: {
             referralTables: true,
-            referralSettings: true
+            referralSettings: true,
+            automaticPayoutSender: getTonReserveSenderConfig().enabled
         },
         reserve: null,
         economics: getReferralEconomics()
@@ -1130,6 +1133,29 @@ export default function referralRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка статуса referral payout request:', error);
             res.status(500).json({ error: 'Ошибка обновления статуса заявки на выплату' });
+        }
+    });
+
+    router.post('/payout-request-send', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+        const { payout_request_id } = req.body;
+
+        try {
+            const result = await sendReferralPayoutRequest(supabase, ownerId, payout_request_id, {
+                requestedBy: 'admin'
+            });
+            if (result.error) {
+                return res.status(result.status || 400).json({
+                    error: result.error,
+                    transfer: result.transfer || null
+                });
+            }
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка автоматической referral payout отправки:', error);
+            res.status(500).json({
+                error: 'Не получилось автоматически отправить TON. Заявка оставлена в sending для ручной сверки.'
+            });
         }
     });
 
