@@ -17,6 +17,11 @@ function addDays(date, days) {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
+function validDateOrNull(value) {
+  const date = value ? new Date(value) : null;
+  return date && date.toString() !== 'Invalid Date' ? date : null;
+}
+
 function getReserveDepositAddress() {
   return String(process.env.TON_RESERVE_DEPOSIT_ADDRESS || '').trim();
 }
@@ -69,7 +74,13 @@ function summarizeLedger(rows = []) {
     const type = String(row.entry_type || '');
     const direction = String(row.direction || '');
 
-    if (type === 'deposit_confirmed' && direction === 'credit') acc.depositTon += amount;
+    if (type === 'deposit_confirmed' && direction === 'credit') {
+      acc.depositTon += amount;
+      const createdAt = validDateOrNull(row.created_at);
+      if (createdAt && (!acc.firstDepositAt || createdAt < acc.firstDepositAt)) {
+        acc.firstDepositAt = createdAt;
+      }
+    }
     if (type === 'partner_payout_sent' && direction === 'debit') acc.partnerPayoutTon += amount;
     if (type === 'admin_refund_sent' && direction === 'debit') acc.adminRefundTon += amount;
     if (type === 'admin_refund_requested') acc.adminRefundRequestedTon += amount;
@@ -85,7 +96,8 @@ function summarizeLedger(rows = []) {
     adminRefundRequestedTon: 0,
     rewardObligationTon: 0,
     bullrunFeeTon: 0,
-    networkFeeTon: 0
+    networkFeeTon: 0,
+    firstDepositAt: null
   });
 }
 
@@ -102,7 +114,7 @@ export function getReferralEconomics() {
 export async function reconcileReferralReserveAccount(supabase, reserveAccount, options = {}) {
   const { data: ledgerRows, error: ledgerError } = await supabase
     .from('referral_reserve_ledger')
-    .select('entry_type, amount_ton, direction')
+    .select('entry_type, amount_ton, direction, created_at')
     .eq('owner_id', reserveAccount.owner_id)
     .eq('reserve_account_id', reserveAccount.id)
     .limit(2000);
@@ -126,9 +138,10 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
     - ledgerSummary.adminRefundTon
   );
   const adminDebtTon = roundTon(Math.max(0, availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
-  const shouldCreateLock = totalDepositedTon >= minimumDepositTon && !reserveAccount.locked_until;
+  const shouldCreateLock = totalDepositedTon > 0 && !reserveAccount.locked_until;
+  const lockStart = ledgerSummary.firstDepositAt || now;
   const lockedUntil = shouldCreateLock
-    ? addDays(now, DEFAULT_DEPOSIT_LOCK_DAYS).toISOString()
+    ? addDays(lockStart, DEFAULT_DEPOSIT_LOCK_DAYS).toISOString()
     : reserveAccount.locked_until || null;
   const status = deriveStatus(
     { ...reserveAccount, locked_until: lockedUntil },
@@ -296,7 +309,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const { data: ledgerRows, error: ledgerError } = reserveAccountId
     ? await supabase
       .from('referral_reserve_ledger')
-      .select('entry_type, amount_ton, direction')
+      .select('entry_type, amount_ton, direction, created_at')
       .eq('owner_id', ownerId)
       .eq('reserve_account_id', reserveAccountId)
       .order('created_at', { ascending: false })
@@ -319,6 +332,23 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const refundRequestedTon = roundTon(Math.max(0, ledgerSummary.adminRefundRequestedTon - refundedTon));
   const availableReserveTon = roundTon(totalDepositedTon - reservedObligationsTon - paidOutTon - refundedTon);
   const adminDebtTon = roundTon(Math.max(numberOrZero(account?.admin_debt_ton), availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
+  let lockedUntil = account?.locked_until || null;
+
+  if (account && ensure && totalDepositedTon > 0 && !lockedUntil) {
+    lockedUntil = addDays(ledgerSummary.firstDepositAt || new Date(), DEFAULT_DEPOSIT_LOCK_DAYS).toISOString();
+    const { data: lockAccount, error: lockError } = await supabase
+      .from('referral_reserve_accounts')
+      .update({
+        locked_until: lockedUntil,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', account.id)
+      .select('*')
+      .single();
+
+    if (lockError) throw lockError;
+    account = lockAccount;
+  }
 
   const computed = {
     minimumDepositTon,
@@ -340,7 +370,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const isClosedForNewPartners = ['over_limit', 'closed_for_new_partners', 'refund_requested', 'refund_available', 'refund_completed', 'paused'].includes(status);
   const canEnableReferrals = depositConfigured && hasMinimumDeposit && !['refund_completed', 'paused'].includes(status);
   const canAcceptNewPartners = canEnableReferrals && !isClosedForNewPartners;
-  const lockedUntilDate = account?.locked_until ? new Date(account.locked_until) : null;
+  const lockedUntilDate = validDateOrNull(lockedUntil);
   const lockExpired = !!lockedUntilDate && lockedUntilDate.toString() !== 'Invalid Date' && lockedUntilDate <= new Date();
   const refundableTon = lockExpired && !['refund_requested', 'refund_completed', 'paused'].includes(status)
     ? Math.max(0, availableReserveTon)
@@ -356,7 +386,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     depositConfigured,
     depositAddress: effectiveDepositAddress,
     depositMemo: normalizeReferralDepositMemo(account?.deposit_memo) || normalizeReferralDepositMemo(buildDepositMemo(ownerId)),
-    lockedUntil: account?.locked_until || null,
+    lockedUntil,
     lockExpired,
     refundableTon: roundTon(refundableTon),
     lastDepositAt: account?.last_deposit_at || null,
