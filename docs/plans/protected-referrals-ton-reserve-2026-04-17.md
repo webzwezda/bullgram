@@ -350,11 +350,13 @@ Statuses:
   - [ ] Notify admin outside the dashboard when a payout request is created.
 
 - [ ] Phase 9: admin refund flow.
-  - Allow refund request only after `locked_until`.
-  - Calculate refundable amount from free reserve.
-  - If no referral sale happened, allow full free deposit refund.
-  - If sales happened, deduct obligations, BullRun fee, network fee, and pending payouts.
-  - Turning on refund flow should pause new partner onboarding.
+  - [x] Allow refund request only after `locked_until`.
+  - [x] Calculate refundable amount from free reserve.
+  - [x] If no referral sale happened, allow full free deposit refund.
+  - [x] If sales happened, deduct obligations, BullRun fee, network fee, and pending payouts.
+  - [x] Turning on refund flow should pause new partner onboarding.
+  - [ ] Send refund automatically from BullRun-controlled wallet.
+  - [ ] Confirm refund by blockchain result.
 
 ## Admin UI Plan
 
@@ -675,3 +677,9 @@ Scenario checks:
   - admin gets a Telegram notification when reserve moves to `reserve_low`, `over_limit`, or `closed_for_new_partners`
   - partners get a Telegram pause notice when the reserve moves to `over_limit` or `closed_for_new_partners`
   - notifications are triggered by real obligation changes, not every reserve watcher poll
+- Added admin reserve refund MVP:
+  - `/app/referrals` shows refund availability in the reserve card
+  - `POST /api/referrals/reserve/refund-request` creates a manual refund request after the 30-day lock
+  - `POST /api/referrals/reserve/refund-sent` marks the requested refund as sent with a TON tx hash
+  - refund requests pause new partner onboarding through `refund_requested`
+  - automatic refund sending and blockchain confirmation remain intentionally unimplemented

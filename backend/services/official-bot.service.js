@@ -629,6 +629,26 @@ export class OfficialBotService {
         return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
     }
 
+    async notifyReferralReserveRefund(ownerId, refund, status) {
+        const amountTon = Number(refund?.amountTon || refund?.amount_ton || 0);
+        const txHash = refund?.chainTxHash || refund?.chain_tx_hash || '';
+        const text = status === 'sent'
+            ? [
+                '✅ Возврат TON-резерва отмечен отправленным.',
+                '',
+                `Сумма: ${amountTon} TON`,
+                txHash ? `Tx: ${txHash}` : ''
+            ].filter(Boolean).join('\n')
+            : [
+                '↩️ Запрошен возврат свободного TON-резерва.',
+                '',
+                `Сумма: ${amountTon} TON`,
+                'Новые партнеры будут на паузе до завершения возврата.'
+            ].join('\n');
+
+        return this.notifyOwnerAdmin(ownerId, text, { disable_web_page_preview: true });
+    }
+
     async notifyReferralReserveStatus(ownerId, reserveAccount, previousStatus = null) {
         const status = String(reserveAccount?.status || '');
         if (!['reserve_low', 'over_limit', 'closed_for_new_partners'].includes(status)) {

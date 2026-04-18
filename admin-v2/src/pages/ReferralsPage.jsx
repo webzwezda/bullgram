@@ -151,6 +151,7 @@ export function ReferralsPage() {
     refreshing: false,
     savingSettings: false,
     payouting: false,
+    refunding: false,
     error: '',
     settings: null,
     summary: {},
@@ -185,6 +186,7 @@ export function ReferralsPage() {
             refreshing: false,
             savingSettings: false,
             payouting: false,
+            refunding: false,
             error: '',
             settings: data.settings || null,
             summary: data.summary || {},
@@ -211,6 +213,7 @@ export function ReferralsPage() {
             refreshing: false,
             savingSettings: false,
             payouting: false,
+            refunding: false,
             error: error.message,
             settings: null,
             summary: {},
@@ -358,6 +361,85 @@ export function ReferralsPage() {
       }));
     } catch (error) {
       setState((prev) => ({ ...prev, savingSettings: false, error: error.message }));
+    }
+  }
+
+  async function refreshReferralState(extra = {}) {
+    const data = await apiRequest('/api/referrals', { accessToken });
+    setState((prev) => ({
+      ...prev,
+      ...extra,
+      settings: data.settings || prev.settings,
+      summary: data.summary || prev.summary,
+      topPartners: data.topPartners || prev.topPartners,
+      leads: data.leads || prev.leads,
+      pendingPayouts: data.pendingPayouts || [],
+      recentEvents: data.recentEvents || prev.recentEvents,
+      support: data.support || prev.support,
+      reserve: data.reserve || prev.reserve,
+      economics: data.economics || prev.economics,
+      updatedAt: new Date().toISOString()
+    }));
+  }
+
+  async function requestReserveRefund() {
+    const refundableTon = Number(state.reserve?.refundableTon || 0);
+    if (!state.reserve?.lockExpired) {
+      window.alert('Депозит еще в локе. Возврат доступен после 30 дней.');
+      return;
+    }
+    if (refundableTon <= 0) {
+      window.alert('Свободного резерва для возврата нет.');
+      return;
+    }
+    const confirmed = window.confirm(`Запросить возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`);
+    if (!confirmed) return;
+    const note = window.prompt('Комментарий к возврату:', '') || '';
+
+    setState((prev) => ({ ...prev, refunding: true, error: '' }));
+    try {
+      await apiRequest('/api/referrals/reserve/refund-request', {
+        accessToken,
+        method: 'POST',
+        body: { note }
+      });
+      await refreshReferralState({ refunding: false });
+    } catch (error) {
+      setState((prev) => ({ ...prev, refunding: false }));
+      window.alert(error.message);
+    }
+  }
+
+  async function markReserveRefundSent() {
+    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
+    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0) {
+      window.alert('Нет активного запроса на возврат.');
+      return;
+    }
+    const rawTxHash = window.prompt('Tx hash TON-возврата:', '');
+    if (rawTxHash === null) return;
+    const chainTxHash = rawTxHash.trim();
+    if (!chainTxHash) {
+      window.alert('Нужен tx hash.');
+      return;
+    }
+    const note = window.prompt('Комментарий к отправленному возврату:', '') || '';
+
+    setState((prev) => ({ ...prev, refunding: true, error: '' }));
+    try {
+      await apiRequest('/api/referrals/reserve/refund-sent', {
+        accessToken,
+        method: 'POST',
+        body: {
+          amount_ton: requestedTon,
+          chain_tx_hash: chainTxHash,
+          note
+        }
+      });
+      await refreshReferralState({ refunding: false });
+    } catch (error) {
+      setState((prev) => ({ ...prev, refunding: false }));
+      window.alert(error.message);
     }
   }
 
@@ -605,6 +687,38 @@ export function ReferralsPage() {
                 <div className="referrals-deposit-field">
                   <div className="referrals-deposit-field__label">Лок депозита</div>
                   <div className="referrals-deposit-field__value">{formatWhen(state.reserve?.lockedUntil)}</div>
+                </div>
+              </div>
+
+              <div className="referrals-refund-box">
+                <div>
+                  <div className="referrals-refund-box__title">Возврат депозита</div>
+                  <div className="referrals-refund-box__text">
+                    {state.reserve?.status === 'refund_requested'
+                      ? `Запрошен возврат ${formatTon(state.reserve?.refundRequestedTon)}. Новые партнеры на паузе до закрытия.`
+                      : state.reserve?.lockExpired
+                        ? `Можно вернуть свободный остаток: ${formatTon(state.reserve?.refundableTon)}. Обязательства и комиссии останутся в резерве.`
+                        : `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`}
+                  </div>
+                </div>
+                <div className="referrals-refund-box__actions">
+                  {state.reserve?.status === 'refund_requested' ? (
+                    <button
+                      className="referrals-action-btn referrals-action-btn--warning"
+                      onClick={markReserveRefundSent}
+                      disabled={state.refunding}
+                    >
+                      {state.refunding ? 'Закрываем...' : 'Отметить отправленным'}
+                    </button>
+                  ) : (
+                    <button
+                      className="referrals-action-btn referrals-action-btn--payout"
+                      onClick={requestReserveRefund}
+                      disabled={state.refunding || !state.reserve?.lockExpired || Number(state.reserve?.refundableTon || 0) <= 0}
+                    >
+                      {state.refunding ? 'Запрашиваем...' : 'Запросить возврат'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

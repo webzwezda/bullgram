@@ -72,6 +72,7 @@ function summarizeLedger(rows = []) {
     if (type === 'deposit_confirmed' && direction === 'credit') acc.depositTon += amount;
     if (type === 'partner_payout_sent' && direction === 'debit') acc.partnerPayoutTon += amount;
     if (type === 'admin_refund_sent' && direction === 'debit') acc.adminRefundTon += amount;
+    if (type === 'admin_refund_requested') acc.adminRefundRequestedTon += amount;
     if (type === 'reward_obligation_created') acc.rewardObligationTon += amount;
     if (type === 'bullrun_fee_created') acc.bullrunFeeTon += amount;
     if (type === 'network_fee_reserved') acc.networkFeeTon += amount;
@@ -81,6 +82,7 @@ function summarizeLedger(rows = []) {
     depositTon: 0,
     partnerPayoutTon: 0,
     adminRefundTon: 0,
+    adminRefundRequestedTon: 0,
     rewardObligationTon: 0,
     bullrunFeeTon: 0,
     networkFeeTon: 0
@@ -314,6 +316,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   ));
   const paidOutTon = roundTon(ledgerSummary.partnerPayoutTon);
   const refundedTon = roundTon(ledgerSummary.adminRefundTon);
+  const refundRequestedTon = roundTon(Math.max(0, ledgerSummary.adminRefundRequestedTon - refundedTon));
   const availableReserveTon = roundTon(totalDepositedTon - reservedObligationsTon - paidOutTon - refundedTon);
   const adminDebtTon = roundTon(Math.max(numberOrZero(account?.admin_debt_ton), availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
 
@@ -326,7 +329,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     bullrunFeeTon,
     networkFeeTon,
     paidOutTon,
-    refundedTon
+    refundedTon,
+    refundRequestedTon
   };
 
   const status = deriveStatus(account, computed);
@@ -336,6 +340,11 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const isClosedForNewPartners = ['over_limit', 'closed_for_new_partners', 'refund_requested', 'refund_available', 'refund_completed', 'paused'].includes(status);
   const canEnableReferrals = depositConfigured && hasMinimumDeposit && !['refund_completed', 'paused'].includes(status);
   const canAcceptNewPartners = canEnableReferrals && !isClosedForNewPartners;
+  const lockedUntilDate = account?.locked_until ? new Date(account.locked_until) : null;
+  const lockExpired = !!lockedUntilDate && lockedUntilDate.toString() !== 'Invalid Date' && lockedUntilDate <= new Date();
+  const refundableTon = lockExpired && !['refund_requested', 'refund_completed', 'paused'].includes(status)
+    ? Math.max(0, availableReserveTon)
+    : 0;
 
   return {
     supported: true,
@@ -348,6 +357,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     depositAddress: effectiveDepositAddress,
     depositMemo: normalizeReferralDepositMemo(account?.deposit_memo) || normalizeReferralDepositMemo(buildDepositMemo(ownerId)),
     lockedUntil: account?.locked_until || null,
+    lockExpired,
+    refundableTon: roundTon(refundableTon),
     lastDepositAt: account?.last_deposit_at || null,
     reason: !depositConfigured
       ? 'TON-кошелек резерва еще не подключен на сервере.'

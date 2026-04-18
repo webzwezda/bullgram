@@ -2034,6 +2034,37 @@ a {
   font-size: 12px;
 }
 
+.referrals-refund-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  padding: 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.referrals-refund-box__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #9a3412;
+  margin-bottom: 4px;
+}
+
+.referrals-refund-box__text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #9a3412;
+}
+
+.referrals-refund-box__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
 /* Referrals Signals Grid */
 .referrals-signals-grid {
   display: grid;
@@ -2619,6 +2650,15 @@ a {
 
   .referrals-deposit-grid {
     grid-template-columns: 1fr;
+  }
+
+  .referrals-refund-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .referrals-refund-box__actions {
+    justify-content: stretch;
   }
 
   .referrals-settings-grid {
