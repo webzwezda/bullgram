@@ -362,10 +362,10 @@ Statuses:
 
 The implementation is complete enough for MVP use, but real-money automation must stay behind runtime flags until these checks pass.
 
-- [ ] Run a controlled TON deposit test with a small amount and verify reserve watcher confirmation.
+- [x] Run a controlled TON deposit test with a small amount and verify reserve watcher confirmation.
 - [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
 - [ ] Enable automatic payout sender only for a small controlled payout and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
-- [ ] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [x] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
 - [ ] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
 
 ## Admin UI Plan
@@ -731,6 +731,8 @@ Scenario checks:
   - confirmation prefers TonAPI with server-side key and falls back to TON Center
   - refund confirmation matches by memo plus wallet seqno because TON outgoing message value can be slightly below the requested amount after network handling
   - new refund requests now use per-request `brr_<reserve>_<request>` memos instead of reusing one memo per reserve account
+  - refund memo is generated only when a request is created; read paths must reuse the stored memo and never generate a fresh one
+  - `/app/referrals` now shows the last admin refund status, amount, timestamp, error, and resolved chain tx hash after the request is closed
 - Runtime env for payout confirmation:
   - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
   - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`
