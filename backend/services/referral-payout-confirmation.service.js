@@ -204,14 +204,14 @@ function getAutoSenderMeta(payout) {
 }
 
 function findConfirmationForPayout(payout, walletMessages) {
-    const { memo } = getAutoSenderMeta(payout);
-    if (!memo) return null;
+    const meta = getAutoSenderMeta(payout);
+    if (!meta.memo) return null;
 
     const expectedAmountTon = Number(payout.amount_ton || 0);
     const expectedWallet = normalizeAddress(payout.ton_wallet);
 
     return walletMessages.find((message) => {
-        if (!String(message.comment || '').includes(memo)) return false;
+        if (!String(message.comment || '').includes(meta.memo)) return false;
         if (meta.seqno !== null && message.seqno !== meta.seqno) return false;
         if (expectedWallet && message.destination && message.destination !== expectedWallet) return false;
         if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
