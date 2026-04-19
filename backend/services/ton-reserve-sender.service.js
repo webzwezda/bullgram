@@ -24,6 +24,38 @@ function normalizeTonAmount(value) {
     return Number(parsed.toFixed(6));
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isRateLimitError(error) {
+    const status = error?.response?.status || error?.status;
+    const message = String(error?.message || error?.response?.data?.result || '').toLowerCase();
+    return status === 429 || message.includes('rate') || message.includes('too many requests');
+}
+
+async function withTonRpcRetry(operation, label) {
+    const attempts = Math.max(1, Math.floor(envNumber('TON_RESERVE_SENDER_RETRY_COUNT', 4, { min: 1, max: 8 })));
+    const baseDelayMs = envNumber('TON_RESERVE_SENDER_RETRY_DELAY_MS', 3_000, { min: 250, max: 30_000 });
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            if (!isRateLimitError(error) || attempt >= attempts) {
+                if (isRateLimitError(error)) {
+                    throw new Error(`TON provider rate limit while ${label}. Try again in a minute or configure TON_RESERVE_API_KEY.`);
+                }
+                throw error;
+            }
+
+            await sleep(baseDelayMs * attempt);
+        }
+    }
+
+    throw new Error(`TON provider request failed while ${label}`);
+}
+
 function normalizeMnemonic(value) {
     if (Array.isArray(value)) {
         return value.map(item => String(item || '').trim()).filter(Boolean);
@@ -107,7 +139,10 @@ export async function sendTonFromReserve({
 
     const destination = Address.parse(String(to || '').trim());
     const { contract, keyPair, walletAddress } = await openReserveWallet();
-    const walletBalanceNano = await contract.getBalance();
+    const walletBalanceNano = await withTonRpcRetry(
+        () => contract.getBalance(),
+        'reading reserve wallet balance'
+    );
     const transferNano = toNano(String(normalizedAmountTon));
     const minBalanceNano = toNano(String(config.minWalletBalanceTon));
 
@@ -115,19 +150,25 @@ export async function sendTonFromReserve({
         throw new Error('TON reserve wallet balance is not enough for payout and safety buffer');
     }
 
-    const seqno = await contract.getSeqno();
-    await contract.sendTransfer({
-        seqno,
-        secretKey: keyPair.secretKey,
-        messages: [
-            internal({
-                to: destination,
-                value: transferNano,
-                body: String(comment || ''),
-                bounce: false
-            })
-        ]
-    });
+    const seqno = await withTonRpcRetry(
+        () => contract.getSeqno(),
+        'reading reserve wallet seqno'
+    );
+    await withTonRpcRetry(
+        () => contract.sendTransfer({
+            seqno,
+            secretKey: keyPair.secretKey,
+            messages: [
+                internal({
+                    to: destination,
+                    value: transferNano,
+                    body: String(comment || ''),
+                    bounce: false
+                })
+            ]
+        }),
+        'sending reserve transfer'
+    );
 
     return {
         amountTon: normalizedAmountTon,

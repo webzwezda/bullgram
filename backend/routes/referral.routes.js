@@ -1467,7 +1467,13 @@ export default function referralRoutes(supabase) {
             res.json(result);
         } catch (error) {
             console.error('Ошибка автоматического возврата referral reserve:', error);
-            res.status(500).json({ error: 'Не получилось автоматически отправить возврат. Проверь статус и tx вручную.' });
+            const message = String(error?.message || '');
+            if (message.includes('TON provider rate limit')) {
+                return res.status(429).json({
+                    error: 'TON-провайдер временно ограничил запросы. Деньги не ушли, заявка сохранена. Повтори отправку через минуту.'
+                });
+            }
+            res.status(500).json({ error: 'Не получилось автоматически отправить возврат. Деньги не ушли, заявка сохранена. Можно повторить отправку.' });
         }
     });
 
