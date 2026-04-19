@@ -710,7 +710,7 @@ Scenario checks:
   - current transfer reference starts as `ton:<wallet>:<seqno>` and is later replaced by confirmation watcher with the real chain tx hash
 - Added automatic partner payout confirmation:
   - `backend/services/referral-payout-confirmation.service.js` looks up outgoing reserve-wallet transactions through TON Center
-  - sent auto payouts with temporary `ton:<wallet>:<seqno>` references are matched by the `brp_...` memo
+  - sent auto payouts with temporary `ton:<wallet>:<seqno>` references are matched by the `brp_...` memo, destination, amount, and wallet seqno
   - confirmed payouts replace the temporary transfer reference with the real chain tx hash
   - reserve ledger network-fee rows are updated with the same confirmed tx hash
   - confirmation is read-only and does not need the wallet mnemonic
