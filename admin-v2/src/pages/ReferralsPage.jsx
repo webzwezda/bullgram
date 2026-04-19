@@ -893,6 +893,12 @@ export function ReferralsPage() {
       return;
     }
 
+    const maxAutoPayoutTon = Number(state.support?.automaticPayoutSenderMaxAmountTon || 0);
+    if (maxAutoPayoutTon > 0 && Number(row.pending_payout_ton || 0) > maxAutoPayoutTon) {
+      window.alert(`Авто TON сейчас ограничен ${formatTon(maxAutoPayoutTon)} за одну заявку. Эту выплату нужно закрыть вручную.`);
+      return;
+    }
+
     const confirmed = window.confirm(`Автоматически отправить ${formatTon(row.pending_payout_ton)} на TON-кошелек партнера?`);
     if (!confirmed) return;
 
@@ -1240,7 +1246,9 @@ export function ReferralsPage() {
                     const payoutStatus = row.pending_payout_status || 'requested';
                     const canQueue = payoutStatus === 'requested';
                     const canStartSending = ['requested', 'queued'].includes(payoutStatus);
-                    const canAutoSend = state.support?.automaticPayoutSender && ['requested', 'queued'].includes(payoutStatus);
+                    const maxAutoPayoutTon = Number(state.support?.automaticPayoutSenderMaxAmountTon || 0);
+                    const overAutoLimit = maxAutoPayoutTon > 0 && Number(row.pending_payout_ton || 0) > maxAutoPayoutTon;
+                    const canAutoSend = state.support?.automaticPayoutSender && !overAutoLimit && ['requested', 'queued'].includes(payoutStatus);
                     const canMarkSent = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canFail = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canCancel = ['requested', 'queued'].includes(payoutStatus);
@@ -1293,6 +1301,11 @@ export function ReferralsPage() {
                               >
                                 Авто TON
                               </button>
+                            )}
+                            {state.support?.automaticPayoutSender && overAutoLimit && ['requested', 'queued'].includes(payoutStatus) && (
+                              <div className="referrals-payout-limit">
+                                Авто до {formatTon(maxAutoPayoutTon)}
+                              </div>
                             )}
                             {canMarkSent && (
                               <button

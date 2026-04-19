@@ -3,6 +3,15 @@ import { reconcileReferralReserveAccount, loadReferralReserveState } from './ref
 import { getTonReserveSenderConfig, sendTonFromReserve } from './ton-reserve-sender.service.js';
 
 const ACTIVE_PAYOUT_STATUSES = ['requested', 'queued', 'sending'];
+const DEFAULT_MAX_AUTO_PAYOUT_TON = 25;
+
+function envNumber(name, fallback, options = {}) {
+    const parsed = Number(process.env[name] || fallback);
+    if (!Number.isFinite(parsed)) return fallback;
+    if (options.min !== undefined && parsed < options.min) return fallback;
+    if (options.max !== undefined && parsed > options.max) return options.max;
+    return parsed;
+}
 
 function normalizeTonAmount(value) {
     const parsed = Number(value || 0);
@@ -12,6 +21,14 @@ function normalizeTonAmount(value) {
 
 function buildPayoutMemo(payoutRequest) {
     return `brp_${String(payoutRequest?.id || '').replace(/-/g, '').slice(0, 24)}`;
+}
+
+export function getReferralPayoutSenderSafetyConfig() {
+    return {
+        maxAutoPayoutTon: normalizeTonAmount(
+            envNumber('REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON', DEFAULT_MAX_AUTO_PAYOUT_TON, { min: 0.000001 })
+        )
+    };
 }
 
 async function recordNetworkFee(supabase, ownerId, payoutRequest, networkFeeTon, transferRef) {
@@ -113,6 +130,14 @@ export async function sendReferralPayoutRequest(supabase, ownerId, payoutRequest
 
     const amountTon = normalizeTonAmount(request.amount_ton);
     if (amountTon <= 0) return { error: 'Сумма выплаты должна быть больше нуля.', status: 400 };
+
+    const { maxAutoPayoutTon } = getReferralPayoutSenderSafetyConfig();
+    if (maxAutoPayoutTon > 0 && amountTon > maxAutoPayoutTon) {
+        return {
+            error: `Автоматическая выплата ограничена ${maxAutoPayoutTon} TON за одну заявку. Выплати вручную или измени REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON.`,
+            status: 400
+        };
+    }
 
     const { data: profile, error: profileError } = await supabase
         .from('referral_profiles')
@@ -296,13 +321,19 @@ export async function processReferralPayoutSenderBatch(supabase, options = {}) {
     const config = getTonReserveSenderConfig();
     if (!config.enabled) return { skipped: true, reason: 'disabled' };
 
+    const { maxAutoPayoutTon } = getReferralPayoutSenderSafetyConfig();
     const limit = Number(options.limit || process.env.REFERRAL_PAYOUT_SENDER_BATCH_LIMIT || 5);
-    const { data: requests, error } = await supabase
+    let requestQuery = supabase
         .from('referral_partner_payouts')
-        .select('id, owner_id')
+        .select('id, owner_id, amount_ton')
         .in('status', ['requested', 'queued'])
-        .order('requested_at', { ascending: true })
-        .limit(Number.isFinite(limit) && limit > 0 ? limit : 5);
+        .order('requested_at', { ascending: true });
+
+    if (maxAutoPayoutTon > 0) {
+        requestQuery = requestQuery.lte('amount_ton', maxAutoPayoutTon);
+    }
+
+    const { data: requests, error } = await requestQuery.limit(Number.isFinite(limit) && limit > 0 ? limit : 5);
 
     if (error) throw error;
 

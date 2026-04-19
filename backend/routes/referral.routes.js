@@ -8,7 +8,10 @@ import {
     reconcileReferralReserveAccount
 } from '../services/referral-reserve.service.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
-import { sendReferralPayoutRequest } from '../services/referral-payout-sender.service.js';
+import {
+    getReferralPayoutSenderSafetyConfig,
+    sendReferralPayoutRequest
+} from '../services/referral-payout-sender.service.js';
 import { getTonReserveSenderConfig } from '../services/ton-reserve-sender.service.js';
 import {
     getReferralRefundSenderConfig,
@@ -44,6 +47,7 @@ function createEmptyResponse() {
             referralTables: true,
             referralSettings: true,
             automaticPayoutSender: getTonReserveSenderConfig().enabled,
+            automaticPayoutSenderMaxAmountTon: getReferralPayoutSenderSafetyConfig().maxAutoPayoutTon,
             automaticRefundSender: getReferralRefundSenderConfig().enabled
         },
         reserve: null,
