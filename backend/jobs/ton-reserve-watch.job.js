@@ -7,6 +7,7 @@ import {
 import { OfficialBotService } from '../services/official-bot.service.js';
 
 const DEFAULT_TONCENTER_API_BASE = 'https://toncenter.com/api/v2';
+const DEFAULT_TONAPI_API_BASE = 'https://tonapi.io/v2';
 const DEFAULT_POLL_INTERVAL_MS = 2 * 60 * 1000;
 const DEFAULT_TX_LIMIT = 50;
 const DEFAULT_MAX_PAGES = 20;
@@ -64,8 +65,25 @@ function extractDepositMemo(comment) {
 function getTransactionHash(tx) {
     const hash = tx?.transaction_id?.hash || tx?.transactionId?.hash || tx?.hash || tx?.tx_hash || tx?.txHash;
     const lt = tx?.transaction_id?.lt || tx?.transactionId?.lt || tx?.lt;
-    if (hash && lt) return `${lt}:${hash}`;
-    return hash ? String(hash) : '';
+    const normalizedHash = normalizeChainHash(hash);
+    if (normalizedHash && lt) return `${lt}:${normalizedHash}`;
+    return normalizedHash || '';
+}
+
+function normalizeChainHash(hash) {
+    const raw = String(hash || '').trim();
+    if (!raw) return '';
+    if (/^[a-f0-9]{64}$/i.test(raw)) {
+        return Buffer.from(raw, 'hex').toString('base64');
+    }
+    return raw;
+}
+
+function normalizeTonAddress(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    if (typeof value !== 'object') return null;
+    return value.address || value.user_friendly || value.raw_form || null;
 }
 
 function getTransactionCursor(tx) {
@@ -94,7 +112,7 @@ function parseToncenterDeposit(tx) {
         chainTxHash,
         depositMemo,
         comment,
-        source: inMsg.source || inMsg.src || null,
+        source: normalizeTonAddress(inMsg.source || inMsg.src),
         createdAt: tx.utime ? new Date(Number(tx.utime) * 1000).toISOString() : null
     };
 }
@@ -160,6 +178,29 @@ async function fetchToncenterTransactions(depositAddress) {
     }
 
     return transactions;
+}
+
+async function fetchTonapiTransactions(depositAddress) {
+    const apiBase = normalizeBaseUrl(process.env.TONAPI_API_BASE || DEFAULT_TONAPI_API_BASE);
+    const apiKey = String(process.env.TONAPI_KEY || process.env.TON_RESERVE_TONAPI_KEY || '').trim();
+    const limit = envNumber('TON_RESERVE_TX_LIMIT', DEFAULT_TX_LIMIT, { min: 1, max: 100 });
+    const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const { data } = await axios.get(`${apiBase}/blockchain/accounts/${encodeURIComponent(depositAddress)}/transactions`, {
+        params: { limit },
+        headers,
+        timeout: envNumber('TON_RESERVE_API_TIMEOUT_MS', 15_000, { min: 1_000 })
+    });
+
+    return Array.isArray(data?.transactions) ? data.transactions : [];
+}
+
+async function fetchReserveTransactions(depositAddress) {
+    try {
+        return await fetchToncenterTransactions(depositAddress);
+    } catch (error) {
+        console.warn('[TonReserveWatch] toncenter failed, falling back to tonapi:', error.message || error);
+        return fetchTonapiTransactions(depositAddress);
+    }
 }
 
 async function loadReserveAccountsByMemo(supabase) {
@@ -231,7 +272,7 @@ export function startTonReserveWatch(supabase) {
             const reserveAccountsByMemo = await loadReserveAccountsByMemo(supabase);
             if (reserveAccountsByMemo.size === 0) return;
 
-            const transactions = await fetchToncenterTransactions(depositAddress);
+            const transactions = await fetchReserveTransactions(depositAddress);
             const parsedDeposits = transactions
                 .map(parseToncenterDeposit)
                 .filter(Boolean)
