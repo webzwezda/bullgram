@@ -987,7 +987,7 @@ export function ReferralsPage() {
                 </div>
                 <div className="referrals-metric">
                   <div className="referrals-metric__label">Пополнено</div>
-                  <div className="referrals-metric__value">{formatTon(state.reserve?.totalDepositedTon)}</div>
+                  <div className="referrals-metric__value">{formatTon(state.reserve?.fundedReserveTon ?? state.reserve?.totalDepositedTon)}</div>
                 </div>
                 <div className="referrals-metric">
                   <div className="referrals-metric__label">Доступно</div>

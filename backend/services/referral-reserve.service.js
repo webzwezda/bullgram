@@ -60,12 +60,12 @@ function statusCopy(status) {
 }
 
 function deriveStatus(account, computed) {
-  if (account?.status && ['refund_requested', 'refund_available', 'refund_completed', 'paused'].includes(account.status)) {
+  if (account?.status && ['refund_requested', 'refund_available', 'paused'].includes(account.status)) {
     return account.status;
   }
 
   if (computed.availableReserveTon < 0 || computed.adminDebtTon > 0) return 'over_limit';
-  if (computed.totalDepositedTon < computed.minimumDepositTon) return 'deposit_required';
+  if ((computed.fundedReserveTon ?? computed.totalDepositedTon) < computed.minimumDepositTon) return 'deposit_required';
   if (computed.availableReserveTon > 0 && computed.availableReserveTon < 20) return 'reserve_low';
 
   const lockedUntil = account?.locked_until ? new Date(account.locked_until) : null;
@@ -138,6 +138,13 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
   const totalDepositedTon = roundTon(Math.max(numberOrZero(reserveAccount.total_deposited_ton), ledgerSummary.depositTon));
   const bullrunFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.bullrun_fee_accrued_ton), ledgerSummary.bullrunFeeTon));
   const networkFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.network_fee_accrued_ton), ledgerSummary.networkFeeTon));
+  const fundedReserveTon = roundTon(Math.max(
+    0,
+    totalDepositedTon
+    - ledgerSummary.partnerPayoutTon
+    - ledgerSummary.adminRefundTon
+    - networkFeeTon
+  ));
   const reservedObligationsTon = roundTon(Math.max(
     numberOrZero(reserveAccount.reserved_obligations_ton),
     ledgerSummary.rewardObligationTon + bullrunFeeTon + networkFeeTon
@@ -149,11 +156,11 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
     - ledgerSummary.adminRefundTon
   );
   const adminDebtTon = roundTon(Math.max(0, availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
-  const shouldCreateLock = totalDepositedTon >= minimumDepositTon && !reserveAccount.locked_until;
+  const shouldCreateLock = fundedReserveTon >= minimumDepositTon && !reserveAccount.locked_until;
   const lockStart = ledgerSummary.firstDepositAt || now;
-  const lockedUntil = totalDepositedTon >= minimumDepositTon && shouldCreateLock
+  const lockedUntil = fundedReserveTon >= minimumDepositTon && shouldCreateLock
     ? addDays(lockStart, DEFAULT_DEPOSIT_LOCK_DAYS).toISOString()
-    : totalDepositedTon >= minimumDepositTon
+    : fundedReserveTon >= minimumDepositTon
       ? reserveAccount.locked_until || null
       : null;
   const status = deriveStatus(
@@ -161,6 +168,7 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
     {
       minimumDepositTon,
       totalDepositedTon,
+      fundedReserveTon,
       availableReserveTon,
       reservedObligationsTon,
       adminDebtTon,
@@ -336,6 +344,13 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const totalDepositedTon = roundTon(Math.max(accountTotalDepositedTon, ledgerSummary.depositTon));
   const bullrunFeeTon = roundTon(Math.max(numberOrZero(account?.bullrun_fee_accrued_ton), ledgerSummary.bullrunFeeTon));
   const networkFeeTon = roundTon(Math.max(numberOrZero(account?.network_fee_accrued_ton), ledgerSummary.networkFeeTon));
+  const fundedReserveTon = roundTon(Math.max(
+    0,
+    totalDepositedTon
+    - ledgerSummary.partnerPayoutTon
+    - ledgerSummary.adminRefundTon
+    - networkFeeTon
+  ));
   const reservedObligationsTon = roundTon(Math.max(
     numberOrZero(account?.reserved_obligations_ton),
     ledgerSummary.rewardObligationTon + bullrunFeeTon + networkFeeTon
@@ -347,7 +362,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const adminDebtTon = roundTon(Math.max(numberOrZero(account?.admin_debt_ton), availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
   let lockedUntil = account?.locked_until || null;
 
-  if (account && ensure && totalDepositedTon < minimumDepositTon && lockedUntil) {
+  if (account && ensure && fundedReserveTon < minimumDepositTon && lockedUntil) {
     const { data: unlockedAccount, error: unlockError } = await supabase
       .from('referral_reserve_accounts')
       .update({
@@ -363,7 +378,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     account = unlockedAccount;
   }
 
-  if (account && ensure && totalDepositedTon >= minimumDepositTon && !lockedUntil) {
+  if (account && ensure && fundedReserveTon >= minimumDepositTon && !lockedUntil) {
     lockedUntil = addDays(ledgerSummary.firstDepositAt || new Date(), DEFAULT_DEPOSIT_LOCK_DAYS).toISOString();
     const { data: lockAccount, error: lockError } = await supabase
       .from('referral_reserve_accounts')
@@ -382,6 +397,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const computed = {
     minimumDepositTon,
     totalDepositedTon,
+    fundedReserveTon,
     availableReserveTon,
     reservedObligationsTon,
     adminDebtTon,
@@ -395,13 +411,13 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const status = deriveStatus(account, computed);
   const effectiveDepositAddress = depositAddress || account?.deposit_address || '';
   const depositConfigured = !!effectiveDepositAddress;
-  const hasMinimumDeposit = totalDepositedTon >= minimumDepositTon;
+  const hasMinimumDeposit = fundedReserveTon >= minimumDepositTon;
   const isClosedForNewPartners = ['over_limit', 'closed_for_new_partners', 'refund_requested', 'refund_available', 'refund_completed', 'paused'].includes(status);
   const canEnableReferrals = depositConfigured && hasMinimumDeposit && !['refund_completed', 'paused'].includes(status);
   const canAcceptNewPartners = canEnableReferrals && !isClosedForNewPartners;
   const lockedUntilDate = validDateOrNull(lockedUntil);
   const lockExpired = !!lockedUntilDate && lockedUntilDate.toString() !== 'Invalid Date' && lockedUntilDate <= new Date();
-  const partialDepositWithoutProgram = totalDepositedTon > 0 && totalDepositedTon < minimumDepositTon;
+  const partialDepositWithoutProgram = fundedReserveTon > 0 && fundedReserveTon < minimumDepositTon;
   const canRequestRefund = (partialDepositWithoutProgram || lockExpired) && !['refund_requested', 'refund_completed', 'paused'].includes(status);
   const refundNetworkFeeTon = roundTon(envNumber('REFERRAL_REFUND_SENDER_NETWORK_FEE_TON', envNumber('REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON', 0.05, { min: 0 }), { min: 0 }));
   const grossRefundableTon = canRequestRefund ? Math.max(0, availableReserveTon) : 0;

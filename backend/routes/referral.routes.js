@@ -206,8 +206,8 @@ export default function referralRoutes(supabase) {
         }
 
         const minimumDepositTon = normalizeCurrencyAmount('TON', reserve.minimumDepositTon || getReferralEconomics().minimumDepositTon || 100);
-        const totalDepositedTon = normalizeCurrencyAmount('TON', reserve.totalDepositedTon || 0);
-        const missingDepositTon = normalizeCurrencyAmount('TON', Math.max(0, minimumDepositTon - totalDepositedTon));
+        const fundedReserveTon = normalizeCurrencyAmount('TON', reserve.fundedReserveTon ?? reserve.availableReserveTon ?? 0);
+        const missingDepositTon = normalizeCurrencyAmount('TON', Math.max(0, minimumDepositTon - fundedReserveTon));
         const suggestedAmountTon = missingDepositTon > 0 ? missingDepositTon : minimumDepositTon;
         const payment = await buildReserveDepositPaymentPayload(
             reserve.depositAddress,
