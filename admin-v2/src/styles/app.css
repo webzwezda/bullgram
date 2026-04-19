@@ -2138,6 +2138,25 @@ a {
   color: #9a3412;
 }
 
+.referrals-refund-last {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7c2d12;
+}
+
+.referrals-refund-last__mono {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #334155;
+}
+
+.referrals-refund-last__error {
+  color: #991b1b;
+}
+
 .referrals-refund-box__actions {
   display: flex;
   justify-content: flex-end;

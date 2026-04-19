@@ -228,20 +228,72 @@ export default function referralRoutes(supabase) {
         };
     }
 
+    function buildReserveRefundSummary(account) {
+        const payload = account?.payload || {};
+        const refundRequest = payload.refund_request || {};
+        const refundSent = payload.refund_sent || {};
+        const autoSender = payload.refund_auto_sender || {};
+        const refundCancelled = payload.refund_cancelled || {};
+
+        const amountTon = normalizeCurrencyAmount('TON', refundSent.amount_ton || refundRequest.amount_ton || refundCancelled.amount_ton || 0);
+        const chainTxHash = refundSent.chain_tx_hash || autoSender.confirmed_chain_tx_hash || autoSender.transfer_ref || null;
+        const confirmedAt = refundSent.confirmed_at || autoSender.confirmed_at || null;
+        const sentAt = refundSent.sent_at || autoSender.completed_at || null;
+        const requestedAt = refundRequest.requested_at || null;
+        const cancelledAt = refundCancelled.cancelled_at || null;
+        const lastError = autoSender.last_error || null;
+
+        if (!amountTon && !requestedAt && !sentAt && !confirmedAt && !cancelledAt && !lastError) {
+            return null;
+        }
+
+        let status = 'requested';
+        if (cancelledAt) status = 'cancelled';
+        if (lastError && !sentAt && !confirmedAt) status = 'failed';
+        if (sentAt || chainTxHash) status = 'sent';
+        if (confirmedAt) status = 'confirmed';
+
+        return {
+            status,
+            amountTon,
+            refundWallet: refundSent.refund_wallet || refundRequest.refund_wallet || null,
+            refundMemo: refundSent.refund_memo || refundRequest.refund_memo || null,
+            chainTxHash,
+            transferRef: autoSender.transfer_ref || null,
+            requestedAt,
+            sentAt,
+            confirmedAt,
+            cancelledAt,
+            error: lastError
+        };
+    }
+
     async function enrichReserveRefundPayload(ownerId, reserve) {
-        if (!reserve?.id || reserve.status !== 'refund_requested') {
+        if (!reserve?.id) {
             return reserve;
         }
 
         const account = await getReserveAccountByOwner(ownerId);
+        const refundLast = buildReserveRefundSummary(account);
+
+        if (reserve.status !== 'refund_requested') {
+            return {
+                ...reserve,
+                refundLast
+            };
+        }
+
         const refundRequest = account?.payload?.refund_request || {};
         const refundWallet = normalizeTonWallet(refundRequest.refund_wallet);
-        const refundMemo = refundRequest.refund_memo || buildReserveRefundMemo(reserve.id);
+        const refundMemo = refundRequest.refund_memo || null;
         const amountTon = normalizeCurrencyAmount('TON', refundRequest.amount_ton || reserve.refundRequestedTon);
-        const transfer = await buildTonTransferPayload(refundWallet, amountTon, refundMemo);
+        const transfer = refundWallet && refundMemo
+            ? await buildTonTransferPayload(refundWallet, amountTon, refundMemo)
+            : { uri: null, qr: null };
 
         return {
             ...reserve,
+            refundLast,
             refundWallet: refundWallet || null,
             refundMemo,
             refundTransferUri: transfer.uri,

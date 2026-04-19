@@ -61,6 +61,14 @@ function payoutStatusTone(status) {
   return 'requested';
 }
 
+function refundStatusLabel(status) {
+  if (status === 'confirmed') return 'Подтвержден';
+  if (status === 'sent') return 'Отправлен';
+  if (status === 'failed') return 'Ошибка';
+  if (status === 'cancelled') return 'Отменен';
+  return 'Запрошен';
+}
+
 function isPayoutEvent(event) {
   return event?.event_type === 'payout_marked' || String(event?.event_type || '').startsWith('payout_request_');
 }
@@ -1034,6 +1042,33 @@ export function ReferralsPage() {
                           ? `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`
                           : 'До 100 TON депозит можно вернуть сразу, если на нем нет обязательств.'}
                   </div>
+                  {state.reserve?.refundLast ? (
+                    <div className="referrals-refund-last">
+                      <div className="referrals-refund-last__row">
+                        Последний возврат: <strong>{refundStatusLabel(state.reserve.refundLast.status)}</strong>
+                        {Number(state.reserve.refundLast.amountTon || 0) > 0 ? ` на ${formatTon(state.reserve.refundLast.amountTon)}` : ''}
+                      </div>
+                      {state.reserve.refundLast.confirmedAt || state.reserve.refundLast.sentAt || state.reserve.refundLast.requestedAt ? (
+                        <div className="referrals-refund-last__row">
+                          {state.reserve.refundLast.confirmedAt
+                            ? `Подтвержден: ${formatWhen(state.reserve.refundLast.confirmedAt)}`
+                            : state.reserve.refundLast.sentAt
+                              ? `Отправлен: ${formatWhen(state.reserve.refundLast.sentAt)}`
+                              : `Запрошен: ${formatWhen(state.reserve.refundLast.requestedAt)}`}
+                        </div>
+                      ) : null}
+                      {state.reserve.refundLast.chainTxHash ? (
+                        <div className="referrals-refund-last__row referrals-refund-last__mono" title={String(state.reserve.refundLast.chainTxHash)}>
+                          Tx: {shortTxHash(state.reserve.refundLast.chainTxHash)}
+                        </div>
+                      ) : null}
+                      {state.reserve.refundLast.error ? (
+                        <div className="referrals-refund-last__row referrals-refund-last__error">
+                          {state.reserve.refundLast.error}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="referrals-refund-box__actions">
                   {state.reserve?.status === 'refund_requested' ? (
