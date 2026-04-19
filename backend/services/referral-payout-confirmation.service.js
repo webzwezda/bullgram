@@ -175,10 +175,10 @@ async function fetchTonapiWalletTransactions(walletAddress) {
 
 async function fetchWalletTransactions(walletAddress) {
     try {
-        return await fetchToncenterWalletTransactions(walletAddress);
+        return await fetchTonapiWalletTransactions(walletAddress);
     } catch (error) {
-        console.warn('[ReferralPayoutConfirmation] toncenter failed, falling back to tonapi:', error.message || error);
-        return fetchTonapiWalletTransactions(walletAddress);
+        console.warn('[ReferralPayoutConfirmation] tonapi failed, falling back to toncenter:', error.message || error);
+        return fetchToncenterWalletTransactions(walletAddress);
     }
 }
 
@@ -212,7 +212,7 @@ function findConfirmationForPayout(payout, walletMessages) {
 
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(memo)) return false;
-        if (meta.seqno !== null && message.seqno !== null && message.seqno !== meta.seqno) return false;
+        if (meta.seqno !== null && message.seqno !== meta.seqno) return false;
         if (expectedWallet && message.destination && message.destination !== expectedWallet) return false;
         if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
@@ -243,7 +243,7 @@ function findConfirmationForRefund(entry, walletMessages) {
 
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(meta.memo)) return false;
-        if (meta.seqno !== null && message.seqno !== null && message.seqno !== meta.seqno) return false;
+        if (meta.seqno !== null && message.seqno !== meta.seqno) return false;
         if (meta.refundWallet && message.destination && message.destination !== meta.refundWallet) return false;
         if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
