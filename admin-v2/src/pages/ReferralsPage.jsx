@@ -677,6 +677,29 @@ export function ReferralsPage() {
     }
   }
 
+  async function cancelReserveRefund() {
+    if (state.reserve?.status !== 'refund_requested') {
+      window.alert('Активной заявки на возврат нет.');
+      return;
+    }
+    const confirmed = window.confirm('Отменить текущую заявку на возврат? После этого можно создать новую на актуальную сумму.');
+    if (!confirmed) return;
+    const note = window.prompt('Комментарий к отмене:', '') || '';
+
+    setState((prev) => ({ ...prev, refunding: true, error: '' }));
+    try {
+      await apiRequest('/api/referrals/reserve/refund-cancel', {
+        accessToken,
+        method: 'POST',
+        body: { note }
+      });
+      await refreshReferralState({ refunding: false });
+    } catch (error) {
+      setState((prev) => ({ ...prev, refunding: false }));
+      window.alert(error.message);
+    }
+  }
+
   async function sendReserveRefundAutomatically() {
     const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
     const refundWallet = state.reserve?.refundWallet || '';
@@ -1014,7 +1037,16 @@ export function ReferralsPage() {
                         </button>
                       ) : null}
                       {!state.support?.automaticRefundSender ? (
-                        <div className="referrals-refund-box__pending">Ожидает возврата</div>
+                        <>
+                          <div className="referrals-refund-box__pending">Ожидает возврата</div>
+                          <button
+                            className="referrals-action-btn referrals-action-btn--warning"
+                            onClick={cancelReserveRefund}
+                            disabled={state.refunding}
+                          >
+                            {state.refunding ? 'Отменяем...' : 'Отменить заявку'}
+                          </button>
+                        </>
                       ) : null}
                     </>
                   ) : (

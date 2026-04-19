@@ -441,6 +441,86 @@ export default function referralRoutes(supabase) {
         };
     }
 
+    async function cancelReserveRefund(ownerId, note = null) {
+        const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
+        if (!reserve.supported || !reserve.id) {
+            return { error: 'Резерв еще не создан.', status: 400 };
+        }
+
+        if (reserve.status !== 'refund_requested') {
+            return { error: 'Активной заявки на возврат нет.', status: 400 };
+        }
+
+        const amountTon = normalizeCurrencyAmount('TON', reserve.refundRequestedTon);
+        if (!Number.isFinite(amountTon) || amountTon <= 0) {
+            return { error: 'Сумма заявки на возврат не найдена.', status: 400 };
+        }
+
+        const account = await getReserveAccountByOwner(ownerId);
+        if (!account) {
+            return { error: 'Резерв не найден.', status: 404 };
+        }
+
+        const now = new Date().toISOString();
+        const refundRequest = account.payload?.refund_request || {};
+        const { error: ledgerError } = await supabase
+            .from('referral_reserve_ledger')
+            .insert({
+                owner_id: ownerId,
+                reserve_account_id: reserve.id,
+                entry_type: 'admin_refund_cancelled',
+                amount_ton: amountTon,
+                direction: 'credit',
+                payload: {
+                    note: note || null,
+                    cancelled_at: now,
+                    previous_refund_request: refundRequest
+                }
+            });
+
+        if (ledgerError) throw ledgerError;
+
+        const nextPayload = {
+            ...(account.payload || {}),
+            refund_request: null,
+            refund_cancelled: {
+                amount_ton: amountTon,
+                cancelled_at: now,
+                note: note || null,
+                previous_refund_request: refundRequest
+            }
+        };
+
+        const synced = await reconcileReferralReserveAccount(supabase, {
+            ...account,
+            status: 'deposit_required',
+            payload: nextPayload
+        });
+
+        const { data: updatedAccount, error: updateError } = await supabase
+            .from('referral_reserve_accounts')
+            .update({
+                status: synced.reserveAccount.status,
+                payload: nextPayload,
+                available_reserve_ton: synced.reserveAccount.available_reserve_ton,
+                reserved_obligations_ton: synced.reserveAccount.reserved_obligations_ton,
+                admin_debt_ton: synced.reserveAccount.admin_debt_ton,
+                updated_at: now
+            })
+            .eq('id', reserve.id)
+            .eq('owner_id', ownerId)
+            .select('*')
+            .single();
+
+        if (updateError) throw updateError;
+
+        return {
+            success: true,
+            amount_ton: amountTon,
+            reserve: updatedAccount
+        };
+    }
+
     async function markReserveRefundSent(ownerId, amount, chainTxHash, note = null) {
         const normalizedChainTxHash = String(chainTxHash || '').trim();
         const amountTon = normalizeCurrencyAmount('TON', amount);
@@ -1312,6 +1392,22 @@ export default function referralRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка запроса возврата referral reserve:', error);
             res.status(500).json({ error: 'Ошибка запроса возврата резерва' });
+        }
+    });
+
+    router.post('/reserve/refund-cancel', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+        const { note } = req.body || {};
+
+        try {
+            const result = await cancelReserveRefund(ownerId, note);
+            if (result.error) {
+                return res.status(result.status || 400).json({ error: result.error });
+            }
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка отмены возврата referral reserve:', error);
+            res.status(500).json({ error: 'Ошибка отмены заявки на возврат' });
         }
     });
 

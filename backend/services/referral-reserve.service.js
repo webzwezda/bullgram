@@ -84,6 +84,7 @@ function summarizeLedger(rows = []) {
     if (type === 'partner_payout_sent' && direction === 'debit') acc.partnerPayoutTon += amount;
     if (type === 'admin_refund_sent' && direction === 'debit') acc.adminRefundTon += amount;
     if (type === 'admin_refund_requested') acc.adminRefundRequestedTon += amount;
+    if (type === 'admin_refund_cancelled') acc.adminRefundCancelledTon += amount;
     if (type === 'reward_obligation_created') acc.rewardObligationTon += amount;
     if (type === 'bullrun_fee_created') acc.bullrunFeeTon += amount;
     if (type === 'network_fee_reserved') acc.networkFeeTon += amount;
@@ -94,6 +95,7 @@ function summarizeLedger(rows = []) {
     partnerPayoutTon: 0,
     adminRefundTon: 0,
     adminRefundRequestedTon: 0,
+    adminRefundCancelledTon: 0,
     rewardObligationTon: 0,
     bullrunFeeTon: 0,
     networkFeeTon: 0,
@@ -331,7 +333,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   ));
   const paidOutTon = roundTon(ledgerSummary.partnerPayoutTon);
   const refundedTon = roundTon(ledgerSummary.adminRefundTon);
-  const refundRequestedTon = roundTon(Math.max(0, ledgerSummary.adminRefundRequestedTon - refundedTon));
+  const refundRequestedTon = roundTon(Math.max(0, ledgerSummary.adminRefundRequestedTon - ledgerSummary.adminRefundCancelledTon - refundedTon));
   const availableReserveTon = roundTon(totalDepositedTon - reservedObligationsTon - paidOutTon - refundedTon);
   const adminDebtTon = roundTon(Math.max(numberOrZero(account?.admin_debt_ton), availableReserveTon < 0 ? Math.abs(availableReserveTon) : 0));
   let lockedUntil = account?.locked_until || null;
