@@ -360,18 +360,37 @@ Statuses:
 
 ## Remaining Activation Work
 
-The implementation is complete enough for MVP use, but real-money automation must stay behind runtime flags until these checks pass.
+The implementation is complete enough for internal MVP use. Admin reserve deposit/refund has been tested with real TON. Partner payout automation is implemented and enabled with a guarded per-request cap, but its final chain-confirmation path still needs the first real partner payout.
 
+### Done And Verified
+
+- [x] Official Telegram bot exists and is active: `@bulrun_ru_bot`.
+- [x] Bot token is valid through Telegram `getMe`.
+- [x] Bot webhook is empty, so runtime uses polling.
+- [x] Bot code has partner actions for opening partner screen, saving TON wallet, and requesting payout.
 - [x] Run a controlled TON deposit test with a small amount and verify reserve watcher confirmation.
-- [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
+- [x] Run controlled automatic admin refund tests with small amounts.
+- [x] Verify automatic admin refund confirmation replaces temporary `ton:<wallet>:<seqno>` with real chain tx hash.
 - [x] Enable automatic payout sender with a guarded per-request limit.
   - Production flag is enabled with `REFERRAL_PAYOUT_SENDER_ENABLED=true`.
   - Automatic payout amount is capped by `REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON=25`.
-  - Real chain confirmation still needs the first real partner payout request.
-- [x] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [x] Enable payout confirmation watcher with TonAPI fallback.
 - [x] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
   - Decision for internal MVP: keep the shared BullRun reserve wallet with per-admin memo.
   - Move to isolated admin wallets/subwallets before opening the product to unrelated external admins.
+
+### Check When Money Is Available For Partner Payout Test
+
+- [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
+- [ ] Create the first real partner payout request from the Telegram bot with amount between `5 TON` and `25 TON`.
+- [ ] Confirm the request appears in `/app/referrals` payout queue with partner wallet, amount, memo/QR, and status.
+- [ ] Verify automatic payout sender sends TON from the BullRun reserve wallet.
+- [ ] Verify the partner receives TON on the wallet entered in the bot.
+- [ ] Verify partner balance decreases by the payout amount.
+- [ ] Verify admin reserve ledger records the network fee.
+- [ ] Verify Telegram notifications reach the partner and admin.
+- [ ] Verify payout confirmation watcher replaces temporary `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [ ] Verify a payout request above `25 TON` is not auto-sent and remains for manual handling.
 
 ## Admin UI Plan
 
@@ -748,12 +767,13 @@ Scenario checks:
   - `TONAPI_KEY=<TonAPI server-side key>`
   - `TON_RESERVE_TONAPI_KEY=<same key for reserve watcher/confirmation>`
 - Runtime env for automatic partner payouts:
-  - `REFERRAL_PAYOUT_SENDER_ENABLED=false` by default
-  - `REFERRAL_REFUND_SENDER_ENABLED=false` by default
+  - `REFERRAL_PAYOUT_SENDER_ENABLED=true` on production
+  - `REFERRAL_REFUND_SENDER_ENABLED=true` on production
   - `TON_RESERVE_WALLET_SECRET_FILE=/root/bullrun-ton-reserve/reserve-wallet.json`
   - `TON_RESERVE_SENDER_ENDPOINT=https://toncenter.com/api/v2/jsonRPC`
   - `TON_RESERVE_API_KEY=<optional TON Center key>`
   - `TON_RESERVE_SENDER_MIN_WALLET_BALANCE_TON=0.2`
+  - `REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON=25`
   - `REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON=0.05`
   - `REFERRAL_PAYOUT_SENDER_INTERVAL_MS=60000`
   - `REFERRAL_PAYOUT_SENDER_BATCH_LIMIT=5`
