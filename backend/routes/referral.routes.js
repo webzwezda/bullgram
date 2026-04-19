@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import QRCode from 'qrcode';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import {
@@ -65,7 +66,9 @@ export default function referralRoutes(supabase) {
     }
 
     function buildReserveRefundMemo(reserveAccountId) {
-        return `brr_${String(reserveAccountId || '').replace(/-/g, '').slice(0, 24)}`;
+        const reservePart = String(reserveAccountId || '').replace(/-/g, '').slice(0, 12);
+        const requestPart = randomUUID().replace(/-/g, '').slice(0, 12);
+        return `brr_${reservePart}_${requestPart}`;
     }
 
     function normalizeTonWallet(value) {

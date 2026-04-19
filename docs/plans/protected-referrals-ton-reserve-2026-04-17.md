@@ -727,13 +727,18 @@ Scenario checks:
   - `POST /api/referrals/reserve/refund-send-auto` sends a requested refund from the BullRun reserve wallet only when `REFERRAL_REFUND_SENDER_ENABLED=true`
   - `/app/referrals` shows `Авто TON` for reserve refunds only when the refund sender is enabled
   - manual QR and manual tx-hash close remain available as the operational fallback
-  - TON Center confirmation now also resolves automatic refund transfers from temporary `ton:<wallet>:<seqno>` references to real chain tx hashes
+  - TON confirmation now resolves automatic refund transfers from temporary `ton:<wallet>:<seqno>` references to real chain tx hashes
+  - confirmation prefers TonAPI with server-side key and falls back to TON Center
+  - refund confirmation matches by memo plus wallet seqno because TON outgoing message value can be slightly below the requested amount after network handling
+  - new refund requests now use per-request `brr_<reserve>_<request>` memos instead of reusing one memo per reserve account
 - Runtime env for payout confirmation:
   - `REFERRAL_PAYOUT_CONFIRMATION_ENABLED=true` by default
   - `REFERRAL_PAYOUT_CONFIRMATION_INTERVAL_MS=120000`
   - `TON_PAYOUT_CONFIRMATION_TX_LIMIT=50`
   - `TON_PAYOUT_CONFIRMATION_MAX_PAGES=5`
   - `TON_PAYOUT_CONFIRMATION_BATCH_LIMIT=50`
+  - `TONAPI_KEY=<TonAPI server-side key>`
+  - `TON_RESERVE_TONAPI_KEY=<same key for reserve watcher/confirmation>`
 - Runtime env for automatic partner payouts:
   - `REFERRAL_PAYOUT_SENDER_ENABLED=false` by default
   - `REFERRAL_REFUND_SENDER_ENABLED=false` by default
