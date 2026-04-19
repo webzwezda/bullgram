@@ -364,7 +364,10 @@ The implementation is complete enough for MVP use, but real-money automation mus
 
 - [x] Run a controlled TON deposit test with a small amount and verify reserve watcher confirmation.
 - [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
-- [ ] Enable automatic payout sender only for a small controlled payout and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
+- [x] Enable automatic payout sender with a guarded per-request limit.
+  - Production flag is enabled with `REFERRAL_PAYOUT_SENDER_ENABLED=true`.
+  - Automatic payout amount is capped by `REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON=25`.
+  - Real chain confirmation still needs the first real partner payout request.
 - [x] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
 - [x] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
   - Decision for internal MVP: keep the shared BullRun reserve wallet with per-admin memo.
@@ -708,7 +711,8 @@ Scenario checks:
   - `backend/jobs/referral-payout-sender.job.js` scans `requested`/`queued` payout requests when explicitly enabled
   - `/api/referrals/payout-request-send` allows an admin-triggered automatic send from the payout queue
   - `/app/referrals` shows the `Авто TON` action only when the sender is enabled
-  - automatic sender is off by default and requires `REFERRAL_PAYOUT_SENDER_ENABLED=true`
+  - automatic sender is enabled on production with `REFERRAL_PAYOUT_SENDER_ENABLED=true`
+  - automatic sender refuses requests above `REFERRAL_PAYOUT_SENDER_MAX_AMOUNT_TON`; production is currently capped at `25 TON`
   - current transfer reference starts as `ton:<wallet>:<seqno>` and is later replaced by confirmation watcher with the real chain tx hash
 - Added automatic partner payout confirmation:
   - `backend/services/referral-payout-confirmation.service.js` looks up outgoing reserve-wallet transactions through TON Center
