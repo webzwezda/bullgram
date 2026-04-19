@@ -614,10 +614,11 @@ export function ReferralsPage() {
       return;
     }
     const defaultRefundWallet = state.reserve?.defaultRefundWallet || state.reserve?.refundWallet || '';
+    const automaticRefund = !!state.support?.automaticRefundSender;
     const confirmed = window.confirm(
       defaultRefundWallet
-        ? `Запросить возврат ${formatTon(refundableTon)} на кошелек из app/payments?\n\nДепозит: ${formatTon(grossRefundableTon)}\nКомиссия сети: ${formatTon(refundNetworkFeeTon)}\nК получению: ${formatTon(refundableTon)}\n\n${defaultRefundWallet}`
-        : `Запросить возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`
+        ? `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)} на кошелек из app/payments?\n\nДепозит: ${formatTon(grossRefundableTon)}\nКомиссия сети: ${formatTon(refundNetworkFeeTon)}\nК получению: ${formatTon(refundableTon)}\n\n${defaultRefundWallet}`
+        : `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`
     );
     if (!confirmed) return;
     const rawWallet = defaultRefundWallet || window.prompt('TON-кошелек, куда вернуть свободный резерв:', state.reserve?.refundWallet || '');
@@ -639,9 +640,17 @@ export function ReferralsPage() {
           refund_wallet: refundWallet
         }
       });
+      if (automaticRefund) {
+        await apiRequest('/api/referrals/reserve/refund-send-auto', {
+          accessToken,
+          method: 'POST'
+        });
+      }
       await refreshReferralState({ refunding: false });
     } catch (error) {
-      setState((prev) => ({ ...prev, refunding: false }));
+      await refreshReferralState({ refunding: false }).catch(() => {
+        setState((prev) => ({ ...prev, refunding: false }));
+      });
       window.alert(error.message);
     }
   }
