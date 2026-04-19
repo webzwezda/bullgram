@@ -2144,6 +2144,16 @@ a {
   flex-shrink: 0;
 }
 
+.referrals-refund-box__pending {
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 /* Referrals Signals Grid */
 .referrals-signals-grid {
   display: grid;

@@ -993,14 +993,13 @@ export function ReferralsPage() {
                   <div className="referrals-refund-box__title">Возврат депозита</div>
                   <div className="referrals-refund-box__text">
                     {state.reserve?.status === 'refund_requested'
-                      ? `Запрошен возврат ${formatTon(state.reserve?.refundRequestedTon)}. Новые партнеры на паузе до закрытия.`
+                      ? `Заявка создана на ${formatTon(state.reserve?.refundRequestedTon)}. Вернем на TON-кошелек из app/payments.`
                       : state.reserve?.canRequestRefund
                         ? `Можно вернуть свободный остаток: ${formatTon(state.reserve?.refundableTon)}. Обязательства и комиссии останутся в резерве.`
                         : state.reserve?.lockedUntil
                           ? `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`
                           : 'До 100 TON депозит можно вернуть сразу, если на нем нет обязательств.'}
                   </div>
-                  <RefundTransferBox reserve={state.reserve} />
                 </div>
                 <div className="referrals-refund-box__actions">
                   {state.reserve?.status === 'refund_requested' ? (
@@ -1014,13 +1013,9 @@ export function ReferralsPage() {
                           {state.refunding ? 'Отправляем...' : 'Авто TON'}
                         </button>
                       ) : null}
-                      <button
-                        className="referrals-action-btn referrals-action-btn--warning"
-                        onClick={markReserveRefundSent}
-                        disabled={state.refunding}
-                      >
-                        {state.refunding ? 'Закрываем...' : 'Отметить отправленным'}
-                      </button>
+                      {!state.support?.automaticRefundSender ? (
+                        <div className="referrals-refund-box__pending">Ожидает возврата</div>
+                      ) : null}
                     </>
                   ) : (
                     <button
