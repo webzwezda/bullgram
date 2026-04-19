@@ -94,9 +94,11 @@ function getOutMessages(tx) {
 function parseOutgoingMemoTransaction(tx) {
     const chainTxHash = getTransactionHash(tx);
     if (!chainTxHash) return [];
+    const seqno = Number(tx?.in_msg?.decoded_body?.seqno ?? tx?.inMsg?.decoded_body?.seqno ?? tx?.inMessage?.decoded_body?.seqno);
 
     return getOutMessages(tx).map((message) => ({
         chainTxHash,
+        seqno: Number.isFinite(seqno) ? seqno : null,
         amountTon: nanoToTon(message?.value || message?.amount || message?.value_nanotons),
         destination: normalizeAddress(message?.destination || message?.dst || message?.to),
         comment: getNestedText(message),
@@ -194,7 +196,10 @@ function getAutoSenderMeta(payout) {
         autoSender,
         transferRef,
         walletAddress: normalizeAddress(autoSender.wallet_address || transferRefParts[1] || process.env.TON_RESERVE_DEPOSIT_ADDRESS),
-        memo: String(autoSender.memo || '').trim()
+        memo: String(autoSender.memo || '').trim(),
+        seqno: Number.isFinite(Number(autoSender.seqno ?? transferRefParts[2]))
+            ? Number(autoSender.seqno ?? transferRefParts[2])
+            : null
     };
 }
 
@@ -207,6 +212,7 @@ function findConfirmationForPayout(payout, walletMessages) {
 
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(memo)) return false;
+        if (meta.seqno !== null && message.seqno !== null && message.seqno !== meta.seqno) return false;
         if (expectedWallet && message.destination && message.destination !== expectedWallet) return false;
         if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
@@ -222,7 +228,10 @@ function getAutoRefundMeta(entry) {
         transferRef,
         walletAddress: normalizeAddress(payload.wallet_address || transferRefParts[1] || process.env.TON_RESERVE_DEPOSIT_ADDRESS),
         memo: String(payload.refund_memo || '').trim(),
-        refundWallet: normalizeAddress(payload.refund_wallet)
+        refundWallet: normalizeAddress(payload.refund_wallet),
+        seqno: Number.isFinite(Number(payload.seqno ?? transferRefParts[2]))
+            ? Number(payload.seqno ?? transferRefParts[2])
+            : null
     };
 }
 
@@ -234,6 +243,7 @@ function findConfirmationForRefund(entry, walletMessages) {
 
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(meta.memo)) return false;
+        if (meta.seqno !== null && message.seqno !== null && message.seqno !== meta.seqno) return false;
         if (meta.refundWallet && message.destination && message.destination !== meta.refundWallet) return false;
         if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
