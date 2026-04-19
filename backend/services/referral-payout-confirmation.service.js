@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { Address } from '@ton/core';
 
 const DEFAULT_TONCENTER_API_BASE = 'https://toncenter.com/api/v2';
+const DEFAULT_TONAPI_API_BASE = 'https://tonapi.io/v2';
 
 function envNumber(name, fallback, options = {}) {
     const parsed = Number(process.env[name] || fallback);
@@ -10,8 +12,8 @@ function envNumber(name, fallback, options = {}) {
     return parsed;
 }
 
-function normalizeBaseUrl(value) {
-    return String(value || DEFAULT_TONCENTER_API_BASE).replace(/\/$/, '');
+function normalizeBaseUrl(value, fallback = DEFAULT_TONCENTER_API_BASE) {
+    return String(value || fallback).replace(/\/$/, '');
 }
 
 function nanoToTon(value) {
@@ -21,7 +23,16 @@ function nanoToTon(value) {
 }
 
 function normalizeAddress(value) {
-    return String(value || '').trim();
+    const raw = typeof value === 'object' && value
+        ? value.address || value.user_friendly || value.raw_form || ''
+        : value;
+    const normalized = String(raw || '').trim();
+    if (!normalized) return '';
+    try {
+        return Address.parse(normalized).toRawString();
+    } catch {
+        return normalized;
+    }
 }
 
 function getNestedText(value) {
@@ -49,8 +60,18 @@ function getNestedText(value) {
 function getTransactionHash(tx) {
     const hash = tx?.transaction_id?.hash || tx?.transactionId?.hash || tx?.hash || tx?.tx_hash || tx?.txHash;
     const lt = tx?.transaction_id?.lt || tx?.transactionId?.lt || tx?.lt;
-    if (hash && lt) return `${lt}:${hash}`;
-    return hash ? String(hash) : '';
+    const normalizedHash = normalizeChainHash(hash);
+    if (normalizedHash && lt) return `${lt}:${normalizedHash}`;
+    return normalizedHash || '';
+}
+
+function normalizeChainHash(hash) {
+    const raw = String(hash || '').trim();
+    if (!raw) return '';
+    if (/^[a-f0-9]{64}$/i.test(raw)) {
+        return Buffer.from(raw, 'hex').toString('base64');
+    }
+    return raw;
 }
 
 function getTransactionCursor(tx) {
@@ -111,7 +132,7 @@ async function fetchToncenterTransactionPage(walletAddress, cursor = null) {
     return Array.isArray(data?.result) ? data.result : [];
 }
 
-async function fetchWalletTransactions(walletAddress) {
+async function fetchToncenterWalletTransactions(walletAddress) {
     const maxPages = envNumber('TON_PAYOUT_CONFIRMATION_MAX_PAGES', 5, { min: 1, max: 50 });
     const transactions = [];
     const seenHashes = new Set();
@@ -136,6 +157,35 @@ async function fetchWalletTransactions(walletAddress) {
     return transactions;
 }
 
+async function fetchTonapiWalletTransactions(walletAddress) {
+    const apiBase = normalizeBaseUrl(process.env.TONAPI_API_BASE || DEFAULT_TONAPI_API_BASE, DEFAULT_TONAPI_API_BASE);
+    const apiKey = String(process.env.TONAPI_KEY || process.env.TON_RESERVE_TONAPI_KEY || '').trim();
+    const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
+    const limit = envNumber('TON_PAYOUT_CONFIRMATION_TX_LIMIT', 50, { min: 1, max: 100 });
+    const { data } = await axios.get(`${apiBase}/blockchain/accounts/${encodeURIComponent(walletAddress)}/transactions`, {
+        params: { limit },
+        headers,
+        timeout: envNumber('TON_PAYOUT_CONFIRMATION_TIMEOUT_MS', 15_000, { min: 1_000 })
+    });
+
+    return Array.isArray(data?.transactions) ? data.transactions : [];
+}
+
+async function fetchWalletTransactions(walletAddress) {
+    try {
+        return await fetchToncenterWalletTransactions(walletAddress);
+    } catch (error) {
+        console.warn('[ReferralPayoutConfirmation] toncenter failed, falling back to tonapi:', error.message || error);
+        return fetchTonapiWalletTransactions(walletAddress);
+    }
+}
+
+function amountMatches(actualTon, expectedTon) {
+    if (!(expectedTon > 0) || !(actualTon > 0)) return true;
+    const tolerance = envNumber('TON_PAYOUT_CONFIRMATION_AMOUNT_TOLERANCE_TON', 0.001, { min: 0, max: 0.1 });
+    return Math.abs(actualTon - expectedTon) <= tolerance;
+}
+
 function getAutoSenderMeta(payout) {
     const autoSender = payout?.payload?.auto_sender || {};
     const transferRef = String(autoSender.transfer_ref || payout?.chain_tx_hash || '').trim();
@@ -158,7 +208,7 @@ function findConfirmationForPayout(payout, walletMessages) {
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(memo)) return false;
         if (expectedWallet && message.destination && message.destination !== expectedWallet) return false;
-        if (expectedAmountTon > 0 && message.amountTon > 0 && Math.abs(message.amountTon - expectedAmountTon) > 0.000001) return false;
+        if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
     }) || null;
 }
@@ -185,7 +235,7 @@ function findConfirmationForRefund(entry, walletMessages) {
     return walletMessages.find((message) => {
         if (!String(message.comment || '').includes(meta.memo)) return false;
         if (meta.refundWallet && message.destination && message.destination !== meta.refundWallet) return false;
-        if (expectedAmountTon > 0 && message.amountTon > 0 && Math.abs(message.amountTon - expectedAmountTon) > 0.000001) return false;
+        if (!amountMatches(message.amountTon, expectedAmountTon)) return false;
         return true;
     }) || null;
 }
