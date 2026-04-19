@@ -242,16 +242,22 @@ export default function referralRoutes(supabase) {
         const requestedAt = refundRequest.requested_at || null;
         const cancelledAt = refundCancelled.cancelled_at || null;
         const lastError = autoSender.last_error || null;
+        const errorAt = autoSender.error_at || null;
 
         if (!amountTon && !requestedAt && !sentAt && !confirmedAt && !cancelledAt && !lastError) {
             return null;
         }
 
-        let status = 'requested';
-        if (cancelledAt) status = 'cancelled';
-        if (lastError && !sentAt && !confirmedAt) status = 'failed';
-        if (sentAt || chainTxHash) status = 'sent';
-        if (confirmedAt) status = 'confirmed';
+        const statusCandidates = [
+            { status: 'requested', at: requestedAt },
+            { status: 'cancelled', at: cancelledAt },
+            { status: 'failed', at: errorAt },
+            { status: 'sent', at: sentAt },
+            { status: 'confirmed', at: confirmedAt }
+        ].filter((candidate) => candidate.at);
+        statusCandidates.sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime());
+
+        const status = statusCandidates[0]?.status || (chainTxHash ? 'sent' : 'requested');
 
         return {
             status,
@@ -264,6 +270,7 @@ export default function referralRoutes(supabase) {
             sentAt,
             confirmedAt,
             cancelledAt,
+            errorAt,
             error: lastError
         };
     }
