@@ -364,8 +364,9 @@ export default function referralRoutes(supabase) {
         }
 
         const amountTon = normalizeCurrencyAmount('TON', reserve.refundableTon);
+        const networkFeeTon = normalizeCurrencyAmount('TON', reserve.refundNetworkFeeTon || 0);
         if (!Number.isFinite(amountTon) || amountTon <= 0) {
-            return { error: 'Свободного резерва для возврата нет.', status: 400 };
+            return { error: 'Свободного резерва для возврата нет после комиссии сети.', status: 400 };
         }
 
         const account = await getReserveAccountByOwner(ownerId);
@@ -388,6 +389,8 @@ export default function referralRoutes(supabase) {
                     refund_wallet: normalizedRefundWallet,
                     refund_memo: refundMemo,
                     requested_at: now,
+                    gross_refundable_ton: reserve.grossRefundableTon,
+                    network_fee_ton: networkFeeTon,
                     available_reserve_ton: reserve.availableReserveTon,
                     reserved_obligations_ton: reserve.reservedObligationsTon,
                     admin_debt_ton: reserve.adminDebtTon
@@ -396,12 +399,33 @@ export default function referralRoutes(supabase) {
 
         if (ledgerError) throw ledgerError;
 
+        if (networkFeeTon > 0) {
+            const { error: feeLedgerError } = await supabase
+                .from('referral_reserve_ledger')
+                .insert({
+                    owner_id: ownerId,
+                    reserve_account_id: reserve.id,
+                    entry_type: 'network_fee_reserved',
+                    amount_ton: networkFeeTon,
+                    direction: 'debit',
+                    payload: {
+                        source: 'admin_refund_requested',
+                        refund_memo: refundMemo,
+                        requested_at: now
+                    }
+                });
+
+            if (feeLedgerError) throw feeLedgerError;
+        }
+
         const nextPayload = {
             ...(account.payload || {}),
             refund_request: {
                 amount_ton: amountTon,
                 refund_wallet: normalizedRefundWallet,
                 refund_memo: refundMemo,
+                gross_refundable_ton: reserve.grossRefundableTon,
+                network_fee_ton: networkFeeTon,
                 note: note || null,
                 requested_at: now
             }
@@ -435,6 +459,7 @@ export default function referralRoutes(supabase) {
                 canAcceptNewPartners: false,
                 refundableTon: 0,
                 refundRequestedTon: amountTon,
+                refundNetworkFeeTon: networkFeeTon,
                 refundWallet: normalizedRefundWallet,
                 refundMemo
             }
@@ -463,6 +488,7 @@ export default function referralRoutes(supabase) {
 
         const now = new Date().toISOString();
         const refundRequest = account.payload?.refund_request || {};
+        const networkFeeTon = normalizeCurrencyAmount('TON', refundRequest.network_fee_ton || 0);
         const { error: ledgerError } = await supabase
             .from('referral_reserve_ledger')
             .insert({
@@ -479,6 +505,25 @@ export default function referralRoutes(supabase) {
             });
 
         if (ledgerError) throw ledgerError;
+
+        if (networkFeeTon > 0) {
+            const { error: feeLedgerError } = await supabase
+                .from('referral_reserve_ledger')
+                .insert({
+                    owner_id: ownerId,
+                    reserve_account_id: reserve.id,
+                    entry_type: 'network_fee_reserved',
+                    amount_ton: networkFeeTon,
+                    direction: 'credit',
+                    payload: {
+                        source: 'admin_refund_cancelled',
+                        cancelled_at: now,
+                        previous_refund_request: refundRequest
+                    }
+                });
+
+            if (feeLedgerError) throw feeLedgerError;
+        }
 
         const nextPayload = {
             ...(account.payload || {}),

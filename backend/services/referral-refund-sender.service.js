@@ -4,6 +4,14 @@ import { getTonReserveSenderConfig, sendTonFromReserve } from './ton-reserve-sen
 
 const REFUND_SENDER_FLAG = 'REFERRAL_REFUND_SENDER_ENABLED';
 
+function envNumber(name, fallback, options = {}) {
+    const parsed = Number(process.env[name] || fallback);
+    if (!Number.isFinite(parsed)) return fallback;
+    if (options.min !== undefined && parsed < options.min) return fallback;
+    if (options.max !== undefined && parsed > options.max) return options.max;
+    return parsed;
+}
+
 function normalizeTonAmount(value) {
     const parsed = Number(value || 0);
     if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -105,7 +113,9 @@ export async function sendReferralReserveRefund(supabase, ownerId, options = {})
             to: refundWallet,
             amountTon,
             comment: refundMemo,
-            enabledFlagName: REFUND_SENDER_FLAG
+            enabledFlagName: REFUND_SENDER_FLAG,
+            minWalletBalanceTon: envNumber('REFERRAL_REFUND_SENDER_MIN_WALLET_BALANCE_TON', 0, { min: 0 }),
+            estimatedNetworkFeeTon: envNumber('REFERRAL_REFUND_SENDER_NETWORK_FEE_TON', config.estimatedNetworkFeeTon, { min: 0 })
         });
     } catch (error) {
         await leaveRefundWithError(supabase, sendingAccount, error, { refund_memo: refundMemo });

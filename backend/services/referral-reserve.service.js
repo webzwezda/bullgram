@@ -9,6 +9,14 @@ function numberOrZero(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function envNumber(name, fallback, options = {}) {
+  const parsed = Number(process.env[name] || fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (options.min !== undefined && parsed < options.min) return fallback;
+  if (options.max !== undefined && parsed > options.max) return options.max;
+  return parsed;
+}
+
 function roundTon(value) {
   return Number(numberOrZero(value).toFixed(6));
 }
@@ -87,7 +95,8 @@ function summarizeLedger(rows = []) {
     if (type === 'admin_refund_cancelled') acc.adminRefundCancelledTon += amount;
     if (type === 'reward_obligation_created') acc.rewardObligationTon += amount;
     if (type === 'bullrun_fee_created') acc.bullrunFeeTon += amount;
-    if (type === 'network_fee_reserved') acc.networkFeeTon += amount;
+    if (type === 'network_fee_reserved' && direction === 'credit') acc.networkFeeTon -= amount;
+    if (type === 'network_fee_reserved' && direction !== 'credit') acc.networkFeeTon += amount;
 
     return acc;
   }, {
@@ -394,8 +403,10 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const lockExpired = !!lockedUntilDate && lockedUntilDate.toString() !== 'Invalid Date' && lockedUntilDate <= new Date();
   const partialDepositWithoutProgram = totalDepositedTon > 0 && totalDepositedTon < minimumDepositTon;
   const canRequestRefund = (partialDepositWithoutProgram || lockExpired) && !['refund_requested', 'refund_completed', 'paused'].includes(status);
+  const refundNetworkFeeTon = roundTon(envNumber('REFERRAL_REFUND_SENDER_NETWORK_FEE_TON', envNumber('REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON', 0.05, { min: 0 }), { min: 0 }));
+  const grossRefundableTon = canRequestRefund ? Math.max(0, availableReserveTon) : 0;
   const refundableTon = canRequestRefund
-    ? Math.max(0, availableReserveTon)
+    ? Math.max(0, grossRefundableTon - refundNetworkFeeTon)
     : 0;
 
   return {
@@ -412,6 +423,8 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     lockExpired,
     partialDepositWithoutProgram,
     canRequestRefund,
+    grossRefundableTon: roundTon(grossRefundableTon),
+    refundNetworkFeeTon,
     refundableTon: roundTon(refundableTon),
     lastDepositAt: account?.last_deposit_at || null,
     reason: !depositConfigured
