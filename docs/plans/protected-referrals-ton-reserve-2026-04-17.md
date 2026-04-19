@@ -366,7 +366,9 @@ The implementation is complete enough for MVP use, but real-money automation mus
 - [ ] Run a manual payout helper test: QR, memo, wallet deeplink, and manual tx close.
 - [ ] Enable automatic payout sender only for a small controlled payout and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
 - [x] Enable automatic refund sender only for a small controlled refund and verify the confirmation watcher replaces `ton:<wallet>:<seqno>` with the real chain tx hash.
-- [ ] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
+- [x] Decide whether shared reserve wallet plus per-admin memo is acceptable for launch, or move to isolated admin wallets/subwallets.
+  - Decision for internal MVP: keep the shared BullRun reserve wallet with per-admin memo.
+  - Move to isolated admin wallets/subwallets before opening the product to unrelated external admins.
 
 ## Admin UI Plan
 
