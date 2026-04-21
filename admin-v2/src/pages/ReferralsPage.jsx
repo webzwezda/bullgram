@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Copy, ExternalLink, Wallet, QrCode } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  Copy,
+  CreditCard,
+  ExternalLink,
+  Lock,
+  QrCode,
+  Users,
+  Wallet,
+  Zap
+} from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
