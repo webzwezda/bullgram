@@ -18,6 +18,14 @@ function formatWhen(value) {
   }).format(new Date(value));
 }
 
+function formatTime(value) {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
 function withdrawalStatusLabel(status) {
   if (status === 'queued') return 'В очереди';
   if (status === 'sending') return 'Отправляется';
@@ -132,14 +140,14 @@ export function ProjectTreasuryPage() {
   const buckets = state.data?.buckets || {};
   const counters = state.data?.counters || {};
   const withdrawals = state.data?.withdrawals || [];
+  const walletSynced = summary.walletStatus === 'synced';
 
   return (
     <div className="page project-treasury">
       <div className="page__header">
         <div>
-          <div className="eyebrow">Project Admin</div>
-          <h1>Казна BullRun</h1>
-          <p>Сколько сайт заработал, что зарезервировано, и сколько можно запросить на вывод.</p>
+          <h1>Финансы проекта</h1>
+          <p>Обновлено: {formatTime(summary.walletCheckedAt)}</p>
         </div>
         <button className="inline-action" onClick={() => loadTreasury({ refreshing: true })} disabled={state.refreshing}>
           {state.refreshing ? 'Обновляем...' : 'Обновить'}
@@ -154,41 +162,33 @@ export function ProjectTreasuryPage() {
       ) : null}
 
       <div className="grid">
-        <StatCard title="Сайт заработал" value={formatTon(summary.grossRevenueTon)} hint="Shop продажи admin-инвентаря + BullRun fee 1%." tone="ok" />
-        <StatCard title="Можно вывести" value={formatTon(summary.availableToWithdrawTon)} hint="Расчетная сумма после pending выводов." tone={availableTon > 0 ? 'ok' : 'default'} />
-        <StatCard title="Защищено" value={formatTon(summary.protectedLiabilityTon)} hint="Партнеры, резервы админов и network fee." tone="warning" />
-        <StatCard title="Заявки на вывод" value={formatTon(summary.pendingWithdrawalsTon)} hint="Запрошено, но еще не закрыто." />
-      </div>
-
-      <div className="table-card project-treasury__notice">
-        <div className="table-card__title">Правило вывода</div>
-        <p>
-          Не выводим весь баланс кошелька. Сначала вычитаем деньги партнеров, резервы админов,
-          seller liabilities, pending оплаты и комиссии сети. Эта страница уже считает по этому правилу,
-          но автоматическая отправка TON будет отдельным шагом после treasury wallet sender.
-        </p>
-        <span className="pill pill--warning">Статус сверки: {summary.reconciliationStatus || 'estimated'}</span>
+        <StatCard title="На кошельке" value={formatTon(summary.walletBalanceTon)} hint={walletSynced ? 'Реальный TON-баланс.' : 'Баланс недоступен.'} tone={walletSynced ? 'ok' : 'warning'} />
+        <StatCard title="Можно вывести" value={formatTon(summary.availableToWithdrawTon)} hint="Лимит по кошельку и учету." tone={availableTon > 0 ? 'ok' : 'default'} />
+        <StatCard title="В резерве" value={formatTon(summary.protectedLiabilityTon)} hint="Партнеры, возвраты, комиссии." tone="warning" />
+        <StatCard title="Заявки" value={formatTon(summary.pendingWithdrawalsTon)} hint="Ожидают закрытия." />
       </div>
 
       <div className="grid grid--double">
         <div className="table-card">
-          <div className="table-card__title">Bucket'ы денег</div>
+          <div className="table-card__title">Деньги</div>
           <div className="project-treasury__buckets">
-            <div><span>Platform revenue</span><strong>{formatTon(buckets.platformRevenueTon)}</strong></div>
-            <div><span>Shop revenue</span><strong>{formatTon(buckets.shopRevenueTon)}</strong></div>
-            <div><span>BullRun fee 1%</span><strong>{formatTon(buckets.referralFeeTon)}</strong></div>
-            <div><span>Partner liability</span><strong>{formatTon(buckets.partnerLiabilityTon)}</strong></div>
-            <div><span>Admin reserve liability</span><strong>{formatTon(buckets.adminReserveLiabilityTon)}</strong></div>
-            <div><span>Network fee reserve</span><strong>{formatTon(buckets.networkFeeReserveTon)}</strong></div>
-            <div><span>Pending payments</span><strong>{formatTon(buckets.pendingPaymentTon)}</strong></div>
+            <div><span>Доход сайта</span><strong>{formatTon(buckets.platformRevenueTon)}</strong></div>
+            <div><span>Продажи</span><strong>{formatTon(buckets.shopRevenueTon)}</strong></div>
+            <div><span>Комиссия BullRun</span><strong>{formatTon(buckets.referralFeeTon)}</strong></div>
+            <div><span>Партнерам</span><strong>{formatTon(buckets.partnerLiabilityTon)}</strong></div>
+            <div><span>Возвраты</span><strong>{formatTon(buckets.adminReserveLiabilityTon)}</strong></div>
+            <div><span>Комиссии сети</span><strong>{formatTon(buckets.networkFeeReserveTon)}</strong></div>
+            <div><span>Ожидают оплаты</span><strong>{formatTon(buckets.pendingPaymentTon)}</strong></div>
+            <div><span>По учету доступно</span><strong>{formatTon(summary.accountingAvailableTon)}</strong></div>
+            <div><span>По кошельку доступно</span><strong>{formatTon(summary.walletAvailableTon)}</strong></div>
           </div>
           <div className="table-subtext" style={{ marginTop: 12 }}>
-            Admin sellers: {counters.adminOwners || 0} • Paid shop purchases: {counters.paidShopPurchases || 0} • Pending: {counters.pendingShopPurchases || 0}
+            Продавцов: {counters.adminOwners || 0} • Оплачено: {counters.paidShopPurchases || 0} • В ожидании: {counters.pendingShopPurchases || 0}
           </div>
         </div>
 
         <form className="table-card project-treasury__form" onSubmit={requestWithdrawal}>
-          <div className="table-card__title">Запросить вывод</div>
+          <div className="table-card__title">Вывод</div>
           <label className="project-treasury__field">
             <span>TON-кошелек</span>
             <input
@@ -216,7 +216,7 @@ export function ProjectTreasuryPage() {
               className="field"
               value={form.note}
               onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-              placeholder="Куда и зачем выводим"
+              placeholder="Заметка"
               rows={3}
             />
           </label>
@@ -224,8 +224,8 @@ export function ProjectTreasuryPage() {
             <span>Комиссия сети: {formatTon(feeTon)}</span>
             <span>Останется: {formatTon(afterWithdrawalTon)}</span>
           </div>
-          <button className="button button--primary" type="submit" disabled={state.submitting || availableTon <= 0}>
-            {state.submitting ? 'Создаем...' : 'Создать заявку'}
+          <button className="button button--primary" type="submit" disabled={state.submitting || availableTon <= 0 || !walletSynced}>
+            {state.submitting ? 'Создаем...' : 'Запросить вывод'}
           </button>
         </form>
       </div>

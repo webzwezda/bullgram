@@ -24,6 +24,19 @@ function normalizeTonAmount(value) {
     return Number(parsed.toFixed(6));
 }
 
+function roundTon(value) {
+    const parsed = Number(value || 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return Number(parsed.toFixed(6));
+}
+
+function nanoToTon(value) {
+    const nano = typeof value === 'bigint' ? value : BigInt(value || 0);
+    const whole = nano / 1_000_000_000n;
+    const fraction = nano % 1_000_000_000n;
+    return Number(`${whole}.${fraction.toString().padStart(9, '0')}`);
+}
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -113,6 +126,23 @@ export function getTonReserveSenderConfig(enabledFlagName = 'REFERRAL_PAYOUT_SEN
         walletSecretFile: String(process.env.TON_RESERVE_WALLET_SECRET_FILE || DEFAULT_WALLET_SECRET_FILE).trim(),
         estimatedNetworkFeeTon: overrides.estimatedNetworkFeeTon ?? envNumber('REFERRAL_PAYOUT_SENDER_NETWORK_FEE_TON', 0.05, { min: 0 }),
         minWalletBalanceTon: overrides.minWalletBalanceTon ?? envNumber('TON_RESERVE_SENDER_MIN_WALLET_BALANCE_TON', 0.2, { min: 0 })
+    };
+}
+
+export async function getTonReserveWalletSnapshot() {
+    const config = getTonReserveSenderConfig();
+    const { contract, walletAddress } = await openReserveWallet();
+    const balanceNano = await withTonRpcRetry(
+        () => contract.getBalance(),
+        'reading reserve wallet balance'
+    );
+
+    return {
+        walletAddress,
+        balanceTon: roundTon(nanoToTon(balanceNano)),
+        minWalletBalanceTon: config.minWalletBalanceTon,
+        endpoint: config.endpoint,
+        checkedAt: new Date().toISOString()
     };
 }
 

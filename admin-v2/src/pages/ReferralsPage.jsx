@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Copy, ExternalLink, Wallet, QrCode } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -137,13 +138,13 @@ function PayoutChainDetails({ row }) {
   if (!txHash && networkFeeTon === null) return null;
 
   return (
-    <div className="referrals-payout-chain">
+    <div className="mt-2 text-xs text-slate-500 flex flex-col gap-1">
       {networkFeeTon !== null && (
-        <div className="referrals-payout-chain__item">Комиссия сети: {formatTon(networkFeeTon)}</div>
+        <div className="flex items-center gap-1">Комиссия сети: {formatTon(networkFeeTon)}</div>
       )}
       {txHash && (
-        <div className="referrals-payout-chain__item">
-          Tx: <span className="referrals-payout-chain__hash" title={String(txHash)}>{shortTxHash(txHash)}</span>
+        <div className="flex items-center gap-1">
+          Tx: <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 cursor-help" title={String(txHash)}>{shortTxHash(txHash)}</span>
         </div>
       )}
     </div>
@@ -167,25 +168,25 @@ function PayoutTransferBox({ row }) {
   }
 
   return (
-    <div className="referrals-payout-transfer">
-      {qr && <img className="referrals-payout-transfer__qr" src={qr} alt="QR для TON-выплаты" />}
-      <div className="referrals-payout-transfer__body">
-        <div className="referrals-payout-transfer__title">Оплата через кошелек</div>
+    <div className="bg-slate-50 rounded-2xl p-4 flex gap-4 mt-2 border border-slate-200">
+      {qr && <img className="w-24 h-24 rounded-xl border border-slate-200 bg-white p-1" src={qr} alt="QR для TON-выплаты" />}
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="font-bold text-sm text-slate-900">Оплата через кошелек</div>
         {memo && (
-          <div className="referrals-payout-transfer__memo">
+          <div className="text-xs text-slate-600 font-mono bg-white px-2 py-1 rounded-md border border-slate-100">
             Memo: <span>{memo}</span>
           </div>
         )}
-        <div className="referrals-payout-transfer__actions">
+        <div className="flex gap-2 mt-auto">
           {uri && (
-            <a className="referrals-action-btn referrals-action-btn--payout" href={uri}>
+            <a className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 !text-slate-600 hover:bg-slate-200 hover:!text-slate-900 bg-blue-50 !text-blue-600 hover:bg-blue-100 hover:!text-blue-700" href={uri}>
               Открыть
             </a>
           )}
           {memo && (
             <button
               type="button"
-              className="referrals-action-btn"
+              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               onClick={() => copyValue(memo, 'Memo')}
             >
               Memo
@@ -194,7 +195,7 @@ function PayoutTransferBox({ row }) {
           {uri && (
             <button
               type="button"
-              className="referrals-action-btn"
+              className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
               onClick={() => copyValue(uri, 'TON-ссылка')}
             >
               Ссылка
@@ -224,38 +225,38 @@ function RefundTransferBox({ reserve }) {
   }
 
   return (
-    <div className="referrals-payout-transfer referrals-refund-transfer">
-      {qr && <img className="referrals-payout-transfer__qr" src={qr} alt="QR для возврата TON-резерва" />}
-      <div className="referrals-payout-transfer__body">
-        <div className="referrals-payout-transfer__title">Возврат через TON-кошелек</div>
+    <div className="bg-slate-50 rounded-2xl p-4 flex gap-4 mt-2 border border-slate-200">
+      {qr && <img className="w-24 h-24 rounded-xl border border-slate-200 bg-white p-1" src={qr} alt="QR для возврата TON-резерва" />}
+      <div className="flex-1 flex flex-col gap-2">
+        <div className="font-bold text-sm text-slate-900">Возврат через TON-кошелек</div>
         {wallet && (
-          <div className="referrals-payout-transfer__memo">
+          <div className="text-xs text-slate-600 font-mono bg-white px-2 py-1 rounded-md border border-slate-100">
             Кошелек: <span>{wallet}</span>
           </div>
         )}
         {memo && (
-          <div className="referrals-payout-transfer__memo">
+          <div className="text-xs text-slate-600 font-mono bg-white px-2 py-1 rounded-md border border-slate-100">
             Memo: <span>{memo}</span>
           </div>
         )}
-        <div className="referrals-payout-transfer__actions">
+        <div className="flex gap-2 mt-auto">
           {uri && (
-            <a className="referrals-action-btn referrals-action-btn--payout" href={uri}>
+            <a className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 !text-slate-600 hover:bg-slate-200 hover:!text-slate-900 bg-blue-50 !text-blue-600 hover:bg-blue-100 hover:!text-blue-700" href={uri}>
               Открыть
             </a>
           )}
           {wallet && (
-            <button type="button" className="referrals-action-btn" onClick={() => copyValue(wallet, 'Кошелек')}>
+            <button type="button" className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => copyValue(wallet, 'Кошелек')}>
               Кошелек
             </button>
           )}
           {memo && (
-            <button type="button" className="referrals-action-btn" onClick={() => copyValue(memo, 'Memo')}>
+            <button type="button" className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => copyValue(memo, 'Memo')}>
               Memo
             </button>
           )}
           {uri && (
-            <button type="button" className="referrals-action-btn" onClick={() => copyValue(uri, 'TON-ссылка')}>
+            <button type="button" className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg font-bold text-xs transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900" onClick={() => copyValue(uri, 'TON-ссылка')}>
               Ссылка
             </button>
           )}
@@ -304,61 +305,72 @@ function DepositTransferBox({ reserve }) {
   }
 
   return (
-    <div className="referrals-deposit-pay">
-      <div className="referrals-deposit-pay__content">
-        <div className="referrals-payout-transfer__title">Пополнение через кошелек</div>
-        <div className="referrals-deposit-pay__hint">
-          Переведи ровно с этим memo. QR ставит сумму {suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}.
+    <div className="flex flex-col md:flex-row gap-6 p-6 sm:p-8 rounded-[2rem] bg-slate-50/50 border border-slate-200 mt-8 mb-4">
+      <div className="flex-1 flex flex-col">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner">
+            <Wallet className="w-5 h-5" strokeWidth={2.5} />
+          </div>
+          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Пополнение через кошелек</h3>
         </div>
-        <div className="referrals-payout-transfer__actions">
-          {hasTrustLink ? (
-            <a className="referrals-action-btn referrals-action-btn--payout" href={reserve.depositTrustWalletUri}>
-              Trust Wallet
+        
+        <p className="text-base text-slate-600 font-medium mb-8 leading-relaxed max-w-md">
+          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}</strong>.
+        </p>
+
+        <div className="flex flex-wrap gap-3 mt-auto">
+          {hasTrustLink && (
+            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 !text-white text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all" href={reserve.depositTrustWalletUri}>
+              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> Trust Wallet
             </a>
-          ) : null}
-          {hasTonLink ? (
-            <a className="referrals-action-btn" href={reserve.depositTonUri}>
-              TON
+          )}
+          {hasTonLink && (
+            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 !text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 transition-all" href={reserve.depositTonUri}>
+              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> TON
             </a>
-          ) : null}
-          {wallet ? (
-            <button type="button" className="referrals-action-btn" onClick={() => copyValue(wallet, 'Кошелек')}>
-              Кошелек
+          )}
+          {wallet && (
+            <button type="button" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all" onClick={() => copyValue(wallet, 'Кошелек')}>
+              <Copy className="w-4 h-4 text-slate-400" /> Кошелек
             </button>
-          ) : null}
-          {memo ? (
-            <button type="button" className="referrals-action-btn" onClick={() => copyValue(memo, 'Memo')}>
-              Memo
+          )}
+          {memo && (
+            <button type="button" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all" onClick={() => copyValue(memo, 'Memo')}>
+              <Copy className="w-4 h-4 text-slate-400" /> Memo
             </button>
-          ) : null}
+          )}
         </div>
       </div>
-      {activeQrSrc ? (
-        <div className="referrals-deposit-pay__qrbox">
-          {hasTrustQr && hasTonQr ? (
-            <div className="referrals-deposit-pay__tabs">
+
+      {activeQrSrc && (
+        <div className="shrink-0 flex flex-col items-center bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full md:w-[260px]">
+          {hasTrustQr && hasTonQr && (
+            <div className="flex p-1 bg-slate-100 rounded-xl mb-5 w-full">
               <button
                 type="button"
-                className={`referrals-deposit-pay__tab ${checkoutView === 'trust' ? 'referrals-deposit-pay__tab--active' : ''}`}
+                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${checkoutView === 'trust' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 onClick={() => setCheckoutView('trust')}
               >
-                Trust Wallet
+                Trust
               </button>
               <button
                 type="button"
-                className={`referrals-deposit-pay__tab ${checkoutView === 'ton' ? 'referrals-deposit-pay__tab--active' : ''}`}
+                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${checkoutView === 'ton' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 onClick={() => setCheckoutView('ton')}
               >
                 TON
               </button>
             </div>
-          ) : null}
-          <div className="referrals-deposit-pay__qr-label">
+          )}
+          <div className="flex items-center justify-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
+            <QrCode className="w-3.5 h-3.5" />
             {checkoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
           </div>
-          <img className="referrals-deposit-pay__qr" src={activeQrSrc} alt={activeQrLabel} />
+          <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50">
+            <img className="w-full h-full object-contain mix-blend-multiply" src={activeQrSrc} alt={activeQrLabel} />
+          </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -961,138 +973,139 @@ export function ReferralsPage() {
 
   if (state.error) {
     return (
-      <section className="page">
-        <div className="page__header">
+      <section className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         </div>
-        <div className="error-card">{state.error}</div>
+        <div className="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-medium">{state.error}</div>
       </section>
     );
   }
 
   return (
-    <section className="page space-y-5">
-      <section className="referrals-control-window">
-        <div className="referrals-window__header">
-          <div className="referrals-window__title">Партнерская программа</div>
-          <div className="referrals-window__subtitle">Резерв, настройки, управление выплатами</div>
+    <div className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-10 space-y-10">
+      
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Партнерская программа</h1>
+          <p className="text-lg text-slate-500 font-medium">Резерв, настройки и управление выплатами</p>
         </div>
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-600">
+            Обновлено: {state.updatedAt ? formatWhen(state.updatedAt) : '...'}
+          </div>
+        </div>
+      </div>
 
-        <div className="referrals-window__sections">
-          <div className="referrals-section">
-            <div className="referrals-section__header">
-              <div className="referrals-section__title">
-                <span className="referrals-section__number">1</span>
-                Резервный фонд
+      {/* Main Content Card */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12">
+        
+        <div className="space-y-12">
+          
+          {/* STEP 1: RESERVE FUND */}
+          <section className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-blue-600/20">
+                  1
+                </div>
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Резервный фонд</h2>
+                  <p className="text-slate-500 font-medium text-sm">TON-резерв для автоматических и защищенных выплат</p>
+                </div>
               </div>
-              <div className="referrals-section__hint">TON-резерв для защищенных выплат</div>
+
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-sm border ${
+                state.reserve?.canEnableReferrals 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                  : 'bg-amber-50 text-amber-700 border-amber-100'
+              }`}>
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                  state.reserve?.canEnableReferrals ? 'bg-emerald-500' : 'bg-amber-500'
+                }`} />
+                {state.reserve?.statusLabel || (state.reserve?.canEnableReferrals ? 'Резерв готов' : 'Резерв не готов')}
+              </div>
             </div>
-            <div className="referrals-section__body">
-              <div className="referrals-status-badge">
-                <div className={`referrals-status-dot ${state.reserve?.canEnableReferrals ? 'referrals-status-dot--ok' : 'referrals-status-dot--warning'}`} />
-                <span className="referrals-status-label">
-                  {state.reserve?.statusLabel || (state.reserve?.canEnableReferrals ? 'Резерв готов' : 'Резерв не готов')}
-                </span>
-              </div>
 
-              <div className="referrals-metrics-grid">
-                <div className="referrals-metric">
-                  <div className="referrals-metric__label">Минимум</div>
-                  <div className="referrals-metric__value">{formatTon(state.reserve?.minimumDepositTon || state.economics?.minimumDepositTon || 100)}</div>
-                </div>
-                <div className="referrals-metric">
-                  <div className="referrals-metric__label">Пополнено</div>
-                  <div className="referrals-metric__value">{formatTon(state.reserve?.fundedReserveTon ?? state.reserve?.totalDepositedTon)}</div>
-                </div>
-                <div className="referrals-metric">
-                  <div className="referrals-metric__label">Доступно</div>
-                  <div className="referrals-metric__value referrals-metric__value--highlight">{formatTon(state.reserve?.availableReserveTon)}</div>
-                </div>
-                <div className="referrals-metric">
-                  <div className="referrals-metric__label">Долг админа</div>
-                  <div className={`referrals-metric__value ${Number(state.reserve?.adminDebtTon || 0) > 0 ? 'referrals-metric__value--danger' : ''}`}>
-                    {formatTon(state.reserve?.adminDebtTon)}
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { label: 'Минимум', value: formatTon(state.reserve?.minimumDepositTon || state.economics?.minimumDepositTon || 100), icon: Lock, color: 'text-slate-400' },
+                { label: 'Пополнено', value: formatTon(state.reserve?.fundedReserveTon ?? state.reserve?.totalDepositedTon), icon: Wallet, color: 'text-blue-500' },
+                { label: 'Доступно', value: formatTon(state.reserve?.availableReserveTon), icon: Activity, color: 'text-emerald-500' },
+                { label: 'Долг админа', value: formatTon(state.reserve?.adminDebtTon), icon: Zap, color: Number(state.reserve?.adminDebtTon || 0) > 0 ? 'text-red-500' : 'text-slate-400' },
+              ].map((item, idx) => (
+                <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 hover:border-blue-100 transition-all group">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-500">{item.label}</span>
+                    <item.icon className={`w-5 h-5 ${item.color} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                  </div>
+                  <div className={`text-3xl font-black tracking-tighter ${item.color.includes('emerald') ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    {item.value}
                   </div>
                 </div>
-              </div>
+              ))}
+            </div>
 
-              <div className="referrals-deposit-grid">
-                <div className="referrals-deposit-field">
-                  <div className="referrals-deposit-field__label">Кошелёк для депозита</div>
-                  <div className="referrals-deposit-field__value referrals-deposit-field__value--mono">
-                    {state.reserve?.depositAddress || 'Кошелёк ещё не подключен в env'}
+            {/* Wallet Info */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Кошелёк для депозита</div>
+                  <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
+                    {state.reserve?.depositAddress || 'Кошелёк ещё не подключен'}
                   </div>
                 </div>
-                <div className="referrals-deposit-field">
-                  <div className="referrals-deposit-field__label">Комментарий / memo</div>
-                  <div className="referrals-deposit-field__value referrals-deposit-field__value--mono">
+                <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Комментарий / Memo</div>
+                  <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
                     {state.reserve?.depositMemo || '—'}
                   </div>
                 </div>
-                <div className="referrals-deposit-field">
-                  <div className="referrals-deposit-field__label">Лок депозита</div>
-                  <div className="referrals-deposit-field__value">{formatWhen(state.reserve?.lockedUntil)}</div>
+              </div>
+              <div className="p-5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/20 flex flex-col justify-center space-y-1">
+                <div className="text-[11px] font-black uppercase tracking-widest text-blue-100 opacity-80">Лок депозита</div>
+                <div className="text-2xl font-black text-white tracking-tight">
+                  {state.reserve?.lockedUntil ? formatWhen(state.reserve?.lockedUntil) : 'Без лока'}
                 </div>
               </div>
+            </div>
 
-              <DepositTransferBox reserve={state.reserve} />
+            <DepositTransferBox reserve={state.reserve} />
 
-              <div className="referrals-refund-box">
-                <div>
-                  <div className="referrals-refund-box__title">Возврат депозита</div>
-                  <div className="referrals-refund-box__text">
-                    {state.reserve?.status === 'refund_requested'
-                      ? `Заявка создана на ${formatTon(state.reserve?.refundRequestedTon)}. Вернем на TON-кошелек из app/payments.`
-                      : state.reserve?.canRequestRefund
-                        ? `К возврату: ${formatTon(state.reserve?.refundableTon)}. Комиссия сети: ${formatTon(state.reserve?.refundNetworkFeeTon)}.`
-                        : state.reserve?.lockedUntil
-                          ? `Возврат откроется после лока: ${formatWhen(state.reserve?.lockedUntil)}.`
-                          : 'До 100 TON депозит можно вернуть сразу, если на нем нет обязательств.'}
+            {/* Refund Block */}
+            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 sm:p-8 mt-4 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div className="space-y-1">
+                  <div className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-blue-500" />
+                    Возврат депозита
                   </div>
-                  {state.reserve?.refundLast ? (
-                    <div className="referrals-refund-last">
-                      <div className="referrals-refund-last__row">
-                        Последний возврат: <strong>{refundStatusLabel(state.reserve.refundLast.status)}</strong>
-                        {Number(state.reserve.refundLast.amountTon || 0) > 0 ? ` на ${formatTon(state.reserve.refundLast.amountTon)}` : ''}
-                      </div>
-                      {state.reserve.refundLast.confirmedAt || state.reserve.refundLast.sentAt || state.reserve.refundLast.requestedAt ? (
-                        <div className="referrals-refund-last__row">
-                          {state.reserve.refundLast.confirmedAt
-                            ? `Подтвержден: ${formatWhen(state.reserve.refundLast.confirmedAt)}`
-                            : state.reserve.refundLast.sentAt
-                              ? `Отправлен: ${formatWhen(state.reserve.refundLast.sentAt)}`
-                              : `Запрошен: ${formatWhen(state.reserve.refundLast.requestedAt)}`}
-                        </div>
-                      ) : null}
-                      {state.reserve.refundLast.chainTxHash ? (
-                        <div className="referrals-refund-last__row referrals-refund-last__mono" title={String(state.reserve.refundLast.chainTxHash)}>
-                          Tx: {shortTxHash(state.reserve.refundLast.chainTxHash)}
-                        </div>
-                      ) : null}
-                      {state.reserve.refundLast.error ? (
-                        <div className="referrals-refund-last__row referrals-refund-last__error">
-                          {state.reserve.refundLast.error}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                  <p className="text-sm text-slate-500 font-medium">
+                    {state.reserve?.status === 'refund_requested'
+                      ? `Заявка на ${formatTon(state.reserve?.refundRequestedTon)}. Вернем на TON-кошелек из app/payments.`
+                      : state.reserve?.canRequestRefund
+                        ? `К возврату: ${formatTon(state.reserve?.refundableTon)}. Сеть: ${formatTon(state.reserve?.refundNetworkFeeTon)}.`
+                        : state.reserve?.lockedUntil
+                          ? `Будет доступно: ${formatWhen(state.reserve?.lockedUntil)}.`
+                          : 'До 100 TON можно вернуть сразу при отсутствии обязательств.'}
+                  </p>
                 </div>
-                <div className="referrals-refund-box__actions">
+                
+                <div className="flex items-center gap-3">
                   {state.reserve?.status === 'refund_requested' ? (
                     <>
-                      {state.support?.automaticRefundSender ? (
+                      {state.support?.automaticRefundSender && (
                         <button
-                          className="referrals-action-btn referrals-action-btn--payout"
+                          className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all disabled:opacity-50"
                           onClick={sendReserveRefundAutomatically}
                           disabled={state.refunding}
                         >
                           {state.refunding ? 'Отправляем...' : 'Авто TON'}
                         </button>
-                      ) : null}
-                      {!state.support?.automaticRefundSender ? (
-                        <div className="referrals-refund-box__pending">Ожидает возврата</div>
-                      ) : null}
+                      )}
                       <button
-                        className="referrals-action-btn referrals-action-btn--warning"
+                        className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 rounded-xl font-bold text-sm hover:bg-orange-50 transition-all disabled:opacity-50"
                         onClick={cancelReserveRefund}
                         disabled={state.refunding}
                       >
@@ -1101,7 +1114,7 @@ export function ReferralsPage() {
                     </>
                   ) : (
                     <button
-                      className="referrals-action-btn referrals-action-btn--payout"
+                      className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-30"
                       onClick={requestReserveRefund}
                       disabled={state.refunding || !state.reserve?.canRequestRefund || Number(state.reserve?.refundableTon || 0) <= 0}
                     >
@@ -1110,25 +1123,59 @@ export function ReferralsPage() {
                   )}
                 </div>
               </div>
+
+              {state.reserve?.refundLast && (
+                <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Последний возврат</div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {refundStatusLabel(state.reserve.refundLast.status)}
+                        {Number(state.reserve.refundLast.amountTon || 0) > 0 && ` на ${formatTon(state.reserve.refundLast.amountTon)}`}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                    {state.reserve.refundLast.chainTxHash && (
+                      <div className="font-mono text-[11px] bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-slate-500" title={String(state.reserve.refundLast.chainTxHash)}>
+                        TX: {shortTxHash(state.reserve.refundLast.chainTxHash)}
+                      </div>
+                    )}
+                    {state.reserve.refundLast.error && (
+                      <div className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
+                        {state.reserve.refundLast.error}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          </section>
 
-          <div className="referrals-divider" />
+          <div className="h-px bg-slate-100" />
 
-          <div className="referrals-section">
-            <div className="referrals-section__header">
-              <div className="referrals-section__title">
-                <span className="referrals-section__number">2</span>
-                Настройки партнерки
+          {/* STEP 2: SETTINGS */}
+          <section className="space-y-8">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-indigo-600/20">
+                2
               </div>
-              <div className="referrals-section__hint">Включение и экономика</div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Настройки партнерки</h2>
+                <p className="text-slate-500 font-medium text-sm">Управление экономикой и активация</p>
+              </div>
             </div>
-            <div className="referrals-section__body">
-              <div className="form-grid referrals-settings-grid">
-                <div className="field-group">
-                  <label className="field-label">Статус</label>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Статус программы</label>
                   <select
-                    className="field"
+                    className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                     value={settingsDraft.referral_enabled ? 'yes' : 'no'}
                     onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
                   >
@@ -1137,111 +1184,147 @@ export function ReferralsPage() {
                   </select>
                 </div>
 
-                <div className="field-group">
-                  <label className="field-label">Награда партнера, %</label>
-                  <input
-                    className="field"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={settingsDraft.referral_reward_percent}
-                    onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_reward_percent: Number(event.target.value || 0) }))}
-                  />
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Награда партнера, %</label>
+                  <div className="relative">
+                    <input
+                      className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={settingsDraft.referral_reward_percent}
+                      onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_reward_percent: Number(event.target.value || 0) }))}
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">%</div>
+                  </div>
                 </div>
 
-                <div className="field-group">
-                  <label className="field-label">Скидка клиенту</label>
-                  <div className="field field--readonly">
+                <div className="space-y-2 group">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Скидка клиенту</label>
+                  <div className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 font-bold opacity-60 cursor-not-allowed">
                     {settingsDraft.referral_client_discount_percent || 10}%
                   </div>
                 </div>
 
-                <div className="field-group">
-                  <label className="field-label">BullRun fee</label>
-                  <div className="field field--readonly">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">BullRun Fee</label>
+                  <div className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 font-bold opacity-60 cursor-not-allowed">
                     {state.economics?.bullrunFeePercent || 1}%
                   </div>
                 </div>
               </div>
 
-              <div className="field-group referrals-settings-welcome">
-                <label className="field-label">Приветствие для партнеров</label>
+              <div className="flex flex-col gap-3 col-span-full mt-4">
+                <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Приветствие для партнеров</label>
                 <textarea
-                  className="field textarea-field"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-slate-900 font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all min-h-[140px] resize-y shadow-inner"
                   value={settingsDraft.referral_welcome_text}
                   onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_welcome_text: event.target.value }))}
                   placeholder="Добро пожаловать в партнерскую программу! Ваша реферальная ссылка готова..."
-                  rows={3}
+                  rows={4}
                 />
               </div>
             </div>
-          </div>
+          </section>
 
           {prioritySignals.length > 0 && (
             <>
-              <div className="referrals-divider" />
-              <div className="referrals-section">
-                <div className="referrals-section__header">
-                  <div className="referrals-section__title">
-                    <span className="referrals-section__number">3</span>
-                    Уведомления
+              <div className="h-px bg-slate-100" />
+              <section className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-amber-500/20">
+                    <Activity className="w-6 h-6" />
                   </div>
-                  <div className="referrals-section__hint">Требует внимания</div>
-                </div>
-                <div className="referrals-section__body">
-                  <div className="referrals-signals-grid">
-                    {prioritySignals.slice(0, 3).map((signal) => (
-                      <div
-                        key={`${signal.title}-${signal.tone}`}
-                        className={`referrals-signal-card referrals-signal-card--${signal.tone}`}
-                      >
-                        <div className="referrals-signal-card__title">{signal.title}</div>
-                        <div className="referrals-signal-card__text">{signal.text}</div>
-                      </div>
-                    ))}
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Уведомления</h2>
+                    <p className="text-slate-500 font-medium text-sm">Требует вашего внимания</p>
                   </div>
                 </div>
-              </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {prioritySignals.slice(0, 3).map((signal, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-5 rounded-[1.5rem] border flex flex-col gap-2 transition-all ${
+                        signal.tone === 'danger' 
+                          ? 'bg-red-50 border-red-100 shadow-sm' 
+                          : 'bg-amber-50 border-amber-100 shadow-sm'
+                      }`}
+                    >
+                      <div className={`text-[10px] font-black uppercase tracking-widest ${
+                        signal.tone === 'danger' ? 'text-red-600' : 'text-amber-600'
+                      }`}>{signal.title}</div>
+                      <div className="text-sm font-bold text-slate-800 leading-snug">{signal.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </>
           )}
         </div>
 
-        <div className="referrals-window__footer">
+        {/* Action Bar */}
+        <div className="mt-12 pt-8 border-t border-slate-100 flex justify-end">
           <button
             type="button"
-            className="button button--primary button--large"
+            className="group relative inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-900 px-10 py-4 text-base font-black text-white shadow-xl shadow-slate-900/20 transition-all hover:bg-slate-800 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:translate-y-0"
             onClick={saveSettings}
             disabled={state.savingSettings}
           >
-            {state.savingSettings ? 'Сохраняем...' : 'Сохранить настройки'}
+            {state.savingSettings ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Сохраняем...
+              </span>
+            ) : (
+              <>
+                Сохранить настройки
+                <ArrowRight className="w-5 h-5 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+              </>
+            )}
           </button>
         </div>
-      </section>
+      </div>
 
-      <div className="referrals-data-section">
-        <div className="referrals-table-card referrals-payout-queue">
-          <div className="referrals-table-card__header">
-            <div>
-              <h3 className="referrals-table-card__title">Заявки на выплату</h3>
-              <div className="referrals-table-card__count">Пока отправка TON ручная, этот блок держит очередь под будущий sender.</div>
+      {/* DASHBOARD TABLES SECTION */}
+      <div className="space-y-8">
+        
+        {/* PENDING PAYOUTS */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col border-amber-200/60 shadow-amber-500/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-8 gap-4 border-b border-slate-100 bg-slate-50/30">
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <CreditCard className="w-6 h-6 text-amber-500" />
+                Заявки на выплату
+              </h3>
+              <p className="text-sm text-slate-500 font-medium">Очередь выплат для ручной или автоматической отправки</p>
             </div>
-            <span className="referrals-table-card__count">{state.pendingPayouts.length} активных</span>
+            <div className="flex items-center gap-2">
+              <span className="px-4 py-1.5 bg-amber-100 text-amber-700 rounded-xl text-xs font-black uppercase tracking-wider border border-amber-200">
+                {state.pendingPayouts.length} активных
+              </span>
+            </div>
           </div>
 
           {state.pendingPayouts.length === 0 ? (
-            <p className="referrals-table-card__empty">Активных заявок на выплату нет</p>
+            <div className="p-20 text-center space-y-4 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                <CreditCard className="w-8 h-8" />
+              </div>
+              <p className="text-slate-400 font-bold tracking-tight">Активных заявок на выплату нет</p>
+            </div>
           ) : (
-            <div className="referrals-table-card__body">
-              <table className="referrals-table">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="referrals-table__head">
-                    <th className="referrals-table__th">Партнер</th>
-                    <th className="referrals-table__th">Кошелек</th>
-                    <th className="referrals-table__th">Заявка</th>
-                    <th className="referrals-table__th referrals-table__th--right">Действия</th>
+                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Партнер</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Кошелек</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Сумма / Статус</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-50">
                   {state.pendingPayouts.map((row) => {
                     const payoutStatus = row.pending_payout_status || 'requested';
                     const canQueue = payoutStatus === 'requested';
@@ -1254,86 +1337,61 @@ export function ReferralsPage() {
                     const canCancel = ['requested', 'queued'].includes(payoutStatus);
 
                     return (
-                      <tr key={row.pending_payout_id || row.tg_user_id} className="referrals-table__row">
-                        <td className="referrals-table__cell">
-                          <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
-                          <div className="referrals-partner-meta">ID: {row.tg_user_id}</div>
+                      <tr key={row.pending_payout_id || row.tg_user_id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-8 py-6">
+                          <div className="font-black text-slate-900 text-base mb-0.5">{row.display_name || row.username || row.tg_user_id}</div>
+                          <div className="text-xs text-slate-400 font-bold">ID: {row.tg_user_id}</div>
                         </td>
-                        <td className="referrals-table__cell">
-                          <div className="referrals-partner-wallet-value">{row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}</div>
+                        <td className="px-8 py-6">
+                          <div className="font-mono text-[11px] text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 inline-block mb-2 max-w-[200px] truncate" title={row.pending_payout_wallet || row.payout_wallet}>
+                            {row.pending_payout_wallet || row.payout_wallet || 'кошелек не указан'}
+                          </div>
                           <PayoutTransferBox row={row} />
                           <PayoutChainDetails row={row} />
                         </td>
-                        <td className="referrals-table__cell">
-                          <div className="referrals-balance referrals-balance--active">{formatTon(row.pending_payout_ton)}</div>
-                          <div className={`referrals-payout-status referrals-payout-status--${payoutStatusTone(payoutStatus)}`}>
+                        <td className="px-8 py-6">
+                          <div className="text-lg font-black text-blue-600 mb-1">{formatTon(row.pending_payout_ton)}</div>
+                          <div className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border ${
+                            payoutStatusTone(payoutStatus) === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                            payoutStatusTone(payoutStatus) === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
                             {payoutStatusLabel(payoutStatus)}
                           </div>
-                          <div className="referrals-balance-secondary">
-                            {formatWhen(row.pending_payout_requested_at)}
-                          </div>
                         </td>
-                        <td className="referrals-table__cell referrals-table__cell--right">
-                          <div className="referrals-actions">
-                            {canQueue && (
-                              <button
-                                className="referrals-action-btn referrals-action-btn--payout"
-                                onClick={() => updatePayoutRequest(row, 'queued')}
-                                disabled={state.payouting}
-                              >
-                                В очередь
-                              </button>
-                            )}
-                            {canStartSending && (
-                              <button
-                                className="referrals-action-btn referrals-action-btn--payout"
-                                onClick={() => updatePayoutRequest(row, 'sending')}
-                                disabled={state.payouting}
-                              >
-                                Отправляю
-                              </button>
-                            )}
+                        <td className="px-8 py-6 text-right">
+                          <div className="flex justify-end gap-2 group-hover:opacity-100 transition-opacity">
                             {canAutoSend && (
                               <button
-                                className="referrals-action-btn referrals-action-btn--payout"
+                                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700"
                                 onClick={() => sendPayoutAutomatically(row)}
                                 disabled={state.payouting}
                               >
                                 Авто TON
                               </button>
                             )}
-                            {state.support?.automaticPayoutSender && overAutoLimit && ['requested', 'queued'].includes(payoutStatus) && (
-                              <div className="referrals-payout-limit">
-                                Авто до {formatTon(maxAutoPayoutTon)}
-                              </div>
-                            )}
-                            {canMarkSent && (
-                              <button
-                                className="referrals-action-btn referrals-action-btn--payout"
-                                onClick={() => markPayout(row, 'TON')}
-                                disabled={state.payouting}
-                              >
-                                Отправлено
-                              </button>
-                            )}
-                            {canFail && (
-                              <button
-                                className="referrals-action-btn referrals-action-btn--warning"
-                                onClick={() => updatePayoutRequest(row, 'failed')}
-                                disabled={state.payouting}
-                              >
-                                Ошибка
-                              </button>
-                            )}
-                            {canCancel && (
-                              <button
-                                className="referrals-action-btn referrals-action-btn--danger"
-                                onClick={() => updatePayoutRequest(row, 'cancelled')}
-                                disabled={state.payouting}
-                              >
-                                Отклонить
-                              </button>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {canQueue && (
+                                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => updatePayoutRequest(row, 'queued')} title="В очередь">
+                                  <Activity className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canMarkSent && (
+                                <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" onClick={() => markPayout(row, 'TON')} title="Отправлено">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canFail && (
+                                <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" onClick={() => updatePayoutRequest(row, 'failed')} title="Ошибка">
+                                  <Zap className="w-4 h-4" />
+                                </button>
+                              )}
+                              {canCancel && (
+                                <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" onClick={() => updatePayoutRequest(row, 'cancelled')} title="Отклонить">
+                                  <Lock className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1345,19 +1403,27 @@ export function ReferralsPage() {
           )}
         </div>
 
-        <div className="referrals-filters-bar">
-          <input
-            className="field referrals-filters-bar__search"
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Поиск по TG ID, @username или коду"
-          />
-          <div className="referrals-filters-bar__filters">
+        {/* FILTERS BAR */}
+        <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-white rounded-[2rem] border border-slate-200 shadow-sm">
+          <div className="relative flex-1 w-full">
+            <input
+              className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Поиск по TG ID, @username или коду..."
+            />
+            <Activity className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+          </div>
+          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-full md:w-auto">
             {FILTERS.map((item) => (
               <button
                 key={item.id}
-                className={`referrals-filter-btn ${filter === item.id ? 'referrals-filter-btn--active' : ''}`}
+                className={`flex-1 md:flex-none px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                  filter === item.id 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
                 onClick={() => setFilter(item.id)}
               >
                 {item.label}
@@ -1366,105 +1432,87 @@ export function ReferralsPage() {
           </div>
         </div>
 
-        <div className="referrals-tables-grid">
-          <div className="referrals-table-card">
-            <div className="referrals-table-card__header">
-              <h3 className="referrals-table-card__title">Партнеры</h3>
-              <span className="referrals-table-card__count">{filteredPartners.length} показано</span>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {/* PARTNERS TABLE */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <Users className="w-6 h-6 text-blue-500" />
+                Партнеры
+              </h3>
+              <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-black uppercase tracking-wider border border-blue-100">
+                {filteredPartners.length} показано
+              </span>
             </div>
 
             {filteredPartners.length === 0 ? (
-              <p className="referrals-table-card__empty">По фильтру никого нет</p>
+              <div className="p-20 text-center text-slate-400 font-bold">Никого не найдено</div>
             ) : (
-              <div className="referrals-table-card__body">
-                <table className="referrals-table">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="referrals-table__head">
-                      <th className="referrals-table__th">Партнер</th>
-                      <th className="referrals-table__th">Лидов</th>
-                      <th className="referrals-table__th">Баланс</th>
-                      <th className="referrals-table__th referrals-table__th--right">Действия</th>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Партнер</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-center">Лиды</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Баланс</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-50">
                     {filteredPartners.map((row) => {
                       const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
                       return (
-                        <tr key={row.tg_user_id} className="referrals-table__row">
-                          <td className="referrals-table__cell">
-                            <div className="referrals-partner-name">{row.display_name || row.username || row.tg_user_id}</div>
-                            <div className="referrals-partner-meta">ID: {row.tg_user_id} • <span className="referrals-partner-code">{row.referral_code}</span></div>
-                            <div className="referrals-partner-wallet">
-                              Кошелёк: {row.payout_wallet ? <span className="referrals-partner-wallet-value">{row.payout_wallet}</span> : 'не указан'}
+                        <tr key={row.tg_user_id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-8 py-6">
+                            <div className="font-black text-slate-900 text-base mb-0.5">{row.display_name || row.username || row.tg_user_id}</div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-[10px] font-black uppercase text-slate-400 tracking-tight">ID: {row.tg_user_id}</span>
+                              <span className="w-1 h-1 rounded-full bg-slate-200" />
+                              <span className="font-mono text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md font-bold uppercase">{row.referral_code}</span>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              {row.payout_wallet ? (
+                                <div className="text-[10px] font-mono text-slate-400 truncate max-w-[150px]">{row.payout_wallet}</div>
+                              ) : (
+                                <div className="text-[10px] font-bold text-slate-300 italic uppercase">Кошелек не указан</div>
+                              )}
                             </div>
                             {Number(row.pending_payout_ton || 0) > 0 && (
-                              <div className="referrals-partner-pending">
-                                Заявка: {formatTon(row.pending_payout_ton)} • {payoutStatusLabel(row.pending_payout_status)}
+                              <div className="inline-flex px-2 py-0.5 rounded-md bg-orange-50 text-orange-600 border border-orange-100 text-[10px] font-black uppercase mt-2">
+                                Ожидает: {formatTon(row.pending_payout_ton)}
                               </div>
                             )}
-                            {Number(row.pending_payout_ton || 0) <= 0 && row.latest_payout_status && (
-                              <div className={`referrals-payout-status referrals-payout-status--${payoutStatusTone(row.latest_payout_status)}`}>
-                                Последняя выплата: {payoutStatusLabel(row.latest_payout_status)}
-                              </div>
-                            )}
-                            <PayoutChainDetails row={row} />
                           </td>
-                          <td className="referrals-table__cell">
-                            <span className={`referrals-count-badge ${(row.total_referrals || 0) > 0 ? 'referrals-count-badge--positive' : ''}`}>
+                          <td className="px-8 py-6 text-center">
+                            <span className={`inline-flex w-10 h-10 items-center justify-center rounded-2xl font-black text-sm border shadow-sm ${
+                              (row.total_referrals || 0) > 0 
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                            }`}>
                               {row.total_referrals || 0}
                             </span>
                           </td>
-                          <td className="referrals-table__cell">
-                            <div className={`referrals-balance ${hasBalance ? 'referrals-balance--active' : ''}`}>
+                          <td className="px-8 py-6">
+                            <div className={`text-base font-black tracking-tight ${hasBalance ? 'text-slate-900' : 'text-slate-400'}`}>
                               {row.balance_rub || 0} RUB
                             </div>
-                            <div className="referrals-balance-secondary">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
                               {row.balance_ton || 0} TON • {row.balance_usdt || 0} USDT
                             </div>
                           </td>
-                          <td className="referrals-table__cell referrals-table__cell--right">
-                            <div className="referrals-actions">
-                              <button
-                                className="referrals-action-btn referrals-action-btn--message"
-                                onClick={() => sendMessagePrompt(row)}
-                              >
-                                Написать
+                          <td className="px-8 py-6 text-right">
+                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" onClick={() => sendMessagePrompt(row)} title="Написать">
+                                <Bot className="w-4 h-4" />
                               </button>
-                              {Number(row.balance_rub) > 0 && (
-                                <button
-                                  className="referrals-action-btn referrals-action-btn--payout"
-                                  onClick={() => markPayout(row, 'RUB')}
-                                  disabled={state.payouting}
-                                >
-                                  RUB
-                                </button>
-                              )}
-                              {Number(row.balance_ton) > 0 && (
-                                <button
-                                  className="referrals-action-btn referrals-action-btn--payout"
-                                  onClick={() => markPayout(row, 'TON')}
-                                  disabled={state.payouting}
-                                >
-                                  {Number(row.pending_payout_ton || 0) > 0 ? 'Заявка TON' : 'TON'}
-                                </button>
-                              )}
-                              {Number(row.balance_usdt) > 0 && (
-                                <button
-                                  className="referrals-action-btn referrals-action-btn--payout"
-                                  onClick={() => markPayout(row, 'USDT')}
-                                  disabled={state.payouting}
-                                >
-                                  USDT
-                                </button>
-                              )}
-                              <a
-                                className="referrals-action-btn referrals-action-btn--dossier"
-                                href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                Досье
+                              <a className="p-2 !text-slate-400 hover:!text-purple-600 hover:bg-purple-50 rounded-lg transition-all" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                                <Activity className="w-4 h-4" />
                               </a>
+                              {hasBalance && (
+                                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => markPayout(row, 'TON')} title="Выплатить">
+                                  <CreditCard className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1476,115 +1524,48 @@ export function ReferralsPage() {
             )}
           </div>
 
-          <div className="referrals-table-card referrals-table-card--wide">
-            <div className="referrals-table-card__header">
-              <h3 className="referrals-table-card__title">Лиды</h3>
-              <span className="referrals-table-card__count">{filteredLeads.length} показано</span>
-            </div>
-
-            {filteredLeads.length === 0 ? (
-              <p className="referrals-table-card__empty">Лидов по фильтру нет</p>
-            ) : (
-              <div className="referrals-table-card__body">
-                <table className="referrals-table">
-                  <thead>
-                    <tr className="referrals-table__head">
-                      <th className="referrals-table__th">Лид</th>
-                      <th className="referrals-table__th">Партнер</th>
-                      <th className="referrals-table__th">Атрибуция</th>
-                      <th className="referrals-table__th referrals-table__th--right">Условия</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLeads.slice(0, 80).map((lead) => {
-                      const status = leadStatus(lead);
-                      const rewardAmount = lead.reward_ton_amount || lead.reward_amount;
-                      const rewardCurrency = lead.reward_ton_amount ? 'TON' : lead.reward_currency;
-                      return (
-                        <tr key={lead.id} className="referrals-table__row">
-                          <td className="referrals-table__cell">
-                            <div className="referrals-partner-name">{lead.referred_display_name || lead.referred_username || lead.referred_tg_user_id}</div>
-                            <div className="referrals-partner-meta">ID: {lead.referred_tg_user_id}</div>
-                            <a
-                              className="referrals-action-btn referrals-action-btn--dossier referrals-lead-dossier"
-                              href={`/app/dossier?tg=${encodeURIComponent(lead.referred_tg_user_id)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Досье
-                            </a>
-                          </td>
-                          <td className="referrals-table__cell">
-                            <div className="referrals-partner-name">{lead.referrer_display_name || lead.referrer_username || lead.referrer_tg_user_id}</div>
-                            <div className="referrals-partner-meta">
-                              ID: {lead.referrer_tg_user_id} • <span className="referrals-partner-code">{lead.referral_code || '—'}</span>
-                            </div>
-                          </td>
-                          <td className="referrals-table__cell referrals-table__cell--secondary">
-                            <div>Первый вход: {formatWhen(lead.first_seen_at)}</div>
-                            <div>Истекает: {formatWhen(lead.expires_at)}</div>
-                            {lead.converted_at && <div>Оплатил: {formatWhen(lead.converted_at)}</div>}
-                          </td>
-                          <td className="referrals-table__cell referrals-table__cell--right">
-                            <div className={`referrals-lead-status referrals-lead-status--${status.tone}`}>{status.text}</div>
-                            <div className="referrals-balance-secondary">
-                              скидка {lead.client_discount_percent_snapshot ?? state.economics?.clientDiscountPercent ?? 10}% • награда {lead.reward_percent_snapshot ?? state.settings?.referral_reward_percent ?? 0}%
-                            </div>
-                            {rewardAmount ? (
-                              <div className="referrals-event-amount referrals-event-amount--reward">
-                                {rewardAmount} {rewardCurrency || ''}
-                              </div>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="referrals-table-card">
-            <div className="referrals-table-card__header">
-              <h3 className="referrals-table-card__title">События</h3>
-              <span className="referrals-table-card__count">{filteredEvents.length} показано</span>
+          {/* EVENTS TABLE */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <Activity className="w-6 h-6 text-purple-500" />
+                События
+              </h3>
             </div>
 
             {filteredEvents.length === 0 ? (
-              <p className="referrals-table-card__empty">Событий нет</p>
+              <div className="p-20 text-center text-slate-400 font-bold">Событий нет</div>
             ) : (
-              <div className="referrals-table-card__body">
-                <table className="referrals-table">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="referrals-table__head">
-                      <th className="referrals-table__th">Когда</th>
-                      <th className="referrals-table__th">Тип</th>
-                      <th className="referrals-table__th">Партнер</th>
-                      <th className="referrals-table__th referrals-table__th--right">Сумма</th>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Когда</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Тип / Партнер</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Сумма</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-50">
                     {filteredEvents.slice(0, 30).map((event) => {
                       const badge = eventBadge(event);
                       const isReward = event.event_type === 'reward_granted';
                       return (
-                        <tr key={event.id} className="referrals-table__row">
-                          <td className="referrals-table__cell referrals-table__cell--secondary">
-                            {formatWhen(event.created_at)}
+                        <tr key={event.id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-8 py-5">
+                            <div className="text-xs font-bold text-slate-500">{formatWhen(event.created_at)}</div>
                           </td>
-                          <td className="referrals-table__cell">
-                            <span className={`referrals-event-badge ${isReward ? 'referrals-event-badge--reward' : 'referrals-event-badge--payout'}`}>
+                          <td className="px-8 py-5">
+                            <div className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border mb-1 ${
+                              isReward ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'
+                            }`}>
                               {badge.text}
-                            </span>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">ID: {event.referrer_tg_user_id}</div>
                           </td>
-                          <td className="referrals-table__cell referrals-table__cell--secondary">
-                            ID: {event.referrer_tg_user_id}
-                          </td>
-                          <td className="referrals-table__cell referrals-table__cell--right">
-                            <span className={`referrals-event-amount ${isReward ? 'referrals-event-amount--reward' : ''}`}>
+                          <td className="px-8 py-5 text-right">
+                            <div className={`text-base font-black tracking-tight ${isReward ? 'text-emerald-600' : 'text-slate-900'}`}>
                               {event.reward_amount || 0} {event.reward_currency || ''}
-                            </span>
+                            </div>
                             {!isReward && <PayoutChainDetails row={event} />}
                           </td>
                         </tr>
@@ -1595,8 +1576,95 @@ export function ReferralsPage() {
               </div>
             )}
           </div>
+
+          {/* LEADS TABLE (FULL WIDTH) */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col col-span-full">
+            <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <Users className="w-6 h-6 text-emerald-500" />
+                Лиды
+              </h3>
+              <span className="px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-wider border border-emerald-100">
+                {filteredLeads.length} показано
+              </span>
+            </div>
+
+            {filteredLeads.length === 0 ? (
+              <div className="p-20 text-center text-slate-400 font-bold">Лидов не найдено</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Лид</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Партнер</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Активность</th>
+                      <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Статус / Награда</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {filteredLeads.slice(0, 50).map((lead) => {
+                      const status = leadStatus(lead);
+                      const rewardAmount = lead.reward_ton_amount || lead.reward_amount;
+                      const rewardCurrency = lead.reward_ton_amount ? 'TON' : lead.reward_currency;
+                      return (
+                        <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="px-8 py-6">
+                            <div className="font-black text-slate-900 text-base mb-0.5">{lead.referred_display_name || lead.referred_username || lead.referred_tg_user_id}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase text-slate-400 tracking-tight">ID: {lead.referred_tg_user_id}</span>
+                              <a className="p-1 !text-slate-300 hover:!text-purple-600 transition-colors" href={`/app/dossier?tg=${encodeURIComponent(lead.referred_tg_user_id)}`} target="_blank" rel="noreferrer">
+                                <Activity className="w-3.5 h-3.5" />
+                              </a>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="font-bold text-slate-800 text-sm mb-0.5">{lead.referrer_display_name || lead.referrer_username || lead.referrer_tg_user_id}</div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 tracking-tight">
+                              ID: {lead.referrer_tg_user_id} • <span className="text-blue-600 font-bold">{lead.referral_code || '—'}</span>
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="text-[11px] font-bold text-slate-500 mb-1 flex items-center gap-2">
+                              <div className="w-1 h-1 rounded-full bg-slate-300" />
+                              Вход: {formatWhen(lead.first_seen_at)}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-500 flex items-center gap-2">
+                              <div className="w-1 h-1 rounded-full bg-slate-300" />
+                              Истекает: {formatWhen(lead.expires_at)}
+                            </div>
+                            {lead.converted_at && (
+                              <div className="text-[11px] font-black text-emerald-600 mt-1 flex items-center gap-2 uppercase">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Оплата: {formatWhen(lead.converted_at)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-8 py-6 text-right">
+                            <div className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border mb-2 ${
+                              status.tone === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              status.tone === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                              'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}>{status.text}</div>
+                            {rewardAmount ? (
+                              <div className="font-black text-lg text-emerald-600 tracking-tight">
+                                +{rewardAmount} <span className="text-xs uppercase ml-0.5 font-black">{rewardCurrency}</span>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Без начисления</div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
-    </section>
+    </div>
   );
 }

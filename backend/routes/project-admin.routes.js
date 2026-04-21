@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
+import { getTonReserveSenderConfig, getTonReserveWalletSnapshot } from '../services/ton-reserve-sender.service.js';
 
 function requireProjectAdmin(req, res, next) {
     if (req.profile?.role !== 'admin') {
@@ -223,43 +224,67 @@ function summarizeWithdrawals(withdrawals) {
 
 async function buildTreasurySummary(supabase) {
     const adminOwnerIds = await loadAdminOwnerIds(supabase);
-    const [shop, referral, partnerLiability, reserveLiability, withdrawals] = await Promise.all([
+    const [shop, referral, partnerLiability, reserveLiability, withdrawals, walletSnapshotResult] = await Promise.all([
         loadShopRevenue(supabase, adminOwnerIds),
         loadReferralTreasury(supabase),
         loadPartnerLiability(supabase),
         loadReserveLiability(supabase),
-        loadWithdrawals(supabase)
+        loadWithdrawals(supabase),
+        getTonReserveWalletSnapshot().then(
+            (snapshot) => ({ snapshot, error: null }),
+            (error) => ({ snapshot: null, error })
+        )
     ]);
 
     const withdrawalSummary = summarizeWithdrawals(withdrawals);
     const grossRevenueTon = roundTon(shop.paidTon + referral.bullrunFeeTon);
+    const partnerLiabilityTon = roundTon(Math.max(
+        partnerLiability.partnerBalanceTon,
+        partnerLiability.activePayoutTon,
+        referral.partnerObligationTon
+    ));
+    const adminReserveLiabilityTon = roundTon(reserveLiability.availableReserveTon);
+    const networkFeeReserveTon = roundTon(referral.networkFeeTon);
     const protectedLiabilityTon = roundTon(
-        partnerLiability.partnerBalanceTon
-        + partnerLiability.activePayoutTon
-        + reserveLiability.availableReserveTon
-        + reserveLiability.reservedObligationsTon
-        + referral.networkFeeTon
+        partnerLiabilityTon
+        + adminReserveLiabilityTon
+        + networkFeeReserveTon
     );
-    const availableToWithdrawTon = roundTon(Math.max(0, grossRevenueTon - withdrawalSummary.pendingTon - withdrawalSummary.sentTon));
+    const accountingAvailableTon = roundTon(Math.max(0, grossRevenueTon - withdrawalSummary.pendingTon - withdrawalSummary.sentTon));
+    const walletSnapshot = walletSnapshotResult.snapshot;
+    const walletStatus = walletSnapshot ? 'synced' : 'unavailable';
+    const walletBalanceTon = roundTon(walletSnapshot?.balanceTon || 0);
+    const safetyBufferTon = roundTon(walletSnapshot?.minWalletBalanceTon ?? getTonReserveSenderConfig().minWalletBalanceTon);
+    const walletAvailableTon = walletSnapshot
+        ? roundTon(Math.max(0, walletBalanceTon - protectedLiabilityTon - withdrawalSummary.pendingTon - safetyBufferTon))
+        : 0;
+    const availableToWithdrawTon = roundTon(Math.min(accountingAvailableTon, walletAvailableTon));
 
     return {
         summary: {
             grossRevenueTon,
             availableToWithdrawTon,
+            accountingAvailableTon,
+            walletAvailableTon,
+            walletBalanceTon,
+            walletAddress: walletSnapshot?.walletAddress || null,
+            walletCheckedAt: walletSnapshot?.checkedAt || null,
+            walletStatus,
+            walletError: walletSnapshotResult.error ? (walletSnapshotResult.error.message || 'wallet_unavailable') : null,
+            safetyBufferTon,
             protectedLiabilityTon,
             pendingWithdrawalsTon: roundTon(withdrawalSummary.pendingTon),
             sentWithdrawalsTon: roundTon(withdrawalSummary.sentTon),
             failedWithdrawalsCount: withdrawalSummary.failedCount,
-            reconciliationStatus: 'estimated',
-            note: 'MVP считает доступную сумму по внутренним таблицам. До отдельного treasury-ledger это расчетная сводка, а не банковская выписка.'
+            reconciliationStatus: walletSnapshot ? 'synced' : 'wallet_unavailable'
         },
         buckets: {
             platformRevenueTon: grossRevenueTon,
             shopRevenueTon: shop.paidTon,
             referralFeeTon: referral.bullrunFeeTon,
-            partnerLiabilityTon: roundTon(partnerLiability.partnerBalanceTon + partnerLiability.activePayoutTon),
-            adminReserveLiabilityTon: roundTon(reserveLiability.availableReserveTon + reserveLiability.reservedObligationsTon),
-            networkFeeReserveTon: referral.networkFeeTon,
+            partnerLiabilityTon,
+            adminReserveLiabilityTon,
+            networkFeeReserveTon,
             pendingPaymentTon: shop.pendingTon
         },
         counters: {
