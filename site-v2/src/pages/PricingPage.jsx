@@ -1,237 +1,132 @@
-import { useMemo } from 'react';
+import { CheckCircle2, XCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { SALES_LINKS } from '../components/MarketingPrimitives.jsx';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
-
-const PLANS = [
-  {
-    id: 'trial',
-    eyebrow: 'Старт',
-    title: 'Trial',
-    text: 'Подходит, чтобы вставить токен, подключить своего бота и проверить первый рабочий сценарий на своем канале.',
-    bullets: [
-      'Быстрый старт без тяжелого внедрения',
-      'Первый платежный сценарий',
-      'Проверка доступа и входа в канал'
-    ],
-    cta: { label: 'Начать Trial', href: SALES_LINKS.trial }
-  },
-  {
-    id: 'normal',
-    eyebrow: 'Основной пакет',
-    title: 'Normal',
-    text: 'Подходит, когда канал уже живет: нужно вести оплаты, доступ, продления, клиентов и заказы без ручного хаоса.',
-    bullets: [
-      'Рабочий контур для платного канала',
-      'Клиенты, продления и отчеты',
-      'Режим для постоянной работы, а не теста'
-    ],
-    cta: { label: 'Открыть Normal', href: SALES_LINKS.ops },
-    highlight: true
-  }
-];
-
-const NEXT_STEP = {
-  title: 'Seller и остальные сложные сценарии',
-  text: 'Это уже следующий слой после рабочего канала. Сначала запускается понятный поток оплаты и доступа, а потом уже подключаются более широкие контуры.'
-};
 
 export function PricingPage() {
   const { user, profilePlan } = useAuth();
 
-  const footerCta = useMemo(() => {
-    if (user && profilePlan === 'trial') {
-      return {
-        title: 'Trial уже идет. Следующий шаг — перевести канал в рабочий режим.',
-        text: 'Если первый сценарий уже собран, не зависай на тестовом входе. Переходи на Normal и работай с оплатой, доступом и клиентами без ограничений.',
-        primary: { label: 'Открыть Normal', href: SALES_LINKS.ops },
-        secondary: { label: 'Открыть кабинет', href: '/app/' }
-      };
-    }
-
-    if (user && profilePlan === 'normal') {
-      return {
-        title: 'Основной пакет уже должен работать внутри кабинета.',
-        text: 'Если канал уже на Normal, дальше вопрос не в тарифах, а в том, чтобы вести клиентов, доступы и заказы в одном месте.',
-        primary: { label: 'Открыть кабинет', href: '/app/' },
-        secondary: { label: 'Открыть Shop', href: '/shop' }
-      };
-    }
-
-    return {
-      title: 'Начни с простого пакета и не покупай вслепую.',
-      text: 'Сначала можно зайти через Trial. Если быстро упираешься в ограничения, следующий шаг уже Normal.',
-      primary: { label: 'Начать Trial', href: SALES_LINKS.trial },
-      secondary: { label: 'Открыть Shop', href: '/shop' }
-    };
-  }, [profilePlan, user]);
-
   return (
-    <section className="pricing-v2">
-      <style>{`
-        .pricing-v2 {
-          display: grid;
-          gap: 24px;
-        }
-        .pricing-v2__hero,
-        .pricing-v2__next,
-        .pricing-v2__cta {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 24px;
-          box-shadow: var(--shadow);
-        }
-        .pricing-v2__hero,
-        .pricing-v2__next,
-        .pricing-v2__cta {
-          padding: 28px;
-        }
-        .pricing-v2__eyebrow,
-        .pricing-v2__card-eyebrow,
-        .pricing-v2__cta-eyebrow {
-          font-size: 12px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--accent);
-          font-weight: 800;
-        }
-        .pricing-v2__hero {
-          display: grid;
-          gap: 14px;
-          background:
-            radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 28%),
-            linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 253, 248, 0.98));
-        }
-        .pricing-v2__hero h1,
-        .pricing-v2__next h2,
-        .pricing-v2__cta-copy h2 {
-          margin: 0;
-          font-size: clamp(32px, 4vw, 48px);
-          line-height: 1.04;
-        }
-        .pricing-v2__hero p,
-        .pricing-v2__next p,
-        .pricing-v2__card p,
-        .pricing-v2__cta-copy p {
-          margin: 0;
-          color: var(--muted);
-          line-height: 1.8;
-        }
-        .pricing-v2__grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
-        }
-        .pricing-v2__card {
-          display: grid;
-          gap: 14px;
-          padding: 24px;
-          border-radius: 24px;
-          border: 1px solid var(--border);
-          background: linear-gradient(180deg, #fffdf8, #f8f4ea);
-          box-shadow: var(--shadow);
-        }
-        .pricing-v2__card--highlight {
-          border-color: rgba(15, 118, 110, 0.34);
-          background: linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(255, 253, 248, 0.98));
-        }
-        .pricing-v2__card h2 {
-          margin: 0;
-          font-size: 30px;
-          line-height: 1.05;
-        }
-        .pricing-v2__list {
-          margin: 0;
-          padding: 0;
-          list-style: none;
-          display: grid;
-          gap: 10px;
-        }
-        .pricing-v2__list li {
-          color: var(--muted);
-          line-height: 1.7;
-        }
-        .pricing-v2__actions,
-        .pricing-v2__cta-actions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .pricing-v2__cta {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          align-items: flex-end;
-          background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(255, 253, 248, 0.98));
-        }
-        .pricing-v2__cta-copy {
-          display: grid;
-          gap: 10px;
-          max-width: 760px;
-        }
-        @media (max-width: 1023px) {
-          .pricing-v2__grid {
-            grid-template-columns: 1fr;
-          }
-          .pricing-v2__cta {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-        }
-      `}</style>
-
-      <section className="pricing-v2__hero">
-        <div className="pricing-v2__eyebrow">Тарифы</div>
-        <h1>Снаружи вам нужны только два понятных пакета.</h1>
-        <p>
-          Один пакет, чтобы быстро запуститься и проверить свой канал. Второй, чтобы вести оплату, доступ,
-          продления и клиентов уже как нормальную рабочую систему.
+    <div className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 w-full max-w-7xl mx-auto">
+      <div className="text-center max-w-3xl mx-auto mb-16 space-y-5">
+        <div className="inline-flex items-center rounded-full bg-blue-50 px-3.5 py-1.5 text-xs font-bold text-blue-600 uppercase tracking-widest ring-1 ring-inset ring-blue-500/20">
+          Тарифы
+        </div>
+        <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight text-balance">
+          Платные доступы к Telegram-каналам без ручной рутины
+        </h1>
+        <p className="text-lg md:text-xl text-slate-500 font-medium max-w-2xl mx-auto text-balance">
+          Автоматический доступ после оплаты, база клиентов, продления и исключение — всё в одном месте.
+          Начни с Trial или сразу перейди на Normal.
         </p>
-      </section>
+      </div>
 
-      <section className="pricing-v2__grid">
-        {PLANS.map((plan) => (
-          <article key={plan.id} className={`pricing-v2__card${plan.highlight ? ' pricing-v2__card--highlight' : ''}`}>
-            <div className="pricing-v2__card-eyebrow">{plan.eyebrow}</div>
-            <h2>{plan.title}</h2>
-            <p>{plan.text}</p>
-            <ul className="pricing-v2__list">
-              {plan.bullets.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
-              ))}
-            </ul>
-            <div className="pricing-v2__actions">
-              <a className="site-button site-button--primary" href={plan.cta.href}>
-                {plan.cta.label}
-              </a>
-              <a className="site-button" href="/shop">
-                Открыть Shop
-              </a>
+      <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
+        
+        {/* Trial Plan */}
+        <div className="relative flex flex-col p-8 sm:p-10 rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="mb-6">
+            <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Trial</h2>
+            <p className="text-slate-500 font-medium">Попробуй платный доступ к своему каналу</p>
+          </div>
+          
+          <div className="mb-8">
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-extrabold text-slate-900 tracking-tight">Бесплатно</span>
             </div>
-          </article>
-        ))}
-      </section>
+            <p className="text-slate-500 mt-2 font-medium">на 14 дней</p>
+          </div>
 
-      <section className="pricing-v2__next">
-        <div className="pricing-v2__eyebrow">Следующий слой</div>
-        <h2>{NEXT_STEP.title}</h2>
-        <p>{NEXT_STEP.text}</p>
-      </section>
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-5 mb-8">
+            <div className="flex items-center gap-2.5 mb-3">
+              <AlertCircle className="w-5 h-5 text-amber-600" strokeWidth={2.5} />
+              <h4 className="text-sm font-bold text-amber-800 uppercase tracking-widest">Ограничения Trial</h4>
+            </div>
+            <ul className="space-y-2 text-sm text-amber-700/90 font-medium">
+              <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span>Ограничение на 50 активных подписчиков</li>
+              <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span>Базовые функции для старта</li>
+              <li className="flex gap-2"><span className="text-amber-500 font-bold">•</span>Нет CRM и продлений</li>
+            </ul>
+          </div>
 
-      <section className="pricing-v2__cta">
-        <div className="pricing-v2__cta-copy">
-          <div className="pricing-v2__cta-eyebrow">Следующий шаг</div>
-          <h2>{footerCta.title}</h2>
-          <p>{footerCta.text}</p>
-        </div>
-        <div className="pricing-v2__cta-actions">
-          <a className="site-button site-button--primary" href={footerCta.primary.href}>
-            {footerCta.primary.label}
+          <ul className="space-y-4 mb-10 flex-1">
+            {[
+              { text: 'До 50 подписчиков', included: true },
+              { text: 'Оплата через бота', included: true },
+              { text: 'Автоматический доступ после оплаты', included: true },
+              { text: 'Базовая аналитика', included: true },
+              { text: 'Больше 50 подписчиков', included: false },
+              { text: 'CRM и база клиентов', included: false },
+              { text: 'Продления и напоминания', included: false },
+              { text: 'Shop для продажи', included: false }
+            ].map((feature, idx) => (
+              <li key={idx} className={`flex items-start gap-3 ${feature.included ? 'text-slate-700 font-semibold' : 'text-slate-400 font-medium'}`}>
+                {feature.included ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" strokeWidth={2.5} />
+                ) : (
+                  <XCircle className="w-5 h-5 text-slate-300 shrink-0" strokeWidth={2.5} />
+                )}
+                <span className={feature.included ? '' : 'line-through decoration-slate-300'}>{feature.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <a
+            href={SALES_LINKS.trial}
+            className="group relative inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-6 py-4 text-base font-bold text-slate-700 ring-1 ring-inset ring-slate-200 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900 hover:ring-slate-300"
+          >
+            Начать бесплатно
+            <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" strokeWidth={2.5} />
           </a>
-          <a className="site-button" href={footerCta.secondary.href}>
-            {footerCta.secondary.label}
+        </div>
+
+        {/* Normal Plan */}
+        <div className="relative flex flex-col p-8 sm:p-10 rounded-3xl bg-white border-2 border-blue-500 shadow-xl shadow-blue-900/5">
+          <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+            <span className="inline-flex items-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-md uppercase tracking-widest">
+              Популярный
+            </span>
+          </div>
+
+          <div className="mb-6">
+            <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Normal</h2>
+            <p className="text-slate-500 font-medium">Полноценный бизнес на платных доступах</p>
+          </div>
+          
+          <div className="mb-8">
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-extrabold text-slate-900 tracking-tight">от 2 900 ₽</span>
+            </div>
+            <p className="text-slate-500 mt-2 font-medium">в месяц</p>
+          </div>
+
+          <ul className="space-y-4 mb-10 flex-1">
+            {[
+              { text: 'Безлимитные подписчики', included: true },
+              { text: 'Оплата через бота', included: true },
+              { text: 'Автоматический доступ после оплаты', included: true },
+              { text: 'CRM и база клиентов', included: true },
+              { text: 'Продления и исключение', included: true },
+              { text: 'Напоминания об оплате', included: true },
+              { text: 'Shop для продажи', included: true },
+              { text: 'Аналитика и отчеты', included: true }
+            ].map((feature, idx) => (
+              <li key={idx} className="flex items-start gap-3 text-slate-700 font-semibold">
+                <CheckCircle2 className="w-5 h-5 text-blue-500 shrink-0" strokeWidth={2.5} />
+                <span>{feature.text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <a
+            href={SALES_LINKS.ops}
+            className="group relative inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-lg shadow-blue-500/30 transition-all duration-200 hover:bg-blue-700 hover:shadow-blue-600/40"
+          >
+            Выбрать Normal
+            <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" strokeWidth={2.5} />
           </a>
         </div>
-      </section>
-    </section>
+
+      </div>
+    </div>
   );
 }

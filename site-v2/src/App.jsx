@@ -1,17 +1,21 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { HomePage } from './pages/HomePage.jsx';
+import { LayoutDashboard, CreditCard, ShoppingBag, AlertCircle, ArrowRight } from 'lucide-react';
+import { TestPage } from './pages/TestPage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
 import { SALES_LINKS } from './components/MarketingPrimitives.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
+import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
+import { UserProfileCard } from './ui/UserProfileCard.jsx';
+import { LoginCard } from './ui/LoginCard.jsx';
 
 const navSections = [
   {
     title: 'BullRun',
     items: [
-      { to: '/', label: 'Главная' },
-      { to: '/pricing', label: 'Тарифы' },
-      { to: '/shop', label: 'Shop' }
+      { to: '/', label: 'Главная', icon: LayoutDashboard },
+      { to: '/pricing', label: 'Тарифы', icon: CreditCard },
+      { to: '/shop', label: 'Shop', icon: ShoppingBag }
     ]
   }
 ];
@@ -19,325 +23,186 @@ const navSections = [
 export function App() {
   const location = useLocation();
   const isHomeRoute = location.pathname === '/';
-  const { user, login, logout, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
-  const sellerIsAssetMarketplace = profileRole === 'admin';
+  const isPricingRoute = location.pathname === '/pricing';
+  const { user, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
+
   const checkoutSignal = (() => {
     if (!user || !checkoutPulse) return null;
-
     if (checkoutPulse.failedCount > 0) {
       return {
         eyebrow: 'Handoff сломан',
         title: 'Оплата уже есть, но передача прав где-то споткнулась',
-        text: 'Не начинай новые сделки вслепую. Сначала добей проблемный handoff в Shop, потом возвращайся к следующему офферу.',
+        text: 'Не начинай новые сделки вслепую. Сначала добей проблемный handoff в Shop.',
         href: '/shop',
-        label: 'Открыть мои покупки'
+        label: 'Открыть покупки'
       };
     }
-
     if (checkoutPulse.awaitingReceiptCount > 0) {
       return {
         eyebrow: 'Ждет чек',
         title: 'Есть P2P-покупка, которая ждет ручной проверки',
-        text: 'Продавец уже должен увидеть этот платеж. Открой покупки и не дублируй оплату.',
+        text: 'Открой покупки и не дублируй оплату.',
         href: '/shop',
-        label: 'Открыть мои покупки'
+        label: 'Открыть покупки'
       };
     }
-
     if (checkoutPulse.pendingCount > 0) {
       return {
         eyebrow: 'Открытый checkout',
         title: 'У тебя уже есть незакрытый счет',
-        text: 'Не плодить новые корзины. Сначала закрой текущий TON/P2P checkout и потом переходи к следующему шагу.',
+        text: 'Закрой текущий TON/P2P checkout перед переходом к следующему шагу.',
         href: '/shop',
         label: 'Вернуться к checkout'
       };
     }
-
     if (profilePlan === 'trial' && checkoutPulse.paidCount > 0) {
       return {
         eyebrow: 'Пора апгрейдиться',
-        title: 'Первый checkout закрыт, Trial уже сделал свою работу',
-        text: 'Теперь логичный следующий шаг — переход на Normal, чтобы открыть рабочий контур без trial-стопоров.',
+        title: 'Trial уже сделал свою работу',
+        text: 'Переходи на Normal, чтобы открыть рабочий контур без trial-стопоров.',
         href: '/shop?offer=normal',
         label: 'Перейти на Normal'
       };
     }
-
     return null;
   })();
+
   const trialUrgencySignal = (() => {
     if (!user || profilePlan !== 'trial' || !trialEndsAt) return null;
-
     const endsAt = new Date(trialEndsAt).getTime();
     const diffMs = endsAt - Date.now();
     if (Number.isNaN(endsAt) || diffMs <= 0 || diffMs > 1000 * 60 * 60 * 72) return null;
 
     const hoursLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
-    const deadlineLabel = new Intl.DateTimeFormat('ru-RU', {
-      dateStyle: 'short',
-      timeStyle: 'short'
-    }).format(new Date(trialEndsAt));
-
     return {
       eyebrow: 'Trial скоро сгорит',
-      title: `До конца trial осталось около ${hoursLeft} ч`,
-      text: `Дедлайн trial: ${deadlineLabel}. Если уже собрал первый контур, не тяни — переходи на Normal и снимай trial-лимиты до того, как входной режим начнет тормозить работу.`,
+      title: `Осталось около ${hoursLeft} ч`,
+      text: 'Переходи на Normal и снимай trial-лимиты до того, как входной режим начнет тормозить работу.',
       href: '/shop?offer=normal',
       label: 'Открыть Normal'
     };
   })();
+
   const sellerSignal = (() => {
     if (!user || profilePlan !== 'normal' || !sellerPulse?.hasAny) return null;
-
     if (sellerPulse.failedCount > 0) {
       return {
-        eyebrow: 'Seller handoff сломан',
-        title: 'Seller checkout уже был, но передача прав споткнулась',
-        text: 'Не открывай новый seller-flow поверх сломанного хвоста. Сначала добей handoff в Shop, потом возвращайся к seller mode.',
+        eyebrow: 'Handoff сломан',
+        title: 'Seller checkout споткнулся',
+        text: 'Добей handoff в Shop, потом возвращайся к seller mode.',
         href: '/shop?offer=seller',
-        label: 'Добить seller checkout'
+        label: 'Добить checkout'
       };
     }
-
     if (sellerPulse.awaitingReceiptCount > 0) {
       return {
-        eyebrow: 'Seller ждет чек',
-        title: 'Есть seller-покупка, которая ждет ручной проверки',
-        text: 'Продавец уже должен увидеть этот seller checkout. Не начинай новый апгрейд, пока этот хвост не закроется.',
+        eyebrow: 'Ждет чек',
+        title: 'Seller-покупка ждет проверки',
+        text: 'Не начинай новый апгрейд, пока этот хвост не закроется.',
         href: '/shop?offer=seller',
-        label: 'Вернуться к seller checkout'
+        label: 'Вернуться к checkout'
       };
     }
-
     if (sellerPulse.pendingCount > 0) {
       return {
-        eyebrow: 'Seller checkout открыт',
-        title: 'Seller mode уже открыт и ждет оплаты',
-        text: 'Сначала закрой текущий seller checkout, потом уже двигайся дальше по каталогу и кабинетам.',
+        eyebrow: 'Checkout открыт',
+        title: 'Seller mode ждет оплаты',
+        text: 'Закрой текущий checkout, потом двигайся дальше.',
         href: '/shop?offer=seller',
-        label: 'Открыть seller checkout'
+        label: 'Открыть checkout'
       };
     }
-
     return null;
   })();
+
   const shellSignal = checkoutSignal || trialUrgencySignal || sellerSignal;
-  const primaryShellAction = (() => {
-    if (shellSignal) {
-      return {
-        href: shellSignal.href,
-        label: shellSignal.label
-      };
-    }
 
-    if (user && profilePlan === 'trial') {
-      return {
-        href: SALES_LINKS.ops,
-        label: 'Перейти на Normal'
-      };
-    }
-
-    return {
-      href: SALES_LINKS.trial,
-      label: 'Начать Trial'
-    };
-  })();
-  const accountShellAction = (() => {
-    if (!user) return null;
-    if (shellSignal) {
-      return {
-        href: '/shop',
-        label: 'Мои покупки'
-      };
-    }
-
-    if (profilePlan === 'normal') {
-      if (sellerPulse?.failedCount || sellerPulse?.awaitingReceiptCount || sellerPulse?.pendingCount) {
-        return {
-          href: '/shop?offer=seller',
-          label: 'Вернуться к seller checkout'
-        };
-      }
-
-      if (sellerPulse?.paidCount) {
-        return {
-          href: '/app/shop',
-          label: sellerIsAssetMarketplace ? 'Открыть seller admin' : 'Открыть P2P seller'
-        };
-      }
-
-      return {
-        href: '/app/',
-        label: 'Открыть кабинет'
-      };
-    }
-
-    return {
-      href: '/shop',
-      label: 'Мои покупки'
-    };
-  })();
-  const packageShellCards = user && packagePulse ? [
-    { id: 'trial', title: 'Trial', href: '/shop?offer=trial', signal: packagePulse.trial },
-    { id: 'normal', title: 'Normal', href: '/shop?offer=normal', signal: packagePulse.normal },
-    { id: 'seller', title: 'Seller', href: '/shop?offer=seller', signal: packagePulse.seller }
-  ] : [];
   const appRoutes = (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/" element={<TestPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/shop" element={<ShopPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 
-  if (isHomeRoute) {
-    return <main className="site-main site-main--home">{appRoutes}</main>;
-  }
-
   return (
-    <div className="site-shell">
-      <aside className="site-sidebar">
-        <div className="site-brand">
-          <div className="site-brand__eyebrow">BullRun</div>
-          <div className="site-brand__title">Платные Telegram-каналы без ручной возни</div>
-          <div className="site-brand__text">
-            Публичный сайт объясняет базовый сценарий монетизации. Админка и широкая операционка остаются внутри, а не
-            бьют человека по голове с первого экрана.
-          </div>
-        </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">
+      <aside className="w-full lg:w-72 bg-white border-b lg:border-r border-slate-200 flex flex-col px-5 py-6 lg:h-screen lg:sticky top-0 shrink-0">
+        
+        {user ? (
+          <UserProfileCard />
+        ) : (
+          <LoginCard />
+        )}
 
-        <nav className="site-nav">
+        <nav className="flex flex-col gap-6 flex-1 overflow-y-auto">
           {navSections.map((section) => (
-            <div key={section.title} className="site-nav__section">
-              <div className="site-nav__section-title">{section.title}</div>
-              <div className="site-nav__section-items">
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={({ isActive }) => `site-nav__item${isActive ? ' site-nav__item--active' : ''}`}
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
+            <div key={section.title} className="flex flex-col gap-2">
+              <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-400 mb-1">
+                {section.title}
+              </div>
+              <div className="flex flex-col gap-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === '/'}
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
+                        ${isActive 
+                          ? 'bg-blue-50 text-blue-700' 
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        }
+                      `}
+                    >
+                      <Icon className="w-5 h-5 flex-shrink-0" />
+                      {item.label}
+                    </NavLink>
+                  );
+                })}
               </div>
             </div>
           ))}
         </nav>
-
-        <div className="site-sidebar__cta">
-          <a className="site-button site-button--primary" href={primaryShellAction.href}>
-            {primaryShellAction.label}
-          </a>
-          <a className="site-button" href="/pricing">
-            Тарифы
-          </a>
-          <a className="site-button" href="/shop">
-            Shop
-          </a>
-          {user ? (
-            <>
-              {accountShellAction ? (
-                <a className="site-button" href={accountShellAction.href}>
-                  {accountShellAction.label}
-                </a>
-              ) : null}
-              <button className="site-button" type="button" onClick={() => logout()}>
-                Выйти
-              </button>
-            </>
-          ) : (
-            <button className="site-button" type="button" onClick={() => login()}>
-              Войти через Google
-            </button>
-          )}
-          <a className="site-button" href="/app/" target="_blank" rel="noreferrer">
-            Открыть admin v2
-          </a>
-        </div>
       </aside>
 
-      <main className="site-main">
-        <header className="site-topbar">
-          <div>
-            <div className="site-topbar__title">BullRun: запуск платного Telegram-канала</div>
-            <div className="site-topbar__text">
-              Сначала продаем понятный результат: оплата, доступ и продление. Широкие контуры BullRun остаются ниже и не
-              мешают первому впечатлению.
-            </div>
-          </div>
-          <div className="site-topbar__actions">
-            <a className="site-button site-button--primary" href={primaryShellAction.href}>
-              {primaryShellAction.label}
-            </a>
-            <a className="site-button" href="/pricing">
-              Тарифы
-            </a>
-            <a className="site-button" href="/shop">
-              Shop
-            </a>
-            {user ? (
-              <>
-                {accountShellAction ? (
-                  <a className="site-button site-button--primary" href={accountShellAction.href}>
-                    {accountShellAction.label}
-                  </a>
-                ) : null}
-                <a className="site-button" href="/app/" target="_blank" rel="noreferrer">
-                  Кабинет
-                </a>
-              </>
-            ) : (
-              <button className="site-button site-button--primary" type="button" onClick={() => login()}>
-                Войти через Google
-              </button>
-            )}
-          </div>
-        </header>
-
-        {shellSignal ? (
-          <section className="site-live-signal">
-            <div>
-              <div className="site-live-signal__eyebrow">{shellSignal.eyebrow}</div>
-              <div className="site-live-signal__title">{shellSignal.title}</div>
-              <div className="site-live-signal__text">{shellSignal.text}</div>
-            </div>
-            <div className="site-live-signal__actions">
-              <a className="site-button site-button--primary" href={shellSignal.href}>
-                {shellSignal.label}
-              </a>
-            </div>
-          </section>
-        ) : null}
-
-        {packageShellCards.length ? (
-          <section className="package-progress-grid" style={{ marginTop: 20 }}>
-            {packageShellCards.map((pkg) => (
-              <a
-                key={pkg.id}
-                href={pkg.href}
-                className={`package-progress-card package-progress-card--${pkg.signal.state}`}
-              >
-                <div className="package-progress-card__topline">
-                  <div className="marketing-card__title">{pkg.title}</div>
-                  <div className="package-badge">{pkg.signal.label}</div>
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
+        {shellSignal && (
+          <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/60 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-amber-100 text-amber-600 shrink-0">
+                <AlertCircle className="w-6 h-6" strokeWidth={2.5} />
+              </div>
+              <div>
+                <div className="text-xs font-extrabold uppercase tracking-widest text-amber-600 mb-1.5">
+                  {shellSignal.eyebrow}
                 </div>
-                <div className="marketing-card__text">
-                  {pkg.id === 'trial'
-                    ? 'Входной слой: первый checkout и первый Telegram-контур.'
-                    : pkg.id === 'normal'
-                      ? 'Основной рабочий контур без trial-стопоров.'
-                      : 'Seller mode для витрины, handoff и продажи активов.'}
-                </div>
-              </a>
-            ))}
-          </section>
-        ) : null}
+                <h3 className="text-xl font-extrabold text-slate-900 mb-2">{shellSignal.title}</h3>
+                <p className="text-slate-600 font-medium leading-relaxed max-w-2xl">{shellSignal.text}</p>
+              </div>
+            </div>
+            <a
+              href={shellSignal.href}
+              className="shrink-0 group relative inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-amber-500/20 transition-all duration-200 hover:bg-amber-600"
+            >
+              {shellSignal.label}
+              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" strokeWidth={2.5} />
+            </a>
+          </div>
+        )}
 
-        {appRoutes}
+        {(isHomeRoute || isPricingRoute) ? (
+          appRoutes
+        ) : (
+          <SiteAuthGate>
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm flex-1">
+              {appRoutes}
+            </div>
+          </SiteAuthGate>
+        )}
       </main>
     </div>
   );
