@@ -1282,7 +1282,7 @@ export function ReferralsPage() {
       </div>
 
       {/* DASHBOARD TABLES SECTION */}
-      <div className="space-y-8">
+      <div className="mt-8 space-y-8">
         
         {/* PENDING PAYOUTS */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col border-amber-200/60 shadow-amber-500/5">
@@ -1427,13 +1427,13 @@ export function ReferralsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="flex flex-col gap-8">
           {/* PARTNERS TABLE */}
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
                 <Users className="w-6 h-6 text-blue-500" />
-                Партнеры
+                Партнеры и баланс
               </h3>
               <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-black uppercase tracking-wider border border-blue-100">
                 {filteredPartners.length} показано
@@ -1520,12 +1520,15 @@ export function ReferralsPage() {
           </div>
 
           {/* EVENTS TABLE */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
+          <div className="order-3 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
                 <Activity className="w-6 h-6 text-purple-500" />
-                События
+                История начислений
               </h3>
+              <span className="px-4 py-1.5 bg-purple-50 text-purple-700 rounded-xl text-xs font-black uppercase tracking-wider border border-purple-100">
+                {filteredEvents.length} записей
+              </span>
             </div>
 
             {filteredEvents.length === 0 ? (
@@ -1573,7 +1576,7 @@ export function ReferralsPage() {
           </div>
 
           {/* LEADS TABLE (FULL WIDTH) */}
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col col-span-full">
+          <div className="order-2 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
                 <Users className="w-6 h-6 text-emerald-500" />
