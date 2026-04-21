@@ -21,6 +21,7 @@ import referralRoutes from './routes/referral.routes.js';
 import shopRoutes from './routes/shop.routes.js';
 import observerRoutes from './routes/observer.routes.js';
 import agentMcpRoutes from './routes/agent-mcp.routes.js';
+import projectAdminRoutes from './routes/project-admin.routes.js';
 
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
@@ -97,6 +98,7 @@ app.use('/api/referrals', referralRoutes(supabase));
 app.use('/api/shop', shopRoutes(supabase));
 app.use('/api/observer', observerRoutes(supabase, getBotById));
 app.use('/api/mcp', agentMcpRoutes(supabase));
+app.use('/api/project-admin', projectAdminRoutes(supabase));
 
 // ==========================================
 // РОУТЫ НАСТРОЕК КАССЫ (Остались локально)

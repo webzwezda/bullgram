@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, UserPlus, FileText, ShoppingBag, Database, Shield,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send, Target,
-  RefreshCcw, AlertTriangle, Eye, LockKeyhole
+  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -31,6 +31,7 @@ const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage.jsx')
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
+const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 export function App() {
   const { profileRole } = useAuth();
   const location = useLocation();
@@ -71,6 +72,7 @@ export function App() {
       items: [
         { to: '/billing', label: 'Касса / webhook', icon: Wallet },
         { to: '/shop-receipts', label: 'Проверка чеков', icon: Receipt },
+        ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
     },
     {
@@ -184,6 +186,7 @@ export function App() {
                 <Route path="/claw" element={<McpSettingsPage />} />
                 <Route path="/plans" element={<PaymentSettingsPage mode="plans" />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />
+                <Route path="/treasury" element={<ProjectTreasuryPage />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<AdminGroupsPage />} />
                 <Route path="/observer" element={<ObserverPage />} />

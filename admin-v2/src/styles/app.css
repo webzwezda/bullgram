@@ -2575,6 +2575,89 @@ a {
   color: #0f172a;
 }
 
+.project-treasury__notice p {
+  margin: 0 0 12px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.project-treasury__buckets {
+  display: grid;
+  gap: 10px;
+}
+
+.project-treasury__buckets > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.project-treasury__buckets > div:last-child {
+  border-bottom: 0;
+}
+
+.project-treasury__buckets span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.project-treasury__buckets strong {
+  color: #0f172a;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.project-treasury__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-treasury__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-treasury__field span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.project-treasury__field .field {
+  min-width: 0;
+  width: 100%;
+  border-radius: 8px;
+}
+
+.project-treasury__withdraw-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.project-treasury__wallet {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
 .referrals-payout-transfer__memo {
   font-size: 11px;
   line-height: 1.35;
