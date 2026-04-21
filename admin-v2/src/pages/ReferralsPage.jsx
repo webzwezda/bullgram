@@ -323,12 +323,12 @@ function DepositTransferBox({ reserve }) {
     return (
       <button
         type="button"
-        className="group flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+        className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left shadow-sm"
         onClick={() => copyValue(value, label)}
       >
         <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 transition-colors group-hover:bg-white group-hover:text-slate-700">
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
           <Copy className="h-3.5 w-3.5" />
           Copy
         </span>
@@ -350,7 +350,7 @@ function DepositTransferBox({ reserve }) {
           Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}</strong>.
         </p>
 
-        <div className="mb-6 grid gap-2">
+        <div className="mb-6 flex w-full flex-col gap-2">
           <DepositCopyRow label="Кошелек" value={wallet} />
           <DepositCopyRow label="Memo" value={memo} />
         </div>
