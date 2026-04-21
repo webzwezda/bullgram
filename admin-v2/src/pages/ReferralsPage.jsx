@@ -1166,7 +1166,7 @@ export function ReferralsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Статус программы</label>
@@ -1210,14 +1210,13 @@ export function ReferralsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 col-span-full mt-4">
+              <div className="flex flex-col gap-3 h-full">
                 <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Приветствие для партнеров</label>
                 <textarea
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-slate-900 font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all min-h-[140px] resize-y shadow-inner"
+                  className="w-full h-full flex-1 px-5 py-4 bg-slate-50 border border-slate-200 rounded-[1.5rem] text-slate-900 font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all min-h-[140px] resize-none shadow-inner"
                   value={settingsDraft.referral_welcome_text}
                   onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_welcome_text: event.target.value }))}
                   placeholder="Добро пожаловать в партнерскую программу! Ваша реферальная ссылка готова..."
-                  rows={4}
                 />
               </div>
             </div>
