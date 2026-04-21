@@ -317,6 +317,25 @@ function DepositTransferBox({ reserve }) {
     }
   }
 
+  function DepositCopyRow({ label, value }) {
+    if (!value) return null;
+
+    return (
+      <button
+        type="button"
+        className="group flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50"
+        onClick={() => copyValue(value, label)}
+      >
+        <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500 transition-colors group-hover:bg-white group-hover:text-slate-700">
+          <Copy className="h-3.5 w-3.5" />
+          Copy
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row gap-6 p-6 sm:p-8 rounded-[2rem] bg-slate-50/50 border border-slate-200 mt-8 mb-4">
       <div className="flex-1 flex flex-col">
@@ -331,6 +350,11 @@ function DepositTransferBox({ reserve }) {
           Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}</strong>.
         </p>
 
+        <div className="mb-6 grid gap-2">
+          <DepositCopyRow label="Кошелек" value={wallet} />
+          <DepositCopyRow label="Memo" value={memo} />
+        </div>
+
         <div className="flex flex-wrap gap-3 mt-auto">
           {hasTrustLink && (
             <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 !text-white text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all" href={reserve.depositTrustWalletUri}>
@@ -341,16 +365,6 @@ function DepositTransferBox({ reserve }) {
             <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 !text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 transition-all" href={reserve.depositTonUri}>
               <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> TON
             </a>
-          )}
-          {wallet && (
-            <button type="button" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all" onClick={() => copyValue(wallet, 'Кошелек')}>
-              <Copy className="w-4 h-4 text-slate-400" /> Кошелек
-            </button>
-          )}
-          {memo && (
-            <button type="button" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900 transition-all" onClick={() => copyValue(memo, 'Memo')}>
-              <Copy className="w-4 h-4 text-slate-400" /> Memo
-            </button>
           )}
         </div>
       </div>
@@ -1046,27 +1060,10 @@ export function ReferralsPage() {
               ))}
             </div>
 
-            {/* Wallet Info */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
-                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Кошелёк для депозита</div>
-                  <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
-                    {state.reserve?.depositAddress || 'Кошелёк ещё не подключен'}
-                  </div>
-                </div>
-                <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
-                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Комментарий / Memo</div>
-                  <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
-                    {state.reserve?.depositMemo || '—'}
-                  </div>
-                </div>
-              </div>
-              <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Лок депозита</div>
-                <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
-                  {state.reserve?.lockedUntil ? formatWhen(state.reserve?.lockedUntil) : 'Без лока'}
-                </div>
+            <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+              <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Лок депозита</div>
+              <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
+                {state.reserve?.lockedUntil ? formatWhen(state.reserve?.lockedUntil) : 'Без лока'}
               </div>
             </div>
 
