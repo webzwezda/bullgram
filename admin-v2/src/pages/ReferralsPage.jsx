@@ -1034,10 +1034,10 @@ export function ReferralsPage() {
                 { label: 'Доступно', value: formatTon(state.reserve?.availableReserveTon), icon: Activity, color: 'text-emerald-500' },
                 { label: 'Долг админа', value: formatTon(state.reserve?.adminDebtTon), icon: Zap, color: Number(state.reserve?.adminDebtTon || 0) > 0 ? 'text-red-500' : 'text-slate-400' },
               ].map((item, idx) => (
-                <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 hover:border-blue-100 transition-all group">
+                <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
                   <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-500">{item.label}</span>
-                    <item.icon className={`w-5 h-5 ${item.color} opacity-70 group-hover:opacity-100 transition-opacity`} />
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                    <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                   </div>
                   <div className={`text-3xl font-black tracking-tighter ${item.color.includes('emerald') ? 'text-emerald-600' : 'text-slate-900'}`}>
                     {item.value}
@@ -1062,9 +1062,9 @@ export function ReferralsPage() {
                   </div>
                 </div>
               </div>
-              <div className="p-5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/20 flex flex-col justify-center space-y-1">
-                <div className="text-[11px] font-black uppercase tracking-widest text-blue-100 opacity-80">Лок депозита</div>
-                <div className="text-2xl font-black text-white tracking-tight">
+              <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Лок депозита</div>
+                <div className="font-mono text-xs break-all bg-slate-50 p-3 rounded-xl border border-slate-100 text-slate-700 leading-relaxed">
                   {state.reserve?.lockedUntil ? formatWhen(state.reserve?.lockedUntil) : 'Без лока'}
                 </div>
               </div>
