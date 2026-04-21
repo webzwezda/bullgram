@@ -986,7 +986,7 @@ export function ReferralsPage() {
 
   if (state.error) {
     return (
-      <section className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+      <section className="page page--flush">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         </div>
         <div className="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-medium">{state.error}</div>
@@ -995,21 +995,7 @@ export function ReferralsPage() {
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-10 space-y-10">
-      
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Партнерская программа</h1>
-          <p className="text-lg text-slate-500 font-medium">Резерв, настройки и управление выплатами</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-600">
-            Обновлено: {state.updatedAt ? formatWhen(state.updatedAt) : '...'}
-          </div>
-        </div>
-      </div>
-
+    <section className="page page--flush">
       {/* Main Content Card */}
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12">
         
@@ -1678,6 +1664,6 @@ export function ReferralsPage() {
 
         </div>
       </div>
-    </div>
+    </section>
   );
 }
