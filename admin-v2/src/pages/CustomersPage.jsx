@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Search, Filter, RefreshCcw, Activity, Users, X, Send, UserSquare2, ChevronRight, Eye, ShoppingCart, Lock, Database, UserX, UserPlus, FileText, AlertCircle, Clock } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -362,137 +363,217 @@ export function CustomersPage() {
   }
 
   return (
-    <section className="page">
-      <div className="page__header">
+    <section className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-10 space-y-10">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <Users className="w-10 h-10 text-blue-600" />
+            Клиенты и Заказы
+          </h1>
+          <p className="text-lg text-slate-500 font-medium">От просмотра тарифа до активного доступа</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-600 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-slate-400" />
+            Обновлено: {state.updatedAt ? formatWhen(state.updatedAt) : '...'}
+          </div>
+        </div>
       </div>
 
-      {state.error ? <div className="error-card">{state.error}</div> : null}
-
-      {handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId ? (
-        <div className="table-card">
-          <div className="table-card__title">Фильтр перехода</div>
-          <div className="toolbar-card__body" style={{ padding: 0 }}>
-            {focusChannelId ? <span className="pill">Канал {focusChannelId}</span> : null}
-            {handoff.abandonedFilter ? <span className="pill">Неоплаты: {ABANDONED_STATUS_LABELS[handoff.abandonedFilter] || handoff.abandonedFilter}</span> : null}
-            {handoff.orderTgUserIds.length > 0 ? <span className="pill">TG ID: {handoff.orderTgUserIds.length}</span> : null}
-            <button
-              className="inline-action"
-              type="button"
-              onClick={() => {
-                setHandoff({ abandonedFilter: '', orderTgUserIds: [] });
-                setSearchParams({ tab: activeTab });
-              }}
-            >
-              Сбросить
-            </button>
-          </div>
+      {state.error ? (
+        <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          {state.error}
         </div>
       ) : null}
 
-      <div className="grid">
-        <StatCard
-          title="Посмотрели тариф, но не создали счет"
-          value={stats.viewed}
-          tone={stats.viewed > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          title="Создали счет, но не оплатили"
-          value={stats.abandoned}
-          tone={stats.abandoned > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          title="Активный доступ"
-          value={stats.activeCustomers}
-        />
-        <StatCard
-          title="Доступ истек"
-          value={stats.expiredCustomers}
-          tone={stats.expiredCustomers > 0 ? 'warning' : 'default'}
-        />
-        <StatCard
-          title="Оплатили, но вход не подтвержден"
-          value={stats.access}
-          tone={stats.access > 0 ? 'warning' : 'default'}
-        />
+      {/* Filter Handoff */}
+      {(handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId) && (
+        <div className="bg-amber-50/50 border border-amber-200 rounded-[2rem] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div>
+            <div className="text-sm font-black uppercase tracking-widest text-amber-600 mb-2 flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              Активный фильтр
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {focusChannelId && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">Канал {focusChannelId}</span>}
+              {handoff.abandonedFilter && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">Неоплаты: {ABANDONED_STATUS_LABELS[handoff.abandonedFilter] || handoff.abandonedFilter}</span>}
+              {handoff.orderTgUserIds.length > 0 && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">TG ID: {handoff.orderTgUserIds.length}</span>}
+            </div>
+          </div>
+          <button
+            className="shrink-0 px-5 py-2.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm hover:bg-amber-100 transition-all flex items-center gap-2"
+            onClick={() => {
+              setHandoff({ abandonedFilter: '', orderTgUserIds: [] });
+              setSearchParams({ tab: activeTab });
+            }}
+          >
+            <X className="w-4 h-4" /> Сбросить фильтр
+          </button>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотрели</div>
+          <div className={`text-4xl font-black tracking-tight ${stats.viewed > 0 ? 'text-amber-500' : 'text-slate-900'}`}>{stats.viewed}</div>
+        </div>
+        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Бросили счет</div>
+          <div className={`text-4xl font-black tracking-tight ${stats.abandoned > 0 ? 'text-orange-500' : 'text-slate-900'}`}>{stats.abandoned}</div>
+        </div>
+        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col lg:col-span-2">
+          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><UserSquare2 className="w-4 h-4" /> Доступ</div>
+          <div className="flex items-end gap-6">
+            <div>
+              <div className="text-4xl font-black tracking-tight text-emerald-500">{stats.activeCustomers}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Активен</div>
+            </div>
+            <div>
+              <div className={`text-4xl font-black tracking-tight ${stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-300'}`}>{stats.expiredCustomers}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Истек</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
+          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Lock className="w-4 h-4" /> Без входа</div>
+          <div className={`text-4xl font-black tracking-tight ${stats.access > 0 ? 'text-purple-500' : 'text-slate-900'}`}>{stats.access}</div>
+        </div>
       </div>
 
-      <div className="toolbar-card">
-        <div className="toolbar-card__title">Рабочий список</div>
-        <div className="toolbar-card__body">
-          <input
-            className="field"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="TG ID, @username, тариф, канал, статус"
-          />
-          <button className="ghost-button" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
-            В рассылку
-          </button>
-          <a className="ghost-button" href="/app/dossier">Досье</a>
+      {/* Workspace Area */}
+      <div className="space-y-6">
+        
+        {/* Toolbar & Filters */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-4 sm:p-6 flex flex-col lg:flex-row gap-6 items-center">
+          <div className="relative flex-1 w-full">
+            <input
+              className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Поиск по TG ID, @username, тарифу, каналу..."
+            />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+          </div>
+          
+          <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+            <button className="flex-1 sm:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold shadow-md hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
+              <Send className="w-4 h-4" /> Рассылка
+            </button>
+            <a className="flex-1 sm:flex-none px-6 py-4 bg-white border border-slate-200 !text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:!text-slate-900 transition-all flex items-center justify-center gap-2" href="/app/dossier">
+              <Database className="w-4 h-4" /> Досье
+            </a>
+          </div>
         </div>
-        <div className="filter-strip">
+
+        {/* Tab Strip */}
+        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto w-full hide-scrollbar">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
-              className={`filter-chip${activeTab === tab.id ? ' filter-chip--active' : ''}`}
+              className={`shrink-0 px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                activeTab === tab.id 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
               onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
             >
               {tab.label}
             </button>
           ))}
         </div>
-      </div>
 
-      <div className="table-card">
-        <div className="table-card__title">{TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}</div>
-        {activeTab === 'viewed' && activeRows.length === 0 ? (
-          <div className="empty-inline">Просмотров тарифов пока нет. Они появятся после включения `customer_funnel_events` в боте.</div>
-        ) : activeRows.length === 0 ? (
-          <div className="empty-inline">Под текущий фильтр ничего не попало.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Клиент</th>
-                <th>Контекст</th>
-                <th>Статус</th>
-                <th>Причина</th>
-                <th>Дальше</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeRows.slice(0, 80).map((row) => (
-                <tr key={`${activeTab}-${row.id}`}>
-                  <td>
-                    <div>{row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `TG ID ${row.tg_user_id}` : '-'}</div>
-                    <div className="table-subtext">{row.source || row.created_at ? formatWhen(row.created_at) : ''}</div>
-                  </td>
-                  <td>
-                    <div>{row.title || row.channel_title || '-'}</div>
-                    <div className="table-subtext">{row.channel_title || ''}</div>
-                  </td>
-                  <td><span className={row.priority >= 90 ? 'pill pill--warning' : 'pill'}>{row.status || '-'}</span></td>
-                  <td>{row.reason || '-'}</td>
-                  <td>
-                    <div className="table-actions">
-                      {row.tg_user_id ? (
-                        <a href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer">Досье</a>
-                      ) : null}
-                      {row.tg_user_id ? (
-                        <button className="inline-action" type="button" onClick={() => openUserbotCenterHandoff(row.tg_user_id)}>
-                          Написать
-                        </button>
-                      ) : null}
-                      <a href={row.href || '/app/customers'} target="_blank" rel="noreferrer">Источник</a>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {/* Data Table */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+              {TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}
+            </h3>
+            <span className="px-4 py-1.5 bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider">
+              {activeRows.length} записей
+            </span>
+          </div>
+
+          {activeTab === 'viewed' && activeRows.length === 0 ? (
+            <div className="p-20 text-center space-y-4 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                <Eye className="w-8 h-8" />
+              </div>
+              <p className="text-slate-400 font-bold tracking-tight">Просмотров тарифов пока нет. Они появятся после включения `customer_funnel_events` в боте.</p>
+            </div>
+          ) : activeRows.length === 0 ? (
+            <div className="p-20 text-center space-y-4 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+                <FileText className="w-8 h-8" />
+              </div>
+              <p className="text-slate-400 font-bold tracking-tight">Под текущий фильтр ничего не попало.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Контекст</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Причина</th>
+                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Дальше</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {activeRows.slice(0, 80).map((row) => (
+                    <tr key={`${activeTab}-${row.id}`} className="hover:bg-slate-50/50 transition-colors group">
+                      <td className="px-8 py-6">
+                        <div className="font-black text-slate-900 text-base mb-0.5">
+                          {row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : '-'}
+                        </div>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
+                          {row.source || row.created_at ? formatWhen(row.created_at) : ''}
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="font-bold text-slate-800 text-sm mb-0.5">{row.title || row.channel_title || '-'}</div>
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{row.channel_title || ''}</div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${
+                          row.priority >= 90 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {row.status || '-'}
+                        </div>
+                      </td>
+                      <td className="px-8 py-6 text-slate-600 font-medium">
+                        {row.reason || '-'}
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {row.tg_user_id && (
+                            <>
+                              <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать (Userbot)">
+                                <Send className="w-4 h-4" />
+                              </button>
+                              <a className="p-2 !text-slate-400 hover:!text-purple-600 hover:bg-purple-50 rounded-lg transition-all" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                                <Database className="w-4 h-4" />
+                              </a>
+                            </>
+                          )}
+                          <a className="p-2 !text-slate-400 hover:!text-slate-900 hover:bg-slate-100 rounded-lg transition-all" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
+                            <ChevronRight className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </div>
     </section>
   );
