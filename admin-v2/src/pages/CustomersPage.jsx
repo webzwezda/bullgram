@@ -366,19 +366,6 @@ export function CustomersPage() {
     <section className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-10 space-y-10">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <Users className="w-10 h-10 text-blue-600" />
-            Клиенты и Заказы
-          </h1>
-          <p className="text-lg text-slate-500 font-medium">От просмотра тарифа до активного доступа</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-2xl shadow-sm text-sm font-bold text-slate-600 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-slate-400" />
-            Обновлено: {state.updatedAt ? formatWhen(state.updatedAt) : '...'}
-          </div>
-        </div>
       </div>
 
       {state.error ? (
