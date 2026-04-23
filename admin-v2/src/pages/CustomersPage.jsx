@@ -363,21 +363,19 @@ export function CustomersPage() {
   }
 
   return (
-    <section className="max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-10 space-y-10">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-      </div>
+    <section className="page page--flush">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12 space-y-10">
+        
+        {state.error ? (
+          <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            {state.error}
+          </div>
+        ) : null}
 
-      {state.error ? (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-2">
-          <AlertCircle className="w-5 h-5" />
-          {state.error}
-        </div>
-      ) : null}
-
-      {/* Filter Handoff */}
-      {(handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId) && (
-        <div className="bg-amber-50/50 border border-amber-200 rounded-[2rem] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        {/* Filter Handoff */}
+        {(handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId) && (
+          <div className="bg-amber-50/50 border border-amber-200 rounded-[2rem] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
           <div>
             <div className="text-sm font-black uppercase tracking-widest text-amber-600 mb-2 flex items-center gap-2">
               <Filter className="w-4 h-4" />
@@ -561,6 +559,7 @@ export function CustomersPage() {
           )}
         </div>
 
+      </div>
       </div>
     </section>
   );
