@@ -361,6 +361,45 @@ export class OfficialBotService {
         }
     }
 
+    async logCustomerFunnelEvent({
+        ownerId,
+        botId = null,
+        tgUserId,
+        tariffId = null,
+        eventType,
+        source = 'official_bot',
+        referralCode = null,
+        sessionKey = null,
+        payload = {}
+    }) {
+        if (!ownerId || !tgUserId || !eventType) return;
+
+        try {
+            await this.supabase
+                .from('customer_funnel_events')
+                .insert({
+                    owner_id: ownerId,
+                    bot_id: botId,
+                    tg_user_id: String(tgUserId),
+                    tariff_id: tariffId,
+                    event_type: eventType,
+                    source,
+                    referral_code: referralCode,
+                    session_key: sessionKey,
+                    payload
+                });
+        } catch (error) {
+            if ((error.message || '').includes('customer_funnel_events')) return;
+            if ((error.message || '').includes('duplicate key')) return;
+            console.error('Ошибка customer_funnel_events:', error.message);
+        }
+    }
+
+    buildCustomerFunnelSessionKey({ botId = null, tgUserId, eventType, tariffId = null }) {
+        const day = new Date().toISOString().slice(0, 10);
+        return [botId || 'bot', tgUserId || 'user', eventType || 'event', tariffId || 'list', day].join(':');
+    }
+
     async createAccessInvite({
         ownerId,
         channelId,
@@ -1707,12 +1746,32 @@ export class OfficialBotService {
             try {
                 const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
                 if (!tariff) return ctx.reply('❌ Тариф не найден.');
+                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
+                await this.logCustomerFunnelEvent({
+                    ownerId: tariff.owner_id,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    tariffId: tariff.id,
+                    eventType: 'tariff_card_opened',
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'tariff_card_opened',
+                        tariffId: tariff.id
+                    }),
+                    payload: {
+                        callback: 'show_tariff',
+                        tariff_title: tariff.title,
+                        currency: tariff.currency,
+                        price: tariff.price
+                    }
+                });
                 const { data: siblingTariffs } = await this.supabase.from('tariffs')
                     .select('*')
                     .eq('owner_id', tariff.owner_id)
                     .eq('is_active', true);
                 const paymentGroup = this.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
-                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
                 const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
                 const paymentLines = this.sortTariffPaymentVariants(paymentGroup.variants)
                     .map((variant) => {
@@ -1795,6 +1854,28 @@ export class OfficialBotService {
                     .eq('memo', memo)
                     .single();
 
+                await this.logCustomerFunnelEvent({
+                    ownerId: tariff.owner_id,
+                    botId,
+                    tgUserId: userId,
+                    tariffId: tariff.id,
+                    eventType: 'invoice_created',
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: userId,
+                        eventType: 'invoice_created',
+                        tariffId: tariff.id
+                    }),
+                    payload: {
+                        invoice_id: createdInvoice?.id || null,
+                        amount: invoiceAmount,
+                        currency: tariff.currency,
+                        original_amount: originalAmount,
+                        referral_discount_percent: referralDiscountPercent
+                    }
+                });
+
                 await this.logPaymentEvent({
                     ownerId: tariff.owner_id,
                     invoiceId: createdInvoice?.id,
@@ -1866,6 +1947,25 @@ export class OfficialBotService {
                 const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
 
                 if (paymentGroup.variants.length > 1) {
+                    await this.logCustomerFunnelEvent({
+                        ownerId: tariff.owner_id,
+                        botId,
+                        tgUserId: ctx.from.id,
+                        tariffId: tariff.id,
+                        eventType: 'tariff_card_opened',
+                        referralCode: referralAttribution?.referral_code || null,
+                        sessionKey: this.buildCustomerFunnelSessionKey({
+                            botId,
+                            tgUserId: ctx.from.id,
+                            eventType: 'tariff_card_opened',
+                            tariffId: tariff.id
+                        }),
+                        payload: {
+                            callback: 'buy',
+                            tariff_title: tariff.title,
+                            variants_count: paymentGroup.variants.length
+                        }
+                    });
                     const keyboard = this.sortTariffPaymentVariants(paymentGroup.variants)
                         .map((variant) => ([{
                             text: `${this.getTariffCurrencyIcon(variant.currency)} ${this.formatTariffPaymentOptions([variant], referralDiscountPercent)}`,
@@ -1881,6 +1981,25 @@ export class OfficialBotService {
                     return;
                 }
 
+                await this.logCustomerFunnelEvent({
+                    ownerId: tariff.owner_id,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    tariffId: tariff.id,
+                    eventType: 'payment_method_selected',
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'payment_method_selected',
+                        tariffId: tariff.id
+                    }),
+                    payload: {
+                        callback: 'buy',
+                        currency: tariff.currency,
+                        tariff_title: tariff.title
+                    }
+                });
                 await createInvoiceForTariff(ctx, tariff);
             } catch (err) { console.error('Ошибка выбора способа оплаты:', err); }
         });
@@ -1892,6 +2011,26 @@ export class OfficialBotService {
             try {
                 const { data: tariff } = await this.supabase.from('tariffs').select('*').eq('id', tariffId).single();
                 if (!tariff) return ctx.reply('❌ Тариф не найден.');
+                const referralAttribution = await this.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
+                await this.logCustomerFunnelEvent({
+                    ownerId: tariff.owner_id,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    tariffId: tariff.id,
+                    eventType: 'payment_method_selected',
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'payment_method_selected',
+                        tariffId: tariff.id
+                    }),
+                    payload: {
+                        callback: 'pay_tariff',
+                        currency: tariff.currency,
+                        tariff_title: tariff.title
+                    }
+                });
                 await createInvoiceForTariff(ctx, tariff);
             } catch (err) { console.error('Ошибка выбранного способа оплаты:', err); }
         });
@@ -2311,6 +2450,23 @@ export class OfficialBotService {
                 const referralAttribution = await this.getActiveReferralAttribution(ownerId, ctx.from.id);
                 const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
 
+                await this.logCustomerFunnelEvent({
+                    ownerId,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    eventType: 'tariff_list_opened',
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'tariff_list_opened'
+                    }),
+                    payload: {
+                        callback: 'buy_tariff',
+                        tariffs_count: tariffGroups.length
+                    }
+                });
+
                 const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
                     const icon = this.getTariffGroupIcon(group);
                     const paymentOptions = this.formatTariffPaymentOptions(group.variants, referralDiscountPercent);
@@ -2407,6 +2563,22 @@ export class OfficialBotService {
                 if (error || !tariffs) return;
 
                 const tariffGroups = this.buildTariffPaymentGroups(tariffs);
+                await this.logCustomerFunnelEvent({
+                    ownerId,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    eventType: 'tariff_list_opened',
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'tariff_list_opened'
+                    }),
+                    payload: {
+                        callback: 'tariffs_page',
+                        page,
+                        tariffs_count: tariffGroups.length
+                    }
+                });
                 await sendPaginatedTariffsMenu(ctx, tariffGroups, ownerId, adminContext, page);
             } catch (error) {
                 console.error('Ошибка пагинации:', error);
@@ -2439,6 +2611,23 @@ export class OfficialBotService {
                     tariff: group.lead,
                     bundleItems: await this.getTariffBundleItems(group.lead, ownerId)
                 })));
+
+                await this.logCustomerFunnelEvent({
+                    ownerId,
+                    botId,
+                    tgUserId: ctx.from.id,
+                    eventType: 'tariff_list_opened',
+                    sessionKey: this.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'tariff_list_opened'
+                    }),
+                    payload: {
+                        callback: 'category',
+                        category,
+                        tariffs_count: categoryTariffs.length
+                    }
+                });
 
                 const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
                     const icon = this.getTariffGroupIcon(group);

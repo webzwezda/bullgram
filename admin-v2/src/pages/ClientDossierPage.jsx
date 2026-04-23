@@ -161,26 +161,11 @@ export function ClientDossierPage() {
     <section className="page">
       <div className="page__header">
         <h1>Досье клиента</h1>
-        <p>
-          Один экран на одного человека. Здесь быстро видно, платил он или нет, в какие группы должен был
-          зайти, где завис доступ и лежит ли он в общих базах.
-        </p>
         <div className="page__meta">
           <span>Последнее обновление: {formatWhen(state.updatedAt)}</span>
           <span>{tgUserId ? `Разбираем TG ID ${tgUserId}` : 'Сначала вбей Telegram ID'}</span>
         </div>
       </div>
-
-      <section className="hero-panel">
-        <div>
-          <span className="eyebrow">Client Dossier / Triage</span>
-          <h2>Один человек, все деньги, доступы и хвосты в одном месте</h2>
-          <p>
-            Это экран для разбора одного конкретного клиента. Здесь за минуту становится ясно, платил он или нет,
-            где завис доступ, в каких базах лежит и куда его пнуть следующим действием без беготни по пяти разделам.
-          </p>
-        </div>
-      </section>
 
       <div className="toolbar-card">
         <div className="toolbar-card__title">Кого разбираем</div>
@@ -204,14 +189,6 @@ export function ClientDossierPage() {
           >
             Открыть
           </button>
-          <a
-            className="ghost-button"
-            href={tgUserId ? `/app/dossier?tg=${encodeURIComponent(tgUserId)}` : '/app/dossier'}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Открыть отдельно
-          </a>
         </div>
       </div>
 
@@ -220,10 +197,10 @@ export function ClientDossierPage() {
       {state.summary ? (
         <>
           <div className="grid">
-            <StatCard title="Заказов" value={state.summary.totalOrders || 0} hint="Все найденные заказы по этому человеку." />
-            <StatCard title="Оплачено" value={state.summary.paidOrders || 0} hint="Сколько счетов реально закрыто." />
-            <StatCard title="Живые подписки" value={state.summary.activeSubscriptions || 0} hint="Сейчас должен быть внутри." />
-            <StatCard title="В общих базах" value={state.summary.baseMemberships || 0} hint="В скольких базах этого человека нашли." />
+            <StatCard title="Заказов" value={state.summary.totalOrders || 0} />
+            <StatCard title="Оплачено" value={state.summary.paidOrders || 0} />
+            <StatCard title="Живые подписки" value={state.summary.activeSubscriptions || 0} />
+            <StatCard title="В общих базах" value={state.summary.baseMemberships || 0} />
           </div>
 
           <div className="grid grid--double">
@@ -260,9 +237,9 @@ export function ClientDossierPage() {
             <div className="toolbar-card">
               <div className="toolbar-card__title">Куда дальше пнуть</div>
               <div className="toolbar-card__body">
-                <a className="ghost-button" href="/app/orders" target="_blank" rel="noreferrer">Заказы</a>
-                <a className="ghost-button" href="/app/access" target="_blank" rel="noreferrer">Доступ</a>
-                <a className="ghost-button" href="/app/crm" target="_blank" rel="noreferrer">CRM</a>
+                <a className="ghost-button" href="/app/customers?tab=orders" target="_blank" rel="noreferrer">Заказы</a>
+                <a className="ghost-button" href="/app/customers?tab=access" target="_blank" rel="noreferrer">Доступ</a>
+                <a className="ghost-button" href="/app/customers?tab=customers" target="_blank" rel="noreferrer">Клиенты</a>
                 <a className="ghost-button" href="/app/broadcast" target="_blank" rel="noreferrer">Рассылки</a>
                 <a className="ghost-button" href="/app/referrals" target="_blank" rel="noreferrer">Рефералка</a>
               </div>

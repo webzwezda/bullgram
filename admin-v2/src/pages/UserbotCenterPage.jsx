@@ -650,9 +650,9 @@ export function UserbotCenterPage() {
           </div>
           <div className="hero-panel__actions">
             <a className="hero-link" href="/app/userbots">Чинить аккаунты</a>
-            <a className="hero-link" href="/app/crm">Открыть CRM</a>
-            <a className="hero-link" href="/app/orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/access">Разобрать доступ</a>
+            <a className="hero-link" href="/app/customers?tab=customers">Открыть клиентов</a>
+            <a className="hero-link" href="/app/customers?tab=orders">Разобрать деньги</a>
+            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
           </div>
         </div>
         <div className="hero-panel__grid">
@@ -867,8 +867,8 @@ export function UserbotCenterPage() {
                     <td>{group.unread_count || 0}</td>
                     <td>
                       {group.linked_channel_id ? (
-                        <a href="/app/crm" target="_blank" rel="noreferrer">
-                          CRM
+                        <a href={`/app/customers?tab=customers&channel=${encodeURIComponent(group.linked_channel_id)}`} target="_blank" rel="noreferrer">
+                          Клиенты
                         </a>
                       ) : (
                         <span className="table-subtext">Сначала завести в систему</span>

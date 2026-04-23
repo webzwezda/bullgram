@@ -1946,7 +1946,7 @@ export function ShopAdminPage() {
                           <a href="/app/userbots" target="_blank" rel="noreferrer">Боты</a>
                         ) : null}
                         {purchaseHasAssetType(purchase, 'customer_base_asset') ? (
-                          <a href="/app/bases" target="_blank" rel="noreferrer">Базы</a>
+                          <a href="/app/customers?tab=bases" target="_blank" rel="noreferrer">Базы</a>
                         ) : null}
                       </div>
                     </td>

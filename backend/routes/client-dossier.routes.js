@@ -43,6 +43,17 @@ export default function clientDossierRoutes(supabase) {
             const channelIds = (channels || []).map(channel => channel.id);
             const channelMap = new Map((channels || []).map(channel => [channel.id, channel]));
 
+            const { data: tariffs, error: tariffsError } = await supabase
+                .from('tariffs')
+                .select('id, title, owner_id, channel_id, is_trial, trial_label')
+                .eq('owner_id', ownerId)
+                .order('created_at', { ascending: false });
+
+            if (tariffsError) throw tariffsError;
+
+            const tariffIds = (tariffs || []).map(tariff => tariff.id);
+            const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
+
             const [subscriptionsResp, invoicesResp, invitesResp, eventsResp, basesResp, membersResp, referralProfileResp, referralAttributionResp, referralEventsAsReferrerResp, referralEventsAsReferredResp] = await Promise.all([
                 channelIds.length > 0
                     ? supabase
@@ -52,12 +63,15 @@ export default function clientDossierRoutes(supabase) {
                         .in('channel_id', channelIds)
                         .order('created_at', { ascending: false })
                     : Promise.resolve({ data: [], error: null }),
-                supabase
-                    .from('invoices')
-                    .select('id, tg_user_id, amount, currency, status, created_at, paid_at, tariffs(id, title, owner_id, channel_id, is_trial, trial_label)')
-                    .eq('tg_user_id', tgUserId)
-                    .order('created_at', { ascending: false })
-                    .limit(100),
+                tariffIds.length > 0
+                    ? supabase
+                        .from('invoices')
+                        .select('id, tg_user_id, tariff_id, amount, currency, status, created_at, paid_at')
+                        .in('tariff_id', tariffIds)
+                        .eq('tg_user_id', tgUserId)
+                        .order('created_at', { ascending: false })
+                        .limit(100)
+                    : Promise.resolve({ data: [], error: null }),
                 supabase
                     .from('access_invites')
                     .select('*')
@@ -128,13 +142,15 @@ export default function clientDossierRoutes(supabase) {
                 tg_chat_id: channelMap.get(subscription.channel_id)?.tg_chat_id || null
             }));
 
-            const invoices = (invoicesResp.data || [])
-                .filter(invoice => invoice.tariffs?.owner_id === ownerId)
-                .map(invoice => ({
+            const invoices = (invoicesResp.data || []).map(invoice => {
+                const tariff = tariffMap.get(invoice.tariff_id) || null;
+                return {
                     ...invoice,
-                    channel_id: invoice.tariffs?.channel_id || null,
-                    channel_title: channelMap.get(invoice.tariffs?.channel_id)?.title || invoice.tariffs?.title || 'Неизвестный канал'
-                }));
+                    tariffs: tariff,
+                    channel_id: tariff?.channel_id || null,
+                    channel_title: channelMap.get(tariff?.channel_id)?.title || tariff?.title || 'Неизвестный канал'
+                };
+            });
 
             const invoiceIds = invoices.map(invoice => invoice.id);
             const [paymentEventsResp] = await Promise.all([

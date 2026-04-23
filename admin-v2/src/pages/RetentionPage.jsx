@@ -359,9 +359,9 @@ export function RetentionPage() {
             правишь текст напоминаний и сразу видишь, где контур доставки сообщений уже не тянет.
           </div>
           <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/crm">Открыть CRM</a>
-            <a className="hero-link" href="/app/orders">Разобрать заказы</a>
-            <a className="hero-link" href="/app/access">Разобрать доступ</a>
+            <a className="hero-link" href="/app/customers?tab=customers">Открыть клиентов</a>
+            <a className="hero-link" href="/app/customers?tab=orders">Разобрать заказы</a>
+            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
             <a className="hero-link" href="/app/broadcast">Пульнуть рассылку</a>
           </div>
         </div>
@@ -500,7 +500,7 @@ export function RetentionPage() {
                           className="inline-action"
                           onClick={() => {
                             if (!focusChannel(row, 'crm_focus_channel')) return;
-                            openApp('/app/crm');
+                            openApp(`/app/customers?tab=customers&channel=${encodeURIComponent(row.id)}`);
                           }}
                         >
                           CRM
@@ -509,7 +509,7 @@ export function RetentionPage() {
                           className="inline-action"
                           onClick={() => {
                             if (!focusChannel(row, 'orders_focus_channel')) return;
-                            openApp('/app/orders');
+                            openApp(`/app/customers?tab=orders&channel=${encodeURIComponent(row.id)}`);
                           }}
                         >
                           Заказы

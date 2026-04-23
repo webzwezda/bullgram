@@ -374,11 +374,11 @@ export default function dashboardRoutes(supabase) {
             const urgentActions = [
                 {
                     id: 'orders_access_pending',
-                    title: 'Оплата есть, а доступ висит',
+                    title: 'Оплата есть, вход не подтвержден',
                     value: paidNotJoined.length,
                     tone: paidNotJoined.length > 0 ? 'danger' : 'ok',
                     href: '/app/orders',
-                    hint: 'Тут бабки уже есть. Значит сначала дожимаешь вход, а не ищешь новых лидов.'
+                    hint: 'Это сигнал к проверке доступа: Telegram-вход мог не записаться, поэтому сначала сверяешь контур.'
                 },
                 {
                     id: 'dead_userbots',

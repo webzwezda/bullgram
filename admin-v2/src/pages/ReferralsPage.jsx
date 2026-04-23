@@ -403,7 +403,7 @@ function DepositTransferBox({ reserve }) {
 }
 
 export function ReferralsPage() {
-  const { accessToken } = useAuth();
+  const { accessToken, profileRole } = useAuth();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [settingsDraft, setSettingsDraft] = useState({
@@ -430,6 +430,7 @@ export function ReferralsPage() {
     economics: {},
     updatedAt: null
   });
+  const canEnableReferrals = !!state.reserve?.canEnableReferrals || profileRole === 'admin';
 
   useEffect(() => {
     let cancelled = false;
@@ -574,11 +575,17 @@ export function ReferralsPage() {
 
   const prioritySignals = useMemo(() => {
     const signals = [];
-    if (state.reserve && !state.reserve.canEnableReferrals) {
+    if (state.reserve && !state.reserve.canEnableReferrals && profileRole !== 'admin') {
       signals.push({
         tone: 'danger',
         title: state.reserve.statusLabel || 'Резерв не готов',
         text: state.reserve.reason || 'Пополни TON-резерв, чтобы включить защищенную партнерку.'
+      });
+    } else if (state.reserve && !state.reserve.canEnableReferrals && profileRole === 'admin') {
+      signals.push({
+        tone: 'warning',
+        title: 'Админский запуск без резерва',
+        text: 'Роль admin может включить партнерку без 100 TON. Выплаты и долг все равно будут считаться.'
       });
     } else if (state.reserve?.status === 'reserve_low') {
       signals.push({
@@ -609,7 +616,7 @@ export function ReferralsPage() {
       });
     }
     return signals;
-  }, [state.reserve, state.settings, state.summary]);
+  }, [profileRole, state.reserve, state.settings, state.summary]);
 
   async function saveSettings() {
     setState((prev) => ({ ...prev, savingSettings: true, error: '' }));
@@ -1176,8 +1183,11 @@ export function ReferralsPage() {
                     onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
                   >
                     <option value="no">Выключена</option>
-                    <option value="yes" disabled={!state.reserve?.canEnableReferrals}>Включена</option>
+                    <option value="yes" disabled={!canEnableReferrals}>Включена</option>
                   </select>
+                  {profileRole === 'admin' && !state.reserve?.canEnableReferrals ? (
+                    <p className="text-xs font-semibold text-amber-600 ml-1">Admin может включить без 100 TON.</p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">

@@ -69,9 +69,21 @@ export default function(supabase, getBotById) {
     async function loadLatestPaidTariffMap(channelIds = []) {
         if (channelIds.length === 0) return new Map();
 
+        const { data: tariffs, error: tariffsError } = await supabase
+            .from('tariffs')
+            .select('id, channel_id, title, is_trial, trial_label, price, currency')
+            .in('channel_id', channelIds);
+
+        if (tariffsError) throw tariffsError;
+
+        const tariffIds = (tariffs || []).map(tariff => tariff.id);
+        const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
+        if (tariffIds.length === 0) return new Map();
+
         const { data: invoices, error } = await supabase
             .from('invoices')
-            .select('tg_user_id, paid_at, created_at, tariffs(channel_id, title, is_trial, trial_label, price, currency)')
+            .select('tg_user_id, tariff_id, paid_at, created_at')
+            .in('tariff_id', tariffIds)
             .eq('status', 'paid')
             .order('paid_at', { ascending: false })
             .limit(5000);
@@ -80,17 +92,18 @@ export default function(supabase, getBotById) {
 
         const latestTariffMap = new Map();
         for (const invoice of invoices || []) {
-            if (!invoice.tariffs || !channelIds.includes(invoice.tariffs.channel_id)) continue;
+            const tariff = tariffMap.get(invoice.tariff_id);
+            if (!tariff) continue;
 
-            const key = buildAudienceKey(String(invoice.tg_user_id), invoice.tariffs.channel_id);
+            const key = buildAudienceKey(String(invoice.tg_user_id), tariff.channel_id);
             if (latestTariffMap.has(key)) continue;
 
             latestTariffMap.set(key, {
-                is_trial: !!invoice.tariffs.is_trial,
-                trial_label: invoice.tariffs.trial_label || null,
-                title: invoice.tariffs.title,
-                price: invoice.tariffs.price,
-                currency: invoice.tariffs.currency
+                is_trial: !!tariff.is_trial,
+                trial_label: tariff.trial_label || null,
+                title: tariff.title,
+                price: tariff.price,
+                currency: tariff.currency
             });
         }
 
@@ -273,32 +286,109 @@ export default function(supabase, getBotById) {
         }
 
         if (audienceType === 'unpaid_leads' || audienceType === 'trial_unpaid') {
-            const { data: invoices } = await supabase
+            const { data: tariffs, error: tariffsError } = await supabase
+                .from('tariffs')
+                .select('id, channel_id, title, is_trial, trial_label')
+                .in('channel_id', channelIds.length > 0 ? channelIds : ['00000000-0000-0000-0000-000000000000']);
+
+            if (tariffsError) throw tariffsError;
+
+            const tariffIds = (tariffs || []).map(tariff => tariff.id);
+            const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
+            if (tariffIds.length === 0) return [];
+
+            const { data: invoices, error: invoicesError } = await supabase
                 .from('invoices')
-                .select('id, tg_user_id, tariff_id, status, created_at, tariffs(channel_id, title, is_trial, trial_label)')
+                .select('id, tg_user_id, tariff_id, status, created_at')
+                .in('tariff_id', tariffIds)
                 .in('status', ['pending', 'awaiting_receipt'])
                 .order('created_at', { ascending: false });
 
+            if (invoicesError) throw invoicesError;
+
             return dedupeAudience((invoices || [])
                 .filter(invoice => {
-                    if (!invoice.tariffs || !channelIds.includes(invoice.tariffs.channel_id)) return false;
-                    if (audienceType === 'trial_unpaid') return !!invoice.tariffs.is_trial;
+                    const tariff = tariffMap.get(invoice.tariff_id);
+                    if (!tariff) return false;
+                    if (audienceType === 'trial_unpaid') return !!tariff.is_trial;
                     return true;
                 })
-                .map(invoice => ({
-                    tg_user_id: String(invoice.tg_user_id),
-                    channel_id: invoice.tariffs.channel_id,
-                    channel_title: channelMap.get(invoice.tariffs.channel_id)?.title || invoice.tariffs.title || 'Неизвестный канал',
-                    bot_id: channelMap.get(invoice.tariffs.channel_id)?.bot_id || null,
-                    source_type: 'invoice',
-                    source_id: invoice.id,
-                    is_trial: !!invoice.tariffs.is_trial,
-                    segment_label: invoice.tariffs.is_trial
-                        ? (invoice.tariffs.trial_label || 'Пробник')
-                        : 'Обычный тариф',
-                    tariff_title: invoice.tariffs.title,
-                    created_at: invoice.created_at
-                })));
+                .map(invoice => {
+                    const tariff = tariffMap.get(invoice.tariff_id);
+                    return {
+                        tg_user_id: String(invoice.tg_user_id),
+                        channel_id: tariff.channel_id,
+                        channel_title: channelMap.get(tariff.channel_id)?.title || tariff.title || 'Неизвестный канал',
+                        bot_id: channelMap.get(tariff.channel_id)?.bot_id || null,
+                        source_type: 'invoice',
+                        source_id: invoice.id,
+                        is_trial: !!tariff.is_trial,
+                        segment_label: tariff.is_trial
+                            ? (tariff.trial_label || 'Пробник')
+                            : 'Обычный тариф',
+                        tariff_title: tariff.title,
+                        created_at: invoice.created_at
+                    };
+                }));
+        }
+
+        if (audienceType === 'viewed_no_invoice') {
+            const { data: tariffs, error: tariffsError } = await supabase
+                .from('tariffs')
+                .select('id, channel_id, title, is_trial, trial_label')
+                .in('channel_id', channelIds.length > 0 ? channelIds : ['00000000-0000-0000-0000-000000000000']);
+
+            if (tariffsError) throw tariffsError;
+
+            const tariffIds = (tariffs || []).map(tariff => tariff.id);
+            const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
+            if (tariffIds.length === 0) return [];
+
+            const [{ data: events, error: eventsError }, { data: invoices, error: invoicesError }] = await Promise.all([
+                supabase
+                    .from('customer_funnel_events')
+                    .select('id, tg_user_id, tariff_id, event_type, source, referral_code, payload, created_at')
+                    .eq('owner_id', ownerId)
+                    .in('event_type', ['tariff_list_opened', 'tariff_card_opened', 'payment_method_selected'])
+                    .order('created_at', { ascending: false })
+                    .limit(500),
+                supabase
+                    .from('invoices')
+                    .select('id, tg_user_id, tariff_id, created_at')
+                    .in('tariff_id', tariffIds)
+                    .order('created_at', { ascending: false })
+                    .limit(5000)
+            ]);
+
+            if (eventsError && !(eventsError.message || '').includes('customer_funnel_events')) throw eventsError;
+            if (invoicesError) throw invoicesError;
+
+            return dedupeAudience((events || [])
+                .filter(event => {
+                    if (event.tariff_id && !tariffMap.has(event.tariff_id)) return false;
+                    return !(invoices || []).some(invoice => {
+                        if (String(invoice.tg_user_id) !== String(event.tg_user_id)) return false;
+                        if (event.tariff_id && String(invoice.tariff_id) !== String(event.tariff_id)) return false;
+                        return new Date(invoice.created_at).getTime() >= new Date(event.created_at).getTime();
+                    });
+                })
+                .map(event => {
+                    const tariff = tariffMap.get(event.tariff_id) || null;
+                    const channel = tariff ? channelMap.get(tariff.channel_id) : null;
+                    return {
+                        tg_user_id: String(event.tg_user_id),
+                        channel_id: tariff?.channel_id || null,
+                        channel_title: channel?.title || 'Смотрел тарифы',
+                        bot_id: channel?.bot_id || null,
+                        source_type: 'customer_funnel_event',
+                        source_id: event.id,
+                        is_trial: !!tariff?.is_trial,
+                        segment_label: event.event_type,
+                        tariff_title: tariff?.title || event.payload?.tariff_title || null,
+                        referral_code: event.referral_code || null,
+                        created_at: event.created_at
+                    };
+                }));
         }
 
         return [];

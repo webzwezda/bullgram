@@ -11,8 +11,9 @@ import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 const AUDIENCES = [
   { id: 'active_subscribers', label: 'Активные подписчики' },
   { id: 'expired_subscribers', label: 'Ушедшие / просроченные' },
+  { id: 'viewed_no_invoice', label: 'Смотрели тариф, но не создали счет' },
   { id: 'unpaid_leads', label: 'Нажали тариф, но не оплатили' },
-  { id: 'paid_not_joined', label: 'Оплатили, но не зашли' },
+  { id: 'paid_not_joined', label: 'Вход не подтвержден' },
   { id: 'customer_base_members', label: 'Вся база по нескольким группам' },
   { id: 'manual_list', label: 'Ручная выборка' },
   { id: 'trial_active', label: 'Пробники внутри' },
@@ -43,6 +44,7 @@ function audienceHint(type) {
   const map = {
     active_subscribers: 'Живые платники. Тут анонсы, апдейты и то, что должно долетать до тех, кто уже внутри.',
     expired_subscribers: 'Те, кто уже сгорел. Этот хвост надо возвращать.',
+    viewed_no_invoice: 'Открыли тарифы, но не дошли до счета. Это верх воронки для мягкого касания.',
     unpaid_leads: 'Нажали тариф, но слились до оплаты. Тут лежат быстрые деньги.',
     paid_not_joined: 'Оплата есть, а входа нет. Тут надо дотащить до доступа.',
     customer_base_members: 'Общая база по нескольким местам. Особенно полезно для дырявого хвоста.',

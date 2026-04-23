@@ -251,6 +251,17 @@ export default function customerBasesRoutes(supabase) {
             const totalChannels = linkedChannels.length;
             const linkedChannelIds = linkedChannels.map(channel => channel.id);
 
+            const { data: linkedTariffs, error: linkedTariffsError } = linkedChannelIds.length > 0
+                ? await supabase
+                    .from('tariffs')
+                    .select('id, channel_id')
+                    .in('channel_id', linkedChannelIds)
+                : { data: [], error: null };
+
+            if (linkedTariffsError) throw linkedTariffsError;
+
+            const linkedTariffIds = (linkedTariffs || []).map(tariff => tariff.id);
+
             const [{ data: subscriptions, error: subscriptionsError }, { data: invoices, error: invoicesError }] = await Promise.all([
                 linkedChannelIds.length > 0
                     ? supabase
@@ -258,10 +269,11 @@ export default function customerBasesRoutes(supabase) {
                         .select('tg_user_id, channel_id, status, expires_at')
                         .in('channel_id', linkedChannelIds)
                     : Promise.resolve({ data: [], error: null }),
-                linkedChannelIds.length > 0
+                linkedTariffIds.length > 0
                     ? supabase
                         .from('invoices')
-                        .select('tg_user_id, status, created_at, paid_at, tariffs(channel_id)')
+                        .select('tg_user_id, status, created_at, paid_at')
+                        .in('tariff_id', linkedTariffIds)
                         .order('created_at', { ascending: false })
                         .limit(5000)
                     : Promise.resolve({ data: [], error: null })
@@ -289,9 +301,6 @@ export default function customerBasesRoutes(supabase) {
 
             const invoiceStatsByUser = new Map();
             for (const invoice of invoices || []) {
-                const channelId = invoice.tariffs?.channel_id;
-                if (!channelId || !linkedChannelIds.includes(channelId)) continue;
-
                 const tgUserId = String(invoice.tg_user_id);
                 if (!invoiceStatsByUser.has(tgUserId)) {
                     invoiceStatsByUser.set(tgUserId, {

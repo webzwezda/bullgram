@@ -32,24 +32,29 @@ export default function ordersRoutes(supabase) {
             const channelIds = (channels || []).map(channel => channel.id);
             const channelMap = new Map((channels || []).map(channel => [channel.id, channel.title]));
 
+            const { data: tariffs, error: tariffsError } = await supabase
+                .from('tariffs')
+                .select('id, title, owner_id, channel_id, is_trial, trial_label')
+                .eq('owner_id', ownerId)
+                .order('created_at', { ascending: false });
+
+            if (tariffsError) throw tariffsError;
+
+            const tariffIds = (tariffs || []).map(tariff => tariff.id);
+            const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
+
             const invoicesResp = await supabase
                 .from('invoices')
-                .select('*, tariffs(id, title, owner_id, channel_id, is_trial, trial_label)')
+                .select('*')
+                .in('tariff_id', tariffIds.length > 0 ? tariffIds : ['00000000-0000-0000-0000-000000000000'])
                 .order('created_at', { ascending: false })
                 .limit(150);
 
             if (invoicesResp.error) throw invoicesResp.error;
 
-            const invoices = (invoicesResp.data || []).filter(invoice =>
-                invoice.tariffs && invoice.tariffs.owner_id === ownerId
-            );
+            const invoices = invoicesResp.data || [];
 
             const invoiceIds = invoices.map(invoice => invoice.id);
-            const tgPairs = invoices.map(invoice => ({
-                tg_user_id: String(invoice.tg_user_id),
-                channel_id: invoice.tariffs.channel_id
-            }));
-
             const [{ data: paymentEvents, error: paymentEventsError }, { data: accessInvites, error: accessInvitesError }, { data: accessEvents, error: accessEventsError }, { data: subscriptions, error: subscriptionsError }, { data: referralEvents, error: referralEventsError }] = await Promise.all([
                 invoiceIds.length > 0
                     ? supabase
@@ -112,7 +117,8 @@ export default function ordersRoutes(supabase) {
             const subscriptionMap = new Map((subscriptions || []).map(sub => [`${sub.tg_user_id}:${sub.channel_id}`, sub]));
 
             const rows = invoices.map(invoice => {
-                const channelId = invoice.tariffs.channel_id;
+                const tariff = tariffMap.get(invoice.tariff_id) || null;
+                const channelId = tariff?.channel_id || null;
                 const subKey = `${invoice.tg_user_id}:${channelId}`;
                 const subscription = subscriptionMap.get(subKey) || null;
                 const paymentEvent = latestPaymentEventByInvoice.get(invoice.id) || null;
@@ -133,7 +139,7 @@ export default function ordersRoutes(supabase) {
                 } else if (invoice.status === 'rejected') {
                     problemReason = 'Оплата отклонена вручную';
                 } else if (invoice.status === 'paid' && invite?.status === 'issued' && !subscription?.last_join_approved_at) {
-                    problemReason = 'Оплата есть, ссылка выдана, но человек не дошел до группы';
+                    problemReason = 'Оплата есть, ссылка выдана, но Telegram-вход не подтвержден';
                 } else if (invoice.status === 'paid' && invite?.status === 'declined') {
                     problemReason = 'Человек постучался, но заявка была отклонена';
                 } else if (invoice.status === 'paid' && !invite && !accessEvent) {
@@ -151,9 +157,9 @@ export default function ordersRoutes(supabase) {
                     amount: invoice.amount,
                     currency: invoice.currency,
                     invoice_status: invoice.status,
-                    tariff_title: invoice.tariffs?.title || 'Неизвестный тариф',
-                    is_trial: !!invoice.tariffs?.is_trial,
-                    trial_label: invoice.tariffs?.trial_label || null,
+                    tariff_title: tariff?.title || 'Неизвестный тариф',
+                    is_trial: !!tariff?.is_trial,
+                    trial_label: tariff?.trial_label || null,
                     channel_title: channelMap.get(channelId) || 'Неизвестный канал',
                     payment_event_type: paymentEvent?.event_type || null,
                     payment_event_status: paymentEvent?.status || null,

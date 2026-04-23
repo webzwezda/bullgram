@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CreditCard, ShoppingBag, AlertCircle, ArrowRight } from 'lucide-react';
 import { TestPage } from './pages/TestPage.jsx';
@@ -22,9 +23,21 @@ const navSections = [
 
 export function App() {
   const location = useLocation();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
   const { user, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
+  const navItems = navSections.flatMap((section) => section.items);
+
+  const currentNavLabel = useMemo(() => {
+    if (location.pathname === '/') return 'Главная';
+    const current = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to));
+    return current?.label || 'BullRun';
+  }, [location.pathname, navItems]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   const checkoutSignal = (() => {
     if (!user || !checkoutPulse) return null;
@@ -128,7 +141,34 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">
-      <aside className="w-full lg:w-72 bg-white border-b lg:border-r border-slate-200 flex flex-col px-5 py-6 lg:h-screen lg:sticky top-0 shrink-0">
+      <div className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="min-w-0">
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">BullRun</div>
+          <div className="truncate text-sm font-black text-slate-900">{currentNavLabel}</div>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white shadow-sm"
+          onClick={() => setMobileNavOpen((value) => !value)}
+          aria-label={mobileNavOpen ? 'Закрыть меню' : 'Открыть меню'}
+          aria-expanded={mobileNavOpen}
+        >
+          <span className="h-0.5 w-5 rounded-full bg-slate-900" />
+          <span className="h-0.5 w-5 rounded-full bg-slate-900" />
+          <span className="h-0.5 w-5 rounded-full bg-slate-900" />
+        </button>
+      </div>
+
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 border-0 bg-slate-950/40 lg:hidden"
+          aria-label="Закрыть меню"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-2xl shadow-slate-950/15 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-72 lg:translate-x-0 lg:border-b-0 lg:shadow-none ${mobileNavOpen ? 'translate-x-0' : ''}`}>
         
         {user ? (
           <UserProfileCard />
@@ -150,6 +190,7 @@ export function App() {
                       key={item.to}
                       to={item.to}
                       end={item.to === '/'}
+                      onClick={() => setMobileNavOpen(false)}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
                         ${isActive 

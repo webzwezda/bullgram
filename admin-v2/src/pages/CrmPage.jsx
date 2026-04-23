@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { PlanBanner } from '../ui/PlanBanner.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
-import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'Все' },
   { id: 'active', label: 'Активные' },
   { id: 'expired', label: 'Сгорели' },
-  { id: 'missing_join', label: 'Оплатили, но не зашли' },
+  { id: 'missing_join', label: 'Вход не подтвержден' },
   { id: 'expired_in_group', label: 'Сгорели, но внутри' },
   { id: 'active_in_group', label: 'Платят и внутри' }
 ];
@@ -24,7 +22,7 @@ function formatDate(value) {
 }
 
 function crmStatusText(row) {
-  if (row.status === 'active' && row.in_group === false) return 'Оплатил, но не зашел';
+  if (row.status === 'active' && row.in_group === false) return 'Вход не подтвержден';
   if (row.status === 'expired' && row.in_group === true) return 'Сгорел, но сидит';
   if (row.status === 'active' && row.in_group === true) return 'Живой и внутри';
   if (row.status === 'expired') return 'Истек';
@@ -73,7 +71,7 @@ function openBroadcastManualSelection(rows = [], suggestedTitle = 'Ручной 
 }
 
 export function CrmPage() {
-  const { accessToken, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken } = useAuth();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [state, setState] = useState({
@@ -170,46 +168,11 @@ export function CrmPage() {
     missingJoin: 0,
     expiredInside: 0
   }), [state.rows]);
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
-
-  const prioritySignals = useMemo(() => ([
-    {
-      title: 'Живые подписки',
-      value: stats.active,
-      tone: stats.active > 0 ? 'ok' : 'default',
-      hint: `Всего записей в CRM: ${stats.total}`
-    },
-    {
-      title: 'Оплатили, но не зашли',
-      value: stats.missingJoin,
-      tone: stats.missingJoin > 0 ? 'warning' : 'ok',
-      hint: 'Это самый теплый хвост на дожим или ручной завод'
-    },
-    {
-      title: 'Сгорели, но сидят',
-      value: stats.expiredInside,
-      tone: stats.expiredInside > 0 ? 'danger' : 'ok',
-      hint: 'Прямой денежный leak: доступ висит, деньги уже не живые'
-    },
-    {
-      title: 'Истекшие',
-      value: stats.expired,
-      tone: stats.expired > 0 ? 'warning' : 'default',
-      hint: 'Хвост на удержание, возврат и ручные решения'
-    }
-  ]), [stats]);
-
   function handoffSingleSubscriber(row) {
     openUserbotCenterHandoff({
       tgUserId: row.tg_user_id,
       draftMessage: row.status === 'active' && row.in_group === false
-        ? 'Привет. Вижу оплату, но ты еще не дошел до группы. Если актуально, отвечай, и я быстро доведу до доступа.'
+        ? 'Привет. Вижу активный доступ, но вход в группу у нас не подтвердился. Если доступ еще не открылся, ответь, и я быстро помогу.'
         : 'Привет. Пишу по твоей подписке в BullRun. Напиши, что сейчас нужно: доступ, продление или проверка статуса.'
     });
   }
@@ -287,65 +250,18 @@ export function CrmPage() {
     <section className="page">
       <div className="page__header">
         <h1>CRM</h1>
-        <p>
-          Живой CRM-контур: фильтры, triage и быстрые мосты. Здесь уже можно разбирать хвост без леса из
-          inline-блоков и прыжков по старому кабинету.
-        </p>
-      <div className="page__meta">
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Экран обновляется сам раз в минуту.'}</span>
+        <div className="page__meta">
+          <span>{state.refreshing ? 'Обновляем фон...' : 'Автообновление раз в минуту'}</span>
           <span>Всего записей: {state.rows.length}</span>
           <span>Текущий хвост: {filteredRows.length}</span>
         </div>
       </div>
-      {profilePlan === 'trial' ? (
-        <>
-          <PlanBanner
-            tone={trialUpgradeUrgent ? 'warning' : 'info'}
-            title={trialUpgradeUrgent ? 'Trial скоро закончится: CRM пора переводить на Normal' : 'CRM на Trial нужен как стартовый контур'}
-            text={trialUpgradeUrgent
-              ? `До конца trial осталось около ${trialHoursLeft} ч. Если уже ведешь хвост по оплатам, доступу и дожиму, не тяни с апгрейдом: на Normal этот контур должен жить как основной.`
-              : 'На Trial можно быстро понять, где клиенты, где подвисший доступ и что нужно дожимать. Как только CRM становится ежедневным инструментом, переводи кабинет на Normal.'}
-          />
-          <UpgradeCallout
-            compact
-            title="CRM уже включился в работу. Дальше логичнее идти на Normal."
-            text="Если здесь уже живут платники, сгоревшие и хвосты на дожим, не оставляй этот контур в ознакомительном режиме. Normal нужен, чтобы вести его без продуктовых стопоров."
-          />
-        </>
-      ) : null}
-
-      <div className="hero-panel">
-        <div className="hero-panel__body">
-          <div className="hero-panel__eyebrow">Подписки и клиенты</div>
-          <div className="hero-panel__title">Здесь видно, кто платит, кто тупит на входе и где у тебя уже течет доступ.</div>
-          <div className="hero-panel__text">
-            CRM в новом кабинете нужен не как архив, а как рабочий triage: быстро отрезать хвосты, дожимать тех,
-            кто оплатил, но не зашел, и сразу бить по просрочке, которая еще сидит внутри.
-          </div>
-          <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/access">Разобрать доступ</a>
-            <a className="hero-link" href="/app/broadcast">Пульнуть рассылку</a>
-            <a className="hero-link" href="/app/userbot-center">Открыть юзерботов</a>
-          </div>
-        </div>
-        <div className="hero-panel__grid">
-          {prioritySignals.map((item) => (
-            <div key={item.title} className={`priority-chip priority-chip--${item.tone}`}>
-              <div className="priority-chip__title">{item.title}</div>
-              <div className="priority-chip__value">{item.value}</div>
-              <div className="priority-chip__hint">{item.hint}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <div className="grid">
-        <StatCard title="Всего" value={stats.total} hint="Все CRM-записи по своим каналам." />
-        <StatCard title="Активные" value={stats.active} hint="Живые подписки." />
-        <StatCard title="Сгорели" value={stats.expired} hint="Истекшие подписки." />
-        <StatCard title="Оплатили, но не зашли" value={stats.missingJoin} hint="Им уже надо писать или вручную заводить." />
-        <StatCard title="Сгорели, но сидят" value={stats.expiredInside} hint="Это прямой денежный leak." />
+        <StatCard title="Всего" value={stats.total} />
+        <StatCard title="Активные" value={stats.active} />
+        <StatCard title="Вход не подтвержден" value={stats.missingJoin} tone={stats.missingJoin > 0 ? 'warning' : 'default'} />
+        <StatCard title="Сгорели, но сидят" value={stats.expiredInside} tone={stats.expiredInside > 0 ? 'danger' : 'default'} />
       </div>
 
       <div className="toolbar-card">
@@ -413,8 +329,8 @@ export function CrmPage() {
                   <td>{formatDate(row.expires_at)}</td>
                   <td>
                     <div className="table-actions">
-                      <a href="/app/orders" target="_blank" rel="noreferrer">Заказы</a>
-                      <a href="/app/access" target="_blank" rel="noreferrer">Доступ</a>
+                      <a href="/app/customers?tab=orders" target="_blank" rel="noreferrer">Заказы</a>
+                      <a href="/app/customers?tab=access" target="_blank" rel="noreferrer">Доступ</a>
                       <a
                         href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
                         target="_blank"

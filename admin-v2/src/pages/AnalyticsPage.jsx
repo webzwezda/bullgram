@@ -146,7 +146,7 @@ export function AnalyticsPage() {
         action: 'Открыть дожим',
         run() {
           window.localStorage.setItem('abandoned_filter_preset', JSON.stringify({ filter: 'queued' }));
-          openApp('/app/abandoned');
+          openApp('/app/customers?tab=abandoned');
         }
       });
     }
@@ -167,11 +167,11 @@ export function AnalyticsPage() {
     if ((stats.paidNotJoinedCount || 0) > 0) {
       items.push({
         id: 'paid_not_joined',
-        title: 'Оплатили, но не зашли',
-        text: `Сейчас ${stats.paidNotJoinedCount} человек оплатили, но так и не вошли. Разбирай доступ и дожим.`,
+        title: 'Вход не подтвержден',
+        text: `Сейчас у ${stats.paidNotJoinedCount} оплат нет надежного события входа. Проверь доступ, прежде чем считать это отказом клиента.`,
         action: 'Открыть доступ',
         run() {
-          openApp('/app/access');
+          openApp('/app/customers?tab=access');
         }
       });
     }
@@ -218,10 +218,10 @@ export function AnalyticsPage() {
       hint: `Ждут чек: ${stats.awaitingReceiptCount || 0}`
     },
     {
-      title: 'Оплатили, но не зашли',
+      title: 'Вход не подтвержден',
       value: stats.paidNotJoinedCount || 0,
       tone: (stats.paidNotJoinedCount || 0) > 0 ? 'warning' : 'ok',
-      hint: `Конверсия входа: ${stats.joinConversion || 0}%`
+      hint: `Подтверждение входа: ${stats.joinConversion || 0}%`
     },
     {
       title: 'Просрочка внутри',
@@ -287,9 +287,9 @@ export function AnalyticsPage() {
             кто уже заплатил, но не зашел, где течет доступ и какие пробники пора дожимать в основной тариф.
           </div>
           <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/orders">Разобрать заказы</a>
-            <a className="hero-link" href="/app/access">Разобрать доступ</a>
-            <a className="hero-link" href="/app/abandoned">Открыть неоплаты</a>
+            <a className="hero-link" href="/app/customers?tab=orders">Разобрать заказы</a>
+            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
+            <a className="hero-link" href="/app/customers?tab=abandoned">Открыть неоплаты</a>
             <a className="hero-link" href="/app/retention">Открыть удержание</a>
           </div>
         </div>
@@ -314,7 +314,7 @@ export function AnalyticsPage() {
       </div>
 
       <div className="grid">
-        <StatCard title="Оплатили, но не зашли" value={stats.paidNotJoinedCount || 0} hint="Горячий хвост по доступу." tone={(stats.paidNotJoinedCount || 0) > 0 ? 'warning' : 'default'} />
+        <StatCard title="Вход не подтвержден" value={stats.paidNotJoinedCount || 0} hint="Сигнал к проверке доступа, не доказательство отказа." tone={(stats.paidNotJoinedCount || 0) > 0 ? 'warning' : 'default'} />
         <StatCard title="Истекли, но хвост мутный" value={stats.expiredButStillInsideCount || 0} hint="Просрочка могла остаться внутри." tone={(stats.expiredButStillInsideCount || 0) > 0 ? 'danger' : 'default'} />
         <StatCard title="Пробники внутри" value={stats.trialActiveCount || 0} hint="Активные пробные доступы." />
         <StatCard title="Пробник скоро сгорит" value={stats.trialExpiringCount || 0} hint="Лучший момент на апселл." tone={(stats.trialExpiringCount || 0) > 0 ? 'warning' : 'default'} />
@@ -367,7 +367,7 @@ export function AnalyticsPage() {
               className="inline-action"
               onClick={() => {
                 window.localStorage.setItem('abandoned_filter_preset', JSON.stringify({ filter: 'queued' }));
-                openApp('/app/abandoned');
+                openApp('/app/customers?tab=abandoned');
               }}
             >
               Открыть дожим
@@ -423,7 +423,7 @@ export function AnalyticsPage() {
             >
               Выгрузить оплаты CSV
             </button>
-            <a className="inline-action" href="/app/orders" target="_blank" rel="noreferrer">
+            <a className="inline-action" href="/app/customers?tab=orders" target="_blank" rel="noreferrer">
               Открыть заказы
             </a>
           </div>

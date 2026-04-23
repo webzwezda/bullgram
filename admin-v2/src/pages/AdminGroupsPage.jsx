@@ -464,9 +464,9 @@ export function AdminGroupsPage() {
                   <span className={linkBadge(row).className}>{linkBadge(row).text}</span>
                 </div>
                 <div className="toolbar-card__body" style={{ padding: 0, marginTop: 12 }}>
-                  <button type="button" onClick={() => focusChannel('crm_focus_channel', row, '/app/crm', 'Эта группа еще не привязана к системе. Сначала синканите каналы или привяжите ее, потом уже будет смысл открывать CRM.')}>CRM</button>
-                  <button type="button" onClick={() => focusChannel('orders_focus_channel', row, '/app/orders', 'Эта группа еще не привязана к системе. Без этого заказы по ней не открыть.')}>Заказы</button>
-                  <button type="button" onClick={() => focusChannel('access_focus_channel', row, '/app/access', 'Эта группа еще не привязана к системе. Без этого и журнал доступа по ней не открыть.')}>Доступ</button>
+                  <button type="button" onClick={() => focusChannel('crm_focus_channel', row, `/app/customers?tab=customers&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Сначала синканите каналы или привяжите ее, потом уже будет смысл открывать клиентов.')}>Клиенты</button>
+                  <button type="button" onClick={() => focusChannel('orders_focus_channel', row, `/app/customers?tab=orders&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Без этого заказы по ней не открыть.')}>Заказы</button>
+                  <button type="button" onClick={() => focusChannel('access_focus_channel', row, `/app/customers?tab=access&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Без этого и журнал доступа по ней не открыть.')}>Доступ</button>
                   <button type="button" onClick={() => sendGroupToBroadcast(row)}>Пнуть</button>
                   <button type="button" onClick={() => { window.location.href = '/app/userbots'; }}>Юзерботы</button>
                 </div>
@@ -531,9 +531,9 @@ export function AdminGroupsPage() {
                   <td><span className={readyBadge(row).className}>{readyBadge(row).text}</span></td>
                   <td>
                     <div className="toolbar-card__body" style={{ padding: 0 }}>
-                      <button type="button" onClick={() => focusChannel('crm_focus_channel', row, '/app/crm', 'Эта группа еще не привязана к системе. Сначала синканите каналы или привяжите ее, потом уже будет смысл открывать CRM.')}>CRM</button>
-                      <button type="button" onClick={() => focusChannel('orders_focus_channel', row, '/app/orders', 'Эта группа еще не привязана к системе. Без этого заказы по ней не открыть.')}>Заказы</button>
-                      <button type="button" onClick={() => focusChannel('access_focus_channel', row, '/app/access', 'Эта группа еще не привязана к системе. Без этого и журнал доступа по ней не открыть.')}>Доступ</button>
+                      <button type="button" onClick={() => focusChannel('crm_focus_channel', row, `/app/customers?tab=customers&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Сначала синканите каналы или привяжите ее, потом уже будет смысл открывать клиентов.')}>Клиенты</button>
+                      <button type="button" onClick={() => focusChannel('orders_focus_channel', row, `/app/customers?tab=orders&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Без этого заказы по ней не открыть.')}>Заказы</button>
+                      <button type="button" onClick={() => focusChannel('access_focus_channel', row, `/app/customers?tab=access&channel=${encodeURIComponent(row.linked_channel_id || '')}`, 'Эта группа еще не привязана к системе. Без этого и журнал доступа по ней не открыть.')}>Доступ</button>
                       <button type="button" onClick={() => sendGroupToBroadcast(row)}>Пнуть</button>
                       <button type="button" onClick={() => { window.location.href = '/app/userbots'; }}>Юзерботы</button>
                     </div>

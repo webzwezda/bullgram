@@ -75,7 +75,7 @@ export function PaymentEventsSection({
                             search: event.invoice_id ? String(event.invoice_id) : '',
                             source: 'admin_v2_payment_event'
                           }));
-                          window.open('/app/orders', '_blank', 'noopener,noreferrer');
+                          window.open('/app/customers?tab=orders', '_blank', 'noopener,noreferrer');
                         }}
                       >
                         Заказы

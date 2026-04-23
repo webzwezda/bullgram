@@ -256,7 +256,7 @@ export function CommandCenterPage() {
       title: 'Доступ течет',
       value: `${summary.expiredButInside || 0} хвост`,
       tone: (summary.expiredButInside || 0) > 0 || (summary.paidNotJoined || 0) > 0 ? 'warning' : 'ok',
-      hint: `Оплатили, но не вошли: ${summary.paidNotJoined || 0}`
+      hint: `Вход не подтвержден: ${summary.paidNotJoined || 0}`
     },
     {
       title: 'Инфраструктура',
@@ -286,7 +286,7 @@ export function CommandCenterPage() {
     {
       title: 'Активные подписчики',
       value: summary.activeSubscribers || 0,
-      hint: `Оплатили, но не зашли: ${summary.paidNotJoined || 0}. Сгорели, но еще внутри: ${summary.expiredButInside || 0}.`
+      hint: `Вход не подтвержден: ${summary.paidNotJoined || 0}. Сгорели, но еще внутри: ${summary.expiredButInside || 0}.`
     },
     {
       title: 'Shop TON',
@@ -552,8 +552,8 @@ export function CommandCenterPage() {
             прокси, shop и сигналы от юзерботов. Открыл утром — сразу понял, куда жать первым.
           </div>
           <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/access">Разобрать доступ</a>
+            <a className="hero-link" href="/app/customers?tab=orders">Разобрать деньги</a>
+            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
             <a className="hero-link" href="/app/userbots">Чинить ботов и прокси</a>
             <a className="hero-link" href="/app/shop">Открыть seller ops</a>
             <button className="hero-link hero-link--button" type="button" onClick={() => openAdminGroups('need_bot')}>Права в группах</button>
@@ -744,7 +744,7 @@ export function CommandCenterPage() {
                   <th>Группа</th>
                   <th>Bot admin</th>
                   <th>Активных</th>
-                  <th>Оплатили, но не зашли</th>
+                  <th>Вход не подтвержден</th>
                   <th>Сгорели, но внутри</th>
                   <th>Действие</th>
                 </tr>

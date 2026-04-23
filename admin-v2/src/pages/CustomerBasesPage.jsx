@@ -607,8 +607,8 @@ export function CustomerBasesPage() {
             <a className="ghost-button" href="/app/broadcast" target="_blank" rel="noreferrer">
               Пнуть хвост в рассылки
             </a>
-            <a className="ghost-button" href="/app/crm" target="_blank" rel="noreferrer">
-              Открыть хвост в CRM
+            <a className="ghost-button" href="/app/customers?tab=customers" target="_blank" rel="noreferrer">
+              Открыть хвост в клиентах
             </a>
           </div>
         </div>
@@ -759,9 +759,9 @@ export function CustomerBasesPage() {
                       >
                         Досье
                       </a>
-                      <a href="/app/crm" target="_blank" rel="noreferrer">CRM</a>
-                      <a href="/app/orders" target="_blank" rel="noreferrer">Заказы</a>
-                      <a href="/app/access" target="_blank" rel="noreferrer">Доступ</a>
+                      <a href="/app/customers?tab=customers" target="_blank" rel="noreferrer">Клиенты</a>
+                      <a href="/app/customers?tab=orders" target="_blank" rel="noreferrer">Заказы</a>
+                      <a href="/app/customers?tab=access" target="_blank" rel="noreferrer">Доступ</a>
                     </div>
                   </td>
                 </tr>

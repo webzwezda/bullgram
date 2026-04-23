@@ -61,7 +61,7 @@ export function BillingWebhookSection({ billingHealth, patchSettings, sendWebhoo
       </div>
       <div className="table-actions" style={{ marginTop: 14 }}>
         <button className="inline-action" onClick={sendWebhookTest}>Тест webhook-а</button>
-        <a className="inline-action" href="/app/orders" target="_blank" rel="noreferrer">Открыть заказы</a>
+        <a className="inline-action" href="/app/customers?tab=orders" target="_blank" rel="noreferrer">Открыть заказы</a>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { OpsChecklistRail } from './ui/OpsChecklistRail.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const UserbotCenterPage = lazy(() => import('./pages/UserbotCenterPage.jsx').then((module) => ({ default: module.UserbotCenterPage })));
+const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const CrmPage = lazy(() => import('./pages/CrmPage.jsx').then((module) => ({ default: module.CrmPage })));
 const OrdersPage = lazy(() => import('./pages/OrdersPage.jsx').then((module) => ({ default: module.OrdersPage })));
 const AccessPage = lazy(() => import('./pages/AccessPage.jsx').then((module) => ({ default: module.AccessPage })));
@@ -48,11 +49,8 @@ export function App() {
     {
       title: 'Продажи и Клиенты',
       items: [
-        { to: '/crm', label: 'CRM', icon: Users },
+        { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/plans', label: 'Тарифы и доступ', icon: FileText },
-        { to: '/orders', label: 'Заказы', icon: ShoppingBag },
-        { to: '/bases', label: 'Базы', icon: Database },
-        { to: '/dossier', label: 'Досье', icon: UserPlus },
       ]
     },
     {
@@ -63,7 +61,6 @@ export function App() {
         { to: '/userbot-center', label: 'Центр юзербота', icon: Target },
         { to: '/proxies', label: 'Прокси', icon: Globe },
         { to: '/admin-groups', label: 'Группы и права', icon: Shield },
-        { to: '/access', label: 'Доступ', icon: LockKeyhole },
         { to: '/claw', label: 'Клешня / MCP', icon: Settings },
       ]
     },
@@ -78,11 +75,24 @@ export function App() {
     {
       title: 'Маркетинг',
       items: [
+        { to: '/referrals', label: 'Партнерка', icon: Users },
         { to: '/broadcast', label: 'Рассылки', icon: Send },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
-        { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
       ]
-    }
+    },
+    ...(profileRole === 'admin'
+      ? [{
+        title: 'Скрытые страницы',
+        items: [
+          { to: '/crm', label: 'CRM', icon: Users },
+          { to: '/orders', label: 'Заказы', icon: ShoppingBag },
+          { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
+          { to: '/access', label: 'Доступ', icon: LockKeyhole },
+          { to: '/bases', label: 'Базы', icon: Database },
+          { to: '/dossier', label: 'Досье', icon: UserPlus },
+        ]
+      }]
+      : [])
   ];
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -167,6 +177,7 @@ export function App() {
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
                 <Route path="/userbot-center" element={<UserbotCenterPage />} />
+                <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<CrmPage />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/access" element={<AccessPage />} />

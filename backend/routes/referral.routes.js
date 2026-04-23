@@ -1173,7 +1173,7 @@ export default function referralRoutes(supabase) {
             const [settingsResp, profilesResp, attributionsResp, eventsResp, payoutMethodsResp, payoutsResp] = await Promise.all([
                 supabase
                     .from('payment_settings')
-                    .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent, ton_wallet')
+                    .select('referral_enabled, referral_reward_percent, referral_welcome_text, referral_client_discount_percent, ton_wallet, admin_tg_id')
                     .eq('owner_id', ownerId)
                     .maybeSingle(),
                 supabase
@@ -1254,6 +1254,7 @@ export default function referralRoutes(supabase) {
             const payoutMethods = payoutMethodsResp.data || [];
             const payouts = payoutsResp.data || [];
             const completedRewards = events.filter(event => event.event_type === 'reward_granted' && event.status === 'completed');
+            const adminTgId = settingsResp.data?.admin_tg_id ? String(settingsResp.data.admin_tg_id) : '';
 
             const eventsByReferrer = new Map();
             for (const event of events) {
@@ -1293,11 +1294,19 @@ export default function referralRoutes(supabase) {
                 }
             }
 
+            const attributionsByReferrer = new Map();
+            for (const attribution of attributions) {
+                const key = String(attribution.referrer_tg_user_id);
+                attributionsByReferrer.set(key, Number(attributionsByReferrer.get(key) || 0) + 1);
+            }
+
             const allPartnerRows = profiles.map(profile => {
-                const profileEvents = eventsByReferrer.get(String(profile.tg_user_id)) || [];
-                const payoutMethod = payoutMethodByReferrer.get(String(profile.tg_user_id)) || null;
-                const pendingPayout = pendingPayoutByReferrer.get(String(profile.tg_user_id)) || null;
-                const latestPayout = latestPayoutByReferrer.get(String(profile.tg_user_id)) || null;
+                const tgUserId = String(profile.tg_user_id);
+                const profileEvents = eventsByReferrer.get(tgUserId) || [];
+                const payoutMethod = payoutMethodByReferrer.get(tgUserId) || null;
+                const pendingPayout = pendingPayoutByReferrer.get(tgUserId) || null;
+                const latestPayout = latestPayoutByReferrer.get(tgUserId) || null;
+                const attributedLeads = Number(attributionsByReferrer.get(tgUserId) || 0);
                 const paidReferrals = profileEvents.filter(event => event.event_type === 'reward_granted').length;
 
                 const earnedRub = profileEvents
@@ -1318,9 +1327,21 @@ export default function referralRoutes(supabase) {
                 const balanceRub = Number(profile.balance_rub || 0);
                 const balanceTon = Number(profile.balance_ton || 0);
                 const balanceUsdt = Number(profile.balance_usdt || 0);
+                const hasReferralHistory = (
+                    attributedLeads > 0 ||
+                    profileEvents.length > 0 ||
+                    !!payoutMethod ||
+                    !!latestPayout ||
+                    totalEarnedRub > 0 ||
+                    totalEarnedTon > 0 ||
+                    totalEarnedUsdt > 0 ||
+                    balanceRub > 0 ||
+                    balanceTon > 0 ||
+                    balanceUsdt > 0
+                );
 
                 return {
-                    tg_user_id: String(profile.tg_user_id),
+                    tg_user_id: tgUserId,
                     username: profile.username || null,
                     display_name: profile.display_name || null,
                     referral_code: profile.referral_code,
@@ -1333,6 +1354,7 @@ export default function referralRoutes(supabase) {
                     paid_out_rub: Math.max(0, totalEarnedRub - balanceRub),
                     paid_out_ton: Math.max(0, totalEarnedTon - balanceTon),
                     paid_out_usdt: Math.max(0, totalEarnedUsdt - balanceUsdt),
+                    attributed_leads: attributedLeads,
                     total_referrals: paidReferrals,
                     earnedRub,
                     earnedTon,
@@ -1352,9 +1374,12 @@ export default function referralRoutes(supabase) {
                     latest_payout_requested_at: latestPayout?.requested_at || null,
                     latest_payout_sent_at: latestPayout?.sent_at || null,
                     latest_payout_chain_tx_hash: latestPayout?.chain_tx_hash || null,
-                    latest_payout_network_fee_ton: latestPayout ? normalizeCurrencyAmount('TON', latestPayout.network_fee_ton || 0) : 0
+                    latest_payout_network_fee_ton: latestPayout ? normalizeCurrencyAmount('TON', latestPayout.network_fee_ton || 0) : 0,
+                    hidden_self_profile: !!adminTgId && tgUserId === adminTgId && !hasReferralHistory
                 };
             });
+
+            const visiblePartnerRows = allPartnerRows.filter(partner => !partner.hidden_self_profile);
 
             const partnerByTgId = new Map(
                 allPartnerRows.map(partner => [String(partner.tg_user_id), partner])
@@ -1409,7 +1434,7 @@ export default function referralRoutes(supabase) {
                 };
             });
 
-            const topPartners = [...allPartnerRows].sort((a, b) => {
+            const topPartners = [...visiblePartnerRows].sort((a, b) => {
                 const bPending = Number(b.pending_payout_ton || 0) > 0 ? 1 : 0;
                 const aPending = Number(a.pending_payout_ton || 0) > 0 ? 1 : 0;
                 if (bPending !== aPending) return bPending - aPending;
@@ -1425,7 +1450,7 @@ export default function referralRoutes(supabase) {
             );
 
             payload.summary = {
-                partners: profiles.length,
+                partners: visiblePartnerRows.length,
                 leads: attributions.length,
                 paidReferrals: completedRewards.length,
                 earnedRub: completedRewards.filter(event => event.reward_currency === 'RUB').reduce((sum, event) => sum + Number(event.reward_amount || 0), 0),
@@ -1451,6 +1476,7 @@ export default function referralRoutes(supabase) {
 
     router.post('/settings', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
+        const isProjectAdmin = req.profile?.role === 'admin';
         const {
             referral_enabled,
             referral_reward_percent,
@@ -1460,7 +1486,7 @@ export default function referralRoutes(supabase) {
 
         try {
             const reserve = await loadReferralReserveState(supabase, ownerId, { ensure: true });
-            if (referral_enabled && !reserve.canEnableReferrals) {
+            if (referral_enabled && !reserve.canEnableReferrals && !isProjectAdmin) {
                 return res.status(400).json({
                     error: reserve.reason || 'Сначала пополни партнерский резерв, потом включай партнерку.',
                     reserve

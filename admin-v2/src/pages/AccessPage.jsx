@@ -2,13 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { PlanBanner } from '../ui/PlanBanner.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
-import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'Все' },
-  { id: 'pending_join', label: 'Оплатили, но не зашли' },
+  { id: 'pending_join', label: 'Вход не подтвержден' },
   { id: 'expired', label: 'Сгорели и висят' }
 ];
 
@@ -27,7 +25,7 @@ function accessIssueClass(row) {
 }
 
 function accessIssueText(row) {
-  if (row.status === 'active' && !row.last_join_approved_at) return 'Оплатил, но не зашел';
+  if (row.status === 'active' && !row.last_join_approved_at) return 'Вход не подтвержден';
   if (row.status === 'expired') return 'Сгорел и не кикнут';
   return row.status || 'Неизвестно';
 }
@@ -67,7 +65,7 @@ function openBroadcastManualSelection(rows = [], suggestedTitle = 'Ручной 
 }
 
 export function AccessPage() {
-  const { accessToken, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken } = useAuth();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [state, setState] = useState({
@@ -157,40 +155,6 @@ export function AccessPage() {
     });
   }, [filter, search, state.accessIssues]);
 
-  const prioritySignals = useMemo(() => ([
-    {
-      title: 'Ожидают вход',
-      value: state.summary.pendingAccess || 0,
-      tone: (state.summary.pendingAccess || 0) > 0 ? 'warning' : 'ok',
-      hint: 'Оплатили, но до группы так и не дошли'
-    },
-    {
-      title: 'Сгорели и висят',
-      value: state.summary.staleExpired || 0,
-      tone: (state.summary.staleExpired || 0) > 0 ? 'danger' : 'ok',
-      hint: 'Истекли, но их еще не выгнали из контура'
-    },
-    {
-      title: 'Одобрены',
-      value: state.summary.approvedInvites || 0,
-      tone: (state.summary.approvedInvites || 0) > 0 ? 'ok' : 'default',
-      hint: 'Пользователей реально пустили через join request'
-    },
-    {
-      title: 'Выданы',
-      value: state.summary.issuedInvites || 0,
-      tone: (state.summary.issuedInvites || 0) > 0 ? 'default' : 'default',
-      hint: 'Ссылки ушли, но дальше нужно смотреть фактический вход'
-    }
-  ]), [state.summary]);
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
-
   function handoffSingleIssue(row) {
     openUserbotCenterHandoff({
       tgUserId: row.tg_user_id,
@@ -273,65 +237,18 @@ export function AccessPage() {
     <section className="page">
       <div className="page__header">
         <h1>Доступ</h1>
-        <p>
-          Живой triage по инвайтам и проблемам доступа. Здесь уже видно, кого дотягивать, кого кикать и где
-          доступ потек.
-        </p>
-      <div className="page__meta">
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Экран обновляется сам раз в минуту.'}</span>
+        <div className="page__meta">
+          <span>{state.refreshing ? 'Обновляем фон...' : 'Автообновление раз в минуту'}</span>
           <span>Проблем по доступу: {filteredIssues.length}</span>
           <span>Инвайтов всего: {state.summary.totalInvites || 0}</span>
         </div>
       </div>
-      {profilePlan === 'trial' ? (
-        <>
-          <PlanBanner
-            tone={trialUpgradeUrgent ? 'warning' : 'info'}
-            title={trialUpgradeUrgent ? 'Trial скоро закончится: доступы пора вести на Normal' : 'Доступ на Trial — это стартовый контроль, а не финальный режим'}
-            text={trialUpgradeUrgent
-              ? `До конца trial осталось около ${trialHoursLeft} ч. Если уже следишь за оплатами, инвайтами и хвостом по входам, не тяни с апгрейдом: Normal нужен для стабильного рабочего контура.`
-              : 'На Trial можно увидеть, где течет доступ и кто завис между оплатой и входом. Как только это становится ежедневной задачей, переводи кабинет на Normal.'}
-          />
-          <UpgradeCallout
-            compact
-            title="Доступ уже стал рабочим контуром — пора на Normal."
-            text="Если здесь уже есть оплаченные и не дошедшие, trial свою задачу выполнил. Дальше этот экран должен жить на Normal без ознакомительного потолка."
-          />
-        </>
-      ) : null}
-
-      <div className="hero-panel">
-        <div className="hero-panel__body">
-          <div className="hero-panel__eyebrow">Доступ и инвайты</div>
-          <div className="hero-panel__title">Здесь видно, кого уже оплатили, кого пустили, а где доступ потек и деньги начали утекать.</div>
-          <div className="hero-panel__text">
-            Этот экран нужен не для красоты. Здесь быстро видно, кто не дошел до группы, кто уже сгорел, но еще
-            висит внутри, и где инвайты не превратились в реальный вход.
-          </div>
-          <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/crm">Открыть CRM</a>
-            <a className="hero-link" href="/app/broadcast">Пульнуть рассылку</a>
-            <a className="hero-link" href="/app/observer">Проверить контур</a>
-          </div>
-        </div>
-        <div className="hero-panel__grid">
-          {prioritySignals.map((item) => (
-            <div key={item.title} className={`priority-chip priority-chip--${item.tone}`}>
-              <div className="priority-chip__title">{item.title}</div>
-              <div className="priority-chip__value">{item.value}</div>
-              <div className="priority-chip__hint">{item.hint}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       <div className="grid">
-        <StatCard title="Инвайтов всего" value={state.summary.totalInvites || 0} hint="Все движения по ссылкам доступа." />
-        <StatCard title="Выданы" value={state.summary.issuedInvites || 0} hint="Ссылку дали, но дальше надо смотреть вход." />
-        <StatCard title="Одобрены" value={state.summary.approvedInvites || 0} hint="Пользователей пустили через join request." />
-        <StatCard title="Ожидают вход" value={state.summary.pendingAccess || 0} hint="Оплатили, но так и не дошли до группы." />
-        <StatCard title="Сгорели и висят" value={state.summary.staleExpired || 0} hint="Истекли, но не были выгнаны." />
+        <StatCard title="Инвайтов" value={state.summary.totalInvites || 0} />
+        <StatCard title="Выданы" value={state.summary.issuedInvites || 0} />
+        <StatCard title="Вход не подтвержден" value={state.summary.pendingAccess || 0} tone={(state.summary.pendingAccess || 0) > 0 ? 'warning' : 'default'} />
+        <StatCard title="Сгорели и висят" value={state.summary.staleExpired || 0} tone={(state.summary.staleExpired || 0) > 0 ? 'danger' : 'default'} />
       </div>
 
       <div className="toolbar-card">
@@ -399,8 +316,8 @@ export function AccessPage() {
                   <td>{row.last_access_event || 'Нет событий'} • {formatDate(row.expires_at)}</td>
                   <td>
                     <div className="table-actions">
-                      <a href="/app/orders" target="_blank" rel="noreferrer">Заказы</a>
-                      <a href="/app/crm" target="_blank" rel="noreferrer">CRM</a>
+                      <a href="/app/customers?tab=orders" target="_blank" rel="noreferrer">Заказы</a>
+                      <a href="/app/customers?tab=customers" target="_blank" rel="noreferrer">Клиенты</a>
                       <a
                         href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`}
                         target="_blank"

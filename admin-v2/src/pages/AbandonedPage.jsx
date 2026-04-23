@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { PlanBanner } from '../ui/PlanBanner.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
-import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 
 const FILTERS = [
   { id: 'all', label: 'Весь хвост' },
@@ -64,7 +62,7 @@ function downloadCsv(filename, header, rows) {
 }
 
 export function AbandonedPage() {
-  const { user, profilePlan, trialEndsAt } = useAuth();
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [settingsDraft, setSettingsDraft] = useState({
@@ -80,13 +78,6 @@ export function AbandonedPage() {
     invoices: [],
     updatedAt: null
   });
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
   useEffect(() => {
     try {
@@ -244,33 +235,6 @@ export function AbandonedPage() {
     });
   }, [state.invoices]);
 
-  const prioritySignals = useMemo(() => ([
-    {
-      title: 'Свежие неоплаты',
-      value: radarStats.fresh,
-      tone: radarStats.fresh > 0 ? 'warning' : 'ok',
-      hint: 'Самый горячий хвост: люди только что ткнули в тариф'
-    },
-    {
-      title: 'В очереди на дожим',
-      value: radarStats.queued,
-      tone: radarStats.queued > 0 ? 'warning' : 'default',
-      hint: 'Их уже пора пинать сообщением или уносить в заказы'
-    },
-    {
-      title: 'Ждут чек',
-      value: radarStats.awaitingReceipt,
-      tone: radarStats.awaitingReceipt > 0 ? 'warning' : 'ok',
-      hint: 'Тут нельзя молча ждать: это хвост на ручной разбор оплаты'
-    },
-    {
-      title: 'Пробники',
-      value: radarStats.trial,
-      tone: radarStats.trial > 0 ? 'ok' : 'default',
-      hint: 'Отдельный хвост под быстрый апселл и мягкий дожим'
-    }
-  ]), [radarStats]);
-
   const currentTgUserIds = useMemo(
     () => Array.from(new Set(filteredInvoices.map((inv) => String(inv.tg_user_id || '')).filter(Boolean))),
     [filteredInvoices]
@@ -360,66 +324,18 @@ export function AbandonedPage() {
     <section className="page">
       <div className="page__header">
         <h1>Брошенные корзины</h1>
-        <p>
-          Тут лежат люди, которые уже почти занесли деньги, но где-то отвалились между интересом и оплатой.
-          Это triage по теплым неоплатам: режь хвост, смотри пробники, правь текст дожима и быстро пинай теплых в добивку.
-        </p>
         <div className="page__meta">
           <span>Последнее обновление: {formatWhen(state.updatedAt)}</span>
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Экран обновляется сам раз в минуту.'}</span>
+          <span>{state.refreshing ? 'Обновляем фон...' : 'Автообновление раз в минуту'}</span>
           <span>{settingsSummary}</span>
         </div>
       </div>
 
-      {profilePlan === 'trial' ? (
-        <>
-          <PlanBanner
-            tone="warning"
-            title="Trial: тут уже видно деньги, но рабочий дожим начинается на Normal"
-            text="На Trial этот экран помогает увидеть почти-оплаты, чеки и пробники. Как только дожим становится регулярной задачей по выручке, нужен рабочий слой без trial-стопоров."
-          />
-          <UpgradeCallout
-            title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
-            text={trialUpgradeUrgent
-              ? 'Если здесь уже лежат живые деньги и теплый хвост, не тяни до конца trial. Переходи на Normal и добивай неоплаты в боевом режиме.'
-              : 'Как только дожим перестал быть разведкой и стал регулярной задачей по деньгам, следующий шаг — Normal.'}
-          />
-        </>
-      ) : null}
-
-      <div className="hero-panel">
-        <div className="hero-panel__body">
-          <div className="hero-panel__eyebrow">Неоплаты и дожим</div>
-          <div className="hero-panel__title">Здесь лежат почти-оплаты: люди уже ткнули в тариф, но не дожали деньги до конца.</div>
-          <div className="hero-panel__text">
-            Этот экран нужен, чтобы не терять теплых клиентов. Здесь режешь хвост по свежести, пробникам и чекам,
-            настраиваешь текст дожима и быстро отправляешь людей в заказы, рассылки или ручной разбор.
-          </div>
-          <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/orders">Разобрать заказы</a>
-            <a className="hero-link" href="/app/broadcast">Пульнуть рассылку</a>
-            <a className="hero-link" href="/app/crm">Открыть CRM</a>
-            <a className="hero-link" href="/app/analytics">Смотреть цифры</a>
-          </div>
-        </div>
-        <div className="hero-panel__grid">
-          {prioritySignals.map((item) => (
-            <div key={item.title} className={`priority-chip priority-chip--${item.tone}`}>
-              <div className="priority-chip__title">{item.title}</div>
-              <div className="priority-chip__value">{item.value}</div>
-              <div className="priority-chip__hint">{item.hint}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="grid">
-        <StatCard title="Всего лидов" value={radarStats.total} hint="Все неоплаты и хвосты под дожим." />
-        <StatCard title="Свежие" value={radarStats.fresh} hint="Только что нажали на тариф." />
-        <StatCard title="В очереди" value={radarStats.queued} hint="Пора долбить автоматикой или руками." tone={radarStats.queued > 0 ? 'warning' : 'default'} />
-        <StatCard title="Ждут чек" value={radarStats.awaitingReceipt} hint="Ручной хвост по подтверждению оплаты." tone={radarStats.awaitingReceipt > 0 ? 'warning' : 'default'} />
-        <StatCard title="Дожаты" value={radarStats.reminded} hint="Система уже стреляла сообщением." />
-        <StatCard title="Пробники" value={radarStats.trial} hint="Отдельный быстрый хвост для апселла." />
+        <StatCard title="Всего" value={radarStats.total} />
+        <StatCard title="Свежие" value={radarStats.fresh} tone={radarStats.fresh > 0 ? 'warning' : 'default'} />
+        <StatCard title="Ждут чек" value={radarStats.awaitingReceipt} tone={radarStats.awaitingReceipt > 0 ? 'warning' : 'default'} />
+        <StatCard title="Пробники" value={radarStats.trial} />
       </div>
 
       <div className="toolbar-card">
@@ -452,9 +368,6 @@ export function AbandonedPage() {
           >
             Выгрузить CSV
           </button>
-          <a className="ghost-button" href="/app/abandoned" target="_blank" rel="noreferrer">
-            Открыть этот экран отдельно
-          </a>
         </div>
         <div className="filter-strip">
           {FILTERS.map((item) => (
@@ -502,12 +415,9 @@ export function AbandonedPage() {
           <button className="ghost-button ghost-button--primary" onClick={saveSettings} disabled={state.saving}>
             {state.saving ? 'Сохраняем...' : 'Сохранить дожим'}
           </button>
-          <a className="ghost-button" href="/app/abandoned" target="_blank" rel="noreferrer">
-            Открыть этот экран отдельно
-          </a>
         </div>
         <div className="toolbar-card__hint">
-          Поддерживаются теги `{tariff_name}`, `{discount_percent}`, `{discount_price}`, `{old_price}`, `{currency}`.
+          Поддерживаются теги <code>{'{tariff_name}'}</code>, <code>{'{discount_percent}'}</code>, <code>{'{discount_price}'}</code>, <code>{'{old_price}'}</code>, <code>{'{currency}'}</code>.
         </div>
       </div>
 
@@ -526,7 +436,7 @@ export function AbandonedPage() {
                   source: 'admin_v2_abandoned',
                   tg_user_ids: currentTgUserIds
                 }));
-                openApp('/app/orders');
+                openApp('/app/customers?tab=orders');
               }}
             >
               Разобрать в заказах
@@ -603,7 +513,7 @@ export function AbandonedPage() {
                               search: String(inv.tg_user_id),
                               source: 'admin_v2_abandoned_row'
                             }));
-                            openApp('/app/orders');
+                            openApp('/app/customers?tab=orders');
                           }}
                         >
                           Заказы
