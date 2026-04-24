@@ -366,7 +366,7 @@ export function CustomersPage() {
   return (
     <section className="page page--flush">
       {/* Main Content Card */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12 space-y-12">
+      <div className="bg-white p-6 sm:p-10 lg:p-12 space-y-12">
 
         {state.error && (
           <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
@@ -460,7 +460,7 @@ export function CustomersPage() {
         )}
 
         {/* Data Table Card */}
-        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
+        <div className="overflow-hidden flex flex-col">
 
           {/* Table Header Area */}
           <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30">
