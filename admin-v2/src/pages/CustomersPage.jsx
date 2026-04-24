@@ -644,36 +644,26 @@ export function CustomersPage() {
 
         {/* Metrics Section */}
         <section className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white shrink-0">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">Сегменты клиентов</h3>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">Быстрый переход к данным</p>
-            </div>
-          </div>
-
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
             {[
-              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', tab: 'customers-active' },
-              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', bg: stats.expiredCustomers > 0 ? 'bg-red-50' : 'bg-slate-50', border: stats.expiredCustomers > 0 ? 'border-red-200' : 'border-slate-200', tab: 'customers-expired' },
-              { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', bg: stats.access > 0 ? 'bg-purple-50' : 'bg-slate-50', border: stats.access > 0 ? 'border-purple-200' : 'border-slate-200', tab: 'access' },
-              { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', bg: stats.viewed > 0 ? 'bg-amber-50' : 'bg-slate-50', border: stats.viewed > 0 ? 'border-amber-200' : 'border-slate-200', tab: 'viewed' },
-              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-blue-500' : 'text-slate-400', bg: stats.abandoned > 0 ? 'bg-blue-50' : 'bg-slate-50', border: stats.abandoned > 0 ? 'border-blue-200' : 'border-slate-200', tab: 'abandoned' },
+              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', tab: 'customers-active' },
+              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', tab: 'customers-expired' },
+              { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', tab: 'access' },
+              { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', tab: 'viewed' },
+              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-blue-500' : 'text-slate-400', tab: 'abandoned' },
             ].map((item, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => setTabState(item.tab)}
-                className={`${item.bg} ${item.border} border p-4 rounded-2xl text-left transition-all hover:border-slate-300 hover:shadow-sm`}
+                className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">{item.label}</span>
-                  <item.icon className={`w-4 h-4 ${item.color} opacity-70`} />
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                  <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                 </div>
-                <div className={`text-2xl font-black tracking-tight ${item.color}`}>{item.value}</div>
+                <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
               </button>
             ))}
           </div>
