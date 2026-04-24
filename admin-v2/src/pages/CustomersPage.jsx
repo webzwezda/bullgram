@@ -364,189 +364,232 @@ export function CustomersPage() {
 
   return (
     <section className="page page--flush">
+      {/* Main Content Card */}
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12 space-y-10">
-        
-        {state.error ? (
-          <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+
+        {state.error && (
+          <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+            <AlertCircle className="w-5 h-5 shrink-0" />
             {state.error}
           </div>
-        ) : null}
+        )}
 
         {/* Filter Handoff */}
         {(handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId) && (
-          <div className="bg-amber-50/50 border border-amber-200 rounded-[2rem] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-          <div>
-            <div className="text-sm font-black uppercase tracking-widest text-amber-600 mb-2 flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              Активный фильтр
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {focusChannelId && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">Канал {focusChannelId}</span>}
-              {handoff.abandonedFilter && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">Неоплаты: {ABANDONED_STATUS_LABELS[handoff.abandonedFilter] || handoff.abandonedFilter}</span>}
-              {handoff.orderTgUserIds.length > 0 && <span className="px-3 py-1 bg-white border border-amber-200 text-amber-700 rounded-lg text-xs font-bold shadow-sm">TG ID: {handoff.orderTgUserIds.length}</span>}
-            </div>
-          </div>
-          <button
-            className="shrink-0 px-5 py-2.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm hover:bg-amber-100 transition-all flex items-center gap-2"
-            onClick={() => {
-              setHandoff({ abandonedFilter: '', orderTgUserIds: [] });
-              setSearchParams({ tab: activeTab });
-            }}
-          >
-            <X className="w-4 h-4" /> Сбросить фильтр
-          </button>
-        </div>
-      )}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Eye className="w-4 h-4" /> Посмотрели</div>
-          <div className={`text-4xl font-black tracking-tight ${stats.viewed > 0 ? 'text-amber-500' : 'text-slate-900'}`}>{stats.viewed}</div>
-        </div>
-        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><ShoppingCart className="w-4 h-4" /> Бросили счет</div>
-          <div className={`text-4xl font-black tracking-tight ${stats.abandoned > 0 ? 'text-orange-500' : 'text-slate-900'}`}>{stats.abandoned}</div>
-        </div>
-        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col lg:col-span-2">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><UserSquare2 className="w-4 h-4" /> Доступ</div>
-          <div className="flex items-end gap-6">
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 rounded-[2rem] p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-md shadow-amber-500/5">
             <div>
-              <div className="text-4xl font-black tracking-tight text-emerald-500">{stats.activeCustomers}</div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Активен</div>
+              <div className="text-xs font-black uppercase tracking-widest text-amber-600 mb-3 flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Активный фильтр
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {focusChannelId && <span className="px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm">Канал {focusChannelId}</span>}
+                {handoff.abandonedFilter && <span className="px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm">Неоплаты: {ABANDONED_STATUS_LABELS[handoff.abandonedFilter] || handoff.abandonedFilter}</span>}
+                {handoff.orderTgUserIds.length > 0 && <span className="px-3 py-1.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-bold shadow-sm">TG ID: {handoff.orderTgUserIds.length}</span>}
+              </div>
             </div>
-            <div>
-              <div className={`text-4xl font-black tracking-tight ${stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-300'}`}>{stats.expiredCustomers}</div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">Истек</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Lock className="w-4 h-4" /> Без входа</div>
-          <div className={`text-4xl font-black tracking-tight ${stats.access > 0 ? 'text-purple-500' : 'text-slate-900'}`}>{stats.access}</div>
-        </div>
-      </div>
-
-      {/* Workspace Area */}
-      <div className="space-y-6">
-        
-        {/* Toolbar & Filters */}
-        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-4 sm:p-6 flex flex-col lg:flex-row gap-6 items-center">
-          <div className="relative flex-1 w-full">
-            <input
-              className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по TG ID, @username, тарифу, каналу..."
-            />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
-          </div>
-          
-          <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-            <button className="flex-1 sm:flex-none px-6 py-4 bg-slate-900 text-white rounded-2xl text-sm font-bold shadow-md hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
-              <Send className="w-4 h-4" /> Рассылка
-            </button>
-            <a className="flex-1 sm:flex-none px-6 py-4 bg-white border border-slate-200 !text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:!text-slate-900 transition-all flex items-center justify-center gap-2" href="/app/dossier">
-              <Database className="w-4 h-4" /> Досье
-            </a>
-          </div>
-        </div>
-
-        {/* Tab Strip */}
-        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto w-full hide-scrollbar">
-          {TABS.map((tab) => (
             <button
-              key={tab.id}
-              type="button"
-              className={`shrink-0 px-5 py-2.5 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                activeTab === tab.id 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-              onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
+              className="shrink-0 px-6 py-3 bg-white border border-amber-200 text-amber-700 rounded-xl text-sm font-black shadow-sm hover:bg-amber-100 transition-all flex items-center gap-2"
+              onClick={() => {
+                setHandoff({ abandonedFilter: '', orderTgUserIds: [] });
+                setSearchParams({ tab: activeTab });
+              }}
             >
-              {tab.label}
+              <X className="w-4 h-4" /> Сбросить фильтр
             </button>
-          ))}
+          </div>
+        )}
+
+        {/* Bento Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+          
+          {/* Primary Access Card (Span 2) */}
+          <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] shadow-xl hover:shadow-2xl transition-shadow flex flex-col lg:col-span-2 relative overflow-hidden group">
+            <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/20 blur-3xl rounded-full group-hover:bg-emerald-500/30 transition-colors" />
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><UserSquare2 className="w-4 h-4" /> Доступ к каналам</div>
+            <div className="flex flex-col gap-6 mt-auto relative z-10">
+              <div className="flex items-end gap-4">
+                <div className="text-5xl font-black tracking-tighter text-white">{stats.activeCustomers}</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 bg-emerald-500/10 px-2 py-1 rounded-md">Активен</div>
+              </div>
+              <div className="w-full h-px bg-slate-800" />
+              <div className="flex items-end gap-4">
+                <div className={`text-3xl font-black tracking-tighter ${stats.expiredCustomers > 0 ? 'text-red-400' : 'text-slate-500'}`}>{stats.expiredCustomers}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Истек</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col lg:col-span-2 group relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-500/10 blur-2xl rounded-full group-hover:bg-purple-500/20 transition-colors" />
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><Lock className="w-4 h-4" /> Вход не подтвержден</div>
+            <div className="mt-auto">
+              <div className={`text-5xl font-black tracking-tighter ${stats.access > 0 ? 'text-purple-600' : 'text-slate-900'}`}>{stats.access}</div>
+              <div className="text-sm font-medium text-slate-500 mt-2">Оплатили, но не вошли</div>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col group relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-amber-500/10 blur-2xl rounded-full group-hover:bg-amber-500/20 transition-colors" />
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> Посмотрели</div>
+            <div className={`text-4xl font-black tracking-tighter mt-auto ${stats.viewed > 0 ? 'text-amber-500' : 'text-slate-900'}`}>{stats.viewed}</div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col group relative overflow-hidden">
+            <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-orange-500/10 blur-2xl rounded-full group-hover:bg-orange-500/20 transition-colors" />
+            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><ShoppingCart className="w-3.5 h-3.5" /> Бросили</div>
+            <div className={`text-4xl font-black tracking-tighter mt-auto ${stats.abandoned > 0 ? 'text-orange-500' : 'text-slate-900'}`}>{stats.abandoned}</div>
+          </div>
         </div>
 
-        {/* Data Table */}
+        {/* Workspace Toolbar */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-slate-200 shadow-sm p-3 sm:p-4 flex flex-col xl:flex-row gap-4 items-center sticky top-4 z-40">
+          
+          {/* Segmented Control Tabs */}
+          <div className="flex w-full xl:w-auto p-1.5 bg-slate-100 rounded-2xl overflow-x-auto hide-scrollbar">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`shrink-0 px-5 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                  activeTab === tab.id 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-px h-8 bg-slate-200 hidden xl:block mx-2" />
+
+          {/* Search & Actions */}
+          <div className="flex flex-col sm:flex-row w-full xl:flex-1 gap-3">
+            <div className="relative w-full sm:flex-1">
+              <input
+                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium text-sm"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Поиск по TG ID, @username, тарифу..."
+              />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            </div>
+            
+            <div className="flex gap-2 w-full sm:w-auto shrink-0">
+              <button className="flex-1 sm:flex-none px-6 py-3.5 bg-blue-600 !text-white rounded-2xl text-sm font-black shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
+                <Send className="w-4 h-4" /> Рассылка
+              </button>
+              <a className="flex-1 sm:flex-none px-6 py-3.5 bg-white border border-slate-200 !text-slate-700 rounded-2xl text-sm font-black shadow-sm hover:bg-slate-50 hover:!text-slate-900 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
+                <Database className="w-4 h-4 text-slate-400" /> Досье
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Data Table Card */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
+          
+          {/* Table Header Area */}
+          <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/50">
             <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
               {TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}
             </h3>
-            <span className="px-4 py-1.5 bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider">
+            <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[11px] font-black uppercase tracking-widest shadow-sm">
               {activeRows.length} записей
             </span>
           </div>
 
           {activeTab === 'viewed' && activeRows.length === 0 ? (
-            <div className="p-20 text-center space-y-4 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
-                <Eye className="w-8 h-8" />
+            <div className="p-24 text-center flex flex-col items-center">
+              <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-6 border border-slate-100">
+                <Eye className="w-10 h-10" />
               </div>
-              <p className="text-slate-400 font-bold tracking-tight">Просмотров тарифов пока нет. Они появятся после включения `customer_funnel_events` в боте.</p>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight mb-2">Просмотров пока нет</h4>
+              <p className="text-slate-500 font-medium max-w-sm">Они появятся здесь после включения параметра `customer_funnel_events` в боте.</p>
             </div>
           ) : activeRows.length === 0 ? (
-            <div className="p-20 text-center space-y-4 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
-                <FileText className="w-8 h-8" />
+            <div className="p-24 text-center flex flex-col items-center">
+              <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-6 border border-slate-100">
+                <FileText className="w-10 h-10" />
               </div>
-              <p className="text-slate-400 font-bold tracking-tight">Под текущий фильтр ничего не попало.</p>
+              <h4 className="text-xl font-black text-slate-900 tracking-tight mb-2">Ничего не найдено</h4>
+              <p className="text-slate-500 font-medium">Под текущий фильтр или поиск не попало ни одной записи.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full text-left text-sm whitespace-nowrap">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
-                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Контекст</th>
-                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
-                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Причина</th>
-                    <th className="px-8 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Дальше</th>
+                    <th className="px-8 py-5 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
+                    <th className="px-8 py-5 font-black text-slate-400 uppercase tracking-widest text-[10px]">Контекст</th>
+                    <th className="px-8 py-5 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
+                    <th className="px-8 py-5 font-black text-slate-400 uppercase tracking-widest text-[10px]">Причина</th>
+                    <th className="px-8 py-5 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {activeRows.slice(0, 80).map((row) => (
-                    <tr key={`${activeTab}-${row.id}`} className="hover:bg-slate-50/50 transition-colors group">
+                    <tr key={`${activeTab}-${row.id}`} className="hover:bg-slate-50/80 transition-colors group">
+                      
+                      {/* Client Col */}
                       <td className="px-8 py-6">
-                        <div className="font-black text-slate-900 text-base mb-0.5">
-                          {row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : '-'}
-                        </div>
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">
-                          {row.source || row.created_at ? formatWhen(row.created_at) : ''}
+                        <div className="flex items-center gap-3 mb-1">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
+                            {row.tg_username ? row.tg_username.charAt(0).toUpperCase() : <UserSquare2 className="w-4 h-4"/>}
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-900 text-base">{row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный'}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                              {row.source || row.created_at ? formatWhen(row.created_at) : ''}
+                            </div>
+                          </div>
                         </div>
                       </td>
+
+                      {/* Context Col */}
                       <td className="px-8 py-6">
-                        <div className="font-bold text-slate-800 text-sm mb-0.5">{row.title || row.channel_title || '-'}</div>
-                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-tight">{row.channel_title || ''}</div>
+                        <div className="font-bold text-slate-800 text-sm mb-1">{row.title || row.channel_title || '—'}</div>
+                        <div className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md inline-block">
+                          {row.channel_title || 'Без канала'}
+                        </div>
                       </td>
+
+                      {/* Status Col */}
                       <td className="px-8 py-6">
-                        <div className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${
-                          row.priority >= 90 ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-slate-100 text-slate-600 border-slate-200'
+                        <div className={`inline-flex px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                          row.priority >= 90 ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                          row.status === 'Активен' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          row.status === 'Истек' ? 'bg-red-50 text-red-700 border-red-200' :
+                          'bg-slate-100 text-slate-600 border-slate-200'
                         }`}>
-                          {row.status || '-'}
+                          {row.status || '—'}
                         </div>
                       </td>
-                      <td className="px-8 py-6 text-slate-600 font-medium">
-                        {row.reason || '-'}
+
+                      {/* Reason Col */}
+                      <td className="px-8 py-6">
+                        <div className="text-slate-600 font-medium text-sm truncate max-w-xs" title={row.reason || ''}>
+                          {row.reason || '—'}
+                        </div>
                       </td>
+
+                      {/* Actions Col */}
                       <td className="px-8 py-6 text-right">
-                        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           {row.tg_user_id && (
                             <>
-                              <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать (Userbot)">
+                              <button className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-xl transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать (Userbot)">
                                 <Send className="w-4 h-4" />
                               </button>
-                              <a className="p-2 !text-slate-400 hover:!text-purple-600 hover:bg-purple-50 rounded-lg transition-all" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                              <a className="p-2.5 bg-white border border-slate-200 !text-slate-400 hover:!text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-xl transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
                                 <Database className="w-4 h-4" />
                               </a>
                             </>
                           )}
-                          <a className="p-2 !text-slate-400 hover:!text-slate-900 hover:bg-slate-100 rounded-lg transition-all" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
+                          <a className="p-2.5 bg-white border border-slate-200 !text-slate-400 hover:!text-slate-900 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all shadow-sm" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
                             <ChevronRight className="w-4 h-4" />
                           </a>
                         </div>
@@ -559,7 +602,6 @@ export function CustomersPage() {
           )}
         </div>
 
-      </div>
       </div>
     </section>
   );
