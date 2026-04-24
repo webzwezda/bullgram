@@ -633,7 +633,7 @@ export function CustomersPage() {
   return (
     <section className="page page--flush space-y-6">
       {/* Main Content Card */}
-      <div className="bg-white rounded-[2rem] p-6 sm:p-10 lg:p-12 space-y-12">
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
         {state.error && (
           <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
@@ -642,85 +642,111 @@ export function CustomersPage() {
           </div>
         )}
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
-          {[
-            { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', tab: 'customers-active' },
-            { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', tab: 'customers-expired' },
-            { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', tab: 'access' },
-            { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', tab: 'viewed' },
-            { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-blue-500' : 'text-slate-400', tab: 'abandoned' },
-          ].map((item, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setTabState(item.tab)}
-              className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-                <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
-              </div>
-              <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
-            </button>
-          ))}
-        </div>
+        {/* Metrics Section */}
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Сегменты клиентов</h3>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">Быстрый переход к данным</p>
+            </div>
+          </div>
 
-        {/* Search & Actions Bar */}
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="relative flex-1 w-full">
-            <input
-              className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Поиск по TG ID, @username, тарифу..."
-            />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+            {[
+              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200', tab: 'customers-active' },
+              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', bg: stats.expiredCustomers > 0 ? 'bg-red-50' : 'bg-slate-50', border: stats.expiredCustomers > 0 ? 'border-red-200' : 'border-slate-200', tab: 'customers-expired' },
+              { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', bg: stats.access > 0 ? 'bg-purple-50' : 'bg-slate-50', border: stats.access > 0 ? 'border-purple-200' : 'border-slate-200', tab: 'access' },
+              { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', bg: stats.viewed > 0 ? 'bg-amber-50' : 'bg-slate-50', border: stats.viewed > 0 ? 'border-amber-200' : 'border-slate-200', tab: 'viewed' },
+              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-blue-500' : 'text-slate-400', bg: stats.abandoned > 0 ? 'bg-blue-50' : 'bg-slate-50', border: stats.abandoned > 0 ? 'border-blue-200' : 'border-slate-200', tab: 'abandoned' },
+            ].map((item, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setTabState(item.tab)}
+                className={`${item.bg} ${item.border} border p-4 rounded-2xl text-left transition-all hover:border-slate-300 hover:shadow-sm`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">{item.label}</span>
+                  <item.icon className={`w-4 h-4 ${item.color} opacity-70`} />
+                </div>
+                <div className={`text-2xl font-black tracking-tight ${item.color}`}>{item.value}</div>
+              </button>
+            ))}
           </div>
-          <div className="w-full md:w-[280px] shrink-0">
-            <select
-              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
-              value={selectedBotId}
-              onChange={(event) => {
-                const next = new URLSearchParams(window.location.search);
-                if (event.target.value) next.set('bot_id', event.target.value);
-                else next.delete('bot_id');
-                setSearchParams(next);
-              }}
-            >
-              <option value="">Все боты</option>
-              {state.bots.map((bot) => (
-                <option key={bot.id} value={bot.id}>
-                  {bot.label}{bot.status === 'deleted' ? ' • удален' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2 w-full md:w-auto shrink-0">
-            <a className="flex-1 md:flex-none px-6 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
-              <Database className="w-4 h-4 text-slate-400" /> Досье
-            </a>
-          </div>
-        </div>
+        </section>
 
-        {/* Tabs Bar */}
-        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                activeTab === tab.id
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-              onClick={() => setTabState(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {/* Filter & Search Section */}
+        <section className="p-6 md:p-8 bg-slate-50/50">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white shrink-0">
+              <Filter className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">Фильтры и поиск</h3>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">Выберите сегмент клиентов</p>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto mb-4">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setTabState(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search & Actions */}
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="relative flex-1 w-full">
+              <input
+                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Поиск по TG ID, @username, тарифу..."
+              />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+            </div>
+            <div className="w-full md:w-[280px] shrink-0">
+              <select
+                className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
+                value={selectedBotId}
+                onChange={(event) => {
+                  const next = new URLSearchParams(window.location.search);
+                  if (event.target.value) next.set('bot_id', event.target.value);
+                  else next.delete('bot_id');
+                  setSearchParams(next);
+                }}
+              >
+                <option value="">Все боты</option>
+                {state.bots.map((bot) => (
+                  <option key={bot.id} value={bot.id}>
+                    {bot.label}{bot.status === 'deleted' ? ' • удален' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 w-full md:w-auto shrink-0">
+              <a className="flex-1 md:flex-none px-6 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
+                <Database className="w-4 h-4 text-slate-400" /> Досье
+              </a>
+            </div>
+          </div>
+        </section>
 
         {/* Data Table Card */}
         <div className="overflow-hidden flex flex-col">
