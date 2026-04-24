@@ -35,6 +35,33 @@ function getAbandonedStatus(invoice) {
     return 'stale';
 }
 
+function buildPersonDisplayName(profile = {}) {
+    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+    if (fullName) return fullName;
+    if (profile.display_name) return String(profile.display_name).trim();
+    return null;
+}
+
+function buildFunnelPersonProfile(event = {}) {
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
+    const first_name = payload.first_name || null;
+    const last_name = payload.last_name || null;
+    const display_name = payload.display_name || null;
+    const username = payload.username || null;
+
+    return {
+        first_name,
+        last_name,
+        display_name: buildPersonDisplayName({ first_name, last_name, display_name }),
+        username
+    };
+}
+
+function normalizeUuidLike(value) {
+    const raw = String(value || '').trim();
+    return raw || null;
+}
+
 function requireProjectAdmin(req, res) {
     if (req.profile?.role !== 'admin') {
         res.status(403).json({ error: 'Демо-данные может создавать только админ проекта' });
@@ -195,6 +222,13 @@ export default function customersRoutes(supabase) {
             referralBuyer: 900000000007,
             referralPartner: 900000000099
         };
+        const demoProfiles = {
+            viewed: { username: 'ivan_petrov', first_name: 'Иван', last_name: 'Петров', display_name: 'Иван Петров' },
+            joined: { username: 'anna_sokolova', first_name: 'Анна', last_name: 'Соколова', display_name: 'Анна Соколова' },
+            noJoin: { username: 'maxim_orlov', first_name: 'Максим', last_name: 'Орлов', display_name: 'Максим Орлов' },
+            expiredInside: { username: 'elena_vasileva', first_name: 'Елена', last_name: 'Васильева', display_name: 'Елена Васильева' },
+            referralBuyer: { username: 'dmitry_kuznetsov', first_name: 'Дмитрий', last_name: 'Кузнецов', display_name: 'Дмитрий Кузнецов' }
+        };
 
         try {
             await cleanupCustomerDemoSeed(supabase, ownerId, seedId);
@@ -334,7 +368,7 @@ export default function customersRoutes(supabase) {
                     {
                         channel_id: channel.id,
                         tg_user_id: demoTg.joined,
-                        tg_username: `demo_joined_${seedId}`,
+                        tg_username: demoProfiles.joined.username,
                         status: 'active',
                         expires_at: hoursAgo(-20 * 24),
                         last_join_approved_at: hoursAgo(26),
@@ -344,7 +378,7 @@ export default function customersRoutes(supabase) {
                     {
                         channel_id: channel.id,
                         tg_user_id: demoTg.noJoin,
-                        tg_username: `demo_no_join_${seedId}`,
+                        tg_username: demoProfiles.noJoin.username,
                         status: 'active',
                         expires_at: hoursAgo(-20 * 24),
                         last_access_event: 'invite_issued',
@@ -353,7 +387,7 @@ export default function customersRoutes(supabase) {
                     {
                         channel_id: channel.id,
                         tg_user_id: demoTg.expiredInside,
-                        tg_username: `demo_expired_inside_${seedId}`,
+                        tg_username: demoProfiles.expiredInside.username,
                         status: 'expired',
                         expires_at: hoursAgo(12),
                         last_join_approved_at: hoursAgo(35 * 24),
@@ -363,7 +397,7 @@ export default function customersRoutes(supabase) {
                     {
                         channel_id: channel.id,
                         tg_user_id: demoTg.referralBuyer,
-                        tg_username: `demo_referral_${seedId}`,
+                        tg_username: demoProfiles.referralBuyer.username,
                         status: 'active',
                         expires_at: hoursAgo(-20 * 24),
                         last_join_approved_at: hoursAgo(6),
@@ -464,17 +498,19 @@ export default function customersRoutes(supabase) {
             if (accessEventsError) throw accessEventsError;
 
             const baseMemberRows = [
-                [demoTg.viewed, 'demo_viewed', 'Смотрел тариф', true],
-                [demoTg.joined, 'demo_joined', 'Оплатил и вошел', true],
-                [demoTg.noJoin, 'demo_no_join', 'Вход не подтвержден', false],
-                [demoTg.expiredInside, 'demo_expired_inside', 'Сгорел, но сидит', true],
-                [demoTg.referralBuyer, 'demo_referral', 'Реферальный заказ', true]
-            ].map(([tgUserId, username, displayName, presentNow]) => ({
+                [demoTg.viewed, demoProfiles.viewed, true],
+                [demoTg.joined, demoProfiles.joined, true],
+                [demoTg.noJoin, demoProfiles.noJoin, false],
+                [demoTg.expiredInside, demoProfiles.expiredInside, true],
+                [demoTg.referralBuyer, demoProfiles.referralBuyer, true]
+            ].map(([tgUserId, profile, presentNow]) => ({
                 owner_id: ownerId,
                 base_id: base.id,
                 tg_user_id: String(tgUserId),
-                username: `${username}_${seedId}`,
-                display_name: `[DEMO ${seedId}] ${displayName}`,
+                username: profile.username,
+                display_name: profile.display_name,
+                first_name: profile.first_name,
+                last_name: profile.last_name,
                 is_bot: false,
                 source_channel_ids: [channel.id],
                 channels_count: 1,
@@ -492,7 +528,7 @@ export default function customersRoutes(supabase) {
                     event_type: 'tariff_list_opened',
                     source: 'demo_seed',
                     session_key: `demo:${seedId}:${demoTg.viewed}:list`,
-                    payload: { ...marker, label: 'opened_list' },
+                    payload: { ...marker, label: 'opened_list', ...demoProfiles.viewed },
                     created_at: hoursAgo(2)
                 },
                 {
@@ -502,7 +538,7 @@ export default function customersRoutes(supabase) {
                     event_type: 'tariff_card_opened',
                     source: 'demo_seed',
                     session_key: `demo:${seedId}:${demoTg.viewed}:card`,
-                    payload: { ...marker, label: 'opened_card' },
+                    payload: { ...marker, label: 'opened_card', ...demoProfiles.viewed },
                     created_at: hoursAgo(1.5)
                 },
                 {
@@ -512,7 +548,7 @@ export default function customersRoutes(supabase) {
                     event_type: 'payment_method_selected',
                     source: 'demo_seed',
                     session_key: `demo:${seedId}:${demoTg.viewed}:method`,
-                    payload: { ...marker, label: 'selected_method' },
+                    payload: { ...marker, label: 'selected_method', ...demoProfiles.viewed },
                     created_at: hoursAgo(1)
                 }
             ]);
@@ -600,8 +636,10 @@ export default function customersRoutes(supabase) {
     router.get('/workbench', authenticateUser, async (req, res) => {
         try {
             const ownerId = req.user.id;
+            const selectedBotId = normalizeUuidLike(req.query.bot_id);
 
             const [
+                botsResp,
                 channelsResp,
                 tariffsResp,
                 basesResp,
@@ -609,8 +647,14 @@ export default function customersRoutes(supabase) {
                 funnelResp
             ] = await Promise.all([
                 supabase
+                    .from('tg_accounts')
+                    .select('id, tg_username, tg_account_id, bot_role, runtime_status, created_at')
+                    .eq('owner_id', ownerId)
+                    .eq('account_type', 'bot')
+                    .order('created_at', { ascending: false }),
+                supabase
                     .from('channels')
-                    .select('id, title, tg_chat_id')
+                    .select('id, title, tg_chat_id, bot_id')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false }),
                 supabase
@@ -625,7 +669,7 @@ export default function customersRoutes(supabase) {
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('customer_base_members')
-                    .select('base_id, tg_user_id, present_now, is_bot, source_channel_ids')
+                    .select('base_id, tg_user_id, username, display_name, first_name, last_name, last_seen_at, present_now, is_bot, source_channel_ids')
                     .eq('owner_id', ownerId),
                 supabase
                     .from('customer_funnel_events')
@@ -635,14 +679,51 @@ export default function customersRoutes(supabase) {
                     .limit(150)
             ]);
 
+            if (botsResp.error) throw botsResp.error;
             if (channelsResp.error) throw channelsResp.error;
             if (tariffsResp.error) throw tariffsResp.error;
             if (basesResp.error && !(basesResp.error.message || '').includes('customer_bases')) throw basesResp.error;
             if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('customer_base_members')) throw baseMembersResp.error;
 
-            const channels = channelsResp.data || [];
-            const tariffs = tariffsResp.data || [];
+            const allBots = botsResp.data || [];
+            const allChannels = channelsResp.data || [];
+            const allTariffs = tariffsResp.data || [];
+            const allFunnelEvents = funnelResp.error ? [] : (funnelResp.data || []);
+
+            const orphanBotIds = new Set([
+                ...allChannels.map(channel => channel.bot_id).filter(Boolean),
+                ...allFunnelEvents.map(event => event.bot_id).filter(Boolean)
+            ]);
+            for (const bot of allBots) {
+                orphanBotIds.delete(bot.id);
+            }
+
+            const botOptions = [
+                ...allBots.map(bot => ({
+                    id: bot.id,
+                    label: bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id || bot.id}`,
+                    tg_username: bot.tg_username || null,
+                    tg_account_id: bot.tg_account_id || null,
+                    bot_role: bot.bot_role || 'sales',
+                    status: 'active',
+                    runtime_status: bot.runtime_status || null
+                })),
+                ...Array.from(orphanBotIds).map(botId => ({
+                    id: botId,
+                    label: `Удаленный бот ${String(botId).slice(0, 8)}`,
+                    tg_username: null,
+                    tg_account_id: null,
+                    bot_role: 'sales',
+                    status: 'deleted',
+                    runtime_status: 'deleted'
+                }))
+            ];
+
+            const channels = selectedBotId
+                ? allChannels.filter(channel => String(channel.bot_id || '') === selectedBotId)
+                : allChannels;
             const channelIds = channels.map(channel => channel.id);
+            const tariffs = allTariffs.filter(tariff => channelIds.includes(tariff.channel_id));
             const tariffIds = tariffs.map(tariff => tariff.id);
             const channelMap = new Map(channels.map(channel => [channel.id, channel]));
             const tariffMap = new Map(tariffs.map(tariff => [tariff.id, tariff]));
@@ -738,6 +819,32 @@ export default function customersRoutes(supabase) {
                 subscriptions,
                 sub => `${sub.tg_user_id}:${sub.channel_id}`
             );
+            const latestBaseProfileByUser = latestBy(
+                baseMembers.filter(member => member.tg_user_id),
+                member => String(member.tg_user_id),
+                'last_seen_at'
+            );
+            const latestFunnelProfileByUser = latestBy(
+                allFunnelEvents.filter(event => event.tg_user_id),
+                event => String(event.tg_user_id)
+            );
+
+            function getPersonProfile(tgUserId, fallbackUsername = null) {
+                const baseProfile = latestBaseProfileByUser.get(String(tgUserId)) || null;
+                const funnelProfile = buildFunnelPersonProfile(latestFunnelProfileByUser.get(String(tgUserId)) || null);
+                const displayName = buildPersonDisplayName({
+                    first_name: baseProfile?.first_name || funnelProfile.first_name,
+                    last_name: baseProfile?.last_name || funnelProfile.last_name,
+                    display_name: baseProfile?.display_name || funnelProfile.display_name
+                });
+
+                return {
+                    tg_username: fallbackUsername || baseProfile?.username || funnelProfile.username || null,
+                    display_name: displayName,
+                    first_name: baseProfile?.first_name || funnelProfile.first_name || null,
+                    last_name: baseProfile?.last_name || funnelProfile.last_name || null
+                };
+            }
 
             const recentOrders = invoices.map(invoice => {
                 const tariff = tariffMap.get(invoice.tariff_id) || null;
@@ -752,6 +859,7 @@ export default function customersRoutes(supabase) {
                 const referralDiscountPercent = Number(invoicePayload.referral_discount_percent || referralReward?.client_discount_percent || 0);
                 const presenceConfirmed = presentByUserChannel.has(`${invoice.tg_user_id}:${tariff?.channel_id}`);
                 const joined = !!subscription?.last_join_approved_at || presenceConfirmed;
+                const person = getPersonProfile(invoice.tg_user_id, subscription?.tg_username || null);
 
                 let problemReason = 'Все выглядит ровно';
                 if (invoice.status === 'awaiting_receipt') problemReason = 'Клиент нажал “я оплатил”, но чек еще не загружен';
@@ -765,6 +873,10 @@ export default function customersRoutes(supabase) {
                     id: invoice.id,
                     created_at: invoice.created_at,
                     tg_user_id: String(invoice.tg_user_id),
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name,
                     channel_id: tariff?.channel_id || null,
                     subscription_id: subscription?.id || null,
                     amount: invoice.amount,
@@ -798,39 +910,63 @@ export default function customersRoutes(supabase) {
 
             const activeCustomers = subscriptions
                 .filter(sub => sub.status === 'active')
-                .map(sub => ({
+                .map(sub => {
+                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
+                    return {
                     ...sub,
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name,
                     in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                }));
+                };});
 
             const expiredCustomers = subscriptions
                 .filter(sub => sub.status === 'expired')
-                .map(sub => ({
+                .map(sub => {
+                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
+                    return {
                     ...sub,
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name,
                     in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                }));
+                };});
 
             const inGroupLeaks = subscriptions
                 .filter(sub => sub.status === 'expired' && sub.last_access_event !== 'kicked')
-                .map(sub => ({
+                .map(sub => {
+                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
+                    return {
                     ...sub,
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name,
                     in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
                     channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                }));
+                };});
 
             const needsAccessCheck = subscriptions
                 .filter(sub => sub.status === 'active' && !sub.last_join_approved_at && !presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`))
-                .map(sub => ({
+                .map(sub => {
+                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
+                    return {
                     ...sub,
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name,
                     in_group: false,
                     presence_confirmed: false,
                     channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                }));
+                };});
 
             const abandonedInvoices = recentOrders
                 .filter(order => order.invoice_status === 'pending' || order.invoice_status === 'awaiting_receipt')
@@ -846,9 +982,11 @@ export default function customersRoutes(supabase) {
                     }
                 }));
 
-            const viewedEvents = funnelResp.error
-                ? []
-                : (funnelResp.data || []).map(event => ({
+            const scopedFunnelEvents = selectedBotId
+                ? allFunnelEvents.filter(event => String(event.bot_id || '') === selectedBotId)
+                : allFunnelEvents;
+
+            const viewedEvents = scopedFunnelEvents.map(event => ({
                     ...event,
                     tariff_title: tariffMap.get(event.tariff_id)?.title || null,
                     channel_id: tariffMap.get(event.tariff_id)?.channel_id || null,
@@ -862,7 +1000,37 @@ export default function customersRoutes(supabase) {
                     if (event.tariff_id && String(invoice.tariff_id) !== String(event.tariff_id)) return false;
                     return new Date(invoice.created_at).getTime() >= new Date(event.created_at).getTime();
                 })
-            );
+            ).map(event => {
+                const person = getPersonProfile(event.tg_user_id, null);
+                return {
+                    ...event,
+                    tg_username: person.tg_username,
+                    display_name: person.display_name,
+                    first_name: person.first_name,
+                    last_name: person.last_name
+                };
+            });
+
+            const startedContacts = viewedEvents
+                .filter(event => event.event_type === 'bot_started')
+                .reduce((acc, event) => {
+                    const existing = acc.get(String(event.tg_user_id));
+                    const eventTime = new Date(event.created_at || 0).getTime();
+                    const existingTime = new Date(existing?.created_at || 0).getTime();
+                    if (!existing || eventTime < existingTime) {
+                        const person = getPersonProfile(event.tg_user_id, null);
+                        acc.set(String(event.tg_user_id), {
+                            ...event,
+                            tg_username: person.tg_username,
+                            display_name: person.display_name,
+                            first_name: person.first_name,
+                            last_name: person.last_name,
+                            status: 'Нажал /start',
+                            reason: event.payload?.start_payload ? `Payload: ${event.payload.start_payload}` : 'Первое касание с ботом'
+                        });
+                    }
+                    return acc;
+                }, new Map());
 
             const baseStatsById = new Map();
             for (const member of baseMembers) {
@@ -882,6 +1050,7 @@ export default function customersRoutes(supabase) {
             }));
 
             const segments = {
+                startedContacts: Array.from(startedContacts.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
                 viewedTariffs,
                 abandonedInvoices,
                 activeCustomers,
@@ -895,7 +1064,10 @@ export default function customersRoutes(supabase) {
             res.json({
                 success: true,
                 updatedAt: new Date().toISOString(),
+                selectedBotId,
+                bots: botOptions,
                 summary: {
+                    startedContacts: startedContacts.size,
                     viewedTariffs: viewedTariffs.length,
                     abandonedInvoices: abandonedInvoices.length,
                     activeCustomers: activeCustomers.length,

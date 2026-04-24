@@ -1651,6 +1651,22 @@ export class OfficialBotService {
                     const startPayload = startText.startsWith('/start ') ? startText.slice(7).trim() : '';
                     const displayName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ').trim() || null;
 
+                    await this.logCustomerFunnelEvent({
+                        ownerId,
+                        botId,
+                        tgUserId: ctx.from.id,
+                        eventType: 'bot_started',
+                        source: 'official_bot',
+                        sessionKey: [botId || 'bot', ctx.from.id, 'bot_started', 'first_touch'].join(':'),
+                        payload: {
+                            username: ctx.from?.username || null,
+                            display_name: displayName,
+                            first_name: ctx.from?.first_name || null,
+                            last_name: ctx.from?.last_name || null,
+                            start_payload: startPayload || null
+                        }
+                    });
+
                     if (startPayload.startsWith('ref_')) {
                         const settings = await this.getReferralSettings(ownerId);
                         const reserve = await loadReferralReserveState(this.supabase, ownerId, { ensure: true });
