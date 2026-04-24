@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, RefreshCcw, Activity, Users, X, Send, UserSquare2, ChevronRight, Eye, ShoppingCart, Lock, Database, UserX, UserPlus, FileText, AlertCircle, Clock } from 'lucide-react';
+import { Search, Filter, Users, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -365,7 +365,7 @@ export function CustomersPage() {
   return (
     <section className="page page--flush">
       {/* Main Content Card */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12 space-y-10">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 p-6 sm:p-10 lg:p-12 space-y-12">
 
         {state.error && (
           <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
@@ -373,6 +373,77 @@ export function CustomersPage() {
             {state.error}
           </div>
         )}
+
+        {/* Stats Section */}
+        <section className="space-y-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-blue-600/20">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Обзор клиентов</h2>
+              <p className="text-slate-500 font-medium text-sm">Активность и доступы</p>
+            </div>
+          </div>
+
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { label: 'Активны', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
+              { label: 'Истекли', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400' },
+              { label: 'Не подтвердили вход', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400' },
+              { label: 'Посмотрели тарифы', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400' },
+            ].map((item, idx) => (
+              <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                  <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
+                </div>
+                <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="h-px bg-slate-100" />
+
+        {/* Filter & Search Bar */}
+        <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-white rounded-[2rem] border border-slate-200 shadow-sm">
+          <div className="relative flex-1 w-full">
+            <input
+              className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Поиск по TG ID, @username, тарифу..."
+            />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+          </div>
+          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-full md:w-auto overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 w-full md:w-auto shrink-0">
+            <button className="flex-1 md:flex-none px-6 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
+              <Send className="w-4 h-4" /> Рассылка
+            </button>
+            <a className="flex-1 md:flex-none px-6 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
+              <Database className="w-4 h-4 text-slate-400" /> Досье
+            </a>
+          </div>
+        </div>
 
         {/* Filter Handoff */}
         {(handoff.abandonedFilter || handoff.orderTgUserIds.length > 0 || focusChannelId) && (
@@ -400,104 +471,15 @@ export function CustomersPage() {
           </div>
         )}
 
-        {/* Bento Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
-          
-          {/* Primary Access Card (Span 2) */}
-          <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2rem] shadow-xl hover:shadow-2xl transition-shadow flex flex-col lg:col-span-2 relative overflow-hidden group">
-            <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/20 blur-3xl rounded-full group-hover:bg-emerald-500/30 transition-colors" />
-            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><UserSquare2 className="w-4 h-4" /> Доступ к каналам</div>
-            <div className="flex flex-col gap-6 mt-auto relative z-10">
-              <div className="flex items-end gap-4">
-                <div className="text-5xl font-black tracking-tighter text-white">{stats.activeCustomers}</div>
-                <div className="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 bg-emerald-500/10 px-2 py-1 rounded-md">Активен</div>
-              </div>
-              <div className="w-full h-px bg-slate-800" />
-              <div className="flex items-end gap-4">
-                <div className={`text-3xl font-black tracking-tighter ${stats.expiredCustomers > 0 ? 'text-red-400' : 'text-slate-500'}`}>{stats.expiredCustomers}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Истек</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col lg:col-span-2 group relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-purple-500/10 blur-2xl rounded-full group-hover:bg-purple-500/20 transition-colors" />
-            <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><Lock className="w-4 h-4" /> Вход не подтвержден</div>
-            <div className="mt-auto">
-              <div className={`text-5xl font-black tracking-tighter ${stats.access > 0 ? 'text-purple-600' : 'text-slate-900'}`}>{stats.access}</div>
-              <div className="text-sm font-medium text-slate-500 mt-2">Оплатили, но не вошли</div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col group relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-amber-500/10 blur-2xl rounded-full group-hover:bg-amber-500/20 transition-colors" />
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><Eye className="w-3.5 h-3.5" /> Посмотрели</div>
-            <div className={`text-4xl font-black tracking-tighter mt-auto ${stats.viewed > 0 ? 'text-amber-500' : 'text-slate-900'}`}>{stats.viewed}</div>
-          </div>
-
-          <div className="bg-white border border-slate-200 p-8 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow flex flex-col group relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-32 h-32 bg-orange-500/10 blur-2xl rounded-full group-hover:bg-orange-500/20 transition-colors" />
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2"><ShoppingCart className="w-3.5 h-3.5" /> Бросили</div>
-            <div className={`text-4xl font-black tracking-tighter mt-auto ${stats.abandoned > 0 ? 'text-orange-500' : 'text-slate-900'}`}>{stats.abandoned}</div>
-          </div>
-        </div>
-
-        {/* Workspace Toolbar */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-slate-200 shadow-sm p-3 sm:p-4 flex flex-col xl:flex-row gap-4 items-center sticky top-4 z-40">
-          
-          {/* Segmented Control Tabs */}
-          <div className="flex w-full xl:w-auto p-1.5 bg-slate-100 rounded-2xl overflow-x-auto hide-scrollbar">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`shrink-0 px-5 py-2.5 text-[11px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                  activeTab === tab.id 
-                    ? 'bg-white text-slate-900 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="w-px h-8 bg-slate-200 hidden xl:block mx-2" />
-
-          {/* Search & Actions */}
-          <div className="flex flex-col sm:flex-row w-full xl:flex-1 gap-3">
-            <div className="relative w-full sm:flex-1">
-              <input
-                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-slate-400 placeholder:font-medium text-sm"
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск по TG ID, @username, тарифу..."
-              />
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            </div>
-            
-            <div className="flex gap-2 w-full sm:w-auto shrink-0">
-              <button className="flex-1 sm:flex-none px-6 py-3.5 bg-blue-600 !text-white rounded-2xl text-sm font-black shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
-                <Send className="w-4 h-4" /> Рассылка
-              </button>
-              <a className="flex-1 sm:flex-none px-6 py-3.5 bg-white border border-slate-200 !text-slate-700 rounded-2xl text-sm font-black shadow-sm hover:bg-slate-50 hover:!text-slate-900 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
-                <Database className="w-4 h-4 text-slate-400" /> Досье
-              </a>
-            </div>
-          </div>
-        </div>
-
         {/* Data Table Card */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
-          
+
           {/* Table Header Area */}
-          <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30">
             <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
               {TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}
             </h3>
-            <span className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[11px] font-black uppercase tracking-widest shadow-sm">
+            <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
               {activeRows.length} записей
             </span>
           </div>
@@ -538,7 +520,7 @@ export function CustomersPage() {
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-3 mb-1">
                           <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black">
-                            {row.tg_username ? row.tg_username.charAt(0).toUpperCase() : <UserSquare2 className="w-4 h-4"/>}
+                            {row.tg_username ? row.tg_username.charAt(0).toUpperCase() : '?'}
                           </div>
                           <div>
                             <div className="font-black text-slate-900 text-base">{row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный'}</div>
