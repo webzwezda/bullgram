@@ -392,8 +392,8 @@ export function CustomersPage() {
           ))}
         </div>
 
-        {/* Filter & Search Bar */}
-        <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-white rounded-[2rem] border border-slate-200 shadow-sm">
+        {/* Search & Actions Bar */}
+        <div className="flex flex-col md:flex-row items-center gap-4">
           <div className="relative flex-1 w-full">
             <input
               className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner"
@@ -404,22 +404,6 @@ export function CustomersPage() {
             />
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
           </div>
-          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl w-full md:w-auto overflow-x-auto">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
           <div className="flex gap-2 w-full md:w-auto shrink-0">
             <button className="flex-1 md:flex-none px-6 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2" type="button" onClick={() => openBroadcastManualSelection(activeRows)}>
               <Send className="w-4 h-4" /> Рассылка
@@ -428,6 +412,24 @@ export function CustomersPage() {
               <Database className="w-4 h-4 text-slate-400" /> Досье
             </a>
           </div>
+        </div>
+
+        {/* Tabs Bar */}
+        <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                activeTab === tab.id
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+              onClick={() => setSearchParams(focusChannelId ? { tab: tab.id, channel: focusChannelId } : { tab: tab.id })}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Filter Handoff */}
