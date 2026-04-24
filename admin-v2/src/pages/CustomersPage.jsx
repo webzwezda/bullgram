@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, Users, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -374,38 +374,23 @@ export function CustomersPage() {
           </div>
         )}
 
-        {/* Stats Section */}
-        <section className="space-y-8">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-blue-600/20">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Обзор клиентов</h2>
-              <p className="text-slate-500 font-medium text-sm">Активность и доступы</p>
-            </div>
-          </div>
-
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { label: 'Активны', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
-              { label: 'Истекли', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400' },
-              { label: 'Не подтвердили вход', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400' },
-              { label: 'Посмотрели тарифы', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400' },
-            ].map((item, idx) => (
-              <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-                  <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
-                </div>
-                <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[
+            { label: 'Активны', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
+            { label: 'Истекли', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400' },
+            { label: 'Не подтвердили вход', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400' },
+            { label: 'Посмотрели тарифы', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400' },
+          ].map((item, idx) => (
+            <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
               </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="h-px bg-slate-100" />
+              <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
+            </div>
+          ))}
+        </div>
 
         {/* Filter & Search Bar */}
         <div className="flex flex-col md:flex-row items-center gap-6 p-4 bg-white rounded-[2rem] border border-slate-200 shadow-sm">
