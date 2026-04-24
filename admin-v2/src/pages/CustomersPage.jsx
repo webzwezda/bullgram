@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, Users } from 'lucide-react';
+import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -13,6 +13,7 @@ const TABS = [
   { id: 'abandoned', label: 'Не смогли оплатить' },
   { id: 'customers-active', label: 'Активный доступ' },
   { id: 'customers-expired', label: 'Доступ закончился' },
+  { id: 'removed-admin', label: 'Удален админом' },
   { id: 'access', label: 'Не смог войти' }
 ];
 
@@ -21,9 +22,17 @@ const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
 const ABANDONED_STATUS_LABELS = {
   awaiting_receipt: 'Ждет чек',
   reminded: 'Уже дожат',
-  fresh: 'Свежий',
-  queued: 'В очереди',
-  stale: 'Протух'
+  fresh: 'Счет без оплаты',
+  queued: 'Счет без оплаты',
+  stale: 'Счет без оплаты'
+};
+
+const VIEWED_EVENT_LABELS = {
+  tariff_list_opened: 'Открыл тарифы',
+  tariff_card_opened: 'Открыл тариф',
+  payment_method_selected: 'Выбрал оплату',
+  invoice_created: 'Создал счет',
+  bot_started: 'Нажал /start'
 };
 
 function formatWhen(value) {
@@ -39,10 +48,10 @@ function getInvoiceStatus(inv) {
   const ageHours = (Date.now() - createdAt) / (1000 * 60 * 60);
 
   if (inv.status === 'awaiting_receipt') return 'Ждет чек';
-  if (inv.reminded) return 'Уже дожат';
-  if (ageHours < 2) return 'Свежий';
-  if (ageHours < 24) return 'В очереди';
-  return 'Протух';
+  if (inv.reminded) return 'Счет без оплаты';
+  if (ageHours < 2) return 'Счет без оплаты';
+  if (ageHours < 24) return 'Счет без оплаты';
+  return 'Счет без оплаты';
 }
 
 function openUserbotCenterHandoff(tgUserId, draftMessage = '') {
@@ -111,6 +120,82 @@ function getClientInitial(row) {
   return '?';
 }
 
+function getViewedEventLabel(eventType) {
+  return VIEWED_EVENT_LABELS[eventType] || eventType || 'Событие';
+}
+
+function getStartedReason() {
+  return 'Первое касание с ботом';
+}
+
+function getAbandonedReason(row) {
+  if (row.status === 'awaiting_receipt') return 'Клиент нажал «я оплатил», но чек еще не загрузил';
+  return 'Счет создан, оплаты пока нет';
+}
+
+function getCustomerReason(row) {
+  if (row.status === 'active') {
+    if (row.in_group === true) return 'Вход подтвержден';
+    if (row.in_group === false) return 'Оплата есть, но вход не подтвержден';
+    return 'Состояние входа неизвестно';
+  }
+
+  if (row.in_group === true) return 'Доступ закончился, но человек внутри';
+  if (row.in_group === false) return 'Доступ закончился, вход не подтвержден';
+  return 'Доступ закончился';
+}
+
+function getAccessReason(row) {
+  if (row.status === 'expired') {
+    return row.access_source_label
+      ? `Доступ закончился, но человек все еще внутри • ${row.access_source_label}`
+      : 'Доступ закончился, но человек все еще внутри';
+  }
+  return row.access_source_label
+    ? `После выдачи доступа вход не подтвердился • ${row.access_source_label}`
+    : 'После выдачи доступа вход не подтвердился';
+}
+
+function getRemovedAdminReason(row) {
+  return row.reason || 'Админ вручную удалил человека из группы';
+}
+
+function appendAccessSource(reason, sourceLabel) {
+  if (!sourceLabel) return reason;
+  return `${reason} • ${sourceLabel}`;
+}
+
+function getContextDisplay(row, activeTab) {
+  const tariffTitle = sanitizeDemoLabel(row.title || '');
+  const channelTitle = sanitizeDemoLabel(row.channel_title || '');
+
+  if (activeTab === 'viewed' || activeTab === 'abandoned') {
+    return {
+      primary: tariffTitle ? `Тариф: ${tariffTitle}` : channelTitle ? `Канал: ${channelTitle}` : '—',
+      secondary: channelTitle ? `Канал: ${channelTitle}` : null
+    };
+  }
+
+  if (activeTab === 'customers-active' || activeTab === 'customers-expired' || activeTab === 'removed-admin' || activeTab === 'access') {
+    return {
+      primary: channelTitle ? `Канал: ${channelTitle}` : tariffTitle ? `Тариф: ${tariffTitle}` : '—',
+      secondary: null
+    };
+  }
+
+  if (activeTab === 'started') {
+    return {
+      primary: 'Первый вход в бота',
+      secondary: null
+    };
+  }
+
+  return {
+    primary: tariffTitle || channelTitle || '—',
+    secondary: tariffTitle && channelTitle && tariffTitle !== channelTitle ? channelTitle : null
+  };
+}
+
 function buildQueue({ abandoned, orders, access }) {
   const items = [];
 
@@ -177,6 +262,7 @@ function buildQuickBroadcastTitle(activeTab) {
   if (activeTab === 'started') return 'Нажал старт';
   if (activeTab === 'customers-active') return 'Активный доступ';
   if (activeTab === 'customers-expired') return 'Доступ закончился';
+  if (activeTab === 'removed-admin') return 'Удален админом';
   if (activeTab === 'viewed') return 'Смотрели тариф, но не создали счет';
   if (activeTab === 'abandoned') return 'Не смогли оплатить';
   if (activeTab === 'access') return 'Оплатили, но вход не подтвержден';
@@ -205,6 +291,8 @@ export function CustomersPage() {
     error: ''
   });
   const quickBroadcastRef = useRef(null);
+  const [openActionsRowId, setOpenActionsRowId] = useState(null);
+  const [mutatingRowId, setMutatingRowId] = useState(null);
   const [handoff, setHandoff] = useState({
     abandonedFilter: '',
     orderTgUserIds: []
@@ -215,9 +303,11 @@ export function CustomersPage() {
     error: '',
     updatedAt: null,
     bots: [],
+    channels: [],
     started: [],
     abandoned: [],
     crm: [],
+    removedAdmin: [],
     orders: [],
     access: [],
     bases: [],
@@ -323,80 +413,82 @@ export function CustomersPage() {
     };
   }, [accessToken, user?.id]);
 
+  const loadCustomers = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
+    if (!accessToken) return;
+
+    if (!silent) {
+      setState((prev) => ({
+        ...prev,
+        loading: !prev.updatedAt,
+        refreshing: !!prev.updatedAt,
+        error: ''
+      }));
+    }
+
+    try {
+      const params = new URLSearchParams();
+      if (selectedBotId) params.set('bot_id', selectedBotId);
+      const data = await apiRequest(`/api/customers/workbench${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
+      const segments = data.segments || {};
+
+      if (shouldCancel()) return;
+
+      const botOptions = data.bots || [];
+      const activeBotOptions = botOptions.filter((item) => item.status !== 'deleted');
+      if (!selectedBotId && activeBotOptions.length > 0) {
+        const next = new URLSearchParams(window.location.search);
+        next.set('bot_id', String(activeBotOptions[0].id));
+        setSearchParams(next);
+        return;
+      }
+
+      setState({
+        loading: false,
+        refreshing: false,
+        error: '',
+        updatedAt: data.updatedAt || new Date().toISOString(),
+        bots: botOptions,
+        channels: data.channels || [],
+        started: segments.startedContacts || [],
+        abandoned: segments.abandonedInvoices || [],
+        crm: [
+          ...(segments.activeCustomers || []),
+          ...(segments.expiredCustomers || [])
+        ],
+        removedAdmin: segments.removedByAdmin || [],
+        orders: segments.recentOrders || [],
+        access: [
+          ...(segments.needsAccessCheck || []),
+          ...(segments.inGroupLeaks || [])
+        ],
+        bases: segments.bases || [],
+        viewed: segments.viewedTariffs || []
+      });
+    } catch (error) {
+      if (!shouldCancel()) {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          refreshing: false,
+          error: error.message
+        }));
+      }
+    }
+  }, [accessToken, selectedBotId, setSearchParams]);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadCustomers({ silent = false } = {}) {
-      if (!accessToken) return;
-
-      if (!silent) {
-        setState((prev) => ({
-          ...prev,
-          loading: !prev.updatedAt,
-          refreshing: !!prev.updatedAt,
-          error: ''
-        }));
-      }
-
-      try {
-        const params = new URLSearchParams();
-        if (selectedBotId) params.set('bot_id', selectedBotId);
-        const data = await apiRequest(`/api/customers/workbench${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
-        const segments = data.segments || {};
-
-        if (cancelled) return;
-
-        const botOptions = data.bots || [];
-        const activeBotOptions = botOptions.filter((item) => item.status !== 'deleted');
-        if (!selectedBotId && activeBotOptions.length > 0) {
-          const next = new URLSearchParams(window.location.search);
-          next.set('bot_id', String(activeBotOptions[0].id));
-          setSearchParams(next);
-          return;
-        }
-
-        setState({
-          loading: false,
-          refreshing: false,
-          error: '',
-          updatedAt: data.updatedAt || new Date().toISOString(),
-          bots: botOptions,
-          started: segments.startedContacts || [],
-          abandoned: segments.abandonedInvoices || [],
-          crm: [
-            ...(segments.activeCustomers || []),
-            ...(segments.expiredCustomers || [])
-          ],
-          orders: segments.recentOrders || [],
-          access: [
-            ...(segments.needsAccessCheck || []),
-            ...(segments.inGroupLeaks || [])
-          ],
-          bases: segments.bases || [],
-          viewed: segments.viewedTariffs || []
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            refreshing: false,
-            error: error.message
-          }));
-        }
-      }
-    }
-
-    loadCustomers();
+    loadCustomers({ shouldCancel: () => cancelled });
     const intervalId = accessToken
-      ? window.setInterval(() => loadCustomers({ silent: true }), 60_000)
+      ? window.setInterval(() => loadCustomers({ silent: true, shouldCancel: () => cancelled }), 60_000)
       : null;
 
     return () => {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [accessToken, selectedBotId, setSearchParams]);
+  }, [accessToken, loadCustomers]);
 
   const rowsByTab = useMemo(() => ({
     started: state.started.map((row) => ({
@@ -407,7 +499,7 @@ export function CustomersPage() {
       first_name: row.first_name,
       last_name: row.last_name,
       status: row.status || 'Нажал /start',
-      reason: row.reason || 'Первое касание с ботом',
+      reason: getStartedReason(),
       created_at: row.created_at,
       href: '/app/customers?tab=started'
     })),
@@ -421,7 +513,7 @@ export function CustomersPage() {
       channel_id: row.channel_id,
       title: row.tariffs?.title || 'Тариф',
       status: getInvoiceStatus(row),
-      reason: row.status,
+      reason: getAbandonedReason(row),
       abandoned_status: row.abandoned_status,
       created_at: row.created_at,
       href: '/app/customers?tab=abandoned'
@@ -436,8 +528,8 @@ export function CustomersPage() {
       channel_id: row.channel_id,
       title: row.tariff_title || 'Просмотр тарифа',
       channel_title: row.channel_title || '',
-      status: row.event_type,
-      reason: row.source || row.referral_code || 'Без счета',
+      status: getViewedEventLabel(row.event_type),
+      reason: 'Счет еще не создан',
       created_at: row.created_at,
       href: '/app/customers?tab=viewed'
     })),
@@ -451,8 +543,8 @@ export function CustomersPage() {
       last_name: row.last_name,
       channel_title: row.channel_title,
       title: row.channel_title,
-      status: 'Активен',
-      reason: row.in_group === true ? 'Вход подтвержден' : row.in_group === false ? 'Вход не подтвержден' : 'Присутствие неизвестно',
+      status: 'Доступ активен',
+      reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
       href: '/app/customers?tab=customers-active'
     })),
@@ -466,10 +558,25 @@ export function CustomersPage() {
       last_name: row.last_name,
       channel_title: row.channel_title,
       title: row.channel_title,
-      status: 'Истек',
-      reason: row.in_group === true ? 'Вход подтвержден' : row.in_group === false ? 'Вход не подтвержден' : 'Присутствие неизвестно',
+      status: 'Доступ закончился',
+      reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
       href: '/app/customers?tab=customers-expired'
+    })),
+    'removed-admin': state.removedAdmin.map((row) => ({
+      id: row.id,
+      tg_user_id: row.tg_user_id,
+      channel_id: row.channel_id,
+      tg_username: row.tg_username,
+      display_name: row.display_name,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      channel_title: row.channel_title,
+      title: row.channel_title,
+      status: 'Удален админом',
+      reason: getRemovedAdminReason(row),
+      expires_at: row.expires_at,
+      href: '/app/customers?tab=removed-admin'
     })),
     access: state.access.map((row) => ({
       id: row.id,
@@ -480,8 +587,10 @@ export function CustomersPage() {
       last_name: row.last_name,
       channel_id: row.channel_id,
       channel_title: row.channel_title,
-      status: row.status === 'expired' ? 'Сгорел и висит' : 'Вход не подтвержден',
-      reason: row.last_access_event || row.access_note || 'Нет событий',
+      in_group: row.in_group,
+      access_source_label: row.access_source_label,
+      status: row.status === 'expired' && row.in_group === true ? 'Доступ закончился, но человек внутри' : 'Вход не подтвержден',
+      reason: getAccessReason(row),
       expires_at: row.expires_at,
       href: '/app/customers?tab=access'
     })),
@@ -509,11 +618,16 @@ export function CustomersPage() {
     abandoned: state.abandoned.length,
     activeCustomers: state.crm.filter((row) => row.status === 'active').length,
     expiredCustomers: state.crm.filter((row) => row.status === 'expired').length,
+    removedAdmin: state.removedAdmin.length,
     access: state.access.length
   }), [state]);
   const selectedBot = useMemo(
     () => state.bots.find((item) => String(item.id) === String(selectedBotId)) || null,
     [state.bots, selectedBotId]
+  );
+  const selectableChannels = useMemo(
+    () => (state.channels || []).filter((channel) => !selectedBotId || String(channel.bot_id || '') === String(selectedBotId)),
+    [state.channels, selectedBotId]
   );
 
   function setTabState(tab, extra = {}) {
@@ -564,6 +678,21 @@ export function CustomersPage() {
     if (!quickBroadcast.open || !quickBroadcastRef.current) return;
     quickBroadcastRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [quickBroadcast.open]);
+
+  useEffect(() => {
+    setOpenActionsRowId(null);
+  }, [activeTab, search, focusChannelId, selectedBotId]);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (!event.target.closest('[data-row-actions-root="true"]')) {
+        setOpenActionsRowId(null);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => window.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   function toggleQuickBroadcastUserbot(id) {
     setQuickBroadcast((prev) => {
@@ -623,6 +752,136 @@ export function CustomersPage() {
         sending: false,
         error: error.message
       }));
+    }
+  }
+
+  function canManageRow(row) {
+    return !!row?.tg_user_id;
+  }
+
+  function resolveActionChannelId(row) {
+    if (row.channel_id) return String(row.channel_id);
+
+    if (selectableChannels.length === 1) {
+      return String(selectableChannels[0].id);
+    }
+
+    if (!selectableChannels.length) {
+      window.alert('Для этого бота нет доступных каналов. Сначала подключи канал в BotFather.');
+      return null;
+    }
+
+    const optionsText = selectableChannels
+      .map((channel, index) => `${index + 1}. ${channel.title || `Канал ${index + 1}`}`)
+      .join('\n');
+    const input = window.prompt(`Выбери канал для выдачи доступа:\n${optionsText}\n\nВведи номер канала.`);
+    if (!input) return null;
+
+    const pickedIndex = Number(input) - 1;
+    if (!Number.isInteger(pickedIndex) || pickedIndex < 0 || pickedIndex >= selectableChannels.length) {
+      window.alert('Некорректный номер канала.');
+      return null;
+    }
+
+    return String(selectableChannels[pickedIndex].id);
+  }
+
+  async function runSubscriptionAction(row, action) {
+    if (!canManageRow(row)) return;
+
+    const rowId = row.id ? String(row.id) : null;
+    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
+    const contextLabel = sanitizeDemoLabel(row.channel_title || row.title || '');
+
+    setOpenActionsRowId(null);
+    setMutatingRowId(rowId);
+
+    try {
+      const channelId = resolveActionChannelId(row);
+      if (!channelId) {
+        setMutatingRowId(null);
+        return;
+      }
+
+      if (action === 'extend-5' || action === 'extend-30' || action === 'extend-forever') {
+        const days = action === 'extend-5' ? 5 : action === 'extend-30' ? 30 : 'forever';
+
+        if (row.id && ['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab)) {
+          await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
+            accessToken,
+            method: 'POST',
+            body: {
+              subscription_ids: [rowId],
+              days
+            }
+          });
+        } else {
+          const result = await apiRequest('/api/customers/direct-access', {
+            accessToken,
+            method: 'POST',
+            body: {
+              tg_user_id: String(row.tg_user_id),
+              channel_id: channelId,
+              duration_days: days
+            }
+          });
+
+          if (result.dm_sent) {
+            window.alert(
+              action === 'extend-forever'
+                ? 'Доступ выдан навсегда. Бот уже отправил человеку ссылку в личку.'
+                : `Доступ выдан на ${days} дней. Бот уже отправил человеку ссылку в личку.`
+            );
+          } else if (result.invite_link) {
+            window.prompt(
+              'Доступ создан, но бот не смог отправить ссылку в личку. Скопируй и перешли ее вручную:',
+              result.invite_link
+            );
+          } else {
+            window.alert('Доступ создан, но бот не смог отправить ссылку в личку.');
+          }
+        }
+
+        if (row.id && ['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab)) {
+          window.alert(
+            action === 'extend-forever'
+              ? 'Доступ выдан навсегда. Таблица обновится.'
+              : `Доступ продлен на ${days} дней. Таблица обновится.`
+          );
+        }
+      }
+
+      if (action === 'kick') {
+        if (!rowId) {
+          window.alert('Эту строку нельзя удалить из группы, потому что подписка еще не создана.');
+          setMutatingRowId(null);
+          return;
+        }
+        const prompt = contextLabel
+          ? `Удалить ${clientLabel} из «${contextLabel}»?`
+          : `Удалить ${clientLabel} из группы?`;
+        if (!window.confirm(prompt)) {
+          setMutatingRowId(null);
+          return;
+        }
+
+        const result = await apiRequest('/api/userbot/crm/subscribers/batch-kick', {
+          accessToken,
+          method: 'POST',
+          body: {
+            subscription_ids: [rowId],
+            action_source: 'customers'
+          }
+        });
+
+        window.alert(`Удаление завершено. Кикнули: ${result.kicked || 0}.`);
+      }
+
+      await loadCustomers();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      setMutatingRowId(null);
     }
   }
 
@@ -774,7 +1033,7 @@ export function CustomersPage() {
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-100">
                       <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Контекст</th>
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Тариф / канал</th>
                       <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
                       <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
                       <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
@@ -784,10 +1043,12 @@ export function CustomersPage() {
                     {activeRows.slice(0, limit).map((row) => {
                       const statusConfig = (() => {
                         if (row.priority >= 90) return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: AlertCircle };
-                        if (row.status === 'Активен') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
-                        if (row.status === 'Истек') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
+                        if (row.status === 'Доступ активен') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
+                        if (row.status === 'Удален админом') return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', icon: AlertCircle };
+                        if (row.status === 'Доступ закончился' || row.status === 'Доступ закончился, но человек внутри') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
                         return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', icon: null };
                       })();
+                      const contextDisplay = getContextDisplay(row, activeTab);
 
                       const StatusIcon = statusConfig.icon;
 
@@ -820,12 +1081,14 @@ export function CustomersPage() {
 
                           {/* Context Col */}
                           <td className="px-6 py-4 hidden md:table-cell">
-                            <div className="font-bold text-slate-800 text-sm mb-1 truncate">{sanitizeDemoLabel(row.title || row.channel_title || '—')}</div>
-                            {row.channel_title && (
-                              <div className="text-[10px] font-black uppercase text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md inline-block">
-                                {sanitizeDemoLabel(row.channel_title)}
+                            <div className="font-bold text-slate-800 text-sm truncate">
+                              {contextDisplay.primary}
+                            </div>
+                            {contextDisplay.secondary ? (
+                              <div className="text-xs text-slate-500 truncate mt-1">
+                                {contextDisplay.secondary}
                               </div>
-                            )}
+                            ) : null}
                           </td>
 
                           {/* Status Col */}
@@ -846,6 +1109,55 @@ export function CustomersPage() {
                           {/* Actions Col */}
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
+                              {canManageRow(row) ? (
+                                <div className="relative" data-row-actions-root="true">
+                                  <button
+                                    type="button"
+                                    className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                    onClick={() => setOpenActionsRowId((prev) => (prev === row.id ? null : row.id))}
+                                    disabled={mutatingRowId === String(row.id)}
+                                    title="Действия"
+                                  >
+                                    <MoreHorizontal className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {openActionsRowId === row.id ? (
+                                    <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
+                                      <button
+                                        type="button"
+                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                        onClick={() => runSubscriptionAction(row, 'extend-5')}
+                                      >
+                                        Продлить на 5 дней
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                        onClick={() => runSubscriptionAction(row, 'extend-30')}
+                                      >
+                                        Продлить на 30 дней
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                        onClick={() => runSubscriptionAction(row, 'extend-forever')}
+                                      >
+                                        Выдать навсегда
+                                      </button>
+                                      <div className="border-t border-slate-100" />
+                                      {row.id ? (
+                                        <button
+                                          type="button"
+                                          className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                                          onClick={() => runSubscriptionAction(row, 'kick')}
+                                        >
+                                          Удалить из группы
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
                               {row.tg_user_id && (
                                 <>
                                   <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать">

@@ -210,7 +210,7 @@ export function ClientDossierPage() {
                 <div className="list-item">
                   <div className="list-item__title">{state.summary.display_name || state.summary.username || state.summary.tg_user_id}</div>
                   <div className="list-item__meta">
-                    Последний канал: {state.summary.latestChannelTitle || '—'} • Последний access-event: {state.summary.latestAccessEvent || '—'}
+                    Последний канал: {state.summary.latestChannelTitle || '—'} • Последний access-event: {state.summary.latestAccessEvent || '—'}{state.summary.latestAccessSourceLabel ? ` • Источник: ${state.summary.latestAccessSourceLabel}` : ''}
                   </div>
                 </div>
                 <div className="list-item">
@@ -288,6 +288,9 @@ export function ClientDossierPage() {
                       <td><span className={invoiceBadge(row.invoice_status)}>{row.invoice_status}</span></td>
                       <td>
                         <div>{row.payment_event_type || 'Нет сигнала кассы'}</div>
+                        {row.access_source_label ? (
+                          <div className="table-subtext">Источник доступа: {row.access_source_label}</div>
+                        ) : null}
                         {Number(row.referral_reward_ton || 0) > 0 ? (
                           <div className="table-subtext">
                             Партнеру: {formatMoney(row.referral_reward_ton, 'TON')} • {row.referral_reward_status || 'ждет'}
@@ -317,6 +320,7 @@ export function ClientDossierPage() {
                     <tr>
                       <th>Канал</th>
                       <th>Статус</th>
+                      <th>Источник</th>
                       <th>Истекает</th>
                     </tr>
                   </thead>
@@ -325,6 +329,7 @@ export function ClientDossierPage() {
                       <tr key={row.id}>
                         <td>{row.channel_title}</td>
                         <td><span className={row.status === 'active' ? 'pill pill--ok' : 'pill pill--warning'}>{row.status}</span></td>
+                        <td>{row.access_source_label || '—'}</td>
                         <td>{formatWhen(row.expires_at)}</td>
                       </tr>
                     ))}
@@ -369,20 +374,22 @@ export function ClientDossierPage() {
                 <thead>
                   <tr>
                     <th>Когда</th>
-                    <th>Канал</th>
-                    <th>Событие</th>
-                    <th>Нота</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.accessEvents.slice(0, 30).map((row) => (
-                    <tr key={row.id}>
-                      <td>{formatWhen(row.created_at)}</td>
-                      <td>{row.channel_title}</td>
-                      <td><span className={accessEventBadge(row.event_type)}>{row.event_type}</span></td>
-                      <td>{row.note || '—'}</td>
+                      <th>Канал</th>
+                      <th>Событие</th>
+                      <th>Источник</th>
+                      <th>Нота</th>
                     </tr>
-                  ))}
+                  </thead>
+                  <tbody>
+                    {state.accessEvents.slice(0, 30).map((row) => (
+                      <tr key={row.id}>
+                        <td>{formatWhen(row.created_at)}</td>
+                        <td>{row.channel_title}</td>
+                        <td><span className={accessEventBadge(row.event_type)}>{row.event_type}</span></td>
+                        <td>{row.access_source_label || '—'}</td>
+                        <td>{row.note || '—'}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             )}

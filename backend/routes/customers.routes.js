@@ -1,5 +1,7 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
+import { OfficialBotService } from '../services/official-bot.service.js';
+import { getBotById } from './official-bot.routes.js';
 
 function latestBy(list = [], keyFn, dateField = 'created_at') {
     const map = new Map();
@@ -60,6 +62,45 @@ function buildFunnelPersonProfile(event = {}) {
 function normalizeUuidLike(value) {
     const raw = String(value || '').trim();
     return raw || null;
+}
+
+function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
+    const source = String(eventSource || '').trim().toLowerCase();
+    const note = String(accessNote || '').toLowerCase();
+    const eventPayload = payload && typeof payload === 'object' ? payload : {};
+    const payloadSource = String(eventPayload.source || '').trim().toLowerCase();
+
+    if (
+        source === 'customers_manual_admin_removed'
+        || source === 'customers_manual_action'
+        || eventPayload.removal_kind === 'manual_admin_removed'
+        || (source === 'manual_batch' && payloadSource === 'customers')
+        || note.includes('удален админом вручную из customers')
+    ) {
+        return { key: 'manual_admin_removed', label: 'Удален админом вручную' };
+    }
+
+    if (
+        source === 'customers_direct_access'
+        || eventPayload.issued_via === 'customers_direct_access'
+        || note.includes('доступ выдан вручную из customers')
+    ) {
+        return { key: 'customers_direct_access', label: 'Выдан вручную из Customers' };
+    }
+
+    if (source === 'gift_code' || source === 'admin_gift' || eventPayload.gift_code_id || eventPayload.gift_code || note.includes('подарочному коду')) {
+        return { key: 'gift_code', label: 'Подарочный код' };
+    }
+
+    if (source === 'official_bot' || source === 'manual_ton' || source === 'manual_rub' || note.includes('join request')) {
+        return { key: 'payment', label: 'Оплата' };
+    }
+
+    return { key: 'unknown', label: null };
+}
+
+function isManualAdminRemoval(eventSource = null, payload = {}, accessNote = '') {
+    return detectAccessSource(eventSource, payload, accessNote).key === 'manual_admin_removed';
 }
 
 function requireProjectAdmin(req, res) {
@@ -202,6 +243,109 @@ async function cleanupCustomerDemoSeed(supabase, ownerId, seedId) {
 
 export default function customersRoutes(supabase) {
     const router = express.Router();
+    const officialBotService = new OfficialBotService(supabase);
+
+    router.post('/direct-access', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const tgUserId = String(req.body?.tg_user_id || '').trim();
+            const channelId = normalizeUuidLike(req.body?.channel_id);
+            const durationRaw = String(req.body?.duration_days || '').trim().toLowerCase();
+
+            if (!tgUserId) {
+                return res.status(400).json({ error: 'Не передан Telegram ID' });
+            }
+
+            if (!channelId) {
+                return res.status(400).json({ error: 'Не передан канал для выдачи доступа' });
+            }
+
+            const durationDays = durationRaw === 'forever' ? 0 : Number(durationRaw || 0);
+            if (!(durationRaw === 'forever' || Number.isFinite(durationDays))) {
+                return res.status(400).json({ error: 'Некорректный срок доступа' });
+            }
+
+            const { data: channel, error: channelError } = await supabase
+                .from('channels')
+                .select('id, owner_id, title, tg_chat_id, bot_id, chat_type')
+                .eq('id', channelId)
+                .eq('owner_id', ownerId)
+                .single();
+
+            if (channelError || !channel) {
+                return res.status(404).json({ error: 'Канал не найден' });
+            }
+
+            if (!channel.bot_id) {
+                return res.status(400).json({ error: 'У канала не привязан официальный бот' });
+            }
+
+            const bot = getBotById(channel.bot_id);
+            if (!bot) {
+                return res.status(409).json({ error: 'Официальный бот не запущен. Перезапусти его в BotFather.' });
+            }
+
+            const result = await officialBotService.issueDirectChannelAccess({
+                bot,
+                ownerId,
+                targetTgUserId: tgUserId,
+                channel,
+                durationDays,
+                eventSource: 'customers_direct_access',
+                accessNote: durationRaw === 'forever'
+                    ? 'Доступ выдан вручную из Customers навсегда'
+                    : `Доступ выдан вручную из Customers на ${durationDays} дней`,
+                payload: {
+                    source: 'customers',
+                    issued_via: 'customers_direct_access',
+                    duration_days: durationRaw === 'forever' ? 'forever' : durationDays
+                }
+            });
+
+            if (result?.error) {
+                return res.status(400).json({ error: result.error });
+            }
+
+            let dmSent = false;
+            let dmError = null;
+            try {
+                const durationText = durationRaw === 'forever' ? 'Навсегда' : `${durationDays} дней`;
+                const lines = [
+                    'Тебе выдали доступ в BullRun.',
+                    '',
+                    `Канал: ${channel.title || 'закрытый канал'}`,
+                    `Срок: ${durationText}`
+                ];
+
+                if (result.expiresAt) {
+                    lines.push(`До: ${new Date(result.expiresAt).toLocaleDateString('ru-RU')}`);
+                }
+
+                lines.push('', 'Ссылка на вход:', result.inviteLink, '', 'Ссылка работает через запрос на вступление и закреплена за твоим аккаунтом.');
+
+                await bot.telegram.sendMessage(tgUserId, lines.join('\n'), {
+                    disable_web_page_preview: true
+                });
+                dmSent = true;
+            } catch (error) {
+                dmError = error.message || 'Не удалось отправить ЛС';
+            }
+
+            res.json({
+                success: true,
+                subscription_id: result.subscriptionId || null,
+                invite_link: result.inviteLink || null,
+                channel_id: channel.id,
+                channel_title: channel.title || null,
+                expires_at: result.expiresAt || null,
+                dm_sent: dmSent,
+                dm_error: dmError
+            });
+        } catch (error) {
+            console.error('Ошибка direct access из Customers:', error);
+            res.status(500).json({ error: 'Не получилось выдать доступ из Customers' });
+        }
+    });
 
     router.post('/demo-seed', authenticateUser, async (req, res) => {
         if (!requireProjectAdmin(req, res)) return;
@@ -811,6 +955,10 @@ export default function customersRoutes(supabase) {
             );
             const latestInviteByInvoice = latestBy(invites, invite => invite.invoice_id, 'issued_at');
             const latestAccessEventByInvoice = latestBy(accessEvents, event => event.invoice_id);
+            const latestAccessEventBySubscription = latestBy(
+                accessEvents.filter(event => event.subscription_id),
+                event => event.subscription_id
+            );
             const referralRewardByInvoice = latestBy(
                 referralEvents.filter(event => event.event_type === 'reward_granted'),
                 event => event.invoice_id
@@ -855,6 +1003,7 @@ export default function customersRoutes(supabase) {
                 const invite = latestInviteByInvoice.get(invoice.id) || null;
                 const accessEvent = latestAccessEventByInvoice.get(invoice.id) || null;
                 const referralReward = referralRewardByInvoice.get(invoice.id) || null;
+                const accessSource = detectAccessSource(accessEvent?.event_source, accessEvent?.payload, subscription?.access_note);
                 const invoicePayload = invoiceCreatedEvent?.payload || {};
                 const referralDiscountPercent = Number(invoicePayload.referral_discount_percent || referralReward?.client_discount_percent || 0);
                 const presenceConfirmed = presentByUserChannel.has(`${invoice.tg_user_id}:${tariff?.channel_id}`);
@@ -900,6 +1049,8 @@ export default function customersRoutes(supabase) {
                     referral_reserve_coverage_status: referralReward?.reserve_coverage_status || null,
                     access_invite_status: invite?.status || null,
                     last_access_event: accessEvent?.event_type || subscription?.last_access_event || null,
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label,
                     subscription_status: subscription?.status || null,
                     joined,
                     presence_confirmed: presenceConfirmed,
@@ -908,65 +1059,50 @@ export default function customersRoutes(supabase) {
                 };
             });
 
-            const activeCustomers = subscriptions
-                .filter(sub => sub.status === 'active')
-                .map(sub => {
-                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
-                    return {
-                    ...sub,
-                    tg_username: person.tg_username,
-                    display_name: person.display_name,
-                    first_name: person.first_name,
-                    last_name: person.last_name,
-                    in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                };});
+            const enrichedSubscriptions = subscriptions.map(sub => {
+                const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
+                const accessEvent = latestAccessEventBySubscription.get(sub.id) || null;
+                const accessSource = detectAccessSource(accessEvent?.event_source, accessEvent?.payload, sub.access_note);
+                const presenceConfirmed = presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`);
 
-            const expiredCustomers = subscriptions
-                .filter(sub => sub.status === 'expired')
-                .map(sub => {
-                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
-                    return {
+                return {
                     ...sub,
                     tg_username: person.tg_username,
                     display_name: person.display_name,
                     first_name: person.first_name,
                     last_name: person.last_name,
-                    in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                };});
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label,
+                    in_group: !!sub.last_join_approved_at || presenceConfirmed,
+                    presence_confirmed: presenceConfirmed,
+                    channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал',
+                    removed_by_admin: isManualAdminRemoval(accessEvent?.event_source, accessEvent?.payload, sub.access_note)
+                };
+            });
 
-            const inGroupLeaks = subscriptions
-                .filter(sub => sub.status === 'expired' && sub.last_access_event !== 'kicked')
-                .map(sub => {
-                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
-                    return {
+            const manualAdminRemovedCustomers = enrichedSubscriptions
+                .filter(sub => sub.removed_by_admin && sub.last_access_event === 'kicked')
+                .map(sub => ({
                     ...sub,
-                    tg_username: person.tg_username,
-                    display_name: person.display_name,
-                    first_name: person.first_name,
-                    last_name: person.last_name,
-                    in_group: !!sub.last_join_approved_at || presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    presence_confirmed: presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`),
-                    channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                };});
+                    admin_action_label: 'Удален админом'
+                }));
 
-            const needsAccessCheck = subscriptions
-                .filter(sub => sub.status === 'active' && !sub.last_join_approved_at && !presentByUserChannel.has(`${sub.tg_user_id}:${sub.channel_id}`))
-                .map(sub => {
-                    const person = getPersonProfile(sub.tg_user_id, sub.tg_username || null);
-                    return {
-                    ...sub,
-                    tg_username: person.tg_username,
-                    display_name: person.display_name,
-                    first_name: person.first_name,
-                    last_name: person.last_name,
-                    in_group: false,
-                    presence_confirmed: false,
-                    channel_title: channelMap.get(sub.channel_id)?.title || 'Неизвестный канал'
-                };});
+            const activeCustomers = enrichedSubscriptions
+                .filter(sub => sub.status === 'active' && !sub.removed_by_admin);
+
+            const expiredCustomers = enrichedSubscriptions
+                .filter(sub => sub.status === 'expired' && !sub.removed_by_admin);
+
+            const inGroupLeaks = enrichedSubscriptions
+                .filter(sub => {
+                    if (sub.status !== 'expired') return false;
+                    if (sub.removed_by_admin) return false;
+                    if (sub.last_access_event === 'kicked') return false;
+                    return sub.in_group;
+                });
+
+            const needsAccessCheck = enrichedSubscriptions
+                .filter(sub => sub.status === 'active' && !sub.removed_by_admin && !sub.last_join_approved_at && !sub.presence_confirmed);
 
             const abandonedInvoices = recentOrders
                 .filter(order => order.invoice_status === 'pending' || order.invoice_status === 'awaiting_receipt')
@@ -1055,6 +1191,8 @@ export default function customersRoutes(supabase) {
                 abandonedInvoices,
                 activeCustomers,
                 expiredCustomers,
+                manualAdminRemovedCustomers,
+                removedByAdmin: manualAdminRemovedCustomers,
                 inGroupLeaks,
                 needsAccessCheck,
                 recentOrders,
@@ -1072,6 +1210,8 @@ export default function customersRoutes(supabase) {
                     abandonedInvoices: abandonedInvoices.length,
                     activeCustomers: activeCustomers.length,
                     expiredCustomers: expiredCustomers.length,
+                    manualAdminRemovedCustomers: manualAdminRemovedCustomers.length,
+                    removedByAdmin: manualAdminRemovedCustomers.length,
                     inGroupLeaks: inGroupLeaks.length,
                     needsAccessCheck: needsAccessCheck.length,
                     recentOrders: recentOrders.length,

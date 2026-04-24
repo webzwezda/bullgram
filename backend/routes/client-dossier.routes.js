@@ -20,6 +20,41 @@ function latestBy(list = [], keyFn, dateField = 'created_at') {
     return map;
 }
 
+function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
+    const source = String(eventSource || '').trim().toLowerCase();
+    const note = String(accessNote || '').toLowerCase();
+    const eventPayload = payload && typeof payload === 'object' ? payload : {};
+    const payloadSource = String(eventPayload.source || '').trim().toLowerCase();
+
+    if (
+        source === 'customers_manual_admin_removed'
+        || source === 'customers_manual_action'
+        || eventPayload.removal_kind === 'manual_admin_removed'
+        || (source === 'manual_batch' && payloadSource === 'customers')
+        || note.includes('удален админом вручную из customers')
+    ) {
+        return { key: 'manual_admin_removed', label: 'Удален админом вручную' };
+    }
+
+    if (
+        source === 'customers_direct_access'
+        || eventPayload.issued_via === 'customers_direct_access'
+        || note.includes('доступ выдан вручную из customers')
+    ) {
+        return { key: 'customers_direct_access', label: 'Выдан вручную из Customers' };
+    }
+
+    if (source === 'gift_code' || source === 'admin_gift' || eventPayload.gift_code_id || eventPayload.gift_code || note.includes('подарочному коду')) {
+        return { key: 'gift_code', label: 'Подарочный код' };
+    }
+
+    if (source === 'official_bot' || source === 'manual_ton' || source === 'manual_rub' || note.includes('join request')) {
+        return { key: 'payment', label: 'Оплата' };
+    }
+
+    return { key: 'unknown', label: null };
+}
+
 export default function clientDossierRoutes(supabase) {
     const router = express.Router();
 
@@ -176,6 +211,10 @@ export default function clientDossierRoutes(supabase) {
             );
             const latestInviteByInvoice = latestBy(invitesResp.data || [], row => row.invoice_id, 'issued_at');
             const latestAccessEventByInvoice = latestBy(eventsResp.data || [], row => row.invoice_id);
+            const latestAccessEventBySubscription = latestBy(
+                (eventsResp.data || []).filter(row => row.subscription_id),
+                row => row.subscription_id
+            );
             const latestInvoiceByChannel = latestBy(invoices, row => row.channel_id);
             const referralProfile = referralProfileResp.data || null;
             const referralAttribution = referralAttributionResp.data || null;
@@ -186,15 +225,36 @@ export default function clientDossierRoutes(supabase) {
                 event => event.invoice_id
             );
 
-            const invites = (invitesResp.data || []).map(invite => ({
-                ...invite,
-                channel_title: channelMap.get(invite.channel_id)?.title || 'Неизвестный канал'
-            }));
+            const invites = (invitesResp.data || []).map(invite => {
+                const accessSource = detectAccessSource(invite?.meta?.event_source, invite?.meta || {}, null);
+                return {
+                    ...invite,
+                    channel_title: channelMap.get(invite.channel_id)?.title || 'Неизвестный канал',
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label
+                };
+            });
 
-            const accessEvents = (eventsResp.data || []).map(event => ({
-                ...event,
-                channel_title: channelMap.get(event.channel_id)?.title || 'Неизвестный канал'
-            }));
+            const accessEvents = (eventsResp.data || []).map(event => {
+                const accessSource = detectAccessSource(event.event_source, event.payload, null);
+                return {
+                    ...event,
+                    channel_title: channelMap.get(event.channel_id)?.title || 'Неизвестный канал',
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label
+                };
+            });
+
+            const subscriptionsWithSource = subscriptions.map((subscription) => {
+                const accessEvent = latestAccessEventBySubscription.get(subscription.id) || null;
+                const accessSource = detectAccessSource(accessEvent?.event_source, accessEvent?.payload, subscription.access_note);
+                return {
+                    ...subscription,
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label,
+                    removed_by_admin: accessSource.key === 'manual_admin_removed' && subscription.last_access_event === 'kicked'
+                };
+            });
 
             const ordersView = invoices.map(invoice => {
                 const latestInvoiceForChannel = latestInvoiceByChannel.get(invoice.channel_id) || null;
@@ -206,6 +266,7 @@ export default function clientDossierRoutes(supabase) {
                 const invite = latestInviteByInvoice.get(invoice.id) || null;
                 const accessEvent = latestAccessEventByInvoice.get(invoice.id) || null;
                 const referralReward = referralRewardByInvoice.get(invoice.id) || null;
+                const accessSource = detectAccessSource(accessEvent?.event_source, accessEvent?.payload, subscription?.access_note);
                 const invoicePayload = invoiceCreatedEvent?.payload || {};
                 const referralDiscountPercent = Number(invoicePayload.referral_discount_percent || referralReward?.client_discount_percent || 0);
                 const referralDiscountAmount = Number(invoicePayload.referral_discount_amount || referralReward?.client_discount_original_amount || 0);
@@ -234,6 +295,8 @@ export default function clientDossierRoutes(supabase) {
                     referral_reserve_coverage_status: referralReward?.reserve_coverage_status || null,
                     access_invite_status: invite?.status || null,
                     last_access_event: accessEvent?.event_type || subscription?.last_access_event || null,
+                    access_source: accessSource.key,
+                    access_source_label: accessSource.label,
                     joined: !!subscription?.last_join_approved_at
                 };
             });
@@ -245,8 +308,8 @@ export default function clientDossierRoutes(supabase) {
             }));
 
             const latestInvoice = invoices[0] || null;
-            const latestSubscription = subscriptions[0] || null;
-            const latestAccessEvent = (eventsResp.data || [])[0] || null;
+            const latestSubscription = subscriptionsWithSource[0] || null;
+            const latestAccessEvent = accessEvents[0] || null;
             const latestBaseMembership = baseMemberships[0] || null;
 
             let referralRole = 'none';
@@ -260,14 +323,17 @@ export default function clientDossierRoutes(supabase) {
                 username: latestBaseMembership?.username || null,
                 totalOrders: ordersView.length,
                 paidOrders: ordersView.filter(order => order.invoice_status === 'paid').length,
-                activeSubscriptions: subscriptions.filter(sub => sub.status === 'active').length,
-                expiredSubscriptions: subscriptions.filter(sub => sub.status === 'expired').length,
-                joinedChannels: subscriptions.filter(sub => !!sub.last_join_approved_at).length,
-                pendingJoins: subscriptions.filter(sub => sub.status === 'active' && !sub.last_join_approved_at).length,
+                activeSubscriptions: subscriptionsWithSource.filter(sub => sub.status === 'active').length,
+                expiredSubscriptions: subscriptionsWithSource.filter(sub => sub.status === 'expired').length,
+                manualAdminRemovedSubscriptions: subscriptionsWithSource.filter(sub => sub.removed_by_admin).length,
+                joinedChannels: subscriptionsWithSource.filter(sub => !!sub.last_join_approved_at).length,
+                pendingJoins: subscriptionsWithSource.filter(sub => sub.status === 'active' && !sub.last_join_approved_at).length,
                 baseMemberships: baseMemberships.length,
                 latestInvoiceStatus: latestInvoice?.status || null,
                 latestChannelTitle: latestSubscription?.channel_title || latestInvoice?.channel_title || null,
                 latestAccessEvent: latestAccessEvent?.event_type || latestSubscription?.last_access_event || null,
+                latestAccessSource: latestAccessEvent?.access_source || latestSubscription?.access_source || null,
+                latestAccessSourceLabel: latestAccessEvent?.access_source_label || latestSubscription?.access_source_label || null,
                 paymentStatus: latestBaseMembership?.payment_status || null,
                 referralRole,
                 referralCode: referralProfile?.referral_code || null,
@@ -286,7 +352,7 @@ export default function clientDossierRoutes(supabase) {
             res.json({
                 success: true,
                 summary,
-                subscriptions,
+                subscriptions: subscriptionsWithSource,
                 orders: ordersView,
                 invites,
                 accessEvents,

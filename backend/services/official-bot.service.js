@@ -10,6 +10,7 @@ import { StringSession } from 'telegram/sessions/index.js';
 
 const activeBots = new Map();
 const pendingReferralWalletInputs = new Map();
+const pendingGiftCodeInputs = new Map();
 
 function normalizeTonWallet(value) {
     return String(value || '').trim();
@@ -24,6 +25,23 @@ function looksLikeTonWallet(value) {
 
 function pendingReferralWalletKey(botId, tgUserId) {
     return `${botId}:${tgUserId}`;
+}
+
+function pendingGiftCodeKey(botId, tgUserId) {
+    return `${botId}:${tgUserId}`;
+}
+
+function generateGiftCode() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const parts = [];
+    for (let group = 0; group < 3; group += 1) {
+        let chunk = '';
+        for (let i = 0; i < 4; i += 1) {
+            chunk += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+        }
+        parts.push(chunk);
+    }
+    return parts.join('-');
 }
 
 /**
@@ -441,6 +459,236 @@ export class OfficialBotService {
             .maybeSingle();
 
         return data || null;
+    }
+
+    async getOwnedSalesChannels(botId, ownerId) {
+        const query = this.supabase
+            .from('channels')
+            .select('id, title, tg_chat_id, bot_id, chat_type, created_at')
+            .eq('owner_id', ownerId)
+            .order('created_at', { ascending: false });
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const channels = (data || []).filter((channel) => {
+            if (!channel?.tg_chat_id) return false;
+            if (String(channel.chat_type || '').toLowerCase() === 'private') return false;
+            return !channel.bot_id || String(channel.bot_id) === String(botId);
+        });
+
+        return channels;
+    }
+
+    async issueDirectChannelAccess({
+        bot,
+        ownerId,
+        targetTgUserId,
+        channel,
+        durationDays,
+        eventSource = 'system',
+        accessNote = null,
+        payload = {}
+    }) {
+        const targetId = String(targetTgUserId || '').trim();
+        if (!targetId || !channel?.id || !channel?.tg_chat_id) {
+            return { error: 'Не хватает данных для выдачи доступа.' };
+        }
+
+        const { subscriptionId, expiresAt } = await this.upsertSubscriptionForChannel(targetId, channel.id, durationDays);
+        if (!subscriptionId) {
+            return { error: 'Не удалось создать подписку.' };
+        }
+
+        const inviteName = `Gift_${targetId}_${new Date().toISOString().split('T')[0]}_${channel.id.slice(0, 6)}`;
+        const inviteLink = await bot.telegram.createChatInviteLink(channel.tg_chat_id, {
+            creates_join_request: true,
+            name: inviteName
+        });
+
+        const accessInvite = await this.createAccessInvite({
+            ownerId,
+            channelId: channel.id,
+            subscriptionId,
+            tgUserId: targetId,
+            inviteLink: inviteLink.invite_link,
+            inviteName
+        });
+
+        await this.logAccessEvent({
+            ownerId,
+            channelId: channel.id,
+            inviteId: accessInvite?.id || null,
+            subscriptionId,
+            tgUserId: targetId,
+            eventType: 'invite_issued',
+            eventSource,
+            payload
+        });
+
+        await this.supabase
+            .from('subscriptions')
+            .update({
+                last_access_event: 'invite_issued',
+                access_note: accessNote || (
+                    durationDays === 0
+                        ? 'Выдана ссылка с join request (навсегда)'
+                        : `Выдана ссылка с join request (+${durationDays} дней)`
+                )
+            })
+            .eq('id', subscriptionId);
+
+        const durationText = durationDays === 0
+            ? 'Навсегда'
+            : `на ${Number(durationDays)} дней`;
+
+        return {
+            success: true,
+            subscriptionId,
+            expiresAt,
+            inviteLink: inviteLink.invite_link,
+            durationText
+        };
+    }
+
+    async createGiftAccessCode({ ownerId, botId, channelId, durationDays, createdByTgUserId }) {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            const code = generateGiftCode();
+            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            const { data, error } = await this.supabase
+                .from('gift_access_codes')
+                .insert({
+                    owner_id: ownerId,
+                    bot_id: botId,
+                    channel_id: channelId,
+                    code,
+                    duration_days: durationDays === 0 ? null : Number(durationDays || 0),
+                    status: 'active',
+                    created_by_tg_user_id: String(createdByTgUserId || ''),
+                    expires_at: expiresAt,
+                    payload: {
+                        duration_label: durationDays === 0 ? 'forever' : `${durationDays}_days`
+                    }
+                })
+                .select('id, code, channel_id, duration_days, expires_at')
+                .single();
+
+            if (!error && data) return data;
+            if ((error?.message || '').toLowerCase().includes('duplicate')) continue;
+            throw error;
+        }
+
+        throw new Error('Не удалось сгенерировать уникальный подарочный код.');
+    }
+
+    async redeemGiftAccessCode({ bot, botId, tgUserId, code }) {
+        const normalizedCode = String(code || '').trim().toUpperCase();
+        if (!normalizedCode) {
+            return { error: 'Код пустой.' };
+        }
+
+        const { data: giftCode, error } = await this.supabase
+            .from('gift_access_codes')
+            .select('id, owner_id, bot_id, channel_id, code, duration_days, status, expires_at, redeemed_at')
+            .eq('code', normalizedCode)
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!giftCode) return { error: 'Код не найден.' };
+        if (giftCode.bot_id && String(giftCode.bot_id) !== String(botId)) {
+            return { error: 'Этот код выпущен для другого бота.' };
+        }
+        if (giftCode.status === 'redeemed' || giftCode.redeemed_at) {
+            return { error: 'Этот код уже использован.' };
+        }
+        if (giftCode.status === 'revoked') {
+            return { error: 'Этот код отозван админом.' };
+        }
+        if (giftCode.expires_at && new Date(giftCode.expires_at) < new Date()) {
+            await this.supabase
+                .from('gift_access_codes')
+                .update({ status: 'expired', updated_at: new Date().toISOString() })
+                .eq('id', giftCode.id);
+            return { error: 'Срок действия кода закончился.' };
+        }
+
+        const { data: lockingRow, error: lockingError } = await this.supabase
+            .from('gift_access_codes')
+            .update({
+                status: 'redeeming',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', giftCode.id)
+            .eq('status', 'active')
+            .is('redeemed_at', null)
+            .select('id')
+            .maybeSingle();
+
+        if (lockingError) throw lockingError;
+        if (!lockingRow) return { error: 'Этот код уже активируется или уже использован.' };
+
+        try {
+            const { data: channel, error: channelError } = await this.supabase
+                .from('channels')
+                .select('id, title, tg_chat_id, owner_id')
+                .eq('id', giftCode.channel_id)
+                .single();
+            if (channelError) throw channelError;
+            if (!channel?.tg_chat_id) throw new Error('Канал для этого кода не найден.');
+
+            const durationDays = Number(giftCode.duration_days || 0);
+            const result = await this.issueDirectChannelAccess({
+                bot,
+                ownerId: giftCode.owner_id,
+                targetTgUserId: String(tgUserId),
+                channel,
+                durationDays,
+                eventSource: 'gift_code',
+                accessNote: durationDays === 0
+                    ? 'Доступ выдан по подарочному коду (навсегда)'
+                    : `Доступ выдан по подарочному коду (+${durationDays} дней)`,
+                payload: {
+                    bot_id: botId,
+                    gift_code_id: giftCode.id,
+                    gift_code: normalizedCode,
+                    duration_days: durationDays === 0 ? 'forever' : durationDays
+                }
+            });
+
+            if (result.error) throw new Error(result.error);
+
+            await this.supabase
+                .from('gift_access_codes')
+                .update({
+                    status: 'redeemed',
+                    redeemed_by_tg_user_id: String(tgUserId),
+                    redeemed_subscription_id: result.subscriptionId,
+                    redeemed_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    payload: {
+                        redeemed_via: 'official_bot'
+                    }
+                })
+                .eq('id', giftCode.id);
+
+            return {
+                success: true,
+                channelTitle: channel.title,
+                inviteLink: result.inviteLink,
+                expiresAt: result.expiresAt,
+                durationText: result.durationText
+            };
+        } catch (redeemError) {
+            await this.supabase
+                .from('gift_access_codes')
+                .update({
+                    status: 'active',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', giftCode.id)
+                .eq('status', 'redeeming');
+            throw redeemError;
+        }
     }
 
     async getBotOwner(botId) {
@@ -1574,6 +1822,7 @@ export class OfficialBotService {
         const sendAdminMenu = async (ctx) => {
             const adminContext = await this.getBotAdminContext(botId);
             const inlineKeyboard = [
+                [{ text: '🎁 Подарочный код', callback_data: 'admin_gift_code' }],
                 [{ text: '⚙️ Управление тарифами', callback_data: 'admin_tariffs' }],
                 [{ text: '💸 Партнерка', callback_data: 'admin_referral' }],
                 [{ text: '👤 Профиль администратора', callback_data: 'admin_profile' }],
@@ -2092,6 +2341,38 @@ export class OfficialBotService {
         // --- Ловец чеков ---
         bot.on('message', async (ctx) => {
             if (ctx.chat.type === 'private' && ctx.message?.text) {
+                const pendingGiftCode = pendingGiftCodeInputs.get(pendingGiftCodeKey(botId, ctx.from.id));
+                if (pendingGiftCode?.mode === 'redeem') {
+                    pendingGiftCodeInputs.delete(pendingGiftCodeKey(botId, ctx.from.id));
+
+                    if (Date.now() - Number(pendingGiftCode.requestedAt || 0) > 15 * 60 * 1000) {
+                        await ctx.reply('Ввод кода устарел. Нажми кнопку «Ввести код» еще раз.');
+                        return;
+                    }
+
+                    try {
+                        const result = await this.redeemGiftAccessCode({
+                            bot,
+                            botId,
+                            tgUserId: ctx.from.id,
+                            code: ctx.message.text
+                        });
+                        if (result.error) {
+                            await ctx.reply(`🎁 ${result.error}`);
+                            return;
+                        }
+
+                        await ctx.reply(
+                            `🎁 Код принят.\n\nКанал: ${result.channelTitle}\nСрок: ${result.durationText}${result.expiresAt ? `\nДо: ${new Date(result.expiresAt).toLocaleDateString('ru-RU')}` : ''}\n\nСсылка на вход:\n${result.inviteLink}\n\nСсылка работает через запрос на вступление и закреплена за твоим аккаунтом.`,
+                            { disable_web_page_preview: true }
+                        );
+                    } catch (error) {
+                        console.error('Ошибка активации gift code:', error);
+                        await ctx.reply('Не получилось активировать код.');
+                    }
+                    return;
+                }
+
                 const pendingWallet = pendingReferralWalletInputs.get(pendingReferralWalletKey(botId, ctx.from.id));
                 if (pendingWallet) {
                     pendingReferralWalletInputs.delete(pendingReferralWalletKey(botId, ctx.from.id));
@@ -2287,7 +2568,10 @@ export class OfficialBotService {
 
                 if (error || !subs || subs.length === 0) {
                     const msg = '📭 <b>Мой статус</b>\n\nУ вас пока нет активных подписок.\n\nВыберите тариф в главном меню, чтобы получить доступ к закрытым каналам и материалам.';
-                    return ctx.reply(msg, { parse_mode: 'HTML' });
+                    return ctx.reply(msg, {
+                        parse_mode: 'HTML',
+                        reply_markup: { inline_keyboard: [[{ text: '🎁 Ввести код', callback_data: 'gift_code_redeem' }]] }
+                    });
                 }
 
                 let message = '📭 <b>Мой статус</b>\n\n✅ <b>Ваши активные подписки:</b>\n\n';
@@ -2312,7 +2596,10 @@ export class OfficialBotService {
                 }
 
                 message += `${this.buildAdminOwnershipHint(adminContext, 'sales')}`;
-                await ctx.reply(message, { parse_mode: 'HTML' });
+                await ctx.reply(message, {
+                    parse_mode: 'HTML',
+                    reply_markup: { inline_keyboard: [[{ text: '🎁 Ввести код', callback_data: 'gift_code_redeem' }]] }
+                });
             } catch (err) {
                 console.error('Ошибка my_status:', err);
                 await ctx.reply('Не удалось загрузить статус.');
@@ -2434,12 +2721,142 @@ export class OfficialBotService {
         // --- Админ-меню обработчики ---
         bot.action('user_menu', async (ctx) => {
             await ctx.answerCbQuery();
+            pendingGiftCodeInputs.delete(pendingGiftCodeKey(botId, ctx.from.id));
             await sendUserMainMenu(ctx);
         });
 
         bot.action('admin_panel', async (ctx) => {
             await ctx.answerCbQuery();
+            pendingGiftCodeInputs.delete(pendingGiftCodeKey(botId, ctx.from.id));
             await sendAdminMenu(ctx);
+        });
+
+        bot.action('gift_code_redeem', async (ctx) => {
+            await ctx.answerCbQuery();
+            pendingGiftCodeInputs.set(pendingGiftCodeKey(botId, ctx.from.id), {
+                mode: 'redeem',
+                requestedAt: Date.now()
+            });
+            await ctx.reply('Пришли подарочный код одним сообщением. Например: ABCD-EFGH-JKLM');
+        });
+
+        bot.action('admin_gift_code', async (ctx) => {
+            await ctx.answerCbQuery();
+
+            const userRole = await this.getUserRole(ctx, botId);
+            if (userRole !== 'admin') {
+                await ctx.reply('Эта кнопка доступна только админу проекта.');
+                return;
+            }
+
+            const ownerId = await this.getBotOwner(botId);
+            if (!ownerId) {
+                await ctx.reply('Не удалось определить владельца бота.');
+                return;
+            }
+
+            const channels = await this.getOwnedSalesChannels(botId, ownerId);
+            if (!channels.length) {
+                await ctx.reply('У этого бота нет подключенных каналов/групп для подарочного кода.');
+                return;
+            }
+
+            await ctx.reply(
+                'Выбери, для какого канала выпустить одноразовый подарочный код.',
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            ...channels.map((channel) => ([{
+                                text: channel.title || `Канал ${channel.id.slice(0, 6)}`,
+                                callback_data: `admin_gift_code_channel_${channel.id}`
+                            }])),
+                            [{ text: 'Отмена', callback_data: 'admin_panel' }]
+                        ]
+                    }
+                }
+            );
+        });
+
+        bot.action(/^admin_gift_code_channel_(.+)$/, async (ctx) => {
+            await ctx.answerCbQuery();
+
+            const ownerId = await this.getBotOwner(botId);
+            if (!ownerId) {
+                await ctx.reply('Не удалось определить владельца бота.');
+                return;
+            }
+
+            const channelId = ctx.match[1];
+            const channels = await this.getOwnedSalesChannels(botId, ownerId);
+            const channel = channels.find((item) => String(item.id) === String(channelId));
+            if (!channel) {
+                await ctx.reply('Канал не найден или не относится к этому боту.');
+                return;
+            }
+
+            pendingGiftCodeInputs.set(pendingGiftCodeKey(botId, ctx.from.id), {
+                mode: 'create',
+                ownerId,
+                channelId: channel.id,
+                channelTitle: channel.title,
+                requestedAt: Date.now()
+            });
+
+            await ctx.reply(
+                `Канал выбран: ${channel.title}\n\nТеперь выбери срок для подарочного кода.`,
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '30 дней', callback_data: 'admin_gift_code_duration_30' }],
+                            [{ text: 'Навсегда', callback_data: 'admin_gift_code_duration_forever' }],
+                            [{ text: 'Отмена', callback_data: 'admin_panel' }]
+                        ]
+                    }
+                }
+            );
+        });
+
+        bot.action(/^admin_gift_code_duration_(30|forever)$/, async (ctx) => {
+            await ctx.answerCbQuery();
+
+            const pending = pendingGiftCodeInputs.get(pendingGiftCodeKey(botId, ctx.from.id));
+            if (!pending?.ownerId || !pending?.channelId || pending.mode !== 'create') {
+                await ctx.reply('Сначала выбери канал для подарочного кода.');
+                return;
+            }
+
+            if (Date.now() - Number(pending.requestedAt || 0) > 15 * 60 * 1000) {
+                pendingGiftCodeInputs.delete(pendingGiftCodeKey(botId, ctx.from.id));
+                await ctx.reply('Сессия генерации устарела. Нажми кнопку еще раз.');
+                return;
+            }
+
+            try {
+                const durationRaw = ctx.match[1];
+                const durationDays = durationRaw === 'forever' ? 0 : 30;
+                const giftCode = await this.createGiftAccessCode({
+                    ownerId: pending.ownerId,
+                    botId,
+                    channelId: pending.channelId,
+                    durationDays,
+                    createdByTgUserId: ctx.from.id
+                });
+
+                pendingGiftCodeInputs.delete(pendingGiftCodeKey(botId, ctx.from.id));
+
+                const validUntil = giftCode.expires_at
+                    ? new Date(giftCode.expires_at).toLocaleDateString('ru-RU')
+                    : 'без срока';
+                const durationText = durationDays === 0 ? 'Навсегда' : '30 дней';
+
+                await ctx.reply(
+                    `🎁 Подарочный код готов.\n\nКанал: ${pending.channelTitle}\nСрок доступа: ${durationText}\nКод: <code>${giftCode.code}</code>\nКод действует до: ${validUntil}\n\nДруг открывает бот, жмет «Ввести код» и получает свою персональную ссылку.`,
+                    { parse_mode: 'HTML' }
+                );
+            } catch (error) {
+                console.error('Ошибка генерации gift code:', error);
+                await ctx.reply('Не получилось выпустить подарочный код.');
+            }
         });
 
         bot.action('buy_tariff', async (ctx) => {

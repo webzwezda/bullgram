@@ -61,6 +61,32 @@ function buildCheckResponse(status, reason = null, details = null, extra = {}) {
     };
 }
 
+function resolveBatchKickCallSource(...rawValues) {
+    const normalized = rawValues
+        .map((value) => String(value || '').trim().toLowerCase())
+        .find(Boolean) || '';
+
+    if (['customers', 'customer', 'customers_workbench', 'customer_workbench'].includes(normalized)) {
+        return {
+            requestSource: 'customers',
+            payloadSource: 'customers',
+            eventSource: 'customers_manual_admin_removed',
+            accessNote: 'Удален админом вручную из Customers',
+            removalKind: 'manual_admin_removed',
+            shouldExpireSubscription: true
+        };
+    }
+
+    return {
+        requestSource: normalized || 'legacy',
+        payloadSource: normalized || 'access_screen',
+        eventSource: 'manual_batch',
+        accessNote: 'Кикнули пачкой из админки',
+        removalKind: null,
+        shouldExpireSubscription: false
+    };
+}
+
 function normalizeFingerprintPayload(raw = {}) {
     const input = raw && typeof raw === 'object' ? raw : {};
     return {
@@ -3396,12 +3422,44 @@ export default function (supabase) {
                     newExpiresAt = baseDate.toISOString();
                 }
 
+                const updates = {
+                    expires_at: newExpiresAt,
+                    status: 'active'
+                };
+
+                if (sub.last_access_event === 'kicked') {
+                    updates.last_access_event = 'manual_restore';
+                    updates.access_note = days === 'forever'
+                        ? 'Доступ восстановлен вручную из админки навсегда'
+                        : `Доступ восстановлен вручную из админки на ${parseInt(days)} дней`;
+                }
+
                 const { error: updateError } = await supabase
                     .from('subscriptions')
-                    .update({ expires_at: newExpiresAt, status: 'active' })
+                    .update(updates)
                     .eq('id', sub.id);
 
                 if (!updateError) {
+                    if (sub.last_access_event === 'kicked') {
+                        await supabase.from('access_events').insert({
+                            owner_id: req.user.id,
+                            channel_id: sub.channel_id,
+                            subscription_id: sub.id,
+                            invoice_id: null,
+                            invite_id: null,
+                            tg_user_id: String(sub.tg_user_id),
+                            event_type: 'restored',
+                            event_source: 'manual_restore',
+                            payload: {
+                                days: days === 'forever' ? 'forever' : parseInt(days),
+                                source: 'admin_extend',
+                                note: days === 'forever'
+                                    ? 'Доступ восстановлен вручную из админки навсегда'
+                                    : `Доступ восстановлен вручную из админки на ${parseInt(days)} дней`
+                            }
+                        });
+                    }
+
                     updated += 1;
                 }
             }
@@ -3420,6 +3478,11 @@ export default function (supabase) {
     router.post('/crm/subscribers/batch-kick', authenticateUser, async (req, res) => {
         const subscriptionIds = Array.isArray(req.body?.subscription_ids) ? req.body.subscription_ids.map(String) : [];
         const userbotId = req.body?.userbot_id ? String(req.body.userbot_id) : null;
+        const batchKickSource = resolveBatchKickCallSource(
+            req.body?.action_source,
+            req.body?.source,
+            req.body?.event_source
+        );
 
         if (subscriptionIds.length === 0) {
             return res.status(400).json({ error: 'Не переданы подписки для кика' });
@@ -3473,16 +3536,28 @@ export default function (supabase) {
                         invite_id: null,
                         tg_user_id: String(sub.tg_user_id),
                         event_type: 'kicked',
-                        event_source: 'manual_batch',
-                        payload: { source: 'access_screen' }
+                        event_source: batchKickSource.eventSource,
+                        payload: {
+                            source: batchKickSource.payloadSource,
+                            note: batchKickSource.accessNote,
+                            ...(batchKickSource.removalKind
+                                ? { removal_kind: batchKickSource.removalKind }
+                                : {})
+                        }
                     });
+
+                    const subscriptionPatch = {
+                        last_access_event: 'kicked',
+                        access_note: batchKickSource.accessNote
+                    };
+
+                    if (batchKickSource.shouldExpireSubscription) {
+                        subscriptionPatch.status = 'expired';
+                    }
 
                     await supabase
                         .from('subscriptions')
-                        .update({
-                            last_access_event: 'kicked',
-                            access_note: 'Кикнули пачкой из админки'
-                        })
+                        .update(subscriptionPatch)
                         .eq('id', sub.id);
 
                     kicked += 1;
