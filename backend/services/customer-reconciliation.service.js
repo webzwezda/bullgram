@@ -124,12 +124,12 @@ function buildUserbotOption(userbot, reservedUserbotIds = new Set()) {
     let availabilityStatus = 'ready';
     let availabilityReason = null;
 
-    if (reservedUserbotIds.has(userbotId)) {
-        availabilityStatus = 'reserved_in_shop';
-        availabilityReason = 'Этот юзербот сейчас выставлен в shop и не должен участвовать в рабочем reconciliation contour.';
-    } else if (isFreshImportedUserbot(userbot)) {
+    if (isFreshImportedUserbot(userbot)) {
         availabilityStatus = 'pending_activation';
         availabilityReason = FRESH_IMPORT_RUNTIME_REASON;
+    } else if (reservedUserbotIds.has(userbotId)) {
+        availabilityStatus = 'reserved_in_shop';
+        availabilityReason = 'Этот юзербот сейчас выставлен в shop и не должен участвовать в рабочем reconciliation contour.';
     } else if (isUserbotOnDeadProxy(userbot)) {
         availabilityStatus = 'proxy_dead';
         availabilityReason = getDeadProxyMessage();
@@ -147,6 +147,7 @@ function buildUserbotOption(userbot, reservedUserbotIds = new Set()) {
         runtime_error: userbot.runtime_error || null,
         availability_status: availabilityStatus,
         availability_reason: availabilityReason,
+        visible_in_reconciliation: availabilityStatus !== 'reserved_in_shop',
         eligible_for_discovery: availabilityStatus === 'ready'
     };
 }
@@ -506,19 +507,21 @@ function buildPersistedSourcePayload(rawInput, existingSource = null) {
 
 export async function listCustomerReconciliationContour(supabase, ownerId) {
     const context = await loadContourContext(supabase, ownerId);
+    const visibleUserbots = (context.userbots || []).filter((userbot) => userbot.visible_in_reconciliation !== false);
     const activeUserbotIds = Array.from(new Set(
         context.sources
             .filter((source) => source.is_active && source.role !== 'ignored')
             .map((source) => String(source.userbot_id))
     ));
-    const selectedUserbotId = activeUserbotIds[0]
-        || context.sources[0]?.userbot_id
+    const visibleUserbotIds = new Set(visibleUserbots.map((userbot) => String(userbot.id)));
+    const selectedUserbotId = activeUserbotIds.find((id) => visibleUserbotIds.has(String(id)))
+        || visibleUserbots[0]?.id
         || null;
 
     return {
         roles: RECONCILIATION_SOURCE_ROLES,
         scan_statuses: RECONCILIATION_SCAN_STATUSES,
-        userbots: context.userbots,
+        userbots: visibleUserbots,
         contour: {
             selected_userbot_id: selectedUserbotId,
             integrity: {
@@ -539,6 +542,7 @@ export async function listCustomerReconciliationContour(supabase, ownerId) {
 export async function discoverCustomerReconciliationSources(supabase, ownerId, userbotId) {
     const context = await loadContourContext(supabase, ownerId);
     const { userbot, userbots } = await loadReadyDiscoveryUserbot(supabase, ownerId, userbotId);
+    const visibleUserbots = (userbots || []).filter((item) => item.visible_in_reconciliation !== false);
     const channelByChatId = new Map(
         (context.channels || []).map((channel) => [String(channel.tg_chat_id), channel])
     );
@@ -611,7 +615,7 @@ export async function discoverCustomerReconciliationSources(supabase, ownerId, u
             roles: RECONCILIATION_SOURCE_ROLES,
             selected_userbot_id: String(userbot.id),
             selected_userbot_username: userbot.tg_username || userbot.tg_account_id || null,
-            userbots,
+            userbots: visibleUserbots,
             discovered_sources: discovered
         };
     } finally {

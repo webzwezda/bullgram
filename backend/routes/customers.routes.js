@@ -1214,6 +1214,41 @@ export default function customersRoutes(supabase) {
         }
     });
 
+    router.delete('/reconciliation-candidates/resolve', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const sourceId = normalizeUuidLike(req.body?.source_id || req.query?.source_id);
+            const tgUserId = String(req.body?.tg_user_id || req.query?.tg_user_id || '').trim();
+
+            if (!sourceId) {
+                return res.status(400).json({ error: 'Не передан source_id кандидата' });
+            }
+
+            if (!tgUserId) {
+                return res.status(400).json({ error: 'Не передан Telegram ID кандидата' });
+            }
+
+            const { error } = await supabase
+                .from('customer_reconciliation_resolutions')
+                .delete()
+                .eq('owner_id', ownerId)
+                .eq('source_id', sourceId)
+                .eq('tg_user_id', tgUserId);
+
+            if (error) throw error;
+
+            res.json({
+                success: true,
+                source_id: sourceId,
+                tg_user_id: tgUserId,
+                restored: true
+            });
+        } catch (error) {
+            console.error('Ошибка отмены reconciliation candidate resolution:', error);
+            res.status(500).json({ error: 'Не удалось вернуть кандидата в нижнюю таблицу' });
+        }
+    });
+
     router.post('/direct-access', authenticateUser, async (req, res) => {
         try {
             const ownerId = req.user.id;

@@ -75,6 +75,46 @@ const CANDIDATE_PAYMENT_FILTERS = [
 
 const LARGE_SOURCE_MEMBER_COUNT = 1000;
 
+function getReconciliationUserbotOptionLabel(userbot) {
+  const baseLabel = userbot.tg_username ? `@${userbot.tg_username}` : `Аккаунт ${userbot.tg_account_id || userbot.id}`;
+  if (userbot.availability_status === 'pending_activation') return `${baseLabel} • safe mode`;
+  if (userbot.availability_status === 'reserved_in_shop') return `${baseLabel} • занят в shop`;
+  if (userbot.availability_status === 'proxy_dead') return `${baseLabel} • мертвый прокси`;
+  return `${baseLabel} • боевой`;
+}
+
+function getReconciliationUserbotStatusMeta(userbot) {
+  if (userbot?.availability_status === 'pending_activation') {
+    return {
+      title: 'Этот аккаунт сейчас в safe mode',
+      body: userbot.availability_reason || 'Сначала выведи аккаунт из safe mode и только потом используй его для контура.',
+      toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
+    };
+  }
+
+  if (userbot?.availability_status === 'reserved_in_shop') {
+    return {
+      title: 'Этот аккаунт сейчас занят в shop',
+      body: userbot.availability_reason || 'Выберите другой аккаунт или освободи этот из shop.',
+      toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
+    };
+  }
+
+  if (userbot?.availability_status === 'proxy_dead') {
+    return {
+      title: 'У этого аккаунта мертвый прокси',
+      body: userbot.availability_reason || 'Почини прокси или выбери другой аккаунт.',
+      toneClass: 'bg-rose-50 border-rose-100 text-rose-700'
+    };
+  }
+
+  return {
+    title: 'Аккаунт боевой',
+    body: 'Можно использовать для ручной проверки и синка в contour.',
+    toneClass: 'bg-emerald-50 border-emerald-100 text-emerald-700'
+  };
+}
+
 function formatWhen(value) {
   if (!value) return '-';
   return new Intl.DateTimeFormat('ru-RU', {
@@ -264,6 +304,11 @@ function getCustomersTabLabel(tabId) {
   return CUSTOMERS_TAB_LABELS[tabId] || 'Учтенный сегмент';
 }
 
+function getMatchingOptionDisplay(option) {
+  const target = option?.target_label ? ` • ${sanitizeDemoLabel(option.target_label)}` : '';
+  return `${getCustomersTabLabel(option?.tab)}${target}`;
+}
+
 function getCandidateNextStep(row) {
   if (row.matching_is_ambiguous) {
     return {
@@ -304,6 +349,33 @@ function getCandidateNextStep(row) {
     label: 'Решить вручную',
     className: 'bg-slate-100 text-slate-600 border-slate-200'
   };
+}
+
+function pickCandidateMatchingOption(row, { title = 'Выбери совпадение' } = {}) {
+  const options = Array.isArray(row?.matching_options) && row.matching_options.length
+    ? row.matching_options
+    : (row?.matching_tab ? [{
+        state: row.matching_state,
+        label: row.matching_label,
+        tab: row.matching_tab,
+        target_label: row.matching_target_label || '',
+        target_id: row.matching_target_id || ''
+      }] : []);
+
+  if (!options.length) return null;
+  if (options.length === 1) return options[0];
+
+  const list = options.map((option, index) => `${index + 1}. ${getMatchingOptionDisplay(option)}${option.label ? ` — ${option.label}` : ''}`).join('\n');
+  const raw = window.prompt(`${title}\n\n${list}\n\nВведи номер варианта.`, '1');
+  if (raw === null) return null;
+
+  const index = Number(raw);
+  if (!Number.isInteger(index) || index < 1 || index > options.length) {
+    window.alert('Нужно ввести номер одного из вариантов.');
+    return null;
+  }
+
+  return options[index - 1];
 }
 
 function parseReconciliationResolutionNote(note) {
@@ -1525,12 +1597,15 @@ export function CustomersPage() {
   async function linkCandidateToAccounted(row) {
     if (!row?.source_id || !row?.tg_user_id || !row?.matching_tab) return;
 
+    const selectedMatch = pickCandidateMatchingOption(row, { title: 'С каким учтенным сегментом связываем кандидата?' });
+    if (!selectedMatch) return;
+
     const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
-    const targetLabel = getCustomersTabLabel(row.matching_tab);
-    const targetContext = row.matching_target_label ? `\nЦель: ${row.matching_target_label}` : '';
+    const targetLabel = getCustomersTabLabel(selectedMatch.tab);
+    const targetContext = selectedMatch.target_label ? `\nЦель: ${selectedMatch.target_label}` : '';
     const operatorNote = window.prompt(
       `Связать ${clientLabel} с сегментом «${targetLabel}»?${targetContext}\n\nЕсли нужно, оставь короткий комментарий для истории.`,
-      row.matching_label ? `Автоподсказка: ${row.matching_label}` : ''
+      selectedMatch.label ? `Автоподсказка: ${selectedMatch.label}` : ''
     );
 
     if (operatorNote === null) return;
@@ -1545,9 +1620,9 @@ export function CustomersPage() {
           source_id: row.source_id,
           tg_user_id: String(row.tg_user_id),
           resolution_type: 'linked_accounted',
-          linked_tab: row.matching_tab,
-          linked_target_label: row.matching_target_label || '',
-          linked_target_id: row.matching_target_id || '',
+          linked_tab: selectedMatch.tab,
+          linked_target_label: selectedMatch.target_label || '',
+          linked_target_id: selectedMatch.target_id || '',
           note: operatorNote.trim()
         }
       });
@@ -1568,10 +1643,34 @@ export function CustomersPage() {
     }
   }
 
+  async function undoCandidateResolution(row) {
+    if (!row?.source_id || !row?.tg_user_id) return;
+
+    const confirmed = window.confirm(`Вернуть TG ${row.tg_user_id} обратно в нижнюю таблицу кандидатов?`);
+    if (!confirmed) return;
+
+    try {
+      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
+        accessToken,
+        method: 'DELETE',
+        body: {
+          source_id: row.source_id,
+          tg_user_id: String(row.tg_user_id)
+        }
+      });
+
+      await loadCandidates({ silent: true });
+    } catch (error) {
+      window.alert(error.message);
+    }
+  }
+
   function jumpToCandidateMatch(row) {
     if (!row?.matching_tab || !row?.tg_user_id) return;
+    const selectedMatch = pickCandidateMatchingOption(row, { title: 'Какое совпадение открыть?' });
+    if (!selectedMatch) return;
     setSearch(String(row.tg_user_id));
-    setTabState(row.matching_tab);
+    setTabState(selectedMatch.tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -1615,26 +1714,21 @@ export function CustomersPage() {
                     <option value="">Выберите аккаунт</option>
                     {reconciliation.userbots.map((userbot) => (
                       <option key={userbot.id} value={userbot.id}>
-                        {userbot.tg_username ? `@${userbot.tg_username}` : `Аккаунт ${userbot.tg_account_id || userbot.id}`}
-                        {userbot.eligible_for_discovery ? '' : ' • занят в магазине'}
+                        {getReconciliationUserbotOptionLabel(userbot)}
                       </option>
                     ))}
                   </select>
                   {reconciliation.selectedUserbotId && (() => {
                     const selected = reconciliation.userbots.find((item) => String(item.id) === String(reconciliation.selectedUserbotId));
                     if (!selected) return null;
-                    if (!selected.eligible_for_discovery) {
-                      return (
-                        <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                          <div className="text-xs font-bold text-amber-700">Этот аккаунт сейчас занят в магазине</div>
-                          <div className="text-xs text-amber-600 mt-1">{selected.availability_reason || 'Выберите другой аккаунт или освободите этот'}</div>
-                        </div>
-                      );
-                    }
+                    const status = getReconciliationUserbotStatusMeta(selected);
                     return (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600 font-medium">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Аккаунт готов к работе
+                      <div className={`mt-3 p-3 border rounded-xl ${status.toneClass}`}>
+                        <div className="flex items-center gap-2 text-xs font-bold">
+                          <CheckCircle2 className="w-4 h-4" />
+                          {status.title}
+                        </div>
+                        <div className="text-xs mt-1">{status.body}</div>
                       </div>
                     );
                   })()}
@@ -2186,7 +2280,17 @@ export function CustomersPage() {
             ) : null}
             {candidateState.recentResolutions.length ? (
               <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Недавно решено</div>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Недавно решено</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Последние ручные решения по reconciliation. Отсюда можно вернуть человека обратно в нижнюю таблицу.
+                    </div>
+                  </div>
+                  <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500">
+                    {candidateState.recentResolutions.length}
+                  </div>
+                </div>
                 <div className="space-y-2">
                   {candidateState.recentResolutions.slice(0, 6).map((row) => {
                     const meta = parseReconciliationResolutionNote(row.note);
@@ -2208,6 +2312,15 @@ export function CustomersPage() {
                         {meta.comment ? (
                           <div className="mt-1 text-xs font-medium text-slate-600">{meta.comment}</div>
                         ) : null}
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                            onClick={() => undoCandidateResolution(row)}
+                          >
+                            Вернуть в кандидаты
+                          </button>
+                        </div>
                       </div>
                     );
                   })}

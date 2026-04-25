@@ -46,6 +46,13 @@
 - Done: candidate row now marks ambiguous matches explicitly
   - if BullRun sees more than one plausible matching segment for the same candidate, row shows `Несколько совпадений`
   - suggested next step falls back to manual review instead of pretending there is one obvious target
+- Done: ambiguous matches now have explicit operator choice
+  - `Связать` no longer blindly uses the first match
+  - when candidate has several plausible matches, operator chooses the exact target before saving the resolution
+  - the same choice is used for `Открыть где уже учтен`
+- Done: manual reconciliation decisions are reversible
+  - recent decisions block can return a person back into the lower candidate table
+  - this reduces operator fear around accidental `Связать` / `Не трогать`
 - Done: first per-source safe scan action
   - manual `Обновить` per contour source
   - scans exactly one source, not the whole Telegram surface
