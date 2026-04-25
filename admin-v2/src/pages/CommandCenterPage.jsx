@@ -656,20 +656,203 @@ export function CommandCenterPage() {
         )}
       </div>
 
-      {profilePlan === 'trial' ? (
-        null
+      {profilePlan === 'trial' && trialLaunchSteps.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-lg shadow-amber-500/20">
+                <Rocket className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Первые шаги</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  Собери базовый контур: прокси, юзербот, платежи и первая продажа
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="space-y-3">
+              {trialLaunchSteps.map((step, index) => (
+                <div
+                  key={step.title}
+                  className={`
+                    flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
+                    ${step.done
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }
+                  `}
+                >
+                  <div className={`
+                    w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0
+                    ${step.done
+                      ? 'bg-green-500 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                    }
+                  `}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900">{step.title}</div>
+                    <div className="text-sm text-slate-500 mt-0.5">{step.hint}</div>
+                  </div>
+                  <a
+                    href={step.href}
+                    className={`
+                      px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex-shrink-0
+                      ${step.done
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
+                      }
+                    `}
+                  >
+                    {step.done ? 'Готово' : 'Открыть'}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      {profilePlan === 'normal' ? (
-        null
+      {profilePlan === 'normal' && normalLaunchSteps.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Развитие Normal</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  Расширь контур: больше прокси, второй юзербот, рассылки и продажи
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="space-y-3">
+              {normalLaunchSteps.map((step, index) => (
+                <div
+                  key={step.title}
+                  className={`
+                    flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200
+                    ${step.done
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }
+                  `}
+                >
+                  <div className={`
+                    w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0
+                    ${step.done
+                      ? 'bg-green-500 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                    }
+                  `}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900">{step.title}</div>
+                    <div className="text-sm text-slate-500 mt-0.5">{step.hint}</div>
+                  </div>
+                  <a
+                    href={step.href}
+                    className={`
+                      px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex-shrink-0
+                      ${step.done
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
+                      }
+                    `}
+                  >
+                    {step.done ? 'Готово' : 'Открыть'}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* topStats и urgentActions теперь показаны только в главной карточке выше */}
 
-      {/* Временно скрыты секции с метриками и пакетами - будут переделаны в новом стиле */}
-      {buyerPackageSignals.length ? null : null}
-      {moneyStats.length ? null : null}
-      {infraStats.length ? null : null}
+      {moneyStats.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Бизнес метрики</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  Деньги, клиенты и продажи
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {moneyStats.map((item) => (
+                <div
+                  key={item.title}
+                  className={`
+                    p-4 rounded-2xl border transition-all duration-200
+                    ${item.tone === 'warning'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-slate-50 border-slate-200'
+                    }
+                  `}
+                >
+                  <div className="text-sm text-slate-500 font-medium mb-1">{item.title}</div>
+                  <div className="text-2xl font-black text-slate-900">{item.value}</div>
+                  <div className="text-xs text-slate-400 mt-2">{item.hint}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {infraStats.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
+                <Database className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Инфраструктура</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  Прокси, юзерботы, группы и ошибки
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {infraStats.map((item) => (
+                <div
+                  key={item.title}
+                  className={`
+                    p-4 rounded-2xl border transition-all duration-200
+                    ${item.tone === 'warning'
+                      ? 'bg-amber-50 border-amber-200'
+                      : 'bg-slate-50 border-slate-200'
+                    }
+                  `}
+                >
+                  <div className="text-sm text-slate-500 font-medium mb-1">{item.title}</div>
+                  <div className="text-2xl font-black text-slate-900">{item.value}</div>
+                  <div className="text-xs text-slate-400 mt-2">{item.hint}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Временно скрыты старые секции во время переработки страницы */}
       {/* Проблемные группы и чаты - будет переделано */}
