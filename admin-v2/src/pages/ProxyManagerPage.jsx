@@ -1745,88 +1745,120 @@ function renderOpenProxyPurchases(rows) {
       ) : null}
 
       {state.support?.profile_role !== 'admin' ? (
-        <div className="toolbar-card proxy-surface-card">
-          <div className="proxy-surface-card__head">
-            <div>
-              <div className="toolbar-card__title">Купить прокси</div>
-              <div className="table-subtext">Один seller-лот, но можно сразу выбрать, сколько прокси забронировать. Все оплаты потом окажутся в блоке ниже.</div>
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+                <ShoppingBag className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Купить прокси</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  Выбери количество и оплати через TON или СБП
+                </p>
+              </div>
             </div>
           </div>
-          {shopState.loading ? (
-            <div className="empty-inline" style={{ marginTop: 12 }}>Загружаем лоты...</div>
-          ) : shopState.error ? (
-            <div className="error-inline" style={{ marginTop: 12 }}>{shopState.error}</div>
-          ) : !proxyBatchOffer ? (
-            <div className="empty-inline" style={{ marginTop: 12 }}>Сейчас готовых лотов нет.</div>
-          ) : (
-            <div className="list-stack" style={{ marginTop: 16 }}>
-              <div className="list-item">
-                <div>
-                  <div className="list-item__title">{proxyBatchOffer.title}</div>
-                  <div className="list-item__meta">{proxyBatchOffer.unitPriceText} за 1 шт.</div>
-                  <div className="list-item__body">{proxyBatchOffer.previewText}</div>
-                  <div className="table-subtext" style={{ marginTop: 8 }}>
-                    Свободно сейчас: <strong>{proxyBatchOffer.items.length}</strong>{profilePlan === 'trial' ? ` • можешь взять сейчас: ${proxyBuyLimit}` : ''}
-                  </div>
-                </div>
-                <div className="hero-actions proxy-buy-actions" style={{ alignItems: 'stretch' }}>
-                  <label className="field-group proxy-quantity-field">
-                    <span>Сколько купить</span>
-                    <div className="proxy-quantity-stepper">
-                      <button
-                        className="ghost-button proxy-quantity-stepper__button"
-                        type="button"
-                        disabled={proxyBuyQuantity <= 1}
-                        onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
-                      >
-                        -
-                      </button>
-                      <input
-                        className="field proxy-quantity-stepper__input"
-                        type="number"
-                        min="1"
-                        max={Math.max(proxyBuyLimit, 1)}
-                        value={proxyBuyQuantity}
-                        disabled={proxyBuyLimit <= 0}
-                        onChange={(event) => {
-                          const next = Number.parseInt(event.target.value, 10);
-                          if (Number.isNaN(next)) {
-                            setProxyBuyQuantity(1);
-                            return;
-                          }
-                          setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
-                        }}
-                      />
-                      <button
-                        className="ghost-button proxy-quantity-stepper__button"
-                        type="button"
-                        disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
-                        onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
-                      >
-                        +
-                      </button>
+
+          <div className="p-6 md:p-8">
+            {shopState.loading ? (
+              <div className="text-center py-8 text-slate-500">Загружаем лоты...</div>
+            ) : shopState.error ? (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800">
+                {shopState.error}
+              </div>
+            ) : !proxyBatchOffer ? (
+              <div className="text-center py-8 text-slate-500">Сейчас готовых лотов нет.</div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+                <div className="flex flex-col lg:flex-row gap-6">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">{proxyBatchOffer.title}</h3>
+                    <div className="text-sm text-slate-600 mb-3">{proxyBatchOffer.previewText}</div>
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <span className="text-2xl font-black text-slate-900">{proxyBatchOffer.unitPriceText}</span>
+                      <span className="text-sm text-slate-500">за 1 шт.</span>
                     </div>
-                  </label>
-                </div>
-                <div className="list-item__footer proxy-buy-footer">
-                  <div className="proxy-buy-footer__title">Купить</div>
-                  <div className="proxy-buy-footer__actions">
-                    {proxyBatchOffer.paymentMethods.map((method) => (
-                      <button
-                        key={method}
-                        className={`ghost-button${method === 'ton' ? ' ghost-button--primary' : ''}`}
-                        type="button"
-                        disabled={checkoutState.loading || proxyBuyLimit <= 0}
-                        onClick={() => createProxyBatchCheckout(method)}
-                      >
-                        {checkoutState.loading ? 'Создаем бронь...' : paymentMethodLabel(method)}
-                      </button>
-                    ))}
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span className="text-slate-600">Свободно: <strong>{proxyBatchOffer.items.length}</strong></span>
+                      </div>
+                      {profilePlan === 'trial' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                          <span className="text-slate-600">Лимит: <strong>{proxyBuyLimit}</strong></span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="lg:min-w-[300px]">
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-700">Количество</label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="w-10 h-10 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-lg font-bold"
+                            type="button"
+                            disabled={proxyBuyQuantity <= 1}
+                            onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
+                          >
+                            −
+                          </button>
+                          <input
+                            className="flex-1 px-3 py-2 text-center border border-slate-200 rounded-lg text-lg font-bold text-slate-900"
+                            type="number"
+                            min="1"
+                            max={Math.max(proxyBuyLimit, 1)}
+                            value={proxyBuyQuantity}
+                            disabled={proxyBuyLimit <= 0}
+                            onChange={(event) => {
+                              const next = Number.parseInt(event.target.value, 10);
+                              if (Number.isNaN(next)) {
+                                setProxyBuyQuantity(1);
+                                return;
+                              }
+                              setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
+                            }}
+                          />
+                          <button
+                            className="w-10 h-10 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-lg font-bold"
+                            type="button"
+                            disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
+                            onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-700">Оплатить через</label>
+                        <div className="flex gap-2">
+                          {proxyBatchOffer.paymentMethods.map((method) => (
+                            <button
+                              key={method}
+                              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-all${
+                                method === 'ton'
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                              type="button"
+                              disabled={checkoutState.loading || proxyBuyLimit <= 0}
+                              onClick={() => createProxyBatchCheckout(method)}
+                            >
+                              {checkoutState.loading ? 'Создаем...' : paymentMethodLabel(method)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ) : null}
 
