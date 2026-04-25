@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Globe, Shield, AlertTriangle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -1492,35 +1493,56 @@ function renderOpenProxyPurchases(rows) {
 
   return (
     <section className="page proxy-page">
-      <div className="proxy-overview proxy-surface-card">
-        <div className="proxy-overview__top">
-          <div className="proxy-overview__copy">
-            <div className="proxy-page__eyebrow">Telegram infra</div>
-            <div className="page__header">
-              <h1>Прокси</h1>
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
+              <Globe className="w-6 h-6" />
             </div>
-            <p className="proxy-page__intro">
-              {isAdmin
-                ? 'Один экран для серверного пула: поднимаешь прокси, раскладываешь их по группам и держишь под контролем продажи, trial-выдачу и свои рабочие связки.'
-                : 'Здесь живут твои proxy: свой и купленный. Для постоянной работы используй личный или купленный контур.'}
-            </p>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">Прокси</h1>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">
+                {isAdmin
+                  ? 'Серверный пул: поднимай прокси, раскладывай по группам и контролируй продажи'
+                  : 'Твои прокси для работы: свой и купленный'}
+              </p>
+            </div>
           </div>
-          <div className="proxy-overview__rule">
-            <div className="proxy-overview__rule-label">Главное правило</div>
-            <div className="proxy-overview__rule-title">1 proxy = 1 userbot</div>
-            <div className="proxy-overview__rule-text">
-              Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
+
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+            <Shield className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-amber-900 mb-1">Главное правило: 1 прокси = 1 юзербот</div>
+              <div className="text-sm text-amber-700">
+                Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
+              </div>
             </div>
           </div>
         </div>
-        <div className="proxy-summary-grid">
-          {proxySummaryCards.map((card) => (
-            <div key={card.label} className={`proxy-summary-card proxy-summary-card--${card.tone}`}>
-              <div className="proxy-summary-card__label">{card.label}</div>
-              <div className="proxy-summary-card__value">{card.value}</div>
-              <div className="proxy-summary-card__hint">{card.hint}</div>
-            </div>
-          ))}
+
+        <div className="p-6 md:p-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {proxySummaryCards.map((card) => (
+              <div
+                key={card.label}
+                className={`
+                  p-4 rounded-2xl border transition-all duration-200
+                  ${card.tone === 'danger'
+                    ? 'bg-red-50 border-red-200'
+                    : card.tone === 'warning'
+                      ? 'bg-amber-50 border-amber-200'
+                      : card.tone === 'ok'
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-slate-50 border-slate-200'
+                  }
+                `}
+              >
+                <div className="text-sm text-slate-600 font-medium mb-1">{card.label}</div>
+                <div className="text-3xl font-black text-slate-900">{card.value}</div>
+                <div className="text-xs text-slate-500 mt-2 leading-snug">{card.hint}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
