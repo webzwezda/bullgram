@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Shield, AlertTriangle } from 'lucide-react';
+import { Globe, Shield, AlertTriangle, Server, Plus } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -1880,126 +1880,169 @@ function renderOpenProxyPurchases(rows) {
       ) : null}
 
       {state.support?.profile_role === 'admin' ? (
-      <div className="proxy-top-grid">
-        <div className="toolbar-card proxy-surface-card proxy-setup-card">
-          <div className="proxy-surface-card__head">
-            <div>
-              <div className="toolbar-card__title">{formState.id ? 'Редактировать proxy' : (state.support?.profile_role === 'admin' ? 'Поднять серверный прокси' : 'Добавить свой proxy')}</div>
-              <div className="table-subtext">
-                {state.support?.profile_role === 'admin'
-                  ? 'Сначала имя и доступ, потом выбираешь, куда этот прокси пойдёт: себе, в продажу или в trial пул.'
-                  : 'Это твой личный proxy для постоянной работы.'}
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                {formState.id ? <Server className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
               </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {formState.id ? 'Редактировать прокси' : 'Поднять серверный прокси'}
+                </h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {formState.id
+                    ? 'Измени параметры прокси или перемести его в другую группу'
+                    : 'Создай новый прокси на сервере или добавь внешний'}
+                </p>
+              </div>
+              {!formState.id ? (
+                <div className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-semibold">
+                  {suggestedServerProxyName}
+                </div>
+              ) : null}
             </div>
-            {!formState.id ? <span className="pill pill--info">{suggestedServerProxyName}</span> : null}
           </div>
-          {state.notice ? (
-            <div className="success-inline" style={{ marginBottom: 16 }}>
-              {state.notice}
-            </div>
-          ) : null}
-          {showQuotaLock ? (
-            <div className="error-card" style={{ marginBottom: 16 }}>
-              На Trial можно держать только один свой proxy. Чтобы добавить следующий, сначала перейди на Normal.
-            </div>
-          ) : null}
-          {state.support?.profile_role === 'admin' && !formState.id ? (
-            <div className="table-subtext" style={{ marginBottom: 16 }}>
-              Оставь host пустым для автоподнятия на сервере.
-            </div>
-          ) : null}
-          <div className="proxy-form-grid">
-            <label className="proxy-field proxy-field--name">
-              <span className="proxy-field__label">Название</span>
-              <input
-                className="field"
-                type="text"
-                value={formState.name}
-                onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Название"
-              />
-            </label>
-            <label className="proxy-field proxy-field--host">
-              <span className="proxy-field__label">Host / IP</span>
-              <input
-                className="field"
-                type="text"
-                value={formState.host}
-                onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
-                placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым для автоподнятия' : 'Host / IP'}
-              />
-            </label>
-            <label className="proxy-field proxy-field--port">
-              <span className="proxy-field__label">Порт</span>
-              <input
-                className="field"
-                type="number"
-                min="1"
-                value={formState.port}
-                onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
-                placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : 'Port'}
-              />
-            </label>
-            <label className="proxy-field proxy-field--username">
-              <span className="proxy-field__label">Username</span>
-              <input
-                className="field"
-                type="text"
-                value={formState.username}
-                onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-                placeholder="Если нужен"
-              />
-            </label>
-            <label className="proxy-field proxy-field--password">
-              <span className="proxy-field__label">Password</span>
-              <input
-                className="field"
-                type="text"
-                value={formState.password}
-                onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                placeholder="Если нужен"
-              />
-            </label>
-            {state.support?.profile_role === 'admin' ? (
-              <label className="proxy-field proxy-field--group">
-                <span className="proxy-field__label">Группа</span>
-                <select
-                  className="field"
-                  value={formState.inventory_group}
-                  onChange={(event) => setFormState((prev) => ({
-                    ...prev,
-                    inventory_group: event.target.value,
-                    name: prev.id ? prev.name : buildServerProxyName(
-                      event.target.value,
-                      state.proxies
-                        .filter((proxy) => proxy.provision_source === 'manual_admin')
-                        .map((proxy) => proxy.name)
-                    )
-                  }))}
-                >
-                  <option value="shop_sale">На продажу в shop</option>
-                  <option value="self_use">Использую сам</option>
-                </select>
-              </label>
+
+          <div className="p-6 md:p-8">
+            {state.notice ? (
+              <div className="mb-6 p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 font-medium">
+                {state.notice}
+              </div>
             ) : null}
-          </div>
-          <div className="toolbar-card__body proxy-setup-card__actions">
+
+            {showQuotaLock ? (
+              <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-medium">
+                На Trial можно держать только один свой прокси. Чтобы добавить следующий, сначала перейди на Normal.
+              </div>
+            ) : null}
+
             {state.support?.profile_role === 'admin' && !formState.id ? (
-              <button className="ghost-button" type="button" onClick={fillFromLatestServerProxy}>
-                Взять из последнего серверного
-              </button>
+              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-5 h-5 text-slate-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-slate-900 mb-1">Автоподнятие на сервере</div>
+                    <div className="text-sm text-slate-600">
+                      Оставь поле Host пустым — прокси будет создан автоматически на сервере BullRun.
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : null}
-            <button className="ghost-button ghost-button--primary" onClick={saveProxy} disabled={state.saving || showQuotaLock}>
-              {state.saving ? 'Сохраняем...' : (state.support?.profile_role === 'admin' ? (formState.host.trim() ? 'Сохранить внешний прокси' : 'Поднять прокси на сервере') : 'Сохранить прокси')}
-            </button>
-            {formState.id ? (
-              <button className="ghost-button" onClick={resetForm}>
-                Сбросить форму
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Название</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  type="text"
+                  value={formState.name}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Например: Прокси сервера 1"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Host / IP</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  type="text"
+                  value={formState.host}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
+                  placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым для автоподнятия' : '192.168.1.1'}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Порт</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  value={formState.port}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
+                  placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : '1080'}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Username</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  type="text"
+                  value={formState.username}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
+                  placeholder="Если нужен"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Password</label>
+                <input
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  type="text"
+                  value={formState.password}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                  placeholder="Если нужен"
+                />
+              </div>
+
+              {state.support?.profile_role === 'admin' ? (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Группа</label>
+                  <select
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
+                    value={formState.inventory_group}
+                    onChange={(event) => setFormState((prev) => ({
+                      ...prev,
+                      inventory_group: event.target.value,
+                      name: prev.id ? prev.name : buildServerProxyName(
+                        event.target.value,
+                        state.proxies
+                          .filter((proxy) => proxy.provision_source === 'manual_admin')
+                          .map((proxy) => proxy.name)
+                      )
+                    }))}
+                  >
+                    <option value="shop_sale">На продажу в shop</option>
+                    <option value="self_use">Использую сам</option>
+                  </select>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3 pt-6 border-t border-slate-100">
+              {state.support?.profile_role === 'admin' && !formState.id ? (
+                <button
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                  type="button"
+                  onClick={fillFromLatestServerProxy}
+                >
+                  Взять из последнего
+                </button>
+              ) : null}
+
+              <button
+                className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                onClick={saveProxy}
+                disabled={state.saving || showQuotaLock}
+              >
+                {state.saving ? 'Сохраняем...' : (formState.host.trim() ? 'Сохранить внешний прокси' : 'Поднять прокси на сервере')}
               </button>
-            ) : null}
+
+              {formState.id ? (
+                <button
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                  onClick={resetForm}
+                >
+                  Сбросить форму
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
       ) : null}
 
       {state.proxies.length > 0 && state.support?.profile_role === 'admin' ? (
