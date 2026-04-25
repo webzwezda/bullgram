@@ -1,7 +1,17 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
+import { UserbotService } from '../services/userbot.service.js';
 import { getBotById } from './official-bot.routes.js';
+import {
+    discoverCustomerReconciliationSources,
+    isCustomerReconciliationError,
+    listCustomerReconciliationContour,
+    scanCustomerReconciliationSource,
+    patchCustomerReconciliationSource,
+    upsertCustomerReconciliationSources,
+    RECONCILIATION_LARGE_SOURCE_MEMBER_COUNT
+} from '../services/customer-reconciliation.service.js';
 
 function latestBy(list = [], keyFn, dateField = 'created_at') {
     const map = new Map();
@@ -64,6 +74,44 @@ function normalizeUuidLike(value) {
     return raw || null;
 }
 
+function buildCandidateMatchingOption({ state, label, tab, targetLabel = null, targetId = null }) {
+    return {
+        state,
+        label,
+        tab,
+        target_label: targetLabel,
+        target_id: targetId
+    };
+}
+
+function normalizeBooleanFlag(value) {
+    if (typeof value === 'boolean') return value;
+    const raw = String(value || '').trim().toLowerCase();
+    return ['true', '1', 'yes', 'y'].includes(raw);
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const RECONCILIATION_MATCHING_TABS = new Set([
+    'started',
+    'viewed',
+    'abandoned',
+    'customers-active',
+    'customers-expired',
+    'removed-admin',
+    'access'
+]);
+
+const RECONCILIATION_SYNC_PRE_DELAY_MS = 4000;
+const RECONCILIATION_SYNC_PRE_DELAY_JITTER_MS = 3000;
+const RECONCILIATION_SYNC_COOLDOWN_MS = 15 * 60 * 1000;
+
+function buildSyncPreDelayMs() {
+    return RECONCILIATION_SYNC_PRE_DELAY_MS + Math.floor(Math.random() * RECONCILIATION_SYNC_PRE_DELAY_JITTER_MS);
+}
+
 function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
     const source = String(eventSource || '').trim().toLowerCase();
     const note = String(accessNote || '').toLowerCase();
@@ -88,6 +136,14 @@ function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
         return { key: 'customers_direct_access', label: 'Выдан вручную из Customers' };
     }
 
+    if (
+        source === 'customers_candidate_import'
+        || eventPayload.imported_via === 'reconciliation_candidates'
+        || note.includes('reconciliation candidates')
+    ) {
+        return { key: 'customers_candidate_import', label: 'Перенесен вручную из кандидатов' };
+    }
+
     if (source === 'gift_code' || source === 'admin_gift' || eventPayload.gift_code_id || eventPayload.gift_code || note.includes('подарочному коду')) {
         return { key: 'gift_code', label: 'Подарочный код' };
     }
@@ -101,6 +157,373 @@ function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
 
 function isManualAdminRemoval(eventSource = null, payload = {}, accessNote = '') {
     return detectAccessSource(eventSource, payload, accessNote).key === 'manual_admin_removed';
+}
+
+async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selectedBotId = null) {
+    const contour = await listCustomerReconciliationContour(supabase, ownerId);
+    const activeSources = (contour.contour?.sources || []).filter((source) => (
+        source.is_active
+        && source.role !== 'ignored'
+        && source.already_bound_channel_id
+        && (!selectedBotId || String(source.bot_id || '') === String(selectedBotId))
+    ));
+
+    if (!activeSources.length) {
+        return {
+            summary: {
+                total: 0,
+                free_rider: 0,
+                unpaid_lead: 0,
+                expired_paid_inside: 0,
+                no_payment_history: 0
+            },
+            candidates: []
+        };
+    }
+
+    const channelIds = Array.from(new Set(activeSources.map((source) => source.already_bound_channel_id).filter(Boolean)));
+    const sourceByChannelId = new Map();
+    for (const source of activeSources) {
+        const channelId = String(source.already_bound_channel_id);
+        if (!sourceByChannelId.has(channelId)) sourceByChannelId.set(channelId, []);
+        sourceByChannelId.get(channelId).push(source);
+    }
+
+    const [
+        baseLinksResp,
+        basesResp,
+        baseMembersResp,
+        tariffsResp,
+        subscriptionsResp
+    ] = await Promise.all([
+        supabase
+            .from('customer_base_channels')
+            .select('base_id, channel_id')
+            .in('channel_id', channelIds),
+        supabase
+            .from('customer_bases')
+            .select('id, name, description')
+            .eq('owner_id', ownerId),
+        supabase
+            .from('customer_base_members')
+            .select('base_id, tg_user_id, username, display_name, first_name, last_name, is_bot, present_now, last_seen_at, source_channel_ids, channels_count')
+            .eq('owner_id', ownerId)
+            .eq('present_now', true),
+        supabase
+            .from('tariffs')
+            .select('id, title, channel_id')
+            .eq('owner_id', ownerId)
+            .in('channel_id', channelIds),
+        supabase
+            .from('subscriptions')
+            .select('id, tg_user_id, tg_username, channel_id, status, expires_at, created_at')
+            .in('channel_id', channelIds)
+    ]);
+
+    if (baseLinksResp.error && !(baseLinksResp.error.message || '').includes('customer_base_channels')) throw baseLinksResp.error;
+    if (basesResp.error && !(basesResp.error.message || '').includes('customer_bases')) throw basesResp.error;
+    if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('customer_base_members')) throw baseMembersResp.error;
+    if (tariffsResp.error) throw tariffsResp.error;
+    if (subscriptionsResp.error) throw subscriptionsResp.error;
+
+    const linkedBaseIds = Array.from(new Set((baseLinksResp.data || []).map((row) => row.base_id).filter(Boolean)));
+    const tariffIds = (tariffsResp.data || []).map((row) => row.id);
+
+    const invoicesResp = tariffIds.length > 0
+        ? await supabase
+            .from('invoices')
+            .select('tg_user_id, tariff_id, status, created_at, paid_at')
+            .in('tariff_id', tariffIds)
+            .order('created_at', { ascending: false })
+            .limit(5000)
+        : { data: [], error: null };
+
+    if (invoicesResp.error) throw invoicesResp.error;
+
+    const candidateUserIds = Array.from(new Set((baseMembersResp.data || [])
+        .filter((member) => member?.tg_user_id)
+        .map((member) => String(member.tg_user_id))));
+    const activeBotIds = Array.from(new Set(activeSources.map((source) => String(source.bot_id || '')).filter(Boolean)));
+
+    const [funnelEventsResp, accessEventsResp] = candidateUserIds.length > 0
+        ? await Promise.all([
+            (() => {
+                let query = supabase
+                    .from('customer_funnel_events')
+                    .select('tg_user_id, bot_id, event_type, created_at')
+                    .eq('owner_id', ownerId)
+                    .in('tg_user_id', candidateUserIds)
+                    .order('created_at', { ascending: false })
+                    .limit(3000);
+
+                if (activeBotIds.length > 0) {
+                    query = query.in('bot_id', activeBotIds);
+                }
+                return query;
+            })(),
+            supabase
+                .from('access_events')
+                .select('tg_user_id, channel_id, event_type, event_source, payload, created_at')
+                .eq('owner_id', ownerId)
+                .in('tg_user_id', candidateUserIds)
+                .in('channel_id', channelIds)
+                .order('created_at', { ascending: false })
+                .limit(3000)
+        ])
+        : [{ data: [], error: null }, { data: [], error: null }];
+    const resolutionsResp = candidateUserIds.length > 0
+        ? await supabase
+            .from('customer_reconciliation_resolutions')
+            .select('source_id, tg_user_id, resolution_type, note')
+            .eq('owner_id', ownerId)
+            .in('tg_user_id', candidateUserIds)
+        : { data: [], error: null };
+
+    if (funnelEventsResp.error && !(funnelEventsResp.error.message || '').includes('customer_funnel_events')) throw funnelEventsResp.error;
+    if (accessEventsResp.error && !(accessEventsResp.error.message || '').includes('access_events')) throw accessEventsResp.error;
+    if (resolutionsResp.error && !(resolutionsResp.error.message || '').includes('customer_reconciliation_resolutions')) throw resolutionsResp.error;
+
+    const basesById = new Map((basesResp.data || []).map((base) => [String(base.id), base]));
+    const linkedBaseIdsSet = new Set(linkedBaseIds.map(String));
+    const nowIso = new Date().toISOString();
+    const latestFunnelByUser = latestBy(
+        funnelEventsResp.data || [],
+        (event) => String(event.tg_user_id)
+    );
+    const latestAccessByUserChannel = latestBy(
+        accessEventsResp.data || [],
+        (event) => `${event.tg_user_id}:${event.channel_id}`
+    );
+
+    const subscriptionStatsByUser = new Map();
+    for (const subscription of subscriptionsResp.data || []) {
+        const tgUserId = String(subscription.tg_user_id);
+        if (!subscriptionStatsByUser.has(tgUserId)) {
+            subscriptionStatsByUser.set(tgUserId, {
+                active_subscription_count: 0,
+                expired_subscription_count: 0
+            });
+        }
+
+        const stats = subscriptionStatsByUser.get(tgUserId);
+        const isActive = subscription.status === 'active' && (!subscription.expires_at || subscription.expires_at >= nowIso);
+        if (isActive) stats.active_subscription_count += 1;
+        else stats.expired_subscription_count += 1;
+    }
+
+    const tariffToChannelId = new Map((tariffsResp.data || []).map((tariff) => [String(tariff.id), String(tariff.channel_id)]));
+    const invoiceStatsByUser = new Map();
+    for (const invoice of invoicesResp.data || []) {
+        const tgUserId = String(invoice.tg_user_id);
+        if (!invoiceStatsByUser.has(tgUserId)) {
+            invoiceStatsByUser.set(tgUserId, {
+                has_any_paid_invoice: false,
+                has_pending_invoice: false,
+                last_paid_at: null,
+                channel_ids: new Set()
+            });
+        }
+
+        const stats = invoiceStatsByUser.get(tgUserId);
+        const channelId = tariffToChannelId.get(String(invoice.tariff_id));
+        if (channelId) stats.channel_ids.add(channelId);
+
+        if (invoice.status === 'paid') {
+            stats.has_any_paid_invoice = true;
+            const paidAt = invoice.paid_at || invoice.created_at || null;
+            if (!stats.last_paid_at || new Date(paidAt || 0) > new Date(stats.last_paid_at || 0)) {
+                stats.last_paid_at = paidAt;
+            }
+        }
+
+        if (['pending', 'awaiting_receipt', 'wait_admin'].includes(invoice.status)) {
+            stats.has_pending_invoice = true;
+        }
+    }
+
+    const seen = new Set();
+    const candidates = [];
+    const resolutionsByKey = new Map(
+        (resolutionsResp.data || []).map((row) => [`${row.source_id}:${row.tg_user_id}`, row])
+    );
+
+    for (const member of baseMembersResp.data || []) {
+        if (member.is_bot || !member.tg_user_id) continue;
+        if (!linkedBaseIdsSet.has(String(member.base_id))) continue;
+
+        const sourceChannelIds = Array.isArray(member.source_channel_ids) ? member.source_channel_ids.map(String) : [];
+        const matchingChannelIds = sourceChannelIds.filter((channelId) => sourceByChannelId.has(String(channelId)));
+        if (!matchingChannelIds.length) continue;
+
+        const subscriptionStats = subscriptionStatsByUser.get(String(member.tg_user_id)) || {
+            active_subscription_count: 0,
+            expired_subscription_count: 0
+        };
+        const invoiceStats = invoiceStatsByUser.get(String(member.tg_user_id)) || {
+            has_any_paid_invoice: false,
+            has_pending_invoice: false,
+            last_paid_at: null
+        };
+
+        for (const channelId of matchingChannelIds) {
+            for (const source of sourceByChannelId.get(String(channelId)) || []) {
+                let paymentStatus = 'no_payment_history';
+                if (subscriptionStats.active_subscription_count > 0) paymentStatus = 'active_paid';
+                else if (invoiceStats.has_any_paid_invoice) paymentStatus = 'expired_paid';
+                else if (invoiceStats.has_pending_invoice) paymentStatus = 'unpaid_lead';
+
+                if (member.present_now && source.role === 'private_paid_group' && subscriptionStats.active_subscription_count === 0) {
+                    paymentStatus = invoiceStats.has_any_paid_invoice ? 'expired_paid_inside' : 'free_rider';
+                }
+
+                if (paymentStatus === 'active_paid') continue;
+
+                const key = `${source.id}:${member.tg_user_id}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const resolution = resolutionsByKey.get(key) || null;
+                if (resolution?.resolution_type === 'ignore_candidate' || resolution?.resolution_type === 'linked_accounted') {
+                    continue;
+                }
+
+                const latestFunnel = latestFunnelByUser.get(String(member.tg_user_id)) || null;
+                const latestAccess = latestAccessByUserChannel.get(`${member.tg_user_id}:${channelId}`) || null;
+                const accessSource = latestAccess
+                    ? detectAccessSource(latestAccess.event_source, latestAccess.payload, '')
+                    : { key: 'unknown', label: null };
+                const matchingOptions = [];
+                const sourceChannelTitle = source.already_bound_channel_title || source.title_snapshot || null;
+                const sourceBotTargetLabel = source.bot_username ? `@${source.bot_username}` : sourceChannelTitle;
+
+                if (accessSource.key === 'manual_admin_removed') {
+                    matchingOptions.push(buildCandidateMatchingOption({
+                        state: 'removed_admin',
+                        label: 'Уже был в учтенном контуре и удален админом',
+                        tab: 'removed-admin',
+                        targetLabel: sourceChannelTitle,
+                        targetId: source.already_bound_channel_id || null
+                    }));
+                }
+
+                if (paymentStatus === 'expired_paid_inside' || paymentStatus === 'expired_paid') {
+                    matchingOptions.push(buildCandidateMatchingOption({
+                        state: 'paid_history',
+                        label: 'Уже есть история оплат и доступа',
+                        tab: 'customers-expired',
+                        targetLabel: sourceChannelTitle,
+                        targetId: source.already_bound_channel_id || null
+                    }));
+                }
+
+                if (paymentStatus === 'unpaid_lead') {
+                    matchingOptions.push(buildCandidateMatchingOption({
+                        state: 'invoice_pending',
+                        label: 'Уже создавал счет в BullRun',
+                        tab: 'abandoned',
+                        targetLabel: sourceChannelTitle,
+                        targetId: source.already_bound_channel_id || null
+                    }));
+                }
+
+                if (latestFunnel?.event_type === 'bot_started') {
+                    matchingOptions.push(buildCandidateMatchingOption({
+                        state: 'started',
+                        label: 'Уже нажимал /start',
+                        tab: 'started',
+                        targetLabel: sourceBotTargetLabel,
+                        targetId: source.bot_id || source.already_bound_channel_id || null
+                    }));
+                } else if (latestFunnel?.event_type) {
+                    matchingOptions.push(buildCandidateMatchingOption({
+                        state: 'funnel_known',
+                        label: 'Уже светился в воронке BullRun',
+                        tab: 'viewed',
+                        targetLabel: sourceBotTargetLabel,
+                        targetId: source.bot_id || source.already_bound_channel_id || null
+                    }));
+                }
+
+                let matchingState = 'group_only';
+                let matchingLabel = 'Пока только в группах';
+                let matchingTab = null;
+                let matchingTargetLabel = null;
+                let matchingTargetId = null;
+
+                if (matchingOptions.length > 0) {
+                    const primaryMatch = matchingOptions[0];
+                    matchingState = primaryMatch.state;
+                    matchingLabel = primaryMatch.label;
+                    matchingTab = primaryMatch.tab;
+                    matchingTargetLabel = primaryMatch.target_label;
+                    matchingTargetId = primaryMatch.target_id;
+                }
+
+                candidates.push({
+                    id: key,
+                    source_id: source.id,
+                    source_role: source.role,
+                    source_title: source.title_snapshot || source.already_bound_channel_title || source.chat_id,
+                    source_chat_id: String(source.chat_id),
+                    source_username: source.username_snapshot || null,
+                    source_channel_id: source.already_bound_channel_id || null,
+                    source_channel_title: source.already_bound_channel_title || source.title_snapshot || null,
+                    tg_user_id: String(member.tg_user_id),
+                    tg_username: member.username || null,
+                    display_name: member.display_name || null,
+                    first_name: member.first_name || null,
+                    last_name: member.last_name || null,
+                    base_id: member.base_id,
+                    base_name: basesById.get(String(member.base_id))?.name || null,
+                    present_now: !!member.present_now,
+                    channels_count: member.channels_count || 0,
+                    payment_status: paymentStatus,
+                    last_paid_at: invoiceStats.last_paid_at || null,
+                    has_pending_invoice: !!invoiceStats.has_pending_invoice,
+                    active_subscription_count: subscriptionStats.active_subscription_count,
+                    expired_subscription_count: subscriptionStats.expired_subscription_count,
+                    last_seen_at: member.last_seen_at || null,
+                    channel_id: source.already_bound_channel_id || null,
+                    matching_state: matchingState,
+                    matching_label: matchingLabel,
+                    matching_tab: matchingTab,
+                    matching_target_label: matchingTargetLabel,
+                    matching_target_id: matchingTargetId,
+                    matching_options: matchingOptions,
+                    matching_options_count: matchingOptions.length,
+                    matching_is_ambiguous: matchingOptions.length > 1,
+                    resolution_type: resolution?.resolution_type || null
+                });
+            }
+        }
+    }
+
+    const priorityMap = {
+        free_rider: 100,
+        expired_paid_inside: 90,
+        unpaid_lead: 80,
+        expired_paid: 70,
+        no_payment_history: 60
+    };
+
+    candidates.sort((left, right) => {
+        const delta = (priorityMap[right.payment_status] || 0) - (priorityMap[left.payment_status] || 0);
+        if (delta !== 0) return delta;
+        return new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
+    });
+
+    const summary = candidates.reduce((acc, row) => {
+        acc.total += 1;
+        acc[row.payment_status] = (acc[row.payment_status] || 0) + 1;
+        return acc;
+    }, {
+        total: 0,
+        free_rider: 0,
+        unpaid_lead: 0,
+        expired_paid_inside: 0,
+        no_payment_history: 0
+    });
+
+    return { summary, candidates };
 }
 
 function requireProjectAdmin(req, res) {
@@ -244,6 +667,552 @@ async function cleanupCustomerDemoSeed(supabase, ownerId, seedId) {
 export default function customersRoutes(supabase) {
     const router = express.Router();
     const officialBotService = new OfficialBotService(supabase);
+    const userbotService = new UserbotService(
+        supabase,
+        process.env.TG_API_ID,
+        process.env.TG_API_HASH
+    );
+
+    function handleContourError(error, res) {
+        if (isCustomerReconciliationError(error)) {
+            return res.status(error.statusCode || 400).json({ error: error.message });
+        }
+
+        console.error('Ошибка reconciliation contour:', error);
+        return res.status(500).json({ error: 'Ошибка reconciliation contour' });
+    }
+
+    router.get('/reconciliation-sources', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const result = await listCustomerReconciliationContour(supabase, ownerId);
+            res.json({ success: true, ...result });
+        } catch (error) {
+            return handleContourError(error, res);
+        }
+    });
+
+    router.post('/reconciliation-sources/discover', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const userbotId = String(req.body?.userbot_id || '').trim();
+
+            if (!userbotId) {
+                return res.status(400).json({ error: 'Не передан userbot_id для discovery.' });
+            }
+
+            const result = await discoverCustomerReconciliationSources(supabase, ownerId, userbotId);
+            res.json({ success: true, ...result });
+        } catch (error) {
+            return handleContourError(error, res);
+        }
+    });
+
+    router.post('/reconciliation-sources', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const result = await upsertCustomerReconciliationSources(supabase, ownerId, req.body || {});
+            res.json({ success: true, ...result });
+        } catch (error) {
+            return handleContourError(error, res);
+        }
+    });
+
+    router.patch('/reconciliation-sources/:id', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const result = await patchCustomerReconciliationSource(
+                supabase,
+                ownerId,
+                req.params.id,
+                req.body || {}
+            );
+            res.json({ success: true, ...result });
+        } catch (error) {
+            return handleContourError(error, res);
+        }
+    });
+
+    router.post('/reconciliation-sources/:id/scan', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const result = await scanCustomerReconciliationSource(
+                supabase,
+                ownerId,
+                req.params.id
+            );
+            res.json({ success: true, ...result });
+        } catch (error) {
+            return handleContourError(error, res);
+        }
+    });
+
+    router.post('/reconciliation-sources/:id/sync-members', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const sourceId = String(req.params.id || '').trim();
+            const confirmLargeSource = normalizeBooleanFlag(req.body?.confirm_large_source);
+            if (!sourceId) {
+                return res.status(400).json({ error: 'Не передан источник для sync участников' });
+            }
+
+            const contour = await listCustomerReconciliationContour(supabase, ownerId);
+            const source = (contour.contour?.sources || []).find((item) => String(item.id) === sourceId);
+            if (!source) {
+                return res.status(404).json({ error: 'Источник contour не найден' });
+            }
+
+            if (!source.is_active || source.role === 'ignored') {
+                return res.status(409).json({ error: 'Этот источник выключен и не участвует в contour' });
+            }
+
+            if (!source.already_bound_channel_id) {
+                return res.status(409).json({ error: 'Источник не привязан к channels, синк участников пока некуда писать' });
+            }
+
+            if (source.cooldown_until && new Date(source.cooldown_until).getTime() > Date.now()) {
+                return res.status(409).json({ error: 'Источник сейчас на паузе после прошлого Telegram-действия. Подожди и повтори sync позже.' });
+            }
+
+            const memberCountSnapshot = Number(source.member_count_snapshot ?? 0);
+            const isLargeSource = Number.isInteger(memberCountSnapshot) && memberCountSnapshot >= RECONCILIATION_LARGE_SOURCE_MEMBER_COUNT;
+            if (isLargeSource && !confirmLargeSource) {
+                return res.status(409).json({
+                    error: `Источник выглядит большим: около ${memberCountSnapshot} участников. Для такого источника нужен отдельный подтвержденный sync.`,
+                    requires_confirmation: true,
+                    large_source_threshold: RECONCILIATION_LARGE_SOURCE_MEMBER_COUNT,
+                    member_count_snapshot: memberCountSnapshot,
+                    source_id: source.id
+                });
+            }
+
+            const { data: baseLinks, error: baseLinksError } = await supabase
+                .from('customer_base_channels')
+                .select('base_id')
+                .eq('channel_id', source.already_bound_channel_id);
+            if (baseLinksError && !(baseLinksError.message || '').includes('customer_base_channels')) throw baseLinksError;
+
+            const baseIds = Array.from(new Set((baseLinks || []).map((row) => row.base_id).filter(Boolean)));
+            if (!baseIds.length) {
+                return res.status(409).json({ error: 'Для этого источника нет связанной customer base. Сначала привяжи канал к базе.' });
+            }
+
+            const { data: bases, error: basesError } = await supabase
+                .from('customer_bases')
+                .select('id, name')
+                .eq('owner_id', ownerId)
+                .in('id', baseIds);
+            if (basesError && !(basesError.message || '').includes('customer_bases')) throw basesError;
+
+            const { data: channel, error: channelError } = await supabase
+                .from('channels')
+                .select('id, title, tg_chat_id')
+                .eq('id', source.already_bound_channel_id)
+                .eq('owner_id', ownerId)
+                .single();
+            if (channelError || !channel) {
+                return res.status(404).json({ error: 'Привязанный канал не найден' });
+            }
+
+            // Reuse the contour service validation path instead of ad-hoc userbot lookup.
+            await discoverCustomerReconciliationSources(supabase, ownerId, source.userbot_id);
+
+            const { data: userbotRows, error: userbotError } = await supabase
+                .from('tg_accounts')
+                .select('*, proxies(host, port, username, password, is_working, provision_source, inventory_group)')
+                .eq('owner_id', ownerId)
+                .eq('account_type', 'userbot')
+                .eq('id', source.userbot_id)
+                .limit(1);
+            if (userbotError || !userbotRows?.[0]) {
+                return res.status(404).json({ error: 'Юзербот для sync не найден' });
+            }
+
+            const client = await userbotService.createAuthorizedClient(userbotRows[0], 1);
+            const scannedAt = new Date().toISOString();
+            const syncPreDelayMs = buildSyncPreDelayMs();
+
+            try {
+                await sleep(syncPreDelayMs);
+                const participants = await client.getParticipants(channel.tg_chat_id, { limit: 5000 });
+                const participantMap = new Map();
+                for (const participant of participants || []) {
+                    const tgUserId = String(participant.id);
+                    participantMap.set(tgUserId, {
+                        tg_user_id: tgUserId,
+                        username: participant.username || null,
+                        first_name: participant.firstName || null,
+                        last_name: participant.lastName || null,
+                        display_name: participant.username
+                            ? `@${participant.username}`
+                            : [participant.firstName, participant.lastName].filter(Boolean).join(' ').trim() || `ID ${tgUserId}`,
+                        is_bot: !!participant.bot
+                    });
+                }
+
+                let syncedMembers = 0;
+
+                for (const base of bases || []) {
+                    const { data: existingMembers, error: existingError } = await supabase
+                        .from('customer_base_members')
+                        .select('id, owner_id, base_id, tg_user_id, username, first_name, last_name, display_name, is_bot, source_channel_ids, channels_count, present_now, last_seen_at')
+                        .eq('owner_id', ownerId)
+                        .eq('base_id', base.id);
+                    if (existingError && !(existingError.message || '').includes('customer_base_members')) throw existingError;
+
+                    const existingByUserId = new Map((existingMembers || []).map((row) => [String(row.tg_user_id), row]));
+                    const upsertRows = [];
+                    const staleRows = [];
+
+                    for (const [tgUserId, participant] of participantMap.entries()) {
+                        const existing = existingByUserId.get(tgUserId) || null;
+                        const sourceChannelIds = Array.isArray(existing?.source_channel_ids) ? existing.source_channel_ids.map(String) : [];
+                        if (!sourceChannelIds.includes(String(channel.id))) sourceChannelIds.push(String(channel.id));
+
+                        upsertRows.push({
+                            owner_id: ownerId,
+                            base_id: base.id,
+                            tg_user_id: tgUserId,
+                            username: participant.username,
+                            first_name: participant.first_name,
+                            last_name: participant.last_name,
+                            display_name: participant.display_name,
+                            is_bot: participant.is_bot,
+                            source_channel_ids: sourceChannelIds,
+                            channels_count: sourceChannelIds.length,
+                            present_now: true,
+                            last_seen_at: scannedAt,
+                            updated_at: scannedAt
+                        });
+                    }
+
+                    for (const existing of existingMembers || []) {
+                        const tgUserId = String(existing.tg_user_id);
+                        if (participantMap.has(tgUserId)) continue;
+
+                        const currentSourceChannelIds = Array.isArray(existing.source_channel_ids) ? existing.source_channel_ids.map(String) : [];
+                        if (!currentSourceChannelIds.includes(String(channel.id))) continue;
+
+                        const nextSourceChannelIds = currentSourceChannelIds.filter((id) => String(id) !== String(channel.id));
+                        staleRows.push({
+                            ...existing,
+                            source_channel_ids: nextSourceChannelIds,
+                            channels_count: nextSourceChannelIds.length,
+                            present_now: nextSourceChannelIds.length > 0,
+                            updated_at: scannedAt
+                        });
+                    }
+
+                    if (upsertRows.length > 0) {
+                        const { error } = await supabase
+                            .from('customer_base_members')
+                            .upsert(upsertRows, { onConflict: 'base_id,tg_user_id' });
+                        if (error) throw error;
+                    }
+
+                    for (const stale of staleRows) {
+                        const { error } = await supabase
+                            .from('customer_base_members')
+                            .update({
+                                source_channel_ids: stale.source_channel_ids,
+                                channels_count: stale.channels_count,
+                                present_now: stale.present_now,
+                                updated_at: stale.updated_at
+                            })
+                            .eq('owner_id', ownerId)
+                            .eq('base_id', base.id)
+                            .eq('tg_user_id', stale.tg_user_id);
+                        if (error) throw error;
+                    }
+
+                    await supabase
+                        .from('customer_bases')
+                        .update({ updated_at: scannedAt })
+                        .eq('id', base.id)
+                        .eq('owner_id', ownerId);
+
+                    syncedMembers += participantMap.size;
+                }
+
+                await supabase
+                    .from('customer_reconciliation_sources')
+                    .update({
+                        last_scan_at: scannedAt,
+                        last_scan_status: 'success',
+                        last_scan_error: null,
+                        next_scan_after: new Date(Date.now() + RECONCILIATION_SYNC_COOLDOWN_MS).toISOString(),
+                        cooldown_until: new Date(Date.now() + RECONCILIATION_SYNC_COOLDOWN_MS).toISOString(),
+                        updated_at: scannedAt
+                    })
+                    .eq('id', source.id)
+                    .eq('owner_id', ownerId);
+
+                res.json({
+                    success: true,
+                    source_id: source.id,
+                    base_count: (bases || []).length,
+                    scanned_channel_title: channel.title || source.title_snapshot || null,
+                    synced_members: participantMap.size,
+                    sync_pre_delay_ms: syncPreDelayMs,
+                    cooldown_until: new Date(Date.now() + RECONCILIATION_SYNC_COOLDOWN_MS).toISOString()
+                });
+            } finally {
+                await client.disconnect().catch(() => {});
+            }
+        } catch (error) {
+            console.error('Ошибка manual contour member sync:', error);
+            res.status(500).json({ error: 'Не удалось синкнуть участников по этому источнику' });
+        }
+    });
+
+    router.get('/reconciliation-candidates', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const selectedBotId = normalizeUuidLike(req.query.bot_id);
+            const { summary, candidates } = await buildReconciliationCandidatesSnapshot(supabase, ownerId, selectedBotId);
+
+            const recentResolutionsResp = await supabase
+                .from('customer_reconciliation_resolutions')
+                .select('id, source_id, tg_user_id, resolution_type, note, created_at, updated_at')
+                .eq('owner_id', ownerId)
+                .order('updated_at', { ascending: false })
+                .limit(12);
+
+            if (recentResolutionsResp.error && !(recentResolutionsResp.error.message || '').includes('customer_reconciliation_resolutions')) {
+                throw recentResolutionsResp.error;
+            }
+
+            const resolutionSourceIds = Array.from(new Set((recentResolutionsResp.data || []).map((row) => row.source_id).filter(Boolean)));
+            const resolutionSourcesResp = resolutionSourceIds.length > 0
+                ? await supabase
+                    .from('customer_reconciliation_sources')
+                    .select('id, title_snapshot, username_snapshot, chat_id, role, bot_id')
+                    .eq('owner_id', ownerId)
+                    .in('id', resolutionSourceIds)
+                : { data: [], error: null };
+
+            if (resolutionSourcesResp.error && !(resolutionSourcesResp.error.message || '').includes('customer_reconciliation_sources')) {
+                throw resolutionSourcesResp.error;
+            }
+
+            const resolutionSourceMap = new Map((resolutionSourcesResp.data || []).map((row) => [String(row.id), row]));
+            const recentResolutions = (recentResolutionsResp.data || [])
+                .filter((row) => {
+                    if (!selectedBotId) return true;
+                    const source = resolutionSourceMap.get(String(row.source_id)) || null;
+                    return source && String(source.bot_id || '') === String(selectedBotId);
+                })
+                .map((row) => {
+                    const source = resolutionSourceMap.get(String(row.source_id)) || null;
+                    return {
+                        ...row,
+                        source_title: source?.title_snapshot || source?.username_snapshot || source?.chat_id || 'Источник уже пропал',
+                        source_role: source?.role || null
+                    };
+                });
+
+            res.json({
+                success: true,
+                updatedAt: new Date().toISOString(),
+                summary,
+                candidates,
+                recent_resolutions: recentResolutions
+            });
+        } catch (error) {
+            console.error('Ошибка reconciliation candidates:', error);
+            res.status(500).json({ error: 'Не удалось собрать reconciliation candidates' });
+        }
+    });
+
+    router.post('/reconciliation-candidates/import', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const sourceId = normalizeUuidLike(req.body?.source_id);
+            const tgUserId = String(req.body?.tg_user_id || '').trim();
+            const channelId = normalizeUuidLike(req.body?.channel_id);
+            const durationRaw = String(req.body?.duration_days || 'forever').trim().toLowerCase();
+
+            if (!sourceId) {
+                return res.status(400).json({ error: 'Не передан source_id кандидата' });
+            }
+
+            if (!tgUserId) {
+                return res.status(400).json({ error: 'Не передан Telegram ID кандидата' });
+            }
+
+            if (!channelId) {
+                return res.status(400).json({ error: 'Не передан канал для переноса в учтенную базу' });
+            }
+
+            const durationDays = durationRaw === 'forever' ? 0 : Number(durationRaw || 0);
+            if (!(durationRaw === 'forever' || Number.isFinite(durationDays))) {
+                return res.status(400).json({ error: 'Некорректный срок доступа' });
+            }
+
+            const { candidates } = await buildReconciliationCandidatesSnapshot(supabase, ownerId);
+            const candidate = candidates.find((row) => (
+                String(row.source_id) === String(sourceId)
+                && String(row.tg_user_id) === tgUserId
+            ));
+
+            if (!candidate) {
+                return res.status(409).json({ error: 'Кандидат уже не актуален или не найден в текущем reconciliation view' });
+            }
+
+            if (!(candidate.source_role === 'private_paid_group' && candidate.present_now)) {
+                return res.status(409).json({ error: 'Перенос в учтенную базу разрешен только для кандидата, который уже сидит в закрытой группе' });
+            }
+
+            if (candidate.channel_id && String(candidate.channel_id) !== String(channelId)) {
+                return res.status(409).json({ error: 'Канал не совпадает с текущим источником кандидата' });
+            }
+
+            const { data: channel, error: channelError } = await supabase
+                .from('channels')
+                .select('id, owner_id, title')
+                .eq('id', channelId)
+                .eq('owner_id', ownerId)
+                .single();
+
+            if (channelError || !channel) {
+                return res.status(404).json({ error: 'Канал не найден или не принадлежит тебе' });
+            }
+
+            const { subscriptionId, expiresAt } = await officialBotService.upsertSubscriptionForChannel(
+                tgUserId,
+                channel.id,
+                durationDays
+            );
+
+            if (subscriptionId) {
+                await supabase
+                    .from('subscriptions')
+                    .update({
+                        last_access_event: 'candidate_imported',
+                        access_note: 'перенесен в учтенную базу из reconciliation candidates'
+                    })
+                    .eq('id', subscriptionId);
+            }
+
+            await officialBotService.logAccessEvent({
+                ownerId,
+                channelId: channel.id,
+                subscriptionId,
+                tgUserId,
+                eventType: 'candidate_imported',
+                eventSource: 'customers_candidate_import',
+                payload: {
+                    imported_via: 'reconciliation_candidates',
+                    duration_days: durationRaw === 'forever' ? 'forever' : Number(durationDays),
+                    channel_title: channel.title || null
+                }
+            });
+
+            return res.json({
+                success: true,
+                tg_user_id: tgUserId,
+                channel_id: channel.id,
+                channel_title: channel.title || null,
+                subscription_id: subscriptionId,
+                expires_at: expiresAt,
+                imported: true
+            });
+        } catch (error) {
+            console.error('Ошибка переноса reconciliation candidate в учтенную базу:', error);
+            res.status(500).json({ error: 'Не удалось перенести кандидата в учтенную базу' });
+        }
+    });
+
+    router.post('/reconciliation-candidates/resolve', authenticateUser, async (req, res) => {
+        try {
+            const ownerId = req.user.id;
+            const sourceId = normalizeUuidLike(req.body?.source_id);
+            const tgUserId = String(req.body?.tg_user_id || '').trim();
+            const resolutionType = String(req.body?.resolution_type || '').trim().toLowerCase();
+            const rawNote = String(req.body?.note || '').trim();
+            const linkedTab = String(req.body?.linked_tab || '').trim().toLowerCase();
+            const linkedTargetLabel = String(req.body?.linked_target_label || '').trim();
+            const linkedTargetId = String(req.body?.linked_target_id || '').trim();
+
+            if (!sourceId) {
+                return res.status(400).json({ error: 'Не передан source_id кандидата' });
+            }
+
+            if (!tgUserId) {
+                return res.status(400).json({ error: 'Не передан Telegram ID кандидата' });
+            }
+
+            if (!['ignore_candidate', 'linked_accounted'].includes(resolutionType)) {
+                return res.status(400).json({ error: 'Передан неизвестный resolution_type' });
+            }
+
+            if (linkedTab && !RECONCILIATION_MATCHING_TABS.has(linkedTab)) {
+                return res.status(400).json({ error: 'Передан неизвестный linked_tab' });
+            }
+
+            const { data: source, error: sourceError } = await supabase
+                .from('customer_reconciliation_sources')
+                .select('id, owner_id')
+                .eq('id', sourceId)
+                .eq('owner_id', ownerId)
+                .single();
+
+            if (sourceError || !source) {
+                return res.status(404).json({ error: 'Источник кандидата не найден' });
+            }
+
+            const { candidates } = await buildReconciliationCandidatesSnapshot(supabase, ownerId);
+            const candidate = candidates.find((row) => (
+                String(row.source_id) === String(sourceId)
+                && String(row.tg_user_id) === tgUserId
+            ));
+
+            if (!candidate) {
+                return res.status(409).json({ error: 'Кандидат уже не актуален или не найден в текущем reconciliation view' });
+            }
+
+            if (resolutionType === 'linked_accounted' && !candidate.matching_tab) {
+                return res.status(409).json({ error: 'Для этого кандидата сейчас нет подтвержденного сегмента, с которым его можно связать' });
+            }
+
+            const noteParts = [];
+            if (resolutionType === 'linked_accounted' && linkedTab) {
+                noteParts.push(`linked_tab:${linkedTab}`);
+            }
+            if (resolutionType === 'linked_accounted' && linkedTargetId) {
+                noteParts.push(`linked_target_id:${linkedTargetId}`);
+            }
+            if (resolutionType === 'linked_accounted' && linkedTargetLabel) {
+                noteParts.push(`linked_target_label:${linkedTargetLabel}`);
+            }
+            if (rawNote) {
+                noteParts.push(rawNote);
+            }
+            const note = noteParts.length ? noteParts.join(' | ') : null;
+
+            const { error } = await supabase
+                .from('customer_reconciliation_resolutions')
+                .upsert({
+                    owner_id: ownerId,
+                    source_id: source.id,
+                    tg_user_id: tgUserId,
+                    resolution_type: resolutionType,
+                    note
+                }, { onConflict: 'owner_id,source_id,tg_user_id' });
+
+            if (error) throw error;
+
+            res.json({
+                success: true,
+                source_id: source.id,
+                tg_user_id: tgUserId,
+                resolution_type: resolutionType
+            });
+        } catch (error) {
+            console.error('Ошибка reconciliation candidate resolution:', error);
+            res.status(500).json({ error: 'Не удалось сохранить решение по кандидату' });
+        }
+    });
 
     router.post('/direct-access', authenticateUser, async (req, res) => {
         try {

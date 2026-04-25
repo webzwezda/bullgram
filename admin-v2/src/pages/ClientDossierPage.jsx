@@ -60,6 +60,54 @@ function referralStatusText(value) {
   return map[value] || 'Пока непонятно';
 }
 
+function reconciliationLinkedTabLabel(value) {
+  const map = {
+    started: 'Нажал старт',
+    viewed: 'Смотрели тарифы',
+    abandoned: 'Не смогли оплатить',
+    'customers-active': 'Активный доступ',
+    'customers-expired': 'Доступ закончился',
+    'removed-admin': 'Удален админом',
+    access: 'Не смог войти'
+  };
+  return map[value] || value || 'Без сегмента';
+}
+
+function parseReconciliationResolutionNote(note) {
+  const tokens = String(note || '')
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const meta = {
+    linkedTab: null,
+    linkedTargetLabel: null,
+    comment: ''
+  };
+
+  const commentParts = [];
+  for (const token of tokens) {
+    if (token.startsWith('linked_tab:')) meta.linkedTab = token.slice('linked_tab:'.length).trim();
+    else if (token.startsWith('linked_target_label:')) meta.linkedTargetLabel = token.slice('linked_target_label:'.length).trim();
+    else if (!token.startsWith('linked_target_id:')) commentParts.push(token);
+  }
+
+  meta.comment = commentParts.join(' • ');
+  return meta;
+}
+
+function reconciliationResolutionBadge(type) {
+  if (type === 'linked_accounted') return 'pill pill--ok';
+  if (type === 'ignore_candidate') return 'pill pill--warning';
+  return 'pill';
+}
+
+function reconciliationResolutionText(type) {
+  if (type === 'linked_accounted') return 'Связан с учтенным';
+  if (type === 'ignore_candidate') return 'Не трогать';
+  return type || 'Решение';
+}
+
 export function ClientDossierPage() {
   const { accessToken } = useAuth();
   const [lookup, setLookup] = useState('');
@@ -74,6 +122,7 @@ export function ClientDossierPage() {
     accessEvents: [],
     paymentEvents: [],
     baseMemberships: [],
+    reconciliationResolutions: [],
     updatedAt: null
   });
 
@@ -106,6 +155,7 @@ export function ClientDossierPage() {
             accessEvents: data.accessEvents || [],
             paymentEvents: data.paymentEvents || [],
             baseMemberships: data.baseMemberships || [],
+            reconciliationResolutions: data.reconciliationResolutions || [],
             updatedAt: new Date().toISOString()
           });
         }
@@ -121,6 +171,7 @@ export function ClientDossierPage() {
             accessEvents: [],
             paymentEvents: [],
             baseMemberships: [],
+            reconciliationResolutions: [],
             updatedAt: null
           });
         }
@@ -390,6 +441,41 @@ export function ClientDossierPage() {
                         <td>{row.note || '—'}</td>
                       </tr>
                     ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="section table-card">
+            <div className="table-card__title">Решения сверки</div>
+            {state.reconciliationResolutions.length === 0 ? (
+              <div className="empty-inline">По reconciliation-решениям истории пока нет.</div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Когда</th>
+                    <th>Источник</th>
+                    <th>Решение</th>
+                    <th>Контекст</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.reconciliationResolutions.slice(0, 30).map((row) => {
+                    const meta = parseReconciliationResolutionNote(row.note);
+                    return (
+                      <tr key={row.id}>
+                        <td>{formatWhen(row.updated_at || row.created_at)}</td>
+                        <td>{row.source_title || 'Источник уже пропал'}</td>
+                        <td><span className={reconciliationResolutionBadge(row.resolution_type)}>{reconciliationResolutionText(row.resolution_type)}</span></td>
+                        <td>
+                          <div>{meta.linkedTab ? `Сегмент: ${reconciliationLinkedTabLabel(meta.linkedTab)}` : 'Без сегмента'}</div>
+                          {meta.linkedTargetLabel ? <div className="table-subtext">Цель: {meta.linkedTargetLabel}</div> : null}
+                          {meta.comment ? <div className="table-subtext">{meta.comment}</div> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

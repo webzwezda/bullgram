@@ -44,6 +44,14 @@ function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
         return { key: 'customers_direct_access', label: 'Выдан вручную из Customers' };
     }
 
+    if (
+        source === 'customers_candidate_import'
+        || eventPayload.imported_via === 'reconciliation_candidates'
+        || note.includes('reconciliation candidates')
+    ) {
+        return { key: 'customers_candidate_import', label: 'Перенесен вручную из кандидатов' };
+    }
+
     if (source === 'gift_code' || source === 'admin_gift' || eventPayload.gift_code_id || eventPayload.gift_code || note.includes('подарочному коду')) {
         return { key: 'gift_code', label: 'Подарочный код' };
     }
@@ -89,7 +97,7 @@ export default function clientDossierRoutes(supabase) {
             const tariffIds = (tariffs || []).map(tariff => tariff.id);
             const tariffMap = new Map((tariffs || []).map(tariff => [tariff.id, tariff]));
 
-            const [subscriptionsResp, invoicesResp, invitesResp, eventsResp, basesResp, membersResp, referralProfileResp, referralAttributionResp, referralEventsAsReferrerResp, referralEventsAsReferredResp] = await Promise.all([
+            const [subscriptionsResp, invoicesResp, invitesResp, eventsResp, basesResp, membersResp, referralProfileResp, referralAttributionResp, referralEventsAsReferrerResp, referralEventsAsReferredResp, reconciliationResolutionsResp] = await Promise.all([
                 channelIds.length > 0
                     ? supabase
                         .from('subscriptions')
@@ -158,6 +166,14 @@ export default function clientDossierRoutes(supabase) {
                     .eq('referred_tg_user_id', tgUserId)
                     .order('created_at', { ascending: false })
                     .limit(50)
+                ,
+                supabase
+                    .from('customer_reconciliation_resolutions')
+                    .select('id, source_id, tg_user_id, resolution_type, note, created_at, updated_at')
+                    .eq('owner_id', ownerId)
+                    .eq('tg_user_id', tgUserId)
+                    .order('updated_at', { ascending: false })
+                    .limit(50)
             ]);
 
             if (subscriptionsResp.error) throw subscriptionsResp.error;
@@ -170,6 +186,20 @@ export default function clientDossierRoutes(supabase) {
             if (referralAttributionResp.error && !(referralAttributionResp.error.message || '').includes('referral_attributions')) throw referralAttributionResp.error;
             if (referralEventsAsReferrerResp.error && !(referralEventsAsReferrerResp.error.message || '').includes('referral_events')) throw referralEventsAsReferrerResp.error;
             if (referralEventsAsReferredResp.error && !(referralEventsAsReferredResp.error.message || '').includes('referral_events')) throw referralEventsAsReferredResp.error;
+            if (reconciliationResolutionsResp.error && !(reconciliationResolutionsResp.error.message || '').includes('customer_reconciliation_resolutions')) throw reconciliationResolutionsResp.error;
+
+            const reconciliationSourceIds = Array.from(new Set((reconciliationResolutionsResp.data || []).map((row) => row.source_id).filter(Boolean)));
+            const reconciliationSourcesResp = reconciliationSourceIds.length > 0
+                ? await supabase
+                    .from('customer_reconciliation_sources')
+                    .select('id, title_snapshot, username_snapshot, chat_id, role')
+                    .eq('owner_id', ownerId)
+                    .in('id', reconciliationSourceIds)
+                : { data: [], error: null };
+
+            if (reconciliationSourcesResp.error && !(reconciliationSourcesResp.error.message || '').includes('customer_reconciliation_sources')) {
+                throw reconciliationSourcesResp.error;
+            }
 
             const subscriptions = (subscriptionsResp.data || []).map(subscription => ({
                 ...subscription,
@@ -302,10 +332,19 @@ export default function clientDossierRoutes(supabase) {
             });
 
             const baseMap = new Map((basesResp.data || []).map(base => [base.id, base]));
+            const reconciliationSourceMap = new Map((reconciliationSourcesResp.data || []).map((row) => [row.id, row]));
             const baseMemberships = (membersResp.data || []).map(member => ({
                 ...member,
                 base_name: baseMap.get(member.base_id)?.name || 'Неизвестная база'
             }));
+            const reconciliationResolutions = (reconciliationResolutionsResp.data || []).map((row) => {
+                const source = reconciliationSourceMap.get(row.source_id) || null;
+                return {
+                    ...row,
+                    source_title: source?.title_snapshot || source?.username_snapshot || source?.chat_id || 'Источник уже пропал',
+                    source_role: source?.role || null
+                };
+            });
 
             const latestInvoice = invoices[0] || null;
             const latestSubscription = subscriptionsWithSource[0] || null;
@@ -329,6 +368,7 @@ export default function clientDossierRoutes(supabase) {
                 joinedChannels: subscriptionsWithSource.filter(sub => !!sub.last_join_approved_at).length,
                 pendingJoins: subscriptionsWithSource.filter(sub => sub.status === 'active' && !sub.last_join_approved_at).length,
                 baseMemberships: baseMemberships.length,
+                reconciliationResolutions: reconciliationResolutions.length,
                 latestInvoiceStatus: latestInvoice?.status || null,
                 latestChannelTitle: latestSubscription?.channel_title || latestInvoice?.channel_title || null,
                 latestAccessEvent: latestAccessEvent?.event_type || latestSubscription?.last_access_event || null,
@@ -358,6 +398,7 @@ export default function clientDossierRoutes(supabase) {
                 accessEvents,
                 paymentEvents,
                 baseMemberships,
+                reconciliationResolutions,
                 referralProfile,
                 referralAttribution,
                 referralEventsAsReferrer,

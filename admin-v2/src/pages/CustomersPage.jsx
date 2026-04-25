@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal } from 'lucide-react';
+import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, ShieldCheck } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -34,6 +34,46 @@ const VIEWED_EVENT_LABELS = {
   invoice_created: 'Создал счет',
   bot_started: 'Нажал /start'
 };
+
+const RECONCILIATION_ROLE_LABELS = {
+  public_funnel_group: 'Публичная группа',
+  public_chat: 'Публичный чат',
+  private_paid_group: 'Закрытая платная группа',
+  ignored: 'Не использовать'
+};
+
+const CUSTOMERS_TAB_LABELS = {
+  started: 'Нажал старт',
+  viewed: 'Смотрели тарифы',
+  abandoned: 'Не смогли оплатить',
+  'customers-active': 'Активный доступ',
+  'customers-expired': 'Доступ закончился',
+  'removed-admin': 'Удален админом',
+  access: 'Не смог войти'
+};
+
+const CANDIDATE_ROLE_FILTERS = [
+  { id: 'all', label: 'Все источники' },
+  { id: 'public_funnel_group', label: 'В публичной группе' },
+  { id: 'public_chat', label: 'В публичном чате' },
+  { id: 'private_paid_group', label: 'Уже в закрытой группе' }
+];
+
+const CANDIDATE_MATCH_FILTERS = [
+  { id: 'all', label: 'Все совпадения' },
+  { id: 'unmatched', label: 'Не сопоставлены' },
+  { id: 'matched', label: 'Похожи на учтенных' }
+];
+
+const CANDIDATE_PAYMENT_FILTERS = [
+  { id: 'all', label: 'Все статусы' },
+  { id: 'free_rider', label: 'Сидят внутри без оплаты' },
+  { id: 'expired_paid_inside', label: 'Платили раньше, но теперь внутри без доступа' },
+  { id: 'unpaid_lead', label: 'Счет без оплаты' },
+  { id: 'no_payment_history', label: 'Просто не оформлены' }
+];
+
+const LARGE_SOURCE_MEMBER_COUNT = 1000;
 
 function formatWhen(value) {
   if (!value) return '-';
@@ -196,6 +236,122 @@ function getContextDisplay(row, activeTab) {
   };
 }
 
+function getCandidateStatusLabel(paymentStatus) {
+  if (paymentStatus === 'free_rider') return 'Сидит зайцем';
+  if (paymentStatus === 'expired_paid_inside') return 'Оплата сгорела, но человек внутри';
+  if (paymentStatus === 'unpaid_lead') return 'Счет без оплаты';
+  if (paymentStatus === 'expired_paid') return 'Раньше платил';
+  return 'Не оформлен';
+}
+
+function getCandidateReason(row) {
+  if (row.payment_status === 'free_rider') return 'Есть в платной группе, но активной оплаты нет';
+  if (row.payment_status === 'expired_paid_inside') return 'Раньше платил, срок сгорел, но человек все еще внутри';
+  if (row.payment_status === 'unpaid_lead') return 'Счет уже создавался, но до оплаты не дошло';
+  if (row.payment_status === 'expired_paid') return 'Оплата в истории была, но сейчас активного доступа нет';
+  return 'Человек найден в контуре, но в учтенную клиентскую базу еще не попал';
+}
+
+function getCandidateMatchingClass(state) {
+  if (state === 'removed_admin') return 'bg-rose-50 text-rose-700 border-rose-200';
+  if (state === 'paid_history') return 'bg-violet-50 text-violet-700 border-violet-200';
+  if (state === 'invoice_pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (state === 'started' || state === 'funnel_known') return 'bg-blue-50 text-blue-700 border-blue-200';
+  return 'bg-slate-100 text-slate-600 border-slate-200';
+}
+
+function getCustomersTabLabel(tabId) {
+  return CUSTOMERS_TAB_LABELS[tabId] || 'Учтенный сегмент';
+}
+
+function getCandidateNextStep(row) {
+  if (row.matching_is_ambiguous) {
+    return {
+      label: 'Проверить вручную',
+      className: 'bg-amber-50 text-amber-700 border-amber-200'
+    };
+  }
+
+  if (row.matching_tab) {
+    return {
+      label: 'Связать с учтенным',
+      className: 'bg-blue-50 text-blue-700 border-blue-200'
+    };
+  }
+
+  if (row.source_role === 'private_paid_group' && row.present_now) {
+    return {
+      label: 'Перенести в учтенные',
+      className: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    };
+  }
+
+  if (row.payment_status === 'unpaid_lead') {
+    return {
+      label: 'Написать',
+      className: 'bg-amber-50 text-amber-700 border-amber-200'
+    };
+  }
+
+  if (row.payment_status === 'no_payment_history' && row.source_role !== 'private_paid_group') {
+    return {
+      label: 'Проверить вручную',
+      className: 'bg-slate-100 text-slate-600 border-slate-200'
+    };
+  }
+
+  return {
+    label: 'Решить вручную',
+    className: 'bg-slate-100 text-slate-600 border-slate-200'
+  };
+}
+
+function parseReconciliationResolutionNote(note) {
+  const tokens = String(note || '')
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const meta = {
+    linkedTab: null,
+    linkedTargetId: null,
+    linkedTargetLabel: null,
+    comment: ''
+  };
+
+  const commentParts = [];
+  for (const token of tokens) {
+    if (token.startsWith('linked_tab:')) meta.linkedTab = token.slice('linked_tab:'.length).trim();
+    else if (token.startsWith('linked_target_id:')) meta.linkedTargetId = token.slice('linked_target_id:'.length).trim();
+    else if (token.startsWith('linked_target_label:')) meta.linkedTargetLabel = token.slice('linked_target_label:'.length).trim();
+    else commentParts.push(token);
+  }
+
+  meta.comment = commentParts.join(' • ');
+  return meta;
+}
+
+function getResolutionTypeLabel(type) {
+  if (type === 'linked_accounted') return 'Связан с учтенным';
+  if (type === 'ignore_candidate') return 'Не трогать';
+  return type || 'Решение';
+}
+
+function getSourceMemberCount(source) {
+  const numeric = Number(source?.member_count_snapshot);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function isLargeReconciliationSource(source) {
+  const memberCount = getSourceMemberCount(source);
+  return memberCount !== null && memberCount >= LARGE_SOURCE_MEMBER_COUNT;
+}
+
+function isSourceOnCooldown(source) {
+  if (!source?.cooldown_until) return false;
+  return new Date(source.cooldown_until).getTime() > Date.now();
+}
+
 function buildQueue({ abandoned, orders, access }) {
   const items = [];
 
@@ -269,8 +425,31 @@ function buildQuickBroadcastTitle(activeTab) {
   return 'Текущий сегмент клиентов';
 }
 
+function getReconciliationRoleOptions(rawRoles = []) {
+  return rawRoles.map((role) => ({
+    id: String(role),
+    label: RECONCILIATION_ROLE_LABELS[String(role)] || String(role)
+  }));
+}
+
+function mapReconciliationDiscoveryStatus(row) {
+  if (row.error) return 'error';
+  if (row.admin_rights_status === 'admin') return row.is_configured ? 'success' : 'partial';
+  if (row.admin_rights_status === 'member') return 'partial';
+  return 'never';
+}
+
+function reconciliationStatusMeta(status) {
+  if (status === 'success' || status === 'ok') return { label: 'Готов', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (status === 'partial' || status === 'needs_recheck' || status === 'queued') return { label: 'Нужно перепроверить', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (status === 'running') return { label: 'Сканируется', className: 'bg-blue-50 text-blue-700 border-blue-200' };
+  if (status === 'cooldown') return { label: 'На паузе', className: 'bg-violet-50 text-violet-700 border-violet-200' };
+  if (status === 'failed' || status === 'error') return { label: 'Ошибка', className: 'bg-rose-50 text-rose-700 border-rose-200' };
+  return { label: 'Ждет ручного скана', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+}
+
 export function CustomersPage() {
-  const { accessToken, user } = useAuth();
+  const { accessToken, user, profileRole } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const normalizedTab = normalizeCustomersTab(searchParams);
   const activeTab = TABS.some((tab) => tab.id === normalizedTab) ? normalizedTab : 'viewed';
@@ -297,6 +476,40 @@ export function CustomersPage() {
     abandonedFilter: '',
     orderTgUserIds: []
   });
+  const [reconciliation, setReconciliation] = useState({
+    loading: true,
+    discovering: false,
+    saving: false,
+    scanningSourceId: '',
+    syncingSourceId: '',
+    error: '',
+    scanStatuses: [],
+    selectedUserbotId: '',
+    userbots: [],
+    roles: [],
+    sources: [],
+    discovered: []
+  });
+  const [candidateState, setCandidateState] = useState({
+    loading: profileRole === 'admin',
+    error: '',
+    updatedAt: null,
+    summary: {
+      total: 0,
+      free_rider: 0,
+      unpaid_lead: 0,
+      expired_paid_inside: 0,
+      no_payment_history: 0
+    },
+    rows: [],
+    recentResolutions: []
+  });
+  const [candidateLimit, setCandidateLimit] = useState(120);
+  const [candidateFilters, setCandidateFilters] = useState({
+    sourceRole: 'all',
+    match: 'all',
+    payment: 'all'
+  });
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -313,6 +526,81 @@ export function CustomersPage() {
     bases: [],
     viewed: []
   });
+
+  const loadCandidates = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
+    if (!accessToken || profileRole !== 'admin') return;
+
+    if (!silent) {
+      setCandidateState((prev) => ({ ...prev, loading: true, error: '' }));
+    }
+
+    try {
+      const params = new URLSearchParams();
+      if (selectedBotId) params.set('bot_id', selectedBotId);
+      const data = await apiRequest(`/api/customers/reconciliation-candidates${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
+      if (shouldCancel()) return;
+
+      setCandidateState({
+        loading: false,
+        error: '',
+        updatedAt: data.updatedAt || new Date().toISOString(),
+        summary: data.summary || {
+          total: 0,
+          free_rider: 0,
+          unpaid_lead: 0,
+          expired_paid_inside: 0,
+          no_payment_history: 0
+        },
+        rows: data.candidates || [],
+        recentResolutions: data.recent_resolutions || []
+      });
+    } catch (error) {
+      if (shouldCancel()) return;
+      setCandidateState((prev) => ({
+        ...prev,
+        loading: false,
+        error: error.message
+      }));
+    }
+  }, [accessToken, profileRole, selectedBotId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReconciliation() {
+      if (!accessToken || profileRole !== 'admin') return;
+
+      setReconciliation((prev) => ({ ...prev, loading: true, error: '' }));
+      try {
+        const data = await apiRequest('/api/customers/reconciliation-sources', { accessToken });
+        if (cancelled) return;
+
+        setReconciliation((prev) => ({
+          ...prev,
+          loading: false,
+          error: '',
+          scanStatuses: data.scan_statuses || [],
+          selectedUserbotId: data.contour?.selected_userbot_id || data.userbots?.[0]?.id || '',
+          userbots: data.userbots || [],
+          roles: data.roles || [],
+          sources: data.contour?.sources || [],
+          discovered: prev.discovered.length ? prev.discovered : []
+        }));
+      } catch (error) {
+        if (cancelled) return;
+        setReconciliation((prev) => ({
+          ...prev,
+          loading: false,
+          error: error.message
+        }));
+      }
+    }
+
+    loadReconciliation();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, profileRole]);
 
   useEffect(() => {
     try {
@@ -490,6 +778,17 @@ export function CustomersPage() {
     };
   }, [accessToken, loadCustomers]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    loadCandidates({ shouldCancel: () => cancelled });
+    const intervalId = window.setInterval(() => loadCandidates({ silent: true, shouldCancel: () => cancelled }), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [loadCandidates]);
+
   const rowsByTab = useMemo(() => ({
     started: state.started.map((row) => ({
       id: row.id,
@@ -650,6 +949,243 @@ export function CustomersPage() {
     () => buildQuickBroadcastTitle(activeTab),
     [activeTab]
   );
+  const filteredCandidateRows = useMemo(
+    () => candidateState.rows.filter((row) => {
+      if (candidateFilters.sourceRole !== 'all' && row.source_role !== candidateFilters.sourceRole) {
+        return false;
+      }
+
+      if (candidateFilters.match === 'matched' && !row.matching_tab) {
+        return false;
+      }
+
+      if (candidateFilters.match === 'unmatched' && row.matching_tab) {
+        return false;
+      }
+
+      if (candidateFilters.payment !== 'all' && row.payment_status !== candidateFilters.payment) {
+        return false;
+      }
+
+      return rowMatches(row, search);
+    }),
+    [candidateFilters.match, candidateFilters.payment, candidateFilters.sourceRole, candidateState.rows, search]
+  );
+  const visibleCandidateRows = useMemo(
+    () => filteredCandidateRows.slice(0, candidateLimit),
+    [candidateLimit, filteredCandidateRows]
+  );
+  const savedSourceRoleMap = useMemo(
+    () => new Map((reconciliation.sources || []).map((row) => [String(row.chat_id), row.role])),
+    [reconciliation.sources]
+  );
+  const reconciliationRoleOptions = useMemo(
+    () => getReconciliationRoleOptions(reconciliation.roles),
+    [reconciliation.roles]
+  );
+
+  async function discoverReconciliationSources() {
+    if (!reconciliation.selectedUserbotId) {
+      window.alert('Сначала выбери юзербота для контура.');
+      return;
+    }
+
+      setReconciliation((prev) => ({ ...prev, discovering: true, error: '' }));
+    try {
+      const data = await apiRequest('/api/customers/reconciliation-sources/discover', {
+        accessToken,
+        method: 'POST',
+        body: { userbot_id: reconciliation.selectedUserbotId }
+      });
+      const discovered = (data.discovered_sources || []).map((row) => ({
+        ...row,
+        role: savedSourceRoleMap.get(String(row.chat_id)) || row.configured_role || 'ignored'
+      }));
+      setReconciliation((prev) => ({
+        ...prev,
+        discovering: false,
+        selectedUserbotId: data.selected_userbot_id || prev.selectedUserbotId,
+        userbots: data.userbots || prev.userbots,
+        discovered
+      }));
+    } catch (error) {
+      setReconciliation((prev) => ({
+        ...prev,
+        discovering: false,
+        error: error.message
+      }));
+    }
+  }
+
+  function updateDiscoveredRole(chatId, role) {
+    setReconciliation((prev) => ({
+      ...prev,
+      discovered: prev.discovered.map((row) => (
+        String(row.chat_id) === String(chatId)
+          ? { ...row, role }
+          : row
+      ))
+    }));
+  }
+
+  async function saveReconciliationContour() {
+    if (!reconciliation.selectedUserbotId) {
+      window.alert('Сначала выбери юзербота.');
+      return;
+    }
+
+    const activeSources = reconciliation.discovered
+      .filter((row) => row.role && row.role !== 'ignored')
+      .map((row) => {
+        const checkedAt = new Date().toISOString();
+        return {
+        chat_id: String(row.chat_id),
+        chat_type: row.telegram_type || row.chat_type || 'unknown',
+        title_snapshot: row.title || '',
+        username_snapshot: row.username || null,
+        role: row.role,
+        bot_id: row.already_bound_bot_id || row.linked_bot_id || null,
+        is_active: true,
+        scan_enabled: true,
+        admin_verified: row.admin_rights_status === 'admin',
+        member_count_snapshot: row.member_count ?? null,
+        admin_rights_snapshot: {
+          status: row.admin_rights_status || 'unknown',
+          checked_at: checkedAt,
+          source: 'customers_manual_discovery'
+        },
+        visibility_snapshot: {
+          status: row.visibility_status || 'visible_now',
+          checked_at: checkedAt,
+          source: 'customers_manual_discovery'
+        }
+      };
+      });
+
+    setReconciliation((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      const data = await apiRequest('/api/customers/reconciliation-sources', {
+        accessToken,
+        method: 'POST',
+        body: {
+          userbot_id: reconciliation.selectedUserbotId,
+          sources: activeSources
+        }
+      });
+
+      setReconciliation((prev) => ({
+        ...prev,
+        saving: false,
+        selectedUserbotId: data.contour?.selected_userbot_id || prev.selectedUserbotId,
+        scanStatuses: data.scan_statuses || prev.scanStatuses,
+        roles: data.roles || prev.roles,
+        userbots: data.userbots || prev.userbots,
+        sources: data.contour?.sources || [],
+        discovered: prev.discovered.map((row) => {
+          const saved = (data.contour?.sources || []).find((source) => String(source.chat_id) === String(row.chat_id));
+          return saved ? { ...row, role: saved.role || row.role, is_configured: true } : row;
+        })
+      }));
+
+      await loadCandidates({ silent: true });
+
+      window.alert(`Контур сохранен. Источников в работе: ${data.contour?.summary?.active_sources ?? activeSources.length}.`);
+    } catch (error) {
+      setReconciliation((prev) => ({
+        ...prev,
+        saving: false,
+        error: error.message
+      }));
+    }
+  }
+
+  async function scanReconciliationSource(sourceId) {
+    if (!sourceId) return;
+
+    setReconciliation((prev) => ({
+      ...prev,
+      scanningSourceId: String(sourceId),
+      error: ''
+    }));
+    try {
+      const data = await apiRequest(`/api/customers/reconciliation-sources/${sourceId}/scan`, {
+        accessToken,
+        method: 'POST'
+      });
+
+      setReconciliation((prev) => ({
+        ...prev,
+        scanningSourceId: '',
+        scanStatuses: data.scan_statuses || prev.scanStatuses,
+        roles: data.roles || prev.roles,
+        userbots: data.userbots || prev.userbots,
+        selectedUserbotId: data.contour?.selected_userbot_id || prev.selectedUserbotId,
+        sources: data.contour?.sources || prev.sources
+      }));
+    } catch (error) {
+      setReconciliation((prev) => ({
+        ...prev,
+        scanningSourceId: '',
+        error: error.message
+      }));
+    }
+  }
+
+  async function syncReconciliationSourceMembers(source) {
+    if (!source?.id) return;
+
+    const sourceLabel = sanitizeDemoLabel(source.title_snapshot || source.already_bound_channel_title || source.chat_id);
+    const memberCount = getSourceMemberCount(source);
+    const isLargeSource = isLargeReconciliationSource(source);
+    const confirmationText = isLargeSource
+      ? `Источник «${sourceLabel}» выглядит большим${memberCount ? `: около ${memberCount} участников` : ''}.\n\nТакой синк лучше запускать только когда он реально нужен. Продолжить ручной синк именно сейчас?`
+      : `Синкнуть участников только из «${sourceLabel}» в связанные базы?`;
+    const confirmed = window.confirm(confirmationText);
+    if (!confirmed) return;
+
+    setReconciliation((prev) => ({
+      ...prev,
+      syncingSourceId: String(source.id),
+      error: ''
+    }));
+    try {
+      const data = await apiRequest(`/api/customers/reconciliation-sources/${source.id}/sync-members`, {
+        accessToken,
+        method: 'POST',
+        body: {
+          confirm_large_source: isLargeSource
+        }
+      });
+
+      setReconciliation((prev) => ({
+        ...prev,
+        syncingSourceId: '',
+        sources: prev.sources.map((row) => (
+          String(row.id) === String(source.id)
+            ? {
+                ...row,
+                last_scan_status: 'success',
+                last_scan_error: null,
+                last_scan_at: new Date().toISOString(),
+                cooldown_until: data.cooldown_until || row.cooldown_until,
+                next_scan_after: data.cooldown_until || row.next_scan_after
+              }
+            : row
+        ))
+      }));
+
+      await loadCandidates({ silent: true });
+
+      const delaySeconds = data.sync_pre_delay_ms ? Math.round(Number(data.sync_pre_delay_ms) / 1000) : null;
+      window.alert(`Синк завершен. Источник: ${data.scanned_channel_title || sourceLabel}. Участников подняли: ${data.synced_members || 0}.${delaySeconds ? ` Перед Telegram-запросом система ждала около ${delaySeconds} сек.` : ''} Источник поставлен на паузу до следующего ручного запуска.`);
+    } catch (error) {
+      setReconciliation((prev) => ({
+        ...prev,
+        syncingSourceId: '',
+        error: error.message
+      }));
+    }
+  }
 
   function openQuickBroadcast() {
     if (!quickBroadcastRows.length) {
@@ -682,6 +1218,10 @@ export function CustomersPage() {
   useEffect(() => {
     setOpenActionsRowId(null);
   }, [activeTab, search, focusChannelId, selectedBotId]);
+
+  useEffect(() => {
+    setCandidateLimit(120);
+  }, [candidateFilters.match, candidateFilters.payment, candidateFilters.sourceRole, search, selectedBotId]);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -885,12 +1425,413 @@ export function CustomersPage() {
     }
   }
 
+  async function runCandidateImport(row, duration = 'forever') {
+    if (!canManageRow(row)) return;
+
+    const rowId = row.id ? String(row.id) : null;
+    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
+    const durationLabel = duration === 'forever' ? 'навсегда' : `${duration} дней`;
+
+    setOpenActionsRowId(null);
+    setMutatingRowId(rowId);
+
+    try {
+      const channelId = resolveActionChannelId(row);
+      if (!channelId) {
+        setMutatingRowId(null);
+        return;
+      }
+
+      const confirmed = window.confirm(`Перенести ${clientLabel} в учтенную базу и оформить доступ на ${durationLabel}?`);
+      if (!confirmed) {
+        setMutatingRowId(null);
+        return;
+      }
+
+      await apiRequest('/api/customers/reconciliation-candidates/import', {
+        accessToken,
+        method: 'POST',
+        body: {
+          source_id: row.source_id,
+          tg_user_id: String(row.tg_user_id),
+          channel_id: channelId,
+          duration_days: duration
+        }
+      });
+
+      setCandidateState((prev) => ({
+        ...prev,
+        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
+        summary: {
+          ...prev.summary,
+          total: Math.max(0, (prev.summary.total || 0) - 1),
+          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
+        }
+      }));
+
+      await loadCustomers();
+      window.alert(
+        duration === 'forever'
+          ? 'Кандидат перенесен в учтенную базу с бессрочным доступом. Если нужно, срок потом можно поправить вручную.'
+          : `Кандидат перенесен в учтенную базу и получил доступ на ${duration} дней.`
+      );
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      setMutatingRowId(null);
+    }
+  }
+
+  async function resolveCandidate(row, resolutionType) {
+    if (!row?.source_id || !row?.tg_user_id) return;
+
+    const rowId = row.id ? String(row.id) : null;
+    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
+    const promptText = resolutionType === 'linked_accounted'
+      ? `Пометить ${clientLabel} как уже учтенного в BullRun и убрать из нижней таблицы?`
+      : `Убрать ${clientLabel} из нижней таблицы как неактуального кандидата?`;
+
+    if (!window.confirm(promptText)) return;
+
+    setOpenActionsRowId(null);
+    setMutatingRowId(rowId);
+    try {
+      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
+        accessToken,
+        method: 'POST',
+        body: {
+          source_id: row.source_id,
+          tg_user_id: String(row.tg_user_id),
+          resolution_type: resolutionType
+        }
+      });
+
+      setCandidateState((prev) => ({
+        ...prev,
+        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
+        summary: {
+          ...prev.summary,
+          total: Math.max(0, (prev.summary.total || 0) - 1),
+          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
+        }
+      }));
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      setMutatingRowId(null);
+    }
+  }
+
+  async function linkCandidateToAccounted(row) {
+    if (!row?.source_id || !row?.tg_user_id || !row?.matching_tab) return;
+
+    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
+    const targetLabel = getCustomersTabLabel(row.matching_tab);
+    const targetContext = row.matching_target_label ? `\nЦель: ${row.matching_target_label}` : '';
+    const operatorNote = window.prompt(
+      `Связать ${clientLabel} с сегментом «${targetLabel}»?${targetContext}\n\nЕсли нужно, оставь короткий комментарий для истории.`,
+      row.matching_label ? `Автоподсказка: ${row.matching_label}` : ''
+    );
+
+    if (operatorNote === null) return;
+
+    setOpenActionsRowId(null);
+    setMutatingRowId(String(row.id));
+    try {
+      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
+        accessToken,
+        method: 'POST',
+        body: {
+          source_id: row.source_id,
+          tg_user_id: String(row.tg_user_id),
+          resolution_type: 'linked_accounted',
+          linked_tab: row.matching_tab,
+          linked_target_label: row.matching_target_label || '',
+          linked_target_id: row.matching_target_id || '',
+          note: operatorNote.trim()
+        }
+      });
+
+      setCandidateState((prev) => ({
+        ...prev,
+        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
+        summary: {
+          ...prev.summary,
+          total: Math.max(0, (prev.summary.total || 0) - 1),
+          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
+        }
+      }));
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      setMutatingRowId(null);
+    }
+  }
+
+  function jumpToCandidateMatch(row) {
+    if (!row?.matching_tab || !row?.tg_user_id) return;
+    setSearch(String(row.tg_user_id));
+    setTabState(row.matching_tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   if (state.loading) {
     return <LoadingState text="Собираем клиентов..." />;
   }
 
   return (
     <section className="page page--flush space-y-6">
+      {profileRole === 'admin' ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <section className="p-6 md:p-8">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  Связка с Telegram
+                </h2>
+                <p className="text-sm text-slate-500 font-medium mt-2">
+                  Чтобы найти людей, которые есть в группах, но не отображаются в базе, нужно подключить Telegram-аккаунт и выбрать группы для проверки
+                </p>
+              </div>
+              <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="text-[10px] font-black uppercase text-slate-400">Групп в работе</div>
+                <div className="text-xl font-black text-slate-900">{reconciliation.sources.filter((row) => row.is_active).length}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-6 mb-6">
+              <div className="space-y-4">
+                <div className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl">
+                  <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Аккаунт для проверки</div>
+                  <select
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                    value={reconciliation.selectedUserbotId}
+                    onChange={(event) => setReconciliation((prev) => ({ ...prev, selectedUserbotId: event.target.value }))}
+                    disabled={reconciliation.loading}
+                  >
+                    <option value="">Выберите аккаунт</option>
+                    {reconciliation.userbots.map((userbot) => (
+                      <option key={userbot.id} value={userbot.id}>
+                        {userbot.tg_username ? `@${userbot.tg_username}` : `Аккаунт ${userbot.tg_account_id || userbot.id}`}
+                        {userbot.eligible_for_discovery ? '' : ' • занят в магазине'}
+                      </option>
+                    ))}
+                  </select>
+                  {reconciliation.selectedUserbotId && (() => {
+                    const selected = reconciliation.userbots.find((item) => String(item.id) === String(reconciliation.selectedUserbotId));
+                    if (!selected) return null;
+                    if (!selected.eligible_for_discovery) {
+                      return (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                          <div className="text-xs font-bold text-amber-700">Этот аккаунт сейчас занят в магазине</div>
+                          <div className="text-xs text-amber-600 mt-1">{selected.availability_reason || 'Выберите другой аккаунт или освободите этот'}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600 font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Аккаунт готов к работе
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-3 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    onClick={discoverReconciliationSources}
+                    disabled={reconciliation.discovering || reconciliation.loading || !reconciliation.selectedUserbotId}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${reconciliation.discovering ? 'animate-spin' : ''}`} />
+                    {reconciliation.discovering ? 'Сканируем...' : 'Найти группы'}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
+                    onClick={saveReconciliationContour}
+                    disabled={reconciliation.saving || reconciliation.loading || !reconciliation.selectedUserbotId || !reconciliation.discovered.length}
+                  >
+                    {reconciliation.saving ? 'Сохраняем...' : 'Сохранить'}
+                  </button>
+                </div>
+
+                {reconciliation.error ? (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold">
+                    {reconciliation.error}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-4">
+                {!reconciliation.discovered.length ? (
+                  <div className="h-full min-h-[200px] rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                      <Database className="w-6 h-6 text-slate-300" />
+                    </div>
+                    <div className="text-sm font-bold text-slate-700 mb-2">Выберите аккаунт и нажмите «Найти группы»</div>
+                    <div className="text-xs text-slate-500 max-w-xs">Система покажет все группы и чаты, которые видит выбранный аккаунт</div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-sm font-black text-slate-900">Найденные группы ({reconciliation.discovered.length})</div>
+                      <div className="text-xs text-slate-500">Выберите, какие группы использовать для проверки</div>
+                    </div>
+                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-2">
+                      {reconciliation.discovered.map((row) => {
+                        const status = reconciliationStatusMeta(mapReconciliationDiscoveryStatus(row));
+                        return (
+                          <div key={row.chat_id} className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="font-black text-slate-900 text-sm truncate">{row.title || `Группа ${row.chat_id}`}</div>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border ${status.className}`}>
+                                      <ShieldCheck className="w-3 h-3" />
+                                      {status.label}
+                                    </span>
+                                    {Number(row.member_count || 0) >= LARGE_SOURCE_MEMBER_COUNT ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border border-amber-200 bg-amber-50 text-amber-700">
+                                        Большой источник
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="text-xs text-slate-500 font-medium">
+                                    {row.username ? `@${row.username}` : `ID: ${row.chat_id}`}
+                                    {row.member_count ? ` • ${row.member_count} участников` : ''}
+                                  </div>
+                                </div>
+                                <div className="w-full sm:w-auto sm:min-w-[180px]">
+                                  <select
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                    value={row.role || 'ignored'}
+                                    onChange={(event) => updateDiscoveredRole(row.chat_id, event.target.value)}
+                                  >
+                                    {reconciliationRoleOptions.map((role) => (
+                                      <option key={role.id} value={role.id}>{role.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {reconciliation.sources.filter((row) => row.is_active).length > 0 && (
+                  <div className="border-t border-slate-100 pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-black text-slate-900">Группы в работе ({reconciliation.sources.filter((row) => row.is_active).length})</div>
+                      <div className="text-xs text-slate-500">Эти группы участвуют в проверке</div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {reconciliation.sources.filter((row) => row.is_active).map((row) => {
+                        const status = reconciliationStatusMeta(row.last_scan_status || 'never');
+                        const linkedBases = Array.isArray(row.linked_bases) ? row.linked_bases : [];
+                        const syncDisabled = !linkedBases.length || reconciliation.syncingSourceId === String(row.id);
+                        const isScanning = reconciliation.scanningSourceId === String(row.id);
+                        const isSyncing = reconciliation.syncingSourceId === String(row.id);
+                        const onCooldown = isSourceOnCooldown(row);
+                        return (
+                          <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-black text-slate-900 text-sm truncate">{row.title_snapshot || row.chat_id}</div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {row.last_scan_at ? `Проверено: ${formatWhen(row.last_scan_at)}` : 'Еще не проверялась'}
+                                </div>
+                                {isLargeReconciliationSource(row) ? (
+                                  <div className="mt-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
+                                    Большой источник{getSourceMemberCount(row) ? ` • ~${getSourceMemberCount(row)} участников` : ''}
+                                  </div>
+                                ) : null}
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {linkedBases.length
+                                    ? `Пишем в базы: ${linkedBases.map((base) => sanitizeDemoLabel(base.name || `База ${base.id}`)).join(', ')}`
+                                    : 'Базы не привязаны. Синк пока некуда писать.'}
+                                </div>
+                                {onCooldown ? (
+                                  <div className="text-xs font-bold text-violet-700 mt-1">
+                                    На паузе до {formatWhen(row.cooldown_until)}
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border ${status.className}`}>
+                                  {status.label}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                                  onClick={() => scanReconciliationSource(row.id)}
+                                  disabled={isScanning}
+                                  title="Обновить"
+                                >
+                                  <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
+                                </button>
+                              </div>
+                            </div>
+                            {row.last_scan_error ? (
+                              <div className="mb-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+                                {row.last_scan_error}
+                              </div>
+                            ) : null}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {linkedBases.length ? (
+                                linkedBases.map((base) => (
+                                  <span
+                                    key={`${row.id}-${base.id}`}
+                                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500"
+                                  >
+                                    {sanitizeDemoLabel(base.name || `База ${base.id}`)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
+                                  Нет привязанных баз
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-100 disabled:opacity-60"
+                                onClick={() => scanReconciliationSource(row.id)}
+                                disabled={isScanning}
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                                {isScanning ? 'Обновляем...' : 'Обновить'}
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+                                onClick={() => syncReconciliationSourceMembers(row)}
+                                disabled={syncDisabled || onCooldown}
+                                title={linkedBases.length ? (onCooldown ? 'Источник на паузе после прошлого ручного sync' : (isLargeReconciliationSource(row) ? 'Для большого источника нужен отдельный подтвержденный sync' : 'Синкнуть участников этого источника в связанные базы')) : 'Сначала привяжи канал к базе'}
+                              >
+                                <Database className="w-3.5 h-3.5" />
+                                {isSyncing ? 'Синхронизируем...' : (onCooldown ? 'На паузе' : (isLargeReconciliationSource(row) ? 'Синкнуть осторожно' : 'Синкнуть'))}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {/* Main Content Card */}
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
@@ -1208,6 +2149,304 @@ export function CustomersPage() {
         </div>
 
       </div>
+
+      {profileRole === 'admin' ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <section className="p-6 md:p-8 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Неучтенные / кандидаты</div>
+              <h3 className="text-2xl font-black tracking-tight text-slate-900">Люди из контура, которых BullRun еще не ведет как нормальных клиентов</h3>
+              <p className="text-sm text-slate-500 font-medium mt-2 max-w-3xl">
+                Это нижний reconciliation-слой из уже синкнутых баз. Здесь нет live-парсинга Telegram: таблица собирается только из сохраненных `customer_base_members` и текущего контура.
+              </p>
+            </div>
+            <div className="px-4 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black uppercase tracking-wider text-slate-500 shrink-0">
+              {filteredCandidateRows.length || 0} из {candidateState.summary.total || 0}
+            </div>
+          </section>
+
+          <section className="p-6 md:p-8 bg-slate-50/40 border-b border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {[
+                { label: 'Сидят зайцем', value: candidateState.summary.free_rider || 0, color: 'text-rose-600' },
+                { label: 'Счет без оплаты', value: candidateState.summary.unpaid_lead || 0, color: 'text-amber-600' },
+                { label: 'Сгорели, но внутри', value: candidateState.summary.expired_paid_inside || 0, color: 'text-violet-600' },
+                { label: 'Просто не оформлены', value: candidateState.summary.no_payment_history || 0, color: 'text-slate-700' }
+              ].map((item) => (
+                <div key={item.label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</div>
+                  <div className={`text-2xl font-black ${item.color}`}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+            {candidateState.error ? (
+              <div className="mt-4 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
+                {candidateState.error}
+              </div>
+            ) : null}
+            {candidateState.recentResolutions.length ? (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Недавно решено</div>
+                <div className="space-y-2">
+                  {candidateState.recentResolutions.slice(0, 6).map((row) => {
+                    const meta = parseReconciliationResolutionNote(row.note);
+                    return (
+                      <div key={row.id} className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+                        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                          <div className="text-sm font-bold text-slate-800">
+                            TG {row.tg_user_id} • {getResolutionTypeLabel(row.resolution_type)}
+                          </div>
+                          <div className="text-xs font-medium text-slate-500">
+                            {formatWhen(row.updated_at || row.created_at)}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Источник: {sanitizeDemoLabel(row.source_title || 'Источник уже пропал')}
+                          {meta.linkedTab ? ` • Связан с: ${getCustomersTabLabel(meta.linkedTab)}` : ''}
+                          {meta.linkedTargetLabel ? ` • Цель: ${sanitizeDemoLabel(meta.linkedTargetLabel)}` : ''}
+                        </div>
+                        {meta.comment ? (
+                          <div className="mt-1 text-xs font-medium text-slate-600">{meta.comment}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-6 space-y-4">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Источник</div>
+                <div className="flex flex-wrap gap-2">
+                  {CANDIDATE_ROLE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
+                        candidateFilters.sourceRole === filter.id
+                          ? 'border-slate-900 bg-slate-900 text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}
+                      onClick={() => setCandidateFilters((prev) => ({ ...prev, sourceRole: filter.id }))}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Совпадение</div>
+                  <div className="flex flex-wrap gap-2">
+                    {CANDIDATE_MATCH_FILTERS.map((filter) => (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
+                          candidateFilters.match === filter.id
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setCandidateFilters((prev) => ({ ...prev, match: filter.id }))}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Состояние</div>
+                  <div className="flex flex-wrap gap-2">
+                    {CANDIDATE_PAYMENT_FILTERS.map((filter) => (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
+                          candidateFilters.payment === filter.id
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                        }`}
+                        onClick={() => setCandidateFilters((prev) => ({ ...prev, payment: filter.id }))}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {candidateState.loading ? (
+            <div className="p-8 text-sm font-medium text-slate-500">Собираем кандидатов из сохраненных баз...</div>
+          ) : !candidateState.rows.length ? (
+            <div className="p-8 text-sm font-medium text-slate-500">
+              Кандидатов пока нет. Для этого блока нужен сохраненный контур и хотя бы одна синкнутая база по его каналам.
+            </div>
+          ) : !filteredCandidateRows.length ? (
+            <div className="p-8 text-sm font-medium text-slate-500">
+              По текущим фильтрам кандидатов нет. Сними часть фильтров или очисти поиск.
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Источник</th>
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
+                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {visibleCandidateRows.map((row) => {
+                    const statusLabel = getCandidateStatusLabel(row.payment_status);
+                    const reason = getCandidateReason(row);
+                    const nextStep = getCandidateNextStep(row);
+                    const sourcePrimary = row.source_channel_title
+                      ? `Канал: ${sanitizeDemoLabel(row.source_channel_title)}`
+                      : `Источник: ${sanitizeDemoLabel(row.source_title || row.source_chat_id)}`;
+                    const sourceSecondary = [row.base_name ? `База: ${sanitizeDemoLabel(row.base_name)}` : null, row.source_username ? `@${row.source_username}` : null]
+                      .filter(Boolean)
+                      .join(' • ');
+
+                    return (
+                      <tr key={`candidate-${row.id}`} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
+                              {getClientInitial(row)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-black text-slate-900 text-sm truncate">
+                                {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `ID: ${row.tg_user_id}`)}
+                              </div>
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                ID: {row.tg_user_id}
+                              </div>
+                              {row.tg_username ? (
+                                <div className="text-xs font-semibold text-slate-500 truncate">
+                                  @{row.tg_username}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 hidden md:table-cell">
+                          <div className="font-bold text-slate-800 text-sm truncate">{sourcePrimary}</div>
+                          {sourceSecondary ? <div className="text-xs text-slate-500 truncate mt-1">{sourceSecondary}</div> : null}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shadow-sm bg-slate-100 text-slate-700 border-slate-200">
+                            {statusLabel}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 hidden lg:table-cell">
+                          <div className="text-slate-600 font-medium text-sm truncate max-w-xs" title={reason}>
+                            {reason}
+                          </div>
+                          <div className={`mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${nextStep.className}`}>
+                            Следующий шаг: {nextStep.label}
+                          </div>
+                          {row.matching_label ? (
+                            <div className={`mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getCandidateMatchingClass(row.matching_state)}`}>
+                              {row.matching_label}
+                            </div>
+                          ) : null}
+                          {row.matching_is_ambiguous ? (
+                            <div className="mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-amber-200 bg-amber-50 text-amber-700">
+                              Несколько совпадений • {row.matching_options_count}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {canManageRow(row) ? (
+                              <div className="relative" data-row-actions-root="true">
+                                <button
+                                  type="button"
+                                  className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
+                                  onClick={() => setOpenActionsRowId((prev) => (prev === row.id ? null : row.id))}
+                                  title="Действия"
+                                >
+                                  <MoreHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                                {openActionsRowId === row.id ? (
+                                  <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
+                                    {row.matching_tab ? (
+                                      <>
+                                        <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => linkCandidateToAccounted(row)}>
+                                          Связать с «{getCustomersTabLabel(row.matching_tab)}»
+                                        </button>
+                                        <div className="border-t border-slate-100" />
+                                      </>
+                                    ) : null}
+                                    {row.source_role === 'private_paid_group' && row.present_now ? (
+                                      <>
+                                        <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runCandidateImport(row)}>
+                                          Перенести в учтенные вручную
+                                        </button>
+                                        <div className="border-t border-slate-100" />
+                                      </>
+                                    ) : null}
+                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-5')}>
+                                      Выдать 5 дней
+                                    </button>
+                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-30')}>
+                                      Выдать 30 дней
+                                    </button>
+                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-forever')}>
+                                      Выдать навсегда
+                                    </button>
+                                    <div className="border-t border-slate-100" />
+                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => resolveCandidate(row, 'ignore_candidate')}>
+                                      Не трогать
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать">
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                            {row.matching_tab ? (
+                              <button
+                                type="button"
+                                className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
+                                onClick={() => jumpToCandidateMatch(row)}
+                                title="Открыть где уже учтен"
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            ) : null}
+                            <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                              <Database className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {filteredCandidateRows.length > candidateLimit ? (
+                <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/30">
+                  <button
+                    type="button"
+                    className="w-full md:w-auto px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
+                    onClick={() => setCandidateLimit((prev) => prev + 120)}
+                  >
+                    Показать еще {Math.min(120, filteredCandidateRows.length - candidateLimit)} из {filteredCandidateRows.length - candidateLimit}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
 
       {quickBroadcast.open && (
         <div ref={quickBroadcastRef} className="mt-6 bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
