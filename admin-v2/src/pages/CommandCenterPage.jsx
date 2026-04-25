@@ -592,23 +592,23 @@ export function CommandCenterPage() {
 
           {/* Quick Actions */}
           <div className="mt-6 flex flex-wrap gap-2">
-            <a className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2" href="/app/customers?tab=orders">
+            <a className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2" href="/app/customers?tab=orders">
               <Wallet className="w-4 h-4" />
               Деньги
             </a>
-            <a className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2" href="/app/customers?tab=access">
+            <a className="px-5 py-2.5 rounded-xl bg-blue-100 text-blue-700 text-sm font-bold hover:bg-blue-200 transition-all flex items-center gap-2" href="/app/customers?tab=access">
               <LockKeyhole className="w-4 h-4" />
               Доступ
             </a>
-            <a className="px-5 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-bold hover:bg-purple-700 transition-all flex items-center gap-2" href="/app/userbots">
+            <a className="px-5 py-2.5 rounded-xl bg-purple-100 text-purple-700 text-sm font-bold hover:bg-purple-200 transition-all flex items-center gap-2" href="/app/userbots">
               <Rocket className="w-4 h-4" />
               Юзерботы
             </a>
-            <a className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all flex items-center gap-2" href="/app/shop">
+            <a className="px-5 py-2.5 rounded-xl bg-emerald-100 text-emerald-700 text-sm font-bold hover:bg-emerald-200 transition-all flex items-center gap-2" href="/app/shop">
               <ShoppingBag className="w-4 h-4" />
               Магазин
             </a>
-            <button className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2" type="button" onClick={() => openAdminGroups('need_bot')}>
+            <button className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition-all flex items-center gap-2" type="button" onClick={() => openAdminGroups('need_bot')}>
               <Shield className="w-4 h-4" />
               Права в группах
             </button>
