@@ -1564,182 +1564,228 @@ function renderOpenProxyPurchases(rows) {
 
       {state.support?.profile_role !== 'admin' ? (
         checkoutState.item ? (
-          <div className="toolbar-card proxy-surface-card">
-            <div className="proxy-surface-card__head">
-              <div className="toolbar-card__title">Оплата прокси</div>
-            </div>
-            <div className="shop-inline-checkout__head">
-              <div>
-                <div className="shop-inline-checkout__title">{checkoutState.item?.title || 'Прокси'}</div>
-                <div className="table-subtext">{itemPriceSummary(checkoutState.item)}</div>
-              </div>
-              <div className="payment-method-row__options">
-                {itemPaymentMethods(checkoutState.item).map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    className={`inline-action inline-action--chip${checkoutState.paymentMethod === method ? ' inline-action--accent' : ''}`}
-                    disabled={checkoutState.loading}
-                    onClick={() => {
-                      openCheckout(checkoutState.item, method);
-                    }}
-                  >
-                    {paymentMethodLabel(method)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {checkoutState.loading ? (
-              <div className="empty-inline" style={{ marginTop: 16 }}>Готовим оплату...</div>
-            ) : checkoutState.error && !checkoutState.purchase ? (
-              <div className="error-inline" style={{ marginTop: 16 }}>{checkoutState.error}</div>
-            ) : checkoutState.purchase ? (
-              <>
-                {checkoutState.error ? (
-                  <div className="error-inline" style={{ marginTop: 16 }}>{checkoutState.error}</div>
-                ) : null}
-                <div className="shop-inline-checkout__meta">
-                  <div><strong>Метод:</strong> {paymentMethodLabel(checkoutState.purchase.payment_method)}</div>
-                  {checkoutState.purchase.payment_method !== 'ton' ? (
-                    <div><strong>Сумма:</strong> {purchaseAmountSummary(checkoutState.purchase)}</div>
-                  ) : null}
-                  <div><strong>Дедлайн:</strong> {formatWhen(checkoutState.purchase.expires_at)}</div>
+          <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+            <div className="p-6 md:p-8 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
+                  <Wallet className="w-6 h-6" />
                 </div>
-                {checkoutState.purchase.payment_method === 'ton' ? (
-                  <div className="shop-inline-checkout__panel">
-                    <div><strong>Сумма:</strong> {purchaseAmountSummary(checkoutState.purchase)}</div>
-                    {checkoutState.purchase.seller_wallet ? (
-                      <div><strong>TON wallet:</strong> <code>{checkoutState.purchase.seller_wallet}</code></div>
-                    ) : null}
-                    <div><strong>Memo:</strong> <code>{checkoutState.purchase.memo || '—'}</code></div>
-                    {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) ? (
-                      <div style={{ marginTop: 16 }}>
-                        {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr ? (
-                          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                            <button
-                              className={`inline-action inline-action--chip${tonCheckoutView === 'trust' ? ' inline-action--accent' : ''}`}
-                              type="button"
-                              onClick={() => setTonCheckoutView('trust')}
-                              style={{ flex: 1 }}
-                            >
-                              Trust Wallet
-                            </button>
-                            <button
-                              className={`inline-action inline-action--chip${tonCheckoutView === 'ton' ? ' inline-action--accent' : ''}`}
-                              type="button"
-                              onClick={() => setTonCheckoutView('ton')}
-                              style={{ flex: 1 }}
-                            >
-                              TON
-                            </button>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-slate-900">Оплата прокси</h2>
+                  <p className="text-sm text-slate-500 font-medium mt-0.5">
+                    {checkoutState.item?.title || 'Прокси'} • {itemPriceSummary(checkoutState.item)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 md:p-8">
+              {checkoutState.loading ? (
+                <div className="text-center py-12 text-slate-500">Готовим оплату...</div>
+              ) : checkoutState.error && !checkoutState.purchase ? (
+                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 mb-6">
+                  {checkoutState.error}
+                </div>
+              ) : checkoutState.purchase ? (
+                <div className="space-y-6">
+                  {checkoutState.error ? (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
+                      {checkoutState.error}
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="text-slate-500 mb-1">Метод оплаты</div>
+                      <div className="font-semibold text-slate-900">{paymentMethodLabel(checkoutState.purchase.payment_method)}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 mb-1">Сумма</div>
+                      <div className="font-semibold text-slate-900">{purchaseAmountSummary(checkoutState.purchase)}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 mb-1">Дедлайн</div>
+                      <div className="font-semibold text-slate-900">{formatWhen(checkoutState.purchase.expires_at)}</div>
+                    </div>
+                  </div>
+
+                  {checkoutState.purchase.payment_method === 'ton' ? (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <div className="text-slate-500">TON кошелек</div>
+                          <code className="text-xs bg-white px-2 py-1 rounded border border-slate-200 font-mono">{checkoutState.purchase.seller_wallet}</code>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Memo</div>
+                          <code className="text-xs bg-white px-2 py-1 rounded border border-slate-200 font-mono">{checkoutState.purchase.memo || '—'}</code>
+                        </div>
+                      </div>
+
+                      {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) ? (
+                        <div className="space-y-3">
+                          {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr ? (
+                            <div className="flex gap-2">
+                              <button
+                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all${
+                                  tonCheckoutView === 'trust' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                                type="button"
+                                onClick={() => setTonCheckoutView('trust')}
+                              >
+                                Trust Wallet
+                              </button>
+                              <button
+                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all${
+                                  tonCheckoutView === 'ton' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                }`}
+                                type="button"
+                                onClick={() => setTonCheckoutView('ton')}
+                              >
+                                TON
+                              </button>
+                            </div>
+                          ) : null}
+                          <div className="bg-white p-4 rounded-xl flex justify-center">
+                            <img
+                              className="w-48 h-48"
+                              src={tonCheckoutView === 'ton'
+                                ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
+                                : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
+                              alt={tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <div className="text-slate-500">Телефон для СБП</div>
+                          <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_phone || '—'}</div>
+                        </div>
+                        {checkoutState.purchase.sbp_fio ? (
+                          <div>
+                            <div className="text-slate-500">Получатель</div>
+                            <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_fio}</div>
                           </div>
                         ) : null}
-                        <div className="table-subtext" style={{ marginBottom: 8 }}>
-                          {tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                        <div>
+                          <div className="text-slate-500">Банки</div>
+                          <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_bank || 'СБП'}</div>
                         </div>
-                        <img
-                          className="checkout-modal__qr"
-                          src={tonCheckoutView === 'ton'
-                            ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
-                            : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
-                          alt={tonCheckoutView === 'ton' ? 'QR для TON-кошелька' : 'QR для Trust Wallet'}
-                        />
+                        {checkoutState.purchase.receipt_file_url ? (
+                          <div>
+                            <div className="text-slate-500">Чек</div>
+                            <a
+                              className="text-blue-600 hover:text-blue-700 font-semibold underline"
+                              href={resolveBackendAssetUrl(checkoutState.purchase.receipt_file_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Открыть файл
+                            </a>
+                          </div>
+                        ) : null}
                       </div>
+
+                      {checkoutState.purchase.status === 'pending' ? (
+                        <div className="space-y-3">
+                          <div className="font-semibold text-slate-900">Отправь чек продавцу</div>
+                          <div className="text-sm text-slate-600">После перевода приложи скриншот или PDF чека</div>
+                          <textarea
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            rows="3"
+                            placeholder="Банк, сумма, время перевода"
+                            value={receiptNote}
+                            onChange={(event) => setReceiptNote(event.target.value)}
+                          />
+                          <input
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
+                          />
+                        </div>
+                      ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
+                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                          Чек отправлен. Продавец скоро проверит его вручную.
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-3 pt-6 border-t border-slate-100">
+                    {checkoutState.purchase.payment_method === 'ton' && (
+                      <>
+                        {checkoutState.purchase.trust_wallet_uri && (
+                          <a
+                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                            href={checkoutState.purchase.trust_wallet_uri}
+                          >
+                            Trust Wallet
+                          </a>
+                        )}
+                        {checkoutState.purchase.ton_uri && (
+                          <a
+                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                            href={checkoutState.purchase.ton_uri}
+                          >
+                            TON
+                          </a>
+                        )}
+                      </>
+                    )}
+
+                    {checkoutState.purchase.payment_method === 'ton' ? (
+                      <button
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                        type="button"
+                        disabled={checkoutState.checking}
+                        onClick={checkCheckout}
+                      >
+                        {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
+                      </button>
+                    ) : checkoutState.purchase.status === 'pending' ? (
+                      <button
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                        type="button"
+                        disabled={checkoutState.checking}
+                        onClick={markCheckoutPaid}
+                      >
+                        {checkoutState.checking ? 'Отправляем...' : 'Отправить чек'}
+                      </button>
                     ) : null}
+
+                    {(checkoutState.purchase.status === 'pending' || checkoutState.purchase.status === 'awaiting_receipt') ? (
+                      <button
+                        className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                        type="button"
+                        onClick={() => cancelCheckoutPurchase(checkoutState.purchase)}
+                      >
+                        Снять бронь
+                      </button>
+                    ) : null}
+
+                    <button
+                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                      type="button"
+                      onClick={() => setCheckoutState({
+                        item: null,
+                        purchase: null,
+                        paymentMethod: 'ton',
+                        loading: false,
+                        checking: false,
+                        error: ''
+                      })}
+                    >
+                      Скрыть
+                    </button>
                   </div>
-                ) : (
-                  <div className="shop-inline-checkout__panel">
-                    <div><strong>СБП:</strong> {checkoutState.purchase.sbp_phone || '—'}</div>
-                    {checkoutState.purchase.sbp_fio ? (
-                      <div><strong>Получатель:</strong> {checkoutState.purchase.sbp_fio}</div>
-                    ) : null}
-                    <div><strong>Банки:</strong> {checkoutState.purchase.sbp_bank || 'СБП'}</div>
-                    {checkoutState.purchase.receipt_file_url ? (
-                      <div>
-                        <strong>Чек:</strong>{' '}
-                        <a href={resolveBackendAssetUrl(checkoutState.purchase.receipt_file_url)} target="_blank" rel="noreferrer">открыть файл</a>
-                      </div>
-                    ) : null}
-                    {checkoutState.purchase.status === 'pending' ? (
-                      <div className="shop-inline-checkout__receipt">
-                        <div className="table-card__title" style={{ marginBottom: 4 }}>Отправь чек продавцу</div>
-                        <div className="table-subtext">После перевода по СБП приложи скрин или PDF чека. Без этого продавец оплату не подтвердит.</div>
-                        <textarea
-                          className="field"
-                          rows="3"
-                          placeholder="Банк, сумма, время перевода"
-                          value={receiptNote}
-                          onChange={(event) => setReceiptNote(event.target.value)}
-                        />
-                        <input
-                          className="field"
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
-                        />
-                        <div className="table-subtext">Подойдут скриншот оплаты или PDF-чек.</div>
-                      </div>
-                    ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
-                      <div className="table-subtext">Чек уже отправлен. Продавец проверит его вручную на странице проверки чеков.</div>
-                    ) : null}
-                  </div>
-                )}
-                <div className="toolbar-card__body">
-                  {checkoutState.purchase.payment_method === 'ton' && checkoutState.purchase.trust_wallet_uri ? (
-                    <a className="ghost-button" href={checkoutState.purchase.trust_wallet_uri}>
-                      Trust Wallet
-                    </a>
-                  ) : null}
-                  {checkoutState.purchase.payment_method === 'ton' && checkoutState.purchase.ton_uri ? (
-                    <a className="ghost-button" href={checkoutState.purchase.ton_uri}>
-                      TON
-                    </a>
-                  ) : null}
-                  {checkoutState.purchase.payment_method === 'ton' ? (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      disabled={checkoutState.checking}
-                      onClick={checkCheckout}
-                    >
-                      {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
-                    </button>
-                  ) : checkoutState.purchase.status === 'pending' ? (
-                    <button
-                      className="ghost-button ghost-button--primary"
-                      type="button"
-                      disabled={checkoutState.checking}
-                      onClick={markCheckoutPaid}
-                    >
-                      {checkoutState.checking ? 'Отправляем...' : 'Отправить чек продавцу'}
-                    </button>
-                  ) : null}
-                  {(checkoutState.purchase.status === 'pending' || checkoutState.purchase.status === 'awaiting_receipt') ? (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => cancelCheckoutPurchase(checkoutState.purchase)}
-                    >
-                      Снять бронь
-                    </button>
-                  ) : null}
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => setCheckoutState({
-                      item: null,
-                      purchase: null,
-                      paymentMethod: 'ton',
-                      loading: false,
-                      checking: false,
-                      error: ''
-                    })}
-                  >
-                    Скрыть
-                  </button>
                 </div>
-              </>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         ) : null
       ) : null}
