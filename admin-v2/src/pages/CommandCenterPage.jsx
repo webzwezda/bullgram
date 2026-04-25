@@ -854,12 +854,144 @@ export function CommandCenterPage() {
         </div>
       ) : null}
 
-      {/* Временно скрыты старые секции во время переработки страницы */}
-      {/* Проблемные группы и чаты - будет переделано */}
-      {/* Сигналы юзерботов - будет переделано */}
-      {/* Telegram ошибки - будет переделано */}
-      {/* Failover - будет переделано */}
-      {/* Shared proxy - будет переделано */}
+      {channelStats.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white shadow-lg shadow-red-500/20">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Группы без прав</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {channelStats.length} {channelStats.length === 1 ? 'группа' : 'групп'} нужно разобрать
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="space-y-3">
+              {channelStats.map((row) => (
+                <div
+                  key={row.id}
+                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50 hover:border-slate-300 transition-all duration-200"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900 mb-2">{row.title}</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <div className="text-slate-500">Бот админ</div>
+                          <div className="font-medium text-slate-900">{row.hasOfficialBot ? '✓ Да' : '✗ Нет'}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Активных</div>
+                          <div className="font-medium text-slate-900">{row.activeSubscribers}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Не подтвердили</div>
+                          <div className="font-medium text-amber-600">{row.paidNotJoined}</div>
+                        </div>
+                        <div>
+                          <div className="text-slate-500">Сгорели, но внутри</div>
+                          <div className="font-medium text-red-600">{row.expiredButInside}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 flex-shrink-0"
+                      onClick={() => openAdminGroups(row.hasOfficialBot ? 'ready' : 'need_bot')}
+                    >
+                      Разобрать права
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {recentInboxAlertRows.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                <Send className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Сообщения от юзерботов</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {recentInboxAlertRows.length} {recentInboxAlertRows.length === 1 ? 'новый сигнал' : 'новых сигналов'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="space-y-3">
+              {recentInboxAlertRows.slice(0, 5).map((row) => (
+                <div
+                  key={`${row.userbot_id}-${row.tg_user_id}-${row.notified_at}`}
+                  className="p-4 rounded-2xl border border-slate-200 bg-slate-50"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900 mb-1">{row.userbot_label}</div>
+                      <div className="text-sm text-slate-600 mb-2 truncate">{row.preview_text || 'Без текста'}</div>
+                      <div className="flex items-center gap-4 text-sm text-slate-500">
+                        <span>TG ID: <span className="font-medium text-slate-900">{row.tg_user_id}</span></span>
+                        <span>{formatWhen(row.notified_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {recentTelegramErrorRows.length > 0 ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Ошибки и ограничения</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {recentTelegramErrorRows.length} {recentTelegramErrorRows.length === 1 ? 'проблема' : 'проблем'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="p-6 md:p-8">
+            <div className="space-y-3">
+              {recentTelegramErrorRows.slice(0, 5).map((row) => (
+                <div
+                  key={row.id}
+                  className="p-4 rounded-2xl border border-red-200 bg-red-50"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900 mb-1">{row.userbot_label}</div>
+                      <div className="text-sm text-red-700 font-medium mb-2">{row.restriction_kind}</div>
+                      <div className="text-sm text-slate-600 mb-1">{row.error_message || row.event_type}</div>
+                      <div className="flex items-center gap-4 text-sm text-slate-500 mt-2">
+                        <span>Источник: <span className="font-medium text-slate-900">{row.event_source}</span></span>
+                        {row.tg_user_id && <span>TG ID: <span className="font-medium text-slate-900">{row.tg_user_id}</span></span>}
+                        <span>{formatWhen(row.happened_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
