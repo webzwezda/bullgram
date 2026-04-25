@@ -1986,48 +1986,166 @@ function renderOpenProxyPurchases(rows) {
       ) : null}
 
       {state.proxies.length > 0 && state.support?.profile_role !== 'admin' ? (
-      <div className="toolbar-card proxy-surface-card">
-        <div className="proxy-surface-card__head">
-          <div>
-            <div className="toolbar-card__title">Фильтр</div>
-            <div className="table-subtext">Быстро отрежь битые, shared и купленные хвосты.</div>
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Мои прокси</h2>
+                  <p className="text-sm text-slate-500 font-medium mt-0.5">
+                    Отфильтруй битые, shared и купленные
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-4 py-2 bg-violet-50 text-violet-700 rounded-xl text-sm font-bold border border-violet-100">
+                {filteredProxies.length}
+              </div>
+            </div>
+
+            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+              {[
+                { id: 'all', label: 'Все' },
+                { id: 'working', label: 'Работают' },
+                { id: 'broken', label: 'С ошибкой' },
+                { id: 'shared_proxy', label: 'Shared' }
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                    filter === item.id
+                      ? 'bg-white text-violet-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setFilter(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                  filter === 'manual_free'
+                    ? 'bg-white text-violet-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setFilter('manual_free')}
+              >
+                Временные
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                  filter === 'purchased'
+                    ? 'bg-white text-violet-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setFilter('purchased')}
+              >
+                Купленные
+              </button>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-50">
+            {filteredProxies.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+                  <Globe className="w-8 h-8" />
+                </div>
+                <p className="text-slate-400 font-bold">Прокси с этим фильтром нет</p>
+              </div>
+            ) : (
+              filteredProxies.map((proxy) => {
+                const badge = proxyBadge(proxy);
+                const mode = proxyHealthMode(proxy);
+                const geo = proxy.last_check_country
+                  ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
+                  : mode === 'telegram_only'
+                    ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
+                    : 'Гео отсутствует';
+
+                return (
+                  <div key={proxy.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="text-lg font-black text-slate-900">{proxy.name}</div>
+                          {Number(proxy.userbot_count || 0) > 1 ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[10px] font-black uppercase mt-1">
+                              Опасная shared-связка
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500">Адрес:</span>{' '}
+                            <span className="font-mono font-bold text-slate-900">{proxy.host}:{proxy.port}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Проверка:</span>{' '}
+                            <span className="font-bold text-slate-900">{proxyEgressSummary(proxy)}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Гео:</span>{' '}
+                            <span className="font-bold text-slate-900">{geo}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500">Статус:</span>{' '}
+                            <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
+                              badge.className === 'pill pill--ok'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : badge.className === 'pill pill--warning'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                  : badge.className === 'pill pill--danger'
+                                    ? 'bg-red-50 text-red-700 border-red-100'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                              {badge.text}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Нагрузка:</span>{' '}
+                            <span className="font-bold text-slate-900">{Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}</span>
+                          </div>
+                        </div>
+
+                        {mode === 'telegram_only' ? (
+                          <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                            Прокси рабочий именно для Telegram-подключений. Обычный web-check не смог вытащить IP/гео.
+                          </div>
+                        ) : null}
+                        {proxy.last_check_error ? (
+                          <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                            {proxy.last_check_error}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          className="px-5 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 shadow-lg shadow-violet-500/20 transition-all"
+                          type="button"
+                          onClick={() => checkProxy(proxy.id)}
+                        >
+                          Проверить
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-        <div className="filter-strip">
-          {[
-            { id: 'all', label: 'Все' },
-            { id: 'working', label: 'Работают' },
-            { id: 'broken', label: 'С ошибкой' },
-            { id: 'shared_proxy', label: 'Shared-хвост' }
-          ].map((item) => (
-            <button
-              key={item.id}
-              className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
-              onClick={() => setFilter(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-          <button
-            className={`filter-chip${filter === 'manual_free' ? ' filter-chip--active' : ''}`}
-            onClick={() => setFilter('manual_free')}
-          >
-            Временные
-          </button>
-          <button
-            className={`filter-chip${filter === 'purchased' ? ' filter-chip--active' : ''}`}
-            onClick={() => setFilter('purchased')}
-          >
-            Купленные
-          </button>
-        </div>
-      </div>
-      ) : null}
-
-      {state.support?.profile_role !== 'admin' && state.proxies.length > 0 ? (
-        renderProxyTable(filteredProxies, 'У тебя пока нет прокси.', {
-          title: 'Мои прокси'
-        })
       ) : null}
 
       {state.support?.profile_role === 'admin' ? (
