@@ -1999,21 +1999,6 @@ function renderOpenProxyPurchases(rows) {
             ) : null}
           </div>
         </div>
-        <div className="toolbar-card proxy-surface-card proxy-side-note">
-          <div className="proxy-surface-card__head">
-            <div className="toolbar-card__title">Как раскладывать прокси</div>
-          </div>
-          <div className="proxy-side-note__stack">
-            <div className="proxy-side-note__item">
-              <div className="proxy-side-note__label">Использую сам</div>
-              <div className="proxy-side-note__text">Прокси для твоего рабочего userbot-контура и внутренних задач.</div>
-            </div>
-            <div className="proxy-side-note__item">
-              <div className="proxy-side-note__label">На продажу</div>
-              <div className="proxy-side-note__text">Инвентарь под shop. Сначала сюда, потом уже публикуй лот.</div>
-            </div>
-          </div>
-        </div>
       </div>
       ) : null}
 
