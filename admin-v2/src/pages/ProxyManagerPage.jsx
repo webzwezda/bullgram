@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Shield, AlertTriangle, Server, Plus } from 'lucide-react';
+import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
