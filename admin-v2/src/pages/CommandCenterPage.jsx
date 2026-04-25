@@ -324,7 +324,7 @@ export function CommandCenterPage() {
       hint: `Ждут оплату: ${summary.pendingInvoices || 0}, ждут чек: ${summary.awaitingReceiptInvoices || 0}.`
     },
     {
-      title: 'Пробники висят',
+      title: 'Пробные счета',
       value: summary.trialPendingInvoices || 0,
       hint: `Напоминания уже ушли: ${summary.remindedInvoices || 0}.`
     },
@@ -340,25 +340,25 @@ export function CommandCenterPage() {
       title: 'Рабочие прокси',
       value: summary.workingProxyCount || 0,
       tone: (summary.brokenProxyCount || 0) > 0 ? 'warning' : 'default',
-      hint: `Битые: ${summary.brokenProxyCount || 0}. Старые опасные shared-связки: ${summary.sharedProxyCount || 0}.`
+      hint: `Битые: ${summary.brokenProxyCount || 0}. Общие прокси: ${summary.sharedProxyCount || 0}.`
     },
     {
-      title: 'Failover включен',
+      title: 'Автопереключение',
       value: summary.userbotFailoverEnabledCount || 0,
-      hint: `Недавние авто-переезды: ${summary.recentFailoversCount || 0}. Пустой fallback-пул: ${summary.userbotFailoverMisconfiguredCount || 0}.`
+      hint: `Недавние переключения: ${summary.recentFailoversCount || 0}. Пустой резерв: ${summary.userbotFailoverMisconfiguredCount || 0}.`
     },
     {
-      title: 'Ops-сигналы',
+      title: 'Сигналы системы',
       value: summary.recentInboxAlerts || 0,
       tone: summary.signalRoutingReady ? 'default' : 'warning',
       hint: summary.signalRoutingReady
-        ? `Контур собран: ops-ботов ${summary.opsBotCount || 0}, admin_tg_id задан.`
-        : 'Контур не собран: либо нет admin_tg_id, либо нет official-бота с ролью ops.'
+        ? `Контур собран: ${summary.opsBotCount || 0} ботов, админ задан.`
+        : 'Контур не собран: настройте админа или ботов для сигналов.'
     },
     {
-      title: 'Базы',
+      title: 'Базы клиентов',
       value: summary.customerBaseCount || 0,
-      hint: `Доступно seller-лотов: ${summary.shopPublishedItemCount || 0}.`
+      hint: `Товаров в магазине: ${summary.shopPublishedItemCount || 0}.`
     }
   ]), [summary]);
 
@@ -370,7 +370,7 @@ export function CommandCenterPage() {
         title: 'Забери или проверь прокси',
         done: (summary.proxyCount || 0) > 0,
         hint: (summary.proxyCount || 0) > 0
-          ? `Прокси уже есть: ${summary.proxyCount}. Проверь, что он Telegram-compatible.`
+          ? `Прокси уже есть: ${summary.proxyCount}. Проверь, что он работает с Telegram.`
           : 'Без прокси дальше не двигаемся: на Trial даем один бесплатный, чтобы собрать первый контур.',
         href: '/app/proxies'
       },
@@ -383,19 +383,19 @@ export function CommandCenterPage() {
         href: '/app/userbots'
       },
       {
-        title: 'Проверь платежный контур',
+        title: 'Настрой платежи',
         done: !!paymentReadiness.hasTon,
         hint: paymentReadiness.hasTon
-          ? 'TON-кошелек задан. Можно идти в shop и закрывать первый платеж.'
-          : 'Задай TON-кошелек, чтобы Trial не был просто красивой витриной без денег.',
+          ? 'TON-кошелек задан. Можно принимать оплату.'
+          : 'Задай TON-кошелек, чтобы принимать оплату за доступ.',
         href: '/app/payments'
       },
       {
-        title: 'Закрой первый checkout',
+        title: 'Продай первый доступ',
         done: (summary.shopPaidPurchases || 0) > 0 || (summary.activeSubscribers || 0) > 0,
         hint: (summary.shopPaidPurchases || 0) > 0 || (summary.activeSubscribers || 0) > 0
-          ? 'Первый checkout уже есть. Теперь видно, где Trial начинает упираться в лимиты.'
-          : 'Иди в Shop, закрой первый TON/P2P checkout и потом возвращайся сюда смотреть, где течет контур.',
+          ? 'Первая продажа уже есть. Теперь видно, где Trial начинает упираться в лимиты.'
+          : 'Открой Магазин и продай первый доступ в TON или через P2P.',
         href: '/shop?offer=trial'
       }
     ];
@@ -406,35 +406,35 @@ export function CommandCenterPage() {
 
     return [
       {
-        title: 'Собери боевой proxy stack',
+        title: 'Добавь прокси для работы',
         done: (summary.proxyCount || 0) > 1,
         hint: (summary.proxyCount || 0) > 1
           ? `Прокси уже больше одного: ${summary.proxyCount}. Можно держать не только входной контур, но и рабочую операционку.`
-          : 'Один trial-прокси уже не тянет рабочий режим. Добери хотя бы второй прокси под боевой контур.',
+          : 'Один бесплатный прокси уже не тянет рабочий режим. Добавь хотя бы второй прокси для работы.',
         href: '/app/proxies'
       },
       {
-        title: 'Подними второй юзербот или seller-аккаунт',
+        title: 'Подними второй юзербот',
         done: (summary.userbotCount || 0) > 1,
         hint: (summary.userbotCount || 0) > 1
-          ? 'В кабинете уже больше одного юзербота. Контур перестал быть trial-одиночкой.'
-          : 'Normal начинает ощущаться, когда у тебя не один входной юзербот, а рабочая связка под диалоги, группы и seller-flow.',
+          ? 'В кабинете уже больше одного юзербота. Контур перестал быть одиночным.'
+          : 'Normal начинается, когда у тебя не один входной юзербот, а рабочая связка под диалоги, группы и продажи.',
         href: '/app/userbots'
       },
       {
-        title: 'Запусти первый боевой дожим',
+        title: 'Запусти рассылки',
         done: (summary.broadcastCount || 0) > 0 || (summary.remindedInvoices || 0) > 0,
         hint: (summary.broadcastCount || 0) > 0 || (summary.remindedInvoices || 0) > 0
-          ? 'Рассылки и дожим уже пошли. Normal работает как контур возврата хвостов, а не как витрина.'
-          : 'Дальше Normal надо проверять не словами, а реальной рассылкой, abandoned или retention-дожимом.',
+          ? 'Рассылки уже пошли. Normal работает как контур возврата клиентов, а не как витрина.'
+          : 'Запусти рассылки или напоминания о неоплаченных счетах.',
         href: '/app/broadcast'
       },
       {
-        title: 'Собери seller или рабочий checkout',
+        title: 'Настрой продажи через Магазин',
         done: (summary.shopPublishedItemCount || 0) > 0 || (summary.shopPaidPurchases || 0) > 0,
         hint: (summary.shopPublishedItemCount || 0) > 0 || (summary.shopPaidPurchases || 0) > 0
-          ? 'Shop уже не пустой: есть либо лоты, либо реальные продажи.'
-          : 'Normal надо дожимать до денег: выставь рабочий оффер, seller-лот или закрой нормальный checkout под свой сценарий.',
+          ? 'Магазин уже работает: есть либо товары, либо продажи.'
+          : 'Настрой Магазин для продаж: добавь товары или включи оплату доступа.',
         href: '/app/shop'
       }
     ];
