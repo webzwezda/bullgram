@@ -1693,7 +1693,7 @@ function renderOpenProxyPurchases(rows) {
                       </div>
 
                       {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) && (
-                        <div className="shrink-0 flex flex-col items-center bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full md:w-[260px]">
+                        <div className="shrink-0 flex flex-col bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full md:w-[260px]">
                           {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr && (
                             <div className="flex p-1 bg-slate-100 rounded-xl mb-5 w-full">
                               <button
@@ -1716,7 +1716,7 @@ function renderOpenProxyPurchases(rows) {
                             <QrCode className="w-3.5 h-3.5" />
                             {tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
                           </div>
-                          <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50">
+                          <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50 mb-4">
                             <img
                               className="w-full h-full object-contain mix-blend-multiply"
                               src={tonCheckoutView === 'ton'
@@ -1725,6 +1725,14 @@ function renderOpenProxyPurchases(rows) {
                               alt={tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
                             />
                           </div>
+                          <button
+                            className="w-full px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                            type="button"
+                            disabled={checkoutState.checking}
+                            onClick={checkCheckout}
+                          >
+                            {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1777,26 +1785,31 @@ function renderOpenProxyPurchases(rows) {
                             accept="image/*,.pdf"
                             onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
                           />
+                          <button
+                            className="w-full px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                            type="button"
+                          >
+                            Проверить оплату
+                          </button>
                         </div>
                       ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
-                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                          Чек отправлен. Продавец скоро проверит его вручную.
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                            Чек отправлен. Продавец скоро проверит его вручную.
+                          </div>
+                          <button
+                            className="w-full px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                            type="button"
+                          >
+                            Проверить оплату
+                          </button>
                         </div>
                       ) : null}
                     </div>
                   )}
 
                   <div className="flex flex-wrap gap-3 pt-6 border-t border-slate-100">
-                    {checkoutState.purchase.payment_method === 'ton' ? (
-                      <button
-                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                        type="button"
-                        disabled={checkoutState.checking}
-                        onClick={checkCheckout}
-                      >
-                        {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
-                      </button>
-                    ) : checkoutState.purchase.status === 'pending' ? (
+                    {checkoutState.purchase.status === 'pending' && checkoutState.purchase.payment_method !== 'ton' ? (
                       <button
                         className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
                         type="button"
