@@ -1289,77 +1289,105 @@ export function ProxyManagerPage() {
 
 function renderOpenProxyPurchases(rows) {
     return (
-      <div className="toolbar-card proxy-surface-card">
-        <div className="proxy-surface-card__head">
-          <div>
-            <div className="toolbar-card__title">Нужно оплатить</div>
-            <div className="table-subtext">Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.</div>
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+              <ShoppingBag className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-slate-900">Нужно оплатить</h2>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">
+                Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.
+              </p>
+            </div>
+            <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-bold border border-amber-100">
+              {rows.length}
+            </div>
           </div>
-          <span className="pill">{rows.length}</span>
         </div>
+
         {rows.length === 0 ? (
-          <div className="empty-inline" style={{ marginTop: 12 }}>Открытых покупок по прокси сейчас нет.</div>
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+              <ShoppingBag className="w-8 h-8" />
+            </div>
+            <p className="text-slate-400 font-bold">Открытых покупок по прокси сейчас нет</p>
+          </div>
         ) : (
-          <table className="table" style={{ marginTop: 16 }}>
-            <thead>
-              <tr>
-                <th>Лот</th>
-                <th>Сумма</th>
-                <th>Статус</th>
-                <th>Дедлайн</th>
-                <th>Дальше</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((purchase) => (
-                <tr key={purchase.id}>
-                  <td>
-                    <div className="table-primary">{purchase.item?.title || 'Прокси'}</div>
-                    <div className="table-subtext">
-                      {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="table-primary">{purchaseAmountSummary(purchase)}</div>
-                    <div className="table-subtext">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</div>
-                  </td>
-                  <td>
-                    <span className={purchaseStatusMeta(purchase.status).className}>
-                      {purchaseStatusMeta(purchase.status).text}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="table-primary">{formatWhen(purchase.expires_at)}</div>
-                  </td>
-                  <td>
-                    <div className="proxy-row-actions proxy-row-actions--stack">
-                      <div className="proxy-row-actions__main">
-                        <button
-                          className="inline-action inline-action--chip inline-action--accent"
-                          type="button"
-                          onClick={() => showPurchaseInline(purchase)}
-                        >
-                          Открыть оплату
-                        </button>
-                        <button
-                          className="inline-action inline-action--chip"
-                          type="button"
-                          onClick={() => cancelCheckoutPurchase(purchase)}
-                        >
-                          Снять бронь
-                        </button>
-                        {purchase.payload?.ton_uri ? (
-                          <a className="inline-action inline-action--chip" href={purchase.payload.ton_uri}>
-                            TON
-                          </a>
-                        ) : null}
+          <div className="divide-y divide-slate-50">
+            {rows.map((purchase) => {
+              const statusMeta = purchaseStatusMeta(purchase.status);
+              return (
+                <div key={purchase.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <div className="text-lg font-black text-slate-900">{purchase.item?.title || 'Прокси'}</div>
+                        <div className="text-sm text-slate-500 mt-1">
+                          {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <div>
+                          <span className="text-slate-500">Сумма:</span>{' '}
+                          <span className="font-bold text-slate-900">{purchaseAmountSummary(purchase)}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Способ:</span>{' '}
+                          <span className="font-bold text-slate-900">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Дедлайн:</span>{' '}
+                          <span className="font-bold text-slate-900">{formatWhen(purchase.expires_at)}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
+                          statusMeta.className === 'pill pill--ok'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : statusMeta.className === 'pill pill--warning'
+                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {statusMeta.text}
+                        </span>
                       </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                        type="button"
+                        onClick={() => showPurchaseInline(purchase)}
+                      >
+                        Открыть оплату
+                      </button>
+                      <button
+                        className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                        type="button"
+                        onClick={() => cancelCheckoutPurchase(purchase)}
+                      >
+                        Снять бронь
+                      </button>
+                      {purchase.payload?.ton_uri ? (
+                        <a
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                          href={purchase.payload.ton_uri}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          TON
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     );
