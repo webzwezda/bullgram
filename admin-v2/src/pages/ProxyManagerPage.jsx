@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag } from 'lucide-react';
+import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag, Wallet, QrCode, Copy, ExternalLink } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -83,6 +83,34 @@ function formatTon(value) {
 
 function formatRub(value) {
   return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function CopyRow({ label, value }) {
+  if (!value) return null;
+
+  async function copyValue() {
+    try {
+      await navigator.clipboard.writeText(value);
+      window.alert(`${label} скопирован.`);
+    } catch {
+      window.prompt(label, value);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left shadow-sm hover:bg-slate-50 transition-colors"
+      onClick={copyValue}
+    >
+      <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
+      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
+        <Copy className="h-3.5 w-3.5" />
+        Copy
+      </span>
+    </button>
+  );
 }
 
 function isProxyShopItem(item) {
@@ -1610,45 +1638,65 @@ function renderOpenProxyPurchases(rows) {
                   </div>
 
                   {checkoutState.purchase.payment_method === 'ton' ? (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
-                      <div className="space-y-3 text-sm">
-                        <div>
-                          <div className="text-slate-500">TON кошелек</div>
-                          <code className="text-xs bg-white px-2 py-1 rounded border border-slate-200 font-mono">{checkoutState.purchase.seller_wallet}</code>
+                    <div className="flex flex-col md:flex-row gap-6 p-6 sm:p-8 rounded-[2rem] bg-slate-50/50 border border-slate-200 mt-8 mb-4">
+                      <div className="flex-1 flex flex-col">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner">
+                            <Wallet className="w-5 h-5" strokeWidth={2.5} />
+                          </div>
+                          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Оплата через кошелек</h3>
                         </div>
-                        <div>
-                          <div className="text-slate-500">Memo</div>
-                          <code className="text-xs bg-white px-2 py-1 rounded border border-slate-200 font-mono">{checkoutState.purchase.memo || '—'}</code>
+
+                        <p className="text-base text-slate-600 font-medium mb-8 leading-relaxed max-w-md">
+                          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{purchaseAmountSummary(checkoutState.purchase)}</strong>.
+                        </p>
+
+                        <div className="mb-6 flex w-full flex-col gap-2">
+                          <CopyRow label="Кошелек" value={checkoutState.purchase.seller_wallet} />
+                          <CopyRow label="Memo" value={checkoutState.purchase.memo || ''} />
+                        </div>
+
+                        <div className="flex flex-wrap gap-3 mt-auto">
+                          {checkoutState.purchase.trust_wallet_uri && (
+                            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 !text-white text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all" href={checkoutState.purchase.trust_wallet_uri} target="_blank" rel="noreferrer">
+                              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> Trust Wallet
+                            </a>
+                          )}
+                          {checkoutState.purchase.ton_uri && (
+                            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 !text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 transition-all" href={checkoutState.purchase.ton_uri} target="_blank" rel="noreferrer">
+                              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> TON
+                            </a>
+                          )}
                         </div>
                       </div>
 
-                      {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) ? (
-                        <div className="space-y-3">
-                          {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr ? (
-                            <div className="flex gap-2">
+                      {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) && (
+                        <div className="shrink-0 flex flex-col items-center bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full md:w-[260px]">
+                          {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr && (
+                            <div className="flex p-1 bg-slate-100 rounded-xl mb-5 w-full">
                               <button
-                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all${
-                                  tonCheckoutView === 'trust' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                }`}
                                 type="button"
+                                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${tonCheckoutView === 'trust' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 onClick={() => setTonCheckoutView('trust')}
                               >
-                                Trust Wallet
+                                Trust
                               </button>
                               <button
-                                className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all${
-                                  tonCheckoutView === 'ton' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                }`}
                                 type="button"
+                                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${tonCheckoutView === 'ton' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 onClick={() => setTonCheckoutView('ton')}
                               >
                                 TON
                               </button>
                             </div>
-                          ) : null}
-                          <div className="bg-white p-4 rounded-xl flex justify-center">
+                          )}
+                          <div className="flex items-center justify-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
+                            <QrCode className="w-3.5 h-3.5" />
+                            {tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                          </div>
+                          <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50">
                             <img
-                              className="w-48 h-48"
+                              className="w-full h-full object-contain mix-blend-multiply"
                               src={tonCheckoutView === 'ton'
                                 ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
                                 : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
@@ -1656,7 +1704,7 @@ function renderOpenProxyPurchases(rows) {
                             />
                           </div>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   ) : (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
@@ -1717,27 +1765,6 @@ function renderOpenProxyPurchases(rows) {
                   )}
 
                   <div className="flex flex-wrap gap-3 pt-6 border-t border-slate-100">
-                    {checkoutState.purchase.payment_method === 'ton' && (
-                      <>
-                        {checkoutState.purchase.trust_wallet_uri && (
-                          <a
-                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                            href={checkoutState.purchase.trust_wallet_uri}
-                          >
-                            Trust Wallet
-                          </a>
-                        )}
-                        {checkoutState.purchase.ton_uri && (
-                          <a
-                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                            href={checkoutState.purchase.ton_uri}
-                          >
-                            TON
-                          </a>
-                        )}
-                      </>
-                    )}
-
                     {checkoutState.purchase.payment_method === 'ton' ? (
                       <button
                         className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
