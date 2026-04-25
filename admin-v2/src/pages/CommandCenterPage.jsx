@@ -1,4 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  LayoutDashboard,
+  Wallet,
+  LockKeyhole,
+  Rocket,
+  ShoppingBag,
+  Shield,
+  AlertTriangle,
+  Users,
+  FileText,
+  Activity,
+  RefreshCw,
+  Send,
+  Settings,
+  ChevronRight,
+  Database
+} from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { ActionCard } from '../ui/ActionCard.jsx';
@@ -526,48 +543,117 @@ export function CommandCenterPage() {
   }
 
   return (
-    <section className="page">
-      <div className="page__header">
-        <h1>Командный центр</h1>
-        <p>
-          Первый реальный экран `admin-v2`. Здесь уже тянется живой backend и видно, где деньги, где
-          инфраструктура течет и куда надо бежать прямо сейчас.
-        </p>
-        <div className="page__meta">
-          <span>Последнее обновление: {formatWhen(state.updatedAt)}</span>
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Экран обновляется сам раз в минуту.'}</span>
-          <span>
-            Платежный контур: {paymentReadiness.hasTon ? 'TON задан' : 'TON не настроен'}
-            {paymentReadiness.adminTgId ? ` • admin_tg_id ${paymentReadiness.adminTgId}` : ' • admin_tg_id нет'}
-          </span>
-        </div>
-      </div>
+    <section className="page page--flush space-y-6">
+      {/* Main Dashboard Card */}
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
 
-      <div className="hero-panel">
-        <div className="hero-panel__body">
-          <div className="hero-panel__eyebrow">Центр управления</div>
-          <div className="hero-panel__title">Смотри, где деньги, где течет контур и кто из админов сейчас не дотягивает.</div>
-          <div className="hero-panel__text">
-            Это уже не старый dashboard ради цифр. Здесь у тебя оперативный вход в деньги, доступ,
-            прокси, shop и сигналы от юзерботов. Открыл утром — сразу понял, куда жать первым.
-          </div>
-          <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/customers?tab=orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
-            <a className="hero-link" href="/app/userbots">Чинить ботов и прокси</a>
-            <a className="hero-link" href="/app/shop">Открыть seller ops</a>
-            <button className="hero-link hero-link--button" type="button" onClick={() => openAdminGroups('need_bot')}>Права в группах</button>
-          </div>
-        </div>
-        <div className="hero-panel__grid">
-          {prioritySignals.map((item) => (
-            <div key={item.title} className={`priority-chip priority-chip--${item.tone}`}>
-              <div className="priority-chip__title">{item.title}</div>
-              <div className="priority-chip__value">{item.value}</div>
-              <div className="priority-chip__hint">{item.hint}</div>
+        {/* Header Section */}
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
+              <LayoutDashboard className="w-6 h-6" />
             </div>
-          ))}
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">Командный центр</h1>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">
+                Главный экран управления: деньги, клиенты, инфраструктура и приоритетные задачи
+              </p>
+            </div>
+          </div>
+
+          {/* Priority Signals */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {prioritySignals.map((item, idx) => (
+              <div key={idx} className={`p-5 rounded-2xl border ${
+                item.tone === 'danger'
+                  ? 'bg-red-50 border-red-100'
+                  : item.tone === 'warning'
+                    ? 'bg-amber-50 border-amber-100'
+                    : 'bg-emerald-50 border-emerald-100'
+              }`}>
+                <div className="text-[10px] font-black uppercase tracking-widest mb-2 ${
+                  item.tone === 'danger'
+                    ? 'text-red-600'
+                    : item.tone === 'warning'
+                      ? 'text-amber-600'
+                      : 'text-emerald-600'
+                }">{item.title}</div>
+                <div className={`text-2xl font-black tracking-tighter ${
+                  item.tone === 'danger'
+                    ? 'text-red-700'
+                    : item.tone === 'warning'
+                      ? 'text-amber-700'
+                      : 'text-emerald-700'
+                }`}>{item.value}</div>
+                <div className="text-xs text-slate-600 mt-1.5 font-medium leading-snug">{item.hint}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick Actions */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <a className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all flex items-center gap-2" href="/app/customers?tab=orders">
+              <Wallet className="w-4 h-4" />
+              Деньги
+            </a>
+            <a className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2" href="/app/customers?tab=access">
+              <LockKeyhole className="w-4 h-4" />
+              Доступ
+            </a>
+            <a className="px-5 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-bold hover:bg-purple-700 transition-all flex items-center gap-2" href="/app/userbots">
+              <Rocket className="w-4 h-4" />
+              Юзерботы
+            </a>
+            <a className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-all flex items-center gap-2" href="/app/shop">
+              <ShoppingBag className="w-4 h-4" />
+              Магазин
+            </a>
+            <button className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all flex items-center gap-2" type="button" onClick={() => openAdminGroups('need_bot')}>
+              <Shield className="w-4 h-4" />
+              Права в группах
+            </button>
+          </div>
         </div>
+
+        {/* Top Stats */}
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {topStats.map((item, idx) => (
+              <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
+                <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">{item.title}</div>
+                <div className="text-3xl font-black tracking-tighter text-slate-900">{item.value}</div>
+                <div className="text-xs text-slate-500 mt-2 font-medium leading-snug">{item.hint}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Urgent Actions */}
+        {(urgentActions.length > 0) && (
+          <div className="p-6 md:p-8 bg-amber-50/40 border-b border-amber-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Требует внимания</h3>
+                <p className="text-sm text-slate-500">Приоритетные задачи, которые нужно решить первым</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {urgentActions.map((action) => (
+                <ActionCard
+                  key={action.id}
+                  title={action.title}
+                  value={action.value}
+                  tone={action.tone}
+                  hint={action.hint}
+                  href={action.href}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {profilePlan === 'trial' ? (
