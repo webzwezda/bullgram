@@ -688,7 +688,7 @@ export function CommandCenterPage() {
                     w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0
                     ${step.done
                       ? 'bg-green-500 text-white'
-                      : 'bg-slate-200 text-slate-500'
+                      : 'bg-slate-300 text-slate-700'
                     }
                   `}>
                     {index + 1}
@@ -702,7 +702,7 @@ export function CommandCenterPage() {
                     className={`
                       px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex-shrink-0
                       ${step.done
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        ? 'bg-green-600 text-white hover:bg-green-700'
                         : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
                       }
                     `}
@@ -748,7 +748,7 @@ export function CommandCenterPage() {
                     w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0
                     ${step.done
                       ? 'bg-green-500 text-white'
-                      : 'bg-slate-200 text-slate-500'
+                      : 'bg-slate-300 text-slate-700'
                     }
                   `}>
                     {index + 1}
@@ -762,7 +762,7 @@ export function CommandCenterPage() {
                     className={`
                       px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 flex-shrink-0
                       ${step.done
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        ? 'bg-green-600 text-white hover:bg-green-700'
                         : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
                       }
                     `}
