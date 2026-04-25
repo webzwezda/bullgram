@@ -1594,15 +1594,37 @@ function renderOpenProxyPurchases(rows) {
         checkoutState.item ? (
           <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
             <div className="p-6 md:p-8 border-b border-slate-100">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
-                  <Wallet className="w-6 h-6" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
+                    <Wallet className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Оплата прокси</h2>
+                    <p className="text-sm text-slate-500 font-medium mt-0.5">
+                      {checkoutState.item?.title || 'Прокси'} • {itemPriceSummary(checkoutState.item)}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-bold text-slate-900">Оплата прокси</h2>
-                  <p className="text-sm text-slate-500 font-medium mt-0.5">
-                    {checkoutState.item?.title || 'Прокси'} • {itemPriceSummary(checkoutState.item)}
-                  </p>
+
+                <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl">
+                  {itemPaymentMethods(checkoutState.item).map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                        checkoutState.paymentMethod === method
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      disabled={checkoutState.loading}
+                      onClick={() => {
+                        openCheckout(checkoutState.item, method);
+                      }}
+                    >
+                      {paymentMethodLabel(method)}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
