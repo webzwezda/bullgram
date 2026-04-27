@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag, Wallet, QrCode, Copy, ExternalLink } from 'lucide-react';
+import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag, Wallet, QrCode, Copy, ExternalLink, Filter } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -7,6 +7,23 @@ import { APP_CONFIG } from '../config.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
+
+const LANE_OPTIONS = [
+  { id: 'self-use', label: 'Использую сам' },
+  { id: 'created-for-sale', label: 'Создано' },
+  { id: 'listed-for-sale', label: 'На витрине' },
+  { id: 'sold', label: 'Продано' },
+  { id: 'purchased-given', label: 'Купленные' }
+];
+
+const FILTER_OPTIONS = [
+  { id: 'all', label: 'Все' },
+  { id: 'working', label: 'Работают' },
+  { id: 'broken', label: 'С ошибкой' },
+  { id: 'shared_proxy', label: 'Shared' },
+  { id: 'manual_free', label: 'Временные' },
+  { id: 'purchased', label: 'Купленные' }
+];
 
 function resolveBackendAssetUrl(value) {
   const url = String(value || '').trim();
@@ -249,6 +266,8 @@ function preferredTonCheckoutView(purchase) {
 export function ProxyManagerPage() {
   const { accessToken, profilePlan } = useAuth();
   const [filter, setFilter] = useState('all');
+  const [selectedLane, setSelectedLane] = useState('self-use');
+  const [purchaseView, setPurchaseView] = useState('shop');
   const [proxyBuyQuantity, setProxyBuyQuantity] = useState(1);
   const [formState, setFormState] = useState({
     id: '',
@@ -452,6 +471,37 @@ export function ProxyManagerPage() {
       return proxy.provision_source === 'purchased';
     }
     return true;
+  }
+
+  function getVisibleProxies() {
+    // Дляsold lane возвращаем особую структуру
+    if (selectedLane === 'sold') {
+      return { items: soldProxyItems, isSold: true };
+    }
+
+    // Выбор базового массива по lane
+    let baseArray;
+    switch (selectedLane) {
+      case 'self-use':
+        baseArray = selfUseProxies;
+        break;
+      case 'created-for-sale':
+        baseArray = createdForSaleProxies;
+        break;
+      case 'listed-for-sale':
+        baseArray = listedForSaleProxies;
+        break;
+      case 'purchased-given':
+        baseArray = nonAdminInventoryProxies;
+        break;
+      default:
+        baseArray = [];
+    }
+
+    // Применяем фильтр статуса
+    const filtered = baseArray.filter(matchesStatusFilter);
+
+    return { items: filtered, isSold: false };
   }
 
   const filteredProxies = state.proxies.filter(matchesStatusFilter);
@@ -1393,6 +1443,235 @@ function renderOpenProxyPurchases(rows) {
     );
   }
 
+  function ProxyTableSection() {
+    const { items: visibleItems, isSold } = getVisibleProxies();
+    const laneInfo = LANE_OPTIONS.find(l => l.id === selectedLane);
+
+    return (
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        {/* Unified header with filters */}
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
+                <Filter className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Прокси</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {laneInfo ? laneInfo.label : 'Все прокси'}
+                </p>
+              </div>
+            </div>
+            <div className="px-4 py-2 bg-violet-50 text-violet-700 rounded-xl text-sm font-bold border border-violet-100">
+              {visibleItems.length}
+            </div>
+          </div>
+
+          {/* Row 1: Lane selection */}
+          <div className="mb-3">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Категория
+            </div>
+            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+              {LANE_OPTIONS.map((lane) => (
+                <button
+                  key={lane.id}
+                  type="button"
+                  className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                    selectedLane === lane.id
+                      ? 'bg-white text-violet-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setSelectedLane(lane.id)}
+                >
+                  {lane.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2: Status filter */}
+          {selectedLane !== 'sold' && (
+            <div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Статус
+              </div>
+              <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+                {FILTER_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                      filter === option.id
+                        ? 'bg-white text-violet-600 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                    onClick={() => setFilter(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Table content */}
+        {visibleItems.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+              <Globe className="w-8 h-8" />
+            </div>
+            <p className="text-slate-400 font-bold">
+              {isSold ? 'Проданных прокси пока нет' : 'Прокси с этим фильтром нет'}
+            </p>
+          </div>
+        ) : isSold ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Лот</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Прокси</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Продажи</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Дальше</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleItems.map((item) => {
+                  const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900">{item.title}</div>
+                        <div className="text-sm text-slate-500">TON {formatTon(item.price_ton)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-700">{proxyAssets.map((a) => a.label || 'Proxy').join(', ') || 'Proxy'}</div>
+                        <div className="text-xs text-slate-500">Лот снят с витрины после продажи</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900">{item.stats?.paid_purchases || 0}</div>
+                        <div className="text-xs text-slate-500">Handoff ok: {item.stats?.completed_transfers || 0}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <a
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                          href="/app/shop"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
+                          Shop
+                        </a>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Название</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Точка входа / гео</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Проверка</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Статус</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Нагрузка</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Дальше</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleItems.map((proxy) => {
+                  const badge = proxyBadge(proxy);
+                  const mode = proxyHealthMode(proxy);
+                  const geo = proxy.last_check_country
+                    ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
+                    : mode === 'telegram_only'
+                      ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
+                      : 'Гео отсутствует';
+                  return (
+                    <tr key={proxy.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900">{proxy.name}</div>
+                        {Number(proxy.userbot_count || 0) > 1 ? (
+                          <div className="text-xs text-red-600 font-semibold mt-1">⚠️ Опасная shared-связка</div>
+                        ) : null}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-mono text-sm text-slate-900 bg-slate-50 px-2 py-1 rounded mb-1">{proxy.host}:{proxy.port}</div>
+                        <div className="text-xs text-slate-600">{geo}</div>
+                        {proxy.ipv6 ? (
+                          <div className="text-xs text-slate-500">IPv6</div>
+                        ) : null}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-mono text-sm text-slate-900">{proxyEgressSummary(proxy)}</div>
+                        <div className="text-xs text-slate-500">{formatWhen(proxy.last_checked_at)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
+                          badge.className === 'pill pill--ok'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : badge.className === 'pill pill--warning'
+                              ? 'bg-amber-50 text-amber-700 border-amber-100'
+                              : badge.className === 'pill pill--danger'
+                                ? 'bg-red-50 text-red-700 border-red-100'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {badge.text}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-slate-900">
+                          {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                            type="button"
+                            onClick={() => checkProxy(proxy.id)}
+                          >
+                            Проверить
+                          </button>
+                          {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
+                            <select
+                              className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs"
+                              value={proxy.inventory_group || 'shop_sale'}
+                              disabled={state.movingProxyId === String(proxy.id)}
+                              onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
+                            >
+                              {ADMIN_PROXY_GROUPS.map((group) => (
+                                <option key={group} value={group}>{inventoryGroupActionLabel(group)}</option>
+                              ))}
+                            </select>
+                          ) : null}
+                          <button
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-all"
+                            type="button"
+                            onClick={() => deleteProxy(proxy.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderProxyTable(rows, emptyText, { title, description } = {}) {
     return (
       <div className={`table-card proxy-lane${rows.length === 0 ? ' proxy-lane--empty' : ''}`}>
@@ -1543,91 +1822,163 @@ function renderOpenProxyPurchases(rows) {
     );
   }
 
-  if (state.loading) {
-    return <LoadingState text="Загружаем прокси..." />;
-  }
+  function ProxyPurchaseSection() {
+    if (state.support?.profile_role === 'admin') {
+      return null;
+    }
 
-  return (
-    <section className="page proxy-page">
+    return (
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
-              <Globe className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">Прокси</h1>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">
-                {isAdmin
-                  ? 'Серверный пул: поднимай прокси, раскладывай по группам и контролируй продажи'
-                  : 'Твои прокси для работы: свой и купленный'}
-              </p>
-            </div>
-          </div>
+        {/* VIEW TABS - навигация между состояниями */}
+        <div className="flex border-b border-slate-100">
+          <button
+            type="button"
+            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
+              purchaseView === 'shop'
+                ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}
+            onClick={() => setPurchaseView('shop')}
+          >
+            <ShoppingBag className="w-5 h-5 inline mr-2" />
+            Купить прокси
+          </button>
+          <button
+            type="button"
+            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
+              purchaseView === 'checkout'
+                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}
+            onClick={() => setPurchaseView('checkout')}
+            disabled={!checkoutState.item}
+          >
+            <Wallet className="w-5 h-5 inline mr-2" />
+            Оплата прокси
+            {checkoutState.item ? <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">1</span> : null}
+          </button>
+          <button
+            type="button"
+            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
+              purchaseView === 'open-purchases'
+                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}
+            onClick={() => setPurchaseView('open-purchases')}
+          >
+            <ShoppingBag className="w-5 h-5 inline mr-2" />
+            Нужно оплатить
+            {openProxyPurchases.length > 0 ? <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs">{openProxyPurchases.length}</span> : null}
+          </button>
+        </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-            <Shield className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="font-semibold text-amber-900 mb-1">Главное правило: 1 прокси = 1 юзербот</div>
-              <div className="text-sm text-amber-700">
-                Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
+        {/* SHOP VIEW */}
+        {purchaseView === 'shop' && (
+          <div className="p-6 md:p-8">
+            {shopState.loading ? (
+              <div className="text-center py-12 text-slate-500">Загружаем предложения...</div>
+            ) : shopState.error ? (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800">
+                {shopState.error}
               </div>
-            </div>
-          </div>
-        </div>
+            ) : !proxyBatchOffer ? (
+              <div className="text-center py-12 text-slate-500">Сейчас готовых лотов нет.</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <div className="text-sm text-slate-600 mb-1">{proxyBatchOffer.title}</div>
+                    <div className="text-3xl font-black text-slate-900 mb-2">{proxyBatchOffer.unitPriceText}</div>
+                    <div className="text-sm text-slate-500">{proxyBatchOffer.previewText}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Свободно</span>
+                      <span className="font-bold text-slate-900">{proxyBatchOffer.items.length}</span>
+                    </div>
+                    {profilePlan === 'trial' && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-600">Лимит</span>
+                        <span className="font-bold text-amber-600">{proxyBuyLimit}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-        <div className="p-6 md:p-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {proxySummaryCards.map((card) => (
-              <div
-                key={card.label}
-                className={`
-                  p-4 rounded-2xl border transition-all duration-200
-                  ${card.tone === 'danger'
-                    ? 'bg-red-50 border-red-200'
-                    : card.tone === 'warning'
-                      ? 'bg-amber-50 border-amber-200'
-                      : card.tone === 'ok'
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-slate-50 border-slate-200'
-                  }
-                `}
-              >
-                <div className="text-sm text-slate-600 font-medium mb-1">{card.label}</div>
-                <div className="text-3xl font-black text-slate-900">{card.value}</div>
-                <div className="text-xs text-slate-500 mt-2 leading-snug">{card.hint}</div>
+                <div className="border-t border-slate-200 pt-6">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-semibold text-slate-700">Количество</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
+                          type="button"
+                          disabled={proxyBuyQuantity <= 1}
+                          onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
+                        >
+                          −
+                        </button>
+                        <input
+                          className="w-20 px-3 py-2 text-center border border-slate-200 rounded-xl text-xl font-bold text-slate-900"
+                          type="number"
+                          min="1"
+                          max={Math.max(proxyBuyLimit, 1)}
+                          value={proxyBuyQuantity}
+                          disabled={proxyBuyLimit <= 0}
+                          onChange={(event) => {
+                            const next = Number.parseInt(event.target.value, 10);
+                            if (Number.isNaN(next)) {
+                              setProxyBuyQuantity(1);
+                              return;
+                            }
+                            setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
+                          }}
+                        />
+                        <button
+                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
+                          type="button"
+                          disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
+                          onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {proxyBatchOffer.paymentMethods.map((method) => (
+                        <button
+                          key={method}
+                          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all${
+                            method === 'ton'
+                              ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
+                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                          type="button"
+                          disabled={checkoutState.loading || proxyBuyLimit <= 0}
+                          onClick={() => createProxyBatchCheckout(method)}
+                        >
+                          {checkoutState.loading ? 'Готовим...' : (method === 'ton' ? 'TON' : 'СБП')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      </div>
+        )}
 
-      {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
-
-      {manualQuotaText && state.support?.profile_role === 'admin' ? (
-        <div className="toolbar-card proxy-surface-card">
-          <div className="proxy-surface-card__head">
-            <div className="toolbar-card__title">Правило по прокси</div>
-          </div>
-          <p style={{ margin: 0 }}>{manualQuotaText}</p>
-          {state.support?.profile_role === 'admin' ? (
-            <p className="table-subtext" style={{ marginTop: 8 }}>
-              Следующее имя для выбранной группы: <strong>{suggestedServerProxyName}</strong>
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {state.support?.profile_role !== 'admin' ? (
-        checkoutState.item ? (
-          <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        {/* CHECKOUT VIEW */}
+        {purchaseView === 'checkout' && checkoutState.item ? (
+          <div>
             <div className="p-6 md:p-8 border-b border-slate-100">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
                     <Wallet className="w-6 h-6" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h2 className="text-xl font-bold text-slate-900">Оплата прокси</h2>
                     <p className="text-sm text-slate-500 font-medium mt-0.5">
                       {checkoutState.item?.title || 'Прокси'} • {itemPriceSummary(checkoutState.item)}
@@ -1818,14 +2169,17 @@ function renderOpenProxyPurchases(rows) {
                     <button
                       className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
                       type="button"
-                      onClick={() => setCheckoutState({
-                        item: null,
-                        purchase: null,
-                        paymentMethod: 'ton',
-                        loading: false,
-                        checking: false,
-                        error: ''
-                      })}
+                      onClick={() => {
+                        setCheckoutState({
+                          item: null,
+                          purchase: null,
+                          paymentMethod: 'ton',
+                          loading: false,
+                          checking: false,
+                          error: ''
+                        });
+                        setPurchaseView('shop');
+                      }}
                     >
                       Скрыть
                     </button>
@@ -1866,124 +2220,197 @@ function renderOpenProxyPurchases(rows) {
               ) : null}
             </div>
           </div>
-        ) : null
-      ) : null}
+        ) : null}
 
-      {state.support?.profile_role !== 'admin' ? (
-        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-          <div className="p-6 md:p-8 border-b border-slate-100">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
-                <ShoppingBag className="w-6 h-6" />
+        {/* OPEN PURCHASES VIEW */}
+        {purchaseView === 'open-purchases' && (
+          <div>
+            <div className="p-6 md:p-8 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                  <ShoppingBag className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-slate-900">Нужно оплатить</h2>
+                  <p className="text-sm text-slate-500 font-medium mt-0.5">
+                    Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.
+                  </p>
+                </div>
+                <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-bold border border-amber-100">
+                  {openProxyPurchases.length}
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Купить прокси</h2>
-                <p className="text-sm text-slate-500 font-medium mt-0.5">
-                  Один живой прокси для постоянной работы
-                </p>
-              </div>
+            </div>
+
+            <div className="divide-y divide-slate-50">
+              {openProxyPurchases.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
+                    <ShoppingBag className="w-8 h-8" />
+                  </div>
+                  <p className="text-slate-400 font-bold">Открытых покупок по прокси сейчас нет</p>
+                </div>
+              ) : (
+                openProxyPurchases.map((purchase) => {
+                  const statusMeta = purchaseStatusMeta(purchase.status);
+                  return (
+                    <div key={purchase.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <div className="text-lg font-black text-slate-900">{purchase.item?.title || 'Прокси'}</div>
+                            <div className="text-sm text-slate-500 mt-1">
+                              {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            <div>
+                              <span className="text-slate-500">Сумма:</span>{' '}
+                              <span className="font-bold text-slate-900">{purchaseAmountSummary(purchase)}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Способ:</span>{' '}
+                              <span className="font-bold text-slate-900">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Дедлайн:</span>{' '}
+                              <span className="font-bold text-slate-900">{formatWhen(purchase.expires_at)}</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
+                              statusMeta.className === 'pill pill--ok'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : statusMeta.className === 'pill pill--warning'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                              {statusMeta.text}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                            type="button"
+                            onClick={() => {
+                              showPurchaseInline(purchase);
+                              setPurchaseView('checkout');
+                            }}
+                          >
+                            Открыть оплату
+                          </button>
+                          <button
+                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                            type="button"
+                            onClick={() => cancelCheckoutPurchase(purchase)}
+                          >
+                            Снять бронь
+                          </button>
+                          {purchase.payload?.ton_uri ? (
+                            <a
+                              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                              href={purchase.payload.ton_uri}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              TON
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (state.loading) {
+    return <LoadingState text="Загружаем прокси..." />;
+  }
+
+  return (
+    <section className="page proxy-page">
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
+              <Globe className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">Прокси</h1>
+              <p className="text-sm text-slate-500 font-medium mt-0.5">
+                {isAdmin
+                  ? 'Серверный пул: поднимай прокси, раскладывай по группам и контролируй продажи'
+                  : 'Твои прокси для работы: свой и купленный'}
+              </p>
             </div>
           </div>
 
-          <div className="p-6 md:p-8">
-            {shopState.loading ? (
-              <div className="text-center py-12 text-slate-500">Загружаем предложения...</div>
-            ) : shopState.error ? (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800">
-                {shopState.error}
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+            <Shield className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-amber-900 mb-1">Главное правило: 1 прокси = 1 юзербот</div>
+              <div className="text-sm text-amber-700">
+                Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
               </div>
-            ) : !proxyBatchOffer ? (
-              <div className="text-center py-12 text-slate-500">Сейчас готовых лотов нет.</div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <div className="text-sm text-slate-600 mb-1">{proxyBatchOffer.title}</div>
-                    <div className="text-3xl font-black text-slate-900 mb-2">{proxyBatchOffer.unitPriceText}</div>
-                    <div className="text-sm text-slate-500">{proxyBatchOffer.previewText}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Свободно</span>
-                      <span className="font-bold text-slate-900">{proxyBatchOffer.items.length}</span>
-                    </div>
-                    {profilePlan === 'trial' && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Лимит</span>
-                        <span className="font-bold text-amber-600">{proxyBuyLimit}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-200 pt-6">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-semibold text-slate-700">Количество</label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
-                          type="button"
-                          disabled={proxyBuyQuantity <= 1}
-                          onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
-                        >
-                          −
-                        </button>
-                        <input
-                          className="w-20 px-3 py-2 text-center border border-slate-200 rounded-xl text-xl font-bold text-slate-900"
-                          type="number"
-                          min="1"
-                          max={Math.max(proxyBuyLimit, 1)}
-                          value={proxyBuyQuantity}
-                          disabled={proxyBuyLimit <= 0}
-                          onChange={(event) => {
-                            const next = Number.parseInt(event.target.value, 10);
-                            if (Number.isNaN(next)) {
-                              setProxyBuyQuantity(1);
-                              return;
-                            }
-                            setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
-                          }}
-                        />
-                        <button
-                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
-                          type="button"
-                          disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
-                          onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {proxyBatchOffer.paymentMethods.map((method) => (
-                        <button
-                          key={method}
-                          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all${
-                            method === 'ton'
-                              ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                          type="button"
-                          disabled={checkoutState.loading || proxyBuyLimit <= 0}
-                          onClick={() => createProxyBatchCheckout(method)}
-                        >
-                          {checkoutState.loading ? 'Готовим...' : (method === 'ton' ? 'TON' : 'СБП')}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
+        </div>
+
+        <div className="p-6 md:p-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {proxySummaryCards.map((card) => (
+              <div
+                key={card.label}
+                className={`
+                  p-4 rounded-2xl border transition-all duration-200
+                  ${card.tone === 'danger'
+                    ? 'bg-red-50 border-red-200'
+                    : card.tone === 'warning'
+                      ? 'bg-amber-50 border-amber-200'
+                      : card.tone === 'ok'
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-slate-50 border-slate-200'
+                  }
+                `}
+              >
+                <div className="text-sm text-slate-600 font-medium mb-1">{card.label}</div>
+                <div className="text-3xl font-black text-slate-900">{card.value}</div>
+                <div className="text-xs text-slate-500 mt-2 leading-snug">{card.hint}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
+
+      {manualQuotaText && state.support?.profile_role === 'admin' ? (
+        <div className="toolbar-card proxy-surface-card">
+          <div className="proxy-surface-card__head">
+            <div className="toolbar-card__title">Правило по прокси</div>
+          </div>
+          <p style={{ margin: 0 }}>{manualQuotaText}</p>
+          {state.support?.profile_role === 'admin' ? (
+            <p className="table-subtext" style={{ marginTop: 8 }}>
+              Следующее имя для выбранной группы: <strong>{suggestedServerProxyName}</strong>
+            </p>
+          ) : null}
         </div>
       ) : null}
 
-      {state.support?.profile_role !== 'admin' ? (
-        renderOpenProxyPurchases(openProxyPurchases)
-      ) : null}
+      {state.support?.profile_role !== 'admin' ? <ProxyPurchaseSection /> : null}
+
+
 
       {state.proxies.length > 0 && state.support?.profile_role !== 'admin' ? (
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
@@ -2314,76 +2741,9 @@ function renderOpenProxyPurchases(rows) {
         </div>
       ) : null}
 
-      {state.proxies.length > 0 && state.support?.profile_role === 'admin' ? (
-      <div className="toolbar-card proxy-surface-card">
-        <div className="proxy-surface-card__head">
-          <div>
-            <div className="toolbar-card__title">Фильтр</div>
-            <div className="table-subtext">Быстро отрежь битые, shared и купленные хвосты.</div>
-          </div>
-        </div>
-        <div className="filter-strip">
-          {[
-            { id: 'all', label: 'Все' },
-            { id: 'working', label: 'Работают' },
-            { id: 'broken', label: 'С ошибкой' },
-            { id: 'shared_proxy', label: 'Shared-хвост' }
-          ].map((item) => (
-            <button
-              key={item.id}
-            className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
-            onClick={() => setFilter(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-          <button
-            className={`filter-chip${filter === 'manual_free' ? ' filter-chip--active' : ''}`}
-            onClick={() => setFilter('manual_free')}
-          >
-            Временные
-          </button>
-          <button
-            className={`filter-chip${filter === 'purchased' ? ' filter-chip--active' : ''}`}
-            onClick={() => setFilter('purchased')}
-          >
-            Купленные
-          </button>
-        </div>
-      </div>
-      ) : null}
 
       {state.support?.profile_role === 'admin' ? (
-        <>
-          <div className="proxy-section-head">
-            <div>
-              <div className="proxy-section-head__eyebrow">Inventory</div>
-              <div className="proxy-section-head__title">Инвентарь прокси</div>
-            </div>
-            <div className="proxy-section-head__hint">
-              Сначала своя работа, потом продажи. Так легче держать контур чистым.
-            </div>
-          </div>
-          <div className="proxy-lanes">
-          {renderProxyTable(selfUseProxies, 'В своей группе пока пусто.', {
-            title: 'Использую сам',
-            description: 'Рабочий контур для собственных userbot-задач.'
-          })}
-          {renderProxyTable(createdForSaleProxies, 'Здесь пока пусто.', {
-            title: 'Создано для продажи',
-            description: 'Прокси уже лежат в продажной группе, но лот ещё не опубликован.'
-          })}
-          {renderProxyTable(listedForSaleProxies, 'На витрине сейчас ничего нет.', {
-            title: 'Выставлено на продажу',
-            description: 'Эти прокси уже попали в shop и ждут покупателя.'
-          })}
-          {renderSoldProxyItems(soldProxyItems)}
-          {renderProxyTable(nonAdminInventoryProxies, 'Купленных или уже выданных прокси под текущий фильтр нет.', {
-            title: 'Купленные и выданные',
-            description: 'Прокси, которые уже ушли пользователям или достались извне, включая старые trial-хвосты.'
-          })}
-          </div>
-        </>
+        <ProxyTableSection />
       ) : null}
 
     </section>
