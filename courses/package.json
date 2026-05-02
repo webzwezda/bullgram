@@ -1,0 +1,13 @@
+{
+  "name": "bullrun-courses",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "eleventy --config .eleventy.cjs",
+    "serve": "eleventy --config .eleventy.cjs --serve"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.2"
+  }
+}

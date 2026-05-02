@@ -1,0 +1,14 @@
+---
+layout: layouts/category.njk
+title: "Телеграм"
+description: "Посты BullRun про Telegram-ботов, доступы, ручные сообщения и ограничения платформы."
+categorySlug: telegram
+categoryTitle: "Телеграм"
+categoryDescription: "Боты, доступы, ручные сообщения и ограничения Telegram."
+activeCategory: telegram
+pagination:
+  data: collections.telegramPosts
+  size: 4
+  alias: posts
+permalink: "/telegram/{% if pagination.pageNumber > 0 %}{{ pagination.pageNumber }}/{% endif %}"
+---

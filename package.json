@@ -6,17 +6,23 @@
     "npm": "10.x"
   },
   "scripts": {
-    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install",
+    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install && npm --prefix blog install && npm --prefix courses install",
     "build:site": "npm --prefix site-v2 run build",
     "build:admin": "npm --prefix admin-v2 run build",
-    "build:v2": "npm run build:site && npm run build:admin",
+    "build:blog": "npm --prefix blog run build",
+    "build:courses": "npm --prefix courses run build",
+    "build:v2": "npm run build:site && npm run build:admin && npm run build:blog && npm run build:courses",
     "mcp:supabase:tunnel": "./ops/scripts/supabase-mcp-tunnel.sh",
     "audit:cutover": "./ops/scripts/audit-cutover.sh",
     "deploy": "./ops/scripts/deploy.sh",
     "deploy:v2": "./ops/scripts/deploy-v2.sh",
+    "deploy:blog": "./ops/scripts/deploy-blog.sh",
+    "deploy:courses": "./ops/scripts/deploy-courses.sh",
     "rollback": "./ops/scripts/rollback.sh",
     "rollback:v2": "./ops/scripts/rollback.sh v2",
     "rollback:backend": "./ops/scripts/rollback.sh backend",
-    "install:v2": "npm --prefix site-v2 install && npm --prefix admin-v2 install"
+    "rollback:blog": "./ops/scripts/rollback.sh blog",
+    "rollback:courses": "./ops/scripts/rollback.sh courses",
+    "install:v2": "npm --prefix site-v2 install && npm --prefix admin-v2 install && npm --prefix blog install && npm --prefix courses install"
   }
 }

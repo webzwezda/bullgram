@@ -1,0 +1,31 @@
+---
+layout: layouts/base.njk
+---
+
+<article class="blog-canvas blog-article">
+  <div class="blog-article__header">
+    <a class="blog-back-link" href="{{ '/' | blogPath }}">← Все статьи</a>
+    <div class="blog-meta">
+      <span>{{ date | readableDate }}</span>
+      {% if category %}
+        <a href="{{ ('/' + category + '/') | blogPath }}">{{ category | categoryLabel(site.categories) }}</a>
+      {% endif %}
+    </div>
+    <h1>{{ title }}</h1>
+    {% if description %}
+      <p class="blog-lead">{{ description }}</p>
+    {% endif %}
+    {% if image %}
+      <figure class="blog-article__cover">
+        <img src="{{ image | blogPath }}" alt="{{ imageAlt or title }}" loading="eager" decoding="async">
+        {% if imageCaption %}
+          <figcaption>{{ imageCaption }}</figcaption>
+        {% endif %}
+      </figure>
+    {% endif %}
+  </div>
+
+  <div class="blog-prose">
+    {{ content | safe }}
+  </div>
+</article>

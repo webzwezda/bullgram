@@ -7,6 +7,8 @@ BACKUP_ROOT="/var/backups/bullrun-deploy"
 BACKEND_DIR="/var/www/backend"
 SITE_DIR="/var/www/bullrun-site-v2"
 APP_DIR="/var/www/bullrun-admin-v2"
+BLOG_DIR="/var/www/bullrun-blog"
+COURSES_DIR="/var/www/bullrun-courses"
 
 TARGET="${1:-all}"
 TIMESTAMP="${2:-}"
@@ -23,6 +25,8 @@ usage() {
 Usage:
   npm run rollback -- all <timestamp>
   npm run rollback -- v2 <timestamp>
+  npm run rollback -- blog <timestamp>
+  npm run rollback -- courses <timestamp>
   npm run rollback -- backend <timestamp>
 
 If timestamp is omitted, the script uses the latest recorded backup for the target.
@@ -66,6 +70,8 @@ restore_v2() {
   local ts="$1"
   local site_backup_dir="$BACKUP_ROOT/releases/$ts/site-v2"
   local app_backup_dir="$BACKUP_ROOT/releases/$ts/admin-v2"
+  local blog_backup_dir="$BACKUP_ROOT/releases/$ts/blog"
+  local courses_backup_dir="$BACKUP_ROOT/releases/$ts/courses"
 
   echo "==> Restoring v2 frontends from $BACKUP_ROOT/releases/$ts"
   ssh "$SERVER" "
@@ -74,8 +80,48 @@ restore_v2() {
     test -d '$app_backup_dir'
     rsync -a --delete '$site_backup_dir/' '$SITE_DIR/'
     rsync -a --delete '$app_backup_dir/' '$APP_DIR/'
+    if [ -d '$blog_backup_dir' ]; then
+      mkdir -p '$BLOG_DIR'
+      rsync -a --delete '$blog_backup_dir/' '$BLOG_DIR/'
+      test -s '$BLOG_DIR/index.html'
+    else
+      echo 'No blog backup for this timestamp; leaving current blog directory unchanged.'
+    fi
+    if [ -d '$courses_backup_dir' ]; then
+      mkdir -p '$COURSES_DIR'
+      rsync -a --delete '$courses_backup_dir/' '$COURSES_DIR/'
+      test -s '$COURSES_DIR/index.html'
+    else
+      echo 'No courses backup for this timestamp; leaving current courses directory unchanged.'
+    fi
     test -s '$SITE_DIR/index.html'
     test -s '$APP_DIR/index.html'
+  "
+}
+
+restore_blog() {
+  local ts="$1"
+  local blog_backup_dir="$BACKUP_ROOT/releases/$ts/blog"
+
+  echo "==> Restoring blog from $blog_backup_dir"
+  ssh "$SERVER" "
+    set -euo pipefail
+    test -d '$blog_backup_dir'
+    rsync -a --delete '$blog_backup_dir/' '$BLOG_DIR/'
+    test -s '$BLOG_DIR/index.html'
+  "
+}
+
+restore_courses() {
+  local ts="$1"
+  local courses_backup_dir="$BACKUP_ROOT/releases/$ts/courses"
+
+  echo "==> Restoring courses from $courses_backup_dir"
+  ssh "$SERVER" "
+    set -euo pipefail
+    test -d '$courses_backup_dir'
+    rsync -a --delete '$courses_backup_dir/' '$COURSES_DIR/'
+    test -s '$COURSES_DIR/index.html'
   "
 }
 
@@ -112,6 +158,22 @@ case "$TARGET" in
       exit 1
     fi
     restore_v2 "$ts"
+    ;;
+  blog)
+    ts="$(resolve_timestamp blog)"
+    if [ -z "$ts" ]; then
+      echo "No recorded backup timestamp found for target: blog" >&2
+      exit 1
+    fi
+    restore_blog "$ts"
+    ;;
+  courses)
+    ts="$(resolve_timestamp courses)"
+    if [ -z "$ts" ]; then
+      echo "No recorded backup timestamp found for target: courses" >&2
+      exit 1
+    fi
+    restore_courses "$ts"
     ;;
   *)
     echo "Unknown rollback target: $TARGET" >&2

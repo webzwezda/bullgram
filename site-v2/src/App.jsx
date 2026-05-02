@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, AlertCircle, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, Newspaper, GraduationCap, AlertCircle, ArrowRight, MessageCircle } from 'lucide-react';
 import { TestPage } from './pages/TestPage.jsx';
+import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
 import { SALES_LINKS } from './components/MarketingPrimitives.jsx';
@@ -15,8 +16,11 @@ const navSections = [
     title: 'BullRun',
     items: [
       { to: '/', label: 'Главная', icon: LayoutDashboard },
+      { to: '/telegram', label: 'Telegram', icon: MessageCircle },
       { to: '/pricing', label: 'Тарифы', icon: CreditCard },
-      { to: '/shop', label: 'Shop', icon: ShoppingBag }
+      { to: '/shop', label: 'Shop', icon: ShoppingBag },
+      { href: '/courses/', label: 'Курсы', icon: GraduationCap, external: true },
+      { href: '/blog/', label: 'Блог', icon: Newspaper, external: true }
     ]
   }
 ];
@@ -26,12 +30,13 @@ export function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
+  const isTelegramRoute = location.pathname === '/telegram';
   const { user, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
-    const current = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to));
+    const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'BullRun';
   }, [location.pathname, navItems]);
 
@@ -133,6 +138,7 @@ export function App() {
   const appRoutes = (
     <Routes>
       <Route path="/" element={<TestPage />} />
+      <Route path="/telegram" element={<TelegramPaywallPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/shop" element={<ShopPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -185,6 +191,20 @@ export function App() {
               <div className="flex flex-col gap-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
+                  if (item.external) {
+                    return (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileNavOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:text-slate-900"
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        {item.label}
+                      </a>
+                    );
+                  }
+
                   return (
                     <NavLink
                       key={item.to}
@@ -235,7 +255,7 @@ export function App() {
           </div>
         )}
 
-        {(isHomeRoute || isPricingRoute) ? (
+        {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>

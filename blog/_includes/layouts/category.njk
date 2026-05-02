@@ -1,0 +1,58 @@
+---
+layout: layouts/base.njk
+---
+
+{% set categoryPosts = posts or (collections.posts | categoryPosts(categorySlug)) %}
+
+<section class="blog-canvas blog-index">
+  <div class="blog-index__hero">
+    <div class="blog-kicker">Категория</div>
+    <h1>{{ categoryTitle }}</h1>
+    {% if categoryDescription %}
+      <p>{{ categoryDescription }}</p>
+    {% endif %}
+  </div>
+
+  <div class="blog-post-list">
+    {% for post in categoryPosts %}
+      <a class="blog-post-row" href="{{ post.url | blogPath }}">
+        <span class="blog-post-row__date">
+          <span>{{ post.date | readableDate }}</span>
+          {% if post.data.category %}
+            <span class="blog-post-row__category">{{ post.data.category | categoryLabel(site.categories) }}</span>
+          {% endif %}
+        </span>
+        <span class="blog-post-row__body">
+          <strong>{{ post.data.title }}</strong>
+          {% if post.data.description %}
+            <small>{{ post.data.description }}</small>
+          {% endif %}
+        </span>
+      </a>
+    {% else %}
+      <div class="blog-empty">
+        <strong>В этой категории пока нет постов</strong>
+        <span>Добавь `category: {{ categorySlug }}` в front matter нужной статьи.</span>
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if pagination and pagination.hrefs.length > 1 %}
+    <nav class="blog-pagination" aria-label="Пагинация категории {{ categoryTitle }}">
+      <span class="blog-pagination__summary">
+        Страница {{ pagination.pageNumber + 1 }} из {{ pagination.hrefs.length }}
+      </span>
+      <div class="blog-pagination__pages">
+        {% for href in pagination.hrefs %}
+          {% if loop.index0 == pagination.pageNumber %}
+            <span class="blog-pagination__item blog-pagination__item--active" aria-current="page">{{ loop.index }}</span>
+          {% else %}
+            <a class="blog-pagination__item" href="{{ href | blogPath }}">{{ loop.index }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </nav>
+  {% endif %}
+
+  <a class="blog-category-back" href="{{ '/' | blogPath }}">Все статьи</a>
+</section>

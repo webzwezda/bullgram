@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% set pageTitle = title or site.title %}
+    {% set pageDescription = description or site.description %}
+    {% set pageUrl = page.url | absoluteBlogUrl %}
+    {% set pageImage = image or false %}
+    {% if pageImage %}
+      {% set pageImageUrl = pageImage | absoluteBlogUrl %}
+    {% endif %}
+    <title>{% if title %}{{ title }} · {% endif %}{{ site.title }}</title>
+    <meta name="description" content="{{ pageDescription }}">
+    <meta name="robots" content="{{ robots or 'max-image-preview:large' }}">
+    
+    {# SEO & Open Graph #}
+    <link rel="canonical" href="{{ pageUrl }}">
+    <meta property="og:type" content="{% if layout == 'layouts/post.njk' %}article{% else %}website{% endif %}">
+    <meta property="og:url" content="{{ pageUrl }}">
+    <meta property="og:title" content="{{ pageTitle }}">
+    <meta property="og:description" content="{{ pageDescription }}">
+    {% if pageImage %}
+    <meta property="og:image" content="{{ pageImageUrl }}">
+    {% if imageAlt %}
+    <meta property="og:image:alt" content="{{ imageAlt }}">
+    {% endif %}
+    {% endif %}
+    <meta property="og:site_name" content="{{ site.title }}">
+    <meta name="twitter:card" content="{% if pageImage %}summary_large_image{% else %}summary{% endif %}">
+    <meta name="twitter:title" content="{{ pageTitle }}">
+    <meta name="twitter:description" content="{{ pageDescription }}">
+    {% if pageImage %}
+    <meta name="twitter:image" content="{{ pageImageUrl }}">
+    {% if imageAlt %}
+    <meta name="twitter:image:alt" content="{{ imageAlt }}">
+    {% endif %}
+    {% endif %}
+
+    {% if layout == 'layouts/post.njk' %}
+    {# Google Discover Structured Data (JSON-LD) #}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": {{ pageTitle | json | safe }},
+      "description": {{ pageDescription | json | safe }},
+      "mainEntityOfPage": {{ pageUrl | json | safe }},
+      {% if pageImage %}
+      "image": [
+        {{ pageImageUrl | json | safe }}
+      ],
+      {% endif %}
+      "datePublished": {{ date | isoDate | json | safe }},
+      "dateModified": {{ (updated or date) | isoDate | json | safe }},
+      "author": [{
+          "@type": "Organization",
+          "name": "BullRun",
+          "url": {{ site.url | json | safe }}
+        }],
+      "publisher": {
+        "@type": "Organization",
+        "name": "BullRun",
+        "url": {{ site.url | json | safe }}
+      }
+    }
+    </script>
+    {% endif %}
+
+    <link rel="stylesheet" href="{{ '/styles/blog.css' | blogPath }}?v={{ site.assetVersion }}">
+  </head>
+  <body>
+    <div class="blog-shell">
+      <header class="blog-mobile-header">
+        <div>
+          <div class="blog-kicker">BullRun</div>
+          <div class="blog-mobile-title">Блог</div>
+        </div>
+        <button class="blog-mobile-menu-button" type="button" aria-controls="blog-sidebar" aria-expanded="false" aria-label="Открыть меню" data-blog-menu-toggle>
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </header>
+
+      {% macro navIcon(name) %}
+        {% if name == "dashboard" %}
+          <svg class="blog-nav__svg" viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+            <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+            <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+            <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+          </svg>
+        {% elif name == "credit-card" %}
+          <svg class="blog-nav__svg" viewBox="0 0 24 24" aria-hidden="true">
+            <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+            <path d="M2 10h20"></path>
+          </svg>
+        {% elif name == "shopping-bag" %}
+          <svg class="blog-nav__svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+            <path d="M3 6h18"></path>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+        {% else %}
+          <svg class="blog-nav__svg" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 18h-5"></path>
+            <path d="M18 14h-8"></path>
+            <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Z"></path>
+            <path d="M6 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2"></path>
+            <circle cx="14" cy="10" r="2"></circle>
+          </svg>
+        {% endif %}
+      {% endmacro %}
+
+      <button class="blog-mobile-overlay" type="button" aria-label="Закрыть меню" data-blog-menu-overlay></button>
+
+      <aside class="blog-sidebar" id="blog-sidebar" aria-label="Навигация BullRun" data-blog-sidebar>
+        <div class="blog-home-wrap">
+          <a class="blog-home-card" href="/">
+            <span class="blog-home-card__mark">BR</span>
+            <span class="blog-home-card__label">На главную сайта</span>
+          </a>
+        </div>
+
+        <nav class="blog-nav">
+          <div>
+            <div class="blog-nav__section">Блог</div>
+            <div class="blog-nav__items blog-nav__items--categories">
+              {% for category in site.categories %}
+                <a class="blog-category-link{% if activeCategory == category.slug or (category.slug == 'all' and not activeCategory) %} blog-category-link--active{% endif %}" href="{{ category.href | blogPath }}">
+                  <span>{{ category.label }}</span>
+                  {% if category.slug == "all" %}
+                    <span class="blog-category-link__count">{{ collections.posts.length }}</span>
+                  {% else %}
+                    <span class="blog-category-link__count">{{ collections.posts | categoryCount(category.slug) }}</span>
+                  {% endif %}
+                </a>
+              {% endfor %}
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="blog-main">
+        {{ content | safe }}
+      </main>
+    </div>
+    <script>
+      (function() {
+        var toggle = document.querySelector('[data-blog-menu-toggle]');
+        var overlay = document.querySelector('[data-blog-menu-overlay]');
+        var sidebar = document.querySelector('[data-blog-sidebar]');
+
+        if (!toggle || !overlay || !sidebar) return;
+
+        function setMenuOpen(isOpen) {
+          document.body.classList.toggle('blog-menu-open', isOpen);
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+          toggle.setAttribute('aria-label', isOpen ? 'Закрыть меню' : 'Открыть меню');
+        }
+
+        toggle.addEventListener('click', function() {
+          setMenuOpen(!document.body.classList.contains('blog-menu-open'));
+        });
+
+        overlay.addEventListener('click', function() {
+          setMenuOpen(false);
+        });
+
+        sidebar.querySelectorAll('a').forEach(function(link) {
+          link.addEventListener('click', function() {
+            setMenuOpen(false);
+          });
+        });
+
+        document.addEventListener('keydown', function(event) {
+          if (event.key === 'Escape') {
+            setMenuOpen(false);
+          }
+        });
+
+        window.addEventListener('resize', function() {
+          if (window.matchMedia('(min-width: 901px)').matches) {
+            setMenuOpen(false);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
