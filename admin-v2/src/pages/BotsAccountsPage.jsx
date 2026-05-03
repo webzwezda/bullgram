@@ -136,6 +136,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     accountBindingFeedback,
     accountCheckReport,
     accountDeleteFeedback,
+    accountProfileFeedback,
     accountRestoreFeedback,
     availableBindingProxiesForAccount,
     availableFailoverProxiesForAccount,
@@ -149,6 +150,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     saveBinding,
     saveUserbotSaleLot,
     setSaleComposer,
+    syncAccountProfile,
     toggleSafeMode,
     toggleSalePaymentMethod,
     updateBinding
@@ -267,6 +269,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     accountBindingFeedback,
     accountCheckReport,
     accountDeleteFeedback,
+    accountProfileFeedback,
     accountRestoreFeedback,
     availableBindingProxiesForAccount,
     availableFailoverProxiesForAccount,
@@ -291,6 +294,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setSaleComposer,
     setSelectedLiveUserbotId,
     state,
+    syncAccountProfile,
     toggleSafeMode,
     toggleSalePaymentMethod,
     updateBinding

@@ -8,6 +8,7 @@ const INITIAL_STATE = {
   savingBot: false,
   savingBotAdminId: '',
   checkingAccountId: '',
+  syncingProfileAccountId: '',
   togglingSafeModeId: '',
   bindingAccountId: '',
   deletingAccountId: '',

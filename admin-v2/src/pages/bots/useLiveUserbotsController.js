@@ -41,6 +41,7 @@ export function useLiveUserbotsController({
   const [accountCheckFeedback, setAccountCheckFeedback] = useState(emptyFeedback);
   const [accountCheckReport, setAccountCheckReport] = useState(emptyCheckReport);
   const [accountBindingFeedback, setAccountBindingFeedback] = useState(emptyFeedback);
+  const [accountProfileFeedback, setAccountProfileFeedback] = useState(emptyFeedback);
   const [accountRestoreFeedback, setAccountRestoreFeedback] = useState(emptyFeedback);
   const [accountDeleteFeedback, setAccountDeleteFeedback] = useState(emptyFeedback);
   const [saleComposer, setSaleComposer] = useState(initialSaleComposer);
@@ -230,6 +231,37 @@ export function useLiveUserbotsController({
       });
     } finally {
       setState((prev) => ({ ...prev, checkingAccountId: '' }));
+    }
+  }
+
+  async function syncAccountProfile(account) {
+    const accountId = String(account?.id || '');
+    if (!accountId) return;
+    if (!window.confirm('Обновить профиль юзербота из Telegram? Это живой запрос к аккаунту. Мы подтянем аватарку, имя, фамилию, username, телефон и описание, но не будем сканировать группы.')) {
+      return;
+    }
+
+    setAccountProfileFeedback({ accountId, tone: 'default', text: '' });
+    setState((prev) => ({ ...prev, syncingProfileAccountId: accountId }));
+    try {
+      const result = await apiRequest(`/api/userbot/profile/${accountId}/sync`, {
+        accessToken,
+        method: 'POST'
+      });
+      await reloadAccounts();
+      setAccountProfileFeedback({
+        accountId,
+        tone: result.cached ? 'warning' : 'success',
+        text: result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль обновлен.')
+      });
+    } catch (error) {
+      setAccountProfileFeedback({
+        accountId,
+        tone: 'error',
+        text: error.message
+      });
+    } finally {
+      setState((prev) => ({ ...prev, syncingProfileAccountId: '' }));
     }
   }
 
@@ -440,6 +472,8 @@ export function useLiveUserbotsController({
     saveBinding,
     saveUserbotSaleLot,
     setSaleComposer,
+    accountProfileFeedback,
+    syncAccountProfile,
     toggleSafeMode,
     toggleSalePaymentMethod,
     updateBinding

@@ -438,7 +438,7 @@ export function RetentionPage() {
           </a>
         </div>
         <div className="toolbar-card__hint">
-          Поддерживаются теги вроде `{channel_name}`, а для пробников еще `{upsell_tariff_name}`, `{upsell_price}`, `{upsell_currency}`.
+          Поддерживаются теги вроде {'{channel_name}'}, а для пробников еще {'{upsell_tariff_name}'}, {'{upsell_price}'}, {'{upsell_currency}'}.
         </div>
       </div>
 

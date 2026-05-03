@@ -43,6 +43,7 @@ const DEFAULT_ADMIN_PROXY_GROUP = 'shop_sale';
 const TRIAL_PROXY_LEASE_HOURS = 24;
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
+const USERBOT_PROFILE_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -58,6 +59,32 @@ function buildCheckResponse(status, reason = null, details = null, extra = {}) {
         reason: reason || null,
         details: details || null,
         ...extra
+    };
+}
+
+function buildTelegramProfilePatch(me, extra = {}) {
+    const firstName = String(me?.firstName || '').trim() || null;
+    const lastName = String(me?.lastName || '').trim() || null;
+    return {
+        tg_account_id: me?.id ? me.id.toString() : null,
+        tg_username: me?.username || firstName || null,
+        tg_first_name: firstName,
+        tg_last_name: lastName,
+        tg_phone: String(me?.phone || '').trim() || null,
+        ...extra
+    };
+}
+
+function userbotProfileSyncCooldown(account) {
+    const cooldownSource = account?.tg_profile_sync_attempted_at || account?.tg_profile_synced_at;
+    if (!cooldownSource) return null;
+    const syncedAtMs = new Date(cooldownSource).getTime();
+    if (!Number.isFinite(syncedAtMs)) return null;
+    const remainingMs = USERBOT_PROFILE_SYNC_COOLDOWN_MS - (Date.now() - syncedAtMs);
+    if (remainingMs <= 0) return null;
+    return {
+        remaining_ms: remainingMs,
+        retry_after_seconds: Math.ceil(remainingMs / 1000)
     };
 }
 
@@ -1853,8 +1880,7 @@ export default function (supabase) {
             await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
                 account_type: 'userbot',
-                tg_account_id: me.id.toString(),
-                tg_username: me.username || me.firstName,
+                ...buildTelegramProfilePatch(me),
                 session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'session_import')),
                 proxy_id: proxyData ? proxyData.proxy_id : null,
                 runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
@@ -2040,8 +2066,7 @@ export default function (supabase) {
             await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
                 account_type: 'userbot',
-                tg_account_id: me.id.toString(),
-                tg_username: me.username || me.firstName,
+                ...buildTelegramProfilePatch(me),
                 session_data: encrypt(userbotService.stringifySessionData(token, sessionData.fingerprint, 'qr')),
                 proxy_id: sessionData.proxyData ? sessionData.proxyData.proxy_id : null,
                 runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
@@ -2079,6 +2104,146 @@ export default function (supabase) {
     // ==========================================
     // 4. УДАЛЕНИЕ И ПРОВЕРКА АККАУНТОВ
     // ==========================================
+    router.post('/profile/:id/sync', authenticateUser, async (req, res) => {
+        const accountId = req.params.id;
+        let client = null;
+
+        try {
+            const { data: account, error } = await supabase
+                .from('tg_accounts')
+                .select('*, proxies(host, port, username, password, is_working, provision_source, inventory_group)')
+                .eq('id', accountId)
+                .eq('owner_id', req.user.id)
+                .single();
+
+            if (error || !account) {
+                return res.status(404).json({ error: 'Аккаунт не найден.' });
+            }
+            if (account.account_type !== 'userbot') {
+                return res.status(400).json({ error: 'Профиль так обновляем только у юзерботов.' });
+            }
+            if (isFreshImportedUserbot(account)) {
+                return res.status(409).json({ error: 'Аккаунт в safe-mode. Сначала сделай живую активацию через проверку Telegram.' });
+            }
+            if (isUserbotOnDeadProxy(account)) {
+                return res.status(409).json({ error: 'У юзербота мертвый прокси. Сначала почини или смени прокси.' });
+            }
+
+            const cooldown = userbotProfileSyncCooldown(account);
+            if (cooldown) {
+                return res.json({
+                    success: true,
+                    cached: true,
+                    cooldown,
+                    account,
+                    message: `Профиль уже обновляли недавно. Повторить можно примерно через ${Math.ceil(cooldown.retry_after_seconds / 60)} мин.`
+                });
+            }
+
+            const decryptedData = decrypt(account.session_data);
+            if (!decryptedData) {
+                throw new Error('Сессия не читается или уже недействительна.');
+            }
+
+            const { token, fingerprint } = userbotService.parseSessionData(decryptedData);
+            const proxyData = account.proxies
+                ? {
+                    proxy_host: account.proxies.host,
+                    proxy_port: account.proxies.port,
+                    proxy_username: account.proxies.username,
+                    proxy_password: account.proxies.password
+                }
+                : undefined;
+
+            const clientConfig = userbotService._getClientConfig(userbotService._buildProxy(proxyData), 1, fingerprint, proxyData);
+            client = new TelegramClient(new StringSession(token), fingerprint.api_id, fingerprint.api_hash, clientConfig);
+            userbotService.prepareServiceClient(client);
+            userbotService._forceManagedIpv6Dc(client, proxyData);
+            await userbotService.connectWithProxyFallback(client, proxyData);
+
+            const me = await client.getMe();
+            let about = null;
+            let photoDataUrl;
+
+            try {
+                const fullUser = await client.invoke(new Api.users.GetFullUser({ id: 'me' }));
+                about = String(fullUser?.fullUser?.about || '').trim() || null;
+            } catch (profileError) {
+                console.warn('[USERBOT_PROFILE_SYNC] about skipped:', profileError?.message || profileError);
+            }
+
+            try {
+                const photo = await client.downloadProfilePhoto(me, { isBig: false });
+                if (Buffer.isBuffer(photo) && photo.length > 0 && photo.length <= 256 * 1024) {
+                    photoDataUrl = `data:image/jpeg;base64,${photo.toString('base64')}`;
+                } else if (Buffer.isBuffer(photo)) {
+                    photoDataUrl = null;
+                }
+            } catch (photoError) {
+                console.warn('[USERBOT_PROFILE_SYNC] photo skipped:', photoError?.message || photoError);
+            }
+
+            const syncedAt = new Date().toISOString();
+            const patch = {
+                ...buildTelegramProfilePatch(me, {
+                    tg_about: about,
+                    tg_profile_synced_at: syncedAt,
+                    tg_profile_sync_attempted_at: syncedAt,
+                    tg_profile_sync_error: null
+                })
+            };
+            if (photoDataUrl !== undefined) {
+                patch.tg_photo_data_url = photoDataUrl;
+            }
+
+            const { data: updatedAccount, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update(patch)
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('*')
+                .single();
+
+            if (updateError || !updatedAccount) {
+                throw new Error(updateError?.message || 'Профиль не сохранился.');
+            }
+
+            return res.json({
+                success: true,
+                cached: false,
+                account: updatedAccount,
+                message: 'Профиль юзербота обновлен.'
+            });
+        } catch (error) {
+            console.error('[USERBOT_PROFILE_SYNC] failed', {
+                accountId,
+                ownerId: req.user?.id || null,
+                error: error.message || String(error || '')
+            });
+            try {
+                await supabase
+                    .from('tg_accounts')
+                    .update({
+                        tg_profile_sync_error: error.message || 'Не удалось обновить профиль.',
+                        tg_profile_sync_attempted_at: new Date().toISOString()
+                    })
+                    .eq('id', accountId)
+                    .eq('owner_id', req.user.id);
+            } catch (updateError) {
+                console.error('[USERBOT_PROFILE_SYNC] error marker failed:', updateError?.message || updateError);
+            }
+            return res.status(500).json({ error: error.message || 'Не удалось обновить профиль.' });
+        } finally {
+            if (client) {
+                try {
+                    await client.disconnect();
+                } catch {
+                    // no-op
+                }
+            }
+        }
+    });
+
     router.delete('/:id', authenticateUser, async (req, res) => {
         try {
             try {
@@ -2197,8 +2362,7 @@ export default function (supabase) {
                 await supabase
                     .from('tg_accounts')
                     .update({
-                        tg_account_id: me.id.toString(),
-                        tg_username: me.username || me.firstName,
+                        ...buildTelegramProfilePatch(me),
                         session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'restored')),
                         runtime_status: activateNow ? 'online' : FRESH_IMPORT_RUNTIME_STATUS,
                         runtime_error: activateNow ? null : FRESH_IMPORT_RUNTIME_REASON,
