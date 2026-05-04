@@ -43,7 +43,6 @@ export function App() {
       items: [
         { to: '/', label: 'Командный центр', icon: LayoutDashboard },
         { to: '/analytics', label: 'Аналитика', icon: Activity },
-        ...(profileRole === 'admin' ? [{ to: '/observer', label: 'Пульт наблюдения', icon: Eye }] : [])
       ]
     },
     {
@@ -68,6 +67,7 @@ export function App() {
       title: 'Финансы',
       items: [
         { to: '/billing', label: 'Касса / webhook', icon: Wallet },
+        { to: '/payments', label: 'Реквизиты', icon: Wallet },
         { to: '/shop-receipts', label: 'Проверка чеков', icon: Receipt },
         ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
@@ -76,8 +76,6 @@ export function App() {
       title: 'Маркетинг',
       items: [
         { to: '/referrals', label: 'Партнерка', icon: Users },
-        { to: '/broadcast', label: 'Рассылки', icon: Send },
-        { to: '/retention', label: 'Удержание', icon: RefreshCcw },
       ]
     },
     ...(profileRole === 'admin'
@@ -90,6 +88,10 @@ export function App() {
           { to: '/access', label: 'Доступ', icon: LockKeyhole },
           { to: '/bases', label: 'Базы', icon: Database },
           { to: '/dossier', label: 'Досье', icon: UserPlus },
+          { to: '/broadcast', label: 'Рассылки', icon: Send },
+          { to: '/retention', label: 'Удержание', icon: RefreshCcw },
+          { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
+          { to: '/shop', label: 'Shop', icon: ShoppingBag },
         ]
       }]
       : [])

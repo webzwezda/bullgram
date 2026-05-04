@@ -161,9 +161,6 @@ export function UserbotOnboardingSection({
     <>
       <div className="mb-6 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="space-y-4">
-          <div className="text-[24px] leading-none font-semibold tracking-[-0.03em] text-slate-950">
-            Подключить самому
-          </div>
           <div className="flex items-center gap-2.5">
             <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-600">
               {steps.proxy}
