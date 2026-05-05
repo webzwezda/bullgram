@@ -482,6 +482,9 @@ export function UserbotCenterPage() {
   const selectedProfileAttemptedAt = selectedUserbot?.tg_profile_sync_attempted_at
     ? formatDate(selectedUserbot.tg_profile_sync_attempted_at)
     : '';
+  const selectedProfilePhotoSrc = selectedUserbot?.tg_photo_url
+    ? `${selectedUserbot.tg_photo_url}${selectedUserbot.tg_photo_synced_at ? `?v=${encodeURIComponent(selectedUserbot.tg_photo_synced_at)}` : ''}`
+    : (selectedUserbot?.tg_photo_data_url || '');
   const profileDirty = !!selectedUserbot && (
     selectedDraftFirstName !== (selectedUserbot.tg_first_name || '') ||
     selectedDraftLastName !== (selectedUserbot.tg_last_name || '') ||
@@ -860,9 +863,9 @@ export function UserbotCenterPage() {
           <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
-                {selectedUserbot.tg_photo_data_url ? (
+                {selectedProfilePhotoSrc ? (
                   <img
-                    src={selectedUserbot.tg_photo_data_url}
+                    src={selectedProfilePhotoSrc}
                     alt=""
                     className="size-16 shrink-0 rounded-[18px] object-cover ring-1 ring-slate-200"
                   />

@@ -7,6 +7,7 @@ import { StringSession } from 'telegram/sessions/index.js';
 import multer from 'multer';
 import os from 'os';
 import fs from 'fs';
+import path from 'path';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { ManagedProxyService } from '../services/managed-proxy.service.js';
 import { enforceOwnedProxyQuota, enforceUserbotQuota, getTierRules } from '../utils/product-tier.js';
@@ -44,6 +45,7 @@ const TRIAL_PROXY_LEASE_HOURS = 24;
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
 const USERBOT_PROFILE_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
+const USERBOT_PROFILE_UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'userbot-profiles');
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -60,6 +62,30 @@ function buildCheckResponse(status, reason = null, details = null, extra = {}) {
         details: details || null,
         ...extra
     };
+}
+
+function safeUploadSegment(value) {
+    return String(value || '')
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 96) || 'unknown';
+}
+
+function storeUserbotProfilePhoto({ ownerId, accountId, photo }) {
+    if (!Buffer.isBuffer(photo) || photo.length === 0 || photo.length > 512 * 1024) {
+        return null;
+    }
+
+    const ownerSegment = safeUploadSegment(ownerId);
+    const accountSegment = safeUploadSegment(accountId);
+    const dir = path.join(USERBOT_PROFILE_UPLOADS_DIR, ownerSegment);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const filename = `${accountSegment}.jpg`;
+    const fullPath = path.join(dir, filename);
+    fs.writeFileSync(fullPath, photo);
+
+    return `/uploads/userbot-profiles/${ownerSegment}/${filename}`;
 }
 
 function buildTelegramProfilePatch(me, extra = {}) {
@@ -122,6 +148,8 @@ function buildUserbotCenterAccount(item, runtimeState = null) {
         tg_last_name: item.tg_last_name || null,
         tg_phone: item.tg_phone || null,
         tg_about: item.tg_about || null,
+        tg_photo_url: item.tg_photo_url || null,
+        tg_photo_synced_at: item.tg_photo_synced_at || null,
         tg_photo_data_url: item.tg_photo_data_url || null,
         tg_profile_synced_at: item.tg_profile_synced_at || null,
         tg_profile_sync_attempted_at: item.tg_profile_sync_attempted_at || null,
@@ -2210,7 +2238,7 @@ export default function (supabase) {
 
             const me = await client.getMe();
             let about = null;
-            let photoDataUrl;
+            let photoUrl;
 
             try {
                 const fullUser = await client.invoke(new Api.users.GetFullUser({ id: 'me' }));
@@ -2221,10 +2249,14 @@ export default function (supabase) {
 
             try {
                 const photo = await client.downloadProfilePhoto(me, { isBig: false });
-                if (Buffer.isBuffer(photo) && photo.length > 0 && photo.length <= 256 * 1024) {
-                    photoDataUrl = `data:image/jpeg;base64,${photo.toString('base64')}`;
+                if (Buffer.isBuffer(photo) && photo.length > 0) {
+                    photoUrl = storeUserbotProfilePhoto({
+                        ownerId: req.user.id,
+                        accountId: account.id,
+                        photo
+                    });
                 } else if (Buffer.isBuffer(photo)) {
-                    photoDataUrl = null;
+                    photoUrl = null;
                 }
             } catch (photoError) {
                 console.warn('[USERBOT_PROFILE_SYNC] photo skipped:', photoError?.message || photoError);
@@ -2236,12 +2268,10 @@ export default function (supabase) {
                     tg_about: about,
                     tg_profile_synced_at: syncedAt,
                     tg_profile_sync_attempted_at: syncedAt,
+                    ...(photoUrl !== undefined ? { tg_photo_url: photoUrl, tg_photo_synced_at: syncedAt, tg_photo_data_url: null } : {}),
                     tg_profile_sync_error: null
                 })
             };
-            if (photoDataUrl !== undefined) {
-                patch.tg_photo_data_url = photoDataUrl;
-            }
 
             const { data: updatedAccount, error: updateError } = await supabase
                 .from('tg_accounts')
