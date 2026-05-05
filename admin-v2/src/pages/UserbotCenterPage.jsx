@@ -15,12 +15,12 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function buildAppUserbotCenterLink(userbotId, tgUserId = '') {
-  const params = new URLSearchParams();
-  if (userbotId) params.set('userbot_id', userbotId);
-  if (tgUserId) params.set('tg_user_id', tgUserId);
-  const query = params.toString();
-  return `/app/userbot-center${query ? `?${query}` : ''}`;
+function formatElapsed(seconds) {
+  const value = Math.max(0, Number(seconds || 0));
+  const minutes = Math.floor(value / 60);
+  const rest = value % 60;
+  if (minutes <= 0) return `${rest} с`;
+  return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
@@ -46,24 +46,6 @@ function needsBotsRecovery(message = '') {
     value.includes('auth_key_unregistered');
 }
 
-function ConversationBadge({ conversation }) {
-  let className = 'pill';
-  let text = 'Спокойно';
-
-  if (conversation.sales_signal) {
-    className += ' pill--warning';
-    text = 'Пахнет покупкой';
-  } else if (conversation.signal_notified_at) {
-    className += ' pill--ok';
-    text = 'Уже пинганули';
-  } else if ((conversation.unread_count || 0) > 0) {
-    className += ' pill--info';
-    text = `Непрочитано: ${conversation.unread_count}`;
-  }
-
-  return <span className={className}>{text}</span>;
-}
-
 export function UserbotCenterPage() {
   const location = useLocation();
   const { accessToken, profilePlan, trialEndsAt } = useAuth();
@@ -80,6 +62,8 @@ export function UserbotCenterPage() {
   const [manualTgUserId, setManualTgUserId] = useState(initialThreadUserId);
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId);
   const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -87,12 +71,8 @@ export function UserbotCenterPage() {
     error: '',
     data: null
   });
-  const [threadState, setThreadState] = useState({
-    loading: false,
-    error: '',
-    messages: [],
-    unavailableReason: ''
-  });
+  const [scanStartedAt, setScanStartedAt] = useState(null);
+  const [scanElapsedSeconds, setScanElapsedSeconds] = useState(0);
   const [actionState, setActionState] = useState({
     sendingReply: false,
     joiningInvite: false,
@@ -132,6 +112,20 @@ export function UserbotCenterPage() {
   }, [trialEndsAt]);
   const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
+  useEffect(() => {
+    if (!scanStartedAt || !state.refreshing) {
+      setScanElapsedSeconds(0);
+      return undefined;
+    }
+
+    const tick = () => {
+      setScanElapsedSeconds(Math.floor((Date.now() - scanStartedAt) / 1000));
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [scanStartedAt, state.refreshing]);
+
   function applyCenterData(nextData, preferredUserbotId = selectedUserbotId, preferredThreadUserId = threadUserId) {
     const nextUserbotId = String(nextData.selected_userbot_id || preferredUserbotId || '');
     const nextConversations = nextData.conversations || [];
@@ -156,6 +150,7 @@ export function UserbotCenterPage() {
   }
 
   async function reloadCenter({ silent = false, preferredThreadUserId = threadUserId, scan = true } = {}) {
+    const trackScanWait = scan && !silent;
     if (!silent) {
       setState((prev) => ({
         ...prev,
@@ -164,14 +159,40 @@ export function UserbotCenterPage() {
         error: ''
       }));
     }
+    if (trackScanWait) {
+      setScanStartedAt(Date.now());
+      setScanElapsedSeconds(0);
+    }
 
     const params = new URLSearchParams();
     if (selectedUserbotId) params.set('userbot_id', selectedUserbotId);
     if (scan) params.set('scan', 'true');
     const query = params.toString() ? `?${params.toString()}` : '';
-    const nextData = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
-    applyCenterData(nextData, selectedUserbotId, preferredThreadUserId);
-    return nextData;
+    try {
+      const nextData = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
+      applyCenterData(nextData, selectedUserbotId, preferredThreadUserId);
+      return nextData;
+    } catch (error) {
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        error: error.message
+      }));
+      throw error;
+    } finally {
+      if (trackScanWait) {
+        setScanStartedAt(null);
+      }
+    }
+  }
+
+  async function refreshCenterNow() {
+    try {
+      await reloadCenter({ scan: true });
+    } catch {
+      // Ошибка уже записана в состояние страницы.
+    }
   }
 
   async function loadAuthorizations() {
@@ -417,50 +438,6 @@ export function UserbotCenterPage() {
   }, [initialThreadUserId]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadThread() {
-      if (!accessToken || !selectedUserbotId || !threadUserId) {
-        setThreadState({ loading: false, error: '', messages: [], unavailableReason: '' });
-        return;
-      }
-
-      setThreadState((prev) => ({ ...prev, loading: true, error: '' }));
-
-      try {
-        const query = new URLSearchParams({
-          userbot_id: selectedUserbotId,
-          tg_user_id: threadUserId
-        });
-        const data = await apiRequest(`/api/userbot/ops-center/thread?${query.toString()}`, { accessToken });
-        if (!cancelled) {
-          setThreadState({
-            loading: false,
-            error: '',
-            messages: data.messages || [],
-            unavailableReason: data.unavailable_reason || ''
-          });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setThreadState({
-            loading: false,
-            error: error.message,
-            messages: [],
-            unavailableReason: ''
-          });
-        }
-      }
-    }
-
-    loadThread();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, selectedUserbotId, threadUserId]);
-
-  useEffect(() => {
     setAuthorizationsState({ loading: false, error: '', rows: [] });
     setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
   }, [accessToken, selectedUserbotId]);
@@ -565,54 +542,24 @@ export function UserbotCenterPage() {
     [conversations, threadUserId]
   );
 
-  const hotConversations = useMemo(
-    () => conversations.filter((item) => item.sales_signal || item.unread_count > 0).slice(0, 8),
+  const sortedConversations = useMemo(
+    () => [...conversations].sort((a, b) => {
+      if ((b.unread_count || 0) !== (a.unread_count || 0)) return (b.unread_count || 0) - (a.unread_count || 0);
+      return String(b.last_message_at || '').localeCompare(String(a.last_message_at || ''));
+    }),
     [conversations]
   );
 
-  const adminGroups = useMemo(
-    () => groups.filter((item) => item.userbot_admin),
+  const commonChatGroups = useMemo(
+    () => groups.filter((item) => item.chat_id),
     [groups]
   );
 
-  const prioritySignals = useMemo(() => ([
-    {
-      title: 'Горячие входящие',
-      value: summary.sales_signals || 0,
-      tone: (summary.sales_signals || 0) > 0 ? 'warning' : 'ok',
-      hint: `Непрочитанных диалогов: ${summary.unread_dialogs || 0}`
-    },
-    {
-      title: 'Админские группы',
-      value: summary.groups_admin || 0,
-      tone: (summary.groups_admin || 0) > 0 ? 'ok' : 'warning',
-      hint: `Всего групп в контуре: ${summary.groups_total || 0}`
-    },
-    {
-      title: 'Ops-сигналы',
-      value: summary.signaled_dialogs || 0,
-      tone: signalConfig.ready ? 'ok' : 'danger',
-      hint: signalConfig.ready
-        ? `Контур собран, admin_tg_id ${signalConfig.admin_tg_id || 'задан'}`
-        : 'Ops-контур не собран: нет admin_tg_id или ops-бота'
-    },
-    {
-      title: 'Личка живая',
-      value: summary.open_dialogs || 0,
-      tone: (summary.open_dialogs || 0) > 0 ? 'ok' : 'default',
-      hint: 'Чем больше живых диалогов, тем выше шанс быстро дожать человека в личке'
-    }
-  ]), [signalConfig, summary]);
-
-  function useReplyTemplate(type) {
-    const templates = {
-      sales_intro: 'Привет. Да, все актуально. Напиши, что именно хочешь взять, и я быстро сориентирую по цене и оплате.',
-      ton_payment: 'Оплата у нас идет в TON. Напиши, что именно хочешь купить, и я скину точные условия и дальнейшие шаги.',
-      qualify_need: 'Напиши коротко, что тебе нужно: доступ, товар, продление или комплект. Так я быстрее дам точный ответ без воды.',
-      warm_close: 'Да, можем быстро закрыть. Если готов, я сразу сориентирую по оплате и что получишь после нее.'
-    };
-
-    setReplyMessage(templates[type] || '');
+  async function selectConversation(conversation) {
+    const nextThreadUserId = String(conversation.tg_user_id);
+    setThreadUserId(nextThreadUserId);
+    setManualTgUserId(nextThreadUserId);
+    setReplyMessage('');
   }
 
   async function markConversationRead(tgUserId) {
@@ -655,21 +602,13 @@ export function UserbotCenterPage() {
     }
   }
 
-  async function selectConversation(conversation) {
-    const nextThreadUserId = String(conversation.tg_user_id);
-    setThreadUserId(nextThreadUserId);
-    setManualTgUserId(nextThreadUserId);
-    if (!replyMessage.trim() && conversation.sales_signal) {
-      setReplyMessage('Привет. Вижу твое сообщение. Напиши, что именно хочешь взять, и я быстро сориентирую по оплате и доступу.');
-    }
-  }
-
   async function sendReply() {
+    const message = String(replyMessage || '').trim();
     if (!selectedConversation?.tg_user_id) {
       window.alert('Сначала выбери диалог, кому отвечать.');
       return;
     }
-    if (!replyMessage.trim()) {
+    if (!message) {
       window.alert('Напиши текст ответа.');
       return;
     }
@@ -684,14 +623,31 @@ export function UserbotCenterPage() {
         method: 'POST',
         body: {
           tg_user_id: selectedConversation.tg_user_id,
-          message: replyMessage,
+          message,
           userbot_id: selectedUserbotId || null,
           known_dialog: true,
           manual_confirmed: true
         }
       });
       setReplyMessage('');
-      await reloadCenter({ preferredThreadUserId: String(selectedConversation.tg_user_id) });
+      const sentAt = new Date().toISOString();
+      setState((prev) => ({
+        ...prev,
+        data: prev.data ? {
+          ...prev.data,
+          conversations: (prev.data.conversations || []).map((item) => (
+            String(item.tg_user_id) === String(selectedConversation.tg_user_id)
+              ? {
+                ...item,
+                last_message_preview: message,
+                last_message_at: sentAt,
+                last_outgoing: true,
+                unread_count: 0
+              }
+              : item
+          ))
+        } : prev.data
+      }));
       window.alert('Ответ улетел.');
     } catch (error) {
       window.alert(`Ошибка ответа: ${error.message}`);
@@ -769,7 +725,36 @@ export function UserbotCenterPage() {
       });
       setManualTgUserId('');
       setManualDirectMessage('');
-      await reloadCenter({ preferredThreadUserId: tgUserId });
+      const sentAt = new Date().toISOString();
+      setThreadUserId(tgUserId);
+      setState((prev) => {
+        if (!prev.data) return prev;
+        const existing = prev.data.conversations || [];
+        const hasConversation = existing.some((item) => String(item.tg_user_id) === tgUserId);
+        const nextConversation = {
+          tg_user_id: tgUserId,
+          username: null,
+          display_name: `ID ${tgUserId}`,
+          unread_count: 0,
+          last_message_preview: message,
+          last_message_at: sentAt,
+          last_outgoing: true,
+          sales_signal: false
+        };
+        return {
+          ...prev,
+          data: {
+            ...prev.data,
+            conversations: hasConversation
+              ? existing.map((item) => String(item.tg_user_id) === tgUserId ? { ...item, ...nextConversation } : item)
+              : [nextConversation, ...existing],
+            summary: prev.data.summary ? {
+              ...prev.data.summary,
+              open_dialogs: hasConversation ? prev.data.summary.open_dialogs : (prev.data.summary.open_dialogs || 0) + 1
+            } : prev.data.summary
+          }
+        };
+      });
       window.alert('Сообщение улетело.');
     } catch (error) {
       window.alert(`Ошибка отправки: ${error.message}`);
@@ -843,94 +828,23 @@ export function UserbotCenterPage() {
     );
   }
 
-  return (
-    <section className="page">
-      <div className="page__header">
-        <h1>Центр юзербота</h1>
-        <p>
-          Первый перенос этого экрана в `admin-v2`: видно, где аккаунт админ, кто пишет в личку и какие
-          входящие уже пахнут продажей. Ручные действия уже вынесены сюда: можно отвечать, отмечать прочитанным,
-          загонять юзербота по инвайту и писать по TG ID через общую группу.
-        </p>
-        <div className="page__meta">
-          <span>{state.refreshing ? 'Обновляем вручную...' : 'Ничего не дергаем в фоне. Telegram трогаем только по явному действию админа.'}</span>
-          <span>
-            Ops-сигналы: {signalConfig.ready ? 'собраны' : 'не собраны'}
-            {signalConfig.admin_tg_id ? ` • admin_tg_id ${signalConfig.admin_tg_id}` : ' • admin_tg_id нет'}
-          </span>
-          <span>{userbots.length} юзерботов доступно для triage</span>
-        </div>
-      </div>
-      {profilePlan === 'trial' ? (
-        <>
-          <PlanBanner
-            tone={trialUpgradeUrgent ? 'warning' : 'info'}
-            title={trialUpgradeUrgent ? 'Trial скоро закончится: userbot center пора вести на Normal' : 'Userbot Center на Trial — это быстрый пробный контур'}
-            text={trialUpgradeUrgent
-              ? `До конца trial осталось около ${trialHoursLeft} ч. Если уже работаешь с личками, сигналами и ручным дожимом, не тяни с апгрейдом: Normal нужен для стабильного рабочего ритма.`
-              : 'На Trial можно собрать первый живой triage по входящим. Но как только userbot становится рабочим closеr-инструментом, переводи кабинет на Normal.'}
-          />
-          <UpgradeCallout
-            compact
-            title="Userbot уже приносит входящие — не держи этот контур в trial."
-            text="Если здесь уже есть лички, сигналы покупки и ручной дожим, это основной рабочий экран. Normal нужен, чтобы дальше жить без ознакомительных стопоров."
-          />
-        </>
-      ) : null}
+  const TAB_OPTIONS = [
+    { id: 'profile', label: 'Профиль' },
+    { id: 'groups', label: 'Группы' },
+    { id: 'messages', label: 'Сообщения' }
+  ];
 
-      <div className="hero-panel">
-        <div className="hero-panel__body">
-          <div className="hero-panel__eyebrow">Лички и группы</div>
-          <div className="hero-panel__title">Здесь разбираешь, кто пишет, кто уже теплый и где юзербот реально может дожать человека.</div>
-          <div className="hero-panel__text">
-            Это оперативный экран по входящим: видно, где аккаунт админ, кто уже пахнет покупкой, кого отпинганул ops-бот
-            и кому можно быстро ответить прямо отсюда.
-          </div>
-          <div className="hero-panel__actions">
-            <a className="hero-link" href="/app/userbots">Чинить аккаунты</a>
-            <a className="hero-link" href="/app/customers?tab=customers">Открыть клиентов</a>
-            <a className="hero-link" href="/app/customers?tab=orders">Разобрать деньги</a>
-            <a className="hero-link" href="/app/customers?tab=access">Разобрать доступ</a>
-          </div>
-        </div>
-        <div className="hero-panel__grid">
-          {prioritySignals.map((item) => (
-            <div key={item.title} className={`priority-chip priority-chip--${item.tone}`}>
-              <div className="priority-chip__title">{item.title}</div>
-              <div className="priority-chip__value">{item.value}</div>
-              <div className="priority-chip__hint">{item.hint}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="toolbar-card">
-        <div className="toolbar-card__title">Какой аккаунт сейчас под лупой</div>
-        <div className="toolbar-card__body">
-          <select
-            className="field"
-            value={selectedUserbotId}
-            onChange={(event) => setSelectedUserbotId(event.target.value)}
-          >
-            {userbots.map((userbot) => (
-              <option key={userbot.id} value={userbot.id}>
-                {userbot.tg_username ? `@${userbot.tg_username}` : `ID ${userbot.tg_account_id}`}
-                {userbot.proxy_name ? ` • ${userbot.proxy_name}` : ''}
-                {userbot.proxy_country ? ` • ${userbot.proxy_country}` : ''}
-              </option>
-            ))}
-          </select>
-          <a className="ghost-button" href="/app/userbots">
-            Юзерботы
-          </a>
-          <button className="ghost-button ghost-button--primary" onClick={() => reloadCenter({ scan: true })} disabled={state.refreshing}>
-            {state.refreshing ? 'Проверяем входящие...' : 'Проверить входящие сейчас'}
-          </button>
-        </div>
-        <div className="toolbar-card__hint">Авто-refresh убран. Этот экран больше не ползает в Telegram сам по таймеру.</div>
+  function renderProfileTab() {
+    return (
+      <>
         {selectedUserbot ? (
-          <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50/70 p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#818cf8' }} />
+              <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
+            </div>
+            <div className="text-sm text-slate-500 mb-6">Редактируй имя, описание и аватарку. Изменения улетают прямо в Telegram.</div>
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
                 <button
                   type="button"
@@ -940,11 +854,7 @@ export function UserbotCenterPage() {
                   title="Загрузить аватарку"
                 >
                   {selectedProfilePhotoSrc ? (
-                    <img
-                      src={selectedProfilePhotoSrc}
-                      alt=""
-                      className="size-16 object-cover"
-                    />
+                    <img src={selectedProfilePhotoSrc} alt="" className="size-16 object-cover" />
                   ) : (
                     <span className="flex size-16 items-center justify-center bg-slate-900 text-[22px] font-black text-white">
                       {selectedProfileInitial}
@@ -966,8 +876,7 @@ export function UserbotCenterPage() {
                   }}
                 />
                 <div className="min-w-0">
-                  <div className="text-[14px] font-bold text-slate-900">Профиль аккаунта</div>
-                  <div className="mt-1 truncate text-[20px] font-black tracking-tight text-slate-950">
+                  <div className="truncate text-[20px] font-black tracking-tight text-slate-950">
                     {selectedProfileTitle}
                   </div>
                   <div className="mt-1 text-[12px] font-medium text-slate-500">
@@ -977,7 +886,7 @@ export function UserbotCenterPage() {
               </div>
               <button
                 type="button"
-                className="ghost-button"
+                className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
                 onClick={syncSelectedUserbotProfile}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedUserbotId}
               >
@@ -985,75 +894,75 @@ export function UserbotCenterPage() {
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Имя</div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Имя</label>
                 <input
-                  className="field"
+                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
                   value={selectedDraftFirstName}
                   maxLength={64}
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
                   placeholder="Имя аккаунта"
                 />
-              </label>
-              <label className="block">
-                <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Фамилия</div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Фамилия</label>
                 <input
-                  className="field"
+                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
                   value={selectedDraftLastName}
                   maxLength={64}
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
                   placeholder="Фамилия аккаунта"
                 />
-              </label>
-              <div className="rounded-[14px] bg-white px-3 py-2.5">
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Username</div>
+              </div>
+              <div className="rounded-[14px] bg-slate-50 px-4 py-3 border border-slate-100">
+                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Username</div>
                 <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
                   {selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '—'}
                 </div>
               </div>
-              <div className="rounded-[14px] bg-white px-3 py-2.5">
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Телефон / TG ID</div>
+              <div className="rounded-[14px] bg-slate-50 px-4 py-3 border border-slate-100">
+                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Телефон / TG ID</div>
                 <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
                   {[selectedUserbot.tg_phone, selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''].filter(Boolean).join(' • ') || '—'}
                 </div>
               </div>
             </div>
 
-            <label className="mt-3 block">
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Описание</div>
+            <div className="mt-4 space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Описание</label>
               <textarea
-                className="field"
-                rows="3"
+                className="w-full px-4 py-3 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 resize-none"
+                rows={3}
                 value={selectedDraftAbout}
                 maxLength={70}
                 onChange={(event) => setProfileDraft((prev) => ({ ...prev, about: event.target.value }))}
                 placeholder="Описание профиля"
               />
-              <div className="mt-1 text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
-            </label>
+              <div className="text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
+            </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="ghost-button ghost-button--primary"
+                className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={saveSelectedUserbotProfile}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !profileDirty}
               >
-                {profileSyncState.saving ? 'Сохраняем в Telegram...' : 'Сохранить в Telegram'}
+                {profileSyncState.saving ? 'Сохраняем...' : 'Сохранить в Telegram'}
               </button>
               <button
                 type="button"
-                className="ghost-button"
+                className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
               >
-                {profileSyncState.uploadingAvatar ? 'Загружаем аватарку...' : 'Загрузить аватарку'}
+                {profileSyncState.uploadingAvatar ? 'Загружаем...' : 'Загрузить аватарку'}
               </button>
               {profileDirty ? (
                 <button
                   type="button"
-                  className="ghost-button"
+                  className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
                   onClick={() => setProfileDraft({
                     accountId: String(selectedUserbot.id),
                     firstName: selectedUserbot.tg_first_name || '',
@@ -1062,401 +971,516 @@ export function UserbotCenterPage() {
                   })}
                   disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
                 >
-                  Отменить правки
+                  Отменить
                 </button>
               ) : null}
             </div>
 
             {selectedUserbot.tg_profile_sync_error ? (
-              <div className="mt-3 rounded-[14px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
-                Последняя ошибка обновления профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
+              <div className="mt-4 p-3 rounded-[14px] bg-red-50 border border-red-200 text-[13px] font-medium text-red-700">
+                Ошибка профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
               </div>
             ) : null}
 
             {profileSyncState.text ? (
-              <div className={`userbots-status-note userbots-status-note--${profileSyncState.tone || 'default'}`}>
+              <div className="mt-3 text-[13px] font-medium text-slate-600">
                 {profileSyncState.text}
               </div>
             ) : null}
-
-            <div className="mt-3 text-[12px] font-medium text-slate-500">
-              При загрузке страницы показываем сохраненные данные из БД. `Стянуть из Telegram` обновляет кэш, `Сохранить в Telegram` меняет имя и описание, а аватарка загружается отдельной кнопкой.
-            </div>
           </div>
         ) : null}
-      </div>
 
-      {state.scanRequired ? (
-        <div className="warning-card section">
-          Экран открылся в safe-preview режиме. Живые диалоги и группы Telegram подтягиваются только после кнопки
-          «Проверить входящие сейчас».
-        </div>
-      ) : null}
-
-      <div className="toolbar-card">
-        <div className="toolbar-card__title">Активные Telegram-сессии аккаунта</div>
-        <div className="list-stack">
-          <div className="list-item">
-            <div className="list-item__title">Зачем это нужно</div>
-            <div className="list-item__meta">
-              Если хочешь, чтобы этим аккаунтом пользовался только сервис, здесь можно разлогинить все остальные устройства и оставить текущую серверную сессию.
-            </div>
+        <div className="border-t border-slate-100 p-6 md:p-8">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+            <div className="text-[15px] font-bold text-slate-900">Активные сессии</div>
           </div>
-          <div className="list-item">
-            <div className="list-item__title">Что останется после чистки</div>
-            <div className="list-item__meta">
-              Строка с меткой <strong>Сессия BullRun</strong> — это текущая серверная авторизация. Кнопка ниже выкинет все остальные устройства и оставит только ее.
-            </div>
+          <div className="text-sm text-slate-500 mb-4">Залогиненные устройства. Можно выкинуть все, кроме серверной сессии BullRun.</div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+              onClick={loadAuthorizations}
+              disabled={authorizationsState.loading || !selectedUserbotId}
+            >
+              {authorizationsState.loading ? 'Тянем сессии...' : 'Показать сессии'}
+            </button>
+            <button
+              className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all disabled:opacity-50"
+              onClick={resetOtherSessions}
+              disabled={actionState.resettingAuthorizations || !selectedUserbotId}
+            >
+              {actionState.resettingAuthorizations ? 'Чистим...' : 'Разлогинить остальные'}
+            </button>
           </div>
-        </div>
-        <div className="toolbar-card__body">
-          <button className="ghost-button" onClick={loadAuthorizations} disabled={authorizationsState.loading || !selectedUserbotId}>
-            {authorizationsState.loading ? 'Тянем сессии...' : 'Показать активные сессии'}
-          </button>
-          <button className="ghost-button ghost-button--primary" onClick={resetOtherSessions} disabled={actionState.resettingAuthorizations || !selectedUserbotId}>
-            {actionState.resettingAuthorizations ? 'Чистим сессии...' : 'Разлогинить все остальные устройства'}
-          </button>
-        </div>
-        {authorizationsState.error ? (
-          <div className="empty-inline">{authorizationsState.error}</div>
-        ) : authorizationsState.loading ? (
-          <div className="empty-inline">Тянем активные авторизации...</div>
-        ) : authorizationsState.rows.length === 0 ? (
-          <div className="empty-inline">Telegram не отдал список сессий для этого аккаунта.</div>
-        ) : (
-          <table className="table" style={{ marginTop: 16 }}>
-            <thead>
-              <tr>
-                <th>Устройство</th>
-                <th>Приложение</th>
-                <th>Где</th>
-                <th>Последний движ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {authorizationsState.rows.map((item) => (
-                <tr key={item.hash || `${item.app_name}-${item.date_active}`}>
-                  <td>
-                    <div>
-                      {item.current ? 'Текущая серверная сессия' : (item.device_model || item.platform || 'Устройство')}
-                      {item.current ? <span className="pill pill--ok" style={{ marginLeft: 8 }}>Сессия BullRun</span> : null}
-                    </div>
-                    <div className="table-subtext">
-                      {item.current ? 'Эту сессию сервис держит сейчас.' : `${item.platform || 'Платформа'} ${item.system_version || ''}`.trim()}
-                    </div>
-                  </td>
-                  <td>
-                    <div>{item.app_name || 'Telegram'}</div>
-                    <div className="table-subtext">{item.app_version || 'Версия не пришла'}{item.official_app ? ' • official app' : ''}</div>
-                  </td>
-                  <td>
-                    <div>{item.country || 'Страна не пришла'}</div>
-                    <div className="table-subtext">{item.ip || 'IP не пришел'}{item.region ? ` • ${item.region}` : ''}</div>
-                  </td>
-                  <td>{formatDate(item.date_active || item.date_created)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
 
-      <div className="grid">
-        <StatCard title="Всего групп" value={summary.groups_total || 0} hint="Куда этот юзербот реально дотягивается." />
-        <StatCard title="Где админ" value={summary.groups_admin || 0} hint="Это самые полезные группы для лички и контроля." />
-        <StatCard title="Диалогов в личке" value={summary.open_dialogs || 0} hint={`Непрочитанных: ${summary.unread_dialogs || 0}.`} />
-        <StatCard title="Пахнет покупкой" value={summary.sales_signals || 0} hint={`Уже отпинганы ops-ботом: ${summary.signaled_dialogs || 0}.`} />
-      </div>
-
-      <div className="table-card" style={{ marginTop: 16 }}>
-        <div className="table-card__title">Последние Telegram-ошибки этого аккаунта</div>
-        {errorEventsState.error ? (
-          <div className="empty-inline">{errorEventsState.error}</div>
-        ) : errorEventsState.loading ? (
-          <div className="empty-inline">Тянем журнал Telegram-ошибок...</div>
-        ) : errorEventsState.rows.length === 0 ? (
-          <div className="empty-inline">Свежих flood/restricted/session ошибок по этому аккаунту не видно.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Что случилось</th>
-                <th>Кому</th>
-                <th>Откуда</th>
-                <th>Когда</th>
-              </tr>
-            </thead>
-            <tbody>
-              {errorEventsState.rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <div>{row.restriction_kind || row.event_type}</div>
-                    <div className="table-subtext">{row.error_message || 'Без текста ошибки'}</div>
-                  </td>
-                  <td>{row.tg_user_id || '—'}</td>
-                  <td>{row.event_source || 'telegram'}</td>
-                  <td>{formatDate(row.happened_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="grid grid--double">
-        <div className="table-card">
-          <div className="table-card__title">Горячие входящие</div>
-          {hotConversations.length === 0 ? (
-            <div className="empty-inline">Пока тихо. Живых горячих личек нет.</div>
+          {authorizationsState.error ? (
+            <div className="text-sm text-slate-500">{authorizationsState.error}</div>
+          ) : authorizationsState.loading ? (
+            <div className="text-sm text-slate-500">Тянем авторизации...</div>
+          ) : authorizationsState.rows.length === 0 ? (
+            <div className="text-sm text-slate-500">Нажми «Показать сессии», чтобы загрузить список.</div>
           ) : (
-            <div className="list-stack">
-              {hotConversations.map((conversation) => (
-                <button
-                  key={conversation.tg_user_id}
-                  className={`list-item${String(threadUserId) === String(conversation.tg_user_id) ? ' list-item--active' : ''}`}
-                  onClick={() => selectConversation(conversation)}
-                >
-                  <div className="list-item__head">
-                    <div>
-                      <div className="list-item__title">
-                        {conversation.display_name || conversation.username || conversation.tg_user_id}
-                      </div>
-                      <div className="list-item__meta">{conversation.tg_user_id}</div>
-                    </div>
-                    <ConversationBadge conversation={conversation} />
-                  </div>
-                  <div className="list-item__body">{conversation.last_message_preview || 'Telegram не отдал текст последнего сообщения.'}</div>
-                  <div className="list-item__footer">
-                    <span>{formatDate(conversation.last_message_at)}</span>
-                    <span>{conversation.unread_count > 0 ? `Непрочитано: ${conversation.unread_count}` : 'Без непрочитанного'}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="table-card">
-          <div className="table-card__title">Где этот юзербот админ</div>
-          {adminGroups.length === 0 ? (
-            <div className="empty-inline">Пока нет групп, где этот юзербот подтвержден как админ.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Группа / чат</th>
-                  <th>В системе</th>
-                  <th>Непрочитанных</th>
-                  <th>Дальше</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adminGroups.map((group) => (
-                  <tr key={group.chat_id}>
-                    <td>
-                      <div>{group.title}</div>
-                      <div className="table-subtext">{group.chat_id}</div>
-                    </td>
-                    <td>{group.linked_channel_title || 'Пока не привязано'}</td>
-                    <td>{group.unread_count || 0}</td>
-                    <td>
-                      {group.linked_channel_id ? (
-                        <a href={`/app/customers?tab=customers&channel=${encodeURIComponent(group.linked_channel_id)}`} target="_blank" rel="noreferrer">
-                          Клиенты
-                        </a>
-                      ) : (
-                        <span className="table-subtext">Сначала завести в систему</span>
-                      )}
-                    </td>
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Устройство</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Приложение</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Где</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Последний движ</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid--double">
-        <div className="table-card">
-          <div className="table-card__title">Все диалоги</div>
-          {conversations.length === 0 ? (
-            <div className="empty-inline">Личка пока пустая или Telegram ничего не отдал.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Кто</th>
-                  <th>Статус</th>
-                  <th>Последний движ</th>
-                  <th>Дальше</th>
-                </tr>
-              </thead>
-              <tbody>
-                {conversations.slice(0, 20).map((conversation) => (
-                  <tr key={conversation.tg_user_id}>
-                    <td>
-                      <div>{conversation.display_name || conversation.username || conversation.tg_user_id}</div>
-                      <div className="table-subtext">{conversation.tg_user_id}</div>
-                    </td>
-                    <td>
-                      <ConversationBadge conversation={conversation} />
-                    </td>
-                    <td>{formatDate(conversation.last_message_at)}</td>
-                    <td>
-                      <div className="table-actions">
-                        <button className="inline-action" onClick={() => selectConversation(conversation)}>
-                          Тред
-                        </button>
-                        <a
-                          href={buildAppUserbotCenterLink(selectedUserbotId, conversation.tg_user_id)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Отдельно
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="table-card">
-          <div className="table-card__title">Последние сообщения по диалогу</div>
-          {!selectedConversation ? (
-            <div className="empty-inline">Слева выбери горячий диалог или строку из таблицы.</div>
-          ) : threadState.loading ? (
-            <LoadingState text="Тянем переписку..." />
-          ) : threadState.error ? (
-            <div className="empty-inline">{threadState.error}</div>
-          ) : (
-            <>
-              <div className="thread-card__header">
-                <div>
-                  <div className="thread-card__title">
-                    {selectedConversation.display_name || selectedConversation.username || selectedConversation.tg_user_id}
-                  </div>
-                  <div className="thread-card__meta">{selectedConversation.tg_user_id}</div>
-                </div>
-                <a
-                  className="ghost-button"
-                  href={buildAppUserbotCenterLink(selectedUserbotId, selectedConversation.tg_user_id)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Открыть отдельно
-                </a>
-              </div>
-
-              <div className="toolbar-card" style={{ marginTop: 16 }}>
-                <div className="toolbar-card__title">Быстрый ответ</div>
-                <div className="toolbar-card__hint">
-                  Ответ уходит только после явного подтверждения. Выбор треда больше не помечает диалог прочитанным сам.
-                </div>
-                <div className="filter-strip">
-                  <button className="filter-chip" onClick={() => useReplyTemplate('sales_intro')}>Да, актуально</button>
-                  <button className="filter-chip" onClick={() => useReplyTemplate('ton_payment')}>Оплата в TON</button>
-                  <button className="filter-chip" onClick={() => useReplyTemplate('qualify_need')}>Уточнить, что нужно</button>
-                  <button className="filter-chip" onClick={() => useReplyTemplate('warm_close')}>Быстро закрыть</button>
-                </div>
-                <div className="toolbar-card__body">
-                  <textarea
-                    className="field"
-                    rows="5"
-                    value={replyMessage}
-                    onChange={(event) => setReplyMessage(event.target.value)}
-                    placeholder="Ответ человеку"
-                  />
-                  <button className="ghost-button ghost-button--primary" onClick={sendReply} disabled={actionState.sendingReply}>
-                    {actionState.sendingReply ? 'Шлем...' : 'Ответить'}
-                  </button>
-                  <button className="ghost-button" onClick={() => markConversationRead(selectedConversation.tg_user_id)} disabled={actionState.markingRead}>
-                    {actionState.markingRead ? 'Помечаем...' : 'Прочитано'}
-                  </button>
-                </div>
-              </div>
-
-              {threadState.messages.length === 0 ? (
-                <div className="empty-inline">
-                  {threadState.unavailableReason || 'Telegram не отдал историю или диалог пустой. Шумный поиск вынесем в отдельную явную кнопку.'}
-                </div>
-              ) : (
-                <div className="thread-stack">
-                  {threadState.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`thread-message${message.outgoing ? ' thread-message--outgoing' : ''}`}
-                    >
-                      <div>{message.text || '—'}</div>
-                      <div className="thread-message__meta">{formatDate(message.date)}</div>
-                    </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {authorizationsState.rows.map((item) => (
+                    <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">
+                          {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
+                          {item.current ? <span className="ml-2 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">BullRun</span> : null}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
+                        <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-800">{item.country || '—'}</div>
+                        <div className="text-xs text-slate-500">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
+                    </tr>
                   ))}
-                </div>
-              )}
-            </>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
-      </div>
 
-      <div className="grid grid--double">
-        <div className="toolbar-card">
-          <div className="toolbar-card__title">Загнать юзербота по инвайту</div>
-          <p className="toolbar-card__hint">
-            Вставь invite-ссылку. Это полезно, когда надо быстро завести аккаунт в рабочую группу или чат под дожим.
-          </p>
-          <div className="toolbar-card__body">
+        <div className="border-t border-slate-100 p-6 md:p-8">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+            <div className="text-[15px] font-bold text-slate-900">Telegram-ошибки</div>
+          </div>
+          <div className="text-sm text-slate-500 mb-4">Последние flood/restricted/session ошибки по этому аккаунту.</div>
+          {errorEventsState.error ? (
+            <div className="text-sm text-slate-500">{errorEventsState.error}</div>
+          ) : errorEventsState.loading ? (
+            <div className="text-sm text-slate-500">Загружаем журнал ошибок...</div>
+          ) : errorEventsState.rows.length === 0 ? (
+            <div className="text-sm text-slate-500">Свежих ошибок по этому аккаунту нет.</div>
+          ) : (
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Что случилось</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Кому</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Откуда</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Когда</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {errorEventsState.rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{row.restriction_kind || row.event_type}</div>
+                        <div className="text-xs text-slate-500">{row.error_message || 'Без текста ошибки'}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.tg_user_id || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{row.event_source || 'telegram'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.happened_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  function renderGroupsTab() {
+    const GROUP_FILTERS = [
+      { id: 'all', label: 'Все' },
+      { id: 'admin', label: 'Админ' },
+      { id: 'linked', label: 'Привязанные' },
+      { id: 'unlinked', label: 'Не привязанные' }
+    ];
+
+    const filteredGroups = groups.filter((group) => {
+      if (groupFilter === 'admin') return group.userbot_admin;
+      if (groupFilter === 'linked') return !!group.linked_channel_id;
+      if (groupFilter === 'unlinked') return !group.linked_channel_id;
+      return true;
+    });
+
+    return (
+      <>
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <div className="text-[15px] font-bold text-slate-900">Группы и каналы</div>
+              <div className="text-sm text-slate-500 mt-0.5">Все чаты где юзербот состоит.</div>
+            </div>
+            <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-bold text-slate-600">
+              {filteredGroups.length}
+            </div>
+          </div>
+          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+            {GROUP_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                className={`px-4 py-2 text-[12px] font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                  groupFilter === f.id
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setGroupFilter(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredGroups.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-400 font-bold">Нет групп с этим фильтром.</div>
+        ) : (
+          <div className="divide-y divide-slate-100 border-b border-slate-100">
+            {filteredGroups.map((group) => (
+              <div key={group.chat_id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="text-[14px] font-bold text-slate-900 truncate">{group.title}</div>
+                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                        group.type === 'channel' ? 'bg-violet-50 text-violet-600 border border-violet-200' : 'bg-blue-50 text-blue-600 border border-blue-200'
+                      }`}>
+                        {group.type === 'channel' ? 'Канал' : 'Группа'}
+                      </span>
+                      {group.userbot_admin ? (
+                        <span className="inline-flex px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase">Админ</span>
+                      ) : null}
+                      {group.admin_check_skipped ? (
+                        <span className="inline-flex px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-black uppercase">Не проверено</span>
+                      ) : null}
+                      {group.admin_error ? (
+                        <span className="text-[10px] text-red-500 font-medium">{group.admin_error}</span>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500">
+                      <span className="font-mono">{group.chat_id}</span>
+                      {(group.unread_count || 0) > 0 ? (
+                        <span className="font-bold text-blue-600">{group.unread_count} непрочитанных</span>
+                      ) : null}
+                      <span>В системе: {group.linked_channel_title || '—'}</span>
+                    </div>
+                    {group.last_message_preview ? (
+                      <div className="mt-1.5 text-[13px] text-slate-600 truncate">{group.last_message_preview}</div>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {group.linked_channel_id ? (
+                      <a
+                        className="h-8 px-3 rounded-lg bg-blue-600 text-white text-[12px] font-bold hover:bg-blue-700 transition-all inline-flex items-center"
+                        href={`/app/customers?tab=customers&channel=${encodeURIComponent(group.linked_channel_id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Клиенты
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="p-6 md:p-8">
+          <div className="text-[15px] font-bold text-slate-900 mb-0.5">Загнать по инвайту</div>
+          <div className="text-sm text-slate-500 mb-4">Заведи юзербота в группу или чат по invite-ссылке.</div>
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
-              className="field"
+              className="h-11 flex-1 px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
               type="text"
               value={manualInviteLink}
               onChange={(event) => setManualInviteLink(event.target.value)}
               placeholder="https://t.me/+..."
             />
-            <button className="ghost-button ghost-button--primary" onClick={joinInviteLink} disabled={actionState.joiningInvite}>
-              {actionState.joiningInvite ? 'Заходим...' : 'Зайти по ссылке'}
+            <button
+              className="h-11 px-5 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50"
+              onClick={joinInviteLink}
+              disabled={actionState.joiningInvite}
+            >
+              {actionState.joiningInvite ? 'Заходим...' : 'Зайти'}
             </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderMessagesTab() {
+    const hasSelectedConversation = !!selectedConversation;
+    const selectedTitle = selectedConversation
+      ? (selectedConversation.display_name || selectedConversation.username || selectedConversation.tg_user_id)
+      : '';
+    const selectedInitial = (selectedTitle || '?').slice(0, 1).toUpperCase();
+    const activeMessage = String(hasSelectedConversation ? replyMessage : manualDirectMessage);
+
+    return (
+      <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-100 bg-slate-50/60 lg:border-b-0 lg:border-r">
+          <div className="border-b border-slate-100 p-5">
+            <div className="text-[15px] font-bold text-slate-900">Чаты</div>
+            <div className="mt-1 text-sm text-slate-500">
+              {data.cache_scanned_at ? `Снимок: ${formatDate(data.cache_scanned_at)}` : 'Нажми «Проверить сейчас», чтобы собрать список.'}
+            </div>
+            <button
+              type="button"
+              className="mt-4 h-9 w-full rounded-xl border border-slate-200 bg-white text-[13px] font-bold text-slate-700 transition-all hover:bg-slate-50"
+              onClick={() => {
+                setThreadUserId('');
+                setReplyMessage('');
+              }}
+            >
+              Новое сообщение
+            </button>
+          </div>
+
+          {sortedConversations.length === 0 ? (
+            <div className="p-5 text-sm text-slate-500">Пока нет сохраненных диалогов.</div>
+          ) : (
+            <div className="max-h-[560px] overflow-y-auto">
+              {sortedConversations.map((conversation) => {
+                const title = conversation.display_name || conversation.username || conversation.tg_user_id;
+                const isActive = String(threadUserId) === String(conversation.tg_user_id);
+                return (
+                  <button
+                    key={conversation.tg_user_id}
+                    type="button"
+                    className={`flex w-full gap-3 border-b border-slate-100 p-4 text-left transition-colors hover:bg-white ${isActive ? 'bg-white' : ''}`}
+                    onClick={() => selectConversation(conversation)}
+                  >
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
+                      {String(title || '?').slice(0, 1).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-[14px] font-bold text-slate-900">{title}</span>
+                        <span className="shrink-0 text-[11px] font-medium text-slate-400">{conversation.last_message_at ? formatDate(conversation.last_message_at) : ''}</span>
+                      </span>
+                      <span className="mt-1 block truncate text-[13px] text-slate-500">
+                        {conversation.last_message_preview || 'Нет текста'}
+                      </span>
+                      <span className="mt-1 flex items-center gap-2 text-[11px] font-medium text-slate-400">
+                        <span>{conversation.tg_user_id}</span>
+                        {(conversation.unread_count || 0) > 0 ? (
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-white">{conversation.unread_count}</span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        <section className="flex min-h-[640px] flex-col bg-white">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+            {hasSelectedConversation ? (
+              <>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-white">
+                    {selectedInitial}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-[15px] font-bold text-slate-900">{selectedTitle}</div>
+                    <div className="text-xs text-slate-500">TG ID {selectedConversation.tg_user_id}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="h-9 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                  onClick={() => markConversationRead(selectedConversation.tg_user_id)}
+                  disabled={actionState.markingRead || (selectedConversation.unread_count || 0) === 0}
+                >
+                  {actionState.markingRead ? 'Отмечаем...' : 'Прочитано'}
+                </button>
+              </>
+            ) : (
+              <div>
+                <div className="text-[15px] font-bold text-slate-900">Новое сообщение</div>
+                <div className="text-xs text-slate-500">Нужен TG ID и общий чат, где юзербот видит человека.</div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-50/40 p-5">
+            {hasSelectedConversation ? (
+              selectedConversation.last_message_preview ? (
+                <div className={`flex ${selectedConversation.last_outgoing ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-[14px] shadow-sm ${
+                    selectedConversation.last_outgoing
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-slate-200 bg-white text-slate-900'
+                  }`}>
+                    <div>{selectedConversation.last_message_preview}</div>
+                    <div className={`mt-1 text-[11px] ${selectedConversation.last_outgoing ? 'text-blue-100' : 'text-slate-400'}`}>
+                      {selectedConversation.last_message_at ? formatDate(selectedConversation.last_message_at) : 'из сохраненного снимка'}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+                  В сохраненном снимке нет текста последнего сообщения.
+                </div>
+              )
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
+                Выбери чат слева или отправь новое сообщение по TG ID.
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 bg-white p-4">
+            {!hasSelectedConversation ? (
+              <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <input
+                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                  type="text"
+                  value={manualTgUserId}
+                  onChange={(event) => setManualTgUserId(event.target.value)}
+                  placeholder="TG ID цифрами"
+                />
+                <select
+                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                  value={manualCommonChatId}
+                  onChange={(event) => setManualCommonChatId(event.target.value)}
+                >
+                  <option value="">Выбери общий чат</option>
+                  {commonChatGroups.map((group) => (
+                    <option key={group.chat_id} value={group.chat_id}>
+                      {group.title} • {group.userbot_admin ? 'админ' : (group.admin_check_skipped ? 'видит чат' : 'участник')} • {group.chat_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="flex items-end gap-3">
+              <textarea
+                className="min-h-[48px] flex-1 resize-none rounded-[16px] border border-slate-200 bg-slate-50 px-4 py-3 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                rows={2}
+                value={activeMessage}
+                onChange={(event) => {
+                  if (hasSelectedConversation) {
+                    setReplyMessage(event.target.value);
+                  } else {
+                    setManualDirectMessage(event.target.value);
+                  }
+                }}
+                placeholder={hasSelectedConversation ? 'Сообщение в этот чат' : 'Текст сообщения'}
+              />
+              <button
+                className="h-11 shrink-0 rounded-[14px] bg-blue-600 px-5 text-[14px] font-bold text-white transition-all hover:bg-blue-700 disabled:opacity-50"
+                onClick={hasSelectedConversation ? sendReply : sendDirectMessage}
+                disabled={hasSelectedConversation ? actionState.sendingReply : actionState.sendingDirect}
+              >
+                {(hasSelectedConversation ? actionState.sendingReply : actionState.sendingDirect) ? 'Шлем...' : 'Отправить'}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <section className="page">
+      {profilePlan === 'trial' ? (
+        <>
+          <PlanBanner
+            tone={trialUpgradeUrgent ? 'warning' : 'info'}
+            title={trialUpgradeUrgent ? 'Trial скоро закончится: userbot center пора вести на Normal' : 'Userbot Center на Trial — это быстрый пробный контур'}
+            text={trialUpgradeUrgent
+              ? `До конца trial осталось около ${trialHoursLeft} ч. Если уже работаешь с личками, сигналами и ручным дожимом, не тяни с апгрейдом: Normal нужен для стабильного рабочего ритма.`
+              : 'На Trial можно собрать первый живой triage по входящим. Но как только userbot становится рабочим closеr-инструментом, переводи кабинет на Normal.'}
+          />
+          <UpgradeCallout
+            compact
+            title="Userbot уже приносит входящие — не держи этот контур в trial."
+            text="Если здесь уже есть лички, сигналы покупки и ручной дожим, это основной рабочий экран. Normal нужен, чтобы дальше жить без ознакомительных стопоров."
+          />
+        </>
+      ) : null}
+
+      {state.scanRequired ? (
+        <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 font-medium text-sm">
+          Экран открылся в safe-preview режиме. Нажми «Проверить сейчас» чтобы подтянуть живые данные из Telegram.
+        </div>
+      ) : null}
+
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+        <div className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <select
+                className="h-11 px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                value={selectedUserbotId}
+                onChange={(event) => setSelectedUserbotId(event.target.value)}
+              >
+                <option value="">Выбери юзербота</option>
+                {userbots.map((userbot) => (
+                  <option key={userbot.id} value={userbot.id}>
+                    {userbot.tg_username ? `@${userbot.tg_username}` : `ID ${userbot.tg_account_id}`}
+                    {userbot.proxy_name ? ` • ${userbot.proxy_name}` : ''}
+                    {userbot.proxy_country ? ` • ${userbot.proxy_country}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
+              onClick={refreshCenterNow}
+              disabled={state.refreshing}
+            >
+              {state.refreshing ? (
+                <>
+                  <span className="inline-block size-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                  <span>Проверяем {formatElapsed(scanElapsedSeconds)}</span>
+                </>
+              ) : 'Проверить сейчас'}
+            </button>
+          </div>
+
+          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+            {TAB_OPTIONS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`flex-1 px-4 py-2.5 text-[13px] font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="toolbar-card">
-          <div className="toolbar-card__title">Написать человеку по TG ID</div>
-          <p className="toolbar-card__hint">
-            Холодный поиск по TG ID больше не даем. Для ручной отправки выбери общий чат, где этот юзербот реально админит или видит человека.
-          </p>
-          <div className="toolbar-card__body">
-            <input
-              className="field"
-              type="text"
-              value={manualTgUserId}
-              onChange={(event) => setManualTgUserId(event.target.value)}
-              placeholder="TG ID цифрами"
-            />
-            <select
-              className="field"
-              value={manualCommonChatId}
-              onChange={(event) => setManualCommonChatId(event.target.value)}
-            >
-              <option value="">Сначала выбери общий чат</option>
-              {adminGroups.map((group) => (
-                <option key={group.chat_id} value={group.chat_id}>
-                  {group.title} • {group.chat_id}
-                </option>
-              ))}
-            </select>
-            <textarea
-              className="field"
-              rows="4"
-              value={manualDirectMessage}
-              onChange={(event) => setManualDirectMessage(event.target.value)}
-              placeholder="Текст сообщения"
-            />
-            <button className="ghost-button ghost-button--primary" onClick={sendDirectMessage} disabled={actionState.sendingDirect}>
-              {actionState.sendingDirect ? 'Шлем...' : 'Отправить по TG ID'}
-            </button>
-          </div>
-        </div>
+        {activeTab === 'profile' ? renderProfileTab() : null}
+        {activeTab === 'groups' ? renderGroupsTab() : null}
+        {activeTab === 'messages' ? renderMessagesTab() : null}
       </div>
     </section>
   );

@@ -63,6 +63,8 @@ const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
 const USERBOT_PROFILE_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
 const USERBOT_PROFILE_UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'userbot-profiles');
+const USERBOT_CENTER_DIALOG_LIMIT = Number(process.env.USERBOT_CENTER_DIALOG_LIMIT || 80);
+const USERBOT_CENTER_ADMIN_CHECK_DELAY_MS = Number(process.env.USERBOT_CENTER_ADMIN_CHECK_DELAY_MS || 350);
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -196,6 +198,36 @@ function buildUserbotCenterAccount(item, runtimeState = null) {
         proxy_is_working: item.proxies?.is_working ?? null,
         runtime_status: runtimeState?.status || item.runtime_status || null,
         runtime_reason: runtimeState?.reason || item.runtime_error || null
+    };
+}
+
+function buildUserbotCenterSignalConfig(paymentSettings, officialBots = []) {
+    const opsBot = (officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null;
+    return {
+        admin_tg_id: paymentSettings?.admin_tg_id ? String(paymentSettings.admin_tg_id) : '',
+        has_admin_tg_id: !!paymentSettings?.admin_tg_id,
+        ops_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') === 'ops').length,
+        sales_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') !== 'ops').length,
+        ops_bot: opsBot
+            ? {
+                id: opsBot.id,
+                tg_username: opsBot.tg_username || null,
+                tg_account_id: opsBot.tg_account_id || null
+            }
+            : null,
+        ready: !!paymentSettings?.admin_tg_id && !!opsBot
+    };
+}
+
+function buildUserbotCenterSummary(groups = [], conversations = []) {
+    return {
+        groups_total: groups.length,
+        groups_admin: groups.filter(group => group.userbot_admin).length,
+        linked_groups: groups.filter(group => group.linked_channel_id).length,
+        open_dialogs: conversations.length,
+        unread_dialogs: conversations.filter(item => item.unread_count > 0).length,
+        sales_signals: conversations.filter(item => item.sales_signal).length,
+        signaled_dialogs: conversations.filter(item => item.signal_notified_at).length
     };
 }
 
@@ -1119,6 +1151,146 @@ function detectSalesSignal(text = '') {
     ];
 
     return keywords.some(keyword => value.includes(keyword));
+}
+
+function sleep(ms) {
+    const safeMs = Number(ms);
+    if (!Number.isFinite(safeMs) || safeMs <= 0) return Promise.resolve();
+    return new Promise(resolve => setTimeout(resolve, safeMs));
+}
+
+function newestTimestamp(...values) {
+    const timestamps = values
+        .filter(Boolean)
+        .map(value => new Date(value).getTime())
+        .filter(value => Number.isFinite(value));
+    if (timestamps.length === 0) return null;
+    return new Date(Math.max(...timestamps)).toISOString();
+}
+
+async function loadUserbotCenterCache(supabase, ownerId, userbotId) {
+    const [{ data: groupRows, error: groupError }, { data: conversationRows, error: conversationError }] = await Promise.all([
+        supabase
+            .from('userbot_center_group_cache')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .eq('userbot_id', userbotId)
+            .order('userbot_admin', { ascending: false })
+            .order('unread_count', { ascending: false })
+            .order('last_message_at', { ascending: false, nullsFirst: false }),
+        supabase
+            .from('userbot_center_conversation_cache')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .eq('userbot_id', userbotId)
+            .order('sales_signal', { ascending: false })
+            .order('unread_count', { ascending: false })
+            .order('last_message_at', { ascending: false, nullsFirst: false })
+    ]);
+
+    if (groupError) throw groupError;
+    if (conversationError) throw conversationError;
+
+    const groups = (groupRows || []).map(row => ({
+        chat_id: String(row.chat_id),
+        title: row.title || null,
+        type: row.chat_type || 'group',
+        unread_count: Number(row.unread_count || 0),
+        last_message_preview: row.last_message_preview || null,
+        last_message_at: row.last_message_at || null,
+        userbot_admin: !!row.userbot_admin,
+        admin_check_skipped: !!row.admin_check_skipped,
+        linked_channel_id: row.linked_channel_id || null,
+        linked_channel_title: row.linked_channel_title || null,
+        admin_error: row.admin_error || null,
+        scanned_at: row.scanned_at || null
+    }));
+
+    const conversations = (conversationRows || []).map(row => ({
+        tg_user_id: String(row.tg_user_id),
+        username: row.username || null,
+        display_name: row.display_name || row.username || `ID ${row.tg_user_id}`,
+        unread_count: Number(row.unread_count || 0),
+        last_message_preview: row.last_message_preview || null,
+        last_message_at: row.last_message_at || null,
+        last_outgoing: !!row.last_outgoing,
+        sales_signal: !!row.sales_signal,
+        signal_notified_at: row.signal_notified_at || null,
+        signal_last_message_id: row.signal_last_message_id || null,
+        scanned_at: row.scanned_at || null
+    }));
+
+    return {
+        groups,
+        conversations,
+        scanned_at: newestTimestamp(
+            ...groups.map(item => item.scanned_at),
+            ...conversations.map(item => item.scanned_at)
+        )
+    };
+}
+
+async function replaceUserbotCenterCache(supabase, ownerId, userbotId, groups = [], conversations = [], scannedAt) {
+    const normalizedScannedAt = scannedAt || new Date().toISOString();
+
+    const { error: deleteGroupsError } = await supabase
+        .from('userbot_center_group_cache')
+        .delete()
+        .eq('owner_id', ownerId)
+        .eq('userbot_id', userbotId);
+    if (deleteGroupsError) throw deleteGroupsError;
+
+    const { error: deleteConversationsError } = await supabase
+        .from('userbot_center_conversation_cache')
+        .delete()
+        .eq('owner_id', ownerId)
+        .eq('userbot_id', userbotId);
+    if (deleteConversationsError) throw deleteConversationsError;
+
+    if (groups.length > 0) {
+        const { error: insertGroupsError } = await supabase
+            .from('userbot_center_group_cache')
+            .insert(groups.map(group => ({
+                owner_id: ownerId,
+                userbot_id: userbotId,
+                chat_id: String(group.chat_id),
+                title: group.title || null,
+                chat_type: group.type || 'group',
+                unread_count: Number(group.unread_count || 0),
+                last_message_preview: group.last_message_preview || null,
+                last_message_at: group.last_message_at || null,
+                userbot_admin: !!group.userbot_admin,
+                admin_check_skipped: !!group.admin_check_skipped,
+                linked_channel_id: group.linked_channel_id || null,
+                linked_channel_title: group.linked_channel_title || null,
+                admin_error: group.admin_error || null,
+                scanned_at: normalizedScannedAt,
+                updated_at: normalizedScannedAt
+            })));
+        if (insertGroupsError) throw insertGroupsError;
+    }
+
+    if (conversations.length > 0) {
+        const { error: insertConversationsError } = await supabase
+            .from('userbot_center_conversation_cache')
+            .insert(conversations.map(conversation => ({
+                owner_id: ownerId,
+                userbot_id: userbotId,
+                tg_user_id: String(conversation.tg_user_id),
+                username: conversation.username || null,
+                display_name: conversation.display_name || null,
+                unread_count: Number(conversation.unread_count || 0),
+                last_message_preview: conversation.last_message_preview || null,
+                last_message_at: conversation.last_message_at || null,
+                last_outgoing: !!conversation.last_outgoing,
+                sales_signal: !!conversation.sales_signal,
+                signal_notified_at: conversation.signal_notified_at || null,
+                signal_last_message_id: conversation.signal_last_message_id || null,
+                scanned_at: normalizedScannedAt,
+                updated_at: normalizedScannedAt
+            })));
+        if (insertConversationsError) throw insertConversationsError;
+    }
 }
 
 function parseTelegramInvite(rawValue = '') {
@@ -3338,37 +3510,19 @@ export default function (supabase) {
                 .eq('owner_id', req.user.id);
 
             if (!runScan) {
+                const cache = await loadUserbotCenterCache(supabase, req.user.id, preferredUserbot.id);
                 return res.json({
                     success: true,
-                    scan_required: true,
+                    scan_required: !cache.scanned_at,
+                    cache_source: cache.scanned_at ? 'database' : 'empty',
+                    cache_scanned_at: cache.scanned_at,
                     selected_userbot_id: preferredUserbot.id,
                     selected_userbot_username: preferredUserbot.tg_username || preferredUserbot.tg_account_id || null,
-                    signal_config: {
-                        admin_tg_id: paymentSettings?.admin_tg_id ? String(paymentSettings.admin_tg_id) : '',
-                        has_admin_tg_id: !!paymentSettings?.admin_tg_id,
-                        ops_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') === 'ops').length,
-                        sales_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') !== 'ops').length,
-                        ops_bot: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null)
-                            ? {
-                                id: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).id,
-                                tg_username: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).tg_username || null,
-                                tg_account_id: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).tg_account_id || null
-                            }
-                            : null,
-                        ready: !!paymentSettings?.admin_tg_id && (officialBots || []).some(item => (item.bot_role || 'sales') === 'ops')
-                    },
+                    signal_config: buildUserbotCenterSignalConfig(paymentSettings, officialBots),
                     userbots: operationalUserbots.map(item => buildUserbotCenterAccount(item)),
-                    summary: {
-                        groups_total: linkedChannels?.length || 0,
-                        groups_admin: 0,
-                        linked_groups: linkedChannels?.length || 0,
-                        open_dialogs: 0,
-                        unread_dialogs: 0,
-                        sales_signals: 0,
-                        signaled_dialogs: 0
-                    },
-                    groups: [],
-                    conversations: []
+                    summary: buildUserbotCenterSummary(cache.groups, cache.conversations),
+                    groups: cache.groups,
+                    conversations: cache.conversations
                 });
             }
 
@@ -3429,9 +3583,10 @@ export default function (supabase) {
 
             try {
                 const me = await client.getMe();
-                const dialogs = await client.getDialogs({ limit: 80 });
+                const dialogs = await client.getDialogs({ limit: USERBOT_CENTER_DIALOG_LIMIT });
                 const groups = [];
                 const conversations = [];
+                let adminChecks = 0;
 
                 for (const dialog of dialogs) {
                     const previewText = String(dialog?.message?.message || '').trim();
@@ -3448,6 +3603,10 @@ export default function (supabase) {
 
                         if (linkedChannel) {
                             try {
+                                if (adminChecks > 0) {
+                                    await sleep(USERBOT_CENTER_ADMIN_CHECK_DELAY_MS);
+                                }
+                                adminChecks += 1;
                                 const admins = await client.getParticipants(dialog.entity, { filter: new Api.ChannelParticipantsAdmins() });
                                 userbotAdmin = admins.some(admin => String(admin.id) === String(me.id));
                             } catch (error) {
@@ -3530,34 +3689,19 @@ export default function (supabase) {
                     signal_last_message_id: notificationMap[String(conversation.tg_user_id)]?.last_message_id || null
                 }));
 
+                const scannedAt = new Date().toISOString();
+                await replaceUserbotCenterCache(supabase, req.user.id, userbot.id, groups, enrichedConversations, scannedAt);
+
                 res.json({
                     success: true,
+                    scan_required: false,
+                    cache_source: 'telegram',
+                    cache_scanned_at: scannedAt,
                     selected_userbot_id: userbot.id,
                     selected_userbot_username: userbot.tg_username || userbot.tg_account_id || null,
-                    signal_config: {
-                        admin_tg_id: paymentSettings?.admin_tg_id ? String(paymentSettings.admin_tg_id) : '',
-                        has_admin_tg_id: !!paymentSettings?.admin_tg_id,
-                        ops_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') === 'ops').length,
-                        sales_bot_count: (officialBots || []).filter(item => (item.bot_role || 'sales') !== 'ops').length,
-                        ops_bot: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null)
-                            ? {
-                                id: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).id,
-                                tg_username: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).tg_username || null,
-                                tg_account_id: ((officialBots || []).find(item => (item.bot_role || 'sales') === 'ops') || null).tg_account_id || null
-                            }
-                            : null,
-                        ready: !!paymentSettings?.admin_tg_id && (officialBots || []).some(item => (item.bot_role || 'sales') === 'ops')
-                    },
+                    signal_config: buildUserbotCenterSignalConfig(paymentSettings, officialBots),
                     userbots: operationalUserbots.map(item => buildUserbotCenterAccount(item, runtimeStates.get(String(item.id)) || null)),
-                    summary: {
-                        groups_total: groups.length,
-                        groups_admin: groups.filter(group => group.userbot_admin).length,
-                        linked_groups: groups.filter(group => group.linked_channel_id).length,
-                        open_dialogs: enrichedConversations.length,
-                        unread_dialogs: enrichedConversations.filter(item => item.unread_count > 0).length,
-                        sales_signals: enrichedConversations.filter(item => item.sales_signal).length,
-                        signaled_dialogs: enrichedConversations.filter(item => item.signal_notified_at).length
-                    },
+                    summary: buildUserbotCenterSummary(groups, enrichedConversations),
                     groups,
                     conversations: enrichedConversations
                 });
