@@ -9,20 +9,9 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
 
 const LANE_OPTIONS = [
-  { id: 'self-use', label: 'Использую сам' },
-  { id: 'created-for-sale', label: 'Создано' },
-  { id: 'listed-for-sale', label: 'На витрине' },
-  { id: 'sold', label: 'Продано' },
-  { id: 'purchased-given', label: 'Купленные' }
-];
-
-const FILTER_OPTIONS = [
-  { id: 'all', label: 'Все' },
-  { id: 'working', label: 'Работают' },
-  { id: 'broken', label: 'С ошибкой' },
-  { id: 'shared_proxy', label: 'Shared' },
-  { id: 'manual_free', label: 'Временные' },
-  { id: 'purchased', label: 'Купленные' }
+  { id: 'self-use', label: 'Свои' },
+  { id: 'on-sale', label: 'На продаже' },
+  { id: 'sold', label: 'Продано' }
 ];
 
 function resolveBackendAssetUrl(value) {
@@ -289,6 +278,14 @@ export function ProxyManagerPage() {
     support: null,
     updatedAt: null
   });
+
+  useEffect(() => {
+    if (!state.notice) return;
+    const timer = window.setTimeout(() => {
+      setState((prev) => ({ ...prev, notice: '' }));
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [state.notice]);
   const [shopState, setShopState] = useState({
     loading: true,
     error: '',
@@ -474,22 +471,17 @@ export function ProxyManagerPage() {
   }
 
   function getVisibleProxies() {
-    // Дляsold lane возвращаем особую структуру
     if (selectedLane === 'sold') {
       return { items: soldProxyItems, isSold: true };
     }
 
-    // Выбор базового массива по lane
     let baseArray;
     switch (selectedLane) {
       case 'self-use':
         baseArray = selfUseProxies;
         break;
-      case 'created-for-sale':
-        baseArray = createdForSaleProxies;
-        break;
-      case 'listed-for-sale':
-        baseArray = listedForSaleProxies;
+      case 'on-sale':
+        baseArray = shopSaleProxies;
         break;
       case 'purchased-given':
         baseArray = nonAdminInventoryProxies;
@@ -498,10 +490,7 @@ export function ProxyManagerPage() {
         baseArray = [];
     }
 
-    // Применяем фильтр статуса
-    const filtered = baseArray.filter(matchesStatusFilter);
-
-    return { items: filtered, isSold: false };
+    return { items: baseArray, isSold: false };
   }
 
   const filteredProxies = state.proxies.filter(matchesStatusFilter);
@@ -560,29 +549,6 @@ export function ProxyManagerPage() {
     }
     return map;
   }, [shopState.sellerItems]);
-
-  useEffect(() => {
-    setTonCheckoutView(preferredTonCheckoutView(checkoutState.purchase));
-  }, [
-    checkoutState.purchase?.id,
-    checkoutState.purchase?.trust_wallet_qr,
-    checkoutState.purchase?.trust_wallet_uri,
-    checkoutState.purchase?.ton_qr,
-    checkoutState.purchase?.ton_uri
-  ]);
-  const createdForSaleProxies = useMemo(() => (
-    shopSaleProxies.filter((proxy) => {
-      const items = sellerProxyItemMap.get(String(proxy.id)) || [];
-      if (items.length === 0) return true;
-      return items.every((item) => item.status === 'draft' || item.visibility === 'private');
-    })
-  ), [sellerProxyItemMap, shopSaleProxies]);
-  const listedForSaleProxies = useMemo(() => (
-    shopSaleProxies.filter((proxy) => {
-      const items = sellerProxyItemMap.get(String(proxy.id)) || [];
-      return items.some((item) => item.status === 'published' && item.visibility !== 'private');
-    })
-  ), [sellerProxyItemMap, shopSaleProxies]);
   const soldProxyItems = useMemo(() => (
     (shopState.sellerItems || []).filter((item) =>
       item.status === 'sold' && (item.assets || []).some((asset) => asset.asset_type === 'proxy')
@@ -592,21 +558,21 @@ export function ProxyManagerPage() {
     if (isAdmin) {
       return [
         {
-          label: 'Использую сам',
+          label: 'Свои',
           value: selfUseProxies.length,
-          hint: 'Живые прокси под свои userbot-задачи.',
+          hint: 'Прокси под свои userbot-задачи.',
           tone: summaryTone(selfUseProxies.length)
         },
         {
           label: 'На продаже',
-          value: listedForSaleProxies.length,
-          hint: 'Уже опубликованы в shop и готовы к оплате.',
-          tone: summaryTone(listedForSaleProxies.length)
+          value: shopSaleProxies.length,
+          hint: 'Прокси для shop — созданные и опубликованные.',
+          tone: summaryTone(shopSaleProxies.length)
         },
         {
           label: 'С ошибкой',
           value: stats.broken,
-          hint: 'Эти прокси надо перепроверить или убрать из контура.',
+          hint: 'Надо перепроверить или убрать из контура.',
           tone: summaryTone(stats.broken, { danger: stats.broken > 0 })
         }
       ];
@@ -640,10 +606,10 @@ export function ProxyManagerPage() {
   }, [
     filteredProxies.length,
     isAdmin,
-    listedForSaleProxies.length,
     openProxyPurchases.length,
     profilePlan,
     selfUseProxies.length,
+    shopSaleProxies.length,
     state.support?.max_owned_userbots,
     state.support?.owned_proxy_quota_total,
     state.support?.owned_proxy_quota_used,
@@ -814,7 +780,8 @@ export function ProxyManagerPage() {
   }
 
   function editProxy(proxy) {
-    if (!canEditProxy) {
+    if (state.support?.profile_role === 'admin') {
+    } else if ((proxy.provision_source || 'manual_free') !== 'manual_owned') {
       return;
     }
     setFormState({
@@ -826,6 +793,7 @@ export function ProxyManagerPage() {
       password: proxy.password || '',
       inventory_group: proxy.inventory_group || 'shop_sale'
     });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function resetForm() {
@@ -1490,34 +1458,8 @@ function renderOpenProxyPurchases(rows) {
               ))}
             </div>
           </div>
-
-          {/* Row 2: Status filter */}
-          {selectedLane !== 'sold' && (
-            <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Статус
-              </div>
-              <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
-                {FILTER_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
-                      filter === option.id
-                        ? 'bg-white text-violet-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                    onClick={() => setFilter(option.id)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Table content */}
         {visibleItems.length === 0 ? (
           <div className="p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
@@ -1528,299 +1470,169 @@ function renderOpenProxyPurchases(rows) {
             </p>
           </div>
         ) : isSold ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Лот</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Прокси</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Продажи</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Дальше</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visibleItems.map((item) => {
-                  const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{item.title}</div>
-                        <div className="text-sm text-slate-500">TON {formatTon(item.price_ton)}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-slate-700">{proxyAssets.map((a) => a.label || 'Proxy').join(', ') || 'Proxy'}</div>
-                        <div className="text-xs text-slate-500">Лот снят с витрины после продажи</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{item.stats?.paid_purchases || 0}</div>
-                        <div className="text-xs text-slate-500">Handoff ok: {item.stats?.completed_transfers || 0}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <a
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
-                          href="/app/shop"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
-                          Shop
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="divide-y divide-slate-100">
+            {visibleItems.map((item) => {
+              const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
+              return (
+                <div key={item.id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1.5">
+                        <div className="text-[15px] font-bold text-slate-900 truncate">{item.title}</div>
+                        <span className="shrink-0 text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">TON {formatTon(item.price_ton)}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+                        <span>{proxyAssets.map((a) => a.label || 'Proxy').join(', ') || 'Proxy'}</span>
+                        <span>Продаж: <strong className="text-slate-700">{item.stats?.paid_purchases || 0}</strong></span>
+                        <span>Handoff: <strong className="text-slate-700">{item.stats?.completed_transfers || 0}</strong></span>
+                      </div>
+                    </div>
+                    <a
+                      className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                      href="/app/shop"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
+                      Shop
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Название</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Точка входа / гео</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Проверка</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Статус</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Нагрузка</th>
-                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Дальше</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visibleItems.map((proxy) => {
-                  const badge = proxyBadge(proxy);
-                  const mode = proxyHealthMode(proxy);
-                  const geo = proxy.last_check_country
-                    ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
-                    : mode === 'telegram_only'
-                      ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
-                      : 'Гео отсутствует';
-                  return (
-                    <tr key={proxy.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">{proxy.name}</div>
-                        {Number(proxy.userbot_count || 0) > 1 ? (
-                          <div className="text-xs text-red-600 font-semibold mt-1">⚠️ Опасная shared-связка</div>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-mono text-sm text-slate-900 bg-slate-50 px-2 py-1 rounded mb-1">{proxy.host}:{proxy.port}</div>
-                        <div className="text-xs text-slate-600">{geo}</div>
-                        {proxy.ipv6 ? (
-                          <div className="text-xs text-slate-500">IPv6</div>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-mono text-sm text-slate-900">{proxyEgressSummary(proxy)}</div>
-                        <div className="text-xs text-slate-500">{formatWhen(proxy.last_checked_at)}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
-                          badge.className === 'pill pill--ok'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : badge.className === 'pill pill--warning'
-                              ? 'bg-amber-50 text-amber-700 border-amber-100'
-                              : badge.className === 'pill pill--danger'
-                                ? 'bg-red-50 text-red-700 border-red-100'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
+          <div className="divide-y divide-slate-100">
+            {visibleItems.map((proxy) => {
+              const badge = proxyBadge(proxy);
+              const mode = proxyHealthMode(proxy);
+              const geo = proxy.last_check_country
+                ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
+                : mode === 'telegram_only'
+                  ? 'Telegram only'
+                  : '—';
+              const statusDotColor = badge.className === 'pill pill--ok'
+                ? 'bg-emerald-400'
+                : badge.className === 'pill pill--warning'
+                  ? 'bg-amber-400'
+                  : badge.className === 'pill pill--danger'
+                    ? 'bg-red-400'
+                    : 'bg-slate-300';
+              const statusBgColor = badge.className === 'pill pill--ok'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : badge.className === 'pill pill--warning'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : badge.className === 'pill pill--danger'
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200';
+              const shopItems = selectedLane === 'on-sale'
+                ? (sellerProxyItemMap.get(String(proxy.id)) || [])
+                : [];
+              const isListed = shopItems.some((i) => i.status === 'published' && i.visibility !== 'private');
+              const hasDraft = shopItems.some((i) => i.status === 'draft' || i.visibility === 'private');
+              return (
+                <div key={proxy.id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0 space-y-2.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDotColor === 'bg-emerald-400' ? '#34d399' : statusDotColor === 'bg-amber-400' ? '#fbbf24' : statusDotColor === 'bg-red-400' ? '#f87171' : '#cbd5e1' }} />
+                        <div className="text-[15px] font-bold text-slate-900">{proxy.name}</div>
+                        <span className={`inline-flex px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide border ${statusBgColor}`}>
                           {badge.text}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900">
-                          {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
-                            type="button"
-                            onClick={() => checkProxy(proxy.id)}
-                          >
-                            Проверить
-                          </button>
-                          {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
-                            <select
-                              className="px-2 py-1.5 rounded-lg border border-slate-200 text-xs"
-                              value={proxy.inventory_group || 'shop_sale'}
-                              disabled={state.movingProxyId === String(proxy.id)}
-                              onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
-                            >
-                              {ADMIN_PROXY_GROUPS.map((group) => (
-                                <option key={group} value={group}>{inventoryGroupActionLabel(group)}</option>
-                              ))}
-                            </select>
-                          ) : null}
-                          <button
-                            className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-all"
-                            type="button"
-                            onClick={() => deleteProxy(proxy.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
-  }
+                        {selectedLane === 'on-sale' ? (
+                          isListed ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase">На витрине</span>
+                          ) : hasDraft ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-black uppercase">Черновик</span>
+                          ) : (
+                            <span className="inline-flex px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-black uppercase">Не выставлен</span>
+                          )
+                        ) : null}
+                        {Number(proxy.userbot_count || 0) > 1 ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[10px] font-black uppercase">Shared</span>
+                        ) : null}
+                      </div>
 
-  function renderProxyTable(rows, emptyText, { title, description } = {}) {
-    return (
-      <div className={`table-card proxy-lane${rows.length === 0 ? ' proxy-lane--empty' : ''}`}>
-        {(title || description) ? (
-          <div className="proxy-surface-card__head">
-            <div>
-              {title ? <div className="table-card__title">{title}</div> : null}
-              {description ? <p className="table-subtext" style={{ marginTop: 0 }}>{description}</p> : null}
-            </div>
-            <span className="pill pill--info">{rows.length}</span>
-          </div>
-        ) : null}
-        {rows.length === 0 ? (
-          <div className="empty-inline">{emptyText}</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Название</th>
-                <th>Точка входа / гео</th>
-                <th>Проверка</th>
-                <th>Статус</th>
-                <th>Нагрузка</th>
-                <th>Дальше</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((proxy) => {
-                const badge = proxyBadge(proxy);
-                const mode = proxyHealthMode(proxy);
-                const geo = proxy.last_check_country
-                  ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
-                  : mode === 'telegram_only'
-                    ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
-                    : 'Гео отсутствует';
-                return (
-                  <tr key={proxy.id}>
-                    <td>
-                      <div className="table-primary">{proxy.name}</div>
-                      {Number(proxy.userbot_count || 0) > 1 ? (
-                        <div className="table-subtext table-subtext--danger">Опасная shared-связка</div>
-                      ) : null}
-                    </td>
-                    <td>
-                      <div className="table-primary table-mono">{proxy.host}:{proxy.port}</div>
-                      <div className="table-subtext">Адрес, куда подключается юзербот.</div>
-                      <div className="table-subtext">{geo}</div>
-                    </td>
-                    <td>
-                      <div className="table-primary table-mono">{proxyEgressSummary(proxy)}</div>
-                      <div className="table-subtext">{formatWhen(proxy.last_checked_at)}</div>
-                      {proxy.ipv6 ? (
-                        <div className="table-subtext">Это исходящий IPv6. Он может отличаться от точки входа `host:port`.</div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Адрес</span>
+                          <span className="font-mono text-[13px] font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{proxy.host}:{proxy.port}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Гео</span>
+                          <span className="font-medium text-slate-700">{geo}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Нагрузка</span>
+                          <span className={`font-bold ${Number(proxy.userbot_count || 0) > 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
+                            {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Исходящий</span>
+                          <span className="font-mono text-[13px] text-slate-700">{proxyEgressSummary(proxy)}</span>
+                        </div>
+                        {proxy.ipv6 ? (
+                          <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">IPv6</span>
+                        ) : null}
+                      </div>
+
+                      <div className="text-xs text-slate-400">
+                        Проверен: {formatWhen(proxy.last_checked_at)}
+                      </div>
+
+                      {proxy.last_check_error ? (
+                        <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                          {proxy.last_check_error}
+                        </div>
                       ) : null}
                       {mode === 'telegram_only' ? (
-                        <div className="table-subtext">Прокси рабочий именно для Telegram-подключений. Обычный web-check не смог вытащить IP/гео.</div>
-                      ) : null}
-                      {proxy.last_check_error ? <div className="table-subtext table-subtext--danger">{proxy.last_check_error}</div> : null}
-                    </td>
-                    <td><span className={badge.className}>{badge.text}</span></td>
-                    <td>
-                      <div className="table-primary">{Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}</div>
-                      <div className="table-subtext">{getProxyLoad(proxy)}</div>
-                    </td>
-                    <td>
-                      <div className="proxy-row-actions proxy-row-actions--stack">
-                        <div className="proxy-row-actions__main">
-                          <button className="inline-action inline-action--chip" onClick={() => checkProxy(proxy.id)}>Проверить</button>
-                          {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
-                            <select
-                              className="field field--compact field--compact-select"
-                              value={proxy.inventory_group || 'shop_sale'}
-                              disabled={state.movingProxyId === String(proxy.id)}
-                              onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
-                            >
-                              {ADMIN_PROXY_GROUPS.map((group) => (
-                                <option key={group} value={group}>
-                                  {inventoryGroupActionLabel(group)}
-                                </option>
-                              ))}
-                            </select>
-                          ) : null}
-                          {state.support?.profile_role !== 'admin' ? (
-                            <a className="inline-action inline-action--chip inline-action--accent" href="/app/shop" target="_blank" rel="noreferrer">Купить еще</a>
-                          ) : null}
+                        <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                          Работает только для Telegram-подключений
                         </div>
-                        <button className="inline-action inline-action--danger-text proxy-row-actions__danger" onClick={() => deleteProxy(proxy.id)}>Удалить</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      ) : null}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all"
+                        type="button"
+                        onClick={() => checkProxy(proxy.id)}
+                      >
+                        Проверить
+                      </button>
+                      {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
+                        <select
+                          className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white"
+                          value={proxy.inventory_group || 'shop_sale'}
+                          disabled={state.movingProxyId === String(proxy.id)}
+                          onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
+                        >
+                          {ADMIN_PROXY_GROUPS.map((group) => (
+                            <option key={group} value={group}>{inventoryGroupActionLabel(group)}</option>
+                          ))}
+                        </select>
+                      ) : null}
+                      <button
+                        className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
+                        type="button"
+                        onClick={() => deleteProxy(proxy.id)}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     );
   }
 
-  function renderSoldProxyItems(rows) {
-    return (
-      <div className={`table-card proxy-lane${rows.length === 0 ? ' proxy-lane--empty' : ''}`}>
-        <div className="proxy-surface-card__head">
-          <div className="table-card__title">Продано</div>
-          <span className="pill">{rows.length}</span>
-        </div>
-        {rows.length === 0 ? (
-          <div className="empty-inline">Проданных прокси пока нет.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Лот</th>
-                <th>Прокси</th>
-                <th>Продажи</th>
-                <th>Дальше</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((item) => {
-                const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
-                return (
-                  <tr key={item.id}>
-                    <td>
-                      <div className="table-primary">{item.title}</div>
-                      <div className="table-subtext">TON {formatTon(item.price_ton)}</div>
-                    </td>
-                    <td>
-                      <div className="table-primary">{proxyAssets.map((asset) => asset.label || 'Proxy').join(', ') || 'Proxy'}</div>
-                      <div className="table-subtext">Лот снят с витрины после продажи</div>
-                    </td>
-                    <td>
-                      <div className="table-primary">{item.stats?.paid_purchases || 0}</div>
-                      <div className="table-subtext">Handoff ok: {item.stats?.completed_transfers || 0}</div>
-                    </td>
-                    <td>
-                      <div className="table-actions">
-                        <a className="inline-action inline-action--chip inline-action--accent" href="/app/shop" target="_blank" rel="noreferrer">Shop</a>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    );
-  }
+
 
   function ProxyPurchaseSection() {
     if (state.support?.profile_role === 'admin') {
@@ -2339,58 +2151,6 @@ function renderOpenProxyPurchases(rows) {
 
   return (
     <section className="page proxy-page">
-      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20">
-              <Globe className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">Прокси</h1>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">
-                {isAdmin
-                  ? 'Серверный пул: поднимай прокси, раскладывай по группам и контролируй продажи'
-                  : 'Твои прокси для работы: свой и купленный'}
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-            <Shield className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="font-semibold text-amber-900 mb-1">Главное правило: 1 прокси = 1 юзербот</div>
-              <div className="text-sm text-amber-700">
-                Если прокси мёртвый или шарится между несколькими юзерботами, Telegram-контур начинает течь сразу.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 md:p-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {proxySummaryCards.map((card) => (
-              <div
-                key={card.label}
-                className={`
-                  p-4 rounded-2xl border transition-all duration-200
-                  ${card.tone === 'danger'
-                    ? 'bg-red-50 border-red-200'
-                    : card.tone === 'warning'
-                      ? 'bg-amber-50 border-amber-200'
-                      : card.tone === 'ok'
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-slate-50 border-slate-200'
-                  }
-                `}
-              >
-                <div className="text-sm text-slate-600 font-medium mb-1">{card.label}</div>
-                <div className="text-3xl font-black text-slate-900">{card.value}</div>
-                <div className="text-xs text-slate-500 mt-2 leading-snug">{card.hint}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
 
@@ -2409,6 +2169,120 @@ function renderOpenProxyPurchases(rows) {
       ) : null}
 
       {state.support?.profile_role !== 'admin' ? <ProxyPurchaseSection /> : null}
+
+      {state.support?.profile_role !== 'admin' ? (
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                <Plus className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-slate-900">
+                  {formState.id ? 'Редактировать прокси' : 'Добавить свой прокси'}
+                </h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">
+                  {formState.id ? 'Измени параметры своего прокси' : 'Укажи данные SOCKS5 прокси, который будешь использовать для юзербота'}
+                </p>
+              </div>
+              {formState.id ? (
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                  onClick={resetForm}
+                >
+                  Отмена
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="p-6 md:p-8">
+            {showQuotaLock ? (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-medium">
+                На Trial можно держать только один свой прокси. Чтобы добавить ещё, сначала перейди на Normal.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
+                  <input
+                    className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
+                    type="text"
+                    value={formState.name}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Например: Мой SOCKS5"
+                  />
+                </div>
+
+                <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="text"
+                        value={formState.host}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
+                        placeholder="192.168.1.1"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[13px] font-semibold text-slate-700">Порт</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        value={formState.port}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
+                        placeholder="1080"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Авторизация</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[13px] font-semibold text-slate-700">Username</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="text"
+                        value={formState.username}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
+                        placeholder="Если нужен"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[13px] font-semibold text-slate-700">Password</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="text"
+                        value={formState.password}
+                        onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                        placeholder="Если нужен"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <button
+                    className="w-full h-11 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                    onClick={saveProxy}
+                    disabled={state.saving}
+                  >
+                    {state.saving ? 'Сохраняем...' : (formState.id ? 'Сохранить изменения' : 'Добавить прокси')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
 
 
@@ -2437,8 +2311,7 @@ function renderOpenProxyPurchases(rows) {
               {[
                 { id: 'all', label: 'Все' },
                 { id: 'working', label: 'Работают' },
-                { id: 'broken', label: 'С ошибкой' },
-                { id: 'shared_proxy', label: 'Shared' }
+                { id: 'broken', label: 'С ошибкой' }
               ].map((item) => (
                 <button
                   key={item.id}
@@ -2453,32 +2326,10 @@ function renderOpenProxyPurchases(rows) {
                   {item.label}
                 </button>
               ))}
-              <button
-                type="button"
-                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
-                  filter === 'manual_free'
-                    ? 'bg-white text-violet-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setFilter('manual_free')}
-              >
-                Временные
-              </button>
-              <button
-                type="button"
-                className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
-                  filter === 'purchased'
-                    ? 'bg-white text-violet-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setFilter('purchased')}
-              >
-                Купленные
-              </button>
             </div>
           </div>
 
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-100">
             {filteredProxies.length === 0 ? (
               <div className="p-12 text-center">
                 <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
@@ -2493,78 +2344,101 @@ function renderOpenProxyPurchases(rows) {
                 const geo = proxy.last_check_country
                   ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
                   : mode === 'telegram_only'
-                    ? 'Гео не удалось определить, но Telegram через этот прокси ходит'
-                    : 'Гео отсутствует';
+                    ? 'Telegram only'
+                    : '—';
+                const statusDotColor = badge.className === 'pill pill--ok'
+                  ? '#34d399'
+                  : badge.className === 'pill pill--warning'
+                    ? '#fbbf24'
+                    : badge.className === 'pill pill--danger'
+                      ? '#f87171'
+                      : '#cbd5e1';
+                const statusBgColor = badge.className === 'pill pill--ok'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : badge.className === 'pill pill--warning'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : badge.className === 'pill pill--danger'
+                      ? 'bg-red-50 text-red-700 border-red-200'
+                      : 'bg-slate-50 text-slate-600 border-slate-200';
 
                 return (
-                  <div key={proxy.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="text-lg font-black text-slate-900">{proxy.name}</div>
+                  <div key={proxy.id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
+                    <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0 space-y-2.5">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDotColor }} />
+                          <div className="text-[15px] font-bold text-slate-900">{proxy.name}</div>
+                          <span className={`inline-flex px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide border ${statusBgColor}`}>
+                            {badge.text}
+                          </span>
                           {Number(proxy.userbot_count || 0) > 1 ? (
-                            <span className="inline-flex px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[10px] font-black uppercase mt-1">
-                              Опасная shared-связка
-                            </span>
+                            <span className="inline-flex px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[10px] font-black uppercase">Shared</span>
                           ) : null}
                         </div>
 
-                        <div className="flex flex-wrap gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Адрес:</span>{' '}
-                            <span className="font-mono font-bold text-slate-900">{proxy.host}:{proxy.port}</span>
+                        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Адрес</span>
+                            <span className="font-mono text-[13px] font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{proxy.host}:{proxy.port}</span>
                           </div>
-                          <div>
-                            <span className="text-slate-500">Проверка:</span>{' '}
-                            <span className="font-bold text-slate-900">{proxyEgressSummary(proxy)}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Гео</span>
+                            <span className="font-medium text-slate-700">{geo}</span>
                           </div>
-                          <div>
-                            <span className="text-slate-500">Гео:</span>{' '}
-                            <span className="font-bold text-slate-900">{geo}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Статус:</span>{' '}
-                            <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
-                              badge.className === 'pill pill--ok'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : badge.className === 'pill pill--warning'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                  : badge.className === 'pill pill--danger'
-                                    ? 'bg-red-50 text-red-700 border-red-100'
-                                    : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}>
-                              {badge.text}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Нагрузка</span>
+                            <span className={`font-bold ${Number(proxy.userbot_count || 0) > 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
+                              {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
                             </span>
                           </div>
-                          <div>
-                            <span className="text-slate-500">Нагрузка:</span>{' '}
-                            <span className="font-bold text-slate-900">{Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Исходящий</span>
+                            <span className="font-mono text-[13px] text-slate-700">{proxyEgressSummary(proxy)}</span>
                           </div>
                         </div>
 
-                        {mode === 'telegram_only' ? (
-                          <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                            Прокси рабочий именно для Telegram-подключений. Обычный web-check не смог вытащить IP/гео.
-                          </div>
-                        ) : null}
+                        <div className="text-xs text-slate-400">
+                          Проверен: {formatWhen(proxy.last_checked_at)}
+                        </div>
+
                         {proxy.last_check_error ? (
                           <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
                             {proxy.last_check_error}
                           </div>
                         ) : null}
+                        {mode === 'telegram_only' ? (
+                          <div className="text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                            Работает только для Telegram-подключений
+                          </div>
+                        ) : null}
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <button
-                          className="px-5 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold hover:bg-violet-700 shadow-lg shadow-violet-500/20 transition-all"
+                          className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all"
                           type="button"
                           onClick={() => checkProxy(proxy.id)}
                         >
                           Проверить
                         </button>
+                        {(proxy.provision_source || 'manual_free') === 'manual_owned' ? (
+                          <>
+                            <button
+                              className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all"
+                              type="button"
+                              onClick={() => editProxy(proxy)}
+                            >
+                              Редактировать
+                            </button>
+                            <button
+                              className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
+                              type="button"
+                              onClick={() => deleteProxy(proxy.id)}
+                            >
+                              Удалить
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -2613,115 +2487,117 @@ function renderOpenProxyPurchases(rows) {
               </div>
             ) : null}
 
-            {state.support?.profile_role === 'admin' && !formState.id ? (
-              <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-slate-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <div className="font-semibold text-slate-900 mb-1">Автоподнятие на сервере</div>
-                    <div className="text-sm text-slate-600">
-                      Оставь поле Host пустым — прокси будет создан автоматически на сервере BullRun.
-                    </div>
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
+                  <input
+                    className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
+                    type="text"
+                    value={formState.name}
+                    onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Например: Прокси сервера 1"
+                  />
+                </div>
+
+                {state.support?.profile_role === 'admin' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Группа</label>
+                    <select
+                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
+                      value={formState.inventory_group}
+                      onChange={(event) => setFormState((prev) => ({
+                        ...prev,
+                        inventory_group: event.target.value,
+                        name: prev.id ? prev.name : buildServerProxyName(
+                          event.target.value,
+                          state.proxies
+                            .filter((proxy) => proxy.provision_source === 'manual_admin')
+                            .map((proxy) => proxy.name)
+                        )
+                      }))}
+                    >
+                      <option value="shop_sale">На продажу в shop</option>
+                      <option value="self_use">Использую сам</option>
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
+                    <input
+                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                      type="text"
+                      value={formState.host}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
+                      placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым — поднимется на сервере' : '192.168.1.1'}
+                    />
+                    {state.support?.profile_role === 'admin' && !formState.id && !formState.host.trim() ? (
+                      <div className="text-[12px] text-blue-600 font-medium">Прокси будет создан автоматически на сервере BullRun</div>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700">Порт</label>
+                    <input
+                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={formState.port}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
+                      placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : '1080'}
+                    />
                   </div>
                 </div>
               </div>
-            ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Название</label>
-                <input
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  type="text"
-                  value={formState.name}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
-                  placeholder="Например: Прокси сервера 1"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Host / IP</label>
-                <input
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  type="text"
-                  value={formState.host}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
-                  placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым для автоподнятия' : '192.168.1.1'}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Порт</label>
-                <input
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  type="number"
-                  min="1"
-                  max="65535"
-                  value={formState.port}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
-                  placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : '1080'}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Username</label>
-                <input
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  type="text"
-                  value={formState.username}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-                  placeholder="Если нужен"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">Password</label>
-                <input
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  type="text"
-                  value={formState.password}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                  placeholder="Если нужен"
-                />
-              </div>
-
-              {state.support?.profile_role === 'admin' ? (
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700">Группа</label>
-                  <select
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
-                    value={formState.inventory_group}
-                    onChange={(event) => setFormState((prev) => ({
-                      ...prev,
-                      inventory_group: event.target.value,
-                      name: prev.id ? prev.name : buildServerProxyName(
-                        event.target.value,
-                        state.proxies
-                          .filter((proxy) => proxy.provision_source === 'manual_admin')
-                          .map((proxy) => proxy.name)
-                      )
-                    }))}
-                  >
-                    <option value="shop_sale">На продажу в shop</option>
-                    <option value="self_use">Использую сам</option>
-                  </select>
+              <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Авторизация</div>
+                  {state.support?.profile_role === 'admin' && !formState.id && latestServerProxy ? (
+                    <button
+                      type="button"
+                      className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition"
+                      onClick={fillFromLatestServerProxy}
+                    >
+                      Подставить из последнего
+                    </button>
+                  ) : null}
                 </div>
-              ) : null}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700">Username</label>
+                    <input
+                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                      type="text"
+                      value={formState.username}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
+                      placeholder="Если нужен"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-semibold text-slate-700">Password</label>
+                    <input
+                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                      type="text"
+                      value={formState.password}
+                      onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                      placeholder="Если нужен"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3 pt-6 border-t border-slate-100">
-              {state.support?.profile_role === 'admin' && !formState.id ? (
-                <button
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                  type="button"
-                  onClick={fillFromLatestServerProxy}
-                >
-                  Взять из последнего
-                </button>
-              ) : null}
-
               <button
-                className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                className="flex-1 min-w-[200px] h-11 inline-flex items-center justify-center rounded-[14px] bg-blue-600 text-[14px] font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
                 onClick={saveProxy}
                 disabled={state.saving || showQuotaLock}
               >
@@ -2730,7 +2606,7 @@ function renderOpenProxyPurchases(rows) {
 
               {formState.id ? (
                 <button
-                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
+                  className="h-11 px-5 rounded-[14px] border border-slate-200 text-slate-700 text-[14px] font-bold hover:bg-slate-50 transition"
                   onClick={resetForm}
                 >
                   Сбросить форму

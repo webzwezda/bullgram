@@ -88,6 +88,53 @@ function userbotProfileSyncCooldown(account) {
     };
 }
 
+function normalizeEditableTelegramProfile(raw = {}) {
+    const firstName = String(raw.first_name ?? raw.firstName ?? '').trim();
+    const lastName = String(raw.last_name ?? raw.lastName ?? '').trim();
+    const about = String(raw.about ?? '').trim();
+
+    if (!firstName) {
+        throw new Error('Имя Telegram-аккаунта не может быть пустым.');
+    }
+    if (firstName.length > 64) {
+        throw new Error('Имя слишком длинное. Telegram обычно принимает до 64 символов.');
+    }
+    if (lastName.length > 64) {
+        throw new Error('Фамилия слишком длинная. Telegram обычно принимает до 64 символов.');
+    }
+    if (about.length > 70) {
+        throw new Error('Описание слишком длинное. Telegram bio обычно принимает до 70 символов.');
+    }
+
+    return {
+        firstName,
+        lastName,
+        about
+    };
+}
+
+function buildUserbotCenterAccount(item, runtimeState = null) {
+    return {
+        id: item.id,
+        tg_username: item.tg_username || null,
+        tg_account_id: item.tg_account_id || null,
+        tg_first_name: item.tg_first_name || null,
+        tg_last_name: item.tg_last_name || null,
+        tg_phone: item.tg_phone || null,
+        tg_about: item.tg_about || null,
+        tg_photo_data_url: item.tg_photo_data_url || null,
+        tg_profile_synced_at: item.tg_profile_synced_at || null,
+        tg_profile_sync_attempted_at: item.tg_profile_sync_attempted_at || null,
+        tg_profile_sync_error: item.tg_profile_sync_error || null,
+        proxy_id: item.proxy_id || null,
+        proxy_name: item.proxies?.name || null,
+        proxy_country: item.proxies?.last_check_country || null,
+        proxy_is_working: item.proxies?.is_working ?? null,
+        runtime_status: runtimeState?.status || item.runtime_status || null,
+        runtime_reason: runtimeState?.reason || item.runtime_error || null
+    };
+}
+
 function resolveBatchKickCallSource(...rawValues) {
     const normalized = rawValues
         .map((value) => String(value || '').trim().toLowerCase())
@@ -2244,6 +2291,125 @@ export default function (supabase) {
         }
     });
 
+    router.post('/profile/:id/update', authenticateUser, async (req, res) => {
+        const accountId = req.params.id;
+        let client = null;
+
+        try {
+            const input = normalizeEditableTelegramProfile(req.body || {});
+            const { data: account, error } = await supabase
+                .from('tg_accounts')
+                .select('*, proxies(host, port, username, password, is_working, provision_source, inventory_group)')
+                .eq('id', accountId)
+                .eq('owner_id', req.user.id)
+                .single();
+
+            if (error || !account) {
+                return res.status(404).json({ error: 'Аккаунт не найден.' });
+            }
+            if (account.account_type !== 'userbot') {
+                return res.status(400).json({ error: 'Профиль так меняем только у юзерботов.' });
+            }
+            if (isFreshImportedUserbot(account)) {
+                return res.status(409).json({ error: 'Аккаунт в safe-mode. Сначала сделай живую активацию через проверку Telegram.' });
+            }
+            if (isUserbotOnDeadProxy(account)) {
+                return res.status(409).json({ error: 'У юзербота мертвый прокси. Сначала почини или смени прокси.' });
+            }
+
+            const decryptedData = decrypt(account.session_data);
+            if (!decryptedData) {
+                throw new Error('Сессия не читается или уже недействительна.');
+            }
+
+            const { token, fingerprint } = userbotService.parseSessionData(decryptedData);
+            const proxyData = account.proxies
+                ? {
+                    proxy_host: account.proxies.host,
+                    proxy_port: account.proxies.port,
+                    proxy_username: account.proxies.username,
+                    proxy_password: account.proxies.password
+                }
+                : undefined;
+
+            const clientConfig = userbotService._getClientConfig(userbotService._buildProxy(proxyData), 1, fingerprint, proxyData);
+            client = new TelegramClient(new StringSession(token), fingerprint.api_id, fingerprint.api_hash, clientConfig);
+            userbotService.prepareServiceClient(client);
+            userbotService._forceManagedIpv6Dc(client, proxyData);
+            await userbotService.connectWithProxyFallback(client, proxyData);
+
+            await client.invoke(new Api.account.UpdateProfile({
+                firstName: input.firstName,
+                lastName: input.lastName,
+                about: input.about
+            }));
+
+            const me = await client.getMe();
+            let about = input.about || null;
+            try {
+                const fullUser = await client.invoke(new Api.users.GetFullUser({ id: 'me' }));
+                about = String(fullUser?.fullUser?.about ?? input.about ?? '').trim() || null;
+            } catch (profileError) {
+                console.warn('[USERBOT_PROFILE_UPDATE] about verify skipped:', profileError?.message || profileError);
+            }
+
+            const syncedAt = new Date().toISOString();
+            const patch = buildTelegramProfilePatch(me, {
+                tg_first_name: input.firstName,
+                tg_last_name: input.lastName || null,
+                tg_about: about,
+                tg_profile_synced_at: syncedAt,
+                tg_profile_sync_attempted_at: syncedAt,
+                tg_profile_sync_error: null
+            });
+
+            const { data: updatedAccount, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update(patch)
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('*')
+                .single();
+
+            if (updateError || !updatedAccount) {
+                throw new Error(updateError?.message || 'Профиль изменился в Telegram, но не сохранился в БД.');
+            }
+
+            return res.json({
+                success: true,
+                account: updatedAccount,
+                message: 'Профиль сохранен в Telegram и Supabase.'
+            });
+        } catch (error) {
+            console.error('[USERBOT_PROFILE_UPDATE] failed', {
+                accountId,
+                ownerId: req.user?.id || null,
+                error: error.message || String(error || '')
+            });
+            try {
+                await supabase
+                    .from('tg_accounts')
+                    .update({
+                        tg_profile_sync_error: error.message || 'Не удалось сохранить профиль.',
+                        tg_profile_sync_attempted_at: new Date().toISOString()
+                    })
+                    .eq('id', accountId)
+                    .eq('owner_id', req.user.id);
+            } catch (updateError) {
+                console.error('[USERBOT_PROFILE_UPDATE] error marker failed:', updateError?.message || updateError);
+            }
+            return res.status(500).json({ error: error.message || 'Не удалось сохранить профиль.' });
+        } finally {
+            if (client) {
+                try {
+                    await client.disconnect();
+                } catch {
+                    // no-op
+                }
+            }
+        }
+    });
+
     router.delete('/:id', authenticateUser, async (req, res) => {
         try {
             try {
@@ -2990,17 +3156,7 @@ export default function (supabase) {
                             : null,
                         ready: !!paymentSettings?.admin_tg_id && (officialBots || []).some(item => (item.bot_role || 'sales') === 'ops')
                     },
-                    userbots: operationalUserbots.map(item => ({
-                        id: item.id,
-                        tg_username: item.tg_username || null,
-                        tg_account_id: item.tg_account_id || null,
-                        proxy_id: item.proxy_id || null,
-                        proxy_name: item.proxies?.name || null,
-                        proxy_country: item.proxies?.last_check_country || null,
-                        proxy_is_working: item.proxies?.is_working ?? null,
-                        runtime_status: item.runtime_status || null,
-                        runtime_reason: item.runtime_error || null
-                    })),
+                    userbots: operationalUserbots.map(item => buildUserbotCenterAccount(item)),
                     summary: {
                         groups_total: linkedChannels?.length || 0,
                         groups_admin: 0,
@@ -3063,16 +3219,9 @@ export default function (supabase) {
                 const fallbackMessage = preferredState?.reason || 'Сейчас нет ни одного живого юзербота для центра.';
                 return res.status(409).json({
                     error: fallbackMessage,
-                    userbots: operationalUserbots.map(item => ({
-                        id: item.id,
-                        tg_username: item.tg_username || null,
-                        tg_account_id: item.tg_account_id || null,
-                        proxy_id: item.proxy_id || null,
-                        proxy_name: item.proxies?.name || null,
-                        proxy_country: item.proxies?.last_check_country || null,
-                        proxy_is_working: item.proxies?.is_working ?? null,
-                        runtime_status: runtimeStates.get(String(item.id))?.status || 'unknown',
-                        runtime_reason: runtimeStates.get(String(item.id))?.reason || null
+                    userbots: operationalUserbots.map(item => buildUserbotCenterAccount(item, runtimeStates.get(String(item.id)) || {
+                        status: 'unknown',
+                        reason: null
                     }))
                 });
             }
@@ -3198,17 +3347,7 @@ export default function (supabase) {
                             : null,
                         ready: !!paymentSettings?.admin_tg_id && (officialBots || []).some(item => (item.bot_role || 'sales') === 'ops')
                     },
-                    userbots: operationalUserbots.map(item => ({
-                        id: item.id,
-                        tg_username: item.tg_username || null,
-                        tg_account_id: item.tg_account_id || null,
-                        proxy_id: item.proxy_id || null,
-                        proxy_name: item.proxies?.name || null,
-                        proxy_country: item.proxies?.last_check_country || null,
-                        proxy_is_working: item.proxies?.is_working ?? null,
-                        runtime_status: runtimeStates.get(String(item.id))?.status || null,
-                        runtime_reason: runtimeStates.get(String(item.id))?.reason || null
-                    })),
+                    userbots: operationalUserbots.map(item => buildUserbotCenterAccount(item, runtimeStates.get(String(item.id)) || null)),
                     summary: {
                         groups_total: groups.length,
                         groups_admin: groups.filter(group => group.userbot_admin).length,

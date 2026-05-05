@@ -105,6 +105,18 @@ export function UserbotCenterPage() {
     error: '',
     rows: []
   });
+  const [profileSyncState, setProfileSyncState] = useState({
+    pulling: false,
+    saving: false,
+    tone: 'default',
+    text: ''
+  });
+  const [profileDraft, setProfileDraft] = useState({
+    accountId: '',
+    firstName: '',
+    lastName: '',
+    about: ''
+  });
   const [errorEventsState, setErrorEventsState] = useState({
     loading: false,
     error: '',
@@ -180,6 +192,112 @@ export function UserbotCenterPage() {
         loading: false,
         error: error.message,
         rows: []
+      });
+    }
+  }
+
+  function applyProfileAccount(account) {
+    if (!account?.id) return;
+    setState((prev) => ({
+      ...prev,
+      data: prev.data ? {
+        ...prev.data,
+        userbots: (prev.data.userbots || []).map((userbot) => (
+          String(userbot.id) === String(account.id)
+            ? { ...userbot, ...account }
+            : userbot
+        ))
+      } : prev.data
+    }));
+    setProfileDraft({
+      accountId: String(account.id),
+      firstName: account.tg_first_name || '',
+      lastName: account.tg_last_name || '',
+      about: account.tg_about || ''
+    });
+  }
+
+  async function syncSelectedUserbotProfile() {
+    if (!accessToken || !selectedUserbotId) return;
+    if (!window.confirm('Обновить профиль юзербота из Telegram? Это живой запрос к аккаунту. Подтянем аватарку, имя, фамилию, username, телефон и описание. Группы сканировать не будем.')) {
+      return;
+    }
+
+    setProfileSyncState({ pulling: true, saving: false, tone: 'default', text: '' });
+    try {
+      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/sync`, {
+        accessToken,
+        method: 'POST'
+      });
+
+      if (result.account) {
+        applyProfileAccount(result.account);
+      }
+
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        tone: result.cached ? 'warning' : 'success',
+        text: result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль обновлен.')
+      });
+    } catch (error) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        tone: 'error',
+        text: error.message
+      });
+    }
+  }
+
+  async function saveSelectedUserbotProfile() {
+    if (!accessToken || !selectedUserbotId) return;
+    const firstName = String(profileDraft.firstName || '').trim();
+    const lastName = String(profileDraft.lastName || '').trim();
+    const about = String(profileDraft.about || '').trim();
+
+    if (!firstName) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        tone: 'error',
+        text: 'Имя Telegram-аккаунта не может быть пустым.'
+      });
+      return;
+    }
+
+    if (!window.confirm('Сохранить эти имя, фамилию и описание в реальный Telegram-профиль выбранного юзербота?')) {
+      return;
+    }
+
+    setProfileSyncState({ pulling: false, saving: true, tone: 'default', text: '' });
+    try {
+      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/update`, {
+        accessToken,
+        method: 'POST',
+        body: {
+          first_name: firstName,
+          last_name: lastName,
+          about
+        }
+      });
+
+      if (result.account) {
+        applyProfileAccount(result.account);
+      }
+
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        tone: 'success',
+        text: result.message || 'Профиль сохранен в Telegram и Supabase.'
+      });
+    } catch (error) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        tone: 'error',
+        text: error.message
       });
     }
   }
@@ -275,6 +393,7 @@ export function UserbotCenterPage() {
 
   useEffect(() => {
     setAuthorizationsState({ loading: false, error: '', rows: [] });
+    setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
   }, [accessToken, selectedUserbotId]);
 
   useEffect(() => {
@@ -321,6 +440,53 @@ export function UserbotCenterPage() {
   const conversations = data.conversations || [];
   const summary = data.summary || {};
   const signalConfig = data.signal_config || {};
+  const selectedUserbot = useMemo(
+    () => userbots.find((item) => String(item.id) === String(selectedUserbotId)) || null,
+    [selectedUserbotId, userbots]
+  );
+  useEffect(() => {
+    if (!selectedUserbot?.id) {
+      setProfileDraft({ accountId: '', firstName: '', lastName: '', about: '' });
+      return;
+    }
+    setProfileDraft({
+      accountId: String(selectedUserbot.id),
+      firstName: selectedUserbot.tg_first_name || '',
+      lastName: selectedUserbot.tg_last_name || '',
+      about: selectedUserbot.tg_about || ''
+    });
+  }, [
+    selectedUserbot?.id,
+    selectedUserbot?.tg_first_name,
+    selectedUserbot?.tg_last_name,
+    selectedUserbot?.tg_about
+  ]);
+
+  const selectedDraftFirstName = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.firstName : '';
+  const selectedDraftLastName = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.lastName : '';
+  const selectedDraftAbout = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.about : '';
+  const selectedProfileName = selectedUserbot
+    ? [selectedDraftFirstName || selectedUserbot.tg_first_name, selectedDraftLastName || selectedUserbot.tg_last_name].filter(Boolean).join(' ').trim()
+    : '';
+  const selectedProfileTitle = selectedProfileName || (
+    selectedUserbot?.tg_username ? `@${selectedUserbot.tg_username}` : 'Имя пока не подтянуто'
+  );
+  const selectedProfileInitial = (
+    selectedProfileName ||
+    selectedUserbot?.tg_username ||
+    String(selectedUserbot?.tg_account_id || '?')
+  ).slice(0, 1).toUpperCase();
+  const selectedProfileSyncedAt = selectedUserbot?.tg_profile_synced_at
+    ? formatDate(selectedUserbot.tg_profile_synced_at)
+    : 'еще не обновляли';
+  const selectedProfileAttemptedAt = selectedUserbot?.tg_profile_sync_attempted_at
+    ? formatDate(selectedUserbot.tg_profile_sync_attempted_at)
+    : '';
+  const profileDirty = !!selectedUserbot && (
+    selectedDraftFirstName !== (selectedUserbot.tg_first_name || '') ||
+    selectedDraftLastName !== (selectedUserbot.tg_last_name || '') ||
+    selectedDraftAbout !== (selectedUserbot.tg_about || '')
+  );
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => String(item.tg_user_id) === String(threadUserId)) || null,
@@ -690,6 +856,132 @@ export function UserbotCenterPage() {
           </button>
         </div>
         <div className="toolbar-card__hint">Авто-refresh убран. Этот экран больше не ползает в Telegram сам по таймеру.</div>
+        {selectedUserbot ? (
+          <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                {selectedUserbot.tg_photo_data_url ? (
+                  <img
+                    src={selectedUserbot.tg_photo_data_url}
+                    alt=""
+                    className="size-16 shrink-0 rounded-[18px] object-cover ring-1 ring-slate-200"
+                  />
+                ) : (
+                  <div className="flex size-16 shrink-0 items-center justify-center rounded-[18px] bg-slate-900 text-[22px] font-black text-white ring-1 ring-slate-200">
+                    {selectedProfileInitial}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[14px] font-bold text-slate-900">Профиль аккаунта</div>
+                  <div className="mt-1 truncate text-[20px] font-black tracking-tight text-slate-950">
+                    {selectedProfileTitle}
+                  </div>
+                  <div className="mt-1 text-[12px] font-medium text-slate-500">
+                    Последнее обновление: {selectedProfileSyncedAt}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={syncSelectedUserbotProfile}
+                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedUserbotId}
+              >
+                {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="block">
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Имя</div>
+                <input
+                  className="field"
+                  value={selectedDraftFirstName}
+                  maxLength={64}
+                  onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
+                  placeholder="Имя аккаунта"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Фамилия</div>
+                <input
+                  className="field"
+                  value={selectedDraftLastName}
+                  maxLength={64}
+                  onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
+                  placeholder="Фамилия аккаунта"
+                />
+              </label>
+              <div className="rounded-[14px] bg-white px-3 py-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Username</div>
+                <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
+                  {selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '—'}
+                </div>
+              </div>
+              <div className="rounded-[14px] bg-white px-3 py-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Телефон / TG ID</div>
+                <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
+                  {[selectedUserbot.tg_phone, selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''].filter(Boolean).join(' • ') || '—'}
+                </div>
+              </div>
+            </div>
+
+            <label className="mt-3 block">
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Описание</div>
+              <textarea
+                className="field"
+                rows="3"
+                value={selectedDraftAbout}
+                maxLength={70}
+                onChange={(event) => setProfileDraft((prev) => ({ ...prev, about: event.target.value }))}
+                placeholder="Описание профиля"
+              />
+              <div className="mt-1 text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
+            </label>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="ghost-button ghost-button--primary"
+                onClick={saveSelectedUserbotProfile}
+                disabled={profileSyncState.pulling || profileSyncState.saving || !profileDirty}
+              >
+                {profileSyncState.saving ? 'Сохраняем в Telegram...' : 'Сохранить в Telegram'}
+              </button>
+              {profileDirty ? (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setProfileDraft({
+                    accountId: String(selectedUserbot.id),
+                    firstName: selectedUserbot.tg_first_name || '',
+                    lastName: selectedUserbot.tg_last_name || '',
+                    about: selectedUserbot.tg_about || ''
+                  })}
+                  disabled={profileSyncState.pulling || profileSyncState.saving}
+                >
+                  Отменить правки
+                </button>
+              ) : null}
+            </div>
+
+            {selectedUserbot.tg_profile_sync_error ? (
+              <div className="mt-3 rounded-[14px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
+                Последняя ошибка обновления профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
+              </div>
+            ) : null}
+
+            {profileSyncState.text ? (
+              <div className={`userbots-status-note userbots-status-note--${profileSyncState.tone || 'default'}`}>
+                {profileSyncState.text}
+              </div>
+            ) : null}
+
+            <div className="mt-3 text-[12px] font-medium text-slate-500">
+              При загрузке страницы показываем сохраненные данные из БД. `Стянуть из Telegram` обновляет кэш, `Сохранить в Telegram` меняет реальный профиль и затем сохраняет тот же профиль в Supabase.
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {state.scanRequired ? (

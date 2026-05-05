@@ -1,11 +1,10 @@
-import { Trash2, ShieldCheck, AlertCircle, RefreshCw } from 'lucide-react';
+import { Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
 
 export function LiveUserbotsSection({
   accountBindingFeedback,
   accountCheckReport,
   accountDeleteFeedback,
-  accountProfileFeedback,
   accountRestoreFeedback,
   availableBindingProxiesForAccount,
   availableFailoverProxiesForAccount,
@@ -30,7 +29,6 @@ export function LiveUserbotsSection({
   setSaleComposer,
   setSelectedLiveUserbotId,
   state,
-  syncAccountProfile,
   toggleSafeMode,
   toggleSalePaymentMethod,
   updateBinding
@@ -57,18 +55,6 @@ export function LiveUserbotsSection({
             const runtimeStatus = String(account.runtime_status || '');
             const hasRecoveryInfo = !!(recovery?.last_restored_at || recovery?.last_restore_error);
             const showRecoveryNextStep = !recovery && ['expired', 'error'].includes(runtimeStatus);
-            const profileName = [account.tg_first_name, account.tg_last_name].filter(Boolean).join(' ').trim();
-            const profileTitle = profileName || (account.tg_username ? `@${account.tg_username}` : 'Имя пока не подтянуто');
-            const profileInitial = (profileName || account.tg_username || String(account.tg_account_id || '?')).slice(0, 1).toUpperCase();
-            const profileSyncedAt = account.tg_profile_synced_at ? formatWhen(account.tg_profile_synced_at) : 'еще не обновляли';
-            const profileAttemptedAt = account.tg_profile_sync_attempted_at ? formatWhen(account.tg_profile_sync_attempted_at) : '';
-            const profileFields = [
-              ['Имя', account.tg_first_name || '—'],
-              ['Фамилия', account.tg_last_name || '—'],
-              ['Username', account.tg_username ? `@${account.tg_username}` : '—'],
-              ['Телефон', account.tg_phone || '—'],
-              ['TG ID', account.tg_account_id || '—']
-            ];
 
             return (
               <div className="space-y-6">
@@ -140,68 +126,6 @@ export function LiveUserbotsSection({
                         </div>
                       </div>
                       ) : null}
-
-                      <div className="mt-4 rounded-[20px] border border-slate-200/60 bg-white p-5 shadow-sm">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex min-w-0 items-start gap-4">
-                            {account.tg_photo_data_url ? (
-                              <img
-                                src={account.tg_photo_data_url}
-                                alt=""
-                                className="size-16 shrink-0 rounded-[18px] object-cover ring-1 ring-slate-200"
-                              />
-                            ) : (
-                              <div className="flex size-16 shrink-0 items-center justify-center rounded-[18px] bg-slate-900 text-[22px] font-black text-white ring-1 ring-slate-200">
-                                {profileInitial}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="text-[14px] font-bold text-slate-900">Профиль аккаунта</div>
-                              <div className="mt-1 truncate text-[20px] font-black tracking-tight text-slate-950">
-                                {profileTitle}
-                              </div>
-                              <div className="mt-1 text-[12px] font-medium text-slate-500">
-                                Последнее обновление: {profileSyncedAt}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[14px] border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() => syncAccountProfile(account)}
-                            disabled={state.syncingProfileAccountId === String(account.id) || state.checkingAccountId === String(account.id)}
-                          >
-                            <RefreshCw className={`size-3.5 ${state.syncingProfileAccountId === String(account.id) ? 'animate-spin' : ''}`} />
-                            {state.syncingProfileAccountId === String(account.id) ? 'Обновляем...' : 'Обновить профиль'}
-                          </button>
-                        </div>
-
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                          {profileFields.map(([label, value]) => (
-                            <div key={label} className="rounded-[14px] bg-slate-50 px-3 py-2.5">
-                              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">{label}</div>
-                              <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">{value}</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="mt-3 rounded-[14px] bg-slate-50 px-3 py-3">
-                          <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Описание</div>
-                          <div className="mt-1 whitespace-pre-wrap text-[13px] font-medium leading-5 text-slate-700">
-                            {account.tg_about || 'Описание пока не подтянуто.'}
-                          </div>
-                        </div>
-
-                        {account.tg_profile_sync_error ? (
-                          <div className="mt-3 rounded-[14px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
-                            Последняя ошибка обновления профиля{profileAttemptedAt ? ` (${profileAttemptedAt})` : ''}: {account.tg_profile_sync_error}
-                          </div>
-                        ) : null}
-
-                        <div className="mt-3 text-[12px] font-medium text-slate-500">
-                          При загрузке страницы показываем сохраненные данные. Telegram дергается только по кнопке и не чаще одного раза в 10 минут.
-                        </div>
-                      </div>
 
                       <div className="mt-4 rounded-[20px] border border-slate-200/60 bg-white p-5 shadow-sm">
                         <div className="flex items-center gap-2 mb-3">
@@ -457,11 +381,6 @@ export function LiveUserbotsSection({
                   {accountBindingFeedback.accountId === String(account.id) && accountBindingFeedback.text ? (
                     <div className={`userbots-status-note userbots-status-note--${accountBindingFeedback.tone || 'default'}`}>
                       {accountBindingFeedback.text}
-                    </div>
-                  ) : null}
-                  {accountProfileFeedback.accountId === String(account.id) && accountProfileFeedback.text ? (
-                    <div className={`userbots-status-note userbots-status-note--${accountProfileFeedback.tone || 'default'}`}>
-                      {accountProfileFeedback.text}
                     </div>
                   ) : null}
                   {accountRestoreFeedback.accountId === String(account.id) && accountRestoreFeedback.text ? (
