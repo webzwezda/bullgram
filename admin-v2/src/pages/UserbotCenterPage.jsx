@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -72,6 +72,7 @@ export function UserbotCenterPage() {
   const initialThreadUserId = String(initialParams.get('tg_user_id') || initialHandoff?.tg_user_id || '').trim();
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
   const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
+  const avatarInputRef = useRef(null);
   const [selectedUserbotId, setSelectedUserbotId] = useState('');
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
   const [replyMessage, setReplyMessage] = useState(initialDraftMessage);
@@ -108,6 +109,7 @@ export function UserbotCenterPage() {
   const [profileSyncState, setProfileSyncState] = useState({
     pulling: false,
     saving: false,
+    uploadingAvatar: false,
     tone: 'default',
     text: ''
   });
@@ -223,7 +225,7 @@ export function UserbotCenterPage() {
       return;
     }
 
-    setProfileSyncState({ pulling: true, saving: false, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: true, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/sync`, {
         accessToken,
@@ -237,6 +239,7 @@ export function UserbotCenterPage() {
       setProfileSyncState({
         pulling: false,
         saving: false,
+        uploadingAvatar: false,
         tone: result.cached ? 'warning' : 'success',
         text: result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль обновлен.')
       });
@@ -244,6 +247,7 @@ export function UserbotCenterPage() {
       setProfileSyncState({
         pulling: false,
         saving: false,
+        uploadingAvatar: false,
         tone: 'error',
         text: error.message
       });
@@ -260,6 +264,7 @@ export function UserbotCenterPage() {
       setProfileSyncState({
         pulling: false,
         saving: false,
+        uploadingAvatar: false,
         tone: 'error',
         text: 'Имя Telegram-аккаунта не может быть пустым.'
       });
@@ -270,7 +275,7 @@ export function UserbotCenterPage() {
       return;
     }
 
-    setProfileSyncState({ pulling: false, saving: true, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: false, saving: true, uploadingAvatar: false, tone: 'default', text: '' });
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/update`, {
         accessToken,
@@ -289,6 +294,7 @@ export function UserbotCenterPage() {
       setProfileSyncState({
         pulling: false,
         saving: false,
+        uploadingAvatar: false,
         tone: 'success',
         text: result.message || 'Профиль сохранен в Telegram и Supabase.'
       });
@@ -296,6 +302,69 @@ export function UserbotCenterPage() {
       setProfileSyncState({
         pulling: false,
         saving: false,
+        uploadingAvatar: false,
+        tone: 'error',
+        text: error.message
+      });
+    }
+  }
+
+  async function uploadSelectedUserbotAvatar(file) {
+    if (!accessToken || !selectedUserbotId || !file) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        uploadingAvatar: false,
+        tone: 'error',
+        text: 'Загрузи JPG, PNG или WEBP до 5 МБ.'
+      });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        uploadingAvatar: false,
+        tone: 'error',
+        text: 'Файл слишком тяжелый. Максимум 5 МБ.'
+      });
+      return;
+    }
+
+    if (!window.confirm('Поставить эту картинку аватаркой реального Telegram-аккаунта?')) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: true, tone: 'default', text: '' });
+    try {
+      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/avatar`, {
+        accessToken,
+        method: 'POST',
+        body: formData
+      });
+
+      if (result.account) {
+        applyProfileAccount(result.account);
+      }
+
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        uploadingAvatar: false,
+        tone: 'success',
+        text: result.message || 'Аватарка сохранена в Telegram и на сервере.'
+      });
+    } catch (error) {
+      setProfileSyncState({
+        pulling: false,
+        saving: false,
+        uploadingAvatar: false,
         tone: 'error',
         text: error.message
       });
@@ -393,7 +462,7 @@ export function UserbotCenterPage() {
 
   useEffect(() => {
     setAuthorizationsState({ loading: false, error: '', rows: [] });
-    setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
   }, [accessToken, selectedUserbotId]);
 
   useEffect(() => {
@@ -863,17 +932,39 @@ export function UserbotCenterPage() {
           <div className="mt-4 rounded-[18px] border border-slate-200 bg-slate-50/70 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
-                {selectedProfilePhotoSrc ? (
-                  <img
-                    src={selectedProfilePhotoSrc}
-                    alt=""
-                    className="size-16 shrink-0 rounded-[18px] object-cover ring-1 ring-slate-200"
-                  />
-                ) : (
-                  <div className="flex size-16 shrink-0 items-center justify-center rounded-[18px] bg-slate-900 text-[22px] font-black text-white ring-1 ring-slate-200">
-                    {selectedProfileInitial}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  className="group relative size-16 shrink-0 overflow-hidden rounded-[18px] text-left ring-1 ring-slate-200 transition hover:ring-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
+                  title="Загрузить аватарку"
+                >
+                  {selectedProfilePhotoSrc ? (
+                    <img
+                      src={selectedProfilePhotoSrc}
+                      alt=""
+                      className="size-16 object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-16 items-center justify-center bg-slate-900 text-[22px] font-black text-white">
+                      {selectedProfileInitial}
+                    </span>
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 bg-slate-950/75 px-1.5 py-1 text-center text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                    {profileSyncState.uploadingAvatar ? '...' : 'Сменить'}
+                  </span>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    event.target.value = '';
+                    if (file) uploadSelectedUserbotAvatar(file);
+                  }}
+                />
                 <div className="min-w-0">
                   <div className="text-[14px] font-bold text-slate-900">Профиль аккаунта</div>
                   <div className="mt-1 truncate text-[20px] font-black tracking-tight text-slate-950">
@@ -888,7 +979,7 @@ export function UserbotCenterPage() {
                 type="button"
                 className="ghost-button"
                 onClick={syncSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedUserbotId}
+                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedUserbotId}
               >
                 {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
               </button>
@@ -947,9 +1038,17 @@ export function UserbotCenterPage() {
                 type="button"
                 className="ghost-button ghost-button--primary"
                 onClick={saveSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || !profileDirty}
+                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !profileDirty}
               >
                 {profileSyncState.saving ? 'Сохраняем в Telegram...' : 'Сохранить в Telegram'}
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
+              >
+                {profileSyncState.uploadingAvatar ? 'Загружаем аватарку...' : 'Загрузить аватарку'}
               </button>
               {profileDirty ? (
                 <button
@@ -961,7 +1060,7 @@ export function UserbotCenterPage() {
                     lastName: selectedUserbot.tg_last_name || '',
                     about: selectedUserbot.tg_about || ''
                   })}
-                  disabled={profileSyncState.pulling || profileSyncState.saving}
+                  disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
                 >
                   Отменить правки
                 </button>
@@ -981,7 +1080,7 @@ export function UserbotCenterPage() {
             ) : null}
 
             <div className="mt-3 text-[12px] font-medium text-slate-500">
-              При загрузке страницы показываем сохраненные данные из БД. `Стянуть из Telegram` обновляет кэш, `Сохранить в Telegram` меняет реальный профиль и затем сохраняет тот же профиль в Supabase.
+              При загрузке страницы показываем сохраненные данные из БД. `Стянуть из Telegram` обновляет кэш, `Сохранить в Telegram` меняет имя и описание, а аватарка загружается отдельной кнопкой.
             </div>
           </div>
         ) : null}
