@@ -88,8 +88,21 @@ function safeUploadSegment(value) {
         .slice(0, 96) || 'unknown';
 }
 
-function storeUserbotProfilePhoto({ ownerId, accountId, photo }) {
-    if (!Buffer.isBuffer(photo) || photo.length === 0 || photo.length > 512 * 1024) {
+function safePhotoExtension(value) {
+    const extension = String(value || 'jpg').trim().toLowerCase().replace(/^\./, '');
+    return ['jpg', 'jpeg', 'png', 'webp'].includes(extension) ? extension.replace('jpeg', 'jpg') : 'jpg';
+}
+
+function profilePhotoExtensionFromFile(file) {
+    const mime = String(file?.mimetype || '').toLowerCase();
+    if (mime === 'image/png') return 'png';
+    if (mime === 'image/webp') return 'webp';
+    if (mime === 'image/jpeg') return 'jpg';
+    return safePhotoExtension(path.extname(file?.originalname || ''));
+}
+
+function storeUserbotProfilePhoto({ ownerId, accountId, photo, extension = 'jpg', maxBytes = 5 * 1024 * 1024 }) {
+    if (!Buffer.isBuffer(photo) || photo.length === 0 || photo.length > maxBytes) {
         return null;
     }
 
@@ -98,17 +111,17 @@ function storeUserbotProfilePhoto({ ownerId, accountId, photo }) {
     const dir = path.join(USERBOT_PROFILE_UPLOADS_DIR, ownerSegment);
     fs.mkdirSync(dir, { recursive: true });
 
-    const filename = `${accountSegment}.jpg`;
+    const filename = `${accountSegment}.${safePhotoExtension(extension)}`;
     const fullPath = path.join(dir, filename);
     fs.writeFileSync(fullPath, photo);
 
     return `/uploads/userbot-profiles/${ownerSegment}/${filename}`;
 }
 
-function storeUserbotProfilePhotoFromPath({ ownerId, accountId, filePath }) {
+function storeUserbotProfilePhotoFromPath({ ownerId, accountId, filePath, extension }) {
     if (!filePath || !fs.existsSync(filePath)) return null;
     const photo = fs.readFileSync(filePath);
-    return storeUserbotProfilePhoto({ ownerId, accountId, photo });
+    return storeUserbotProfilePhoto({ ownerId, accountId, photo, extension });
 }
 
 function buildTelegramProfilePatch(me, extra = {}) {
@@ -2534,7 +2547,8 @@ export default function (supabase) {
             const photoUrl = storeUserbotProfilePhotoFromPath({
                 ownerId: req.user.id,
                 accountId: account.id,
-                filePath: req.file.path
+                filePath: req.file.path,
+                extension: profilePhotoExtensionFromFile(req.file)
             });
 
             if (!photoUrl) {
