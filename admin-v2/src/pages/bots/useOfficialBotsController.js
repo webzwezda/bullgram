@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
 
+function normalizeBotKind(value) {
+  return value === 'template' ? 'template' : 'sales';
+}
+
 export function useOfficialBotsController({
   accessToken,
   accounts,
@@ -11,7 +15,7 @@ export function useOfficialBotsController({
 }) {
   const [botForm, setBotForm] = useState({
     botToken: '',
-    botRole: 'sales'
+    botKind: 'sales'
   });
   const [botAdminDrafts, setBotAdminDrafts] = useState({});
   const [selectedOfficialBotId, setSelectedOfficialBotId] = useState('');
@@ -44,29 +48,73 @@ export function useOfficialBotsController({
       showUiMessage('Вставь токен бота.', 'error');
       return;
     }
-    if (botForm.botRole === 'placeholder') {
-      showUiMessage('Заготовка пока не подключается. Выбери рабочую роль бота.', 'error');
-      return;
-    }
+
+    const nextBotKind = normalizeBotKind(botForm.botKind);
 
     setState((prev) => ({ ...prev, savingBot: true }));
     try {
-      await apiRequest('/api/official-bot/add', {
+      const addResponse = await apiRequest('/api/official-bot/add', {
         accessToken,
         method: 'POST',
         body: {
           botToken: botForm.botToken.trim(),
-          botRole: botForm.botRole,
+          botRole: 'sales',
+          bot_kind: nextBotKind,
           admin_tg_id: paymentAdminTgId || ''
         }
       });
-      setBotForm((prev) => ({ ...prev, botToken: '' }));
-      await reloadAccounts();
-      showUiMessage('Бот подключен.', 'success');
+      const nextPayload = await reloadAccounts();
+      const addedBotAccount = (nextPayload?.accounts || []).find((account) => (
+        account.account_type === 'bot'
+        && String(account.tg_account_id || '') === String(addResponse?.bot?.id || '')
+      ));
+
+      if (nextBotKind === 'template' && !addedBotAccount?.id) {
+        showUiMessage('Бот подключен, но тип не подтвердился. Переключи его на "Заготовка" вручную ниже.', 'error');
+        setBotForm({ botToken: '', botKind: 'sales' });
+        return;
+      }
+
+      if (addedBotAccount?.id) {
+        setSelectedOfficialBotId(String(addedBotAccount.id));
+      }
+      setBotForm({ botToken: '', botKind: 'sales' });
+      showUiMessage(nextBotKind === 'template' ? 'Бот подключен как заготовка.' : 'Бот подключен.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, savingBot: false }));
+    }
+  }
+
+  async function saveBotKind(account, botKind) {
+    const accountId = String(account?.id || '');
+    if (!accountId) return;
+
+    const nextBotKind = normalizeBotKind(botKind);
+
+    setState((prev) => ({ ...prev, savingBotKindId: accountId }));
+    try {
+      await apiRequest('/api/official-bot/type', {
+        accessToken,
+        method: 'POST',
+        body: {
+          account_id: account.id,
+          bot_kind: nextBotKind
+        }
+      });
+      await reloadAccounts();
+      if (nextBotKind === 'template') {
+        showUiMessage('Бот переведен в заготовку.', 'success');
+      } else if (normalizeBotKind(account.bot_kind) === 'template') {
+        showUiMessage('Бот переведен в продажи. Если ты уже назначал его админом в Telegram, перевесь права или синхронизируй группы, чтобы BullRun увидел места для контура.', 'success');
+      } else {
+        showUiMessage('Бот переведен в продажи.', 'success');
+      }
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    } finally {
+      setState((prev) => ({ ...prev, savingBotKindId: '' }));
     }
   }
 
@@ -105,6 +153,7 @@ export function useOfficialBotsController({
     botForm,
     officialBots,
     saveBotAdmin,
+    saveBotKind,
     selectedOfficialBot,
     selectedOfficialBotId,
     setBotAdminDrafts,

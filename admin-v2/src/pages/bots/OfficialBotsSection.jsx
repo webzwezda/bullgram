@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Bot, KeyRound, ShieldAlert, Trash2, CheckCircle2, AlertCircle, MessageSquare, Users, UserCog, ExternalLink } from 'lucide-react';
+import { Bot, ShieldAlert, Trash2, CheckCircle2, MessageSquare, Users, UserCog, ExternalLink } from 'lucide-react';
+import { SalesContourSection } from './SalesContourSection.jsx';
 
 function summarizeTargets(targets = []) {
   const titles = targets
@@ -82,6 +82,14 @@ function botAdminMeta(account, fallbackAdminTgId) {
   };
 }
 
+function normalizeBotKind(value) {
+  return value === 'template' ? 'template' : 'sales';
+}
+
+function botKindLabel(value) {
+  return normalizeBotKind(value) === 'template' ? 'Заготовка' : 'Продажи';
+}
+
 export function OfficialBotsSection({
   botForm,
   setBotForm,
@@ -94,8 +102,10 @@ export function OfficialBotsSection({
   botAdminDrafts,
   setBotAdminDrafts,
   saveBotAdmin,
+  saveBotKind,
   deleteAccount,
-  channelsByBotId
+  channelsByBotId,
+  salesContourSectionProps
 }) {
   return (
     <div className="space-y-6">
@@ -138,15 +148,15 @@ export function OfficialBotsSection({
 
             <div className="md:col-span-3">
               <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">Роль бота</span>
+                <span className="text-sm font-bold text-slate-700">Тип бота</span>
                 <div className="relative">
                   <select
                     className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer shadow-sm"
-                    value={botForm.botRole}
-                    onChange={(event) => setBotForm((prev) => ({ ...prev, botRole: event.target.value }))}
+                    value={botForm.botKind}
+                    onChange={(event) => setBotForm((prev) => ({ ...prev, botKind: event.target.value }))}
                   >
-                    <option value="sales">Продажи доступа</option>
-                    <option value="placeholder">Заготовка</option>
+                    <option value="sales">Бот продаж</option>
+                    <option value="template">Заготовка</option>
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
@@ -166,7 +176,7 @@ export function OfficialBotsSection({
             </div>
           </div>
 
-          {botForm.botRole === 'sales' && (
+          {botForm.botKind === 'sales' ? (
             <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
               <div className="flex items-center gap-2 text-[13px] font-medium text-slate-600">
                 <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
@@ -184,6 +194,10 @@ export function OfficialBotsSection({
                 <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />
                 <span>Заносит в CRM</span>
               </div>
+            </div>
+          ) : (
+            <div className="mt-5 p-4 bg-slate-100/80 rounded-2xl border border-slate-200 text-[13px] font-medium text-slate-600">
+              Заготовка подключается сразу, но контур продаж и боевые Telegram-настройки для нее не требуются.
             </div>
           )}
         </div>
@@ -209,7 +223,7 @@ export function OfficialBotsSection({
 
           <div className="p-6 md:p-8 bg-slate-50/50">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-              <div className="md:col-span-5">
+              <div className="md:col-span-4">
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">Выберите бота</span>
                   <div className="relative">
@@ -231,7 +245,34 @@ export function OfficialBotsSection({
                 </label>
               </div>
 
-              <div className="md:col-span-5">
+              <div className="md:col-span-3">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm font-bold text-slate-700">Тип бота</span>
+                  <div className="relative">
+                    <select
+                      className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none cursor-pointer shadow-sm disabled:cursor-wait"
+                      value={normalizeBotKind(selectedOfficialBot?.bot_kind)}
+                      onChange={(event) => saveBotKind(selectedOfficialBot, event.target.value)}
+                      disabled={state.savingBotKindId === String(selectedOfficialBot.id)}
+                    >
+                      <option value="sales">Бот продаж</option>
+                      <option value="template">Заготовка</option>
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                  </div>
+                  <p className="text-xs font-medium text-slate-500">
+                    {state.savingBotKindId === String(selectedOfficialBot.id)
+                      ? 'Сохраняем тип бота...'
+                      : normalizeBotKind(selectedOfficialBot?.bot_kind) === 'sales'
+                        ? 'Для sales показываем контур продаж.'
+                        : 'Template живет без sales-контура.'}
+                  </p>
+                </label>
+              </div>
+
+              <div className="md:col-span-3">
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-bold text-slate-700">Telegram ID админа</span>
                   <input
@@ -280,6 +321,7 @@ export function OfficialBotsSection({
             const groupsMeta = botGroupMeta(groupTargets);
             const chatsMeta = botChatMeta(chatTargets);
             const adminMeta = botAdminMeta(account, state.paymentAdminTgId);
+            const kind = normalizeBotKind(account.bot_kind);
 
             return (
               <article key={account.id} className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all hover:border-slate-300/60 hover:shadow-[0_4px_20px_rgb(0,0,0,0.06)]">
@@ -293,8 +335,12 @@ export function OfficialBotsSection({
                         <h4 className="text-base font-bold text-slate-900">
                           @{account.tg_username || `bot-${String(account.tg_account_id || account.id)}`}
                         </h4>
-                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 mt-1 bg-slate-100 text-slate-600 text-[11px] font-bold rounded-md uppercase tracking-wider">
-                          Роль: продажи
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 mt-1 text-[11px] font-bold rounded-md uppercase tracking-wider ${
+                          kind === 'template'
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          Тип: {botKindLabel(kind)}
                         </div>
                       </div>
                     </div>
@@ -351,6 +397,13 @@ export function OfficialBotsSection({
           })}
         </section>
       )}
+
+      {salesContourSectionProps?.isVisible ? (
+        <SalesContourSection
+          {...salesContourSectionProps}
+          selectedOfficialBot={selectedOfficialBot}
+        />
+      ) : null}
     </div>
   );
 }

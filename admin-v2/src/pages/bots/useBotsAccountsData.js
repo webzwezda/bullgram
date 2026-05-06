@@ -7,6 +7,8 @@ const INITIAL_STATE = {
   refreshing: false,
   savingBot: false,
   savingBotAdminId: '',
+  savingBotKindId: '',
+  savingContourBotId: '',
   checkingAccountId: '',
   togglingSafeModeId: '',
   bindingAccountId: '',
@@ -21,6 +23,8 @@ const INITIAL_STATE = {
   reservedItemsByAsset: {},
   sellerItemsById: {},
   channels: [],
+  officialBotContoursPayload: null,
+  officialBotContoursError: '',
   paymentAdminTgId: '',
   recoveryMap: {},
   recoverySupported: true,
@@ -28,7 +32,7 @@ const INITIAL_STATE = {
 };
 
 async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
-  const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp, channelsResp] = await Promise.all([
+  const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp, channelsResp, contoursResp] = await Promise.all([
     supabase
       .from('tg_accounts')
       .select('*')
@@ -49,7 +53,10 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     supabase
       .from('channels')
       .select('id, title, tg_chat_id, bot_id, chat_type')
-      .eq('owner_id', ownerId)
+      .eq('owner_id', ownerId),
+    apiRequest('/api/official-bot/contours', { accessToken })
+      .then((payload) => ({ payload, error: '' }))
+      .catch((error) => ({ payload: null, error: error.message }))
   ]);
 
   if (accountsResp.error) throw accountsResp.error;
@@ -64,6 +71,8 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     reservedItemsByAsset: Object.fromEntries((reservedResp.entries || []).map((entry) => [entry.key, entry])),
     sellerItemsById: Object.fromEntries((sellerItemsResp.items || []).map((item) => [String(item.id), item])),
     channels: channelsResp.data || [],
+    officialBotContoursPayload: contoursResp.payload,
+    officialBotContoursError: contoursResp.error || '',
     paymentAdminTgId: paymentResp.data?.admin_tg_id || '',
     recoveryMap: Object.fromEntries((recoveryResp.rows || []).map((row) => [String(row.account_id), row])),
     recoverySupported: recoveryResp.support?.recovery !== false,
@@ -80,6 +89,7 @@ export function useBotsAccountsData({ accessToken, ownerId }) {
       ...prev,
       ...payload
     }));
+    return payload;
   }, [accessToken, ownerId]);
 
   useEffect(() => {
@@ -121,6 +131,8 @@ export function useBotsAccountsData({ accessToken, ownerId }) {
           reservedItemsByAsset: {},
           sellerItemsById: {},
           channels: [],
+          officialBotContoursPayload: null,
+          officialBotContoursError: '',
           paymentAdminTgId: '',
           recoveryMap: {},
           recoverySupported: true,

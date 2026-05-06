@@ -27,6 +27,7 @@ import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.
 import { useListedShopUserbotsController } from './bots/useListedShopUserbotsController.js';
 import { useLiveUserbotsController } from './bots/useLiveUserbotsController.js';
 import { useOfficialBotsController } from './bots/useOfficialBotsController.js';
+import { useSalesContourController } from './bots/useSalesContourController.js';
 import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
 import { useUserbotStorefront } from './bots/useUserbotStorefront.js';
 
@@ -100,6 +101,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     botForm,
     officialBots,
     saveBotAdmin,
+    saveBotKind,
     selectedOfficialBot,
     selectedOfficialBotId,
     setBotAdminDrafts,
@@ -110,6 +112,21 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     accounts: state.accounts,
     paymentAdminTgId: state.paymentAdminTgId,
     reloadAccounts,
+    setState,
+    showUiMessage
+  });
+
+  const salesContourSectionProps = useSalesContourController({
+    accessToken,
+    accounts: state.accounts,
+    proxies: state.proxies,
+    reservedUserbotIds: state.reservedUserbotIds,
+    channelsByBotId,
+    officialBotContoursPayload: state.officialBotContoursPayload,
+    officialBotContoursError: state.officialBotContoursError,
+    reloadAccounts,
+    selectedOfficialBot,
+    state,
     setState,
     showUiMessage
   });
@@ -210,8 +227,10 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     botAdminDrafts,
     setBotAdminDrafts,
     saveBotAdmin,
+    saveBotKind,
     deleteAccount,
-    channelsByBotId
+    channelsByBotId,
+    salesContourSectionProps
   };
 
   const onboardingSectionCommonProps = {
