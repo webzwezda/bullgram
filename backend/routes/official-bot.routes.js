@@ -51,6 +51,17 @@ function sendOfficialBotError(res, error, fallbackMessage, fallbackStatus = 500)
     return res.status(fallbackStatus).json({ error: fallbackMessage });
 }
 
+async function createSalesContourBotApi(ownerId, botId) {
+    const account = await salesContourService.assertOwnedSalesBot(ownerId, botId);
+    const token = account.session_data ? decrypt(account.session_data) : '';
+    if (!token) {
+        throw new SalesContourError('У official-бота нет сохраненного токена.', 409, 'bot_token_missing');
+    }
+
+    const bot = new Telegraf(token);
+    return bot.telegram;
+}
+
 /**
  * Роуты для официальных ботов
  */
@@ -261,6 +272,36 @@ export default function (supabase) {
             res.json({ success: true, ...data });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось сохранить sales contour');
+        }
+    });
+
+    router.post('/contours/rights', authenticateUser, async (req, res) => {
+        try {
+            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
+            const data = await salesContourService.getBotChatRights(req.user.id, req.body || {}, botApi);
+            res.json({ success: true, ...data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось проверить права бота в Telegram');
+        }
+    });
+
+    router.post('/contours/check-rights', authenticateUser, async (req, res) => {
+        try {
+            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
+            const data = await salesContourService.getBotChatRights(req.user.id, req.body || {}, botApi);
+            res.json({ success: true, ...data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось проверить права бота в Telegram');
+        }
+    });
+
+    router.post('/contours/prepare-userbot', authenticateUser, async (req, res) => {
+        try {
+            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
+            const data = await salesContourService.prepareSelectedUserbotAdmin(req.user.id, req.body || {}, botApi);
+            res.json({ success: true, ...data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось подготовить юзербота');
         }
     });
 

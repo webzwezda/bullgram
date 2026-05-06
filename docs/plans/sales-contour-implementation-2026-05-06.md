@@ -190,3 +190,34 @@
 - Verified: `cd admin-v2 && npm run build`.
 - Applied: Supabase migrations `sales_contours_botfather_mvp`, `sales_contours_selected_userbot_index`, `sales_contours_selected_userbot_covering_index`, `sales_contours_integrity_checks`.
 - Residual risk: if a template bot was made admin in Telegram while its runtime was disabled, Telegram may not replay old `my_chat_member` updates after switching it to sales. UI now warns the operator to re-sync/rebind Telegram places if linked targets do not appear.
+
+## Userbot Admin Preparation - 2026-05-06
+
+- Goal: official BotFather bot should act as the controlled admin handoff point for a selected contour userbot.
+- Rule: no Telegram crawling or automatic checks on page load; Telegram is touched only by explicit operator button.
+- Backend endpoints:
+  - `POST /api/official-bot/contours/check-rights`
+    - compatibility alias kept: `POST /api/official-bot/contours/rights`
+    - body: `bot_id`, optional `target = paid | public`
+    - uses the already saved `sales_bot_contours` row as source of truth
+    - checks official bot membership/admin rights in the saved contour target
+    - returns `rights.is_admin`, `rights.can_invite_users`, `rights.can_promote_members`, `rights.can_manage_chat`, `warnings`
+  - `POST /api/official-bot/contours/prepare-userbot`
+    - body: `bot_id`, optional `target = paid`
+    - requires saved contour with `userbot_mode = single` and `selected_userbot_id`
+    - UI intentionally blocks unsaved draft changes before calling this endpoint
+    - UI uses paid target for userbot preparation
+    - if userbot is not in the target chat, creates an invite link and returns `status = needs_join`
+    - if userbot is already a `member`, promotes it with the minimal safe admin-right set
+    - if userbot is already `administrator`, returns `status = already_admin`
+- Safety rules:
+  - official bot must already be admin with `can_invite_users` and `can_promote_members`
+  - userbot must already be eligible for contour use
+  - promote does not grant `can_promote_members`, `can_change_info`, `can_delete_messages`, or `can_restrict_members`
+  - the system never promises guaranteed private-message delivery
+- Verification:
+  - `node --check backend/routes/official-bot.routes.js`
+  - `node --check backend/services/sales-contour.service.js`
+  - `cd admin-v2 && npm run build`
+- Residual risk:
+  - runtime validation against live Telegram was not possible in this task because deploy/server start were explicitly out of scope

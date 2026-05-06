@@ -1,24 +1,83 @@
-import { AlertTriangle, Bot, Link2, MessageSquare, Radio, Save, UserRound } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, KeyRound, Link2, Loader2, MessageSquare, Radio, Save, ShieldCheck, UserRound } from 'lucide-react';
 
 function renderOptionLabel(option) {
   if (!option) return '';
   return option.label || option.title || option.id;
 }
 
+function normalizeStatusKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function isAdminStatusOk(value) {
+  return ['administrator', 'creator', 'owner', 'admin'].includes(normalizeStatusKey(value));
+}
+
+function formatAdminStatus(value) {
+  const normalized = normalizeStatusKey(value);
+  if (!normalized) return 'неизвестно';
+  if (['administrator', 'admin'].includes(normalized)) return 'админ';
+  if (normalized === 'creator') return 'владелец';
+  if (normalized === 'owner') return 'владелец';
+  return String(value || '').trim();
+}
+
+function formatPermissionValue(value) {
+  if (value === true) return 'да';
+  if (value === false) return 'нет';
+  return 'неизвестно';
+}
+
+function RightsPill({ state, label, value }) {
+  const toneClass = state === true
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : state === false
+      ? 'border-amber-200 bg-amber-50 text-amber-800'
+      : 'border-slate-200 bg-white text-slate-500';
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold ${toneClass}`}>
+      {state === true ? <CheckCircle2 className="size-3.5" /> : <AlertTriangle className="size-3.5" />}
+      {label}: {value}
+    </span>
+  );
+}
+
 export function SalesContourSection({
+  botRightsResult,
+  botRightsTarget,
+  checkBotRights,
+  checkingBotRights,
   contourError,
   contourWarnings,
   draft,
   paidChannelOptions,
+  prepareUserbotAdmin,
+  preparingUserbot,
   publicChatOptions,
   saveContour,
   savingContour,
   selectedOfficialBot,
+  setBotRightsTarget,
   setFieldValue,
   setUserbotMode,
+  userbotPrepareResult,
   userbotOptions
 }) {
   const isPoolMode = draft.userbotMode === 'pool';
+  const hasBotRightsResult = !!botRightsResult;
+  const prepareInviteLink = userbotPrepareResult?.inviteLink || '';
+  const canPrepareUserbot = draft.userbotMode === 'single' && !!draft.selectedUserbotId && !isPoolMode;
+  const isBotAdmin = isAdminStatusOk(botRightsResult?.adminStatus);
+  const prepareStatus = normalizeStatusKey(userbotPrepareResult?.status);
+  const prepareToneClass = prepareStatus === 'needs_join'
+    ? 'border-amber-200 bg-amber-50 text-amber-900'
+    : prepareStatus === 'error'
+      ? 'border-rose-200 bg-rose-50 text-rose-900'
+      : 'border-emerald-200 bg-emerald-50 text-emerald-900';
+  const prepareMessage = prepareStatus === 'needs_join'
+    ? userbotPrepareResult?.message || 'Юзербот должен вступить, потом нажми кнопку еще раз.'
+    : userbotPrepareResult?.message || 'Статус подготовки обновлен.';
 
   return (
     <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
@@ -180,6 +239,118 @@ export function SalesContourSection({
             ))}
           </div>
         ) : null}
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <ShieldCheck className="size-4 text-emerald-600" />
+                Права бота в Telegram
+              </div>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+                Работает по сохраненному контуру. Если менял поля выше, сначала нажми сохранение.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                value={botRightsTarget}
+                onChange={(event) => setBotRightsTarget(event.target.value)}
+              >
+                <option value="paid">Платный контур</option>
+                <option value="public" disabled={!draft.publicChatId}>Публичный чат</option>
+              </select>
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-4 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => checkBotRights(botRightsTarget)}
+                disabled={checkingBotRights}
+              >
+                {checkingBotRights ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                Проверить права
+              </button>
+            </div>
+          </div>
+
+          {hasBotRightsResult ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <RightsPill state={isBotAdmin} label="Статус" value={formatAdminStatus(botRightsResult?.adminStatus)} />
+              <RightsPill state={botRightsResult?.canInviteUsers} label="can_invite_users" value={formatPermissionValue(botRightsResult?.canInviteUsers)} />
+              <RightsPill state={botRightsResult?.canPromoteMembers} label="can_promote_members" value={formatPermissionValue(botRightsResult?.canPromoteMembers)} />
+              <RightsPill state={botRightsResult?.canManageChat} label="can_manage_chat" value={formatPermissionValue(botRightsResult?.canManageChat)} />
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500">
+              Нажми проверку после сохранения контура. Страница не дергает Telegram сама по себе.
+            </div>
+          )}
+
+          {botRightsResult?.message ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] font-medium text-slate-700">
+              {botRightsResult.message}
+            </div>
+          ) : null}
+
+          {botRightsResult?.warnings?.length ? (
+            <div className="mt-3 grid gap-2">
+              {botRightsResult.warnings.map((warning) => (
+                <div key={warning} className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-900">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+                  <span>{warning}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                  <UserRound className="size-4 text-violet-600" />
+                  Подготовка юзербота
+                </div>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+                  Работает только для платного контура и режима с одним выбранным юзерботом.
+                </p>
+              </div>
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-[13px] font-bold text-white shadow-sm shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={prepareUserbotAdmin}
+                disabled={!canPrepareUserbot || preparingUserbot}
+              >
+                {preparingUserbot ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
+                Подготовить юзербота
+              </button>
+            </div>
+
+            {userbotPrepareResult ? (
+              <div className={`mt-3 rounded-xl border px-4 py-3 text-sm ${prepareToneClass}`}>
+                <p className="font-bold">{prepareMessage}</p>
+                {prepareInviteLink ? (
+                  <a
+                    className="mt-2 inline-flex items-center gap-2 text-[13px] font-bold text-violet-700 hover:text-violet-900"
+                    href={prepareInviteLink}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Ссылка для вступления
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                ) : null}
+                {userbotPrepareResult?.warnings?.length ? (
+                  <div className="mt-2 grid gap-2">
+                    {userbotPrepareResult.warnings.map((warning) => (
+                      <div key={warning} className="flex gap-2 text-[13px] font-medium">
+                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
           <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">

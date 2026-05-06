@@ -7,6 +7,7 @@ const GROUP_CHAT_TYPES = new Set(['group', 'supergroup']);
 const BLOCKED_USERBOT_STATUSES = new Set(['restricted', 'expired', 'error']);
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ADMIN_MEMBER_STATUSES = new Set(['administrator', 'creator']);
 
 export class SalesContourError extends Error {
     constructor(message, statusCode = 400, code = 'sales_contour_error') {
@@ -94,6 +95,74 @@ function normalizeUserbotMode(value) {
 
 function normalizeChatType(value) {
     return String(value || '').trim().toLowerCase();
+}
+
+function normalizeContourTarget(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw || raw === 'paid') return 'paid';
+    if (raw === 'public') return 'public';
+    throw new SalesContourError('target должен быть paid или public.', 400, 'target_invalid');
+}
+
+function normalizeTelegramError(error) {
+    const message = String(error?.response?.description || error?.description || error?.message || error || '').trim();
+    const code = String(error?.code || error?.response?.error_code || '').trim();
+    return {
+        message,
+        code,
+        isNotFound: /user_not_participant|user not found|participant_id_invalid|member not found|not found/i.test(message),
+        isForbidden: /forbidden|not enough rights|can't|have no rights|not an administrator|chat_admin_required/i.test(message)
+    };
+}
+
+function buildTelegramMemberRights(member) {
+    const status = String(member?.status || '').trim().toLowerCase();
+    const isAdmin = ADMIN_MEMBER_STATUSES.has(status);
+
+    return {
+        status: status || 'unknown',
+        is_admin: isAdmin,
+        is_creator: status === 'creator',
+        can_invite_users: !!member?.can_invite_users || status === 'creator',
+        can_promote_members: !!member?.can_promote_members || status === 'creator',
+        can_manage_chat: !!member?.can_manage_chat || status === 'creator',
+        can_change_info: !!member?.can_change_info || status === 'creator',
+        can_delete_messages: !!member?.can_delete_messages || status === 'creator',
+        can_restrict_members: !!member?.can_restrict_members || status === 'creator'
+    };
+}
+
+function buildBotRightsWarnings(rights) {
+    const warnings = [];
+
+    if (!rights?.is_admin) {
+        warnings.push('Официальный бот не админ в этом Telegram-месте.');
+    }
+    if (!rights?.can_invite_users) {
+        warnings.push('Боту нужно право добавлять участников, чтобы выдать ссылку юзерботу.');
+    }
+    if (!rights?.can_promote_members) {
+        warnings.push('Боту нужно право добавлять админов, чтобы повысить юзербота.');
+    }
+
+    return warnings;
+}
+
+function mapTelegramMember(member) {
+    if (!member) return null;
+    return {
+        status: String(member.status || '').toLowerCase() || 'unknown',
+        user: member.user
+            ? {
+                id: member.user.id ? String(member.user.id) : null,
+                username: member.user.username || null,
+                first_name: member.user.first_name || null,
+                last_name: member.user.last_name || null,
+                is_bot: !!member.user.is_bot
+            }
+            : null,
+        rights: buildTelegramMemberRights(member)
+    };
 }
 
 function isFreshImportedUserbot(userbot) {
@@ -337,6 +406,18 @@ export class SalesContourService {
         return data || [];
     }
 
+    async loadContourForBot(ownerId, botId) {
+        const { data, error } = await this.supabase
+            .from('sales_bot_contours')
+            .select('bot_id, owner_id, paid_channel_id, public_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
+            .eq('owner_id', ownerId)
+            .eq('bot_id', botId)
+            .maybeSingle();
+
+        this.throwIfDbError(error);
+        return data || null;
+    }
+
     async assertOwnedSalesBot(ownerId, botId) {
         const { data, error } = await this.supabase
             .from('tg_accounts')
@@ -414,6 +495,252 @@ export class SalesContourService {
         }
 
         return selected;
+    }
+
+    resolveContourTargetChannel({ contour, channels, botId, target }) {
+        const targetChannelId = target === 'public' ? contour?.public_chat_id : contour?.paid_channel_id;
+        if (!targetChannelId) {
+            throw new SalesContourError(
+                target === 'public' ? 'В контуре не выбран публичный чат.' : 'В контуре не выбран платный канал.',
+                409,
+                target === 'public' ? 'public_chat_missing' : 'paid_channel_missing'
+            );
+        }
+
+        const channel = channels.find((item) => String(item.id) === String(targetChannelId)) || null;
+        this.validateChannelForBot(
+            channel,
+            botId,
+            target === 'public' ? 'public_chat_id' : 'paid_channel_id',
+            target === 'public' ? { allowedChatTypes: GROUP_CHAT_TYPES } : {}
+        );
+
+        return channel;
+    }
+
+    async loadContourRuntimeContext(ownerId, input = {}) {
+        const botId = normalizeUuid(input.bot_id ?? input.account_id, 'bot_id', { required: true });
+        const target = normalizeContourTarget(input.target);
+
+        const [bot, channels, contour] = await Promise.all([
+            this.assertOwnedSalesBot(ownerId, botId),
+            this.loadOwnedChannels(ownerId),
+            this.loadContourForBot(ownerId, botId)
+        ]);
+
+        if (!contour) {
+            throw new SalesContourError('Сначала сохрани контур продаж для этого бота.', 409, 'sales_contour_missing');
+        }
+
+        const channel = this.resolveContourTargetChannel({
+            contour,
+            channels,
+            botId: bot.id,
+            target
+        });
+
+        return { bot, channels, contour, channel, target };
+    }
+
+    async getBotChatRights(ownerId, input = {}, botApi) {
+        if (!botApi?.getChatMember) {
+            throw new SalesContourError('Telegram API бота недоступен.', 500, 'telegram_bot_api_missing');
+        }
+
+        const context = await this.loadContourRuntimeContext(ownerId, input);
+        const botTelegramId = String(context.bot.tg_account_id || '').trim();
+        if (!botTelegramId) {
+            throw new SalesContourError('У official-бота нет Telegram ID.', 409, 'bot_telegram_id_missing');
+        }
+
+        let member;
+        try {
+            member = await botApi.getChatMember(context.channel.tg_chat_id, botTelegramId);
+        } catch (error) {
+            const telegramError = normalizeTelegramError(error);
+            throw new SalesContourError(
+                telegramError.message || 'Не получилось проверить права official-бота в Telegram.',
+                telegramError.isForbidden ? 409 : 502,
+                telegramError.isForbidden ? 'bot_rights_check_forbidden' : 'bot_rights_check_failed'
+            );
+        }
+
+        const rights = buildTelegramMemberRights(member);
+        const warnings = buildBotRightsWarnings(rights);
+
+        return {
+            target: context.target,
+            status: warnings.length ? 'needs_attention' : 'ready',
+            admin_status: rights.status,
+            channel: mapChannel(context.channel, context.bot.id),
+            bot: {
+                id: context.bot.id,
+                tg_username: context.bot.tg_username || null,
+                tg_account_id: botTelegramId
+            },
+            member: mapTelegramMember(member),
+            rights,
+            warnings,
+            message: warnings.length ? warnings.join(' ') : 'Права official-бота подходят для подготовки юзербота.',
+            is_ready_for_userbot_admin: warnings.length === 0
+        };
+    }
+
+    async createUserbotInvite(botApi, channel) {
+        if (!botApi?.createChatInviteLink) {
+            throw new SalesContourError('Telegram API бота не умеет создавать invite link.', 500, 'telegram_invite_api_missing');
+        }
+
+        const expireDate = Math.floor(Date.now() / 1000) + 60 * 60;
+        const inviteName = `BullRun_userbot_${new Date().toISOString().slice(0, 16)}`;
+
+        try {
+            const invite = await botApi.createChatInviteLink(channel.tg_chat_id, {
+                name: inviteName,
+                expire_date: expireDate,
+                member_limit: 1,
+                creates_join_request: false
+            });
+
+            return {
+                invite_link: invite?.invite_link || null,
+                expire_date: expireDate,
+                name: inviteName
+            };
+        } catch (error) {
+            const telegramError = normalizeTelegramError(error);
+            throw new SalesContourError(
+                telegramError.message || 'Не получилось создать ссылку для юзербота.',
+                telegramError.isForbidden ? 409 : 502,
+                telegramError.isForbidden ? 'invite_create_forbidden' : 'invite_create_failed'
+            );
+        }
+    }
+
+    async loadSelectedContourUserbot(ownerId, contour) {
+        if (contour?.userbot_mode !== 'single' || !contour?.selected_userbot_id) {
+            throw new SalesContourError('Для подготовки нужен режим “Один юзербот” и выбранный аккаунт.', 409, 'single_userbot_missing');
+        }
+
+        const userbotState = await this.loadOwnedUserbots(ownerId);
+        const userbot = userbotState.optionById.get(String(contour.selected_userbot_id));
+        if (!userbot) {
+            throw new SalesContourError('Выбранный юзербот не найден у владельца.', 404, 'userbot_not_found');
+        }
+        if (!userbot.eligible_for_contour) {
+            throw new SalesContourError(
+                userbot.availability_reason || 'Выбранный юзербот сейчас нельзя использовать в sales contour.',
+                409,
+                'userbot_not_eligible'
+            );
+        }
+        if (!userbot.tg_account_id) {
+            throw new SalesContourError('У выбранного юзербота нет Telegram ID.', 409, 'userbot_telegram_id_missing');
+        }
+
+        return userbot;
+    }
+
+    async prepareSelectedUserbotAdmin(ownerId, input = {}, botApi) {
+        if (!botApi?.getChatMember || !botApi?.promoteChatMember) {
+            throw new SalesContourError('Telegram API бота недоступен.', 500, 'telegram_bot_api_missing');
+        }
+
+        const context = await this.loadContourRuntimeContext(ownerId, input);
+        const rightsResult = await this.getBotChatRights(ownerId, { bot_id: context.bot.id, target: context.target }, botApi);
+        const missingRights = buildBotRightsWarnings(rightsResult.rights);
+        if (missingRights.length) {
+            throw new SalesContourError(missingRights.join(' '), 409, 'bot_rights_missing');
+        }
+
+        const userbot = await this.loadSelectedContourUserbot(ownerId, context.contour);
+        let userbotMember = null;
+
+        try {
+            userbotMember = await botApi.getChatMember(context.channel.tg_chat_id, userbot.tg_account_id);
+        } catch (error) {
+            const telegramError = normalizeTelegramError(error);
+            if (!telegramError.isNotFound) {
+                throw new SalesContourError(
+                    telegramError.message || 'Не получилось проверить юзербота в Telegram-чате.',
+                    telegramError.isForbidden ? 409 : 502,
+                    telegramError.isForbidden ? 'userbot_member_check_forbidden' : 'userbot_member_check_failed'
+                );
+            }
+        }
+
+        if (!userbotMember || ['left', 'kicked'].includes(String(userbotMember.status || '').toLowerCase())) {
+            const invite = await this.createUserbotInvite(botApi, context.channel);
+            return {
+                status: 'needs_join',
+                target: context.target,
+                channel: mapChannel(context.channel, context.bot.id),
+                userbot,
+                selected_userbot_id: userbot.id,
+                invite,
+                invite_link: invite.invite_link,
+                message: 'Юзербот ещё не в чате. Открой ссылку в этом аккаунте, дождись вступления и нажми подготовку ещё раз.'
+            };
+        }
+
+        const memberRights = buildTelegramMemberRights(userbotMember);
+        if (memberRights.is_admin) {
+            return {
+                status: 'already_admin',
+                target: context.target,
+                channel: mapChannel(context.channel, context.bot.id),
+                userbot,
+                selected_userbot_id: userbot.id,
+                userbot_member: mapTelegramMember(userbotMember),
+                message: 'Юзербот уже админ в этом Telegram-месте.'
+            };
+        }
+
+        try {
+            await botApi.promoteChatMember(context.channel.tg_chat_id, userbot.tg_account_id, {
+                can_invite_users: true,
+                can_promote_members: false,
+                can_change_info: false,
+                can_delete_messages: false,
+                can_restrict_members: false,
+                can_pin_messages: false,
+                can_manage_topics: false,
+                can_manage_video_chats: false,
+                can_post_messages: false,
+                can_edit_messages: false
+            });
+        } catch (error) {
+            const telegramError = normalizeTelegramError(error);
+            throw new SalesContourError(
+                telegramError.message || 'Не получилось сделать юзербота админом.',
+                telegramError.isForbidden ? 409 : 502,
+                telegramError.isForbidden ? 'userbot_promote_forbidden' : 'userbot_promote_failed'
+            );
+        }
+
+        let promotedMember = null;
+        try {
+            promotedMember = await botApi.getChatMember(context.channel.tg_chat_id, userbot.tg_account_id);
+        } catch {
+            promotedMember = null;
+        }
+
+        return {
+            status: 'promoted',
+            target: context.target,
+            channel: mapChannel(context.channel, context.bot.id),
+            userbot,
+            selected_userbot_id: userbot.id,
+            userbot_member: mapTelegramMember(promotedMember),
+            granted_rights: {
+                can_invite_users: true,
+                can_promote_members: false,
+                can_change_info: false,
+                can_delete_messages: false,
+                can_restrict_members: false
+            },
+            message: 'Юзербот повышен до админа с минимальными правами.'
+        };
     }
 
     async getContoursOverview(ownerId) {
