@@ -3289,7 +3289,10 @@ export default function (supabase) {
                                         bot_id: matchedBot.id,
                                         tg_chat_id: chatIdStr,
                                         title: dialog.title,
-                                        chat_type: dialog.isGroup ? 'supergroup' : 'channel'
+                                        chat_type: dialog.isGroup ? 'supergroup' : 'channel',
+                                        username: String(dialog.entity?.username || '').trim().replace(/^@/, '') || null,
+                                        visibility: dialog.entity?.username ? 'public' : 'private',
+                                        last_visibility_check_at: new Date().toISOString()
                                     }, { onConflict: 'tg_chat_id' });
                                     if (!syncResults.find(r => r.chat_id === chatIdStr)) syncResults.push({ chat_id: chatIdStr, chat_name: dialog.title, bot_name: matchedBot.tg_username });
                                 }

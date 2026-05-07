@@ -23,6 +23,23 @@ function looksLikeTonWallet(value) {
     return false;
 }
 
+function normalizeTelegramUsername(value) {
+    return String(value || '').trim().replace(/^@/, '') || null;
+}
+
+function resolveTelegramVisibility(username) {
+    return normalizeTelegramUsername(username) ? 'public' : 'private';
+}
+
+function buildChannelVisibilityPayload(chat = {}) {
+    const username = normalizeTelegramUsername(chat.username);
+    return {
+        username,
+        visibility: resolveTelegramVisibility(username),
+        last_visibility_check_at: new Date().toISOString()
+    };
+}
+
 function pendingReferralWalletKey(botId, tgUserId) {
     return `${botId}:${tgUserId}`;
 }
@@ -3106,7 +3123,8 @@ export class OfficialBotService {
                                 bot_id: botId,
                                 tg_chat_id: chat.id,
                                 title: chat.title || String(chat.id),
-                                chat_type: chat.type || 'channel'
+                                chat_type: chat.type || 'channel',
+                                ...buildChannelVisibilityPayload(chat)
                             },
                             { onConflict: 'tg_chat_id' }
                         );

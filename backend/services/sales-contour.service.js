@@ -4,6 +4,37 @@ export const SALES_BOT_KINDS = Object.freeze(['sales', 'template']);
 export const SALES_CONTOUR_USERBOT_MODES = Object.freeze(['none', 'single', 'pool']);
 
 const GROUP_CHAT_TYPES = new Set(['group', 'supergroup']);
+const CHANNEL_CHAT_TYPES = new Set(['channel']);
+const CONTOUR_TARGET_CONFIG = Object.freeze({
+    public_channel: {
+        field: 'public_channel_id',
+        label: 'открытый канал',
+        missingCode: 'public_channel_missing',
+        missingMessage: 'В контуре не выбран открытый канал.',
+        allowedChatTypes: CHANNEL_CHAT_TYPES
+    },
+    public_chat: {
+        field: 'public_chat_id',
+        label: 'открытый чат',
+        missingCode: 'public_chat_missing',
+        missingMessage: 'В контуре не выбран открытый чат.',
+        allowedChatTypes: GROUP_CHAT_TYPES
+    },
+    paid_channel: {
+        field: 'paid_channel_id',
+        label: 'закрытый канал',
+        missingCode: 'paid_channel_missing',
+        missingMessage: 'В контуре не выбран закрытый канал.',
+        allowedChatTypes: CHANNEL_CHAT_TYPES
+    },
+    paid_chat: {
+        field: 'paid_chat_id',
+        label: 'закрытый чат',
+        missingCode: 'paid_chat_missing',
+        missingMessage: 'В контуре не выбран закрытый чат.',
+        allowedChatTypes: GROUP_CHAT_TYPES
+    }
+});
 const BLOCKED_USERBOT_STATUSES = new Set(['restricted', 'expired', 'error']);
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -25,6 +56,7 @@ export function getSalesContourFoundationMessage() {
 export function isSalesContourFoundationError(error) {
     const message = String(error?.message || '').toLowerCase();
     return message.includes('sales_bot_contours')
+        || message.includes('sales_bot_contour_rights')
         || message.includes('bot_kind')
         || message.includes('selected_userbot_ids');
 }
@@ -97,11 +129,21 @@ function normalizeChatType(value) {
     return String(value || '').trim().toLowerCase();
 }
 
+function normalizeVisibility(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return ['public', 'private', 'unknown'].includes(raw) ? raw : 'unknown';
+}
+
 function normalizeContourTarget(value) {
     const raw = String(value || '').trim().toLowerCase();
-    if (!raw || raw === 'paid') return 'paid';
-    if (raw === 'public') return 'public';
-    throw new SalesContourError('target должен быть paid или public.', 400, 'target_invalid');
+    if (!raw || raw === 'paid') return 'paid_channel';
+    if (raw === 'public') return 'public_chat';
+    if (raw === 'open_channel') return 'public_channel';
+    if (raw === 'open_chat') return 'public_chat';
+    if (raw === 'closed_channel' || raw === 'access_channel') return 'paid_channel';
+    if (raw === 'closed_chat' || raw === 'access_chat') return 'paid_chat';
+    if (Object.prototype.hasOwnProperty.call(CONTOUR_TARGET_CONFIG, raw)) return raw;
+    throw new SalesContourError('target должен быть public_channel, public_chat, paid_channel или paid_chat.', 400, 'target_invalid');
 }
 
 function normalizeTelegramError(error) {
@@ -148,6 +190,27 @@ function buildBotRightsWarnings(rights) {
     return warnings;
 }
 
+function buildRoleRightsWarnings(rights, target) {
+    const warnings = [];
+    const normalizedTarget = normalizeContourTarget(target);
+
+    if (!rights?.is_admin) {
+        warnings.push('Бот не назначен админом в этой площадке.');
+        return warnings;
+    }
+
+    if (['paid_channel', 'paid_chat'].includes(normalizedTarget)) {
+        if (!rights?.can_invite_users) {
+            warnings.push('Не хватает права приглашать участников.');
+        }
+        if (!rights?.can_restrict_members) {
+            warnings.push('Не хватает права удалять участников.');
+        }
+    }
+
+    return warnings;
+}
+
 function mapTelegramMember(member) {
     if (!member) return null;
     return {
@@ -162,6 +225,35 @@ function mapTelegramMember(member) {
             }
             : null,
         rights: buildTelegramMemberRights(member)
+    };
+}
+
+function mapContourRightsRow(row) {
+    if (!row) return null;
+    const target = normalizeContourTarget(row.target);
+    const warnings = Array.isArray(row.warnings)
+        ? row.warnings.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+
+    return {
+        target,
+        status: row.status || 'unknown',
+        admin_status: row.admin_status || 'unknown',
+        is_admin: !!row.is_admin,
+        channel_id: row.channel_id || null,
+        bot_id: row.bot_id || null,
+        checked_at: row.checked_at || null,
+        rights: {
+            status: row.admin_status || 'unknown',
+            is_admin: !!row.is_admin,
+            is_creator: row.admin_status === 'creator',
+            can_invite_users: row.can_invite_users,
+            can_restrict_members: row.can_restrict_members,
+            can_promote_members: row.can_promote_members,
+            can_manage_chat: row.can_manage_chat
+        },
+        warnings,
+        message: row.message || ''
     };
 }
 
@@ -211,12 +303,19 @@ function buildUserbotOption(userbot, reservedUserbotIds = new Set()) {
 }
 
 function mapChannel(channel, selectedBotId = null) {
+    const username = String(channel.username || '').trim().replace(/^@/, '') || null;
+    const visibility = normalizeVisibility(channel.visibility || (username ? 'public' : 'unknown'));
+
     return {
         id: channel.id,
         title: channel.title || null,
         tg_chat_id: channel.tg_chat_id ? String(channel.tg_chat_id) : null,
         bot_id: channel.bot_id || null,
         chat_type: normalizeChatType(channel.chat_type || 'unknown') || 'unknown',
+        username,
+        visibility,
+        is_public: visibility === 'public',
+        last_visibility_check_at: channel.last_visibility_check_at || null,
         created_at: channel.created_at || null,
         linked_to_selected_bot: selectedBotId ? String(channel.bot_id || '') === String(selectedBotId) : false
     };
@@ -236,20 +335,26 @@ function mapContourRow(contour, { channelById, userbotById }) {
             })()
             : [];
     const paidChannel = contour?.paid_channel_id ? channelById.get(String(contour.paid_channel_id)) || null : null;
+    const publicChannel = contour?.public_channel_id ? channelById.get(String(contour.public_channel_id)) || null : null;
     const publicChat = contour?.public_chat_id ? channelById.get(String(contour.public_chat_id)) || null : null;
+    const paidChat = contour?.paid_chat_id ? channelById.get(String(contour.paid_chat_id)) || null : null;
 
     return {
         bot_id: contour.bot_id,
         owner_id: contour.owner_id,
+        public_channel_id: contour.public_channel_id || null,
         paid_channel_id: contour.paid_channel_id,
         public_chat_id: contour.public_chat_id || null,
+        paid_chat_id: contour.paid_chat_id || null,
         userbot_mode: contour.userbot_mode || 'none',
         selected_userbot_id: contour.selected_userbot_id || null,
         selected_userbot_ids: selectedUserbotIds,
         created_at: contour.created_at || null,
         updated_at: contour.updated_at || null,
+        public_channel: publicChannel ? mapChannel(publicChannel) : null,
         paid_channel: paidChannel ? mapChannel(paidChannel) : null,
         public_chat: publicChat ? mapChannel(publicChat) : null,
+        paid_chat: paidChat ? mapChannel(paidChat) : null,
         selected_userbot: contour.selected_userbot_id ? userbotById.get(String(contour.selected_userbot_id)) || null : null,
         selected_userbots: selectedUserbotIds.map((id) => userbotById.get(String(id)) || null).filter(Boolean)
     };
@@ -257,8 +362,10 @@ function mapContourRow(contour, { channelById, userbotById }) {
 
 export function normalizeSalesContourPayload(input = {}) {
     const botId = normalizeUuid(input.bot_id ?? input.account_id, 'bot_id', { required: true });
-    const paidChannelId = normalizeUuid(input.paid_channel_id, 'paid_channel_id', { required: true });
+    const publicChannelId = normalizeUuid(input.public_channel_id, 'public_channel_id', { required: false });
+    const paidChannelId = normalizeUuid(input.paid_channel_id, 'paid_channel_id', { required: false });
     const publicChatId = normalizeUuid(input.public_chat_id, 'public_chat_id', { required: false });
+    const paidChatId = normalizeUuid(input.paid_chat_id, 'paid_chat_id', { required: false });
     const userbotMode = normalizeUserbotMode(input.userbot_mode ?? input.userbotMode);
     const selectedUserbotId = userbotMode === 'single'
         ? normalizeUuid(input.selected_userbot_id, 'selected_userbot_id', { required: false })
@@ -277,12 +384,35 @@ export function normalizeSalesContourPayload(input = {}) {
 
     return {
         botId,
+        publicChannelId,
         paidChannelId,
         publicChatId,
+        paidChatId,
         userbotMode,
         selectedUserbotId: userbotMode === 'single' ? selectedUserbotId : null,
         selectedUserbotIds: userbotMode === 'pool' ? selectedUserbotIds : []
     };
+}
+
+function assertDistinctContourTargets(payload) {
+    const selected = [
+        ['public_channel_id', payload.publicChannelId],
+        ['paid_channel_id', payload.paidChannelId],
+        ['public_chat_id', payload.publicChatId],
+        ['paid_chat_id', payload.paidChatId]
+    ].filter(([, value]) => value);
+
+    for (let index = 0; index < selected.length; index += 1) {
+        const [fieldName, value] = selected[index];
+        const duplicate = selected.slice(index + 1).find(([, nextValue]) => String(nextValue) === String(value));
+        if (duplicate) {
+            throw new SalesContourError(
+                `Telegram-площадка не может одновременно быть ${fieldName} и ${duplicate[0]}.`,
+                409,
+                'contour_targets_not_distinct'
+            );
+        }
+    }
 }
 
 function buildContourWarnings(bot, contourPayload) {
@@ -298,7 +428,7 @@ function buildContourWarnings(bot, contourPayload) {
     if (!contourPayload?.paid_channel_id) {
         warnings.push({
             code: 'paid_channel_missing',
-            message: 'Не выбран основной платный канал.'
+            message: 'Не выбран закрытый канал.'
         });
     }
 
@@ -362,7 +492,7 @@ export class SalesContourService {
     async loadOwnedChannels(ownerId) {
         const { data, error } = await this.supabase
             .from('channels')
-            .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, created_at')
+            .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, username, visibility, last_visibility_check_at, created_at')
             .eq('owner_id', ownerId)
             .order('created_at', { ascending: false });
 
@@ -398,7 +528,7 @@ export class SalesContourService {
     async loadContours(ownerId) {
         const { data, error } = await this.supabase
             .from('sales_bot_contours')
-            .select('bot_id, owner_id, paid_channel_id, public_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
+            .select('bot_id, owner_id, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
             .eq('owner_id', ownerId)
             .order('updated_at', { ascending: false });
 
@@ -406,10 +536,51 @@ export class SalesContourService {
         return data || [];
     }
 
+    async loadContourRights(ownerId) {
+        const { data, error } = await this.supabase
+            .from('sales_bot_contour_rights')
+            .select('owner_id, bot_id, channel_id, target, status, admin_status, is_admin, can_invite_users, can_restrict_members, can_promote_members, can_manage_chat, warnings, message, checked_at, updated_at')
+            .eq('owner_id', ownerId)
+            .order('checked_at', { ascending: false });
+
+        this.throwIfDbError(error);
+        return data || [];
+    }
+
+    async saveContourRights(ownerId, { bot, channel, target, rights, warnings, status, message }) {
+        const payload = {
+            owner_id: ownerId,
+            bot_id: bot.id,
+            channel_id: channel.id,
+            target: normalizeContourTarget(target),
+            status: status || 'unknown',
+            admin_status: rights.status || 'unknown',
+            is_admin: !!rights.is_admin,
+            can_invite_users: !!rights.can_invite_users,
+            can_restrict_members: !!rights.can_restrict_members,
+            can_promote_members: !!rights.can_promote_members,
+            can_manage_chat: !!rights.can_manage_chat,
+            warnings: Array.isArray(warnings) ? warnings : [],
+            message: message || '',
+            raw_rights: rights,
+            checked_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+
+        const { data, error } = await this.supabase
+            .from('sales_bot_contour_rights')
+            .upsert(payload, { onConflict: 'bot_id,target' })
+            .select('owner_id, bot_id, channel_id, target, status, admin_status, is_admin, can_invite_users, can_restrict_members, can_promote_members, can_manage_chat, warnings, message, checked_at, updated_at')
+            .single();
+
+        this.throwIfDbError(error);
+        return mapContourRightsRow(data);
+    }
+
     async loadContourForBot(ownerId, botId) {
         const { data, error } = await this.supabase
             .from('sales_bot_contours')
-            .select('bot_id, owner_id, paid_channel_id, public_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
+            .select('bot_id, owner_id, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
             .eq('owner_id', ownerId)
             .eq('bot_id', botId)
             .maybeSingle();
@@ -455,7 +626,8 @@ export class SalesContourService {
         }
 
         if (allowedChatTypes && !allowedChatTypes.has(chatType)) {
-            throw new SalesContourError(`Для ${fieldName} нужен group или supergroup.`, 409, `${fieldName}_chat_type_invalid`);
+            const expected = allowedChatTypes.has('channel') ? 'channel' : 'group или supergroup';
+            throw new SalesContourError(`Для ${fieldName} нужен ${expected}.`, 409, `${fieldName}_chat_type_invalid`);
         }
 
         const linkedBotId = String(channel.bot_id || '').trim();
@@ -498,12 +670,14 @@ export class SalesContourService {
     }
 
     resolveContourTargetChannel({ contour, channels, botId, target }) {
-        const targetChannelId = target === 'public' ? contour?.public_chat_id : contour?.paid_channel_id;
+        const normalizedTarget = normalizeContourTarget(target);
+        const targetConfig = CONTOUR_TARGET_CONFIG[normalizedTarget];
+        const targetChannelId = contour?.[targetConfig.field];
         if (!targetChannelId) {
             throw new SalesContourError(
-                target === 'public' ? 'В контуре не выбран публичный чат.' : 'В контуре не выбран платный канал.',
+                targetConfig.missingMessage,
                 409,
-                target === 'public' ? 'public_chat_missing' : 'paid_channel_missing'
+                targetConfig.missingCode
             );
         }
 
@@ -511,8 +685,8 @@ export class SalesContourService {
         this.validateChannelForBot(
             channel,
             botId,
-            target === 'public' ? 'public_chat_id' : 'paid_channel_id',
-            target === 'public' ? { allowedChatTypes: GROUP_CHAT_TYPES } : {}
+            targetConfig.field,
+            { allowedChatTypes: targetConfig.allowedChatTypes }
         );
 
         return channel;
@@ -566,12 +740,24 @@ export class SalesContourService {
         }
 
         const rights = buildTelegramMemberRights(member);
-        const warnings = buildBotRightsWarnings(rights);
+        const warnings = buildRoleRightsWarnings(rights, context.target);
+        const status = warnings.length ? 'needs_attention' : 'ready';
+        const message = warnings.length ? warnings.join(' ') : 'Права official-бота сохранены.';
+        const cachedRights = await this.saveContourRights(ownerId, {
+            bot: context.bot,
+            channel: context.channel,
+            target: context.target,
+            rights,
+            warnings,
+            status,
+            message
+        });
 
         return {
             target: context.target,
-            status: warnings.length ? 'needs_attention' : 'ready',
+            status,
             admin_status: rights.status,
+            channel_id: context.channel.id,
             channel: mapChannel(context.channel, context.bot.id),
             bot: {
                 id: context.bot.id,
@@ -581,8 +767,10 @@ export class SalesContourService {
             member: mapTelegramMember(member),
             rights,
             warnings,
-            message: warnings.length ? warnings.join(' ') : 'Права official-бота подходят для подготовки юзербота.',
-            is_ready_for_userbot_admin: warnings.length === 0
+            cached_rights: cachedRights,
+            checked_at: cachedRights?.checked_at || null,
+            message,
+            is_ready_for_userbot_admin: buildBotRightsWarnings(rights).length === 0
         };
     }
 
@@ -744,16 +932,26 @@ export class SalesContourService {
     }
 
     async getContoursOverview(ownerId) {
-        const [bots, channels, contours, userbotState] = await Promise.all([
+        const [bots, channels, contours, contourRights, userbotState] = await Promise.all([
             this.loadOwnedOfficialBots(ownerId),
             this.loadOwnedChannels(ownerId),
             this.loadContours(ownerId),
+            this.loadContourRights(ownerId),
             this.loadOwnedUserbots(ownerId)
         ]);
 
         const contourByBotId = new Map(contours.map((item) => [String(item.bot_id), item]));
+        const rightsByBotId = new Map();
         const channelById = new Map(channels.map((item) => [String(item.id), item]));
         const linkedChannelMap = new Map();
+
+        for (const row of contourRights) {
+            const botId = String(row.bot_id || '');
+            const mapped = mapContourRightsRow(row);
+            if (!botId || !mapped) continue;
+            if (!rightsByBotId.has(botId)) rightsByBotId.set(botId, {});
+            rightsByBotId.get(botId)[mapped.target] = mapped;
+        }
 
         for (const channel of channels) {
             const botId = String(channel.bot_id || '').trim();
@@ -766,13 +964,14 @@ export class SalesContourService {
             bots: bots.map((bot) => {
                 const botKind = normalizeBotKind(bot.bot_kind, { allowMissing: true }) || 'sales';
                 const linkedChannels = linkedChannelMap.get(String(bot.id)) || [];
-                const paidChannelOptions = linkedChannels
-                    .filter((channel) => normalizeChatType(channel.chat_type) !== 'private')
+                const channelOptions = linkedChannels
+                    .filter((channel) => normalizeChatType(channel.chat_type) === 'channel')
                     .map((channel) => mapChannel(channel, bot.id));
-                const publicChatOptions = linkedChannels
+                const chatOptions = linkedChannels
                     .filter((channel) => GROUP_CHAT_TYPES.has(normalizeChatType(channel.chat_type)))
                     .map((channel) => mapChannel(channel, bot.id));
                 const rawContour = contourByBotId.get(String(bot.id)) || null;
+                const rightsByTarget = rightsByBotId.get(String(bot.id)) || {};
                 const contour = rawContour
                     ? mapContourRow(rawContour, {
                         channelById,
@@ -792,10 +991,13 @@ export class SalesContourService {
                     runtime_status: bot.runtime_status || null,
                     runtime_error: bot.runtime_error || null,
                     contour,
+                    rights_by_target: rightsByTarget,
                     readiness,
                     linked_channels: linkedChannels.map((channel) => mapChannel(channel, bot.id)),
-                    paid_channel_options: paidChannelOptions,
-                    public_chat_options: publicChatOptions,
+                    public_channel_options: channelOptions,
+                    paid_channel_options: channelOptions,
+                    public_chat_options: chatOptions,
+                    paid_chat_options: chatOptions,
                     userbot_options: userbotState.options
                 };
             }),
@@ -808,9 +1010,7 @@ export class SalesContourService {
 
     async saveContour(ownerId, input = {}) {
         const payload = normalizeSalesContourPayload(input);
-        if (payload.publicChatId && String(payload.publicChatId) === String(payload.paidChannelId)) {
-            throw new SalesContourError('Публичный чат и платный канал должны быть разными Telegram-местами.', 409, 'public_chat_same_as_paid_channel');
-        }
+        assertDistinctContourTargets(payload);
         const bot = await this.assertOwnedSalesBot(ownerId, payload.botId);
 
         const [channels, userbotState] = await Promise.all([
@@ -819,13 +1019,25 @@ export class SalesContourService {
         ]);
 
         const channelById = new Map(channels.map((item) => [String(item.id), item]));
-        const paidChannel = channelById.get(String(payload.paidChannelId)) || null;
+        const publicChannel = payload.publicChannelId ? channelById.get(String(payload.publicChannelId)) || null : null;
+        const paidChannel = payload.paidChannelId ? channelById.get(String(payload.paidChannelId)) || null : null;
         const publicChat = payload.publicChatId ? channelById.get(String(payload.publicChatId)) || null : null;
+        const paidChat = payload.paidChatId ? channelById.get(String(payload.paidChatId)) || null : null;
 
-        this.validateChannelForBot(paidChannel, bot.id, 'paid_channel_id');
+        if (publicChannel) {
+            this.validateChannelForBot(publicChannel, bot.id, 'public_channel_id', { allowedChatTypes: CHANNEL_CHAT_TYPES });
+        }
+
+        if (paidChannel) {
+            this.validateChannelForBot(paidChannel, bot.id, 'paid_channel_id', { allowedChatTypes: CHANNEL_CHAT_TYPES });
+        }
 
         if (publicChat) {
             this.validateChannelForBot(publicChat, bot.id, 'public_chat_id', { allowedChatTypes: GROUP_CHAT_TYPES });
+        }
+
+        if (paidChat) {
+            this.validateChannelForBot(paidChat, bot.id, 'paid_chat_id', { allowedChatTypes: GROUP_CHAT_TYPES });
         }
 
         const requestedUserbotIds = payload.userbotMode === 'single'
@@ -839,8 +1051,10 @@ export class SalesContourService {
         const upsertPayload = {
             bot_id: bot.id,
             owner_id: ownerId,
+            public_channel_id: payload.publicChannelId,
             paid_channel_id: payload.paidChannelId,
             public_chat_id: payload.publicChatId,
+            paid_chat_id: payload.paidChatId,
             userbot_mode: payload.userbotMode,
             selected_userbot_id: payload.userbotMode === 'single' ? payload.selectedUserbotId : null,
             selected_userbot_ids: payload.userbotMode === 'pool' ? selectedUserbots.map((item) => item.id) : [],
@@ -850,7 +1064,7 @@ export class SalesContourService {
         const { data, error } = await this.supabase
             .from('sales_bot_contours')
             .upsert(upsertPayload, { onConflict: 'bot_id' })
-            .select('bot_id, owner_id, paid_channel_id, public_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
+            .select('bot_id, owner_id, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id, userbot_mode, selected_userbot_id, selected_userbot_ids, created_at, updated_at')
             .single();
 
         this.throwIfDbError(error);

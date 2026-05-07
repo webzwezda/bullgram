@@ -51,6 +51,18 @@ function sendOfficialBotError(res, error, fallbackMessage, fallbackStatus = 500)
     return res.status(fallbackStatus).json({ error: fallbackMessage });
 }
 
+function normalizeChannelChatType(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['channel', 'group', 'supergroup'].includes(normalized)) return normalized;
+    throw new SalesContourError('Тип площадки должен быть channel, group или supergroup.', 400, 'channel_chat_type_invalid');
+}
+
+function normalizeRefreshedChannelChatType(value, fallback = 'channel') {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['channel', 'group', 'supergroup'].includes(normalized)) return normalized;
+    return normalizeChannelChatType(fallback);
+}
+
 async function createSalesContourBotApi(ownerId, botId) {
     const account = await salesContourService.assertOwnedSalesBot(ownerId, botId);
     const token = account.session_data ? decrypt(account.session_data) : '';
@@ -302,6 +314,172 @@ export default function (supabase) {
             res.json({ success: true, ...data });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось подготовить юзербота');
+        }
+    });
+
+    router.patch('/channels/:channelId', authenticateUser, async (req, res) => {
+        try {
+            const channelId = String(req.params.channelId || '').trim();
+            if (!channelId) {
+                return res.status(400).json({ error: 'Не передана Telegram-площадка' });
+            }
+
+            const chatType = normalizeChannelChatType(req.body?.chat_type ?? req.body?.chatType);
+
+            const { data, error } = await supabase
+                .from('channels')
+                .update({ chat_type: chatType })
+                .eq('id', channelId)
+                .eq('owner_id', req.user.id)
+                .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, username, visibility, last_visibility_check_at, created_at')
+                .single();
+
+            if (error) throw error;
+            if (!data) {
+                return res.status(404).json({ error: 'Telegram-площадка не найдена' });
+            }
+
+            res.json({ success: true, channel: data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось обновить Telegram-площадку');
+        }
+    });
+
+    router.post('/channels/:channelId/refresh', authenticateUser, async (req, res) => {
+        try {
+            const channelId = String(req.params.channelId || '').trim();
+            if (!channelId) {
+                return res.status(400).json({ error: 'Не передана Telegram-площадка' });
+            }
+
+            const { data: channel, error: channelError } = await supabase
+                .from('channels')
+                .select('id, owner_id, bot_id, tg_chat_id, title, chat_type')
+                .eq('id', channelId)
+                .eq('owner_id', req.user.id)
+                .maybeSingle();
+
+            if (channelError) throw channelError;
+            if (!channel) {
+                return res.status(404).json({ error: 'Telegram-площадка не найдена' });
+            }
+            if (!channel.bot_id) {
+                throw new SalesContourError('У площадки не привязан official-бот.', 409, 'channel_bot_missing');
+            }
+
+            const { data: account, error: accountError } = await supabase
+                .from('tg_accounts')
+                .select('id, owner_id, account_type, session_data')
+                .eq('id', channel.bot_id)
+                .eq('owner_id', req.user.id)
+                .eq('account_type', 'bot')
+                .maybeSingle();
+
+            if (accountError) throw accountError;
+            if (!account?.session_data) {
+                throw new SalesContourError('У official-бота нет сохраненного токена.', 409, 'bot_token_missing');
+            }
+
+            const bot = new Telegraf(decrypt(account.session_data));
+            let chat;
+            try {
+                chat = await bot.telegram.getChat(channel.tg_chat_id);
+            } catch (error) {
+                const message = String(error?.response?.description || error?.message || '').trim();
+                throw new SalesContourError(
+                    message || 'Не получилось обновить площадку из Telegram.',
+                    502,
+                    'channel_refresh_failed'
+                );
+            }
+
+            const username = String(chat?.username || '').trim().replace(/^@/, '') || null;
+            const title = String(chat?.title || chat?.first_name || channel.title || channel.tg_chat_id || '').trim();
+            const chatType = normalizeRefreshedChannelChatType(chat?.type, channel.chat_type);
+            const visibility = username ? 'public' : 'private';
+
+            const { data, error } = await supabase
+                .from('channels')
+                .update({
+                    title,
+                    chat_type: chatType,
+                    username,
+                    visibility,
+                    last_visibility_check_at: new Date().toISOString()
+                })
+                .eq('id', channel.id)
+                .eq('owner_id', req.user.id)
+                .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, username, visibility, last_visibility_check_at, created_at')
+                .single();
+
+            if (error) throw error;
+
+            res.json({ success: true, channel: data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось обновить информацию о Telegram-площадке');
+        }
+    });
+
+    router.delete('/channels/:channelId', authenticateUser, async (req, res) => {
+        try {
+            const channelId = String(req.params.channelId || '').trim();
+            if (!channelId) {
+                return res.status(400).json({ error: 'Не передана Telegram-площадка' });
+            }
+
+            const { data: channel, error: channelError } = await supabase
+                .from('channels')
+                .select('id')
+                .eq('id', channelId)
+                .eq('owner_id', req.user.id)
+                .maybeSingle();
+
+            if (channelError) throw channelError;
+            if (!channel) {
+                return res.status(404).json({ error: 'Telegram-площадка не найдена' });
+            }
+
+            const { data: contourUsages, error: contourUsagesError } = await supabase
+                .from('sales_bot_contours')
+                .select('bot_id, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id')
+                .eq('owner_id', req.user.id)
+                .or(`public_channel_id.eq.${channelId},paid_channel_id.eq.${channelId},public_chat_id.eq.${channelId},paid_chat_id.eq.${channelId}`);
+
+            if (contourUsagesError && !isSalesContourFoundationError(contourUsagesError)) {
+                throw contourUsagesError;
+            }
+
+            if ((contourUsages || []).some((contour) => String(contour.paid_channel_id || '') === channelId)) {
+                throw new SalesContourError(
+                    'Нельзя удалить площадку, пока она выбрана как закрытый канал контура. Сначала выберите другой закрытый канал.',
+                    409,
+                    'channel_used_as_paid_channel'
+                );
+            }
+
+            for (const field of ['public_channel_id', 'public_chat_id', 'paid_chat_id']) {
+                const { error: clearContourError } = await supabase
+                    .from('sales_bot_contours')
+                    .update({ [field]: null })
+                    .eq('owner_id', req.user.id)
+                    .eq(field, channelId);
+
+                if (clearContourError && !isSalesContourFoundationError(clearContourError)) {
+                    throw clearContourError;
+                }
+            }
+
+            const { error } = await supabase
+                .from('channels')
+                .delete()
+                .eq('id', channelId)
+                .eq('owner_id', req.user.id);
+
+            if (error) throw error;
+
+            res.json({ success: true });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось удалить Telegram-площадку');
         }
     });
 

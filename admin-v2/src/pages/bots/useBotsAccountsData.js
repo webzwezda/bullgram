@@ -52,7 +52,7 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     })),
     supabase
       .from('channels')
-      .select('id, title, tg_chat_id, bot_id, chat_type')
+      .select('id, title, tg_chat_id, bot_id, chat_type, username, visibility, last_visibility_check_at')
       .eq('owner_id', ownerId),
     apiRequest('/api/official-bot/contours', { accessToken })
       .then((payload) => ({ payload, error: '' }))

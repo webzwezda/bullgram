@@ -1,9 +1,4 @@
-import { AlertTriangle, Bot, CheckCircle2, ExternalLink, KeyRound, Link2, Loader2, MessageSquare, Radio, Save, ShieldCheck, UserRound } from 'lucide-react';
-
-function renderOptionLabel(option) {
-  if (!option) return '';
-  return option.label || option.title || option.id;
-}
+import { AlertTriangle, CheckCircle2, KeyRound, Link2, Loader2, MessageSquare, Radio, ShieldCheck } from 'lucide-react';
 
 function normalizeStatusKey(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
@@ -17,8 +12,7 @@ function formatAdminStatus(value) {
   const normalized = normalizeStatusKey(value);
   if (!normalized) return 'неизвестно';
   if (['administrator', 'admin'].includes(normalized)) return 'админ';
-  if (normalized === 'creator') return 'владелец';
-  if (normalized === 'owner') return 'владелец';
+  if (['creator', 'owner'].includes(normalized)) return 'владелец';
   return String(value || '').trim();
 }
 
@@ -28,344 +22,338 @@ function formatPermissionValue(value) {
   return 'неизвестно';
 }
 
-function RightsPill({ state, label, value }) {
-  const toneClass = state === true
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : state === false
-      ? 'border-amber-200 bg-amber-50 text-amber-800'
-      : 'border-slate-200 bg-white text-slate-500';
+function formatCheckedAt(value) {
+  if (!value) return 'не обновляли';
+  try {
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function formatVisibility(option) {
+  if (option?.visibility === 'public') return option.username ? `Публичная @${option.username}` : 'Публичная';
+  if (option?.visibility === 'private') return 'Приватная';
+  return 'Публичность не проверена';
+}
+
+function getRoleConfigs() {
+  return [
+    {
+      key: 'public_channel',
+      title: 'Открытый',
+      subtitle: 'Канал-витрина',
+      field: 'publicChannelId',
+      oppositeField: 'paidChannelId',
+      empty: 'Нет каналов',
+      icon: Radio,
+      required: false
+    },
+    {
+      key: 'public_chat',
+      title: 'Публичный чат',
+      subtitle: 'Открытое общение',
+      field: 'publicChatId',
+      oppositeField: 'paidChatId',
+      empty: 'Нет чатов',
+      icon: MessageSquare,
+      required: false
+    },
+    {
+      key: 'paid_channel',
+      title: 'Закрытый канал',
+      subtitle: 'Доступ по тарифу',
+      field: 'paidChannelId',
+      oppositeField: 'publicChannelId',
+      empty: 'Нет каналов',
+      icon: Link2,
+      required: false
+    },
+    {
+      key: 'paid_chat',
+      title: 'Закрытый чат',
+      subtitle: 'Чат для участников',
+      field: 'paidChatId',
+      oppositeField: 'publicChatId',
+      empty: 'Нет чатов',
+      icon: MessageSquare,
+      required: false
+    }
+  ];
+}
+
+function optionsForRole(config, props) {
+  if (config.key === 'public_channel') return props.publicChannelOptions || [];
+  if (config.key === 'public_chat') return props.publicChatOptions || [];
+  if (config.key === 'paid_channel') return props.paidChannelOptions || [];
+  if (config.key === 'paid_chat') return props.paidChatOptions || [];
+  return [];
+}
+
+function rightsSummary(result, selectedId) {
+  if (!selectedId) {
+    return {
+      tone: 'muted',
+      title: 'Не выбрано',
+      text: 'Сначала выберите площадку'
+    };
+  }
+
+  if (!result) {
+    return {
+      tone: 'muted',
+      title: 'Не проверено',
+      text: 'Нажмите "Обновить права"'
+    };
+  }
+
+  if (result.status === 'error') {
+    return {
+      tone: 'error',
+      title: 'Ошибка',
+      text: result.message || 'Telegram не ответил'
+    };
+  }
+
+  const adminOk = isAdminStatusOk(result.adminStatus);
+  const canInvite = result.canInviteUsers !== false;
+  const canManage = result.canManageChat !== false;
+  const canPromote = result.canPromoteMembers !== false;
+  const isOk = adminOk && canInvite && canManage && canPromote;
+
+  if (isOk) {
+    return {
+      tone: 'ok',
+      title: 'Права в порядке',
+      text: `Обновлено: ${formatCheckedAt(result.checkedAt)}`
+    };
+  }
+
+  return {
+    tone: 'warning',
+    title: 'Не хватает прав',
+    text: result.message || `Обновлено: ${formatCheckedAt(result.checkedAt)}`
+  };
+}
+
+function RightsDetails({ result }) {
+  if (!result) return null;
+
+  const adminOk = isAdminStatusOk(result.adminStatus);
+  const pillClass = 'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold';
+  const rights = [
+    ['Админ', adminOk],
+    ['Приглашать', result.canInviteUsers],
+    ['Удалять', result.canRestrictMembers],
+    ['Назначать админов', result.canPromoteMembers],
+    ['Управлять', result.canManageChat]
+  ];
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-bold ${toneClass}`}>
-      {state === true ? <CheckCircle2 className="size-3.5" /> : <AlertTriangle className="size-3.5" />}
-      {label}: {value}
-    </span>
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {rights.map(([label, value]) => {
+          const ok = value === true;
+          const bad = value === false;
+          return (
+            <span key={label} className={`${pillClass} ${
+              ok
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : bad
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-slate-200 bg-white text-slate-500'
+            }`}>
+              {ok ? <CheckCircle2 className="size-3" /> : <AlertTriangle className="size-3" />}
+              {label}: {formatPermissionValue(value)}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-xs font-medium text-slate-500">
+        Статус Telegram: {formatAdminStatus(result.adminStatus)} · Обновлено: {formatCheckedAt(result.checkedAt)}
+      </p>
+      {result.warnings?.length ? (
+        <p className="text-xs font-medium leading-snug text-amber-700">{result.warnings[0]}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function RoleCard({
+  config,
+  options,
+  draft,
+  setFieldValue,
+  savingContour,
+  checkBotRights,
+  checking,
+  rightsResult
+}) {
+  const Icon = config.icon;
+  const selectedId = String(draft[config.field] || '');
+  const selectedOption = options.find((option) => String(option.id) === selectedId);
+  const summary = rightsSummary(rightsResult, selectedId);
+  const toneClass = summary.tone === 'ok'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : summary.tone === 'warning'
+      ? 'border-amber-200 bg-amber-50 text-amber-800'
+      : summary.tone === 'error'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : 'border-slate-200 bg-white text-slate-500';
+
+  function selectRole(value) {
+    if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
+      setFieldValue(config.field, value, {
+        autoSave: true,
+        oppositeField: config.oppositeField
+      });
+      return;
+    }
+    setFieldValue(config.field, value, { autoSave: true });
+  }
+
+  return (
+    <article className="flex min-h-[248px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <Icon className="size-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-black text-slate-900">{config.title}</h4>
+              {config.required ? (
+                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-rose-600">обязательно</span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">{config.subtitle}</p>
+          </div>
+        </div>
+      </div>
+
+      <label className="grid gap-2">
+        <span className="text-xs font-black uppercase tracking-wider text-slate-400">Площадка</span>
+        <select
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
+          value={selectedId}
+          onChange={(event) => selectRole(event.target.value)}
+          disabled={!options.length || savingContour}
+        >
+          <option value="">{options.length ? 'Не выбрано' : config.empty}</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.title || option.label || option.tgChatId || option.id}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="mt-3 min-h-[40px] text-xs font-medium text-slate-500">
+        {selectedOption ? (
+          <span>{formatVisibility(selectedOption)}</span>
+        ) : (
+          <span>Выберите площадку из списка, который видит official-бот.</span>
+        )}
+      </div>
+
+      <div className={`mt-auto rounded-xl border px-3 py-2 ${toneClass}`}>
+        <p className="text-sm font-black">{savingContour ? 'Сохраняем...' : summary.title}</p>
+        <p className="mt-0.5 line-clamp-2 text-xs font-medium">
+          {savingContour ? 'Изменение селектора сохраняется автоматически' : summary.text}
+        </p>
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        <button
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => checkBotRights(config.key)}
+          disabled={!selectedId || checking}
+        >
+          {checking ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+          Обновить права
+        </button>
+      </div>
+
+      {rightsResult ? (
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <RightsDetails result={rightsResult} />
+        </div>
+      ) : null}
+    </article>
   );
 }
 
 export function SalesContourSection({
-  botRightsResult,
-  botRightsTarget,
+  adminSlot,
+  botRightsByTarget = {},
   checkBotRights,
-  checkingBotRights,
+  checkingBotRightsTarget = '',
   contourError,
-  contourWarnings,
+  contourWarnings = [],
   draft,
   paidChannelOptions,
-  prepareUserbotAdmin,
-  preparingUserbot,
+  paidChatOptions,
+  publicChannelOptions,
   publicChatOptions,
-  saveContour,
   savingContour,
-  selectedOfficialBot,
-  setBotRightsTarget,
-  setFieldValue,
-  setUserbotMode,
-  userbotPrepareResult,
-  userbotOptions
+  setFieldValue
 }) {
-  const isPoolMode = draft.userbotMode === 'pool';
-  const hasBotRightsResult = !!botRightsResult;
-  const prepareInviteLink = userbotPrepareResult?.inviteLink || '';
-  const canPrepareUserbot = draft.userbotMode === 'single' && !!draft.selectedUserbotId && !isPoolMode;
-  const isBotAdmin = isAdminStatusOk(botRightsResult?.adminStatus);
-  const prepareStatus = normalizeStatusKey(userbotPrepareResult?.status);
-  const prepareToneClass = prepareStatus === 'needs_join'
-    ? 'border-amber-200 bg-amber-50 text-amber-900'
-    : prepareStatus === 'error'
-      ? 'border-rose-200 bg-rose-50 text-rose-900'
-      : 'border-emerald-200 bg-emerald-50 text-emerald-900';
-  const prepareMessage = prepareStatus === 'needs_join'
-    ? userbotPrepareResult?.message || 'Юзербот должен вступить, потом нажми кнопку еще раз.'
-    : userbotPrepareResult?.message || 'Статус подготовки обновлен.';
+  const roleConfigs = getRoleConfigs();
 
   return (
-    <section className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white relative z-10">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 text-white shrink-0">
-            <Radio className="w-6 h-6" />
-          </div>
+    <div className="space-y-4">
+      {contourError ? (
+        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
           <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">Контур продаж</h3>
-            <p className="text-sm text-slate-500 font-medium mt-0.5">
-              Привязка оплачиваемого канала, публичного чата и режима юзербота для @{selectedOfficialBot?.tg_username || `bot-${String(selectedOfficialBot?.tg_account_id || selectedOfficialBot?.id || '')}`}
-            </p>
+            <p className="font-bold">Контурный endpoint ответил ошибкой</p>
+            <p className="mt-0.5 text-amber-800/90">Площадки можно выбрать по локальным данным, но сохранять лучше после ответа backend.</p>
           </div>
         </div>
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-[13px] font-bold border border-emerald-100">
-          <Bot className="w-4 h-4" />
-          Только для ботов продаж
-        </div>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
+        {roleConfigs.map((config) => (
+          <RoleCard
+            key={config.key}
+            config={config}
+            options={optionsForRole(config, {
+              publicChannelOptions,
+              publicChatOptions,
+              paidChannelOptions,
+              paidChatOptions
+            })}
+            draft={draft}
+            setFieldValue={setFieldValue}
+            savingContour={savingContour}
+            checkBotRights={checkBotRights}
+            checking={checkingBotRightsTarget === config.key}
+            rightsResult={botRightsByTarget[config.key] || null}
+          />
+        ))}
+        {adminSlot}
       </div>
 
-      <div className="p-6 md:p-8 bg-slate-50/50 space-y-5">
-        {contourError ? (
-          <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
-            <div>
-              <p className="font-bold">Контурный endpoint ответил ошибкой</p>
-              <p className="mt-0.5 text-amber-800/90">
-                Форма осталась рабочей на локальных данных бота, но итоговую готовность лучше перепроверить после ответа backend.
-              </p>
+      {contourWarnings.length ? (
+        <div className="grid gap-2">
+          {contourWarnings.map((warning) => (
+            <div key={warning} className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+              <span>{warning}</span>
             </div>
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-          <div className="md:col-span-5">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-emerald-600" />
-                Платный канал / группа
-              </span>
-              <div className="relative">
-                <select
-                  className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none cursor-pointer shadow-sm"
-                  value={draft.paidChannelId}
-                  onChange={(event) => setFieldValue('paidChannelId', event.target.value)}
-                >
-                  <option value="">Выбери платный контур</option>
-                  {paidChannelOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {renderOptionLabel(option)}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </div>
-            </label>
-          </div>
-
-          <div className="md:col-span-4">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-sky-600" />
-                Публичный чат
-                <span className="text-[11px] font-semibold text-slate-400">необязательно</span>
-              </span>
-              <div className="relative">
-                <select
-                  className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 appearance-none cursor-pointer shadow-sm"
-                  value={draft.publicChatId}
-                  onChange={(event) => setFieldValue('publicChatId', event.target.value)}
-                >
-                  <option value="">Без публичного чата</option>
-                  {publicChatOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {renderOptionLabel(option)}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </div>
-            </label>
-          </div>
-
-          <div className="md:col-span-3">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                <UserRound className="w-4 h-4 text-violet-600" />
-                Режим юзербота
-              </span>
-              <div className="relative">
-                <select
-                  className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 appearance-none cursor-pointer shadow-sm"
-                  value={draft.userbotMode}
-                  onChange={(event) => setUserbotMode(event.target.value)}
-                >
-                  <option value="none">Без юзербота</option>
-                  <option value="single">Один юзербот</option>
-                  <option value="pool">Пул юзерботов</option>
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </div>
-              </div>
-            </label>
-          </div>
-
-          {draft.userbotMode === 'single' ? (
-            <div className="md:col-span-6">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-bold text-slate-700">Выбранный юзербот</span>
-                <div className="relative">
-                  <select
-                    className="w-full h-12 pl-4 pr-10 rounded-xl border border-slate-200 bg-white text-[15px] font-medium text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 appearance-none cursor-pointer shadow-sm"
-                    value={draft.selectedUserbotId}
-                    onChange={(event) => setFieldValue('selectedUserbotId', event.target.value)}
-                  >
-                    <option value="">Выбери юзербота</option>
-                    {userbotOptions.map((option) => (
-                      <option key={option.id} value={option.id} disabled={option.eligible === false}>
-                        {renderOptionLabel(option)}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </div>
-                </div>
-              </label>
-            </div>
-          ) : null}
-
-          {isPoolMode ? (
-            <div className="md:col-span-12">
-              <div className="flex gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-violet-500" />
-                <div>
-                  <p className="font-bold">Пул оставили на следующий шаг</p>
-                  <p className="mt-0.5 text-violet-800/90">
-                    В этом MVP режим уже виден оператору, но сохраняем пока только `без юзербота` и `один юзербот`, чтобы не обещать полурабочую автоматику.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
+          ))}
         </div>
+      ) : null}
 
-        {contourWarnings.length ? (
-          <div className="grid gap-3">
-            {contourWarnings.map((warning) => (
-              <div key={warning} className="flex gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
-                <p>{warning}</p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                <ShieldCheck className="size-4 text-emerald-600" />
-                Права бота в Telegram
-              </div>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
-                Работает по сохраненному контуру. Если менял поля выше, сначала нажми сохранение.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                value={botRightsTarget}
-                onChange={(event) => setBotRightsTarget(event.target.value)}
-              >
-                <option value="paid">Платный контур</option>
-                <option value="public" disabled={!draft.publicChatId}>Публичный чат</option>
-              </select>
-              <button
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-900 px-4 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => checkBotRights(botRightsTarget)}
-                disabled={checkingBotRights}
-              >
-                {checkingBotRights ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-                Проверить права
-              </button>
-            </div>
-          </div>
-
-          {hasBotRightsResult ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <RightsPill state={isBotAdmin} label="Статус" value={formatAdminStatus(botRightsResult?.adminStatus)} />
-              <RightsPill state={botRightsResult?.canInviteUsers} label="can_invite_users" value={formatPermissionValue(botRightsResult?.canInviteUsers)} />
-              <RightsPill state={botRightsResult?.canPromoteMembers} label="can_promote_members" value={formatPermissionValue(botRightsResult?.canPromoteMembers)} />
-              <RightsPill state={botRightsResult?.canManageChat} label="can_manage_chat" value={formatPermissionValue(botRightsResult?.canManageChat)} />
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500">
-              Нажми проверку после сохранения контура. Страница не дергает Telegram сама по себе.
-            </div>
-          )}
-
-          {botRightsResult?.message ? (
-            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] font-medium text-slate-700">
-              {botRightsResult.message}
-            </div>
-          ) : null}
-
-          {botRightsResult?.warnings?.length ? (
-            <div className="mt-3 grid gap-2">
-              {botRightsResult.warnings.map((warning) => (
-                <div key={warning} className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] font-medium text-amber-900">
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
-                  <span>{warning}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-black text-slate-900">
-                  <UserRound className="size-4 text-violet-600" />
-                  Подготовка юзербота
-                </div>
-                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
-                  Работает только для платного контура и режима с одним выбранным юзерботом.
-                </p>
-              </div>
-              <button
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-[13px] font-bold text-white shadow-sm shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={prepareUserbotAdmin}
-                disabled={!canPrepareUserbot || preparingUserbot}
-              >
-                {preparingUserbot ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                Подготовить юзербота
-              </button>
-            </div>
-
-            {userbotPrepareResult ? (
-              <div className={`mt-3 rounded-xl border px-4 py-3 text-sm ${prepareToneClass}`}>
-                <p className="font-bold">{prepareMessage}</p>
-                {prepareInviteLink ? (
-                  <a
-                    className="mt-2 inline-flex items-center gap-2 text-[13px] font-bold text-violet-700 hover:text-violet-900"
-                    href={prepareInviteLink}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Ссылка для вступления
-                    <ExternalLink className="size-3.5" />
-                  </a>
-                ) : null}
-                {userbotPrepareResult?.warnings?.length ? (
-                  <div className="mt-2 grid gap-2">
-                    {userbotPrepareResult.warnings.map((warning) => (
-                      <div key={warning} className="flex gap-2 text-[13px] font-medium">
-                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{warning}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-          <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
-            Если ждешь ручной outreach через юзербота, Telegram может писать человеку только когда аккаунт уже знает цель или сидит с ней в общем чате. Права админа у юзербота в таком чате обычно повышают шанс доставки.
-          </p>
-          <button
-            className="inline-flex items-center justify-center gap-2 h-12 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[15px] font-bold shadow-sm shadow-emerald-500/20 transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none"
-            onClick={saveContour}
-            disabled={savingContour || isPoolMode}
-          >
-            <Save className="w-4 h-4" />
-            {savingContour ? 'Сохраняем...' : 'Сохранить контур'}
-          </button>
-        </div>
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+        <ShieldCheck className="mr-2 inline size-4 text-indigo-600" />
+        Права хранятся в BullRun. Telegram дергаем только по кнопке "Обновить права".
       </div>
-    </section>
+    </div>
   );
 }

@@ -10,7 +10,13 @@ function normalizeUserbotMode(value) {
 }
 
 function normalizeContourTarget(value) {
-  return String(value || '').toLowerCase() === 'public' ? 'public' : 'paid';
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || raw === 'paid' || raw === 'closed_channel' || raw === 'access_channel') return 'paid_channel';
+  if (raw === 'public' || raw === 'open_chat') return 'public_chat';
+  if (raw === 'open_channel') return 'public_channel';
+  if (raw === 'closed_chat' || raw === 'access_chat') return 'paid_chat';
+  if (['public_channel', 'public_chat', 'paid_channel', 'paid_chat'].includes(raw)) return raw;
+  return 'paid_channel';
 }
 
 function toId(value) {
@@ -67,8 +73,13 @@ function dedupeStrings(items) {
 }
 
 function isChatTarget(target) {
-  const chatType = String(target?.chat_type || target?.type || '').toLowerCase();
+  const chatType = String(target?.chat_type || target?.type || target?.chatType || '').toLowerCase();
   return chatType === 'group' || chatType === 'supergroup';
+}
+
+function isChannelTarget(target) {
+  const chatType = String(target?.chat_type || target?.type || target?.chatType || '').toLowerCase();
+  return chatType === 'channel';
 }
 
 function extractFirstArray(source, keys) {
@@ -121,11 +132,17 @@ function getContourConfig(entry) {
 function normalizeChannelOption(item) {
   const id = toId(item?.id || item?.channel_id || item?.value || item?.tg_chat_id);
   if (!id) return null;
+  const username = String(item?.username || item?.tg_username || '').trim().replace(/^@/, '');
+  const visibility = String(item?.visibility || (username ? 'public' : 'unknown')).trim().toLowerCase();
 
   return {
     id,
     title: String(item?.title || item?.label || item?.name || item?.tg_chat_id || id).trim(),
-    chatType: String(item?.chat_type || item?.type || '').toLowerCase()
+    chatType: String(item?.chat_type || item?.type || '').toLowerCase(),
+    tgChatId: String(item?.tg_chat_id || item?.chat_id || '').trim(),
+    username,
+    visibility: ['public', 'private', 'unknown'].includes(visibility) ? visibility : 'unknown',
+    lastVisibilityCheckAt: item?.last_visibility_check_at || item?.lastVisibilityCheckAt || null
   };
 }
 
@@ -159,11 +176,12 @@ function dedupeOptions(items) {
   });
 }
 
-function resolveChannelOptions({ entry, fallbackChannels, chatOnly = false }) {
+function resolveChannelOptions({ entry, fallbackChannels, targetKind = 'channel' }) {
   const contour = getContourConfig(entry);
+  const chatOnly = targetKind === 'chat';
   const optionKeys = chatOnly
-    ? ['public_chat_options', 'public_chats', 'eligible_public_chats', 'chat_options', 'eligible_chats']
-    : ['paid_channel_options', 'paid_channels', 'eligible_paid_channels', 'channel_options', 'eligible_channels', 'channels'];
+    ? ['paid_chat_options', 'public_chat_options', 'public_chats', 'eligible_public_chats', 'chat_options', 'eligible_chats']
+    : ['public_channel_options', 'paid_channel_options', 'paid_channels', 'eligible_paid_channels', 'channel_options', 'eligible_channels', 'channels'];
   const rawOptions = [
     ...extractFirstArray(entry, optionKeys),
     ...extractFirstArray(contour, optionKeys),
@@ -171,7 +189,7 @@ function resolveChannelOptions({ entry, fallbackChannels, chatOnly = false }) {
   ];
 
   const options = dedupeOptions(rawOptions.map(normalizeChannelOption).filter(Boolean));
-  if (!chatOnly) return options;
+  if (!chatOnly) return options.filter((option) => isChannelTarget(option));
   return options.filter((option) => isChatTarget(option));
 }
 
@@ -224,7 +242,11 @@ function createEmptyRightsResult(target) {
     target: normalizeContourTarget(target),
     status: '',
     adminStatus: '',
+    isAdmin: null,
+    channelId: '',
+    checkedAt: '',
     canInviteUsers: null,
+    canRestrictMembers: null,
     canPromoteMembers: null,
     canManageChat: null,
     warnings: [],
@@ -240,7 +262,11 @@ function normalizeRightsResult(payload, fallbackTarget) {
     target: normalizeContourTarget(readFirstValue(root, ['target', 'chat_target']) || fallbackTarget),
     status: normalizeStatusKey(readFirstValue(root, ['status', 'check_status'])) || 'checked',
     adminStatus: String(readFirstValue(root, ['admin_status', 'adminStatus']) || '').trim(),
+    isAdmin: normalizeNullableBoolean(readFirstValue(root, ['is_admin', 'isAdmin']) ?? readFirstValue(rights, ['is_admin', 'isAdmin'])),
+    channelId: toId(readFirstValue(root, ['channel_id', 'channelId']) || root?.channel?.id || root?.cached_rights?.channel_id || root?.cachedRights?.channelId),
+    checkedAt: String(readFirstValue(root, ['checked_at', 'checkedAt']) || root?.cached_rights?.checked_at || root?.cachedRights?.checkedAt || '').trim(),
     canInviteUsers: normalizeNullableBoolean(readFirstValue(rights, ['can_invite_users', 'canInviteUsers'])),
+    canRestrictMembers: normalizeNullableBoolean(readFirstValue(rights, ['can_restrict_members', 'canRestrictMembers'])),
     canPromoteMembers: normalizeNullableBoolean(readFirstValue(rights, ['can_promote_members', 'canPromoteMembers'])),
     canManageChat: normalizeNullableBoolean(readFirstValue(rights, ['can_manage_chat', 'canManageChat'])),
     warnings: dedupeStrings([
@@ -249,6 +275,15 @@ function normalizeRightsResult(payload, fallbackTarget) {
     ]),
     message: String(readFirstValue(root, ['message', 'text', 'detail']) || '').trim()
   };
+}
+
+function resolveRightsByTarget(entry) {
+  const source = readFirstObject(entry, ['rights_by_target', 'rightsByTarget', 'cached_rights_by_target', 'cachedRightsByTarget']) || {};
+  return Object.entries(source).reduce((acc, [target, value]) => {
+    const normalizedTarget = normalizeContourTarget(target);
+    acc[normalizedTarget] = normalizeRightsResult(value, normalizedTarget);
+    return acc;
+  }, {});
 }
 
 function normalizePrepareResult(payload, fallbackTarget, fallbackUserbotId) {
@@ -285,8 +320,10 @@ function isPreparationSuccessStatus(status) {
 function buildDraft({ entry, paidChannelOptions, publicChatOptions, userbotOptions }) {
   const contour = getContourConfig(entry);
   const eligibleUserbotOptions = userbotOptions.filter((option) => option.eligible !== false);
+  const publicChannelId = toId(contour?.public_channel_id || contour?.publicChannelId || entry?.public_channel_id);
   const paidChannelId = toId(contour?.paid_channel_id || contour?.paidChannelId || entry?.paid_channel_id);
   const publicChatId = toId(contour?.public_chat_id || contour?.publicChatId || entry?.public_chat_id);
+  const paidChatId = toId(contour?.paid_chat_id || contour?.paidChatId || entry?.paid_chat_id);
   const userbotMode = normalizeUserbotMode(contour?.userbot_mode || contour?.userbotMode || entry?.userbot_mode);
   const selectedUserbotId = toId(contour?.selected_userbot_id || contour?.selectedUserbotId || entry?.selected_userbot_id);
   const selectedUserbotIds = asArray(
@@ -296,8 +333,10 @@ function buildDraft({ entry, paidChannelOptions, publicChatOptions, userbotOptio
   ).map(toId).filter(Boolean);
 
   return {
-    paidChannelId: paidChannelId || (paidChannelOptions.length === 1 ? paidChannelOptions[0].id : ''),
+    publicChannelId: publicChannelId || '',
+    paidChannelId: paidChannelId || '',
     publicChatId: publicChatId || '',
+    paidChatId: paidChatId || '',
     userbotMode,
     selectedUserbotId: selectedUserbotId || (userbotMode === 'single' && eligibleUserbotOptions.length === 1 ? eligibleUserbotOptions[0].id : ''),
     selectedUserbotIds
@@ -320,7 +359,7 @@ export function useSalesContourController({
 }) {
   const [draftsByBotId, setDraftsByBotId] = useState({});
   const [dirtyBotIds, setDirtyBotIds] = useState({});
-  const [botRightsTarget, setBotRightsTarget] = useState('paid');
+  const [botRightsTarget, setBotRightsTarget] = useState('paid_channel');
   const [botRightsByKey, setBotRightsByKey] = useState({});
   const [checkingRightsKey, setCheckingRightsKey] = useState('');
   const [prepareResultByKey, setPrepareResultByKey] = useState({});
@@ -351,19 +390,19 @@ export function useSalesContourController({
     return getContourPayloadEntry(officialBotContoursPayload, selectedBotId);
   }, [officialBotContoursPayload, selectedBotId]);
 
-  const paidChannelOptions = useMemo(() => {
+  const rawChannelOptions = useMemo(() => {
     return resolveChannelOptions({
       entry: contourEntry,
       fallbackChannels,
-      chatOnly: false
+      targetKind: 'channel'
     });
   }, [contourEntry, fallbackChannels]);
 
-  const rawPublicChatOptions = useMemo(() => {
+  const rawChatOptions = useMemo(() => {
     return resolveChannelOptions({
       entry: contourEntry,
       fallbackChannels,
-      chatOnly: true
+      targetKind: 'chat'
     });
   }, [contourEntry, fallbackChannels]);
 
@@ -376,23 +415,57 @@ export function useSalesContourController({
   }, [contourEntry, fallbackUserbots, officialBotContoursPayload]);
 
   const contourWarnings = useMemo(() => resolveWarnings(contourEntry), [contourEntry]);
+  const cachedRightsByTarget = useMemo(() => resolveRightsByTarget(contourEntry), [contourEntry]);
 
   const draft = draftsByBotId[selectedBotId] || {
-    paidChannelId: paidChannelOptions.length === 1 ? paidChannelOptions[0].id : '',
+    publicChannelId: '',
+    paidChannelId: '',
     publicChatId: '',
+    paidChatId: '',
     userbotMode: 'none',
     selectedUserbotId: '',
     selectedUserbotIds: []
   };
 
+  const publicChannelOptions = useMemo(() => {
+    return rawChannelOptions.filter((option) => toId(option.id) !== toId(draft.paidChannelId));
+  }, [draft.paidChannelId, rawChannelOptions]);
+
+  const paidChannelOptions = useMemo(() => {
+    return rawChannelOptions.filter((option) => toId(option.id) !== toId(draft.publicChannelId));
+  }, [draft.publicChannelId, rawChannelOptions]);
+
   const publicChatOptions = useMemo(() => {
-    return rawPublicChatOptions.filter((option) => toId(option.id) !== toId(draft.paidChannelId));
-  }, [draft.paidChannelId, rawPublicChatOptions]);
+    return rawChatOptions.filter((option) => toId(option.id) !== toId(draft.paidChatId));
+  }, [draft.paidChatId, rawChatOptions]);
+
+  const paidChatOptions = useMemo(() => {
+    return rawChatOptions.filter((option) => toId(option.id) !== toId(draft.publicChatId));
+  }, [draft.publicChatId, rawChatOptions]);
 
   const normalizedRightsTarget = normalizeContourTarget(botRightsTarget);
   const rightsKey = `${selectedBotId}:${normalizedRightsTarget}`;
-  const prepareKey = `${selectedBotId}:${normalizedRightsTarget}`;
+  const prepareKey = `${selectedBotId}:paid_channel`;
   const botRightsResult = botRightsByKey[rightsKey] || null;
+  const targetFieldByKey = {
+    public_channel: 'publicChannelId',
+    public_chat: 'publicChatId',
+    paid_channel: 'paidChannelId',
+    paid_chat: 'paidChatId'
+  };
+  const botRightsByTarget = Object.keys(targetFieldByKey).reduce((acc, target) => {
+    const selectedChannelId = toId(draft[targetFieldByKey[target]]);
+    const localRights = botRightsByKey[`${selectedBotId}:${target}`] || null;
+    const cachedRights = cachedRightsByTarget[target] || null;
+    const candidate = localRights || cachedRights;
+    acc[target] = candidate && selectedChannelId && toId(candidate.channelId) === selectedChannelId
+      ? candidate
+      : null;
+    return acc;
+  }, {});
+  const checkingBotRightsTarget = checkingRightsKey.startsWith(`${selectedBotId}:`)
+    ? checkingRightsKey.slice(`${selectedBotId}:`.length)
+    : '';
   const userbotPrepareResult = (() => {
     const result = prepareResultByKey[prepareKey] || null;
     if (result?.userbotId && toId(result.userbotId) !== toId(draft.selectedUserbotId)) {
@@ -425,25 +498,57 @@ export function useSalesContourController({
   }, [contourEntry, dirtyBotIds, paidChannelOptions, publicChatOptions, selectedBotId, userbotOptions]);
 
   useEffect(() => {
-    if (normalizedRightsTarget !== 'public' || draft.publicChatId) return;
-    setBotRightsTarget('paid');
-  }, [draft.publicChatId, normalizedRightsTarget]);
+    const targetFieldByKey = {
+      public_channel: 'publicChannelId',
+      public_chat: 'publicChatId',
+      paid_channel: 'paidChannelId',
+      paid_chat: 'paidChatId'
+    };
+    if (draft[targetFieldByKey[normalizedRightsTarget]]) return;
+    setBotRightsTarget('paid_channel');
+  }, [draft, normalizedRightsTarget]);
+
+  function getNextDraft(patch) {
+    return {
+      ...(draftsByBotId[selectedBotId] || draft),
+      ...patch
+    };
+  }
+
+  function clearRightsForFields(fields = []) {
+    const targetByField = {
+      publicChannelId: 'public_channel',
+      publicChatId: 'public_chat',
+      paidChannelId: 'paid_channel',
+      paidChatId: 'paid_chat'
+    };
+    const targets = fields.map((field) => targetByField[field]).filter(Boolean);
+    if (!targets.length) return;
+
+    setBotRightsByKey((prev) => {
+      const next = { ...prev };
+      targets.forEach((target) => {
+        delete next[`${selectedBotId}:${target}`];
+      });
+      return next;
+    });
+  }
 
   function updateDraft(patch) {
     if (!selectedBotId) return;
+    const nextDraft = getNextDraft(patch);
 
     setDraftsByBotId((prev) => ({
       ...prev,
-      [selectedBotId]: {
-        ...(prev[selectedBotId] || draft),
-        ...patch
-      }
+      [selectedBotId]: nextDraft
     }));
 
     setDirtyBotIds((prev) => ({
       ...prev,
       [selectedBotId]: true
     }));
+
+    return nextDraft;
   }
 
   function setUserbotMode(mode) {
@@ -455,25 +560,26 @@ export function useSalesContourController({
     });
   }
 
-  async function saveContour() {
+  async function saveContour(contourDraft = draft, options = {}) {
     if (!selectedOfficialBot?.id) return;
 
-    if (!draft.paidChannelId) {
-      showUiMessage('Сначала выбери платный канал или группу.', 'error');
-      return;
-    }
-
-    if (draft.userbotMode === 'single' && !draft.selectedUserbotId) {
+    if (contourDraft.userbotMode === 'single' && !contourDraft.selectedUserbotId) {
       showUiMessage('Для режима с одним юзерботом сначала выбери аккаунт.', 'error');
       return;
     }
 
-    if (draft.publicChatId && draft.publicChatId === draft.paidChannelId) {
-      showUiMessage('Публичный чат и платный канал должны быть разными Telegram-местами.', 'error');
+    const selectedTargets = [
+      contourDraft.publicChannelId,
+      contourDraft.publicChatId,
+      contourDraft.paidChannelId,
+      contourDraft.paidChatId
+    ].filter(Boolean);
+    if (new Set(selectedTargets).size !== selectedTargets.length) {
+      showUiMessage('Одна Telegram-площадка не может занимать две роли в контуре.', 'error');
       return;
     }
 
-    if (draft.userbotMode === 'pool') {
+    if (contourDraft.userbotMode === 'pool') {
       showUiMessage('Пул юзерботов оставили в MVP только как режим-наметку. Пока сохраняем без юзербота или один аккаунт.', 'error');
       return;
     }
@@ -489,10 +595,12 @@ export function useSalesContourController({
         method: 'POST',
         body: {
           bot_id: selectedOfficialBot.id,
-          paid_channel_id: draft.paidChannelId,
-          public_chat_id: draft.publicChatId || null,
-          userbot_mode: draft.userbotMode,
-          selected_userbot_id: draft.userbotMode === 'single' ? draft.selectedUserbotId : null,
+          public_channel_id: contourDraft.publicChannelId || null,
+          paid_channel_id: contourDraft.paidChannelId || null,
+          public_chat_id: contourDraft.publicChatId || null,
+          paid_chat_id: contourDraft.paidChatId || null,
+          userbot_mode: contourDraft.userbotMode,
+          selected_userbot_id: contourDraft.userbotMode === 'single' ? contourDraft.selectedUserbotId : null,
           selected_userbot_ids: []
         }
       });
@@ -502,7 +610,7 @@ export function useSalesContourController({
         [selectedBotId]: false
       }));
       await reloadAccounts();
-      showUiMessage('Контур продаж сохранен.', 'success');
+      showUiMessage(options.auto ? 'Выбор сохранен.' : 'Контур продаж сохранен.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
@@ -521,12 +629,14 @@ export function useSalesContourController({
       showUiMessage('Сначала сохрани контур, потом проверяй права в Telegram.', 'error');
       return;
     }
-    if (normalizedTarget === 'public' && !draft.publicChatId) {
-      showUiMessage('В контуре не выбран публичный чат.', 'error');
-      return;
-    }
-    if (normalizedTarget === 'paid' && !draft.paidChannelId) {
-      showUiMessage('Сначала выбери платный канал или группу.', 'error');
+    const targetFieldByKey = {
+      public_channel: 'publicChannelId',
+      public_chat: 'publicChatId',
+      paid_channel: 'paidChannelId',
+      paid_chat: 'paidChatId'
+    };
+    if (!draft[targetFieldByKey[normalizedTarget]]) {
+      showUiMessage('Сначала выбери площадку для этой роли и сохрани контур.', 'error');
       return;
     }
 
@@ -549,7 +659,7 @@ export function useSalesContourController({
         [key]: normalizeRightsResult(result, normalizedTarget)
       }));
 
-      showUiMessage('Права бота обновлены.', 'success');
+      showUiMessage('Права обновлены и сохранены.', 'success');
     } catch (error) {
       setBotRightsByKey((prev) => ({
         ...prev,
@@ -567,7 +677,7 @@ export function useSalesContourController({
 
   async function prepareUserbotAdmin() {
     if (!selectedOfficialBot?.id) return;
-    const normalizedTarget = 'paid';
+    const normalizedTarget = 'paid_channel';
 
     if (dirtyBotIds[selectedBotId]) {
       showUiMessage('Сначала сохрани контур, потом подготавливай юзербота.', 'error');
@@ -578,7 +688,7 @@ export function useSalesContourController({
       return;
     }
     if (!draft.paidChannelId) {
-      showUiMessage('Сначала выбери платный канал или группу.', 'error');
+      showUiMessage('Сначала выбери закрытый канал.', 'error');
       return;
     }
 
@@ -636,9 +746,11 @@ export function useSalesContourController({
 
   return {
     botRightsResult,
+    botRightsByTarget,
     botRightsTarget: normalizedRightsTarget,
     checkBotRights,
     checkingBotRights: checkingRightsKey === rightsKey,
+    checkingBotRightsTarget,
     contourError: officialBotContoursError,
     contourWarnings,
     draft,
@@ -647,12 +759,22 @@ export function useSalesContourController({
     prepareUserbotAdmin,
     preparingUserbot: preparingUserbotKey === prepareKey,
     publicChatOptions,
+    paidChatOptions,
+    publicChannelOptions,
     saveContour,
     savingContour: String(state?.savingContourBotId || '') === selectedBotId,
     selectedBotKind,
     setBotRightsTarget,
-    setFieldValue(field, value) {
-      updateDraft({ [field]: value });
+    setFieldValue(field, value, options = {}) {
+      const patch = { [field]: value };
+      if (options.oppositeField && value && String(draft[options.oppositeField] || '') === String(value)) {
+        patch[options.oppositeField] = '';
+      }
+      const nextDraft = updateDraft(patch);
+      clearRightsForFields(Object.keys(patch));
+      if (options.autoSave && nextDraft) {
+        saveContour(nextDraft, { auto: true });
+      }
     },
     setUserbotMode,
     userbotPrepareResult,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { LiveUserbotsSection } from './bots/LiveUserbotsSection.jsx';
@@ -37,6 +38,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   const [uiMessage, setUiMessage] = useState({ tone: 'default', text: '' });
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
+  const [refreshingTelegramPlaceId, setRefreshingTelegramPlaceId] = useState('');
   const { state, setState, reloadAccounts } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
@@ -130,6 +132,60 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setState,
     showUiMessage
   });
+
+  async function saveTelegramPlaceType(place, chatType) {
+    const placeId = String(place?.id || '').trim();
+    if (!placeId) return;
+
+    try {
+      await apiRequest(`/api/official-bot/channels/${placeId}`, {
+        accessToken,
+        method: 'PATCH',
+        body: { chat_type: chatType }
+      });
+      await reloadAccounts();
+      showUiMessage('Тип Telegram-площадки обновлен.', 'success');
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    }
+  }
+
+  async function deleteTelegramPlace(place) {
+    const placeId = String(place?.id || '').trim();
+    if (!placeId) return;
+    const placeTitle = String(place?.title || place?.tg_chat_id || 'Telegram-площадку');
+    if (!window.confirm(`Удалить ${placeTitle} из BullRun? В Telegram это ничего не удалит.`)) return;
+
+    try {
+      await apiRequest(`/api/official-bot/channels/${placeId}`, {
+        accessToken,
+        method: 'DELETE'
+      });
+      await reloadAccounts();
+      showUiMessage('Telegram-площадка удалена из BullRun.', 'success');
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    }
+  }
+
+  async function refreshTelegramPlaceInfo(place) {
+    const placeId = String(place?.id || '').trim();
+    if (!placeId) return;
+
+    setRefreshingTelegramPlaceId(placeId);
+    try {
+      await apiRequest(`/api/official-bot/channels/${placeId}/refresh`, {
+        accessToken,
+        method: 'POST'
+      });
+      await reloadAccounts();
+      showUiMessage('Информация о Telegram-площадке обновлена.', 'success');
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    } finally {
+      setRefreshingTelegramPlaceId('');
+    }
+  }
 
   const {
     currentQrFingerprintProfile,
@@ -228,8 +284,11 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setBotAdminDrafts,
     saveBotAdmin,
     saveBotKind,
-    deleteAccount,
     channelsByBotId,
+    saveTelegramPlaceType,
+    deleteTelegramPlace,
+    refreshTelegramPlaceInfo,
+    refreshingTelegramPlaceId,
     salesContourSectionProps
   };
 
