@@ -35,6 +35,7 @@ import { startCryptoRatesRefresh } from './jobs/crypto-rates.job.js';
 import { startReferralSettlementRetry } from './jobs/referral-settlement-retry.job.js';
 import { startReferralPayoutSender } from './jobs/referral-payout-sender.job.js';
 import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirmation.job.js';
+import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -221,4 +222,5 @@ app.listen(PORT, async () => {
     startReferralSettlementRetry(supabase, getBotById);
     startReferralPayoutSender(supabase);
     startReferralPayoutConfirmation(supabase);
+    startOfficialBotWebhookQueue(supabase);
 });

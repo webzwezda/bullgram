@@ -147,11 +147,34 @@ export function useOfficialBotsController({
     }
   }
 
+  async function refreshOfficialBotWebhookStatus(account) {
+    const accountId = String(account?.id || '');
+    if (!accountId) return;
+
+    setState((prev) => ({ ...prev, webhookRuntimeActionId: accountId }));
+    try {
+      const result = await apiRequest(`/api/official-bot/webhook-runtime/${accountId}/status`, {
+        accessToken
+      });
+      await reloadAccounts();
+      if (result?.webhook?.last_error_message) {
+        showUiMessage(`Webhook проверен: ${result.webhook.last_error_message}`, 'error');
+      } else {
+        showUiMessage('Webhook проверен.', 'success');
+      }
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    } finally {
+      setState((prev) => ({ ...prev, webhookRuntimeActionId: '' }));
+    }
+  }
+
   return {
     addOfficialBot,
     botAdminDrafts,
     botForm,
     officialBots,
+    refreshOfficialBotWebhookStatus,
     saveBotAdmin,
     saveBotKind,
     selectedOfficialBot,

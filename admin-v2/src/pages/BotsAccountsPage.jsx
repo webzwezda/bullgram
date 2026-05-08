@@ -102,6 +102,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     botAdminDrafts,
     botForm,
     officialBots,
+    refreshOfficialBotWebhookStatus,
     saveBotAdmin,
     saveBotKind,
     selectedOfficialBot,
@@ -133,23 +134,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     showUiMessage
   });
 
-  async function saveTelegramPlaceType(place, chatType) {
-    const placeId = String(place?.id || '').trim();
-    if (!placeId) return;
-
-    try {
-      await apiRequest(`/api/official-bot/channels/${placeId}`, {
-        accessToken,
-        method: 'PATCH',
-        body: { chat_type: chatType }
-      });
-      await reloadAccounts();
-      showUiMessage('Тип Telegram-площадки обновлен.', 'success');
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    }
-  }
-
   async function deleteTelegramPlace(place) {
     const placeId = String(place?.id || '').trim();
     if (!placeId) return;
@@ -162,7 +146,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         method: 'DELETE'
       });
       await reloadAccounts();
-      showUiMessage('Telegram-площадка удалена из BullRun.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     }
@@ -284,8 +267,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setBotAdminDrafts,
     saveBotAdmin,
     saveBotKind,
+    refreshOfficialBotWebhookStatus,
     channelsByBotId,
-    saveTelegramPlaceType,
     deleteTelegramPlace,
     refreshTelegramPlaceInfo,
     refreshingTelegramPlaceId,

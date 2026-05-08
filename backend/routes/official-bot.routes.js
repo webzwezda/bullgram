@@ -1,4 +1,5 @@
 import express from 'express';
+import { randomBytes } from 'crypto';
 import { Telegraf } from 'telegraf';
 import { OfficialBotService } from '../services/official-bot.service.js';
 import {
@@ -13,6 +14,17 @@ import { authenticateUser } from '../middlewares/auth.middleware.js';
 
 const officialBotService = new OfficialBotService(null); // Supabase будет установлен позже через init
 const salesContourService = new SalesContourService(null);
+const OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES = [
+    'message',
+    'edited_message',
+    'channel_post',
+    'edited_channel_post',
+    'callback_query',
+    'pre_checkout_query',
+    'my_chat_member',
+    'chat_member',
+    'chat_join_request'
+];
 
 async function resolveBotAdminUsername(botToken, adminTgId) {
     const normalizedAdminTgId = String(adminTgId || '').trim();
@@ -28,8 +40,78 @@ async function resolveBotAdminUsername(botToken, adminTgId) {
     }
 }
 
-function shouldStartOfficialBotRuntime(botKind) {
+function normalizeWebhookMode(value) {
+    return String(value || 'polling').trim().toLowerCase() === 'webhook' ? 'webhook' : 'polling';
+}
+
+function shouldStartOfficialBotRuntime(botKind, webhookMode = 'polling') {
+    if (normalizeWebhookMode(webhookMode) === 'webhook') return false;
     return normalizeBotKind(botKind, { allowMissing: true }) !== 'template';
+}
+
+function isLocalDevelopment() {
+    const origin = getOfficialBotWebhookOrigin();
+    return origin.includes('localhost') || origin.includes('127.0.0.1');
+}
+
+function inferTelegramUpdateType(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return 'unknown';
+    return Object.keys(payload).find((key) => key !== 'update_id') || 'unknown';
+}
+
+function isDuplicateUpdateError(error) {
+    return error?.code === '23505' || String(error?.message || '').includes('duplicate key');
+}
+
+function isOfficialBotWebhookFoundationError(error) {
+    return error?.code === '42P01'
+        || error?.code === '42703'
+        || String(error?.message || '').includes('official_bot_update_queue')
+        || String(error?.message || '').includes('webhook_secret')
+        || String(error?.message || '').includes('webhook_mode');
+}
+
+function getOfficialBotWebhookOrigin() {
+    return String(
+        process.env.OFFICIAL_BOT_WEBHOOK_ORIGIN
+        || process.env.PUBLIC_API_ORIGIN
+        || process.env.PUBLIC_APP_ORIGIN
+        || 'https://bullrun.ru'
+    ).trim().replace(/\/$/, '');
+}
+
+function generateOfficialBotWebhookSecret() {
+    return randomBytes(32).toString('hex');
+}
+
+function buildOfficialBotWebhookUrl(botId, secret) {
+    const origin = getOfficialBotWebhookOrigin();
+    return `${origin}/api/official-bot/webhook/${encodeURIComponent(botId)}/${encodeURIComponent(secret)}`;
+}
+
+async function loadOwnedOfficialBotAccount(supabase, ownerId, accountId) {
+    const normalizedAccountId = String(accountId || '').trim();
+    if (!normalizedAccountId) {
+        throw new SalesContourError('Не передан official-бот.', 400, 'official_bot_missing');
+    }
+
+    const { data: account, error } = await supabase
+        .from('tg_accounts')
+        .select('*')
+        .eq('id', normalizedAccountId)
+        .eq('owner_id', ownerId)
+        .eq('account_type', 'bot')
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!account) {
+        throw new SalesContourError('Official-бот не найден.', 404, 'official_bot_not_found');
+    }
+    if (!account.session_data) {
+        throw new SalesContourError('У official-бота нет сохраненного токена.', 409, 'bot_token_missing');
+    }
+
+    return account;
 }
 
 function sendOfficialBotError(res, error, fallbackMessage, fallbackStatus = 500) {
@@ -44,6 +126,13 @@ function sendOfficialBotError(res, error, fallbackMessage, fallbackStatus = 500)
         return res.status(400).json({
             error: getSalesContourFoundationMessage(),
             code: 'sales_contour_sql_missing'
+        });
+    }
+
+    if (isOfficialBotWebhookFoundationError(error)) {
+        return res.status(400).json({
+            error: 'Не применена SQL-основа webhook runtime для official-ботов.',
+            code: 'official_bot_webhook_sql_missing'
         });
     }
 
@@ -84,6 +173,232 @@ export default function (supabase) {
     officialBotService.supabase = supabase;
     salesContourService.supabase = supabase;
 
+    router.post('/webhook/:botId/:secret', async (req, res) => {
+        const botId = String(req.params.botId || '').trim();
+        const secret = String(req.params.secret || '').trim();
+
+        if (!botId || !secret) {
+            return res.status(400).json({ error: 'Webhook route is missing bot id or secret.' });
+        }
+
+        try {
+            const { data: account, error: accountError } = await supabase
+                .from('tg_accounts')
+                .select('id, owner_id, account_type, webhook_mode, webhook_secret')
+                .eq('id', botId)
+                .eq('account_type', 'bot')
+                .maybeSingle();
+
+            if (accountError) {
+                if (isOfficialBotWebhookFoundationError(accountError)) {
+                    return res.status(503).json({
+                        error: 'Official bot webhook SQL foundation is not applied.',
+                        code: 'official_bot_webhook_sql_missing'
+                    });
+                }
+                throw accountError;
+            }
+
+            if (!account?.webhook_secret || account.webhook_secret !== secret) {
+                return res.status(404).json({ error: 'Webhook not found.' });
+            }
+
+            if (normalizeWebhookMode(account.webhook_mode) !== 'webhook') {
+                return res.status(409).json({
+                    error: 'Official bot is not in webhook mode.',
+                    code: 'official_bot_webhook_mode_disabled'
+                });
+            }
+
+            if (!account.owner_id) {
+                return res.status(409).json({
+                    error: 'Official bot has no owner.',
+                    code: 'official_bot_owner_missing'
+                });
+            }
+
+            const payload = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+            const telegramUpdateId = Number(payload.update_id);
+            if (!Number.isSafeInteger(telegramUpdateId)) {
+                return res.status(400).json({
+                    error: 'Telegram update_id is required.',
+                    code: 'telegram_update_id_missing'
+                });
+            }
+
+            const { error: insertError } = await supabase
+                .from('official_bot_update_queue')
+                .insert({
+                    bot_id: account.id,
+                    owner_id: account.owner_id,
+                    telegram_update_id: telegramUpdateId,
+                    update_type: inferTelegramUpdateType(payload),
+                    payload,
+                    status: 'queued'
+                });
+
+            if (insertError && !isDuplicateUpdateError(insertError)) {
+                if (isOfficialBotWebhookFoundationError(insertError)) {
+                    return res.status(503).json({
+                        error: 'Official bot webhook SQL foundation is not applied.',
+                        code: 'official_bot_webhook_sql_missing'
+                    });
+                }
+                throw insertError;
+            }
+
+            const { error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({
+                    last_update_at: new Date().toISOString(),
+                    webhook_status: 'receiving'
+                })
+                .eq('id', account.id);
+
+            if (updateError && !isOfficialBotWebhookFoundationError(updateError)) {
+                console.warn('Не получилось обновить статус webhook official-бота:', updateError.message);
+            }
+
+            return res.json({ ok: true, duplicate: Boolean(insertError && isDuplicateUpdateError(insertError)) });
+        } catch (error) {
+            console.error('Ошибка official bot webhook:', error?.message || error);
+            return res.status(500).json({ error: 'Official bot webhook failed.' });
+        }
+    });
+
+    router.post('/webhook-runtime/:accountId/enable', authenticateUser, async (req, res) => {
+        try {
+            const account = await loadOwnedOfficialBotAccount(supabase, req.user.id, req.params.accountId);
+            const token = decrypt(account.session_data);
+            const secret = req.body?.rotate_secret || !account.webhook_secret
+                ? generateOfficialBotWebhookSecret()
+                : account.webhook_secret;
+            const webhookUrl = buildOfficialBotWebhookUrl(account.id, secret);
+            const bot = new Telegraf(token);
+
+            officialBotService.stopBot(account.id);
+            await bot.telegram.setWebhook(webhookUrl, {
+                allowed_updates: OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES,
+                secret_token: secret
+            });
+
+            const webhookInfo = await bot.telegram.getWebhookInfo();
+            const now = new Date().toISOString();
+
+            const { data: updatedAccount, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({
+                    webhook_mode: 'webhook',
+                    webhook_secret: secret,
+                    webhook_url: webhookUrl,
+                    webhook_set_at: now,
+                    webhook_status: webhookInfo?.last_error_message ? 'error' : 'enabled',
+                    runtime_status: 'webhook',
+                    runtime_error: webhookInfo?.last_error_message || null
+                })
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('id, tg_username, bot_role, bot_kind, webhook_mode, webhook_url, webhook_set_at, webhook_status, last_update_at, runtime_status, runtime_error')
+                .single();
+
+            if (updateError) throw updateError;
+
+            res.json({
+                success: true,
+                account: updatedAccount,
+                webhook: {
+                    url: webhookInfo?.url || webhookUrl,
+                    pending_update_count: webhookInfo?.pending_update_count ?? 0,
+                    last_error_date: webhookInfo?.last_error_date || null,
+                    last_error_message: webhookInfo?.last_error_message || null,
+                    allowed_updates: webhookInfo?.allowed_updates || OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES
+                }
+            });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось включить webhook official-бота');
+        }
+    });
+
+    router.post('/webhook-runtime/:accountId/disable', authenticateUser, async (req, res) => {
+        try {
+            const account = await loadOwnedOfficialBotAccount(supabase, req.user.id, req.params.accountId);
+            const token = decrypt(account.session_data);
+            const bot = new Telegraf(token);
+            const shouldDropPendingUpdates = Boolean(req.body?.drop_pending_updates);
+
+            await bot.telegram.deleteWebhook({ drop_pending_updates: shouldDropPendingUpdates });
+
+            const { data: updatedAccount, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({
+                    webhook_mode: 'polling',
+                    webhook_url: null,
+                    webhook_set_at: null,
+                    webhook_status: 'disabled',
+                    runtime_status: null,
+                    runtime_error: null
+                })
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('id, tg_username, bot_role, bot_kind, webhook_mode, webhook_url, webhook_set_at, webhook_status, last_update_at, runtime_status, runtime_error')
+                .single();
+
+            if (updateError) throw updateError;
+
+            officialBotService.stopBot(account.id);
+            if (shouldStartOfficialBotRuntime(account.bot_kind, 'polling')) {
+                officialBotService.startBot(account.id, token, account.tg_username, account.bot_role || 'sales');
+            }
+
+            res.json({
+                success: true,
+                account: updatedAccount,
+                runtime_started: shouldStartOfficialBotRuntime(account.bot_kind, 'polling')
+            });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось отключить webhook official-бота');
+        }
+    });
+
+    router.get('/webhook-runtime/:accountId/status', authenticateUser, async (req, res) => {
+        try {
+            const account = await loadOwnedOfficialBotAccount(supabase, req.user.id, req.params.accountId);
+            const token = decrypt(account.session_data);
+            const bot = new Telegraf(token);
+            const webhookInfo = await bot.telegram.getWebhookInfo();
+            const status = webhookInfo?.last_error_message ? 'error' : (webhookInfo?.url ? 'enabled' : 'disabled');
+
+            const { data: updatedAccount, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({
+                    webhook_status: status,
+                    webhook_url: webhookInfo?.url || account.webhook_url || null,
+                    runtime_error: webhookInfo?.last_error_message || null
+                })
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('id, tg_username, bot_role, bot_kind, webhook_mode, webhook_url, webhook_set_at, webhook_status, last_update_at, runtime_status, runtime_error')
+                .single();
+
+            if (updateError) throw updateError;
+
+            res.json({
+                success: true,
+                account: updatedAccount,
+                webhook: {
+                    url: webhookInfo?.url || '',
+                    pending_update_count: webhookInfo?.pending_update_count ?? 0,
+                    last_error_date: webhookInfo?.last_error_date || null,
+                    last_error_message: webhookInfo?.last_error_message || null,
+                    max_connections: webhookInfo?.max_connections || null,
+                    allowed_updates: webhookInfo?.allowed_updates || []
+                }
+            });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось проверить webhook official-бота');
+        }
+    });
+
     // ==========================================
     // ДОБАВЛЕНИЕ БОТА ПО ТОКЕНУ
     // ==========================================
@@ -115,8 +430,33 @@ export default function (supabase) {
             if (error) throw error;
 
             officialBotService.stopBot(insertedAccount.id);
-            if (shouldStartOfficialBotRuntime(normalizedKind)) {
+
+            if (normalizedKind === 'template') {
+                // template — не запускаем runtime
+            } else if (isLocalDevelopment()) {
                 officialBotService.startBot(insertedAccount.id, botToken, botInfo.username, normalizedRole);
+            } else {
+                const secret = generateOfficialBotWebhookSecret();
+                const webhookUrl = buildOfficialBotWebhookUrl(insertedAccount.id, secret);
+                const setupBot = new Telegraf(botToken);
+                await setupBot.telegram.setWebhook(webhookUrl, {
+                    allowed_updates: OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES,
+                    secret_token: secret
+                });
+                const webhookInfo = await setupBot.telegram.getWebhookInfo();
+                const now = new Date().toISOString();
+
+                await supabase.from('tg_accounts').update({
+                    webhook_mode: 'webhook',
+                    webhook_secret: secret,
+                    webhook_url: webhookUrl,
+                    webhook_set_at: now,
+                    webhook_status: webhookInfo?.last_error_message ? 'error' : 'enabled',
+                    runtime_status: 'webhook',
+                    runtime_error: webhookInfo?.last_error_message || null
+                }).eq('id', insertedAccount.id);
+
+                officialBotService.startWebhookBot(insertedAccount.id, botToken, botInfo.username, normalizedRole);
             }
 
             res.status(200).json({
@@ -125,7 +465,7 @@ export default function (supabase) {
                 account_id: insertedAccount.id,
                 bot_role: normalizedRole,
                 bot_kind: normalizedKind,
-                runtime_started: shouldStartOfficialBotRuntime(normalizedKind)
+                runtime_started: normalizedKind !== 'template'
             });
         } catch (err) {
             if (err instanceof SalesContourError || isSalesContourFoundationError(err)) {
@@ -209,7 +549,7 @@ export default function (supabase) {
 
             const token = decrypt(account.session_data);
             officialBotService.stopBot(account.id);
-            if (shouldStartOfficialBotRuntime(account.bot_kind)) {
+            if (shouldStartOfficialBotRuntime(account.bot_kind, account.webhook_mode)) {
                 officialBotService.startBot(account.id, token, account.tg_username, normalizedRole);
             }
 
@@ -217,7 +557,7 @@ export default function (supabase) {
                 success: true,
                 bot_role: normalizedRole,
                 bot_kind: normalizeBotKind(account.bot_kind, { allowMissing: true }) || 'sales',
-                runtime_started: shouldStartOfficialBotRuntime(account.bot_kind)
+                runtime_started: shouldStartOfficialBotRuntime(account.bot_kind, account.webhook_mode)
             });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось сменить роль бота');
@@ -253,7 +593,7 @@ export default function (supabase) {
 
             officialBotService.stopBot(account.id);
 
-            if (shouldStartOfficialBotRuntime(normalizedKind)) {
+            if (shouldStartOfficialBotRuntime(normalizedKind, account.webhook_mode)) {
                 const token = decrypt(account.session_data);
                 officialBotService.startBot(account.id, token, account.tg_username, account.bot_role || 'sales');
             }
@@ -262,7 +602,7 @@ export default function (supabase) {
                 success: true,
                 bot_kind: normalizedKind,
                 bot_role: account.bot_role || 'sales',
-                runtime_started: shouldStartOfficialBotRuntime(normalizedKind)
+                runtime_started: shouldStartOfficialBotRuntime(normalizedKind, account.webhook_mode)
             });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось сменить тип бота');
@@ -449,15 +789,7 @@ export default function (supabase) {
                 throw contourUsagesError;
             }
 
-            if ((contourUsages || []).some((contour) => String(contour.paid_channel_id || '') === channelId)) {
-                throw new SalesContourError(
-                    'Нельзя удалить площадку, пока она выбрана как закрытый канал контура. Сначала выберите другой закрытый канал.',
-                    409,
-                    'channel_used_as_paid_channel'
-                );
-            }
-
-            for (const field of ['public_channel_id', 'public_chat_id', 'paid_chat_id']) {
+            for (const field of ['public_channel_id', 'paid_channel_id', 'public_chat_id', 'paid_chat_id']) {
                 const { error: clearContourError } = await supabase
                     .from('sales_bot_contours')
                     .update({ [field]: null })
@@ -503,12 +835,42 @@ export async function initAllBots(supabase) {
 
     for (const account of bots) {
         try {
-            if (!shouldStartOfficialBotRuntime(account.bot_kind || 'sales')) {
-                officialBotService.stopBot(account.id);
+            const normalizedKind = normalizeBotKind(account.bot_kind, { allowMissing: true });
+            if (normalizedKind === 'template') continue;
+
+            const token = decrypt(account.session_data);
+            const mode = normalizeWebhookMode(account.webhook_mode);
+
+            if (isLocalDevelopment()) {
+                officialBotService.startBot(account.id, token, account.tg_username, account.bot_role || 'sales');
                 continue;
             }
-            const token = decrypt(account.session_data);
-            officialBotService.startBot(account.id, token, account.tg_username, account.bot_role || 'sales');
-        } catch (err) { console.error(`Не удалось запустить бота:`, err.message); }
+
+            if (mode === 'polling') {
+                const secret = generateOfficialBotWebhookSecret();
+                const webhookUrl = buildOfficialBotWebhookUrl(account.id, secret);
+                const setupBot = new Telegraf(token);
+                await setupBot.telegram.setWebhook(webhookUrl, {
+                    allowed_updates: OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES,
+                    secret_token: secret
+                });
+                const webhookInfo = await setupBot.telegram.getWebhookInfo();
+                const now = new Date().toISOString();
+
+                await supabase.from('tg_accounts').update({
+                    webhook_mode: 'webhook',
+                    webhook_secret: secret,
+                    webhook_url: webhookUrl,
+                    webhook_set_at: now,
+                    webhook_status: webhookInfo?.last_error_message ? 'error' : 'enabled',
+                    runtime_status: 'webhook',
+                    runtime_error: webhookInfo?.last_error_message || null
+                }).eq('id', account.id);
+
+                console.log(`🔄 Бот @${account.tg_username} мигрирован на webhook`);
+            }
+
+            officialBotService.startWebhookBot(account.id, token, account.tg_username, account.bot_role || 'sales');
+        } catch (err) { console.error(`Не удалось запустить бота @${account.tg_username}:`, err.message); }
     }
 }

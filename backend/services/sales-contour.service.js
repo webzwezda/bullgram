@@ -415,46 +415,11 @@ function assertDistinctContourTargets(payload) {
     }
 }
 
-function buildContourWarnings(bot, contourPayload) {
-    const warnings = [];
-
-    if ((bot?.bot_kind || 'sales') === 'template') {
-        warnings.push({
-            code: 'template_bot',
-            message: 'Это template-бот. Runtime и sales contour для него не используются.'
-        });
-    }
-
-    if (!contourPayload?.paid_channel_id) {
-        warnings.push({
-            code: 'paid_channel_missing',
-            message: 'Не выбран закрытый канал.'
-        });
-    }
-
-    if (contourPayload?.userbot_mode === 'single' && !contourPayload?.selected_userbot_id) {
-        warnings.push({
-            code: 'single_userbot_missing',
-            message: 'Для режима single не выбран юзербот.'
-        });
-    }
-
-    if (contourPayload?.userbot_mode === 'pool' && !(contourPayload?.selected_userbot_ids || []).length) {
-        warnings.push({
-            code: 'pool_userbots_missing',
-            message: 'Для режима pool пока не выбраны юзерботы.'
-        });
-    }
-
-    return warnings;
-}
-
 function buildContourReadiness(bot, contourPayload) {
-    const warnings = buildContourWarnings(bot, contourPayload);
     return {
-        status: warnings.length === 0 ? 'ready' : 'needs_attention',
-        is_ready: warnings.length === 0,
-        warnings
+        status: 'ready',
+        is_ready: true,
+        warnings: []
     };
 }
 

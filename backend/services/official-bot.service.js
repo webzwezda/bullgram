@@ -1826,13 +1826,9 @@ export class OfficialBotService {
     }
 
     /**
-     * Запуск официального бота
+     * Регистрация handlers для официального бота (общий код для polling и webhook)
      */
-    startBot(botId, token, username, role = 'sales') {
-        if (activeBots.has(botId)) return;
-
-        const bot = new Telegraf(token);
-        const self = this;
+    registerHandlers(bot, botId, username, role = 'sales') {
         const normalizedRole = role === 'ops' ? 'ops' : 'sales';
 
         // --- Админ-меню ---
@@ -3258,8 +3254,30 @@ export class OfficialBotService {
             }
         });
 
-        bot.launch().then(() => console.log(`🤖 Бот @${username} успешно запущен!`));
+    }
+
+    /**
+     * Запуск официального бота (polling)
+     */
+    startBot(botId, token, username, role = 'sales') {
+        if (activeBots.has(botId)) return;
+
+        const bot = new Telegraf(token);
+        this.registerHandlers(bot, botId, username, role);
+        bot.launch().then(() => console.log(`🤖 Бот @${username} успешно запущен (polling)!`));
         activeBots.set(botId, bot);
+    }
+
+    /**
+     * Запуск официального бота (webhook) — без polling, готов к handleUpdate()
+     */
+    startWebhookBot(botId, token, username, role = 'sales') {
+        if (activeBots.has(botId)) return;
+
+        const bot = new Telegraf(token);
+        this.registerHandlers(bot, botId, username, role);
+        activeBots.set(botId, bot);
+        console.log(`🤖 Бот @${username} готов к webhook-обработке!`);
     }
 
     /**

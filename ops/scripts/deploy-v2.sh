@@ -91,7 +91,7 @@ rsync -avz --delete "$ROOT_DIR/courses/_site/" "$SERVER:$COURSES_DIR/"
 echo "==> Normalizing frontend ownership and permissions on server"
 ssh "$SERVER" "
   set -euo pipefail
-  chown -R n8nuser:n8nuser '$SITE_DIR' '$APP_DIR' '$BLOG_DIR' '$COURSES_DIR'
+  chown -R www-data:www-data '$SITE_DIR' '$APP_DIR' '$BLOG_DIR' '$COURSES_DIR'
   find '$SITE_DIR' '$APP_DIR' '$BLOG_DIR' '$COURSES_DIR' -type d -exec chmod 755 {} +
   find '$SITE_DIR' '$APP_DIR' '$BLOG_DIR' '$COURSES_DIR' -type f -exec chmod 644 {} +
 "

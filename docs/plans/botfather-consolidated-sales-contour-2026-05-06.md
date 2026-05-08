@@ -450,3 +450,81 @@ Remaining next layer:
   - `node --check backend/routes/official-bot.routes.js`
   - `cd admin-v2 && npm run build`
   - `git diff --check`
+
+## Implementation Pass 10 - 2026-05-07
+
+- Product rule captured: do not expose Telegram backend terms `group`, `supergroup`, and `channel` as the main operator model.
+- Done: `Telegram-площадки` now presents places as:
+  - `Открытый канал`
+  - `Закрытый канал`
+  - `Открытый чат`
+  - `Закрытый чат`
+- Done: the manual type selector now shows only `Канал` and `Чат`; `group/supergroup` stays an internal persistence detail.
+- Done: public/private status comes from cached Telegram metadata and is refreshed only by the explicit `Обновить` button.
+- Verified:
+  - `cd admin-v2 && npm run build`
+  - `git diff --check`
+
+## Implementation Pass 11 - 2026-05-07
+
+- Done: removed the manual `Канал / Чат` selector from `Telegram-площадки`.
+- Done: the list is now read-only for Telegram facts:
+  - title
+  - open/closed category
+  - channel/chat surface
+  - username and Telegram ID
+- Done: operators now update facts only through `Обновить`, which pulls Telegram metadata and writes the DB cache.
+- Done: kept `Удалить` as a BullRun-only cleanup action.
+- Product rule captured: operators should not manually assign the technical shape of a Telegram place in the normal flow.
+- Verified:
+  - `cd admin-v2 && npm run build`
+  - `git diff --check`
+
+## Implementation Pass 12 - 2026-05-07
+
+- Done: cleaned visual noise from the active `Контур продаж` rows.
+- Done: removed secondary role subtitles from the contour:
+  - `Витрина`
+  - `Доступ по тарифу`
+  - `Открытое общение`
+  - `Для участников`
+- Done: removed the visible `Обязательно` marker from the active contour UI.
+- Done: changed rights pills in this active block from English labels to Russian:
+  - `Приглашать`
+  - `Назначать`
+  - `Управлять`
+- Verified:
+  - `cd admin-v2 && npm run build`
+  - `git diff --check`
+
+## Implementation Pass 13 - 2026-05-07
+
+- Done: rights in `Контур продаж` are always visible for each selected role.
+- Done: removed the hidden rights panel pattern; the button is now only `Обновить права`.
+- Done: rights labels are operator-readable:
+  - `Бот админ`
+  - `Может приглашать`
+  - `Может удалять участников`
+  - `Может назначать админов`
+  - `Может управлять чатом`
+- Done: rights are color-coded plainly:
+  - green = yes
+  - red = no
+  - gray = not checked
+- Verified:
+  - `cd admin-v2 && npm run build`
+  - `git diff --check`
+
+## Implementation Pass 14 - 2026-05-07
+
+- Done: fixed deletion of Telegram places that are selected as `Закрытый канал`.
+- Done: `DELETE /api/official-bot/channels/:channelId` now clears all sales-contour role references before deleting the place:
+  - `public_channel_id`
+  - `paid_channel_id`
+  - `public_chat_id`
+  - `paid_chat_id`
+- Product rule captured: deleting a Telegram place from BullRun is DB cleanup only; it should not be blocked by a saved contour role now that partial contours are allowed.
+- Verified:
+  - `node --check backend/routes/official-bot.routes.js`
+  - `cd admin-v2 && npm run build`
+  - `git diff --check`

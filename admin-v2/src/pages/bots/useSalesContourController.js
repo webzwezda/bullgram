@@ -162,7 +162,8 @@ function normalizeUserbotOption(item) {
     title,
     eligible,
     reason,
-    label: !eligible && reason ? `${title} — ${reason}` : title
+    label: !eligible && reason ? `${title} — ${reason}` : title,
+    runtimeStatus: item?.runtime_status || ''
   };
 }
 
@@ -355,7 +356,6 @@ export function useSalesContourController({
   selectedOfficialBot,
   state,
   setState,
-  showUiMessage
 }) {
   const [draftsByBotId, setDraftsByBotId] = useState({});
   const [dirtyBotIds, setDirtyBotIds] = useState({});
@@ -378,13 +378,9 @@ export function useSalesContourController({
     return (accounts || []).filter((account) => {
       if (account.account_type !== 'userbot') return false;
       if (reservedIds.has(toId(account.id))) return false;
-      if (account.proxy_id) {
-        const proxy = (proxies || []).find((item) => toId(item.id) === toId(account.proxy_id));
-        if (proxy?.is_working === false) return false;
-      }
       return true;
     });
-  }, [accounts, proxies, reservedUserbotIds]);
+  }, [accounts, reservedUserbotIds]);
 
   const contourEntry = useMemo(() => {
     return getContourPayloadEntry(officialBotContoursPayload, selectedBotId);
@@ -564,7 +560,6 @@ export function useSalesContourController({
     if (!selectedOfficialBot?.id) return;
 
     if (contourDraft.userbotMode === 'single' && !contourDraft.selectedUserbotId) {
-      showUiMessage('Для режима с одним юзерботом сначала выбери аккаунт.', 'error');
       return;
     }
 
@@ -575,12 +570,10 @@ export function useSalesContourController({
       contourDraft.paidChatId
     ].filter(Boolean);
     if (new Set(selectedTargets).size !== selectedTargets.length) {
-      showUiMessage('Одна Telegram-площадка не может занимать две роли в контуре.', 'error');
       return;
     }
 
-    if (contourDraft.userbotMode === 'pool') {
-      showUiMessage('Пул юзерботов оставили в MVP только как режим-наметку. Пока сохраняем без юзербота или один аккаунт.', 'error');
+    if (contourDraft.userbotMode === 'pool' && !(contourDraft.selectedUserbotIds || []).length) {
       return;
     }
 
@@ -601,7 +594,7 @@ export function useSalesContourController({
           paid_chat_id: contourDraft.paidChatId || null,
           userbot_mode: contourDraft.userbotMode,
           selected_userbot_id: contourDraft.userbotMode === 'single' ? contourDraft.selectedUserbotId : null,
-          selected_userbot_ids: []
+          selected_userbot_ids: contourDraft.userbotMode === 'pool' ? (contourDraft.selectedUserbotIds || []) : []
         }
       });
 
@@ -610,9 +603,8 @@ export function useSalesContourController({
         [selectedBotId]: false
       }));
       await reloadAccounts();
-      showUiMessage(options.auto ? 'Выбор сохранен.' : 'Контур продаж сохранен.', 'success');
+
     } catch (error) {
-      showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({
         ...prev,
@@ -626,7 +618,6 @@ export function useSalesContourController({
 
     const normalizedTarget = normalizeContourTarget(target);
     if (dirtyBotIds[selectedBotId]) {
-      showUiMessage('Сначала сохрани контур, потом проверяй права в Telegram.', 'error');
       return;
     }
     const targetFieldByKey = {
@@ -636,7 +627,6 @@ export function useSalesContourController({
       paid_chat: 'paidChatId'
     };
     if (!draft[targetFieldByKey[normalizedTarget]]) {
-      showUiMessage('Сначала выбери площадку для этой роли и сохрани контур.', 'error');
       return;
     }
 
@@ -659,7 +649,7 @@ export function useSalesContourController({
         [key]: normalizeRightsResult(result, normalizedTarget)
       }));
 
-      showUiMessage('Права обновлены и сохранены.', 'success');
+
     } catch (error) {
       setBotRightsByKey((prev) => ({
         ...prev,
@@ -669,7 +659,6 @@ export function useSalesContourController({
           message: error.message
         }
       }));
-      showUiMessage(error.message, 'error');
     } finally {
       setCheckingRightsKey('');
     }
@@ -680,15 +669,12 @@ export function useSalesContourController({
     const normalizedTarget = 'paid_channel';
 
     if (dirtyBotIds[selectedBotId]) {
-      showUiMessage('Сначала сохрани контур, потом подготавливай юзербота.', 'error');
       return;
     }
     if (draft.userbotMode !== 'single' || !draft.selectedUserbotId) {
-      showUiMessage('Для подготовки нужен режим "Один юзербот" и выбранный аккаунт.', 'error');
       return;
     }
     if (!draft.paidChannelId) {
-      showUiMessage('Сначала выбери закрытый канал.', 'error');
       return;
     }
 
@@ -719,12 +705,12 @@ export function useSalesContourController({
       }
 
       if (normalizedResult.status === 'needs_join') {
-        showUiMessage('Юзербот должен сначала вступить, потом нажми кнопку еще раз.', 'success');
+
       } else if (isPreparationSuccessStatus(normalizedResult.status)) {
         reloadAccounts().catch(() => null);
-        showUiMessage(normalizedResult.message || 'Юзербот подготовлен.', 'success');
+
       } else {
-        showUiMessage(normalizedResult.message || 'Подготовка юзербота завершена.', 'success');
+
       }
     } catch (error) {
       setPrepareResultByKey((prev) => ({
@@ -738,7 +724,6 @@ export function useSalesContourController({
           userbotId: toId(draft.selectedUserbotId)
         }
       }));
-      showUiMessage(error.message, 'error');
     } finally {
       setPreparingUserbotKey('');
     }
@@ -765,8 +750,10 @@ export function useSalesContourController({
     savingContour: String(state?.savingContourBotId || '') === selectedBotId,
     selectedBotKind,
     setBotRightsTarget,
-    setFieldValue(field, value, options = {}) {
-      const patch = { [field]: value };
+    setFieldValue(fieldOrPatch, value, options = {}) {
+      const patch = typeof fieldOrPatch === 'object' && fieldOrPatch !== null
+        ? { ...fieldOrPatch }
+        : { [fieldOrPatch]: value };
       if (options.oppositeField && value && String(draft[options.oppositeField] || '') === String(value)) {
         patch[options.oppositeField] = '';
       }
