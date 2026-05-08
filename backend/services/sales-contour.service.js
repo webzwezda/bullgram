@@ -1,5 +1,5 @@
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
-import { decrypt } from '../utils/crypto.js';
+import { Api } from 'telegram';
 
 export const SALES_BOT_KINDS = Object.freeze(['sales', 'template']);
 export const SALES_CONTOUR_USERBOT_MODES = Object.freeze(['none', 'single', 'pool']);
@@ -41,6 +41,19 @@ const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_MEMBER_STATUSES = new Set(['administrator', 'creator']);
 const CONTOUR_TARGET_KEYS = Object.keys(CONTOUR_TARGET_CONFIG);
+const LEFT_STATUSES = new Set(['left', 'kicked']);
+const CONTOUR_USERBOT_PROMOTE_RIGHTS = Object.freeze({
+    can_invite_users: true,
+    can_promote_members: false,
+    can_change_info: false,
+    can_delete_messages: false,
+    can_restrict_members: false,
+    can_pin_messages: false,
+    can_manage_topics: false,
+    can_manage_video_chats: false,
+    can_post_messages: false,
+    can_edit_messages: false
+});
 
 const JOIN_DELAY_MIN = 3000;
 const JOIN_DELAY_MAX = 5000;
@@ -57,8 +70,6 @@ function extractInviteHash(inviteLink) {
     const match = inviteLink.match(/[+](\w[\w-]+)/) || inviteLink.match(/joinchat\/([\w-]+)/);
     return match ? match[1] : null;
 }
-
-import { Api } from 'telegram';
 
 export class SalesContourError extends Error {
     constructor(message, statusCode = 400, code = 'sales_contour_error') {
@@ -943,18 +954,7 @@ export class SalesContourService {
         }
 
         try {
-            await botApi.promoteChatMember(context.channel.tg_chat_id, userbot.tg_account_id, {
-                can_invite_users: true,
-                can_promote_members: false,
-                can_change_info: false,
-                can_delete_messages: false,
-                can_restrict_members: false,
-                can_pin_messages: false,
-                can_manage_topics: false,
-                can_manage_video_chats: false,
-                can_post_messages: false,
-                can_edit_messages: false
-            });
+            await botApi.promoteChatMember(context.channel.tg_chat_id, userbot.tg_account_id, CONTOUR_USERBOT_PROMOTE_RIGHTS);
         } catch (error) {
             const telegramError = normalizeTelegramError(error);
             throw new SalesContourError(
@@ -1102,65 +1102,65 @@ export class SalesContourService {
         return data;
     }
 
+    async _isChatMember(botApi, tgChatId, tgUserId) {
+        try {
+            const member = await botApi.getChatMember(tgChatId, tgUserId);
+            const status = String(member?.status || '').toLowerCase();
+            return !LEFT_STATUSES.has(status);
+        } catch {
+            return false;
+        }
+    }
+
+    async _waitForMembership(botApi, tgChatId, tgUserId, { attempts = 3, interval = 2000 } = {}) {
+        for (let i = 0; i < attempts; i++) {
+            if (await this._isChatMember(botApi, tgChatId, tgUserId)) return true;
+            if (i < attempts - 1) await sleep(interval);
+        }
+        return false;
+    }
+
+    async _joinViaInvite(botApi, userbotClient, tgChatId) {
+        const sources = [
+            () => botApi.exportChatInviteLink(tgChatId).then((l) => ({ hash: extractInviteHash(l), revoke: null })),
+            () => botApi.createChatInviteLink(tgChatId, {}).then((r) => ({ hash: extractInviteHash(r.invite_link), revoke: r.invite_link }))
+        ];
+
+        for (const getInvite of sources) {
+            let hash, revoke;
+            try {
+                ({ hash, revoke } = await getInvite());
+            } catch {
+                continue;
+            }
+            if (!hash) continue;
+
+            try {
+                await userbotClient.invoke(new Api.messages.ImportChatInvite({ hash }));
+                return true;
+            } catch {
+            } finally {
+                if (revoke) {
+                    await botApi.revokeChatInviteLink(tgChatId, revoke).catch(() => {});
+                }
+            }
+        }
+        return false;
+    }
+
     async joinSingleTarget(botApi, userbotClient, channel, userbot, targetKey, label) {
         const tgChatId = channel.tg_chat_id;
         const userbotTgId = Number(userbot.tg_account_id);
 
-        let isMember = false;
-        try {
-            const member = await botApi.getChatMember(tgChatId, userbotTgId);
-            const status = String(member?.status || '').toLowerCase();
-            isMember = !['left', 'kicked'].includes(status);
-        } catch {}
+        const wasMember = await this._isChatMember(botApi, tgChatId, userbotTgId);
 
-        if (!isMember) {
+        if (!wasMember) {
             const username = String(channel.username || '').trim().replace(/^@/, '');
             if (username) {
                 const entity = await userbotClient.getEntity(username);
                 await userbotClient.invoke(new Api.channels.JoinChannel({ channel: entity }));
             } else {
-                const inviteMethods = [
-                    {
-                        name: 'exportChatInviteLink',
-                        getHash: async () => {
-                            const link = await botApi.exportChatInviteLink(tgChatId);
-                            return { hash: extractInviteHash(link), revoke: null };
-                        }
-                    },
-                    {
-                        name: 'createChatInviteLink',
-                        getHash: async () => {
-                            const r = await botApi.createChatInviteLink(tgChatId, {});
-                            return { hash: extractInviteHash(r.invite_link), revoke: r.invite_link };
-                        }
-                    }
-                ];
-
-                let joined = false;
-                for (const method of inviteMethods) {
-                    let hashStr, revokeLink;
-                    try {
-                        const result = await method.getHash();
-                        hashStr = result.hash;
-                        revokeLink = result.revoke;
-                    } catch (err) {
-                        console.log(`[joinSingleTarget] ${label}: ${method.name} failed → ${err.message}`);
-                        continue;
-                    }
-                    if (!hashStr) continue;
-
-                    try {
-                        await userbotClient.invoke(new Api.messages.ImportChatInvite({ hash: hashStr }));
-                        joined = true;
-                        break;
-                    } catch {
-                    } finally {
-                        if (revokeLink) {
-                            try { await botApi.revokeChatInviteLink(tgChatId, revokeLink); } catch {}
-                        }
-                    }
-                }
-
+                const joined = await this._joinViaInvite(botApi, userbotClient, tgChatId);
                 if (!joined) {
                     throw new SalesContourError(
                         `Не удалось вступить в ${label} ни одним из способов.`,
@@ -1168,22 +1168,11 @@ export class SalesContourService {
                         'invite_join_failed'
                     );
                 }
-
-                await new Promise(r => setTimeout(r, 2000));
+                await sleep(2000);
             }
         }
 
-        let isNowMember = false;
-        for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-                const member = await botApi.getChatMember(tgChatId, userbotTgId);
-                const status = String(member?.status || '').toLowerCase();
-                isNowMember = !['left', 'kicked'].includes(status);
-                if (isNowMember) break;
-            } catch {}
-            if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-        }
-
+        const isNowMember = await this._waitForMembership(botApi, tgChatId, userbotTgId);
         if (!isNowMember) {
             return {
                 target: targetKey,
@@ -1194,35 +1183,20 @@ export class SalesContourService {
             };
         }
 
-        let isAdmin = false;
-        try {
-            const member = await botApi.getChatMember(tgChatId, userbotTgId);
-            isAdmin = ['administrator', 'creator', 'owner'].includes(String(member?.status || '').toLowerCase());
-        } catch {
-            isAdmin = false;
-        }
+        const isAdmin = ADMIN_MEMBER_STATUSES.has(
+            String((await botApi.getChatMember(tgChatId, userbotTgId).catch(() => null))?.status || '').toLowerCase()
+        );
 
         if (!isAdmin) {
-            await botApi.promoteChatMember(tgChatId, userbotTgId, {
-                can_invite_users: true,
-                can_promote_members: false,
-                can_change_info: false,
-                can_delete_messages: false,
-                can_restrict_members: false,
-                can_pin_messages: false,
-                can_manage_topics: false,
-                can_manage_video_chats: false,
-                can_post_messages: false,
-                can_edit_messages: false
-            });
+            await botApi.promoteChatMember(tgChatId, userbotTgId, CONTOUR_USERBOT_PROMOTE_RIGHTS);
         }
 
         return {
             target: targetKey,
             channel_id: channel.id,
             channel_title: channel.title,
-            status: isMember && isAdmin ? 'already_admin' : 'joined',
-            message: `${label}: юзербот ${isMember ? 'уже был в площадке' : 'вступил'}, ${isAdmin ? 'уже админ' : 'получил права админа'}.`
+            status: wasMember && isAdmin ? 'already_admin' : 'joined',
+            message: `${label}: юзербот ${wasMember ? 'уже был в площадке' : 'вступил'}, ${isAdmin ? 'уже админ' : 'получил права админа'}.`
         };
     }
 
