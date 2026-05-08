@@ -1564,21 +1564,6 @@ a {
 }
 
 
-.userbots-status-note {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: #f8fbff;
-  border: 1px solid #e7edf4;
-}
-
-
-.userbots-status-note--error {
-  background: #fff7f7;
-  border-color: #f3caca;
-  color: #b42318;
-}
-
-
 .field {
   min-width: 280px;
   min-height: 46px;

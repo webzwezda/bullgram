@@ -98,6 +98,18 @@ When working with userbot operations:
 4. If Telegram `@SpamBot` confirms restriction, account gets `restricted` status and is removed from shop
 5. Dedicated managed proxy of restricted userbot should be cleaned up from BullRun when no longer shared
 
+## Supabase MCP
+
+A Supabase MCP server (`supabase`) is configured in `.mcp.json` and connects to the self-hosted Supabase instance.
+
+**Tools available:** `execute_sql`, `apply_migration`, `list_tables`, `list_auth_users`, `generate_typescript_types`, `explain_query`, and others from `selfhosted-supabase-mcp`.
+
+**Connection:** SSH tunnel auto-starts on session launch via `SessionStart` hook (`ops/scripts/ensure-mcp-tunnel.sh`):
+- `localhost:8080` → Kong REST API
+- `localhost:5432` → PostgreSQL direct (bypasses PgBouncer)
+
+**Access:** `supabase_admin` role with service-role key — full read/write.
+
 ## Environment & Configuration
 
 **Required:** Node.js 22.22.0, npm 10.x (see `.nvmrc`)

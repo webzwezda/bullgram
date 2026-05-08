@@ -464,7 +464,7 @@ export class UserbotService {
             if (ignoreAuthKeyErrors && (raw.includes('AUTH_KEY_UNREGISTERED') || raw.includes('SESSION_REVOKED'))) {
                 return;
             }
-            throw error;
+            console.error('[GramJS _errorHandler]', error);
         };
 
         return client;

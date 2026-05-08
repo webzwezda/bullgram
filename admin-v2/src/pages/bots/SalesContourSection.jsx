@@ -1,4 +1,8 @@
 import { AlertTriangle, CheckCircle2, KeyRound, Link2, Loader2, MessageSquare, Radio, ShieldCheck } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 function normalizeStatusKey(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
@@ -145,7 +149,6 @@ function RightsDetails({ result }) {
   if (!result) return null;
 
   const adminOk = isAdminStatusOk(result.adminStatus);
-  const pillClass = 'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold';
   const rights = [
     ['Админ', adminOk],
     ['Приглашать', result.canInviteUsers],
@@ -161,21 +164,15 @@ function RightsDetails({ result }) {
           const ok = value === true;
           const bad = value === false;
           return (
-            <span key={label} className={`${pillClass} ${
-              ok
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : bad
-                  ? 'border-amber-200 bg-amber-50 text-amber-800'
-                  : 'border-slate-200 bg-white text-slate-500'
-            }`}>
-              {ok ? <CheckCircle2 className="size-3" /> : <AlertTriangle className="size-3" />}
-              {label}: {formatPermissionValue(value)}
-            </span>
+            <Badge key={label} variant={ok ? 'default' : bad ? 'destructive' : 'secondary'} className={`text-[10px] uppercase font-bold py-0.5 px-2 ${ok ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' : bad ? 'bg-amber-100 text-amber-800 hover:bg-amber-100' : 'bg-slate-100 text-slate-600 hover:bg-slate-100'}`}>
+              {ok ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <AlertTriangle className="w-3 h-3 mr-1" />}
+              {label}
+            </Badge>
           );
         })}
       </div>
       <p className="text-xs font-medium text-slate-500">
-        Статус Telegram: {formatAdminStatus(result.adminStatus)} · Обновлено: {formatCheckedAt(result.checkedAt)}
+        Статус: {formatAdminStatus(result.adminStatus)} · Обновлено: {formatCheckedAt(result.checkedAt)}
       </p>
       {result.warnings?.length ? (
         <p className="text-xs font-medium leading-snug text-amber-700">{result.warnings[0]}</p>
@@ -204,7 +201,7 @@ function RoleCard({
       ? 'border-amber-200 bg-amber-50 text-amber-800'
       : summary.tone === 'error'
         ? 'border-rose-200 bg-rose-50 text-rose-700'
-        : 'border-slate-200 bg-white text-slate-500';
+        : 'border-slate-200 bg-slate-50 text-slate-500';
 
   function selectRole(value) {
     if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
@@ -218,73 +215,81 @@ function RoleCard({
   }
 
   return (
-    <article className="flex min-h-[248px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-            <Icon className="size-5" />
+    <Card className="flex flex-col ring-slate-200/60 shadow-sm min-h-[280px]">
+      <CardHeader className="pb-3 border-b border-slate-50/50 bg-slate-50/30">
+        <div className="flex min-w-0 gap-3 items-center">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100/50">
+            <Icon className="w-5 h-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-sm font-black text-slate-900">{config.title}</h4>
+              <h4 className="text-sm font-bold text-slate-900">{config.title}</h4>
               {config.required ? (
-                <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-rose-600">обязательно</span>
+                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-600">обязательно</span>
               ) : null}
             </div>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">{config.subtitle}</p>
+            <p className="text-xs text-slate-500">{config.subtitle}</p>
           </div>
         </div>
-      </div>
+      </CardHeader>
 
-      <label className="grid gap-2">
-        <span className="text-xs font-black uppercase tracking-wider text-slate-400">Площадка</span>
-        <select
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-50 disabled:text-slate-400"
-          value={selectedId}
-          onChange={(event) => selectRole(event.target.value)}
-          disabled={!options.length || savingContour}
-        >
-          <option value="">{options.length ? 'Не выбрано' : config.empty}</option>
-          {options.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.title || option.label || option.tgChatId || option.id}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div className="mt-3 min-h-[40px] text-xs font-medium text-slate-500">
-        {selectedOption ? (
-          <span>{formatVisibility(selectedOption)}</span>
-        ) : (
-          <span>Выберите площадку из списка, который видит official-бот.</span>
-        )}
-      </div>
-
-      <div className={`mt-auto rounded-xl border px-3 py-2 ${toneClass}`}>
-        <p className="text-sm font-black">{savingContour ? 'Сохраняем...' : summary.title}</p>
-        <p className="mt-0.5 line-clamp-2 text-xs font-medium">
-          {savingContour ? 'Изменение селектора сохраняется автоматически' : summary.text}
-        </p>
-      </div>
-
-      <div className="mt-3 grid gap-2">
-        <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-[13px] font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={() => checkBotRights(config.key)}
-          disabled={!selectedId || checking}
-        >
-          {checking ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-          Обновить права
-        </button>
-      </div>
-
-      {rightsResult ? (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <RightsDetails result={rightsResult} />
+      <CardContent className="flex flex-col flex-1 pt-4 pb-4">
+        <div className="grid gap-2">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Площадка</label>
+          <Select
+            value={selectedId}
+            onValueChange={selectRole}
+            disabled={!options.length || savingContour}
+          >
+            <SelectTrigger className="data-[size=default]:h-10 w-full bg-white">
+              <SelectValue placeholder={options.length ? 'Не выбрано' : config.empty} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.title || option.label || option.tgChatId || option.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      ) : null}
-    </article>
+
+        <div className="mt-2 min-h-[32px] text-xs text-slate-500">
+          {selectedOption ? (
+            <span>{formatVisibility(selectedOption)}</span>
+          ) : (
+            <span className="opacity-70">Выберите площадку из списка</span>
+          )}
+        </div>
+
+        <div className={`mt-auto rounded-xl border px-3 py-2.5 ${toneClass}`}>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${summary.tone === 'ok' ? 'bg-emerald-500' : summary.tone === 'warning' ? 'bg-amber-500' : summary.tone === 'error' ? 'bg-rose-500' : 'bg-slate-300'}`} />
+            <p className="text-sm font-bold">{savingContour ? 'Сохраняем...' : summary.title}</p>
+          </div>
+          <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-snug">
+            {savingContour ? 'Изменение сохраняется...' : summary.text}
+          </p>
+        </div>
+
+        <div className="mt-3">
+          <Button
+            className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[13px]"
+            onClick={() => checkBotRights(config.key)}
+            disabled={!selectedId || checking}
+          >
+            {checking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <KeyRound className="w-4 h-4 mr-2" />}
+            Обновить права
+          </Button>
+        </div>
+
+        {rightsResult ? (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <RightsDetails result={rightsResult} />
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -306,18 +311,18 @@ export function SalesContourSection({
   const roleConfigs = getRoleConfigs();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {contourError ? (
-        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+          <AlertTriangle className="mt-0.5 w-5 h-5 shrink-0 text-amber-500" />
           <div>
             <p className="font-bold">Контурный endpoint ответил ошибкой</p>
-            <p className="mt-0.5 text-amber-800/90">Площадки можно выбрать по локальным данным, но сохранять лучше после ответа backend.</p>
+            <p className="mt-0.5 text-amber-800/90 text-xs">Площадки можно выбрать по локальным данным, но сохранять лучше после ответа backend.</p>
           </div>
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {roleConfigs.map((config) => (
           <RoleCard
             key={config.key}
@@ -342,17 +347,17 @@ export function SalesContourSection({
       {contourWarnings.length ? (
         <div className="grid gap-2">
           {contourWarnings.map((warning) => (
-            <div key={warning} className="flex gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-700">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+            <div key={warning} className="flex gap-3 items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-medium text-amber-900">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
               <span>{warning}</span>
             </div>
           ))}
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-        <ShieldCheck className="mr-2 inline size-4 text-indigo-600" />
-        Права хранятся в BullRun. Telegram дергаем только по кнопке "Обновить права".
+      <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-sm text-indigo-800">
+        <ShieldCheck className="w-5 h-5 text-indigo-500 shrink-0" />
+        <span className="font-medium text-indigo-900">Права хранятся в BullRun. Telegram дергаем только по кнопке "Обновить права".</span>
       </div>
     </div>
   );

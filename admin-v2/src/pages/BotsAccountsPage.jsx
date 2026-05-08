@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -32,10 +33,15 @@ import { useSalesContourController } from './bots/useSalesContourController.js';
 import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
 import { useUserbotStorefront } from './bots/useUserbotStorefront.js';
 
+function showUiMessage(text, tone = 'default') {
+  if (tone === 'success') return toast.success(text);
+  if (tone === 'error') return toast.error(text);
+  return toast(text);
+}
+
 // Shared inventory data lives in hooks; page still owns userbot mutations and selection sync outside official-bot slice.
 function BotsAccountsPageContent({ mode = 'userbots' }) {
   const { accessToken, user, profilePlan } = useAuth();
-  const [uiMessage, setUiMessage] = useState({ tone: 'default', text: '' });
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
   const [refreshingTelegramPlaceId, setRefreshingTelegramPlaceId] = useState('');
@@ -43,10 +49,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     accessToken,
     ownerId: user?.id
   });
-
-  function showUiMessage(text, tone = 'default') {
-    setUiMessage({ tone, text });
-  }
 
   const {
     cancelUserbotCheckout,
@@ -387,12 +389,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   return (
     <section className="page page--flush">
-      {uiMessage.text ? (
-        <div className={`userbots-status-note userbots-status-note--${uiMessage.tone || 'default'}`}>
-          {uiMessage.text}
-        </div>
-      ) : null}
-
       {isOfficialMode ? (
         <OfficialBotsSection {...officialBotsSectionProps} />
       ) : !canSellUserbotAssets ? (

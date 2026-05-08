@@ -1,4 +1,4 @@
-import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, Link2, KeyRound, Plus, X } from 'lucide-react';
+import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, Link2, KeyRound, Plus, X, Settings, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 function adminContextMeta(accountOrAdminTgId) {
@@ -97,55 +97,71 @@ function SelectChevron() {
   );
 }
 
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+
 function ConnectBotSection({ botForm, setBotForm, state, addOfficialBot }) {
   return (
-    <div className="p-6 md:p-8">
-      <div className="flex items-center gap-3 mb-1">
-        <div className="w-2 h-2 rounded-full bg-blue-500" />
-        <div className="text-[15px] font-bold text-slate-900">Подключить нового бота</div>
-      </div>
-      <div className="text-sm text-slate-500 mb-5">Получи токен у @BotFather и вставь сюда.</div>
-
-      <div className="flex flex-col sm:flex-row items-end gap-3">
-        <div className="flex-1 min-w-0">
-          <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 block mb-1.5">Токен бота</label>
-          <input
-            className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-slate-50 font-mono text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-            type="text"
-            value={botForm.botToken}
-            onChange={(event) => setBotForm((prev) => ({ ...prev, botToken: event.target.value }))}
-            placeholder="8123456789:AAE_x7v9Kq2Lm..."
-            spellCheck="false"
-          />
+    <Card className="relative ring-slate-200/60 shadow-sm mb-6 overflow-hidden">
+      <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
+      <CardHeader className="relative flex flex-row items-start gap-4 pb-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+          <Bot className="w-6 h-6" />
         </div>
-        <div className="w-full sm:w-44">
-          <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 block mb-1.5">Тип</label>
-          <div className="relative">
-            <select
-              className="h-11 w-full cursor-pointer appearance-none px-4 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+        <div className="flex-1">
+          <CardTitle className="text-xl font-bold text-slate-900">
+            Подключить нового бота
+          </CardTitle>
+          <CardDescription className="text-sm font-medium text-slate-500 mt-1">Получи токен у @BotFather и вставь сюда.</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="relative">
+        <div className="flex flex-col sm:flex-row items-end gap-4">
+          <div className="flex-1 w-full">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Токен бота</label>
+            <Input
+              value={botForm.botToken}
+              onChange={(e) => setBotForm((prev) => ({ ...prev, botToken: e.target.value }))}
+              placeholder="8123456789:AAE_x7v9Kq2Lm..."
+              spellCheck="false"
+              className="font-mono bg-slate-50 h-11"
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Тип</label>
+            <Select
               value={botForm.botKind}
-              onChange={(event) => setBotForm((prev) => ({ ...prev, botKind: event.target.value }))}
+              onValueChange={(value) => setBotForm((prev) => ({ ...prev, botKind: value }))}
             >
-              <option value="sales">Бот продаж</option>
-              <option value="template">Заготовка</option>
-            </select>
-            <SelectChevron />
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+                <SelectValue placeholder="Тип бота" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sales">Бот продаж</SelectItem>
+                <SelectItem value="template">Заготовка</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button
+              onClick={addOfficialBot}
+              disabled={state.savingBot || !botForm.botToken.trim()}
+              className="h-11 px-6 bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+            >
+              {state.savingBot ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Подключить
+            </Button>
+            <Button variant="outline" asChild className="h-11 w-full sm:w-auto text-slate-700">
+              <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                @BotFather <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            className="h-11 px-5 rounded-xl bg-blue-600 text-[14px] font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50"
-            onClick={addOfficialBot}
-            disabled={state.savingBot || !botForm.botToken.trim()}
-          >
-            {state.savingBot ? '...' : 'Подключить'}
-          </button>
-          <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="h-11 px-4 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-700 hover:bg-slate-50 transition-all inline-flex items-center gap-1.5">
-            @BotFather <ExternalLink className="size-3" />
-          </a>
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -174,69 +190,75 @@ function BotConfigSection({
     : null;
 
   return (
-    <div className="border-t border-slate-100">
-      <div className="p-6 md:p-8">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-          <div className="text-[15px] font-bold text-slate-900">Настройка бота</div>
+    <Card className="ring-slate-200/60 shadow-sm">
+      <CardHeader className="flex flex-row items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
+          <Settings className="w-6 h-6" />
         </div>
-        <div className="text-sm text-slate-500 mb-5">Выбери бота, укажи тип и Telegram ID для уведомлений о продажах.</div>
-
+        <div className="flex-1">
+          <CardTitle className="text-xl font-bold text-slate-900">
+            Настройка бота
+          </CardTitle>
+          <CardDescription className="text-sm font-medium text-slate-500 mt-1">Выбери бота, укажи тип и Telegram ID для уведомлений о продажах.</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 block mb-1.5">Бот</label>
-            <div className="relative">
-              <select
-                className="h-11 w-full cursor-pointer appearance-none px-4 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
-                value={selectedOfficialBotId || selectedBotId}
-                onChange={(event) => setSelectedOfficialBotId(event.target.value)}
-              >
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Бот</label>
+            <Select
+              value={selectedOfficialBotId || selectedBotId}
+              onValueChange={(value) => setSelectedOfficialBotId(value)}
+            >
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+                <SelectValue placeholder="Выбери бота" />
+              </SelectTrigger>
+              <SelectContent>
                 {officialBots.map((account) => (
-                  <option key={account.id} value={account.id}>
+                  <SelectItem key={account.id} value={account.id}>
                     {botTitle(account)}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              <SelectChevron />
-            </div>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 block mb-1.5">Тип бота</label>
-            <div className="relative">
-              <select
-                className="h-11 w-full cursor-pointer appearance-none px-4 pr-10 rounded-xl border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-60"
-                value={kind}
-                onChange={(event) => saveBotKind(selectedOfficialBot, event.target.value)}
-                disabled={state.savingBotKindId === selectedBotId}
-              >
-                <option value="sales">Бот продаж</option>
-                <option value="template">Заготовка</option>
-              </select>
-              <SelectChevron />
-            </div>
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Тип бота</label>
+            <Select
+              value={kind}
+              onValueChange={(value) => saveBotKind(selectedOfficialBot, value)}
+              disabled={state.savingBotKindId === selectedBotId}
+            >
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+                <SelectValue placeholder="Тип бота" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sales">Бот продаж</SelectItem>
+                <SelectItem value="template">Заготовка</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
-            <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 block mb-1.5">Админ TG ID</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Админ TG ID</label>
             <div className="flex gap-2">
-              <input
-                className="h-11 flex-1 px-4 rounded-xl border border-slate-200 bg-slate-50 text-[14px] font-bold text-slate-950 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10"
-                type="text"
+              <Input
                 value={adminDraftValue}
-                onChange={(event) => setBotAdminDrafts((prev) => ({
+                onChange={(e) => setBotAdminDrafts((prev) => ({
                   ...prev,
-                  [selectedBotId]: event.target.value
+                  [selectedBotId]: e.target.value
                 }))}
                 placeholder="488609412"
+                className="h-11 bg-slate-50 font-mono"
               />
-              <button
-                className="h-11 px-4 rounded-xl bg-slate-900 text-[13px] font-bold text-white hover:bg-slate-800 transition-all disabled:opacity-50"
+              <Button
                 onClick={() => saveBotAdmin(selectedOfficialBot)}
                 disabled={state.savingBotAdminId === selectedBotId}
+                className="h-11 px-4 bg-slate-900 hover:bg-slate-800 text-white"
               >
-                {state.savingBotAdminId === selectedBotId ? '...' : 'Сохранить'}
-              </button>
+                {state.savingBotAdminId === selectedBotId ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Сохранить'}
+              </Button>
             </div>
             <div className="mt-1.5 text-xs text-slate-500">
               {adminContextMeta(selectedOfficialBot) === 'Не указан'
@@ -245,10 +267,10 @@ function BotConfigSection({
             </div>
           </div>
         </div>
-      </div>
+      </CardContent>
 
       {kind === 'sales' && salesContourSectionProps?.isVisible ? (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-slate-100 bg-slate-50/30">
           <UserbotsSection
             salesContourSectionProps={salesContourSectionProps}
           />
@@ -263,13 +285,14 @@ function BotConfigSection({
           />
         </div>
       ) : kind === 'template' ? (
-        <div className="border-t border-slate-100 p-6 md:p-8">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 font-medium">
+        <CardContent className="border-t border-slate-100 pt-6">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 font-medium flex items-center gap-2">
+            <Bot className="w-4 h-4 text-slate-400" />
             Это заготовка. Магазин и привязка площадок для неё не нужны, но токен и админа можно держать наготове.
           </div>
-        </div>
+        </CardContent>
       ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -304,6 +327,7 @@ function UserbotsSection({
       }, null, { autoSave: true });
     }
     setAdding(false);
+    salesContourSectionProps?.triggerJoinAll?.();
   }
 
   function handleRemove(optionId) {
@@ -323,79 +347,101 @@ function UserbotsSection({
       <div className="px-6 md:px-8 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <UserCog className="size-4 text-slate-400" />
-            <div className="text-[15px] font-bold text-slate-900">Юзерботы</div>
+            <UserCog className="w-4 h-4 text-slate-400" />
+            <div className="text-sm font-bold text-slate-900">Юзерботы</div>
           </div>
           <div className="flex items-center gap-2">
             {selectedOptions.length ? (
-              <div className="px-2.5 py-1 rounded-lg bg-slate-100 text-[13px] font-bold text-slate-600">{selectedOptions.length}</div>
+              <div className="px-2.5 py-1 rounded-full bg-slate-200 text-xs font-bold text-slate-600">{selectedOptions.length}</div>
             ) : null}
             {availableOptions.length > 0 ? (
-              <button
-                className="h-8 px-3 rounded-lg bg-blue-600 text-[12px] font-bold text-white hover:bg-blue-700 transition-all inline-flex items-center gap-1.5"
+              <Button
+                size="sm"
                 onClick={() => setAdding(true)}
+                className="bg-blue-600 hover:bg-blue-700 h-8 text-xs px-3"
               >
-                <Plus className="size-3.5" />
+                <Plus className="w-3.5 h-3.5 mr-1" />
                 Добавить
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
       </div>
 
       {adding && availableOptions.length > 0 ? (
-        <div className="px-6 md:px-8 py-3 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-2">
-            <select
-              className="h-9 flex-1 px-3 rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-700 outline-none focus:border-blue-400"
-              defaultValue=""
-              onChange={(e) => { if (e.target.value) handleAdd(e.target.value); }}
-            >
-              <option value="" disabled>Выбери юзербота</option>
+        <div className="px-6 md:px-8 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+          <Select onValueChange={(value) => { if (value) handleAdd(value); }}>
+            <SelectTrigger className="flex-1 w-full bg-white data-[size=default]:h-9">
+              <SelectValue placeholder="Выбери юзербота" />
+            </SelectTrigger>
+            <SelectContent>
               {availableOptions.map((option) => (
-                <option key={option.id} value={option.id}>{option.title}</option>
+                <SelectItem key={option.id} value={option.id}>{option.title}</SelectItem>
               ))}
-            </select>
-            <button
-              className="h-9 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-white transition-all"
-              onClick={() => setAdding(false)}
-            >
-              Отмена
-            </button>
-          </div>
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAdding(false)}
+            className="h-9 text-slate-600"
+          >
+            Отмена
+          </Button>
         </div>
       ) : null}
 
       {!selectedOptions.length && !adding ? (
-        <div className="px-6 md:px-8 py-6 text-center">
-          <p className="text-[13px] text-slate-400 font-medium">Юзерботы не привязаны</p>
-          <p className="mt-1 text-[12px] text-slate-400">Привяжи юзерботов — они будут приглашать и управлять подписчиками.</p>
+        <div className="px-6 md:px-8 py-8 text-center bg-slate-50/50">
+          <div className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
+            <UserCog className="w-5 h-5 text-slate-300" />
+          </div>
+          <p className="text-sm text-slate-600 font-semibold">Юзерботы не привязаны</p>
+          <p className="mt-1 text-xs text-slate-500">Они будут приглашать и управлять подписчиками.</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {selectedOptions.map((option) => (
-            <div key={option.id} className="px-6 md:px-8 py-3 hover:bg-slate-50/50 transition-colors">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="size-2 rounded-full" style={{ backgroundColor: statusColor(option.runtimeStatus) }} />
-                  <span className="text-[13px] font-bold text-slate-900">{option.title}</span>
+          {selectedOptions.map((option) => {
+            const isActive = salesContourSectionProps?.userbotActiveMap?.[String(option.id)] !== false;
+            const isToggling = salesContourSectionProps?.togglingUserbotId === String(option.id);
+            return (
+              <div key={option.id} className="px-6 md:px-8 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: statusColor(option.runtimeStatus) }} />
+                    <span className="text-sm font-bold text-slate-900">{option.title}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`toggle-switch ${isActive ? 'toggle-switch--on' : ''} ${isToggling ? 'opacity-60 pointer-events-none' : ''}`}
+                      role="switch"
+                      aria-checked={isActive}
+                      aria-label={`Статус ${option.title}`}
+                      onClick={() => salesContourSectionProps?.toggleUserbotActive?.(option.id, !isActive)}
+                    >
+                      <span className="toggle-switch__thumb" />
+                    </div>
+                    <span className={`text-[11px] font-semibold ${isActive ? 'text-emerald-600' : 'text-slate-400'}`}>Работаю</span>
+                  </div>
                 </div>
-                <button
-                  className="h-7 px-2.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:border-rose-200 transition-all inline-flex items-center gap-1"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
                   onClick={() => handleRemove(option.id)}
                   disabled={savingContour}
                 >
-                  <X className="size-3" />
+                  <X className="w-3.5 h-3.5 mr-1" />
                   Отвязать
-                </button>
+                </Button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {savingContour ? (
-        <div className="px-6 md:px-8 py-2 text-[12px] font-medium text-slate-400">Сохраняем...</div>
+        <div className="px-6 md:px-8 py-2 text-xs font-medium text-slate-400 bg-slate-50">Сохраняем...</div>
       ) : null}
     </div>
   );
@@ -414,29 +460,29 @@ function BotRuntimeSection({
 
   if (statusMeta.title === 'Ошибка подключения') {
     return (
-      <div className="border-t border-slate-100">
-        <div className="p-6 md:p-8">
-          <div className={`rounded-xl border p-4 ${statusMeta.className}`}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta.dot }} />
-                <div>
-                  <div className="text-[13px] font-black">{statusMeta.title}</div>
-                  <div className="text-[11px] opacity-70 mt-0.5">{statusMeta.text}</div>
-                </div>
+      <Card className="border-rose-200 bg-rose-50 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta.dot }} />
+              <div>
+                <div className="text-sm font-bold text-rose-800">{statusMeta.title}</div>
+                <div className="text-xs text-rose-700/80 mt-0.5">{statusMeta.text}</div>
               </div>
-              <button
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-current/20 bg-white/60 px-3 text-[12px] font-bold transition-colors hover:bg-white disabled:cursor-wait disabled:opacity-60 shrink-0"
-                onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
-                disabled={isBusy}
-              >
-                {isBusy ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
-                Переподключить
-              </button>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-rose-200 text-rose-700 hover:bg-rose-100/50 hover:text-rose-800"
+              onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
+              disabled={isBusy}
+            >
+              {isBusy ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
+              Переподключить
+            </Button>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -536,10 +582,10 @@ function SalesContourBlock({
   contourError
 }) {
   return (
-    <div>
+    <div className="bg-slate-50/50 pb-2">
       {contourError ? (
-        <div className="mx-6 md:mx-8 mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+        <div className="mx-6 md:mx-8 mb-4 mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+          <AlertTriangle className="mt-0.5 w-5 h-5 shrink-0 text-amber-500" />
           <div>
             <p className="font-bold">Ошибка контура</p>
             <p className="mt-0.5 text-amber-800/90 text-xs">Площадки можно выбрать, но сохранять лучше после ответа сервера.</p>
@@ -558,58 +604,78 @@ function SalesContourBlock({
           const checking = checkingBotRightsTarget === config.key;
 
           return (
-            <div key={config.key} className="px-6 md:px-8 py-4">
-              <div className="flex items-center gap-3">
-                <Icon className="size-4 text-slate-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-bold text-slate-900">{config.title}</span>
+            <div key={config.key} className="px-6 md:px-8 py-5">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center shrink-0 border border-slate-100">
+                    <Icon className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">{config.title}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: summary.tone === 'ok' ? '#10b981' : summary.tone === 'warning' ? '#f59e0b' : summary.tone === 'error' ? '#ef4444' : '#cbd5e1' }} />
+                      <span className="text-xs text-slate-500">{summary.title}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: summary.tone === 'ok' ? '#10b981' : summary.tone === 'warning' ? '#f59e0b' : summary.tone === 'error' ? '#ef4444' : '#cbd5e1' }} />
-                <select
-                  className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 max-w-[200px]"
-                  value={selectedId}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
-                      setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField });
-                    } else {
-                      setFieldValue(config.field, value, { autoSave: true });
-                    }
-                  }}
-                  disabled={!options.length}
-                >
-                  <option value="">{options.length ? '—' : 'Нет площадок'}</option>
-                  {options.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.title || option.tgChatId || option.id}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="h-9 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-50 inline-flex items-center gap-1.5"
-                  onClick={() => checkBotRights(config.key)}
-                  disabled={!selectedId || checking}
-                >
-                  {checking ? <Loader2 className="size-3 animate-spin" /> : <KeyRound className="size-3" />}
-                  Обновить права
-                </button>
+
+                <div className="flex items-center gap-3 ml-11 lg:ml-0">
+                  <div className="w-full sm:w-[220px]">
+                    <Select
+                      value={selectedId}
+                      onValueChange={(value) => {
+                        if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
+                          setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField });
+                        } else {
+                          setFieldValue(config.field, value, { autoSave: true });
+                        }
+                      }}
+                      disabled={!options.length}
+                    >
+                      <SelectTrigger className="data-[size=default]:h-9 w-full bg-white">
+                        <SelectValue placeholder={options.length ? '—' : 'Нет площадок'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map((option) => (
+                          <SelectItem key={option.id} value={String(option.id)}>
+                            {option.title || option.tgChatId || option.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 text-slate-700 bg-white"
+                    onClick={() => checkBotRights(config.key)}
+                    disabled={!selectedId || checking}
+                  >
+                    {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5 mr-1.5 text-slate-400" />}
+                    Проверить
+                  </Button>
+                </div>
               </div>
 
-              <div className="ml-7 mt-2">
+              <div className="ml-11 mt-3">
                 {selectedOption ? (
-                  <div className="mb-1 text-xs text-slate-500">
-                    {selectedOption.visibility === 'public' ? (selectedOption.username ? `@${selectedOption.username}` : 'Публичная') : selectedOption.visibility === 'private' ? 'Приватная' : 'Публичность не проверена'}
-                    {selectedOption.tgChatId ? <span className="font-mono ml-2">{selectedOption.tgChatId}</span> : null}
+                  <div className="mb-2 text-xs text-slate-500 flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-slate-100 font-medium">
+                      {selectedOption.visibility === 'public' ? (selectedOption.username ? `@${selectedOption.username}` : 'Публичная') : selectedOption.visibility === 'private' ? 'Приватная' : 'Не проверена'}
+                    </span>
+                    {selectedOption.tgChatId && <span className="font-mono text-[11px] opacity-70">{selectedOption.tgChatId}</span>}
                   </div>
                 ) : null}
                 <RightsBadges result={rights} selectedId={selectedId} />
                 {savingContour ? (
-                  <div className="mt-1 text-[12px] font-medium text-slate-400">Сохраняем выбор...</div>
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-indigo-600">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Сохраняем выбор...
+                  </div>
                 ) : null}
                 {summary.text ? (
-                  <div className="mt-1 text-[11px] font-medium text-slate-500">{summary.text}</div>
+                  <div className="mt-1.5 text-[11px] font-medium text-slate-500 bg-slate-100/50 p-2 rounded-md border border-slate-100">{summary.text}</div>
                 ) : null}
               </div>
             </div>
@@ -633,27 +699,34 @@ function PlacesSection({
   if (!selectedOfficialBot) return null;
 
   return (
-    <div className="border-t border-slate-100">
-      <div className="p-6 md:p-8 border-b border-slate-100">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Users className="size-4 text-slate-400" />
-            <div>
-              <div className="text-[15px] font-bold text-slate-900">Telegram-площадки</div>
-              <div className="text-sm text-slate-500">Открытые и закрытые каналы/чаты, где бот — админ.</div>
-            </div>
+    <Card className="ring-slate-200/60 shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between border-b border-slate-100 bg-slate-50/50">
+        <div className="flex gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+            <Users className="w-6 h-6" />
           </div>
-          {targets.length ? (
-            <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-bold text-slate-600">{targets.length}</div>
-          ) : null}
+          <div className="flex-1">
+            <CardTitle className="text-xl font-bold text-slate-900">
+              Telegram-площадки
+            </CardTitle>
+            <CardDescription className="text-sm font-medium text-slate-500 mt-1">Открытые и закрытые каналы/чаты, где бот — админ.</CardDescription>
+          </div>
         </div>
-      </div>
+        {targets.length > 0 && (
+          <div className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-sm font-bold">
+            {targets.length}
+          </div>
+        )}
+      </CardHeader>
 
       {!targets.length ? (
-        <div className="p-8 text-center">
-          <p className="text-sm text-slate-400 font-bold">Площадок пока нет</p>
-          <p className="mt-1 text-[13px] text-slate-400">Назначьте бота админом в канале или чате.</p>
-        </div>
+        <CardContent className="p-12 text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+            <Users className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-sm text-slate-500 font-semibold">Площадок пока нет</p>
+          <p className="mt-1 text-xs text-slate-400">Назначьте бота админом в канале или чате.</p>
+        </CardContent>
       ) : (
         <div className="divide-y divide-slate-100">
           {targets.map((target) => {
@@ -662,36 +735,40 @@ function PlacesSection({
             const categoryColor = placeCategoryColor(target);
             const username = String(target?.username || '').trim().replace(/^@/, '');
             return (
-              <div key={target.id} className="px-6 md:px-8 py-4 hover:bg-slate-50/50 transition-colors">
+              <div key={target.id} className="p-4 sm:px-6 hover:bg-slate-50 transition-colors">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[14px] font-bold text-slate-900 truncate">{target.title || target.tg_chat_id || 'Без названия'}</span>
+                      <span className="text-sm font-bold text-slate-900 truncate">{target.title || target.tg_chat_id || 'Без названия'}</span>
                       <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${categoryColor}`}>{categoryLabel}</span>
-                      {username ? (
+                      {username && (
                         <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase border border-indigo-200 bg-indigo-50 text-indigo-700">@{username}</span>
-                      ) : null}
+                      )}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
                       <span className="font-mono">{target.tg_chat_id || '—'}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-wait disabled:opacity-60"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 hover:border-indigo-200"
                       onClick={() => refreshTelegramPlaceInfo(target)}
                       disabled={isRefreshing}
                     >
-                      <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                       {isRefreshing ? 'Обновляем' : 'Обновить'}
-                    </button>
-                    <button
-                      className="h-9 px-3 rounded-lg border border-rose-200 bg-rose-50 text-[12px] font-bold text-rose-600 hover:bg-rose-100 transition-all inline-flex items-center gap-1.5"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100"
                       onClick={() => deleteTelegramPlace(target)}
                     >
-                      <Trash2 className="size-3.5" />
+                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                       Удалить
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -699,7 +776,7 @@ function PlacesSection({
           })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -724,7 +801,7 @@ export function OfficialBotsSection({
   salesContourSectionProps
 }) {
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+    <div className="flex flex-col gap-6">
       <ConnectBotSection
         botForm={botForm}
         setBotForm={setBotForm}

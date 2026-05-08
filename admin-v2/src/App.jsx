@@ -9,6 +9,7 @@ import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { OpsChecklistRail } from './ui/OpsChecklistRail.jsx';
+import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const UserbotCenterPage = lazy(() => import('./pages/UserbotCenterPage.jsx').then((module) => ({ default: module.UserbotCenterPage })));
@@ -211,6 +212,8 @@ export function App() {
         </main>
 
         <OpsChecklistRail />
+
+        <Toaster position="bottom-right" richColors duration={4000} />
       </div>
     </div>
   );

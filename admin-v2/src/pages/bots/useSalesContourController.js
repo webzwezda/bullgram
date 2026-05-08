@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
 
 function normalizeBotKind(value) {
@@ -354,6 +355,7 @@ export function useSalesContourController({
   officialBotContoursError,
   reloadAccounts,
   selectedOfficialBot,
+  showUiMessage,
   state,
   setState,
 }) {
@@ -729,6 +731,61 @@ export function useSalesContourController({
     }
   }
 
+  const [userbotActiveMap, setUserbotActiveMap] = useState({});
+  const [togglingUserbotId, setTogglingUserbotId] = useState('');
+
+  useEffect(() => {
+    const rawBindings = contourEntry?.userbot_bindings || [];
+    const map = {};
+    for (const b of rawBindings) {
+      map[String(b.userbot_id)] = b.is_active;
+    }
+    setUserbotActiveMap(map);
+  }, [contourEntry]);
+
+  async function toggleUserbotActive(userbotId, isActive) {
+    console.log('[toggleUserbotActive]', { userbotId, isActive, selectedBotId: selectedOfficialBot?.id, togglingUserbotId });
+    if (!selectedOfficialBot?.id || togglingUserbotId) return;
+    setTogglingUserbotId(String(userbotId));
+    setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: isActive }));
+    try {
+      await apiRequest('/api/official-bot/contours/userbot-active', {
+        accessToken,
+        method: 'PATCH',
+        body: {
+          bot_id: selectedOfficialBot.id,
+          userbot_id: userbotId,
+          is_active: isActive
+        }
+      });
+      if (isActive) {
+        triggerJoinAll();
+      }
+    } catch (err) {
+      console.error('[toggleUserbotActive] PATCH failed:', err?.message);
+      setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: !isActive }));
+    } finally {
+      setTogglingUserbotId('');
+    }
+  }
+
+  function triggerJoinAll() {
+    const botId = selectedOfficialBot?.id;
+    if (!botId) return;
+    apiRequest('/api/official-bot/contours/join-all', {
+      accessToken,
+      method: 'POST',
+      body: { bot_id: botId }
+    }).then((data) => {
+      const summary = data?.summary || 'Готово';
+      toast.success(summary);
+      reloadAccounts();
+    }).catch((err) => {
+      console.error('join-all failed:', err?.message);
+      toast.error(err?.message || 'Ошибка вступления в группы');
+    });
+  }
+
   return {
     botRightsResult,
     botRightsByTarget,
@@ -765,6 +822,10 @@ export function useSalesContourController({
     },
     setUserbotMode,
     userbotPrepareResult,
-    userbotOptions
+    userbotOptions,
+    userbotActiveMap,
+    toggleUserbotActive,
+    togglingUserbotId,
+    triggerJoinAll
   };
 }

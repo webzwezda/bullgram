@@ -1,4 +1,5 @@
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { decrypt } from '../utils/crypto.js';
 
 export const SALES_BOT_KINDS = Object.freeze(['sales', 'template']);
 export const SALES_CONTOUR_USERBOT_MODES = Object.freeze(['none', 'single', 'pool']);
@@ -39,6 +40,25 @@ const BLOCKED_USERBOT_STATUSES = new Set(['restricted', 'expired', 'error']);
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_MEMBER_STATUSES = new Set(['administrator', 'creator']);
+const CONTOUR_TARGET_KEYS = Object.keys(CONTOUR_TARGET_CONFIG);
+
+const JOIN_DELAY_MIN = 3000;
+const JOIN_DELAY_MAX = 5000;
+const BATCH_PAUSE_AFTER = 2;
+const BATCH_PAUSE_MIN = 8000;
+const BATCH_PAUSE_MAX = 10000;
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractInviteHash(inviteLink) {
+    if (!inviteLink) return null;
+    const match = inviteLink.match(/[+](\w[\w-]+)/) || inviteLink.match(/joinchat\/([\w-]+)/);
+    return match ? match[1] : null;
+}
+
+import { Api } from 'telegram';
 
 export class SalesContourError extends Error {
     constructor(message, statusCode = 400, code = 'sales_contour_error') {
@@ -490,6 +510,80 @@ export class SalesContourService {
         };
     }
 
+    async loadUserbotBindings(ownerId) {
+        const { data, error } = await this.supabase
+            .from('official_bot_userbot_bindings')
+            .select('bot_id, userbot_id, is_active, created_at');
+        this.throwIfDbError(error);
+        return data || [];
+    }
+
+    async toggleUserbotBinding(ownerId, botId, userbotId, isActive) {
+        const normalizedBotId = normalizeUuid(botId, 'bot_id', { required: true });
+        const normalizedUserbotId = normalizeUuid(userbotId, 'userbot_id', { required: true });
+
+        await this.assertOwnedSalesBot(ownerId, normalizedBotId);
+
+        const { data: userbot } = await this.supabase
+            .from('tg_accounts')
+            .select('id, owner_id, account_type')
+            .eq('id', normalizedUserbotId)
+            .eq('owner_id', ownerId)
+            .eq('account_type', 'userbot')
+            .maybeSingle();
+
+        if (!userbot) {
+            throw new SalesContourError('Юзербот не найден.', 404, 'userbot_not_found');
+        }
+
+        const { error } = await this.supabase
+            .from('official_bot_userbot_bindings')
+            .upsert({
+                bot_id: normalizedBotId,
+                userbot_id: normalizedUserbotId,
+                is_active: !!isActive
+            }, { onConflict: 'bot_id,userbot_id' });
+        this.throwIfDbError(error);
+
+        return { bot_id: normalizedBotId, userbot_id: normalizedUserbotId, is_active: isActive };
+    }
+
+    async syncUserbotBindings(ownerId, botId, activeUserbotIds) {
+        const { data: existing, error } = await this.supabase
+            .from('official_bot_userbot_bindings')
+            .select('userbot_id')
+            .eq('bot_id', botId);
+        this.throwIfDbError(error);
+
+        const existingIds = new Set((existing || []).map((r) => String(r.userbot_id)));
+        const desiredIds = new Set(activeUserbotIds.map(String));
+
+        const toAdd = [...desiredIds].filter((id) => !existingIds.has(id));
+        const toRemove = [...existingIds].filter((id) => !desiredIds.has(id));
+
+        if (toAdd.length) {
+            const rows = toAdd.map((userbotId) => ({
+                bot_id: botId,
+                userbot_id: userbotId,
+                is_active: true
+            }));
+            const { error: insertError } = await this.supabase
+                .from('official_bot_userbot_bindings')
+                .upsert(rows, { onConflict: 'bot_id,userbot_id' });
+            this.throwIfDbError(insertError);
+        }
+
+        if (toRemove.length) {
+            for (const userbotId of toRemove) {
+                await this.supabase
+                    .from('official_bot_userbot_bindings')
+                    .delete()
+                    .eq('bot_id', botId)
+                    .eq('userbot_id', userbotId);
+            }
+        }
+    }
+
     async loadContours(ownerId) {
         const { data, error } = await this.supabase
             .from('sales_bot_contours')
@@ -744,14 +838,13 @@ export class SalesContourService {
             throw new SalesContourError('Telegram API бота не умеет создавать invite link.', 500, 'telegram_invite_api_missing');
         }
 
-        const expireDate = Math.floor(Date.now() / 1000) + 60 * 60;
+        const expireDate = Math.floor(Date.now() / 1000) + 30 * 60;
         const inviteName = `BullRun_userbot_${new Date().toISOString().slice(0, 16)}`;
 
         try {
             const invite = await botApi.createChatInviteLink(channel.tg_chat_id, {
                 name: inviteName,
                 expire_date: expireDate,
-                member_limit: 1,
                 creates_join_request: false
             });
 
@@ -896,14 +989,259 @@ export class SalesContourService {
         };
     }
 
+    async loadFirstContourUserbot(ownerId, contour) {
+        const userbotState = await this.loadOwnedUserbots(ownerId);
+        let candidateIds = [];
+
+        if (contour?.userbot_mode === 'single' && contour?.selected_userbot_id) {
+            candidateIds = [String(contour.selected_userbot_id)];
+        } else if (contour?.userbot_mode === 'pool' && Array.isArray(contour?.selected_userbot_ids)) {
+            candidateIds = contour.selected_userbot_ids.map(String);
+        }
+
+        for (const id of candidateIds) {
+            const option = userbotState.optionById.get(id);
+            if (option && option.eligible_for_contour) {
+                return option;
+            }
+        }
+
+        throw new SalesContourError('Нет доступного юзербота в контуре.', 409, 'no_eligible_userbot');
+    }
+
+    async joinUserbotToAllTargets(ownerId, input = {}, botApi, userbotService) {
+        const botId = normalizeUuid(input.bot_id ?? input.account_id, 'bot_id', { required: true });
+        const [bot, channels, contour] = await Promise.all([
+            this.assertOwnedSalesBot(ownerId, botId),
+            this.loadOwnedChannels(ownerId),
+            this.loadContourForBot(ownerId, botId)
+        ]);
+
+        if (!contour) {
+            throw new SalesContourError('Сначала сохрани контур продаж для этого бота.', 409, 'sales_contour_missing');
+        }
+
+        const targets = CONTOUR_TARGET_KEYS
+            .map((key) => {
+                const config = CONTOUR_TARGET_CONFIG[key];
+                const channelId = contour[config.field];
+                if (!channelId) return null;
+                const channel = channels.find((c) => String(c.id) === String(channelId));
+                if (!channel) return null;
+                return { key, channel, label: config.label };
+            })
+            .filter(Boolean);
+
+        if (!targets.length) {
+            throw new SalesContourError('В контуре нет привязанных площадок.', 409, 'no_targets');
+        }
+
+        const userbot = await this.loadFirstContourUserbot(ownerId, contour);
+        const userbotAccount = await this.loadFullUserbotAccount(userbot.id);
+        if (!userbotAccount?.session_data) {
+            throw new SalesContourError('У юзербота нет данных сессии.', 409, 'userbot_session_missing');
+        }
+
+        let client;
+        try {
+            client = await userbotService.createAuthorizedClient(userbotAccount, 1);
+        } catch (error) {
+            throw new SalesContourError(
+                `Не получилось подключить юзербота: ${error.message}`,
+                502,
+                'userbot_client_failed'
+            );
+        }
+
+        const results = [];
+        try {
+            for (let i = 0; i < targets.length; i++) {
+                const { key, channel, label } = targets[i];
+
+                if (i > 0) {
+                    const delay = JOIN_DELAY_MIN + Math.random() * (JOIN_DELAY_MAX - JOIN_DELAY_MIN);
+                    await sleep(delay);
+                }
+                if (i > 0 && i % BATCH_PAUSE_AFTER === 0) {
+                    const pause = BATCH_PAUSE_MIN + Math.random() * (BATCH_PAUSE_MAX - BATCH_PAUSE_MIN);
+                    await sleep(pause);
+                }
+
+                try {
+                    const result = await this.joinSingleTarget(botApi, client, channel, userbot, key, label);
+                    results.push(result);
+                } catch (error) {
+                    console.error(`[joinAll] ${label}: FAILED — ${error.message}`, error);
+                    results.push({
+                        target: key,
+                        channel_id: channel.id,
+                        channel_title: channel.title,
+                        status: 'error',
+                        message: error.message || `Не получилось вступить в ${label}`
+                    });
+                }
+            }
+        } finally {
+            await client.disconnect().catch(() => null);
+        }
+
+        const joined = results.filter((r) => r.status === 'joined' || r.status === 'already_admin').length;
+        return {
+            results,
+            summary: `${joined} из ${targets.length} площадок — юзербот подключен.`
+        };
+    }
+
+    async loadFullUserbotAccount(userbotId) {
+        const { data, error } = await this.supabase
+            .from('tg_accounts')
+            .select('id, owner_id, account_type, tg_account_id, tg_username, session_data, proxy_id, runtime_status, proxies(id, name, is_working, last_check_country, last_check_country_code)')
+            .eq('id', userbotId)
+            .single();
+        this.throwIfDbError(error);
+        return data;
+    }
+
+    async joinSingleTarget(botApi, userbotClient, channel, userbot, targetKey, label) {
+        const tgChatId = channel.tg_chat_id;
+        const userbotTgId = Number(userbot.tg_account_id);
+
+        let isMember = false;
+        try {
+            const member = await botApi.getChatMember(tgChatId, userbotTgId);
+            const status = String(member?.status || '').toLowerCase();
+            isMember = !['left', 'kicked'].includes(status);
+        } catch {}
+
+        if (!isMember) {
+            const username = String(channel.username || '').trim().replace(/^@/, '');
+            if (username) {
+                const entity = await userbotClient.getEntity(username);
+                await userbotClient.invoke(new Api.channels.JoinChannel({ channel: entity }));
+            } else {
+                const inviteMethods = [
+                    {
+                        name: 'exportChatInviteLink',
+                        getHash: async () => {
+                            const link = await botApi.exportChatInviteLink(tgChatId);
+                            return { hash: extractInviteHash(link), revoke: null };
+                        }
+                    },
+                    {
+                        name: 'createChatInviteLink',
+                        getHash: async () => {
+                            const r = await botApi.createChatInviteLink(tgChatId, {});
+                            return { hash: extractInviteHash(r.invite_link), revoke: r.invite_link };
+                        }
+                    }
+                ];
+
+                let joined = false;
+                for (const method of inviteMethods) {
+                    let hashStr, revokeLink;
+                    try {
+                        const result = await method.getHash();
+                        hashStr = result.hash;
+                        revokeLink = result.revoke;
+                    } catch (err) {
+                        console.log(`[joinSingleTarget] ${label}: ${method.name} failed → ${err.message}`);
+                        continue;
+                    }
+                    if (!hashStr) continue;
+
+                    try {
+                        await userbotClient.invoke(new Api.messages.ImportChatInvite({ hash: hashStr }));
+                        joined = true;
+                        break;
+                    } catch {
+                    } finally {
+                        if (revokeLink) {
+                            try { await botApi.revokeChatInviteLink(tgChatId, revokeLink); } catch {}
+                        }
+                    }
+                }
+
+                if (!joined) {
+                    throw new SalesContourError(
+                        `Не удалось вступить в ${label} ни одним из способов.`,
+                        502,
+                        'invite_join_failed'
+                    );
+                }
+
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        let isNowMember = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const member = await botApi.getChatMember(tgChatId, userbotTgId);
+                const status = String(member?.status || '').toLowerCase();
+                isNowMember = !['left', 'kicked'].includes(status);
+                if (isNowMember) break;
+            } catch {}
+            if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+        }
+
+        if (!isNowMember) {
+            return {
+                target: targetKey,
+                channel_id: channel.id,
+                channel_title: channel.title,
+                status: 'error',
+                message: `${label}: не удалось добавить юзербота в площадку.`
+            };
+        }
+
+        let isAdmin = false;
+        try {
+            const member = await botApi.getChatMember(tgChatId, userbotTgId);
+            isAdmin = ['administrator', 'creator', 'owner'].includes(String(member?.status || '').toLowerCase());
+        } catch {
+            isAdmin = false;
+        }
+
+        if (!isAdmin) {
+            await botApi.promoteChatMember(tgChatId, userbotTgId, {
+                can_invite_users: true,
+                can_promote_members: false,
+                can_change_info: false,
+                can_delete_messages: false,
+                can_restrict_members: false,
+                can_pin_messages: false,
+                can_manage_topics: false,
+                can_manage_video_chats: false,
+                can_post_messages: false,
+                can_edit_messages: false
+            });
+        }
+
+        return {
+            target: targetKey,
+            channel_id: channel.id,
+            channel_title: channel.title,
+            status: isMember && isAdmin ? 'already_admin' : 'joined',
+            message: `${label}: юзербот ${isMember ? 'уже был в площадке' : 'вступил'}, ${isAdmin ? 'уже админ' : 'получил права админа'}.`
+        };
+    }
+
     async getContoursOverview(ownerId) {
-        const [bots, channels, contours, contourRights, userbotState] = await Promise.all([
+        const [bots, channels, contours, contourRights, userbotState, userbotBindings] = await Promise.all([
             this.loadOwnedOfficialBots(ownerId),
             this.loadOwnedChannels(ownerId),
             this.loadContours(ownerId),
             this.loadContourRights(ownerId),
-            this.loadOwnedUserbots(ownerId)
+            this.loadOwnedUserbots(ownerId),
+            this.loadUserbotBindings(ownerId)
         ]);
+
+        const bindingByBotId = new Map();
+        for (const binding of userbotBindings) {
+            const botKey = String(binding.bot_id);
+            if (!bindingByBotId.has(botKey)) bindingByBotId.set(botKey, []);
+            bindingByBotId.get(botKey).push({ userbot_id: binding.userbot_id, is_active: binding.is_active });
+        }
 
         const contourByBotId = new Map(contours.map((item) => [String(item.bot_id), item]));
         const rightsByBotId = new Map();
@@ -963,7 +1301,8 @@ export class SalesContourService {
                     paid_channel_options: channelOptions,
                     public_chat_options: chatOptions,
                     paid_chat_options: chatOptions,
-                    userbot_options: userbotState.options
+                    userbot_options: userbotState.options,
+                    userbot_bindings: bindingByBotId.get(String(bot.id)) || []
                 };
             }),
             support: {
@@ -1033,6 +1372,12 @@ export class SalesContourService {
             .single();
 
         this.throwIfDbError(error);
+
+        const allUserbotIds = [
+            ...(payload.userbotMode === 'single' && payload.selectedUserbotId ? [payload.selectedUserbotId] : []),
+            ...(payload.userbotMode === 'pool' ? selectedUserbots.map((item) => item.id) : [])
+        ].filter(Boolean);
+        await this.syncUserbotBindings(ownerId, bot.id, allUserbotIds);
 
         return {
             contour: mapContourRow(data, {

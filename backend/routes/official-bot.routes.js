@@ -657,6 +657,35 @@ export default function (supabase) {
         }
     });
 
+    router.post('/contours/join-all', authenticateUser, async (req, res) => {
+        try {
+            console.log('[join-all] started for user:', req.user?.id, 'bot_id:', req.body?.bot_id);
+            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
+            const { UserbotService } = await import('../services/userbot.service.js');
+            const userbotService = new UserbotService(supabase, 4, '014b35b6184100b085b0d0572f9b5103');
+            const data = await salesContourService.joinUserbotToAllTargets(req.user.id, req.body || {}, botApi, userbotService);
+            console.log('[join-all] completed:', data?.summary);
+            res.json({ success: true, ...data });
+        } catch (error) {
+            console.error('[join-all] FAILED:', error);
+            return sendOfficialBotError(res, error, 'Не получилось подключить юзербота ко всем площадкам');
+        }
+    });
+
+    router.patch('/contours/userbot-active', authenticateUser, async (req, res) => {
+        try {
+            const data = await salesContourService.toggleUserbotBinding(
+                req.user.id,
+                req.body?.bot_id,
+                req.body?.userbot_id,
+                !!req.body?.is_active
+            );
+            res.json({ success: true, ...data });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось переключить статус юзербота');
+        }
+    });
+
     router.patch('/channels/:channelId', authenticateUser, async (req, res) => {
         try {
             const channelId = String(req.params.channelId || '').trim();

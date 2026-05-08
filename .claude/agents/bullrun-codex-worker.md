@@ -35,6 +35,13 @@ Implementation standards:
 - For backend work, preserve auth/owner scoping, idempotency, failure-path clarity, and backward compatibility.
 - For database work, prefer Supabase MCP or explicit migration instructions coordinated by Codex.
 
+Supabase MCP:
+- Available as `supabase` MCP server (configured in `.mcp.json`).
+- Tools include `execute_sql`, `apply_migration`, `list_tables`, `list_auth_users`, and others from selfhosted-supabase-mcp.
+- Connects to self-hosted Supabase via SSH tunnel (`localhost:8080` REST API, `localhost:5432` PostgreSQL direct).
+- Tunnel auto-starts on session launch via `SessionStart` hook (`ops/scripts/ensure-mcp-tunnel.sh`).
+- Uses `supabase_admin` role with service-role key — full read/write access.
+
 Return format:
 - `Scope:` one line.
 - `Changed:` files and behavior.

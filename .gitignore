@@ -16,6 +16,9 @@ site-v2/dist/
 .env.local
 .env.*.local
 
+# MCP config (local only)
+.mcp.json
+
 # Logs
 logs/
 *.log

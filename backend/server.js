@@ -57,6 +57,9 @@ function envFlag(name) {
 process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection:', reason);
 });
+process.on('uncaughtException', (error) => {
+    console.error('[FATAL] Uncaught Exception:', error);
+});
 
 // ==========================================
 // НАСТРОЙКА EXPRESS
