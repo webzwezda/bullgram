@@ -2117,7 +2117,7 @@ export default function (supabase) {
                     last_check_ip: data.last_check_ip,
                     last_check_country: data.last_check_country,
                     last_check_city: data.last_check_city,
-                    force_ipv6: data.is_working === true && !data.last_check_ip,
+                    force_ipv6: data.is_working === true && (!data.last_check_ip || data.last_check_ip.includes(':')),
                     provision_source: data.provision_source,
                     inventory_group: data.inventory_group
                 };
@@ -2275,7 +2275,7 @@ export default function (supabase) {
                     last_check_ip: data.last_check_ip,
                     last_check_country: data.last_check_country,
                     last_check_city: data.last_check_city,
-                    force_ipv6: data.is_working === true && !data.last_check_ip,
+                    force_ipv6: data.is_working === true && (!data.last_check_ip || data.last_check_ip.includes(':')),
                     provision_source: data.provision_source,
                     inventory_group: data.inventory_group
                 };
