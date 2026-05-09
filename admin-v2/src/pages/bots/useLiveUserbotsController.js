@@ -35,7 +35,8 @@ export function useLiveUserbotsController({
   setState,
   state,
   usedUserbotProxyIds,
-  userbots
+  userbots,
+  showUiMessage
 }) {
   const [bindings, setBindings] = useState({});
   const [accountCheckFeedback, setAccountCheckFeedback] = useState(emptyFeedback);
@@ -145,12 +146,14 @@ export function useLiveUserbotsController({
         tone: 'success',
         text: `Сессию восстановили: @${result.username || account.tg_username || 'без username'}`
       });
+      showUiMessage(`Аккаунт @${result.username || account.tg_username || 'без username'} восстановлен.`, 'success');
     } catch (error) {
       setAccountRestoreFeedback({
         accountId: String(account.id),
         tone: 'error',
         text: error.message
       });
+      showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, restoringAccountId: '' }));
     }
@@ -174,12 +177,14 @@ export function useLiveUserbotsController({
         tone: 'success',
         text: 'Аккаунт удален.'
       });
+      showUiMessage('Аккаунт удален.', 'success');
     } catch (error) {
       setAccountDeleteFeedback({
         accountId: String(account.id),
         tone: 'error',
         text: error.message
       });
+      showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, deletingAccountId: '' }));
     }
@@ -204,6 +209,7 @@ export function useLiveUserbotsController({
         tone: summary.tone,
         text: result?.reason || summary.title
       });
+      showUiMessage(summary.title, summary.tone === 'error' ? 'error' : summary.tone === 'warning' ? 'error' : 'success');
       setAccountCheckReport({
         accountId: String(accountId),
         title: summary.title,
@@ -217,6 +223,7 @@ export function useLiveUserbotsController({
         tone: 'error',
         text: error.message
       });
+      showUiMessage(error.message, 'error');
       setAccountCheckReport({
         accountId: String(accountId),
         title: 'Проверка упала',
@@ -267,6 +274,7 @@ export function useLiveUserbotsController({
         ],
         checkedAt: new Date().toISOString()
       });
+      showUiMessage('Safe-mode включен.', 'success');
     } catch (error) {
       setAccountCheckReport({
         accountId,
@@ -279,6 +287,7 @@ export function useLiveUserbotsController({
         ],
         checkedAt: new Date().toISOString()
       });
+      showUiMessage('Safe-mode не переключился: ' + error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, togglingSafeModeId: '' }));
     }
@@ -293,6 +302,7 @@ export function useLiveUserbotsController({
         tone: 'error',
         text: 'Юзербот должен быть привязан к прокси. Пустое значение нельзя сохранить.'
       });
+      showUiMessage('Юзербот должен быть привязан к прокси.', 'error');
       return;
     }
 
@@ -314,12 +324,14 @@ export function useLiveUserbotsController({
         tone: 'success',
         text: 'Привязка прокси обновлена.'
       });
+      showUiMessage('Привязка прокси обновлена.', 'success');
     } catch (error) {
       setAccountBindingFeedback({
         accountId: String(accountId),
         tone: 'error',
         text: error.message
       });
+      showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, bindingAccountId: '' }));
     }
@@ -394,12 +406,14 @@ export function useLiveUserbotsController({
 
       resetSaleComposer();
       await reloadAccounts();
+      showUiMessage('Лот выставлен в Shop.', 'success');
     } catch (error) {
       setSaleComposer((prev) => ({
         ...prev,
         saving: false,
         error: error.message
       }));
+      showUiMessage(error.message, 'error');
     }
   }
 

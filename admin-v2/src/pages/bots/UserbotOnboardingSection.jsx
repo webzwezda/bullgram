@@ -1,4 +1,86 @@
 import { useEffect } from 'react';
+import { UserPlus, Network, Smartphone, FolderArchive, QrCode, FileKey, FileJson, CheckCircle2, Fingerprint, Loader2, UploadCloud, MonitorSmartphone } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+
+function StepHeader({ number, title }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600 ring-1 ring-indigo-200">
+        {number}
+      </div>
+      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">{title}</h3>
+    </div>
+  );
+}
+
+function SegmentedControl({ options, value, onChange }) {
+  return (
+    <div className="flex p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 w-full">
+      {options.map((opt) => {
+        const isActive = value === opt.value;
+        const Icon = opt.icon;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={`relative flex items-center justify-center gap-2 flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ease-in-out ${
+              isActive
+                ? 'text-slate-900 bg-white shadow-sm ring-1 ring-slate-200/50'
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+          >
+            {Icon && <Icon className={`w-4 h-4 ${isActive ? opt.activeColor || 'text-indigo-600' : 'text-slate-400'}`} />}
+            <span>{opt.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FileUploadBox({ label, fileName, acceptedTypes, onChange, icon: Icon, colorClass }) {
+  const isUploaded = !!fileName;
+
+  return (
+    <label className={`relative flex w-full items-center gap-4 rounded-2xl border-2 border-dashed px-5 py-4 text-left transition-all duration-200 cursor-pointer group bg-white ${
+      isUploaded
+        ? `border-${colorClass}-300 bg-${colorClass}-50/30`
+        : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50/50'
+    }`}>
+      <input
+        type="file"
+        accept={acceptedTypes}
+        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+        onChange={onChange}
+      />
+      <div className={`flex size-12 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors ${
+        isUploaded
+          ? `bg-${colorClass}-100 text-${colorClass}-600`
+          : 'bg-white border border-slate-200 text-slate-400 group-hover:text-indigo-500'
+      }`}>
+        {isUploaded ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className={`text-sm font-bold ${isUploaded ? 'text-slate-900' : 'text-slate-700'}`}>{label}</div>
+        <div className={`truncate text-sm font-medium mt-0.5 ${isUploaded ? 'text-slate-600' : 'text-slate-400'}`}>
+          {fileName || `Нажмите чтобы выбрать файл`}
+        </div>
+      </div>
+      <div className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${
+        isUploaded
+          ? 'bg-slate-200/50 text-slate-600'
+          : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
+      }`}>
+        {isUploaded ? 'Заменить' : 'Обзор'}
+      </div>
+    </label>
+  );
+}
 
 function QrFingerprintConfigurator({
   fingerprintProfiles,
@@ -13,131 +95,130 @@ function QrFingerprintConfigurator({
   const selectedProfile = currentQrFingerprintProfile(onboarding.qrFingerprintProfileId);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold text-slate-600">
-          {stepNumber}
-        </div>
-        <div className="text-[14px] font-bold uppercase tracking-[0.08em] text-slate-900">Fingerprint профиля</div>
-      </div>
-      <div className="grid grid-cols-2 gap-3 rounded-[16px] bg-slate-100/80 p-1.5 border border-slate-200/60">
-        <button
-          type="button"
-          onClick={() => switchFingerprintMode('preset')}
-          className={`flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-[14px] font-semibold transition ${
-            onboarding.fingerprintMode === 'preset'
-              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/60'
-              : 'bg-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-        >
-          <span>Готовый пресет</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => switchFingerprintMode('custom')}
-          className={`flex items-center justify-center gap-2 rounded-[18px] px-4 py-3 text-[14px] font-semibold transition ${
-            onboarding.fingerprintMode === 'custom'
-              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/60'
-              : 'bg-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-        >
-          <span>Свой профиль</span>
-        </button>
+    <div className="rounded-2xl bg-slate-50/50 p-4 border border-slate-100">
+      <StepHeader number={stepNumber} title="Профиль устройства (Fingerprint)" />
+
+      <div className="mb-4">
+        <SegmentedControl
+          value={onboarding.fingerprintMode}
+          onChange={switchFingerprintMode}
+          options={[
+            { value: 'preset', label: 'Готовый пресет', icon: Fingerprint, activeColor: 'text-indigo-600' },
+            { value: 'custom', label: 'Ручная настройка', icon: MonitorSmartphone, activeColor: 'text-indigo-600' }
+          ]}
+        />
       </div>
 
-      {onboarding.fingerprintMode === 'preset' ? (
-        <div className="space-y-2">
-          <select
-            className="h-12 w-full rounded-[14px] border border-slate-200 bg-slate-50 px-4 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
-            value={onboarding.qrFingerprintProfileId}
-            onChange={(event) => updateOnboarding({ qrFingerprintProfileId: event.target.value })}
-          >
-            {fingerprintProfiles.map((profile) => (
-              <option key={profile.id} value={profile.id}>
-                {profile.owner_id ? `${profile.label} • мой` : profile.label}
-              </option>
-            ))}
-          </select>
-          {selectedProfile?.note ? (
-            <div className="text-[12px] leading-5 text-slate-500">{selectedProfile.note}</div>
-          ) : null}
-          {fingerprintProfilesState.error ? (
-            <div className="text-[12px] leading-5 text-amber-600">{fingerprintProfilesState.error}</div>
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-3 rounded-[18px] bg-slate-50/80 p-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">Название профиля</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customFingerprintLabel}
-                onChange={(event) => updateOnboarding({ customFingerprintLabel: event.target.value })}
-                placeholder="Например: мой Android 15"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">api_id</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customApiId}
-                onChange={(event) => updateOnboarding({ customApiId: event.target.value })}
-                placeholder="2040"
-              />
-            </label>
-            <label className="space-y-2 md:col-span-2">
-              <span className="text-[13px] font-semibold text-slate-800">api_hash</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customApiHash}
-                onChange={(event) => updateOnboarding({ customApiHash: event.target.value })}
-                placeholder="32-символьный hash"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">Устройство</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customDeviceModel}
-                onChange={(event) => updateOnboarding({ customDeviceModel: event.target.value })}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">Система</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customSystemVersion}
-                onChange={(event) => updateOnboarding({ customSystemVersion: event.target.value })}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">Версия Telegram</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customAppVersion}
-                onChange={(event) => updateOnboarding({ customAppVersion: event.target.value })}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">system_lang_code</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customSystemLangCode}
-                onChange={(event) => updateOnboarding({ customSystemLangCode: event.target.value })}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-slate-800">lang_code</span>
-              <input
-                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-950 outline-none transition focus:border-blue-300"
-                value={onboarding.customLangCode}
-                onChange={(event) => updateOnboarding({ customLangCode: event.target.value })}
-              />
-            </label>
+      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {onboarding.fingerprintMode === 'preset' ? (
+          <div className="space-y-3">
+            <Select
+              value={onboarding.qrFingerprintProfileId || ''}
+              onValueChange={(value) => updateOnboarding({ qrFingerprintProfileId: value })}
+            >
+              <SelectTrigger className="w-full h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm">
+                <SelectValue placeholder="Выберите профиль из списка" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {fingerprintProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id} className="rounded-lg py-2.5">
+                    {profile.owner_id ? `${profile.label} • мой` : profile.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedProfile?.note && (
+              <div className="flex gap-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <Fingerprint className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                <div className="text-xs leading-5 text-slate-600 font-medium">{selectedProfile.note}</div>
+              </div>
+            )}
+            {fingerprintProfilesState.error && (
+              <div className="text-sm font-medium text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100">
+                {fingerprintProfilesState.error}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="rounded-2xl bg-white/80 p-5 border border-slate-100 space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">Название профиля (для себя)</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm"
+                  value={onboarding.customFingerprintLabel}
+                  onChange={(event) => updateOnboarding({ customFingerprintLabel: event.target.value })}
+                  placeholder="Например: Мой основной Android"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">api_id</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm font-mono"
+                  value={onboarding.customApiId}
+                  onChange={(event) => updateOnboarding({ customApiId: event.target.value })}
+                  placeholder="2040"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">api_hash</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm font-mono"
+                  value={onboarding.customApiHash}
+                  onChange={(event) => updateOnboarding({ customApiHash: event.target.value })}
+                  placeholder="b18441a1ff607e10a989891a5462e627"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">Устройство (device_model)</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm"
+                  value={onboarding.customDeviceModel}
+                  onChange={(event) => updateOnboarding({ customDeviceModel: event.target.value })}
+                  placeholder="Pixel 7 Pro"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">Система (system_version)</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm"
+                  value={onboarding.customSystemVersion}
+                  onChange={(event) => updateOnboarding({ customSystemVersion: event.target.value })}
+                  placeholder="Android 14.0"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">Версия приложения (app_version)</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm font-mono"
+                  value={onboarding.customAppVersion}
+                  onChange={(event) => updateOnboarding({ customAppVersion: event.target.value })}
+                  placeholder="10.14.5"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">system_lang_code</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm font-mono"
+                  value={onboarding.customSystemLangCode}
+                  onChange={(event) => updateOnboarding({ customSystemLangCode: event.target.value })}
+                  placeholder="en-US"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[13px] font-semibold text-slate-700 ml-1">lang_code</label>
+                <Input
+                  className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm font-mono"
+                  value={onboarding.customLangCode}
+                  onChange={(event) => updateOnboarding({ customLangCode: event.target.value })}
+                  placeholder="en"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -171,79 +252,67 @@ export function UserbotOnboardingSection({
 
   return (
     <>
-      <div className="mb-6 rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="space-y-5">
-          <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[12px] font-bold text-blue-700">
-                {steps.proxy}
-              </div>
-              <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-900">Выбор прокси</div>
+      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 mb-6 bg-white overflow-hidden rounded-2xl">
+        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+              <UserPlus className="w-6 h-6" />
             </div>
-            <select
-              className="h-12 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
-              value={onboarding.proxyId}
-              onChange={(event) => updateOnboarding({ proxyId: event.target.value })}
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Подключение аккаунта</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Добавьте нового юзербота в ваш контур</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Step 1: Proxy */}
+          <div className="rounded-2xl bg-slate-50/50 p-4 border border-slate-100">
+            <StepHeader number={steps.proxy} title="Выбор прокси" />
+            <Select
+              value={onboarding.proxyId || ''}
+              onValueChange={(value) => updateOnboarding({ proxyId: value })}
             >
-              <option value="">Выбери живой прокси</option>
-              {availableOnboardingProxies.map((proxy) => (
-                <option key={proxy.id} value={proxy.id}>
-                  {proxyLabel(proxy)}{proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0 ? ' • куплен и свободен' : ''}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-slate-400" />
+                  <SelectValue placeholder="Выберите живой прокси для подключения" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {availableOnboardingProxies.map((proxy) => {
+                  const isFreeAndPurchased = proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0;
+                  return (
+                    <SelectItem key={proxy.id} value={proxy.id} className="rounded-lg py-2.5">
+                      <div className="flex items-center justify-between w-full pr-2 gap-4">
+                        <span>{proxyLabel(proxy)}</span>
+                        {isFreeAndPurchased && (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 whitespace-nowrap ml-auto">
+                            Свободен
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[12px] font-bold text-blue-700">
-                {steps.connect}
-              </div>
-              <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-900">Способ входа</div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 rounded-[16px] bg-slate-100/80 p-1.5 border border-slate-200/60">
-              <button
-                type="button"
-                onClick={() => updateOnboarding({ connectMethod: 'qr' })}
-                className={`flex items-center justify-center gap-2 rounded-[12px] px-4 py-2.5 text-[13px] font-semibold transition ${
-                  onboarding.connectMethod === 'qr'
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'bg-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-                  <path d="M4 9V5h4"></path>
-                  <path d="M20 9V5h-4"></path>
-                  <path d="M4 15v4h4"></path>
-                  <path d="M20 15v4h-4"></path>
-                  <path d="M9 4H7a3 3 0 0 0-3 3v2"></path>
-                  <path d="M15 4h2a3 3 0 0 1 3 3v2"></path>
-                  <path d="M9 20H7a3 3 0 0 1-3-3v-2"></path>
-                  <path d="M15 20h2a3 3 0 0 0 3-3v-2"></path>
-                  <rect x="9" y="9" width="6" height="6" rx="1.4"></rect>
-                </svg>
-                <span>Через QR</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => updateOnboarding({ connectMethod: 'files' })}
-                className={`flex items-center justify-center gap-2 rounded-[12px] px-4 py-2.5 text-[13px] font-semibold transition ${
-                  onboarding.connectMethod === 'files'
-                    ? 'bg-white text-slate-950 shadow-sm'
-                    : 'bg-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-                  <path d="M8 7.5h5l2.5 2.5H20a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9.5a2 2 0 0 1 2-2Z"></path>
-                  <path d="M5 9.5H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1"></path>
-                  <path d="M9.5 13h5"></path>
-                  <path d="M9.5 16h3"></path>
-                </svg>
-                <span>Из файлов</span>
-              </button>
-            </div>
+          {/* Step 2: Connect Method */}
+          <div className="rounded-2xl bg-slate-50/50 p-4 border border-slate-100">
+            <StepHeader number={steps.connect} title="Способ входа" />
+            <SegmentedControl
+              value={onboarding.connectMethod}
+              onChange={(val) => updateOnboarding({ connectMethod: val })}
+              options={[
+                { value: 'qr', label: 'Через QR-код', icon: QrCode, activeColor: 'text-indigo-600' },
+                { value: 'files', label: 'Импорт сессии', icon: FolderArchive, activeColor: 'text-indigo-600' }
+              ]}
+            />
           </div>
 
+          {/* Step 3: Fingerprint (QR only) */}
           <QrFingerprintConfigurator
             currentQrFingerprintProfile={currentQrFingerprintProfile}
             fingerprintProfiles={fingerprintProfiles}
@@ -254,120 +323,120 @@ export function UserbotOnboardingSection({
             updateOnboarding={updateOnboarding}
           />
 
-          <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[12px] font-bold text-blue-700">
-                {finalStep}
-              </div>
-              <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-900">
-                {onboarding.connectMethod === 'files' ? 'Загрузка файлов' : 'Вход через QR'}
-              </div>
-            </div>
+          {/* Final Step: Files or QR */}
+          <div className="rounded-2xl bg-slate-50/50 p-4 border border-slate-100">
+            <StepHeader
+              number={finalStep}
+              title={onboarding.connectMethod === 'files' ? 'Загрузка файлов сессии' : 'Авторизация устройства'}
+            />
 
             {onboarding.connectMethod === 'files' ? (
-              <div className="space-y-3">
-                <div className={`relative flex w-full items-center gap-3 rounded-[14px] border bg-white px-4 py-3.5 text-left transition hover:border-blue-300 hover:shadow-sm cursor-pointer ${
-                  onboarding.sessionFileName ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'
-                }`}>
-                  <input
-                    type="file"
-                    accept=".session"
-                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                    onChange={handleSessionFileChange}
-                  />
-                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-[12px] ${
-                    onboarding.sessionFileName ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"></path>
-                      <path d="M14 3v5h5"></path>
-                    </svg>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-slate-800">.session</div>
-                    <div className="truncate text-[13px] font-medium text-slate-600">{onboarding.sessionFileName || 'Telegram-сессия аккаунта'}</div>
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{onboarding.sessionFileName ? 'Заменить' : 'Выбрать'}</div>
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <FileUploadBox
+                  label="Сессия Telegram (.session)"
+                  fileName={onboarding.sessionFileName}
+                  acceptedTypes=".session"
+                  onChange={handleSessionFileChange}
+                  icon={FileKey}
+                  colorClass="indigo"
+                />
+
+                <FileUploadBox
+                  label="Профиль устройства (.json)"
+                  fileName={onboarding.jsonFileName}
+                  acceptedTypes=".json,application/json"
+                  onChange={handleJsonFileChange}
+                  icon={FileJson}
+                  colorClass="slate"
+                />
+
+                <div className="pt-2">
+                  <Button
+                    size="lg"
+                    onClick={importSession}
+                    disabled={!onboarding.sessionFile || !onboarding.jsonFile || onboarding.isImporting}
+                    className="w-full sm:w-auto min-w-[240px] h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 text-base"
+                  >
+                    {onboarding.isImporting ? (
+                      <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Подключение...</>
+                    ) : (
+                      <><UploadCloud className="w-5 h-5 mr-2" /> Импортировать аккаунт</>
+                    )}
+                  </Button>
                 </div>
-                <div className={`relative flex w-full items-center gap-3 rounded-[14px] border bg-white px-4 py-3.5 text-left transition hover:border-blue-300 hover:shadow-sm cursor-pointer ${
-                  onboarding.jsonFileName ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'
-                }`}>
-                  <input
-                    type="file"
-                    accept=".json,application/json"
-                    className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                    onChange={handleJsonFileChange}
-                  />
-                  <div className={`flex size-10 shrink-0 items-center justify-center rounded-[12px] ${
-                    onboarding.jsonFileName ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"></path>
-                      <path d="M14 3v5h5"></path>
-                      <path d="M9 13h6"></path>
-                      <path d="M9 17h4"></path>
-                    </svg>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-bold text-slate-800">.json</div>
-                    <div className="truncate text-[13px] font-medium text-slate-600">{onboarding.jsonFileName || 'Профиль устройства'}</div>
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">{onboarding.jsonFileName ? 'Заменить' : 'Выбрать'}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={importSession}
-                  disabled={!onboarding.sessionFile || !onboarding.jsonFile || onboarding.isImporting}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                >
-                  {onboarding.isImporting ? 'Подключаем...' : 'Подключить'}
-                </button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4 animate-in fade-in duration-300">
                 {onboarding.qrCodeUrl ? (
-                  <div className="flex flex-col items-center gap-3 rounded-[18px] border border-slate-200 bg-white p-5 shadow-sm">
-                    <img src={onboarding.qrCodeUrl} alt="QR login" className="w-full max-w-[200px] rounded-lg" />
-                    <div className="text-[12px] font-medium text-slate-500 text-center">
-                      Telegram → Настройки → Устройства → Подключить устройство
+                  <div className="flex flex-col sm:flex-row items-center gap-6 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-6">
+                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 shrink-0">
+                      <img src={onboarding.qrCodeUrl} alt="QR login" className="w-48 h-48 sm:w-56 sm:h-56" />
+                    </div>
+                    <div className="flex flex-col gap-4 text-center sm:text-left">
+                      <div>
+                        <h4 className="text-lg font-bold text-slate-900 mb-1">Отсканируйте код</h4>
+                        <p className="text-sm text-slate-500">Откройте Telegram на телефоне, чтобы привязать сессию к сервису.</p>
+                      </div>
+                      <ol className="text-sm text-slate-700 space-y-2 text-left bg-white/60 p-4 rounded-xl border border-indigo-50/50">
+                        <li className="flex gap-2">
+                          <span className="font-bold text-indigo-500">1.</span>
+                          <span>Зайдите в <b>Настройки</b></span>
+                        </li>
+                        <li className="flex gap-2">
+                          <span className="font-bold text-indigo-500">2.</span>
+                          <span>Выберите <b>Устройства</b></span>
+                        </li>
+                        <li className="flex gap-2">
+                          <span className="font-bold text-indigo-500">3.</span>
+                          <span>Нажмите <b>Подключить устройство</b></span>
+                        </li>
+                      </ol>
                     </div>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={startQrLogin}
-                    disabled={onboarding.isGeneratingQr}
-                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-                      <path d="M4 9V5h4"></path>
-                      <path d="M20 9V5h-4"></path>
-                      <path d="M4 15v4h4"></path>
-                      <path d="M20 15v4h-4"></path>
-                      <rect x="9" y="9" width="6" height="6" rx="1.4"></rect>
-                    </svg>
-                    {onboarding.isGeneratingQr ? 'Генерируем QR...' : 'Получить QR'}
-                  </button>
+                  <div className="p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-white flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center shadow-sm mb-4 border border-slate-100">
+                      <Smartphone className="w-8 h-8 text-indigo-500" />
+                    </div>
+                    <h4 className="text-base font-bold text-slate-900 mb-2">Генерация сессии</h4>
+                    <p className="text-sm text-slate-500 max-w-sm mb-6">
+                      Мы создадим уникальный QR-код на основе выбранного прокси и отпечатка устройства.
+                    </p>
+                    <Button
+                      size="lg"
+                      onClick={startQrLogin}
+                      disabled={onboarding.isGeneratingQr}
+                      className="h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 px-8 text-base w-full sm:w-auto"
+                    >
+                      {onboarding.isGeneratingQr ? (
+                        <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Запуск...</>
+                      ) : (
+                        <><QrCode className="w-5 h-5 mr-2" /> Сгенерировать QR-код</>
+                      )}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
-      {onboarding.qrStatus ? (
-        <div className={`mb-6 flex items-start gap-2.5 rounded-[14px] px-4 py-3 text-[13px] font-medium leading-relaxed ${
+      {onboarding.qrStatus && (
+        <div className={`mb-6 p-4 flex gap-3 items-start rounded-2xl border text-sm font-medium shadow-sm animate-in slide-in-from-bottom-2 ${
           onboarding.qrStatusTone === 'success'
-            ? 'border border-emerald-200 bg-emerald-50 text-emerald-800'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
             : onboarding.qrStatusTone === 'warning'
-              ? 'border border-amber-200 bg-amber-50 text-amber-800'
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
               : onboarding.qrStatusTone === 'error'
-                ? 'border border-rose-200 bg-rose-50 text-rose-800'
-                : 'border border-slate-200 bg-white text-slate-700 shadow-sm'
+                ? 'border-rose-200 bg-rose-50 text-rose-800'
+                : 'border-slate-200 bg-white text-slate-700'
         }`}>
-          {onboarding.qrStatus}
+          {onboarding.qrStatusTone === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
+          {onboarding.qrStatusTone === 'warning' && <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />}
+          <div className="pt-0.5">{onboarding.qrStatus}</div>
         </div>
-      ) : null}
+      )}
     </>
   );
 }

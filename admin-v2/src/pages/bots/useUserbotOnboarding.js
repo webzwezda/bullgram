@@ -127,7 +127,8 @@ export function useUserbotOnboarding({
 
   async function pollQrStatus() {
     stopQrPolling();
-    updateOnboarding({ qrStatus: 'Ждем скан и вход...', qrStatusTone: 'default' });
+    updateOnboarding({ qrStatus: '', qrStatusTone: 'default' });
+    showUiMessage('Ждем скан и вход...');
 
     qrPollingIntervalRef.current = window.setInterval(async () => {
       try {
@@ -140,12 +141,14 @@ export function useUserbotOnboarding({
             qrCodeUrl: '',
             qrStatusTone: 'success'
           });
+          showUiMessage('Аккаунт подключен через QR.', 'success');
           await reloadAccounts();
         }
       } catch (error) {
         if (String(error.message).includes('404')) {
           stopQrPolling();
           updateOnboarding({ qrStatus: 'QR больше не активен. Сгенерируй новый.', qrStatusTone: 'error' });
+          showUiMessage('QR больше не активен. Сгенерируй новый.', 'error');
           return;
         }
         stopQrPolling();
@@ -153,6 +156,7 @@ export function useUserbotOnboarding({
           qrStatus: error.message || 'Не удалось проверить статус QR. Остановили ожидание, чтобы не долбить API бесконечно.',
           qrStatusTone: 'error'
         });
+        showUiMessage(error.message || 'Не удалось проверить статус QR.', 'error');
       }
     }, 3000);
 
@@ -162,6 +166,7 @@ export function useUserbotOnboarding({
         qrStatus: 'QR-ожидание истекло. Сгенерируй новый код, если вход так и не завершился.',
         qrStatusTone: 'error'
       });
+      showUiMessage('QR-ожидание истекло.', 'error');
     }, 3 * 60 * 1000);
   }
 
@@ -257,6 +262,9 @@ export function useUserbotOnboarding({
         qrStatus: result.qrCode ? `QR готов. Сканируй его в Telegram. Профиль входа: ${profileLabel}.` : 'QR не пришел.',
         qrStatusTone: result.qrCode ? 'success' : 'error'
       });
+      if (!result.qrCode) {
+        showUiMessage('QR не пришел от Telegram.', 'error');
+      }
       if (result.qrCode) {
         pollQrStatus();
       }
@@ -265,6 +273,7 @@ export function useUserbotOnboarding({
         qrStatus: normalizeOnboardingErrorMessage(error),
         qrStatusTone: 'error'
       });
+      showUiMessage(normalizeOnboardingErrorMessage(error), 'error');
     } finally {
       updateOnboarding({ isGeneratingQr: false });
     }
@@ -329,12 +338,14 @@ export function useUserbotOnboarding({
         qrStatus: '',
         qrStatusTone: 'default'
       });
+      showUiMessage('Аккаунт импортирован в safe-mode.', 'success');
       await reloadAccounts();
     } catch (error) {
       updateOnboarding({
         qrStatus: normalizeOnboardingErrorMessage(error),
         qrStatusTone: 'error'
       });
+      showUiMessage(normalizeOnboardingErrorMessage(error), 'error');
     } finally {
       updateOnboarding({ isImporting: false });
     }

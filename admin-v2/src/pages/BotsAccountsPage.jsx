@@ -216,7 +216,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setState,
     state,
     usedUserbotProxyIds,
-    userbots
+    userbots,
+    showUiMessage
   });
 
   const {
@@ -399,9 +400,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}
-            steps={canSellUserbotAssets
-              ? { proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }
-              : { proxy: 1, connect: 3, fingerprint: 4, authFiles: 4, authQr: 5 }}
+            steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
           />
 
           <LiveUserbotsSection {...sellerLiveUserbotsSectionProps} />
