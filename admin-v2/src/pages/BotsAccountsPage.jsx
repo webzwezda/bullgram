@@ -391,25 +391,24 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     <section className="page page--flush">
       {isOfficialMode ? (
         <OfficialBotsSection {...officialBotsSectionProps} />
-      ) : !canSellUserbotAssets ? (
+      ) : (
         <>
-          <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+          {!canSellUserbotAssets ? (
+            <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+          ) : null}
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}
-            steps={{ proxy: 1, connect: 3, fingerprint: 4, authFiles: 4, authQr: 5 }}
-          />
-        </>
-      ) : (
-        <>
-          <UserbotOnboardingSection
-            {...onboardingSectionCommonProps}
-            steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
+            steps={canSellUserbotAssets
+              ? { proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }
+              : { proxy: 1, connect: 3, fingerprint: 4, authFiles: 4, authQr: 5 }}
           />
 
           <LiveUserbotsSection {...sellerLiveUserbotsSectionProps} />
 
-          <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
+          {canSellUserbotAssets ? (
+            <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
+          ) : null}
         </>
       )}
     </section>
