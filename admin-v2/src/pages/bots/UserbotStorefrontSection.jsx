@@ -440,7 +440,7 @@ export function UserbotStorefrontSection({
                 }
               }}
             >
-              <SelectTrigger className="w-full h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm max-w-2xl">
+              <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm max-w-2xl">
                 <SelectValue placeholder="Выберите заказ" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">

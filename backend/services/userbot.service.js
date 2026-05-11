@@ -870,6 +870,11 @@ export class UserbotService {
                 }
             }
 
+            // Если IP-чек показал IPv6 exit — прокси форсит IPv6 исходящие
+            if (exitIp && exitIp.includes(':')) {
+                proxyData.force_ipv6 = true;
+            }
+
             const telegramCheck = await this._checkTelegramConnectivity(proxyData);
 
             if (!exitIp) {
@@ -1717,6 +1722,24 @@ export class UserbotService {
             }));
 
             return { success: true };
+        } finally {
+            await client.disconnect();
+        }
+    }
+
+    async scanGroupActivity(userbot, tgChatId, limit = 200) {
+        const client = await this.createAuthorizedClient(userbot, 1);
+        try {
+            const messages = await client.getMessages(tgChatId, { limit });
+            const authorMap = new Map();
+
+            for (const msg of messages) {
+                if (!msg || !msg.senderId) continue;
+                const id = String(msg.senderId);
+                authorMap.set(id, (authorMap.get(id) || 0) + 1);
+            }
+
+            return authorMap;
         } finally {
             await client.disconnect();
         }

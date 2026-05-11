@@ -1,5 +1,10 @@
-import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, Link2, KeyRound, Plus, X, Settings, Zap } from 'lucide-react';
+import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, Link2, KeyRound, Plus, X, Settings } from 'lucide-react';
 import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 function adminContextMeta(accountOrAdminTgId) {
   const adminTgId = typeof accountOrAdminTgId === 'object'
@@ -15,10 +20,6 @@ function adminContextMeta(accountOrAdminTgId) {
 
 function normalizeBotKind(value) {
   return value === 'template' ? 'template' : 'sales';
-}
-
-function botKindLabel(value) {
-  return normalizeBotKind(value) === 'template' ? 'Заготовка' : 'Продажи';
 }
 
 function botTitle(account) {
@@ -89,78 +90,66 @@ function placeCategoryColor(target) {
   return 'bg-amber-50 text-amber-700 border-amber-200';
 }
 
-function SelectChevron() {
-  return (
-    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-    </div>
-  );
-}
-
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-
 function ConnectBotSection({ botForm, setBotForm, state, addOfficialBot }) {
   return (
-    <Card className="relative ring-slate-200/60 shadow-sm mb-6 overflow-hidden">
-      <div className="absolute top-0 inset-x-0 h-32 bg-gradient-to-b from-blue-50/50 to-transparent pointer-events-none" />
-      <CardHeader className="relative flex flex-row items-start gap-4 pb-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
-          <Bot className="w-6 h-6" />
+    <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl relative">
+
+      <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+        <div className="flex flex-row items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+            <Bot className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Подключить нового бота</h2>
+            <p className="text-sm font-medium text-slate-500 mt-0.5">Получите токен у @BotFather и вставьте сюда.</p>
+          </div>
         </div>
-        <div className="flex-1">
-          <CardTitle className="text-xl font-bold text-slate-900">
-            Подключить нового бота
-          </CardTitle>
-          <CardDescription className="text-sm font-medium text-slate-500 mt-1">Получи токен у @BotFather и вставь сюда.</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="relative">
-        <div className="flex flex-col sm:flex-row items-end gap-4">
+      </div>
+      
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-end gap-4 max-w-4xl">
           <div className="flex-1 w-full">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Токен бота</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Токен бота</label>
             <Input
               value={botForm.botToken}
               onChange={(e) => setBotForm((prev) => ({ ...prev, botToken: e.target.value }))}
               placeholder="8123456789:AAE_x7v9Kq2Lm..."
               spellCheck="false"
-              className="font-mono bg-slate-50 h-11"
+              className="font-mono bg-white h-11 rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500"
             />
           </div>
-          <div className="w-full sm:w-48">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Тип</label>
+          <div className="w-full sm:w-[200px]">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Тип</label>
             <Select
               value={botForm.botKind}
               onValueChange={(value) => setBotForm((prev) => ({ ...prev, botKind: value }))}
             >
-              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
                 <SelectValue placeholder="Тип бота" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sales">Бот продаж</SelectItem>
-                <SelectItem value="template">Заготовка</SelectItem>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="sales" className="rounded-lg">Бот продаж</SelectItem>
+                <SelectItem value="template" className="rounded-lg">Заготовка</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex gap-3 w-full sm:w-auto">
             <Button
               onClick={addOfficialBot}
               disabled={state.savingBot || !botForm.botToken.trim()}
-              className="h-11 px-6 bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+              className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 w-full sm:w-auto font-bold"
             >
               {state.savingBot ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Подключить
+              {state.savingBot ? 'Подключение...' : 'Подключить'}
             </Button>
-            <Button variant="outline" asChild className="h-11 w-full sm:w-auto text-slate-700">
-              <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="flex items-center gap-2">
-                @BotFather <ExternalLink className="w-3.5 h-3.5" />
+            <Button variant="outline" asChild className="h-11 rounded-xl w-full sm:w-auto text-slate-700 border-slate-200 shadow-sm">
+              <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="flex items-center gap-2 font-bold">
+                @BotFather <ExternalLink className="w-4 h-4" />
               </a>
             </Button>
           </div>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
@@ -190,33 +179,34 @@ function BotConfigSection({
     : null;
 
   return (
-    <Card className="ring-slate-200/60 shadow-sm">
-      <CardHeader className="flex flex-row items-start gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
-          <Settings className="w-6 h-6" />
-        </div>
-        <div className="flex-1">
-          <CardTitle className="text-xl font-bold text-slate-900">
-            Настройка бота
-          </CardTitle>
-          <CardDescription className="text-sm font-medium text-slate-500 mt-1">Выбери бота, укажи тип и Telegram ID для уведомлений о продажах.</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+        <div className="flex flex-row items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+            <Settings className="w-6 h-6" />
+          </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Бот</label>
+            <h2 className="text-xl font-bold text-slate-900">Настройка бота</h2>
+            <p className="text-sm font-medium text-slate-500 mt-0.5">Конфигурация, тип и уведомления о продажах.</p>
+          </div>
+        </div>
+      </div>
+      
+      <div className="p-5 sm:p-6 bg-white">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Выбранный бот</label>
             <Select
               value={selectedOfficialBotId || selectedBotId}
               onValueChange={(value) => setSelectedOfficialBotId(value)}
             >
-              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
                 <SelectValue placeholder="Выбери бота" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-xl">
                 {officialBots.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {botTitle(account)}
+                  <SelectItem key={account.id} value={account.id} className="rounded-lg py-2.5">
+                    <span className="font-medium text-slate-900">{botTitle(account)}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -224,24 +214,24 @@ function BotConfigSection({
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Тип бота</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Тип бота</label>
             <Select
               value={kind}
               onValueChange={(value) => saveBotKind(selectedOfficialBot, value)}
               disabled={state.savingBotKindId === selectedBotId}
             >
-              <SelectTrigger className="data-[size=default]:h-11 w-full bg-slate-50">
+              <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
                 <SelectValue placeholder="Тип бота" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sales">Бот продаж</SelectItem>
-                <SelectItem value="template">Заготовка</SelectItem>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="sales" className="rounded-lg">Бот продаж</SelectItem>
+                <SelectItem value="template" className="rounded-lg">Заготовка</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5 block">Админ TG ID</label>
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Админ TG ID</label>
             <div className="flex gap-2">
               <Input
                 value={adminDraftValue}
@@ -249,28 +239,28 @@ function BotConfigSection({
                   ...prev,
                   [selectedBotId]: e.target.value
                 }))}
-                placeholder="488609412"
-                className="h-11 bg-slate-50 font-mono"
+                placeholder="ID (напр. 488609412)"
+                className="h-11 bg-white rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500 font-mono"
               />
               <Button
                 onClick={() => saveBotAdmin(selectedOfficialBot)}
                 disabled={state.savingBotAdminId === selectedBotId}
-                className="h-11 px-4 bg-slate-900 hover:bg-slate-800 text-white"
+                className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-sm"
               >
                 {state.savingBotAdminId === selectedBotId ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Сохранить'}
               </Button>
             </div>
-            <div className="mt-1.5 text-xs text-slate-500">
+            <div className="mt-2 text-xs font-medium text-slate-500">
               {adminContextMeta(selectedOfficialBot) === 'Не указан'
-                ? 'Укажи свой Telegram ID — так бот узнает, кто админ, и будет присылать уведомления о продажах.'
-                : adminContextMeta(selectedOfficialBot)}
+                ? 'Укажи свой TG ID для получения уведомлений.'
+                : <span className="text-emerald-600 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Привязан: {adminContextMeta(selectedOfficialBot)}</span>}
             </div>
           </div>
         </div>
-      </CardContent>
+      </div>
 
       {kind === 'sales' && salesContourSectionProps?.isVisible ? (
-        <div className="border-t border-slate-100 bg-slate-50/30">
+        <div className="border-t border-slate-100 bg-slate-50/50">
           <UserbotsSection
             salesContourSectionProps={salesContourSectionProps}
           />
@@ -285,12 +275,12 @@ function BotConfigSection({
           />
         </div>
       ) : kind === 'template' ? (
-        <CardContent className="border-t border-slate-100 pt-6">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 font-medium flex items-center gap-2">
-            <Bot className="w-4 h-4 text-slate-400" />
-            Это заготовка. Магазин и привязка площадок для неё не нужны, но токен и админа можно держать наготове.
+        <div className="border-t border-slate-100 p-5 sm:p-6 bg-slate-50/50">
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-sm text-indigo-800 font-medium flex items-center gap-3">
+            <Bot className="w-5 h-5 text-indigo-500 shrink-0" />
+            <p>Это заготовка. Магазин и привязка площадок для неё не нужны. Настройте профиль и переведите в тип "Бот продаж", когда будете готовы.</p>
           </div>
-        </CardContent>
+        </div>
       ) : null}
     </Card>
   );
@@ -343,25 +333,27 @@ function UserbotsSection({
   }
 
   return (
-    <div className="border-t border-slate-100">
-      <div className="px-6 md:px-8 py-4">
+    <div className="border-t border-slate-100 pb-2">
+      <div className="px-5 sm:px-6 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <UserCog className="w-4 h-4 text-slate-400" />
-            <div className="text-sm font-bold text-slate-900">Юзерботы</div>
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+              <UserCog className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="text-base font-bold text-slate-900">Привязанные юзерботы</div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {selectedOptions.length ? (
-              <div className="px-2.5 py-1 rounded-full bg-slate-200 text-xs font-bold text-slate-600">{selectedOptions.length}</div>
+              <Badge variant="secondary" className="bg-white border border-slate-200 text-slate-700 shadow-sm">{selectedOptions.length}</Badge>
             ) : null}
             {availableOptions.length > 0 ? (
               <Button
                 size="sm"
                 onClick={() => setAdding(true)}
-                className="bg-blue-600 hover:bg-blue-700 h-8 text-xs px-3"
+                className="bg-indigo-600 hover:bg-indigo-700 h-11 rounded-xl text-xs px-4 shadow-sm font-bold"
               >
-                <Plus className="w-3.5 h-3.5 mr-1" />
-                Добавить
+                <Plus className="w-4 h-4 mr-1.5" />
+                Добавить юзербота
               </Button>
             ) : null}
           </div>
@@ -369,14 +361,14 @@ function UserbotsSection({
       </div>
 
       {adding && availableOptions.length > 0 ? (
-        <div className="px-6 md:px-8 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+        <div className="px-5 sm:px-6 py-4 border-y border-slate-100 bg-indigo-50/30 flex items-center gap-3">
           <Select onValueChange={(value) => { if (value) handleAdd(value); }}>
-            <SelectTrigger className="flex-1 w-full bg-white data-[size=default]:h-9">
-              <SelectValue placeholder="Выбери юзербота" />
+            <SelectTrigger className="flex-1 w-full bg-white rounded-xl border-slate-200 data-[size=default]:h-11 shadow-sm">
+              <SelectValue placeholder="Выберите доступного юзербота" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               {availableOptions.map((option) => (
-                <SelectItem key={option.id} value={option.id}>{option.title}</SelectItem>
+                <SelectItem key={option.id} value={option.id} className="rounded-lg py-2">{option.title}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -384,7 +376,7 @@ function UserbotsSection({
             variant="outline"
             size="sm"
             onClick={() => setAdding(false)}
-            className="h-9 text-slate-600"
+            className="h-11 rounded-xl text-slate-600 border-slate-200 bg-white"
           >
             Отмена
           </Button>
@@ -392,46 +384,49 @@ function UserbotsSection({
       ) : null}
 
       {!selectedOptions.length && !adding ? (
-        <div className="px-6 md:px-8 py-8 text-center bg-slate-50/50">
-          <div className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
-            <UserCog className="w-5 h-5 text-slate-300" />
+        <div className="px-5 sm:px-6 py-8 text-center">
+          <div className="w-12 h-12 bg-white border border-slate-100 rounded-full shadow-sm flex items-center justify-center mx-auto mb-3">
+            <UserCog className="w-6 h-6 text-slate-300" />
           </div>
-          <p className="text-sm text-slate-600 font-semibold">Юзерботы не привязаны</p>
-          <p className="mt-1 text-xs text-slate-500">Они будут приглашать и управлять подписчиками.</p>
+          <p className="text-sm text-slate-700 font-bold">Юзерботы не привязаны</p>
+          <p className="mt-1 text-sm text-slate-500 max-w-sm mx-auto">Привяжите юзербота, чтобы он управлял приглашениями и подписчиками в контуре.</p>
         </div>
       ) : (
-        <div className="divide-y divide-slate-100">
+        <div className="px-5 sm:px-6 pb-2 space-y-2">
           {selectedOptions.map((option) => {
             const isActive = salesContourSectionProps?.userbotActiveMap?.[String(option.id)] !== false;
             const isToggling = salesContourSectionProps?.togglingUserbotId === String(option.id);
             return (
-              <div key={option.id} className="px-6 md:px-8 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+              <div key={option.id} className="bg-white border border-slate-200 p-3 rounded-xl shadow-sm flex items-center justify-between gap-4 transition-all hover:border-slate-300">
+                <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: statusColor(option.runtimeStatus) }} />
+                    <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: statusColor(option.runtimeStatus) }} />
                     <span className="text-sm font-bold text-slate-900">{option.title}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className={`toggle-switch ${isActive ? 'toggle-switch--on' : ''} ${isToggling ? 'opacity-60 pointer-events-none' : ''}`}
+                  <div className="w-px h-4 bg-slate-200"></div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
                       role="switch"
                       aria-checked={isActive}
-                      aria-label={`Статус ${option.title}`}
                       onClick={() => salesContourSectionProps?.toggleUserbotActive?.(option.id, !isActive)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                        isToggling ? 'opacity-50 pointer-events-none' : ''
+                      } ${isActive ? 'bg-indigo-600' : 'bg-slate-200'}`}
                     >
-                      <span className="toggle-switch__thumb" />
-                    </div>
-                    <span className={`text-[11px] font-semibold ${isActive ? 'text-emerald-600' : 'text-slate-400'}`}>Работаю</span>
+                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${isActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                    <span className={`text-xs font-bold ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>Участвует в ротации</span>
                   </div>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                  className="h-8 px-2.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
                   onClick={() => handleRemove(option.id)}
                   disabled={savingContour}
                 >
-                  <X className="w-3.5 h-3.5 mr-1" />
+                  <X className="w-4 h-4 mr-1.5" />
                   Отвязать
                 </Button>
               </div>
@@ -441,7 +436,10 @@ function UserbotsSection({
       )}
 
       {savingContour ? (
-        <div className="px-6 md:px-8 py-2 text-xs font-medium text-slate-400 bg-slate-50">Сохраняем...</div>
+        <div className="px-5 sm:px-6 py-3 text-xs font-bold text-indigo-500 flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Сохранение контура...
+        </div>
       ) : null}
     </div>
   );
@@ -460,28 +458,29 @@ function BotRuntimeSection({
 
   if (statusMeta.title === 'Ошибка подключения') {
     return (
-      <Card className="border-rose-200 bg-rose-50 shadow-sm">
-        <CardContent className="p-4">
+      <Card className="border-0 shadow-sm ring-1 ring-rose-200/50 bg-rose-50 rounded-2xl overflow-hidden mb-6">
+        <div className="p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta.dot }} />
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-500" />
+              </div>
               <div>
-                <div className="text-sm font-bold text-rose-800">{statusMeta.title}</div>
-                <div className="text-xs text-rose-700/80 mt-0.5">{statusMeta.text}</div>
+                <div className="text-base font-bold text-rose-900">{statusMeta.title}</div>
+                <div className="text-sm font-medium text-rose-700 mt-0.5">{statusMeta.text}</div>
               </div>
             </div>
             <Button
               variant="outline"
-              size="sm"
-              className="border-rose-200 text-rose-700 hover:bg-rose-100/50 hover:text-rose-800"
+              className="h-11 rounded-xl border-rose-200 text-rose-700 bg-white hover:bg-rose-100 hover:text-rose-800 font-bold shadow-sm w-full sm:w-auto"
               onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
               disabled={isBusy}
             >
-              {isBusy ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-2" />}
-              Переподключить
+              {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              Переподключить бота
             </Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
     );
   }
@@ -514,7 +513,7 @@ function rightsSummary(result, selectedId) {
   const canPromote = result.canPromoteMembers !== false;
   const isOk = adminOk && canInvite && canManage && canPromote;
 
-  if (isOk) return { tone: 'ok', title: 'Ок', text: '' };
+  if (isOk) return { tone: 'ok', title: 'Права настроены', text: '' };
   return { tone: 'warning', title: 'Есть ограничения', text: result.message || '' };
 }
 
@@ -536,22 +535,22 @@ function RightsBadges({ result, selectedId }) {
 
   if (!selectedId) {
     return (
-      <div className="mt-2 inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-        Права появятся после выбора площадки.
+      <div className="mt-2.5 inline-flex rounded-lg border border-slate-200 bg-slate-100/50 px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
+        Укажите площадку, чтобы проверить права бота.
       </div>
     );
   }
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1">
+    <div className="mt-2.5 flex flex-wrap gap-1.5">
       {rights.map(({ label, value }) => (
-        <span key={label} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${permissionPillClass(value)}`}>
-          {value === true ? <CheckCircle2 className="size-3" /> : value === false ? <AlertTriangle className="size-3" /> : <span className="size-1.5 rounded-full bg-current opacity-60" />}
+        <span key={label} className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-bold shadow-sm ${permissionPillClass(value)}`}>
+          {value === true ? <CheckCircle2 className="w-3.5 h-3.5" /> : value === false ? <AlertTriangle className="w-3.5 h-3.5" /> : <span className="w-2 h-2 rounded-full bg-current opacity-40 ml-0.5" />}
           {label}
         </span>
       ))}
       {result?.warnings?.length ? (
-        <span className="basis-full text-[11px] font-medium text-rose-700">{result.warnings[0]}</span>
+        <span className="basis-full text-xs font-bold text-rose-600 mt-1">{result.warnings[0]}</span>
       ) : null}
     </div>
   );
@@ -582,105 +581,113 @@ function SalesContourBlock({
   contourError
 }) {
   return (
-    <div className="bg-slate-50/50 pb-2">
+    <div className="bg-slate-50/50 pb-5">
       {contourError ? (
-        <div className="mx-6 md:mx-8 mb-4 mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+        <div className="mx-5 sm:mx-6 mb-4 mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
           <AlertTriangle className="mt-0.5 w-5 h-5 shrink-0 text-amber-500" />
           <div>
-            <p className="font-bold">Ошибка контура</p>
-            <p className="mt-0.5 text-amber-800/90 text-xs">Площадки можно выбрать, но сохранять лучше после ответа сервера.</p>
+            <p className="font-bold">Ошибка сохранения контура</p>
+            <p className="mt-0.5 text-amber-800/90 text-sm font-medium">Площадки можно выбрать, но сохранять лучше после ответа сервера.</p>
           </div>
         </div>
       ) : null}
 
-      <div className="divide-y divide-slate-100">
-        {ROLE_CONFIGS.map((config) => {
-          const Icon = config.icon;
-          const options = optionsForRole(config, draft._props || {});
-          const selectedId = String(draft[config.field] || '');
-          const selectedOption = options.find((o) => String(o.id) === selectedId);
-          const rights = botRightsByTarget[config.key] || null;
-          const summary = rightsSummary(rights, selectedId);
-          const checking = checkingBotRightsTarget === config.key;
+      <div className="px-5 sm:px-6 pt-5 pb-2">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Link2 className="w-4 h-4 text-indigo-600" />
+          </div>
+          <div className="text-base font-bold text-slate-900">Привязка площадок</div>
+        </div>
 
-          return (
-            <div key={config.key} className="px-6 md:px-8 py-5">
-              <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center shrink-0 border border-slate-100">
-                    <Icon className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-900">{config.title}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: summary.tone === 'ok' ? '#10b981' : summary.tone === 'warning' ? '#f59e0b' : summary.tone === 'error' ? '#ef4444' : '#cbd5e1' }} />
-                      <span className="text-xs text-slate-500">{summary.title}</span>
+        <div className="space-y-3">
+          {ROLE_CONFIGS.map((config) => {
+            const Icon = config.icon;
+            const options = optionsForRole(config, draft._props || {});
+            const selectedId = String(draft[config.field] || '');
+            const selectedOption = options.find((o) => String(o.id) === selectedId);
+            const rights = botRightsByTarget[config.key] || null;
+            const summary = rightsSummary(rights, selectedId);
+            const checking = checkingBotRightsTarget === config.key;
+
+            return (
+              <div key={config.key} className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm transition-all hover:border-slate-300">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-slate-50 shadow-sm flex items-center justify-center shrink-0 border border-slate-100">
+                      <Icon className="w-5 h-5 text-slate-500" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">{config.title}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: summary.tone === 'ok' ? '#10b981' : summary.tone === 'warning' ? '#f59e0b' : summary.tone === 'error' ? '#ef4444' : '#cbd5e1' }} />
+                        <span className="text-xs font-bold text-slate-500">{summary.title}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3 ml-11 lg:ml-0">
-                  <div className="w-full sm:w-[220px]">
-                    <Select
-                      value={selectedId}
-                      onValueChange={(value) => {
-                        if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
-                          setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField });
-                        } else {
-                          setFieldValue(config.field, value, { autoSave: true });
-                        }
-                      }}
-                      disabled={!options.length}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 ml-12 lg:ml-0">
+                    <div className="w-full sm:w-[280px]">
+                      <Select
+                        value={selectedId}
+                        onValueChange={(value) => {
+                          if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
+                            setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField });
+                          } else {
+                            setFieldValue(config.field, value, { autoSave: true });
+                          }
+                        }}
+                        disabled={!options.length}
+                      >
+                        <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
+                          <SelectValue placeholder={options.length ? 'Выберите площадку' : 'Нет доступных площадок'} />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {options.map((option) => (
+                            <SelectItem key={option.id} value={String(option.id)} className="rounded-lg py-2">
+                              {option.title || option.tgChatId || option.id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      className="h-11 shrink-0 text-slate-700 bg-white border-slate-200 rounded-xl shadow-sm font-bold"
+                      onClick={() => checkBotRights(config.key)}
+                      disabled={!selectedId || checking}
                     >
-                      <SelectTrigger className="data-[size=default]:h-9 w-full bg-white">
-                        <SelectValue placeholder={options.length ? '—' : 'Нет площадок'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map((option) => (
-                          <SelectItem key={option.id} value={String(option.id)}>
-                            {option.title || option.tgChatId || option.id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {checking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <KeyRound className="w-4 h-4 mr-2 text-slate-400" />}
+                      {checking ? 'Проверка...' : 'Проверить права'}
+                    </Button>
                   </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 shrink-0 text-slate-700 bg-white"
-                    onClick={() => checkBotRights(config.key)}
-                    disabled={!selectedId || checking}
-                  >
-                    {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5 mr-1.5 text-slate-400" />}
-                    Проверить
-                  </Button>
+                </div>
+
+                <div className="ml-12 mt-4 pt-4 border-t border-slate-100">
+                  {selectedOption ? (
+                    <div className="mb-3 text-xs text-slate-500 flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-0 shadow-sm font-bold">
+                        {selectedOption.visibility === 'public' ? (selectedOption.username ? `@${selectedOption.username}` : 'Публичная') : selectedOption.visibility === 'private' ? 'Приватная' : 'Не проверена'}
+                      </Badge>
+                      {selectedOption.tgChatId && <span className="font-mono text-[11px] opacity-70 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">{selectedOption.tgChatId}</span>}
+                    </div>
+                  ) : null}
+                  <RightsBadges result={rights} selectedId={selectedId} />
+                  {savingContour ? (
+                    <div className="mt-3 flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100/50">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Синхронизация контура...
+                    </div>
+                  ) : null}
+                  {summary.text ? (
+                    <div className="mt-3 text-xs font-bold text-slate-600 bg-slate-100/80 p-3 rounded-xl border border-slate-200 shadow-inner">{summary.text}</div>
+                  ) : null}
                 </div>
               </div>
-
-              <div className="ml-11 mt-3">
-                {selectedOption ? (
-                  <div className="mb-2 text-xs text-slate-500 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-slate-100 font-medium">
-                      {selectedOption.visibility === 'public' ? (selectedOption.username ? `@${selectedOption.username}` : 'Публичная') : selectedOption.visibility === 'private' ? 'Приватная' : 'Не проверена'}
-                    </span>
-                    {selectedOption.tgChatId && <span className="font-mono text-[11px] opacity-70">{selectedOption.tgChatId}</span>}
-                  </div>
-                ) : null}
-                <RightsBadges result={rights} selectedId={selectedId} />
-                {savingContour ? (
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-indigo-600">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Сохраняем выбор...
-                  </div>
-                ) : null}
-                {summary.text ? (
-                  <div className="mt-1.5 text-[11px] font-medium text-slate-500 bg-slate-100/50 p-2 rounded-md border border-slate-100">{summary.text}</div>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -699,74 +706,79 @@ function PlacesSection({
   if (!selectedOfficialBot) return null;
 
   return (
-    <Card className="ring-slate-200/60 shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between border-b border-slate-100 bg-slate-50/50">
-        <div className="flex gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
-            <Users className="w-6 h-6" />
-          </div>
-          <div className="flex-1">
-            <CardTitle className="text-xl font-bold text-slate-900">
-              Telegram-площадки
-            </CardTitle>
-            <CardDescription className="text-sm font-medium text-slate-500 mt-1">Открытые и закрытые каналы/чаты, где бот — админ.</CardDescription>
+    <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                Telegram-площадки
+                {targets.length > 0 && (
+                  <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-0 text-xs rounded-full px-2">
+                    {targets.length}
+                  </Badge>
+                )}
+              </h2>
+              <p className="text-sm font-medium text-slate-500 mt-0.5">Открытые и закрытые каналы/чаты, где бот назначен администратором.</p>
+            </div>
           </div>
         </div>
-        {targets.length > 0 && (
-          <div className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-sm font-bold">
-            {targets.length}
-          </div>
-        )}
-      </CardHeader>
+      </div>
 
       {!targets.length ? (
-        <CardContent className="p-12 text-center flex flex-col items-center justify-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-            <Users className="w-6 h-6 text-slate-400" />
+        <div className="p-12 text-center flex flex-col items-center justify-center bg-white">
+          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-1 ring-slate-100">
+            <Users className="w-8 h-8 text-slate-300" />
           </div>
-          <p className="text-sm text-slate-500 font-semibold">Площадок пока нет</p>
-          <p className="mt-1 text-xs text-slate-400">Назначьте бота админом в канале или чате.</p>
-        </CardContent>
+          <h3 className="text-base font-bold text-slate-900">Площадок пока нет</h3>
+          <p className="mt-1 text-sm text-slate-500 max-w-sm">Назначьте бота админом в канале или чате, чтобы они появились здесь.</p>
+        </div>
       ) : (
-        <div className="divide-y divide-slate-100">
+        <div className="p-5 sm:p-6 space-y-3 bg-white">
           {targets.map((target) => {
             const isRefreshing = refreshingTelegramPlaceId === String(target.id);
             const categoryLabel = formatPlaceCategory(target);
             const categoryColor = placeCategoryColor(target);
             const username = String(target?.username || '').trim().replace(/^@/, '');
+            
             return (
-              <div key={target.id} className="p-4 sm:px-6 hover:bg-slate-50 transition-colors">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div key={target.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:border-indigo-300 transition-colors">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-900 truncate">{target.title || target.tg_chat_id || 'Без названия'}</span>
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${categoryColor}`}>{categoryLabel}</span>
+                    <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
+                      <span className="text-base font-bold text-slate-900 truncate">{target.title || target.tg_chat_id || 'Без названия'}</span>
+                      <Badge variant="outline" className={`${categoryColor} shadow-sm px-2 py-0.5 text-xs font-bold border`}>
+                        {categoryLabel}
+                      </Badge>
                       {username && (
-                        <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase border border-indigo-200 bg-indigo-50 text-indigo-700">@{username}</span>
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm px-2 py-0.5 text-xs font-bold">
+                          @{username}
+                        </Badge>
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      <span className="font-mono">{target.tg_chat_id || '—'}</span>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <span className="font-mono bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">{target.tg_chat_id || '—'}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 hover:border-indigo-200"
+                      className="h-11 rounded-xl text-slate-700 font-bold border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 shadow-sm"
                       onClick={() => refreshTelegramPlaceInfo(target)}
                       disabled={isRefreshing}
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      {isRefreshing ? 'Обновляем' : 'Обновить'}
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Обновление...' : 'Обновить'}
                     </Button>
                     <Button
                       variant="outline"
-                      size="sm"
-                      className="text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100"
+                      className="h-11 rounded-xl text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 font-bold shadow-sm"
                       onClick={() => deleteTelegramPlace(target)}
                     >
-                      <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                      <Trash2 className="w-4 h-4 mr-2" />
                       Удалить
                     </Button>
                   </div>
@@ -809,6 +821,12 @@ export function OfficialBotsSection({
         addOfficialBot={addOfficialBot}
       />
 
+      <BotRuntimeSection
+        selectedOfficialBot={selectedOfficialBot}
+        refreshOfficialBotWebhookStatus={refreshOfficialBotWebhookStatus}
+        state={state}
+      />
+
       <BotConfigSection
         selectedOfficialBot={selectedOfficialBot}
         selectedOfficialBotId={selectedOfficialBotId}
@@ -820,12 +838,6 @@ export function OfficialBotsSection({
         saveBotKind={saveBotKind}
         state={state}
         salesContourSectionProps={salesContourSectionProps}
-      />
-
-      <BotRuntimeSection
-        selectedOfficialBot={selectedOfficialBot}
-        refreshOfficialBotWebhookStatus={refreshOfficialBotWebhookStatus}
-        state={state}
       />
 
       <PlacesSection

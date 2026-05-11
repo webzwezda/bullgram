@@ -1352,6 +1352,7 @@ export class SalesContourService {
             ...(payload.userbotMode === 'pool' ? selectedUserbots.map((item) => item.id) : [])
         ].filter(Boolean);
         await this.syncUserbotBindings(ownerId, bot.id, allUserbotIds);
+        await this.ensureContourBases(ownerId, data);
 
         return {
             contour: mapContourRow(data, {
@@ -1367,5 +1368,62 @@ export class SalesContourService {
             },
             readiness: buildContourReadiness(bot, data)
         };
+    }
+
+    async ensureContourBases(ownerId, contourRow) {
+        const TARGET_LABELS = {
+            public_channel: 'Открытый канал',
+            paid_channel: 'Платный канал',
+            public_chat: 'Открытый чат',
+            paid_chat: 'Платный чат'
+        };
+
+        const targets = Object.entries(CONTOUR_TARGET_CONFIG);
+        for (const [targetType, config] of targets) {
+            const channelId = contourRow[config.field];
+            if (!channelId) continue;
+
+            const { data: existing } = await this.supabase
+                .from('customer_bases')
+                .select('id')
+                .eq('contour_id', contourRow.bot_id)
+                .eq('target_type', targetType)
+                .maybeSingle();
+
+            if (existing) continue;
+
+            const { error } = await this.supabase
+                .from('customer_bases')
+                .insert({
+                    owner_id: ownerId,
+                    contour_id: contourRow.bot_id,
+                    target_type: targetType,
+                    name: TARGET_LABELS[targetType] || targetType
+                })
+                .select('id')
+                .single();
+
+            if (error && !String(error.message || '').includes('already exists')) {
+                console.error(`[ensureContourBases] failed for ${targetType}:`, error.message);
+                continue;
+            }
+
+            const baseId = error ? null : (await this.supabase
+                .from('customer_bases')
+                .select('id')
+                .eq('contour_id', contourRow.bot_id)
+                .eq('target_type', targetType)
+                .single()
+            ).data?.id;
+
+            if (!baseId) continue;
+
+            await this.supabase
+                .from('customer_base_channels')
+                .upsert({
+                    base_id: baseId,
+                    channel_id: channelId
+                }, { onConflict: 'base_id,channel_id' });
+        }
     }
 }

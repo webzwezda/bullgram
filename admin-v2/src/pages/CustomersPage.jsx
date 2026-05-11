@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, ShieldCheck } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, ShieldCheck, Users, Megaphone, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
+import { toast } from 'sonner';
 
 const TABS = [
+  { id: 'bot', label: 'Официальный бот', icon: Database },
+  { id: 'audience-paid-channel', label: 'Платный канал', icon: Users },
+  { id: 'audience-paid-chat', label: 'Платный чат', icon: Lock },
+  { id: 'audience-public-channel', label: 'Открытый канал', icon: Eye },
+  { id: 'audience-public-chat', label: 'Открытый чат', icon: MessageCircle }
+];
+
+const BOT_SUBTABS = [
   { id: 'started', label: 'Нажал старт' },
   { id: 'viewed', label: 'Смотрели тарифы' },
   { id: 'abandoned', label: 'Не смогли оплатить' },
@@ -75,6 +84,234 @@ const CANDIDATE_PAYMENT_FILTERS = [
 
 const LARGE_SOURCE_MEMBER_COUNT = 1000;
 
+const AUDIENCE_TAB_MAP = {
+  'audience-public-channel': 'public_channel',
+  'audience-paid-channel': 'paid_channel',
+  'audience-public-chat': 'public_chat',
+  'audience-paid-chat': 'paid_chat'
+};
+
+
+function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction, openActionsRowId, setOpenActionsRowId }) {
+  const navigate = useNavigate();
+  if (!target) {
+    return (
+      <div className="p-16 text-center flex flex-col items-center">
+        <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+          <Users className="w-8 h-8" />
+        </div>
+        <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Группа не подключена</h4>
+        <p className="text-slate-500 font-medium text-sm">Добавьте эту группу в контуре продаж на странице Бот-отец</p>
+      </div>
+    );
+  }
+
+  const members = target.members || [];
+  const targetType = target.targetType;
+  const isPaid = targetType === 'paid_channel' || targetType === 'paid_chat';
+  const channelId = target.channelId;
+
+  let paidCount = 0;
+  let freeCount = 0;
+  let expiredCount = 0;
+  let enrichedRows = members;
+
+  if (isPaid) {
+    enrichedRows = members.map((m) => {
+      const crm = crmMap.get(String(m.tg_user_id));
+      let paymentStatus = 'free';
+      if (crm?.status === 'active') { paymentStatus = 'paid'; paidCount++; }
+      else if (crm?.status === 'expired') { paymentStatus = 'expired'; expiredCount++; }
+      else { freeCount++; }
+      return { ...m, crm, paymentStatus };
+    });
+  }
+
+  return (
+    <div className="overflow-hidden flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30 gap-3">
+        <div>
+          <h3 className="text-xl font-black text-slate-900">{target.channelTitle || TABS.find(t => t.id === `audience-${targetType}`)?.label || 'Группа'}</h3>
+          <div className="text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
+            <span>{target.totalMembers} участников</span>
+            {isPaid && paidCount > 0 && <span className="text-emerald-600">{paidCount} оплачено</span>}
+            {isPaid && expiredCount > 0 && <span className="text-amber-600">{expiredCount} просрочено</span>}
+            {isPaid && freeCount > 0 && <span className="text-red-500">{freeCount} без оплаты</span>}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => onSync(targetType)}
+            disabled={!!syncingType}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncingType === targetType ? 'animate-spin' : ''}`} />
+            {syncingType === targetType ? 'Загружаем...' : 'Обновить список'}
+          </button>
+          {target.baseId && (
+            <a
+              href={`/app/broadcast?baseId=${target.baseId}`}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all"
+            >
+              <Megaphone className="w-4 h-4" />
+              Рассылка
+            </a>
+          )}
+        </div>
+      </div>
+
+      {!target.baseId ? (
+        <div className="p-16 text-center flex flex-col items-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+            <Users className="w-8 h-8" />
+          </div>
+          <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Участники еще не загружены</h4>
+          <p className="text-slate-500 font-medium text-sm">Нажмите «Обновить список» чтобы загрузить участников из Telegram</p>
+        </div>
+      ) : members.length === 0 ? (
+        <div className="p-16 text-center flex flex-col items-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+            <Users className="w-8 h-8" />
+          </div>
+          <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Пусто</h4>
+          <p className="text-slate-500 font-medium text-sm">В этой группе пока нет участников</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-slate-50/80 border-b border-slate-100">
+                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
+                {isPaid && (
+                  <>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Оплата</th>
+                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Доступ до</th>
+                  </>
+                )}
+                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {enrichedRows.slice(0, 100).map((row) => {
+                const rowId = row.tg_user_id;
+                const actionRow = {
+                  tg_user_id: String(row.tg_user_id),
+                  tg_username: row.username,
+                  display_name: row.display_name,
+                  first_name: row.first_name,
+                  last_name: row.last_name,
+                  channel_id: channelId,
+                  channel_title: target.channelTitle,
+                  id: row.crm?.id || null,
+                  _crmSubscription: !!row.crm?.id
+                };
+                const clientCell = (
+                  <td className="px-6 py-4">
+                    <div className="min-w-0">
+                        <div className="font-black text-slate-900 text-sm truncate">
+                          {row.display_name || row.first_name || (row.username ? `@${row.username}` : 'Неизвестный')}
+                        </div>
+                        {row.tg_user_id && (
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">ID: {row.tg_user_id}</div>
+                        )}
+                        {row.username && (
+                          <div className="text-xs font-semibold text-slate-500 truncate">@{row.username}</div>
+                        )}
+                      </div>
+                  </td>
+                );
+                if (isPaid) {
+                  const ps = row.paymentStatus;
+                  const statusStyles = ps === 'paid'
+                    ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200'
+                    : ps === 'expired'
+                      ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-200'
+                      : 'bg-red-50 text-red-600 ring-1 ring-red-200';
+                  const statusLabel = ps === 'paid' ? 'Оплачено' : ps === 'expired' ? 'Просрочен' : 'Без оплаты';
+                  const dot = ps === 'paid' ? 'bg-emerald-500' : ps === 'expired' ? 'bg-amber-500' : 'bg-red-500';
+                  return (
+                    <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
+                      {clientCell}
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${statusStyles}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                          {statusLabel}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 font-medium">
+                        {row.crm?.expires_at
+                          ? new Date(row.crm.expires_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+                          : row.paymentStatus === 'paid' ? 'Навсегда' : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <div className="relative" data-row-actions-root="true">
+                            <button
+                              type="button"
+                              className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
+                              onClick={() => setOpenActionsRowId((prev) => (prev === rowId ? null : rowId))}
+                              title="Действия"
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                            {openActionsRowId === rowId && (
+                              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
+                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-5'); }}>Продлить на 5 дней</button>
+                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
+                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
+                                <div className="border-t border-slate-100" />
+                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
+                              </div>
+                            )}
+                          </div>
+                          {row.tg_user_id && (
+                            <>
+                              <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                              <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                                <Database className="w-3.5 h-3.5" />
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
+                    {clientCell}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        {row.tg_user_id && (
+                          <>
+                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                            <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
+                              <Database className="w-3.5 h-3.5" />
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {enrichedRows.length > 100 && (
+            <div className="px-6 py-3 text-sm text-slate-500 font-medium border-t border-slate-100 bg-slate-50/50">
+              Показано 100 из {enrichedRows.length}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getReconciliationUserbotOptionLabel(userbot) {
   const baseLabel = userbot.tg_username ? `@${userbot.tg_username}` : `Аккаунт ${userbot.tg_account_id || userbot.id}`;
   if (userbot.availability_status === 'pending_activation') return `${baseLabel} • safe mode`;
@@ -134,13 +371,19 @@ function getInvoiceStatus(inv) {
   return 'Счет без оплаты';
 }
 
-function openUserbotCenterHandoff(tgUserId, draftMessage = '') {
+function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = '', navigate = null) {
   if (!tgUserId) return;
   window.localStorage.setItem(USERBOT_CENTER_HANDOFF_KEY, JSON.stringify({
     tg_user_id: String(tgUserId),
-    draft_message: String(draftMessage || '').trim()
+    draft_message: String(draftMessage || '').trim(),
+    common_chat_id: String(commonChatId || '').trim()
   }));
-  window.location.href = `/app/userbot-center?tg_user_id=${encodeURIComponent(tgUserId)}`;
+  const url = `/userbot-center?tg_user_id=${encodeURIComponent(tgUserId)}`;
+  if (navigate) {
+    navigate(url);
+  } else {
+    window.location.href = `/app${url}`;
+  }
 }
 
 function openBroadcastManualSelection(rows = [], title = 'Клиенты: ручной хвост') {
@@ -486,17 +729,6 @@ function normalizeCustomersTab(searchParams) {
   return tab;
 }
 
-function buildQuickBroadcastTitle(activeTab) {
-  if (activeTab === 'started') return 'Нажал старт';
-  if (activeTab === 'customers-active') return 'Активный доступ';
-  if (activeTab === 'customers-expired') return 'Доступ закончился';
-  if (activeTab === 'removed-admin') return 'Удален админом';
-  if (activeTab === 'viewed') return 'Смотрели тариф, но не создали счет';
-  if (activeTab === 'abandoned') return 'Не смогли оплатить';
-  if (activeTab === 'access') return 'Оплатили, но вход не подтвержден';
-  return 'Текущий сегмент клиентов';
-}
-
 function getReconciliationRoleOptions(rawRoles = []) {
   return rawRoles.map((role) => ({
     id: String(role),
@@ -522,26 +754,21 @@ function reconciliationStatusMeta(status) {
 
 export function CustomersPage() {
   const { accessToken, user, profileRole } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const normalizedTab = normalizeCustomersTab(searchParams);
-  const activeTab = TABS.some((tab) => tab.id === normalizedTab) ? normalizedTab : 'viewed';
+  const isAudienceTab = normalizedTab.startsWith('audience-');
+  const isBotTab = normalizedTab === 'bot' || BOT_SUBTABS.some((s) => s.id === normalizedTab);
+  const activeTab = TABS.some((tab) => tab.id === normalizedTab) ? normalizedTab
+    : isBotTab ? 'bot'
+    : 'bot';
+  const activeBotSubtab = isBotTab && normalizedTab !== 'bot'
+    ? normalizedTab
+    : (isBotTab ? (searchParams.get('subtab') || 'started') : 'started');
   const focusChannelId = searchParams.get('channel') || '';
   const selectedBotId = searchParams.get('bot_id') || '';
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(80);
-  const [broadcastSupport, setBroadcastSupport] = useState({
-    loading: false,
-    userbots: []
-  });
-  const [quickBroadcast, setQuickBroadcast] = useState({
-    open: false,
-    sending: false,
-    messageText: '',
-    senderType: 'official_only',
-    senderUserbotIds: [],
-    error: ''
-  });
-  const quickBroadcastRef = useRef(null);
   const [openActionsRowId, setOpenActionsRowId] = useState(null);
   const [mutatingRowId, setMutatingRowId] = useState(null);
   const [handoff, setHandoff] = useState({
@@ -597,6 +824,13 @@ export function CustomersPage() {
     access: [],
     bases: [],
     viewed: []
+  });
+  const [audienceState, setAudienceState] = useState({
+    loading: false,
+    contourId: null,
+    targets: [],
+    syncingType: null,
+    error: ''
   });
 
   const loadCandidates = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
@@ -722,56 +956,6 @@ export function CustomersPage() {
       window.localStorage.removeItem('abandoned_filter_preset');
     }
   }, [setSearchParams]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadBroadcastSupport() {
-      if (!accessToken || !user?.id) return;
-
-      setBroadcastSupport((prev) => ({ ...prev, loading: true }));
-      try {
-        const [{ data: rawUserbots }, reserved] = await Promise.all([
-          supabase
-            .from('tg_accounts')
-            .select('id, tg_username, tg_account_id')
-            .eq('owner_id', user.id)
-            .eq('account_type', 'userbot')
-            .order('created_at', { ascending: false }),
-          apiRequest('/api/shop/seller/reserved-assets', { accessToken })
-        ]);
-
-        if (cancelled) return;
-
-        const reservedIds = new Set((reserved.userbot_ids || []).map(String));
-        const userbots = (rawUserbots || []).filter((row) => !reservedIds.has(String(row.id)));
-
-        setBroadcastSupport({
-          loading: false,
-          userbots
-        });
-
-        setQuickBroadcast((prev) => ({
-          ...prev,
-          senderUserbotIds: prev.senderUserbotIds.length
-            ? prev.senderUserbotIds.filter((id) => userbots.some((row) => String(row.id) === String(id)))
-            : userbots.map((row) => row.id)
-        }));
-      } catch (error) {
-        if (!cancelled) {
-          setBroadcastSupport({
-            loading: false,
-            userbots: []
-          });
-        }
-      }
-    }
-
-    loadBroadcastSupport();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, user?.id]);
 
   const loadCustomers = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
     if (!accessToken) return;
@@ -974,13 +1158,19 @@ export function CustomersPage() {
     }))
   }), [state]);
 
+  const audienceTargetType = isAudienceTab ? activeTab.replace('audience-', '').replace(/-/g, '_') : null;
+  const currentAudienceTarget = isAudienceTab
+    ? audienceState.targets.find((t) => t.targetType === audienceTargetType)
+    : null;
+
+  const effectiveTab = isBotTab ? activeBotSubtab : activeTab;
   const activeRows = useMemo(
-    () => (rowsByTab[activeTab] || [])
+    () => (rowsByTab[effectiveTab] || [])
       .filter((row) => !focusChannelId || String(row.channel_id || '') === String(focusChannelId))
-      .filter((row) => activeTab !== 'abandoned' || !handoff.abandonedFilter || row.abandoned_status === handoff.abandonedFilter)
-      .filter((row) => activeTab !== 'access' || handoff.orderTgUserIds.length === 0 || handoff.orderTgUserIds.includes(String(row.tg_user_id || '')))
+      .filter((row) => effectiveTab !== 'abandoned' || !handoff.abandonedFilter || row.abandoned_status === handoff.abandonedFilter)
+      .filter((row) => effectiveTab !== 'access' || handoff.orderTgUserIds.length === 0 || handoff.orderTgUserIds.includes(String(row.tg_user_id || '')))
       .filter((row) => rowMatches(row, search)),
-    [activeTab, focusChannelId, handoff.abandonedFilter, handoff.orderTgUserIds, rowsByTab, search]
+    [effectiveTab, focusChannelId, handoff.abandonedFilter, handoff.orderTgUserIds, rowsByTab, search]
   );
 
   const stats = useMemo(() => ({
@@ -1012,15 +1202,24 @@ export function CustomersPage() {
     setSearchParams(next);
   }
 
-  const quickBroadcastRows = useMemo(
-    () => activeRows.filter((row) => row.tg_user_id),
-    [activeRows]
+  function setBotSubtab(subtab) {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'bot');
+    next.set('subtab', subtab);
+    setSearchParams(next);
+  }
+
+  const crmMap = useMemo(
+    () => {
+      const map = new Map();
+      for (const row of state.crm) {
+        if (row.tg_user_id) map.set(String(row.tg_user_id), row);
+      }
+      return map;
+    },
+    [state.crm]
   );
 
-  const quickBroadcastTitle = useMemo(
-    () => buildQuickBroadcastTitle(activeTab),
-    [activeTab]
-  );
   const filteredCandidateRows = useMemo(
     () => candidateState.rows.filter((row) => {
       if (candidateFilters.sourceRole !== 'all' && row.source_role !== candidateFilters.sourceRole) {
@@ -1259,34 +1458,6 @@ export function CustomersPage() {
     }
   }
 
-  function openQuickBroadcast() {
-    if (!quickBroadcastRows.length) {
-      window.alert('В текущем сегменте нет получателей для рассылки.');
-      return;
-    }
-
-    setQuickBroadcast((prev) => ({
-      ...prev,
-      open: true,
-      error: '',
-      senderType: broadcastSupport.userbots.length ? prev.senderType : 'official_only'
-    }));
-  }
-
-  function closeQuickBroadcast() {
-    setQuickBroadcast((prev) => ({
-      ...prev,
-      open: false,
-      sending: false,
-      error: ''
-    }));
-  }
-
-  useEffect(() => {
-    if (!quickBroadcast.open || !quickBroadcastRef.current) return;
-    quickBroadcastRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [quickBroadcast.open]);
-
   useEffect(() => {
     setOpenActionsRowId(null);
   }, [activeTab, search, focusChannelId, selectedBotId]);
@@ -1306,64 +1477,42 @@ export function CustomersPage() {
     return () => window.removeEventListener('mousedown', handlePointerDown);
   }, []);
 
-  function toggleQuickBroadcastUserbot(id) {
-    setQuickBroadcast((prev) => {
-      const next = new Set((prev.senderUserbotIds || []).map(String));
-      if (next.has(String(id))) next.delete(String(id));
-      else next.add(String(id));
-      return {
-        ...prev,
-        senderUserbotIds: Array.from(next)
-      };
-    });
-  }
-
-  async function sendQuickBroadcast() {
-    if (!quickBroadcast.messageText.trim()) {
-      setQuickBroadcast((prev) => ({ ...prev, error: 'Напиши текст сообщения.' }));
-      return;
-    }
-
-    if (quickBroadcast.senderType === 'official_then_userbot_pool' && quickBroadcast.senderUserbotIds.length === 0) {
-      setQuickBroadcast((prev) => ({ ...prev, error: 'Выбери хотя бы одного юзербота для fallback.' }));
-      return;
-    }
-
-    setQuickBroadcast((prev) => ({ ...prev, sending: true, error: '' }));
+  // Audience loading
+  const loadAudience = useCallback(async () => {
+    if (!accessToken) return;
     try {
-      await apiRequest('/api/broadcast/send', {
-        accessToken,
-        method: 'POST',
-        body: {
-          title: quickBroadcastTitle,
-          audience_type: 'manual_list',
-          manual_tg_user_ids: quickBroadcastRows.map((row) => String(row.tg_user_id)),
-          manual_members: quickBroadcastRows.map((row) => ({
-            tg_user_id: String(row.tg_user_id),
-            username: row.tg_username || null,
-            display_name: row.title || row.channel_title || null
-          })),
-          sender_type: quickBroadcast.senderType,
-          sender_userbot_ids: quickBroadcast.senderUserbotIds,
-          delay_ms: quickBroadcast.senderType === 'official_then_userbot_pool' ? 5000 : 1500,
-          message_text: quickBroadcast.messageText.trim(),
-          manual_confirmed_userbot_risk: quickBroadcast.senderType === 'official_then_userbot_pool'
-        }
-      });
-
-      window.alert('Рассылка запущена.');
-      setQuickBroadcast((prev) => ({
+      setAudienceState((prev) => ({ ...prev, loading: true, error: '' }));
+      const data = await apiRequest('/api/audience', { accessToken });
+      setAudienceState((prev) => ({
         ...prev,
-        open: false,
-        sending: false,
+        loading: false,
+        contourId: data.contourId || null,
+        targets: data.targets || [],
         error: ''
       }));
-    } catch (error) {
-      setQuickBroadcast((prev) => ({
-        ...prev,
-        sending: false,
-        error: error.message
-      }));
+    } catch (err) {
+      setAudienceState((prev) => ({ ...prev, loading: false, error: err.message }));
+    }
+  }, [accessToken]);
+
+  useEffect(() => { loadAudience(); }, [loadAudience]);
+
+  async function syncAudience(targetType) {
+    const cid = audienceState.contourId;
+    if (!cid) return;
+    try {
+      setAudienceState((prev) => ({ ...prev, syncingType: targetType }));
+      const result = await apiRequest('/api/audience/sync', {
+        accessToken,
+        method: 'POST',
+        body: { contourId: cid, targetType }
+      });
+      toast.success(`Загружено ${result.synced_count} участников, из них ${result.active_count} активных`);
+      await loadAudience();
+    } catch (err) {
+      toast.error(err.message || 'Ошибка обновления');
+    } finally {
+      setAudienceState((prev) => ({ ...prev, syncingType: null }));
     }
   }
 
@@ -1418,7 +1567,9 @@ export function CustomersPage() {
       if (action === 'extend-5' || action === 'extend-30' || action === 'extend-forever') {
         const days = action === 'extend-5' ? 5 : action === 'extend-30' ? 30 : 'forever';
 
-        if (row.id && ['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab)) {
+        const hasCrmSub = row.id && (['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab) || row._crmSubscription);
+
+        if (hasCrmSub) {
           await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
             accessToken,
             method: 'POST',
@@ -1454,7 +1605,7 @@ export function CustomersPage() {
           }
         }
 
-        if (row.id && ['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab)) {
+        if (hasCrmSub) {
           window.alert(
             action === 'extend-forever'
               ? 'Доступ выдан навсегда. Таблица обновится.'
@@ -1680,252 +1831,7 @@ export function CustomersPage() {
 
   return (
     <section className="page page--flush space-y-6">
-      {profileRole === 'admin' ? (
-        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-          <section className="p-6 md:p-8">
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-xl font-black tracking-tight text-slate-900 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  Связка с Telegram
-                </h2>
-                <p className="text-sm text-slate-500 font-medium mt-2">
-                  Чтобы найти людей, которые есть в группах, но не отображаются в базе, нужно подключить Telegram-аккаунт и выбрать группы для проверки
-                </p>
-              </div>
-              <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-100">
-                <div className="text-[10px] font-black uppercase text-slate-400">Групп в работе</div>
-                <div className="text-xl font-black text-slate-900">{reconciliation.sources.filter((row) => row.is_active).length}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-6 mb-6">
-              <div className="space-y-4">
-                <div className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl">
-                  <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Аккаунт для проверки</div>
-                  <select
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                    value={reconciliation.selectedUserbotId}
-                    onChange={(event) => setReconciliation((prev) => ({ ...prev, selectedUserbotId: event.target.value }))}
-                    disabled={reconciliation.loading}
-                  >
-                    <option value="">Выберите аккаунт</option>
-                    {reconciliation.userbots.map((userbot) => (
-                      <option key={userbot.id} value={userbot.id}>
-                        {getReconciliationUserbotOptionLabel(userbot)}
-                      </option>
-                    ))}
-                  </select>
-                  {reconciliation.selectedUserbotId && (() => {
-                    const selected = reconciliation.userbots.find((item) => String(item.id) === String(reconciliation.selectedUserbotId));
-                    if (!selected) return null;
-                    const status = getReconciliationUserbotStatusMeta(selected);
-                    return (
-                      <div className={`mt-3 p-3 border rounded-xl ${status.toneClass}`}>
-                        <div className="flex items-center gap-2 text-xs font-bold">
-                          <CheckCircle2 className="w-4 h-4" />
-                          {status.title}
-                        </div>
-                        <div className="text-xs mt-1">{status.body}</div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="flex-1 px-4 py-3 rounded-xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    onClick={discoverReconciliationSources}
-                    disabled={reconciliation.discovering || reconciliation.loading || !reconciliation.selectedUserbotId}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${reconciliation.discovering ? 'animate-spin' : ''}`} />
-                    {reconciliation.discovering ? 'Сканируем...' : 'Найти группы'}
-                  </button>
-                  <button
-                    type="button"
-                    className="flex-1 px-4 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
-                    onClick={saveReconciliationContour}
-                    disabled={reconciliation.saving || reconciliation.loading || !reconciliation.selectedUserbotId || !reconciliation.discovered.length}
-                  >
-                    {reconciliation.saving ? 'Сохраняем...' : 'Сохранить'}
-                  </button>
-                </div>
-
-                {reconciliation.error ? (
-                  <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold">
-                    {reconciliation.error}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="space-y-4">
-                {!reconciliation.discovered.length ? (
-                  <div className="h-full min-h-[200px] rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 flex flex-col items-center justify-center p-8 text-center">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                      <Database className="w-6 h-6 text-slate-300" />
-                    </div>
-                    <div className="text-sm font-bold text-slate-700 mb-2">Выберите аккаунт и нажмите «Найти группы»</div>
-                    <div className="text-xs text-slate-500 max-w-xs">Система покажет все группы и чаты, которые видит выбранный аккаунт</div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm font-black text-slate-900">Найденные группы ({reconciliation.discovered.length})</div>
-                      <div className="text-xs text-slate-500">Выберите, какие группы использовать для проверки</div>
-                    </div>
-                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-2">
-                      {reconciliation.discovered.map((row) => {
-                        const status = reconciliationStatusMeta(mapReconciliationDiscoveryStatus(row));
-                        return (
-                          <div key={row.chat_id} className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <div className="font-black text-slate-900 text-sm truncate">{row.title || `Группа ${row.chat_id}`}</div>
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border ${status.className}`}>
-                                      <ShieldCheck className="w-3 h-3" />
-                                      {status.label}
-                                    </span>
-                                    {Number(row.member_count || 0) >= LARGE_SOURCE_MEMBER_COUNT ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border border-amber-200 bg-amber-50 text-amber-700">
-                                        Большой источник
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <div className="text-xs text-slate-500 font-medium">
-                                    {row.username ? `@${row.username}` : `ID: ${row.chat_id}`}
-                                    {row.member_count ? ` • ${row.member_count} участников` : ''}
-                                  </div>
-                                </div>
-                                <div className="w-full sm:w-auto sm:min-w-[180px]">
-                                  <select
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                    value={row.role || 'ignored'}
-                                    onChange={(event) => updateDiscoveredRole(row.chat_id, event.target.value)}
-                                  >
-                                    {reconciliationRoleOptions.map((role) => (
-                                      <option key={role.id} value={role.id}>{role.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {reconciliation.sources.filter((row) => row.is_active).length > 0 && (
-                  <div className="border-t border-slate-100 pt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-sm font-black text-slate-900">Группы в работе ({reconciliation.sources.filter((row) => row.is_active).length})</div>
-                      <div className="text-xs text-slate-500">Эти группы участвуют в проверке</div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {reconciliation.sources.filter((row) => row.is_active).map((row) => {
-                        const status = reconciliationStatusMeta(row.last_scan_status || 'never');
-                        const linkedBases = Array.isArray(row.linked_bases) ? row.linked_bases : [];
-                        const syncDisabled = !linkedBases.length || reconciliation.syncingSourceId === String(row.id);
-                        const isScanning = reconciliation.scanningSourceId === String(row.id);
-                        const isSyncing = reconciliation.syncingSourceId === String(row.id);
-                        const onCooldown = isSourceOnCooldown(row);
-                        return (
-                          <div key={row.id} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                            <div className="flex items-start justify-between gap-2 mb-3">
-                              <div className="min-w-0 flex-1">
-                                <div className="font-black text-slate-900 text-sm truncate">{row.title_snapshot || row.chat_id}</div>
-                                <div className="text-xs text-slate-500 mt-1">
-                                  {row.last_scan_at ? `Проверено: ${formatWhen(row.last_scan_at)}` : 'Еще не проверялась'}
-                                </div>
-                                {isLargeReconciliationSource(row) ? (
-                                  <div className="mt-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
-                                    Большой источник{getSourceMemberCount(row) ? ` • ~${getSourceMemberCount(row)} участников` : ''}
-                                  </div>
-                                ) : null}
-                                <div className="text-xs text-slate-500 mt-1">
-                                  {linkedBases.length
-                                    ? `Пишем в базы: ${linkedBases.map((base) => sanitizeDemoLabel(base.name || `База ${base.id}`)).join(', ')}`
-                                    : 'Базы не привязаны. Синк пока некуда писать.'}
-                                </div>
-                                {onCooldown ? (
-                                  <div className="text-xs font-bold text-violet-700 mt-1">
-                                    На паузе до {formatWhen(row.cooldown_until)}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border ${status.className}`}>
-                                  {status.label}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-                                  onClick={() => scanReconciliationSource(row.id)}
-                                  disabled={isScanning}
-                                  title="Обновить"
-                                >
-                                  <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
-                                </button>
-                              </div>
-                            </div>
-                            {row.last_scan_error ? (
-                              <div className="mb-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-                                {row.last_scan_error}
-                              </div>
-                            ) : null}
-                            <div className="flex flex-wrap items-center gap-2">
-                              {linkedBases.length ? (
-                                linkedBases.map((base) => (
-                                  <span
-                                    key={`${row.id}-${base.id}`}
-                                    className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500"
-                                  >
-                                    {sanitizeDemoLabel(base.name || `База ${base.id}`)}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700">
-                                  Нет привязанных баз
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition-all hover:bg-slate-100 disabled:opacity-60"
-                                onClick={() => scanReconciliationSource(row.id)}
-                                disabled={isScanning}
-                              >
-                                <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-                                {isScanning ? 'Обновляем...' : 'Обновить'}
-                              </button>
-                              <button
-                                type="button"
-                                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
-                                onClick={() => syncReconciliationSourceMembers(row)}
-                                disabled={syncDisabled || onCooldown}
-                                title={linkedBases.length ? (onCooldown ? 'Источник на паузе после прошлого ручного sync' : (isLargeReconciliationSource(row) ? 'Для большого источника нужен отдельный подтвержденный sync' : 'Синкнуть участников этого источника в связанные базы')) : 'Сначала привяжи канал к базе'}
-                              >
-                                <Database className="w-3.5 h-3.5" />
-                                {isSyncing ? 'Синхронизируем...' : (onCooldown ? 'На паузе' : (isLargeReconciliationSource(row) ? 'Синкнуть осторожно' : 'Синкнуть'))}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
+      {/* Main Content Card */}
       {/* Main Content Card */}
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
@@ -1950,7 +1856,7 @@ export function CustomersPage() {
               <button
                 key={idx}
                 type="button"
-                onClick={() => setTabState(item.tab)}
+                onClick={() => setBotSubtab(item.tab)}
                 className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
               >
                 <div className="flex items-center justify-between mb-4">
@@ -1964,7 +1870,7 @@ export function CustomersPage() {
         </section>
 
         {/* Filter & Search Section */}
-        <section className="p-6 md:p-8 bg-slate-50/50">
+        <section className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-200/60">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white shrink-0">
               <Filter className="w-6 h-6" />
@@ -1976,21 +1882,41 @@ export function CustomersPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto mb-4">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`shrink-0 px-5 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setTabState(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div className="flex gap-1 overflow-x-auto border-b border-slate-100 mb-6">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isAudience = tab.id.startsWith('audience-');
+              const targetType = isAudience ? tab.id.replace('audience-', '').replace(/-/g, '_') : null;
+              const audienceTarget = isAudience ? audienceState.targets.find((t) => t.targetType === targetType) : null;
+              const count = isAudience
+                ? (audienceTarget?.totalMembers || 0)
+                : tab.id === 'bot' ? stats.started : null;
+              const isDisabled = isAudience && !audienceState.loading && audienceTarget && !audienceTarget.channelId;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
+                    isActive
+                      ? 'border-indigo-600 text-indigo-600'
+                      : isDisabled
+                        ? 'border-transparent text-slate-300 cursor-not-allowed'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                  onClick={() => !isDisabled && setTabState(tab.id)}
+                  disabled={!!isDisabled}
+                >
+                  {Icon && <Icon className="w-4 h-4" />}
+                  {tab.label}
+                  {count !== null && count > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Search & Actions */}
@@ -2033,6 +1959,38 @@ export function CustomersPage() {
         </section>
 
         {/* Data Table Card */}
+        <div className="border-t border-slate-200/60">
+        {isAudienceTab ? (
+          <AudienceTable
+            target={currentAudienceTarget}
+            syncingType={audienceState.syncingState}
+            onSync={syncAudience}
+            loading={audienceState.loading}
+            crmMap={crmMap}
+            onAction={runSubscriptionAction}
+            openActionsRowId={openActionsRowId}
+            setOpenActionsRowId={setOpenActionsRowId}
+          />
+        ) : (
+        <>
+          {isBotTab && (
+            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto mx-8 mt-4">
+              {BOT_SUBTABS.map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                    activeBotSubtab === sub.id
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setBotSubtab(sub.id)}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          )}
         <div className="overflow-hidden flex flex-col">
 
           {/* Table Header Area */}
@@ -2092,11 +2050,7 @@ export function CustomersPage() {
 
                           {/* Client Col */}
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
-                                {getClientInitial(row)}
-                              </div>
-                              <div className="min-w-0">
+                            <div className="min-w-0">
                                 <div className="font-black text-slate-900 text-sm truncate">
                                   {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
                                 </div>
@@ -2110,7 +2064,6 @@ export function CustomersPage() {
                                     @{row.tg_username}
                                   </div>
                                 ) : null}
-                              </div>
                             </div>
                           </td>
 
@@ -2195,7 +2148,7 @@ export function CustomersPage() {
                               ) : null}
                               {row.tg_user_id && (
                                 <>
-                                  <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать">
+                                  <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать">
                                     <Send className="w-3.5 h-3.5" />
                                   </button>
                                   <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
@@ -2227,482 +2180,23 @@ export function CustomersPage() {
                   ) : null}
                 </div>
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={openQuickBroadcast}
-                    disabled={!quickBroadcastRows.length}
+                  <a
+                    href="/app/broadcast"
+                    className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
-                    Рассылка по выбранному фильтру
-                  </button>
+                    Рассылка
+                  </a>
                 </div>
               </div>
             </>
           )}
         </div>
+        </>
+        )}
 
+        </div>
       </div>
-
-      {profileRole === 'admin' ? (
-        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-          <section className="p-6 md:p-8 border-b border-slate-100 flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Неучтенные / кандидаты</div>
-              <h3 className="text-2xl font-black tracking-tight text-slate-900">Люди из контура, которых BullRun еще не ведет как нормальных клиентов</h3>
-              <p className="text-sm text-slate-500 font-medium mt-2 max-w-3xl">
-                Это нижний reconciliation-слой из уже синкнутых баз. Здесь нет live-парсинга Telegram: таблица собирается только из сохраненных `customer_base_members` и текущего контура.
-              </p>
-            </div>
-            <div className="px-4 py-2 rounded-2xl border border-slate-200 bg-slate-50 text-xs font-black uppercase tracking-wider text-slate-500 shrink-0">
-              {filteredCandidateRows.length || 0} из {candidateState.summary.total || 0}
-            </div>
-          </section>
-
-          <section className="p-6 md:p-8 bg-slate-50/40 border-b border-slate-100">
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {[
-                { label: 'Сидят зайцем', value: candidateState.summary.free_rider || 0, color: 'text-rose-600' },
-                { label: 'Счет без оплаты', value: candidateState.summary.unpaid_lead || 0, color: 'text-amber-600' },
-                { label: 'Сгорели, но внутри', value: candidateState.summary.expired_paid_inside || 0, color: 'text-violet-600' },
-                { label: 'Просто не оформлены', value: candidateState.summary.no_payment_history || 0, color: 'text-slate-700' }
-              ].map((item) => (
-                <div key={item.label} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</div>
-                  <div className={`text-2xl font-black ${item.color}`}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-            {candidateState.error ? (
-              <div className="mt-4 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
-                {candidateState.error}
-              </div>
-            ) : null}
-            {candidateState.recentResolutions.length ? (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[11px] font-black uppercase tracking-widest text-slate-400">Недавно решено</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Последние ручные решения по reconciliation. Отсюда можно вернуть человека обратно в нижнюю таблицу.
-                    </div>
-                  </div>
-                  <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-500">
-                    {candidateState.recentResolutions.length}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {candidateState.recentResolutions.slice(0, 6).map((row) => {
-                    const meta = parseReconciliationResolutionNote(row.note);
-                    return (
-                      <div key={row.id} className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2">
-                        <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                          <div className="text-sm font-bold text-slate-800">
-                            TG {row.tg_user_id} • {getResolutionTypeLabel(row.resolution_type)}
-                          </div>
-                          <div className="text-xs font-medium text-slate-500">
-                            {formatWhen(row.updated_at || row.created_at)}
-                          </div>
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Источник: {sanitizeDemoLabel(row.source_title || 'Источник уже пропал')}
-                          {meta.linkedTab ? ` • Связан с: ${getCustomersTabLabel(meta.linkedTab)}` : ''}
-                          {meta.linkedTargetLabel ? ` • Цель: ${sanitizeDemoLabel(meta.linkedTargetLabel)}` : ''}
-                        </div>
-                        {meta.comment ? (
-                          <div className="mt-1 text-xs font-medium text-slate-600">{meta.comment}</div>
-                        ) : null}
-                        <div className="mt-2 flex justify-end">
-                          <button
-                            type="button"
-                            className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                            onClick={() => undoCandidateResolution(row)}
-                          >
-                            Вернуть в кандидаты
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-            <div className="mt-6 space-y-4">
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Источник</div>
-                <div className="flex flex-wrap gap-2">
-                  {CANDIDATE_ROLE_FILTERS.map((filter) => (
-                    <button
-                      key={filter.id}
-                      type="button"
-                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
-                        candidateFilters.sourceRole === filter.id
-                          ? 'border-slate-900 bg-slate-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                      }`}
-                      onClick={() => setCandidateFilters((prev) => ({ ...prev, sourceRole: filter.id }))}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Совпадение</div>
-                  <div className="flex flex-wrap gap-2">
-                    {CANDIDATE_MATCH_FILTERS.map((filter) => (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
-                          candidateFilters.match === filter.id
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        }`}
-                        onClick={() => setCandidateFilters((prev) => ({ ...prev, match: filter.id }))}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Состояние</div>
-                  <div className="flex flex-wrap gap-2">
-                    {CANDIDATE_PAYMENT_FILTERS.map((filter) => (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
-                          candidateFilters.payment === filter.id
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        }`}
-                        onClick={() => setCandidateFilters((prev) => ({ ...prev, payment: filter.id }))}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {candidateState.loading ? (
-            <div className="p-8 text-sm font-medium text-slate-500">Собираем кандидатов из сохраненных баз...</div>
-          ) : !candidateState.rows.length ? (
-            <div className="p-8 text-sm font-medium text-slate-500">
-              Кандидатов пока нет. Для этого блока нужен сохраненный контур и хотя бы одна синкнутая база по его каналам.
-            </div>
-          ) : !filteredCandidateRows.length ? (
-            <div className="p-8 text-sm font-medium text-slate-500">
-              По текущим фильтрам кандидатов нет. Сними часть фильтров или очисти поиск.
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Источник</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {visibleCandidateRows.map((row) => {
-                    const statusLabel = getCandidateStatusLabel(row.payment_status);
-                    const reason = getCandidateReason(row);
-                    const nextStep = getCandidateNextStep(row);
-                    const sourcePrimary = row.source_channel_title
-                      ? `Канал: ${sanitizeDemoLabel(row.source_channel_title)}`
-                      : `Источник: ${sanitizeDemoLabel(row.source_title || row.source_chat_id)}`;
-                    const sourceSecondary = [row.base_name ? `База: ${sanitizeDemoLabel(row.base_name)}` : null, row.source_username ? `@${row.source_username}` : null]
-                      .filter(Boolean)
-                      .join(' • ');
-
-                    return (
-                      <tr key={`candidate-${row.id}`} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-black shrink-0">
-                              {getClientInitial(row)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-black text-slate-900 text-sm truncate">
-                                {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `ID: ${row.tg_user_id}`)}
-                              </div>
-                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                                ID: {row.tg_user_id}
-                              </div>
-                              {row.tg_username ? (
-                                <div className="text-xs font-semibold text-slate-500 truncate">
-                                  @{row.tg_username}
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 hidden md:table-cell">
-                          <div className="font-bold text-slate-800 text-sm truncate">{sourcePrimary}</div>
-                          {sourceSecondary ? <div className="text-xs text-slate-500 truncate mt-1">{sourceSecondary}</div> : null}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border shadow-sm bg-slate-100 text-slate-700 border-slate-200">
-                            {statusLabel}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 hidden lg:table-cell">
-                          <div className="text-slate-600 font-medium text-sm truncate max-w-xs" title={reason}>
-                            {reason}
-                          </div>
-                          <div className={`mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${nextStep.className}`}>
-                            Следующий шаг: {nextStep.label}
-                          </div>
-                          {row.matching_label ? (
-                            <div className={`mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${getCandidateMatchingClass(row.matching_state)}`}>
-                              {row.matching_label}
-                            </div>
-                          ) : null}
-                          {row.matching_is_ambiguous ? (
-                            <div className="mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-amber-200 bg-amber-50 text-amber-700">
-                              Несколько совпадений • {row.matching_options_count}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            {canManageRow(row) ? (
-                              <div className="relative" data-row-actions-root="true">
-                                <button
-                                  type="button"
-                                  className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
-                                  onClick={() => setOpenActionsRowId((prev) => (prev === row.id ? null : row.id))}
-                                  title="Действия"
-                                >
-                                  <MoreHorizontal className="w-3.5 h-3.5" />
-                                </button>
-                                {openActionsRowId === row.id ? (
-                                  <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
-                                    {row.matching_tab ? (
-                                      <>
-                                        <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => linkCandidateToAccounted(row)}>
-                                          Связать с «{getCustomersTabLabel(row.matching_tab)}»
-                                        </button>
-                                        <div className="border-t border-slate-100" />
-                                      </>
-                                    ) : null}
-                                    {row.source_role === 'private_paid_group' && row.present_now ? (
-                                      <>
-                                        <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runCandidateImport(row)}>
-                                          Перенести в учтенные вручную
-                                        </button>
-                                        <div className="border-t border-slate-100" />
-                                      </>
-                                    ) : null}
-                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-5')}>
-                                      Выдать 5 дней
-                                    </button>
-                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-30')}>
-                                      Выдать 30 дней
-                                    </button>
-                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => runSubscriptionAction(row, 'extend-forever')}>
-                                      Выдать навсегда
-                                    </button>
-                                    <div className="border-t border-slate-100" />
-                                    <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => resolveCandidate(row, 'ignore_candidate')}>
-                                      Не трогать
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id)} title="Написать">
-                              <Send className="w-3.5 h-3.5" />
-                            </button>
-                            {row.matching_tab ? (
-                              <button
-                                type="button"
-                                className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
-                                onClick={() => jumpToCandidateMatch(row)}
-                                title="Открыть где уже учтен"
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            ) : null}
-                            <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
-                              <Database className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {filteredCandidateRows.length > candidateLimit ? (
-                <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/30">
-                  <button
-                    type="button"
-                    className="w-full md:w-auto px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
-                    onClick={() => setCandidateLimit((prev) => prev + 120)}
-                  >
-                    Показать еще {Math.min(120, filteredCandidateRows.length - candidateLimit)} из {filteredCandidateRows.length - candidateLimit}
-                  </button>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
-
-      {quickBroadcast.open && (
-        <div ref={quickBroadcastRef} className="mt-6 bg-white border border-slate-100 rounded-[2rem] shadow-sm overflow-hidden">
-          <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Быстрая рассылка</div>
-              <div className="text-2xl font-black tracking-tight text-slate-900">{quickBroadcastTitle}</div>
-            </div>
-            <button
-              type="button"
-              className="p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all"
-              onClick={closeQuickBroadcast}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-8 space-y-8">
-            {quickBroadcast.error ? (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
-                {quickBroadcast.error}
-              </div>
-            ) : null}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-5">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Получатели</div>
-                <div className="text-lg font-black text-slate-900">{quickBroadcastRows.length}</div>
-              </div>
-              <div className="bg-slate-50/70 border border-slate-100 rounded-2xl p-5">
-                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Режим</div>
-                <div className="text-sm font-black text-slate-900">
-                  {quickBroadcast.senderType === 'official_then_userbot_pool'
-                    ? 'Официальный бот -> fallback юзербот'
-                    : 'Только официальный бот'}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400">Кто пишет людям</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  className={`p-5 rounded-2xl border text-left transition-all ${quickBroadcast.senderType === 'official_only' ? 'border-blue-200 bg-blue-50/70' : 'border-slate-200 bg-white'}`}
-                  onClick={() => setQuickBroadcast((prev) => ({ ...prev, senderType: 'official_only', error: '' }))}
-                >
-                  <div className="font-black text-slate-900 mb-1">Только официальный бот</div>
-                  <div className="text-sm text-slate-500">Безопасный режим для массового возврата.</div>
-                </button>
-                <button
-                  type="button"
-                  disabled={!broadcastSupport.userbots.length}
-                  className={`p-5 rounded-2xl border text-left transition-all ${quickBroadcast.senderType === 'official_then_userbot_pool' ? 'border-purple-200 bg-purple-50/70' : 'border-slate-200 bg-white'} ${!broadcastSupport.userbots.length ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => {
-                    if (!broadcastSupport.userbots.length) return;
-                    setQuickBroadcast((prev) => ({ ...prev, senderType: 'official_then_userbot_pool', error: '' }));
-                  }}
-                >
-                  <div className="font-black text-slate-900 mb-1">Официальный бот, потом юзербот</div>
-                  <div className="text-sm text-slate-500">Сначала safe-контур, затем fallback по тем, кто не доставился.</div>
-                </button>
-              </div>
-            </div>
-
-            {quickBroadcast.senderType === 'official_then_userbot_pool' ? (
-              <div className="space-y-3">
-                <div className="text-xs font-black uppercase tracking-widest text-slate-400">Юзерботы для fallback</div>
-                <div className="space-y-2 max-h-56 overflow-y-auto">
-                  {broadcastSupport.userbots.map((row) => (
-                    <label key={row.id} className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/60 cursor-pointer">
-                      <div>
-                        <div className="font-black text-slate-900">@{row.tg_username || row.tg_account_id}</div>
-                        <div className="text-xs text-slate-500">Использовать только если официальный бот не достучался.</div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={quickBroadcast.senderUserbotIds.map(String).includes(String(row.id))}
-                        onChange={() => toggleQuickBroadcastUserbot(row.id)}
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="text-xs text-amber-700 font-bold">
-                  Рискованный режим: Telegram может ограничить sender-аккаунт. Включай только для теплого хвоста.
-                </div>
-              </div>
-            ) : null}
-
-            <div className="space-y-3">
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400">Сообщение</div>
-              <textarea
-                className="w-full min-h-[180px] px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-slate-900 font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-inner resize-y"
-                value={quickBroadcast.messageText}
-                onChange={(event) => setQuickBroadcast((prev) => ({ ...prev, messageText: event.target.value, error: '' }))}
-                placeholder="Напиши сообщение для возврата или дожима."
-              />
-            </div>
-
-            <div className="space-y-3">
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400">Первые получатели</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {quickBroadcastRows.slice(0, 6).map((row) => (
-                  <div key={`quick-broadcast-${row.id}`} className="px-4 py-3 rounded-2xl border border-slate-100 bg-slate-50/60">
-                    <div className="font-black text-slate-900 text-sm">{row.tg_username ? `@${row.tg_username}` : `ID: ${row.tg_user_id}`}</div>
-                    <div className="text-xs text-slate-500 truncate">{sanitizeDemoLabel(row.title || row.channel_title || 'Без контекста')}</div>
-                  </div>
-                ))}
-              </div>
-              {quickBroadcastRows.length > 6 ? (
-                <div className="text-xs text-slate-500 font-bold">И еще {quickBroadcastRows.length - 6}</div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="px-8 py-6 border-t border-slate-100 bg-slate-50/40 flex flex-col-reverse md:flex-row md:items-center md:justify-between gap-3">
-            <button
-              type="button"
-              className="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all"
-              onClick={() => openBroadcastManualSelection(quickBroadcastRows, quickBroadcastTitle)}
-            >
-              Открыть полную рассылку
-            </button>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-2xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all"
-                onClick={closeQuickBroadcast}
-              >
-                Скрыть
-              </button>
-              <button
-                type="button"
-                className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all"
-                onClick={sendQuickBroadcast}
-                disabled={quickBroadcast.sending || !quickBroadcastRows.length}
-              >
-                {quickBroadcast.sending ? 'Отправляем...' : 'Отправить'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

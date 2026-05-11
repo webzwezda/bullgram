@@ -50,6 +50,7 @@ export function UserbotCenterPage() {
   const location = useLocation();
   const { accessToken, profilePlan, trialEndsAt } = useAuth();
   const [initialHandoff] = useState(() => consumeUserbotCenterHandoff());
+  const handoffLoadDoneRef = useRef(false);
   const initialParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialThreadUserId = String(initialParams.get('tg_user_id') || initialHandoff?.tg_user_id || '').trim();
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
@@ -57,12 +58,30 @@ export function UserbotCenterPage() {
   const avatarInputRef = useRef(null);
   const [selectedUserbotId, setSelectedUserbotId] = useState('');
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
-  const [replyMessage, setReplyMessage] = useState(initialDraftMessage);
+
+  const draftStorageKey = 'bullrun_userbot_drafts';
+  function loadDraft(key, fallback = '') {
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      if (raw) { const map = JSON.parse(raw); return map[key] || fallback; }
+    } catch {}
+    return fallback;
+  }
+  function saveDraft(key, value) {
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      if (value) map[key] = value; else delete map[key];
+      localStorage.setItem(draftStorageKey, JSON.stringify(map));
+    } catch {}
+  }
+
+  const [replyMessage, setReplyMessage] = useState(initialDraftMessage || loadDraft('reply'));
   const [manualInviteLink, setManualInviteLink] = useState('');
-  const [manualTgUserId, setManualTgUserId] = useState(initialThreadUserId);
-  const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId);
-  const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [manualTgUserId, setManualTgUserId] = useState(initialThreadUserId || loadDraft('manual_tg'));
+  const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
+  const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage || loadDraft('manual_msg'));
+  const [activeTab, setActiveTab] = useState(initialThreadUserId ? 'messages' : 'profile');
   const [groupFilter, setGroupFilter] = useState('all');
   const [state, setState] = useState({
     loading: true,
@@ -396,6 +415,8 @@ export function UserbotCenterPage() {
     let cancelled = false;
 
     async function loadCenter() {
+      if (initialHandoff && handoffLoadDoneRef.current) return;
+
       setState((prev) => ({
         ...prev,
         loading: !prev.data,
@@ -406,11 +427,12 @@ export function UserbotCenterPage() {
       try {
         const params = new URLSearchParams();
         if (selectedUserbotId) params.set('userbot_id', selectedUserbotId);
-        if (initialThreadUserId) params.set('scan', 'true');
+        if (initialThreadUserId && !initialHandoff) params.set('scan', 'true');
         const query = params.toString() ? `?${params.toString()}` : '';
         const data = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
         if (cancelled) return;
         applyCenterData(data, selectedUserbotId, threadUserId || initialThreadUserId);
+        if (initialHandoff) handoffLoadDoneRef.current = true;
       } catch (error) {
         if (cancelled) return;
         setState({
@@ -630,6 +652,7 @@ export function UserbotCenterPage() {
         }
       });
       setReplyMessage('');
+      saveDraft('reply', '');
       const sentAt = new Date().toISOString();
       setState((prev) => ({
         ...prev,
@@ -725,6 +748,8 @@ export function UserbotCenterPage() {
       });
       setManualTgUserId('');
       setManualDirectMessage('');
+      saveDraft('manual_msg', '');
+      saveDraft('manual_tg', '');
       const sentAt = new Date().toISOString();
       setThreadUserId(tgUserId);
       setState((prev) => {
@@ -794,7 +819,7 @@ export function UserbotCenterPage() {
     }
   }
 
-  if (state.loading) {
+  if (state.loading && !initialHandoff) {
     return <LoadingState text="Тянем живой Центр юзербота..." />;
   }
 
@@ -1357,13 +1382,13 @@ export function UserbotCenterPage() {
                   className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
                   type="text"
                   value={manualTgUserId}
-                  onChange={(event) => setManualTgUserId(event.target.value)}
+                  onChange={(event) => { setManualTgUserId(event.target.value); saveDraft('manual_tg', event.target.value); }}
                   placeholder="TG ID цифрами"
                 />
                 <select
                   className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
                   value={manualCommonChatId}
-                  onChange={(event) => setManualCommonChatId(event.target.value)}
+                  onChange={(event) => { setManualCommonChatId(event.target.value); saveDraft('manual_chat', event.target.value); }}
                 >
                   <option value="">Выбери общий чат</option>
                   {commonChatGroups.map((group) => (
@@ -1382,8 +1407,10 @@ export function UserbotCenterPage() {
                 onChange={(event) => {
                   if (hasSelectedConversation) {
                     setReplyMessage(event.target.value);
+                    saveDraft('reply', event.target.value);
                   } else {
                     setManualDirectMessage(event.target.value);
+                    saveDraft('manual_msg', event.target.value);
                   }
                 }}
                 placeholder={hasSelectedConversation ? 'Сообщение в этот чат' : 'Текст сообщения'}
@@ -1419,6 +1446,13 @@ export function UserbotCenterPage() {
             text="Если здесь уже есть лички, сигналы покупки и ручной дожим, это основной рабочий экран. Normal нужен, чтобы дальше жить без ознакомительных стопоров."
           />
         </>
+      ) : null}
+
+      {state.loading && initialHandoff ? (
+        <div className="mb-4 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 font-medium text-sm flex items-center gap-2">
+          <span className="inline-block size-3 animate-spin rounded-full border-2 border-blue-400 border-t-blue-700" />
+          Подтягиваем данные юзербота...
+        </div>
       ) : null}
 
       {state.scanRequired ? (

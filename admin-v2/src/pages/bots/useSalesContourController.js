@@ -605,8 +605,9 @@ export function useSalesContourController({
         [selectedBotId]: false
       }));
       await reloadAccounts();
-
+      showUiMessage('Контур продаж сохранён.', 'success');
     } catch (error) {
+      showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({
         ...prev,
@@ -650,8 +651,7 @@ export function useSalesContourController({
         ...prev,
         [key]: normalizeRightsResult(result, normalizedTarget)
       }));
-
-
+      showUiMessage('Права бота проверены.', 'success');
     } catch (error) {
       setBotRightsByKey((prev) => ({
         ...prev,
@@ -661,6 +661,7 @@ export function useSalesContourController({
           message: error.message
         }
       }));
+      showUiMessage(error.message, 'error');
     } finally {
       setCheckingRightsKey('');
     }
@@ -761,9 +762,11 @@ export function useSalesContourController({
       if (isActive) {
         triggerJoinAll();
       }
+      showUiMessage(isActive ? 'Юзербот включён в ротацию.' : 'Юзербот приостановлен.', 'success');
     } catch (err) {
       console.error('[toggleUserbotActive] PATCH failed:', err?.message);
       setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: !isActive }));
+      showUiMessage(err?.message || 'Не удалось переключить юзербота.', 'error');
     } finally {
       setTogglingUserbotId('');
     }

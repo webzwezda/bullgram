@@ -517,7 +517,8 @@ function launchManagedProxyVerification({
                 port,
                 username,
                 password,
-                provision_source: 'manual_admin'
+                provision_source: 'manual_admin',
+                force_ipv6: true
             });
 
             if (health.success) {
@@ -1945,7 +1946,8 @@ export default function (supabase) {
                 is_working: proxy.is_working,
                 last_check_ip: proxy.last_check_ip || null,
                 last_check_country: proxy.last_check_country || null,
-                last_check_city: proxy.last_check_city || null
+                last_check_city: proxy.last_check_city || null,
+                force_ipv6: !proxy.last_check_ip || proxy.last_check_ip.includes(':')
             });
 
             if (result.success) {

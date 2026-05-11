@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag, Wallet, QrCode, Copy, ExternalLink, Filter } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -97,7 +98,7 @@ function CopyRow({ label, value }) {
   async function copyValue() {
     try {
       await navigator.clipboard.writeText(value);
-      window.alert(`${label} скопирован.`);
+      toast.success(`${label} скопирован.`);
     } catch {
       window.prompt(label, value);
     }
@@ -273,19 +274,11 @@ export function ProxyManagerPage() {
     saving: false,
     movingProxyId: '',
     error: '',
-    notice: '',
     proxies: [],
     support: null,
     updatedAt: null
   });
 
-  useEffect(() => {
-    if (!state.notice) return;
-    const timer = window.setTimeout(() => {
-      setState((prev) => ({ ...prev, notice: '' }));
-    }, 4000);
-    return () => window.clearTimeout(timer);
-  }, [state.notice]);
   const [shopState, setShopState] = useState({
     loading: true,
     error: '',
@@ -368,7 +361,6 @@ export function ProxyManagerPage() {
             loading: false,
             refreshing: false,
             error: error.message,
-            notice: '',
             proxies: [],
             support: null,
             updatedAt: null
@@ -713,7 +705,7 @@ export function ProxyManagerPage() {
         updatedAt: new Date().toISOString()
       }));
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
       setState((prev) => ({
         ...prev,
@@ -768,14 +760,14 @@ export function ProxyManagerPage() {
       setState((prev) => ({
         ...prev,
         saving: false,
-        notice: result?.message || 'Прокси сохранен.',
         proxies: data.proxies || [],
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
+      toast.success(result?.message || 'Прокси сохранен.');
     } catch (error) {
-      setState((prev) => ({ ...prev, saving: false, error: error.message, notice: '' }));
-      window.alert(error.message);
+      setState((prev) => ({ ...prev, saving: false, error: error.message }));
+      toast.error(error.message);
     }
   }
 
@@ -810,7 +802,7 @@ export function ProxyManagerPage() {
 
   function fillFromLatestServerProxy() {
     if (!latestServerProxy) {
-      window.alert('Серверных прокси пока нет. Нечего брать как шаблон.');
+      toast('Серверных прокси пока нет. Нечего брать как шаблон.');
       return;
     }
 
@@ -849,7 +841,7 @@ export function ProxyManagerPage() {
         updatedAt: new Date().toISOString()
       }));
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
@@ -858,7 +850,7 @@ export function ProxyManagerPage() {
     if (!ADMIN_PROXY_GROUPS.includes(targetGroup)) return;
     if ((proxy.inventory_group || 'shop_sale') === targetGroup) return;
 
-    setState((prev) => ({ ...prev, movingProxyId: String(proxy.id), error: '', notice: '' }));
+    setState((prev) => ({ ...prev, movingProxyId: String(proxy.id), error: '' }));
     try {
       await apiRequest('/api/userbot/proxies', {
         accessToken,
@@ -877,18 +869,18 @@ export function ProxyManagerPage() {
       setState((prev) => ({
         ...prev,
         movingProxyId: '',
-        notice: `Прокси "${proxy.name}" перенесен в новую группу.`,
         proxies: data.proxies || [],
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
+      toast.success(`Прокси "${proxy.name}" перенесен в новую группу.`);
     } catch (error) {
       setState((prev) => ({
         ...prev,
         movingProxyId: '',
-        error: error.message,
-        notice: ''
+        error: error.message
       }));
+      toast.error(error.message);
     }
   }
 
@@ -1125,11 +1117,11 @@ export function ProxyManagerPage() {
       ]);
       setState((prev) => ({
         ...prev,
-        notice: 'Оплата найдена. Прокси скоро появится в кабинете.',
         proxies: data.proxies || [],
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
+      toast.success('Оплата найдена. Прокси скоро появится в кабинете.');
       setShopState((prev) => ({
         ...prev,
         purchases: purchasesData.purchases || prev.purchases
@@ -1273,12 +1265,12 @@ export function ProxyManagerPage() {
 
       setState((prev) => ({
         ...prev,
-        notice: 'Бронь снята.',
         error: '',
         proxies: data.proxies || [],
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
+      toast.success('Бронь снята.');
       setShopState((prev) => ({
         ...prev,
         purchases: purchasesData.purchases || prev.purchases
@@ -2475,12 +2467,6 @@ function renderOpenProxyPurchases(rows) {
           </div>
 
           <div className="p-6 md:p-8">
-            {state.notice ? (
-              <div className="mb-6 p-4 rounded-2xl bg-green-50 border border-green-200 text-green-800 font-medium">
-                {state.notice}
-              </div>
-            ) : null}
-
             {showQuotaLock ? (
               <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-medium">
                 На Trial можно держать только один свой прокси. Чтобы добавить следующий, сначала перейди на Normal.

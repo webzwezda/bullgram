@@ -116,7 +116,7 @@ function QrFingerprintConfigurator({
               value={onboarding.qrFingerprintProfileId || ''}
               onValueChange={(value) => updateOnboarding({ qrFingerprintProfileId: value })}
             >
-              <SelectTrigger className="w-full h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm">
+              <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm">
                 <SelectValue placeholder="Выберите профиль из списка" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -273,7 +273,7 @@ export function UserbotOnboardingSection({
               value={onboarding.proxyId || ''}
               onValueChange={(value) => updateOnboarding({ proxyId: value })}
             >
-              <SelectTrigger className="w-full h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
+              <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
                 <div className="flex items-center gap-2">
                   <Network className="w-4 h-4 text-slate-400" />
                   <SelectValue placeholder="Выберите живой прокси для подключения" />
