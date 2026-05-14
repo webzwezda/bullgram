@@ -89,6 +89,7 @@ function CreateTariffForm({
   newTariff,
   setNewTariff,
   channels,
+  officialBots,
   onCreate
 }) {
   const [errors, setErrors] = useState({});
@@ -98,9 +99,13 @@ function CreateTariffForm({
   const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
   const rubPayment = newTariff.payment_methods?.rub || { enabled: false, price: '' };
   const isLifetime = newTariff.is_lifetime || false;
+  const selectedBotId = newTariff.bot_id || '';
 
-  const groupChannels = channels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
-  const chatChannels = channels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
+  const botChannels = selectedBotId
+    ? channels.filter((channel) => channel.bot_id === selectedBotId)
+    : channels;
+  const groupChannels = botChannels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
+  const chatChannels = botChannels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
 
   // Автоматически выбираем первый вариант, если значение не задано
   useEffect(() => {
@@ -114,6 +119,15 @@ function CreateTariffForm({
       updateAccessMethod('chat', { channel_id: chatChannels[0].id });
     }
   }, [chatAccess.enabled, chatChannels.length]);
+
+  useEffect(() => {
+    setNewTariff((prev) => {
+      const updates = { channel_id: '' };
+      if (groupChannels.length > 0) updates.channel_id = groupChannels[0].id;
+      return { ...prev, ...updates };
+    });
+    updateAccessMethod('chat', { channel_id: chatChannels.length > 0 ? chatChannels[0].id : '' });
+  }, [selectedBotId]);
 
   const updatePaymentMethod = (method, patch) => {
     setNewTariff((prev) => ({
@@ -287,11 +301,48 @@ function CreateTariffForm({
 
           <div className="create-tariff-divider" />
 
-          {/* Методы доступа */}
+          {/* Официальный бот */}
           <div className="create-tariff-section">
             <div className="create-tariff-section__header">
               <div className="create-tariff-section__title">
                 <span className="create-tariff-section__number">2</span>
+                Официальный бот
+              </div>
+              <div className="create-tariff-section__hint">Бот который будет выдавать доступ после оплаты</div>
+            </div>
+            <div className="create-tariff-section__body">
+              <div className={`field-group ${errors.bot ? 'field-group--error' : ''}`}>
+                <label className="field-label">Выбери бота</label>
+                {officialBots.length > 0 ? (
+                  <select
+                    className="field"
+                    value={selectedBotId}
+                    onChange={(e) => setNewTariff((prev) => ({ ...prev, bot_id: e.target.value }))}
+                  >
+                    <option value="">Все боты</option>
+                    {officialBots.map((bot) => (
+                      <option key={bot.id} value={bot.id}>
+                        {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select className="field" disabled>
+                    <option value="">Нет подключённых ботов</option>
+                  </select>
+                )}
+                {errors.bot && <div className="error-text">{errors.bot}</div>}
+              </div>
+            </div>
+          </div>
+
+          <div className="create-tariff-divider" />
+
+          {/* Методы доступа */}
+          <div className="create-tariff-section">
+            <div className="create-tariff-section__header">
+              <div className="create-tariff-section__title">
+                <span className="create-tariff-section__number">3</span>
                 Что выдаём после оплаты
                 <span className="create-tariff-badge">{getAccessCount()} опций</span>
               </div>
@@ -441,7 +492,7 @@ function CreateTariffForm({
           <div className="create-tariff-section">
             <div className="create-tariff-section__header">
               <div className="create-tariff-section__title">
-                <span className="create-tariff-section__number">3</span>
+                <span className="create-tariff-section__number">4</span>
                 Способы оплаты
               </div>
               <div className="create-tariff-section__hint">Включи один или оба способа</div>
@@ -550,11 +601,17 @@ export function TariffsSection({
   ensureBundleDraft,
   getTariffBundleItems,
   newTariff,
+  officialBots,
   setBundleDrafts,
   setNewTariff,
   tariffs
 }) {
   const tariffGroups = useMemo(() => buildTariffGroups(tariffs), [tariffs]);
+  const botsById = useMemo(() => {
+    const map = new Map();
+    (officialBots || []).forEach((bot) => map.set(String(bot.id), bot));
+    return map;
+  }, [officialBots]);
 
   return (
     <>
@@ -570,6 +627,7 @@ export function TariffsSection({
           newTariff={newTariff}
           setNewTariff={setNewTariff}
           channels={channels}
+          officialBots={officialBots}
           onCreate={createTariff}
         />
 
@@ -596,7 +654,10 @@ export function TariffsSection({
                       <div className="tariff-card__meta">
                         <span className="tariff-card__meta-item">
                           <Users size={14} />
-                          {tariff.channels?.title || 'Нет группы'}
+                          {(() => {
+                            const bot = tariff.bot_id ? botsById.get(String(tariff.bot_id)) : null;
+                            return bot ? (bot.tg_username ? `@${bot.tg_username}` : `Bot ${bot.tg_account_id}`) : (tariff.channels?.title || 'Нет группы');
+                          })()}
                         </span>
                         <span className="tariff-card__meta-item">
                           <Clock size={14} />

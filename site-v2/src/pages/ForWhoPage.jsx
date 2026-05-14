@@ -34,7 +34,7 @@ export function ForWhoPage() {
         title: 'Ты уже внутри Trial. Следующий шаг — собрать первый контур и перейти на Normal.',
         text: 'Не читай сайт по кругу. Закрой первый checkout, доведи P2P или группу до живого сценария и открывай Normal.',
         primary: { label: 'Перейти на Normal', href: SALES_LINKS.ops },
-        secondary: { label: 'Открыть Shop', href: '/shop?offer=normal' }
+        secondary: { label: 'Открыть Normal', href: SALES_LINKS.ops }
       };
     }
 

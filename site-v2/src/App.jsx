@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CreditCard, ShoppingBag, Newspaper, GraduationCap, AlertCircle, ArrowRight, MessageCircle } from 'lucide-react';
-import { TestPage } from './pages/TestPage.jsx';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
+import { BillingNormalPage } from './pages/BillingNormalPage.jsx';
+import { BillingSuccessPage } from './pages/BillingSuccessPage.jsx';
+import { BillingFailPage } from './pages/BillingFailPage.jsx';
 import { SALES_LINKS } from './components/MarketingPrimitives.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -31,11 +33,14 @@ export function App() {
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
   const isTelegramRoute = location.pathname === '/telegram';
+  const isBillingReturnRoute = location.pathname === '/billing/success' || location.pathname === '/billing/fail';
+  const isLegacyNormalShopRoute = location.pathname === '/shop' && new URLSearchParams(location.search).get('offer') === 'normal';
   const { user, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
+    if (location.pathname.startsWith('/billing')) return 'Оплата Normal';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'BullRun';
   }, [location.pathname, navItems]);
@@ -78,7 +83,7 @@ export function App() {
         eyebrow: 'Пора апгрейдиться',
         title: 'Trial уже сделал свою работу',
         text: 'Переходи на Normal, чтобы открыть рабочий контур без trial-стопоров.',
-        href: '/shop?offer=normal',
+        href: SALES_LINKS.ops,
         label: 'Перейти на Normal'
       };
     }
@@ -96,7 +101,7 @@ export function App() {
       eyebrow: 'Trial скоро сгорит',
       title: `Осталось около ${hoursLeft} ч`,
       text: 'Переходи на Normal и снимай trial-лимиты до того, как входной режим начнет тормозить работу.',
-      href: '/shop?offer=normal',
+      href: SALES_LINKS.ops,
       label: 'Открыть Normal'
     };
   })();
@@ -137,10 +142,13 @@ export function App() {
 
   const appRoutes = (
     <Routes>
-      <Route path="/" element={<TestPage />} />
+      <Route path="/" element={<TelegramPaywallPage />} />
       <Route path="/telegram" element={<TelegramPaywallPage />} />
       <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/shop" element={<ShopPage />} />
+      <Route path="/shop" element={isLegacyNormalShopRoute ? <Navigate to="/billing/normal" replace /> : <ShopPage />} />
+      <Route path="/billing/normal" element={<BillingNormalPage />} />
+      <Route path="/billing/success" element={<BillingSuccessPage />} />
+      <Route path="/billing/fail" element={<BillingFailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -255,7 +263,7 @@ export function App() {
           </div>
         )}
 
-        {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
+        {(isHomeRoute || isPricingRoute || isTelegramRoute || isBillingReturnRoute || isLegacyNormalShopRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>

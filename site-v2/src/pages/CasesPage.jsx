@@ -103,7 +103,7 @@ export function CasesPage() {
         title: 'Кейсы уже посмотрел. Теперь нужен свой первый закрытый сценарий.',
         text: 'Trial должен быстро привести тебя в рабочий checkout, а не застрять на чтении. Закрывай первый оффер и переходи на Normal.',
         primary: { label: 'Перейти на Normal', href: SALES_LINKS.ops },
-        secondary: { label: 'Открыть Shop', href: '/shop?offer=normal' }
+        secondary: { label: 'Открыть Normal', href: SALES_LINKS.ops }
       };
     }
 

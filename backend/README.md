@@ -119,6 +119,28 @@ RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72
 `USERBOT_DM_ENABLED` включает только ручные действия из интерфейса.  
 Он не должен автоматически включать retention, auto-kick fallback, inbox watch или broadcast.
 
+### BullRun platform billing
+
+Normal продается отдельным контуром `/api/billing`, а не через Shop/P2P клиентов.  
+Robokassa-секреты хранятся только в `.env` backend и не редактируются через `payment_settings`.
+
+```env
+ROBOKASSA_ENABLED=false
+ROBOKASSA_TEST_MODE=true
+ROBOKASSA_MERCHANT_LOGIN=
+ROBOKASSA_PASSWORD_1=
+ROBOKASSA_PASSWORD_2=
+BILLING_NORMAL_PRICE_RUB=900
+BILLING_NORMAL_DURATION_DAYS=365
+BILLING_PENDING_ORDER_TTL_MINUTES=30
+```
+
+Callback URL для Robokassa:
+
+- Result URL: `https://bullrun.ru/api/billing/robokassa/result`
+- Success URL: `https://bullrun.ru/api/billing/robokassa/success`
+- Fail URL: `https://bullrun.ru/api/billing/robokassa/fail`
+
 ### QR onboarding и импорт сессий
 
 - `QR login` теперь не использует один глобальный fingerprint для всех аккаунтов.

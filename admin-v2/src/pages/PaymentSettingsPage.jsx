@@ -30,6 +30,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     userbots: [],
     channels: [],
     tariffs: [],
+    officialBots: [],
     bundleItems: [],
     bundleSupport: true,
     billingHealth: null,
@@ -95,6 +96,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           { data: settings },
           { data: userbots, error: userbotsError },
           { data: channels, error: channelsError },
+          { data: officialBots, error: officialBotsError },
           health,
           { data: paymentEvents, error: paymentEventsError }
         ] = await Promise.all([
@@ -107,8 +109,14 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             .order('created_at', { ascending: false }),
           supabase
             .from('channels')
-            .select('id, title, tg_chat_id, chat_type')
+            .select('id, title, tg_chat_id, chat_type, bot_id')
             .eq('owner_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('tg_accounts')
+            .select('id, tg_account_id, tg_username')
+            .eq('owner_id', user.id)
+            .eq('account_type', 'bot')
             .order('created_at', { ascending: false }),
           apiRequest('/api/payment/health', { accessToken }),
           supabase
@@ -171,6 +179,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             },
             userbots: nextUserbots,
             channels: channels || [],
+            officialBots: officialBots || [],
             tariffs: nextTariffs,
             bundleItems,
             bundleSupport,
@@ -300,6 +309,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             ensureBundleDraft={ensureBundleDraft}
             getTariffBundleItems={getTariffBundleItems}
             newTariff={newTariff}
+            officialBots={state.officialBots}
             setBundleDrafts={setBundleDrafts}
             setNewTariff={setNewTariff}
             tariffs={state.tariffs}

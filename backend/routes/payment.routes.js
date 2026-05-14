@@ -111,7 +111,7 @@ export default function paymentRoutes(supabase, getBotById) {
 
             const { data: invoice, error: invoiceError } = await supabase
                 .from('invoices')
-                .select('*, tariffs(id, owner_id, channel_id, title)')
+                .select('*, tariffs(id, owner_id, channel_id, bot_id, title)')
                 .eq('memo', event.invoiceMemo)
                 .maybeSingle();
 
@@ -166,13 +166,18 @@ export default function paymentRoutes(supabase, getBotById) {
                 return res.json({ success: true, ignored: true, reason: 'already_paid' });
             }
 
-            const { data: primaryChannel } = await supabase
-                .from('channels')
-                .select('bot_id')
-                .eq('id', invoice.tariffs.channel_id)
-                .single();
+            const tariffBotId = invoice.tariffs.bot_id || null;
+            let bot = tariffBotId ? getBotById(tariffBotId) : null;
 
-            const bot = primaryChannel?.bot_id ? getBotById(primaryChannel.bot_id) : null;
+            if (!bot) {
+                const { data: primaryChannel } = await supabase
+                    .from('channels')
+                    .select('bot_id')
+                    .eq('id', invoice.tariffs.channel_id)
+                    .single();
+
+                bot = primaryChannel?.bot_id ? getBotById(primaryChannel.bot_id) : null;
+            }
             if (!bot) {
                 return res.status(409).json({ error: 'Официальный бот для тарифа не запущен' });
             }

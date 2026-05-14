@@ -63,7 +63,7 @@ export function ScenariosPage() {
         title: 'У тебя уже есть Trial. Пора собирать рабочий контур.',
         text: 'Если первый сценарий уже понятен, следующий шаг не смотреть страницы дальше, а закрыть Normal и перевести оплату, доступ и аудиторию в рабочий режим.',
         primary: { label: 'Открыть Normal', href: SALES_LINKS.ops },
-        secondary: { label: 'Открыть Shop', href: '/shop?offer=normal' }
+        secondary: { label: 'Открыть Normal', href: SALES_LINKS.ops }
       };
     }
 

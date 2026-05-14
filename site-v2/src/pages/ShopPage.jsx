@@ -35,7 +35,7 @@ const CHECKOUT_PATHS = [
     eyebrow: 'Normal',
     title: 'Рабочий пакет',
     text: 'Нужен, когда канал уже живет и надо нормально вести оплаты, доступ, клиентов и продления.',
-    href: '/shop?offer=normal'
+    href: '/billing/normal'
   },
   {
     id: 'seller',
@@ -630,7 +630,7 @@ function checkoutPackages(items) {
       id: 'normal',
       title: 'Normal',
       text: 'Основной рабочий checkout: деньги, доступ, CRM и дожим уже как нормальный продуктовый контур.',
-      href: '/shop?offer=normal',
+      href: '/billing/normal',
       item: normalItem
     },
     {
@@ -694,7 +694,7 @@ function packagePurchaseState(pkgId, purchases) {
     if (active) {
       return {
         label: active.status === 'awaiting_receipt' ? 'Normal ждет проверки' : active.status === 'paid' ? 'Normal уже куплен' : 'Normal checkout открыт',
-        href: '/shop?offer=normal',
+        href: '/billing/normal',
         actionLabel: active.status === 'paid' ? 'Открыть мои покупки' : 'Вернуться к checkout'
       };
     }
@@ -889,7 +889,7 @@ function packagePurchaseGuidance(purchase) {
         text: 'Первый checkout уже сделал свое дело. Следующий шаг — зайти в кабинет, собрать базовый контур и потом идти в апгрейд на Normal.',
         primaryHref: '/app/',
         primaryLabel: 'Открыть кабинет',
-        secondaryHref: '/shop?offer=normal',
+        secondaryHref: '/billing/normal',
         secondaryLabel: 'Перейти на Normal'
       };
     }
@@ -997,7 +997,7 @@ function checkoutNextMoves(profilePlan, purchases) {
       moves.push({
         title: 'Переходить на Normal',
         text: 'Первый checkout уже закрыт. Теперь Trial должен превратиться в рабочий money ops stack без лимитов.',
-        href: '/shop?offer=normal',
+        href: '/billing/normal',
         label: 'Открыть Normal'
       });
     } else {
@@ -1067,7 +1067,7 @@ function checkoutNextMoves(profilePlan, purchases) {
     {
       title: 'Смотреть Normal как следующий слой',
       text: 'Если нужен уже не тест, а рабочий money ops stack, смотри Normal и его on-site checkout.',
-      href: '/shop?offer=normal',
+      href: '/billing/normal',
       label: 'Открыть Normal'
     },
     {
@@ -1111,6 +1111,12 @@ export function ShopPage() {
   const sellerId = params.get('seller') || '';
   const focusedItemId = params.get('item') || '';
   const offer = params.get('offer') || '';
+
+  useEffect(() => {
+    if (offer === 'normal') {
+      window.location.replace('/billing/normal');
+    }
+  }, [offer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1313,7 +1319,7 @@ export function ShopPage() {
         {
           title: `Trial скоро сгорит: осталось около ${trialHoursLeft} ч`,
           text: `Дедлайн trial уже близко. Если контур хоть чуть-чуть прогрет, лучше не ждать упора в лимиты, а сразу открыть Normal и закрыть апгрейд до сгорания trial.`,
-          href: '/shop?offer=normal',
+          href: '/billing/normal',
           label: 'Открыть Normal'
         },
         ...moves
@@ -1354,7 +1360,7 @@ export function ShopPage() {
         title: 'Normal открыт. Закрой первый боевой checkout.',
         text: 'Теперь сайт уже не песочница. Выбери рабочий оффер, закрой покупку и потом иди собирать нормальный money ops stack в кабинете.',
         primaryLabel: 'Открыть Normal checkout',
-        primaryHref: '/shop?offer=normal',
+        primaryHref: '/billing/normal',
         secondaryLabel: 'Открыть кабинет',
         secondaryHref: '/app/'
       };
@@ -1367,7 +1373,7 @@ export function ShopPage() {
         title: `Trial скоро сгорит: осталось около ${trialHoursLeft} ч`,
         text: `Дедлайн уже близко. Если не хочешь снова собирать контур с нуля и упираться в trial-лимиты, закрывай апгрейд на Normal до окончания trial.`,
         primaryLabel: 'Перейти на Normal',
-        primaryHref: '/shop?offer=normal',
+        primaryHref: '/billing/normal',
         secondaryLabel: 'Открыть мои покупки',
         secondaryHref: '/shop'
       };
@@ -1381,7 +1387,7 @@ export function ShopPage() {
         title: 'Ты уже закрыл первый checkout на Trial',
         text: 'Теперь не топчись на входном контуре. Переходи на Normal, если нужен второй юзербот, нормальные рассылки, seller-mode и рабочая операционка без trial-стопоров.',
         primaryLabel: 'Перейти на Normal',
-        primaryHref: '/shop?offer=normal',
+        primaryHref: '/billing/normal',
         secondaryLabel: 'Сравнить Trial и Normal',
         secondaryHref: '/pricing'
       };
@@ -1394,7 +1400,7 @@ export function ShopPage() {
         primaryLabel: 'Открыть мои покупки',
         primaryHref: '/shop',
         secondaryLabel: 'Перейти на Normal',
-        secondaryHref: '/shop?offer=normal'
+        secondaryHref: '/billing/normal'
       };
     }
 
@@ -1788,7 +1794,7 @@ export function ShopPage() {
             ))}
           </div>
           <div className="shop-preview__actions" style={{ marginTop: 16 }}>
-            <a className="site-button site-button--primary" href="/shop?offer=normal">
+            <a className="site-button site-button--primary" href="/billing/normal">
               Перейти в checkout Normal
             </a>
             <a className="site-button" href="/pricing">
@@ -1833,7 +1839,7 @@ export function ShopPage() {
           <div className="shop-preview__actions" style={{ marginTop: 14 }}>
             {offer === 'normal' ? (
               <>
-                <a className="site-button site-button--primary" href="/shop?offer=normal">
+                <a className="site-button site-button--primary" href="/billing/normal">
                   Checkout Normal
                 </a>
                 <a className="site-button" href="/pricing">

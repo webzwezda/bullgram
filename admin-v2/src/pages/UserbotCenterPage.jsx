@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -60,6 +61,7 @@ export function UserbotCenterPage() {
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
 
   const draftStorageKey = 'bullrun_userbot_drafts';
+  const historyStorageKey = 'bullrun_userbot_history';
   function loadDraft(key, fallback = '') {
     try {
       const raw = localStorage.getItem(draftStorageKey);
@@ -75,6 +77,49 @@ export function UserbotCenterPage() {
       localStorage.setItem(draftStorageKey, JSON.stringify(map));
     } catch {}
   }
+  function loadHistory(tgUserId) {
+    try {
+      const raw = localStorage.getItem(historyStorageKey);
+      if (raw) { const map = JSON.parse(raw); return map[tgUserId] || []; }
+    } catch {}
+    return [];
+  }
+  function saveHistory(tgUserId, messages) {
+    try {
+      const raw = localStorage.getItem(historyStorageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      map[tgUserId] = messages;
+      localStorage.setItem(historyStorageKey, JSON.stringify(map));
+    } catch {}
+  }
+  function appendHistory(tgUserId, msg) {
+    try {
+      const raw = localStorage.getItem(historyStorageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      const arr = map[tgUserId] || [];
+      arr.push(msg);
+      map[tgUserId] = arr;
+      localStorage.setItem(historyStorageKey, JSON.stringify(map));
+    } catch {}
+  }
+  function syncIncomingToHistory(conversations) {
+    if (!conversations?.length) return;
+    try {
+      const raw = localStorage.getItem(historyStorageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      let changed = false;
+      for (const conv of conversations) {
+        if (!conv.last_message_preview || conv.last_outgoing) continue;
+        const arr = map[conv.tg_user_id] || [];
+        const last = arr[arr.length - 1];
+        if (last && last.text === conv.last_message_preview && !last.outgoing) continue;
+        arr.push({ text: conv.last_message_preview, outgoing: false, timestamp: conv.last_message_at || new Date().toISOString() });
+        map[conv.tg_user_id] = arr;
+        changed = true;
+      }
+      if (changed) localStorage.setItem(historyStorageKey, JSON.stringify(map));
+    } catch {}
+  }
 
   const [replyMessage, setReplyMessage] = useState(initialDraftMessage || loadDraft('reply'));
   const [manualInviteLink, setManualInviteLink] = useState('');
@@ -82,6 +127,7 @@ export function UserbotCenterPage() {
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
   const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage || loadDraft('manual_msg'));
   const [activeTab, setActiveTab] = useState(initialThreadUserId ? 'messages' : 'profile');
+  const [chatHistory, setChatHistory] = useState(() => initialThreadUserId ? loadHistory(initialThreadUserId) : []);
   const [groupFilter, setGroupFilter] = useState('all');
   const [state, setState] = useState({
     loading: true,
@@ -154,6 +200,8 @@ export function UserbotCenterPage() {
 
     setSelectedUserbotId(nextUserbotId);
     setThreadUserId(nextThreadUserId);
+    syncIncomingToHistory(nextConversations);
+    if (nextThreadUserId) setChatHistory(loadHistory(nextThreadUserId));
     setState((prev) => ({
       ...prev,
       loading: false,
@@ -577,11 +625,44 @@ export function UserbotCenterPage() {
     [groups]
   );
 
+  const [loadingThread, setLoadingThread] = useState(false);
+  const [threadUnavailable, setThreadUnavailable] = useState('');
+
+  async function loadThreadMessages(tgUserId) {
+    if (!accessToken || !selectedUserbotId) {
+      setThreadUnavailable('Выберите юзербота');
+      return;
+    }
+    setLoadingThread(true);
+    setThreadUnavailable('');
+    try {
+      const params = new URLSearchParams({ tg_user_id: tgUserId, userbot_id: selectedUserbotId });
+      const result = await apiRequest(`/api/userbot/ops-center/thread?${params.toString()}`, { accessToken });
+      const apiMessages = result.messages || [];
+
+      if (result.unavailable_reason && !apiMessages.length) {
+        setThreadUnavailable(result.unavailable_reason);
+        return;
+      }
+
+      const merged = apiMessages.map((m) => ({ text: m.text, outgoing: m.outgoing, timestamp: m.date }));
+      saveHistory(tgUserId, merged);
+      setChatHistory(merged);
+    } catch (error) {
+      console.error('Ошибка загрузки переписки:', error);
+      setThreadUnavailable(error.message || 'Не удалось загрузить переписку');
+    } finally {
+      setLoadingThread(false);
+    }
+  }
+
   async function selectConversation(conversation) {
     const nextThreadUserId = String(conversation.tg_user_id);
     setThreadUserId(nextThreadUserId);
     setManualTgUserId(nextThreadUserId);
     setReplyMessage('');
+    setChatHistory(loadHistory(nextThreadUserId));
+    setThreadUnavailable('');
   }
 
   async function markConversationRead(tgUserId) {
@@ -589,14 +670,18 @@ export function UserbotCenterPage() {
 
     setActionState((prev) => ({ ...prev, markingRead: true }));
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       await apiRequest('/api/userbot/ops-center/mark-read', {
         accessToken,
         method: 'POST',
         body: {
           tg_user_id: String(tgUserId),
           userbot_id: selectedUserbotId
-        }
+        },
+        signal: controller.signal
       });
+      clearTimeout(timeout);
 
       setState((prev) => ({
         ...prev,
@@ -617,8 +702,9 @@ export function UserbotCenterPage() {
           } : prev.data.summary
         } : prev.data
       }));
+      reloadCenter({ silent: true, preferredThreadUserId: threadUserId }).catch(() => {});
     } catch (error) {
-      window.alert(`Не получилось отметить диалог как прочитанный: ${error.message}`);
+      toast.error(`Не получилось отметить диалог как прочитанный: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, markingRead: false }));
     }
@@ -627,11 +713,11 @@ export function UserbotCenterPage() {
   async function sendReply() {
     const message = String(replyMessage || '').trim();
     if (!selectedConversation?.tg_user_id) {
-      window.alert('Сначала выбери диалог, кому отвечать.');
+      toast.error('Сначала выбери диалог, кому отвечать.');
       return;
     }
     if (!message) {
-      window.alert('Напиши текст ответа.');
+      toast.error('Напиши текст ответа.');
       return;
     }
     if (!window.confirm('Отправить этот ответ через юзербота вручную? Telegram может ограничить аккаунт, если диалог холодный.')) {
@@ -654,6 +740,9 @@ export function UserbotCenterPage() {
       setReplyMessage('');
       saveDraft('reply', '');
       const sentAt = new Date().toISOString();
+      const historyMsg = { text: message, outgoing: true, timestamp: sentAt };
+      appendHistory(String(selectedConversation.tg_user_id), historyMsg);
+      setChatHistory((prev) => [...prev, historyMsg]);
       setState((prev) => ({
         ...prev,
         data: prev.data ? {
@@ -671,9 +760,9 @@ export function UserbotCenterPage() {
           ))
         } : prev.data
       }));
-      window.alert('Ответ улетел.');
+      toast.success('Ответ улетел.');
     } catch (error) {
-      window.alert(`Ошибка ответа: ${error.message}`);
+      toast.error(`Ошибка ответа: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, sendingReply: false }));
     }
@@ -681,11 +770,11 @@ export function UserbotCenterPage() {
 
   async function joinInviteLink() {
     if (!selectedUserbotId) {
-      window.alert('Сначала выбери юзербота, который будет заходить по ссылке.');
+      toast.error('Сначала выбери юзербота, который будет заходить по ссылке.');
       return;
     }
     if (!manualInviteLink.trim()) {
-      window.alert('Вставь ссылку-приглашение.');
+      toast.error('Вставь ссылку-приглашение.');
       return;
     }
 
@@ -701,9 +790,9 @@ export function UserbotCenterPage() {
       });
       setManualInviteLink('');
       await reloadCenter();
-      window.alert(`Юзербот зашел в: ${data.title || 'группу/чат'}`);
+      toast.success(`Юзербот зашел в: ${data.title || 'группу/чат'}`);
     } catch (error) {
-      window.alert(`Ошибка входа по ссылке: ${error.message}`);
+      toast.error(`Ошибка входа по ссылке: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, joiningInvite: false }));
     }
@@ -714,19 +803,19 @@ export function UserbotCenterPage() {
     const message = String(manualDirectMessage || '').trim();
 
     if (!selectedUserbotId) {
-      window.alert('Сначала выбери юзербота, который будет писать.');
+      toast.error('Сначала выбери юзербота, который будет писать.');
       return;
     }
     if (!/^\d+$/.test(tgUserId)) {
-      window.alert('Нужен нормальный Telegram ID цифрами.');
+      toast.error('Нужен нормальный Telegram ID цифрами.');
       return;
     }
     if (!message) {
-      window.alert('Напиши текст сообщения.');
+      toast.error('Напиши текст сообщения.');
       return;
     }
     if (!manualCommonChatId) {
-      window.alert('Сначала выбери общий чат. Холодный поиск по TG ID без общей группы больше не даем.');
+      toast.error('Сначала выбери общий чат. Холодный поиск по TG ID без общей группы больше не даем.');
       return;
     }
     if (!window.confirm('Отправить ЛС по TG ID через юзербота вручную? Делай это только если аккаунт уже знает человека или есть общий чат.')) {
@@ -751,6 +840,9 @@ export function UserbotCenterPage() {
       saveDraft('manual_msg', '');
       saveDraft('manual_tg', '');
       const sentAt = new Date().toISOString();
+      const historyMsg = { text: message, outgoing: true, timestamp: sentAt };
+      appendHistory(tgUserId, historyMsg);
+      setChatHistory([historyMsg]);
       setThreadUserId(tgUserId);
       setState((prev) => {
         if (!prev.data) return prev;
@@ -780,9 +872,9 @@ export function UserbotCenterPage() {
           }
         };
       });
-      window.alert('Сообщение улетело.');
+      toast.success('Сообщение улетело.');
     } catch (error) {
-      window.alert(`Ошибка отправки: ${error.message}`);
+      toast.error(`Ошибка отправки: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, sendingDirect: false }));
     }
@@ -790,7 +882,7 @@ export function UserbotCenterPage() {
 
   async function resetOtherSessions() {
     if (!selectedUserbotId) {
-      window.alert('Сначала выбери юзербота.');
+      toast.error('Сначала выбери юзербота.');
       return;
     }
     if (!window.confirm('Разлогинить все остальные устройства этого Telegram-аккаунта и оставить только текущую серверную сессию?')) {
@@ -811,9 +903,9 @@ export function UserbotCenterPage() {
         error: '',
         rows: data.authorizations || []
       });
-      window.alert(data.message || 'Остальные устройства разлогинены.');
+      toast.success(data.message || 'Остальные устройства разлогинены.');
     } catch (error) {
-      window.alert(`Не получилось разлогинить остальные устройства: ${error.message}`);
+      toast.error(`Не получилось разлогинить остальные устройства: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, resettingAuthorizations: false }));
     }
@@ -1331,14 +1423,24 @@ export function UserbotCenterPage() {
                     <div className="text-xs text-slate-500">TG ID {selectedConversation.tg_user_id}</div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="h-9 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
-                  onClick={() => markConversationRead(selectedConversation.tg_user_id)}
-                  disabled={actionState.markingRead || (selectedConversation.unread_count || 0) === 0}
-                >
-                  {actionState.markingRead ? 'Отмечаем...' : 'Прочитано'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="h-9 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                    onClick={() => loadThreadMessages(selectedConversation.tg_user_id)}
+                    disabled={loadingThread}
+                  >
+                    {loadingThread ? 'Тянем...' : 'Обновить'}
+                  </button>
+                  <button
+                    type="button"
+                    className="h-9 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                    onClick={() => markConversationRead(selectedConversation.tg_user_id)}
+                    disabled={actionState.markingRead || (selectedConversation.unread_count || 0) === 0}
+                  >
+                    {actionState.markingRead ? 'Отмечаем...' : 'Прочитано'}
+                  </button>
+                </div>
               </>
             ) : (
               <div>
@@ -1350,22 +1452,42 @@ export function UserbotCenterPage() {
 
           <div className="flex-1 overflow-y-auto bg-slate-50/40 p-5">
             {hasSelectedConversation ? (
-              selectedConversation.last_message_preview ? (
-                <div className={`flex ${selectedConversation.last_outgoing ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-[14px] shadow-sm ${
-                    selectedConversation.last_outgoing
-                      ? 'bg-blue-600 text-white'
-                      : 'border border-slate-200 bg-white text-slate-900'
-                  }`}>
-                    <div>{selectedConversation.last_message_preview}</div>
-                    <div className={`mt-1 text-[11px] ${selectedConversation.last_outgoing ? 'text-blue-100' : 'text-slate-400'}`}>
-                      {selectedConversation.last_message_at ? formatDate(selectedConversation.last_message_at) : 'из сохраненного снимка'}
+              loadingThread ? (
+                <div className="flex items-center justify-center h-full text-sm text-slate-400">
+                  <span className="inline-block size-3 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 mr-2" />
+                  Подтягиваем переписку...
+                </div>
+              ) : threadUnavailable ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+                  <div className="text-sm text-amber-600 font-medium">{threadUnavailable}</div>
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+                    onClick={() => loadThreadMessages(selectedConversation.tg_user_id)}
+                  >
+                    Попробовать снова
+                  </button>
+                </div>
+              ) : chatHistory.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {chatHistory.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.outgoing ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-[14px] shadow-sm ${
+                        msg.outgoing
+                          ? 'bg-blue-600 text-white'
+                          : 'border border-slate-200 bg-white text-slate-900'
+                      }`}>
+                        <div>{msg.text}</div>
+                        <div className={`mt-1 text-[11px] ${msg.outgoing ? 'text-blue-100' : 'text-slate-400'}`}>
+                          {msg.timestamp ? formatDate(msg.timestamp) : ''}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">
-                  В сохраненном снимке нет текста последнего сообщения.
+                  История сообщений пуста. Отправьте первое сообщение.
                 </div>
               )
             ) : (

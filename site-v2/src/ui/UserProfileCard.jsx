@@ -1,7 +1,7 @@
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LogOut, Zap } from 'lucide-react';
 
-function planMeta(plan, trialEndsAt) {
+function planMeta(plan, trialEndsAt, normalEndsAt) {
   if (plan === 'pro') {
     return {
       title: 'Pro',
@@ -10,8 +10,10 @@ function planMeta(plan, trialEndsAt) {
   }
 
   if (plan === 'normal') {
+    const date = normalEndsAt ? new Date(normalEndsAt) : null;
     return {
       title: 'Normal',
+      hint: date && Number.isFinite(date.getTime()) ? `До ${date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}` : 'Активен',
       pillClass: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/50'
     };
   }
@@ -28,7 +30,7 @@ function planMeta(plan, trialEndsAt) {
 }
 
 export function UserProfileCard() {
-  const { user, profilePlan, trialEndsAt, logout } = useAuth();
+  const { user, profilePlan, trialEndsAt, normalEndsAt, logout } = useAuth();
 
   if (!user) return null;
 
@@ -37,7 +39,7 @@ export function UserProfileCard() {
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
 
-  const currentPlan = planMeta(profilePlan, trialEndsAt);
+  const currentPlan = planMeta(profilePlan, trialEndsAt, normalEndsAt);
 
   return (
     <div className="flex flex-col mb-8 mt-2">

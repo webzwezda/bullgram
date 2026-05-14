@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase.js';
 import { DEFAULT_NEW_TARIFF } from './payment-settings.constants.js';
 
@@ -52,48 +53,49 @@ export function useTariffsController({
     ].filter((method) => method.enabled);
 
     if (!newTariff.title || (!isLifetime && !newTariff.duration_days)) {
-      window.alert('Заполни название и срок.');
+      toast.error('Заполни название и срок.');
       return;
     }
 
     if (!groupAccess.enabled && !chatAccess.enabled && !resourceAccess.enabled) {
-      window.alert('Включи хотя бы одну выдачу: группу, чат или ссылку/текст.');
+      toast.error('Включи хотя бы одну выдачу: группу, чат или ссылку/текст.');
       return;
     }
 
     if (groupAccess.enabled && !newTariff.channel_id) {
-      window.alert('Выбери закрытую группу для выдачи доступа.');
+      toast.error('Выбери закрытую группу для выдачи доступа.');
       return;
     }
 
     if ((chatAccess.enabled || resourceAccess.enabled) && !bundleSupport) {
-      window.alert('Пакеты в БД не активированы. Пока можно включить только выдачу основной группы.');
+      toast.error('Пакеты в БД не активированы. Пока можно включить только выдачу основной группы.');
       return;
     }
 
     if (chatAccess.enabled && !chatAccess.channel_id) {
-      window.alert('Выбери чат, куда бот будет выдавать ссылку на вступление.');
+      toast.error('Выбери чат, куда бот будет выдавать ссылку на вступление.');
       return;
     }
 
     if (resourceAccess.enabled && !String(resourceAccess.text || '').trim()) {
-      window.alert('Заполни ссылку или текст, который бот отправит после оплаты.');
+      toast.error('Заполни ссылку или текст, который бот отправит после оплаты.');
       return;
     }
 
     if (paymentMethods.length === 0) {
-      window.alert('Включи хотя бы один способ оплаты: TON или RUB/СБП.');
+      toast.error('Включи хотя бы один способ оплаты: TON или RUB/СБП.');
       return;
     }
 
     if (paymentMethods.some((method) => !method.price || Number(method.price) <= 0)) {
-      window.alert('Заполни стоимость для каждого включенного способа оплаты.');
+      toast.error('Заполни стоимость для каждого включенного способа оплаты.');
       return;
     }
 
     try {
       const payloads = paymentMethods.map((method) => ({
         owner_id: userId,
+        bot_id: newTariff.bot_id || null,
         channel_id: groupAccess.enabled ? newTariff.channel_id : null,
         title: newTariff.title,
         price: parseFloat(method.price),
@@ -139,31 +141,38 @@ export function useTariffsController({
       }
 
       setNewTariff(DEFAULT_NEW_TARIFF);
-      window.alert(paymentMethods.length > 1
-        ? 'Тарифы под оба способа оплаты созданы. Экран сам подхватит их после обновления.'
-        : 'Тариф создан. Экран сам подхватит его после обновления.'
-      );
+      toast.success(paymentMethods.length > 1
+        ? 'Тарифы под оба способа оплаты созданы.'
+        : 'Тариф создан.');
       window.location.reload();
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
   async function deleteTariff(idOrIds) {
-    if (!window.confirm('Точно убрать тариф? Старые чеки и статистика останутся.')) return;
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
     try {
-      const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
       const { error } = await supabase.from('tariffs').update({ is_active: false }).in('id', ids);
       if (error) throw error;
+      toast('Тариф убран. Старые чеки и статистика остаются.', {
+        action: {
+          label: 'Вернуть',
+          onClick: async () => {
+            await supabase.from('tariffs').update({ is_active: true }).in('id', ids);
+            window.location.reload();
+          }
+        }
+      });
       window.location.reload();
     } catch (err) {
-      window.alert(err.message);
+      toast.error(err.message);
     }
   }
 
   async function addBundleItem(tariff, draftKey = tariff.id, targetTariffIds = [tariff.id]) {
     if (!bundleSupport) {
-      window.alert('Bundle-пакеты еще не включены в БД.');
+      toast.error('Bundle-пакеты еще не включены в БД.');
       return;
     }
 
@@ -175,11 +184,11 @@ export function useTariffsController({
     };
 
     if (draft.item_type === 'channel' && !draft.channel_id) {
-      window.alert('Выбери канал/чат для пакета.');
+      toast.error('Выбери канал/чат для пакета.');
       return;
     }
     if (draft.item_type === 'resource' && (!draft.resource_title || !draft.resource_url)) {
-      window.alert('Для материала нужны название и ссылка.');
+      toast.error('Для материала нужны название и ссылка.');
       return;
     }
 
@@ -207,19 +216,27 @@ export function useTariffsController({
       if (error) throw error;
       window.location.reload();
     } catch (err) {
-      window.alert(err.message);
+      toast.error(err.message);
     }
   }
 
   async function deleteBundleItem(itemIdOrIds) {
-    if (!window.confirm('Убрать этот элемент из пакета?')) return;
+    const itemIds = Array.isArray(itemIdOrIds) ? itemIdOrIds : [itemIdOrIds];
     try {
-      const itemIds = Array.isArray(itemIdOrIds) ? itemIdOrIds : [itemIdOrIds];
       const { error } = await supabase.from('tariff_bundle_items').update({ is_active: false }).in('id', itemIds);
       if (error) throw error;
+      toast('Элемент убран из пакета.', {
+        action: {
+          label: 'Вернуть',
+          onClick: async () => {
+            await supabase.from('tariff_bundle_items').update({ is_active: true }).in('id', itemIds);
+            window.location.reload();
+          }
+        }
+      });
       window.location.reload();
     } catch (err) {
-      window.alert(err.message);
+      toast.error(err.message);
     }
   }
 

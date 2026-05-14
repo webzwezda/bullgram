@@ -1,10 +1,11 @@
 import { APP_CONFIG } from '../config.js';
 
-export async function apiRequest(path, { accessToken, method = 'GET', body } = {}) {
+export async function apiRequest(path, { accessToken, method = 'GET', body, signal } = {}) {
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const response = await fetch(`${APP_CONFIG.backendUrl}${path}`, {
     method,
     cache: 'no-store',
+    signal,
     headers: {
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
       ,

@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const DEFAULT_NEW_TARIFF = {
+  bot_id: '',
   channel_id: '',
   title: '',
   access_methods: {

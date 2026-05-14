@@ -751,16 +751,7 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
     const now = new Date();
 
     if (offerCode === 'normal') {
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                product_tier: 'normal',
-                trial_started_at: null,
-                trial_ends_at: null
-            })
-            .eq('id', ownerId)
-            .neq('product_tier', 'pro');
-        if (error && !String(error.message || '').includes('product_tier')) throw error;
+        console.warn('[Shop] Игнорируем Normal unlock из Shop. Normal теперь выдается только через BullRun billing.');
         return;
     }
 

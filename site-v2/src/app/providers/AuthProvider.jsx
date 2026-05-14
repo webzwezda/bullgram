@@ -8,7 +8,44 @@ function normalizeOfferCode(item) {
   return String(item?.offer_code || '').trim().toLowerCase();
 }
 
-function buildPackagePulse(rows) {
+function buildNormalBillingSignal(order, profile) {
+  const normalEndsAt = profile?.normal_ends_at ? new Date(profile.normal_ends_at).getTime() : null;
+  if (profile?.product_tier === 'normal' && normalEndsAt && normalEndsAt > Date.now()) {
+    return {
+      id: 'normal',
+      state: 'paid',
+      label: 'Активен'
+    };
+  }
+
+  if (order?.status === 'pending') {
+    return {
+      id: 'normal',
+      state: 'pending',
+      label: 'Счет открыт'
+    };
+  }
+
+  if (order?.status === 'paid') {
+    return {
+      id: 'normal',
+      state: 'paid',
+      label: 'Куплен'
+    };
+  }
+
+  if (order?.status === 'failed' || order?.status === 'expired') {
+    return {
+      id: 'normal',
+      state: 'expired',
+      label: 'Истек'
+    };
+  }
+
+  return null;
+}
+
+function buildPackagePulse(rows, normalBillingSignal = null) {
   const activeStatuses = ['pending', 'awaiting_receipt', 'paid'];
   const expiredStatuses = ['expired', 'rejected'];
   const textOfferPurchases = rows.filter((purchase) => purchase?.item?.item_type === 'text_offer');
@@ -21,6 +58,7 @@ function buildPackagePulse(rows) {
     }
 
     if (pkgId === 'normal') {
+      if (normalBillingSignal) return normalBillingSignal;
       const active = textOfferPurchases.find((purchase) => normalizeOfferCode(purchase.item) === 'normal' && activeStatuses.includes(purchase.status));
       if (active) return active;
       return textOfferPurchases.find((purchase) => normalizeOfferCode(purchase.item) === 'normal' && expiredStatuses.includes(purchase.status)) || null;
@@ -102,6 +140,9 @@ export function AuthProvider({ children }) {
   const [profilePlan, setProfilePlan] = useState('trial');
   const [trialStartedAt, setTrialStartedAt] = useState(null);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
+  const [normalStartedAt, setNormalStartedAt] = useState(null);
+  const [normalEndsAt, setNormalEndsAt] = useState(null);
+  const [billingOrder, setBillingOrder] = useState(null);
   const [checkoutPulse, setCheckoutPulse] = useState(null);
   const [sellerPulse, setSellerPulse] = useState(null);
   const [packagePulse, setPackagePulse] = useState(null);
@@ -142,12 +183,14 @@ export function AuthProvider({ children }) {
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
+        setNormalStartedAt(null);
+        setNormalEndsAt(null);
         return;
       }
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, product_tier, trial_started_at, trial_ends_at')
+        .select('role, product_tier, trial_started_at, trial_ends_at, normal_started_at, normal_ends_at')
         .eq('id', session.user.id)
         .single();
 
@@ -157,11 +200,15 @@ export function AuthProvider({ children }) {
         (error.message || '').includes('product_tier')
         || (error.message || '').includes('trial_started_at')
         || (error.message || '').includes('trial_ends_at')
+        || (error.message || '').includes('normal_started_at')
+        || (error.message || '').includes('normal_ends_at')
       )) {
         setProfileRole(data?.role || null);
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
+        setNormalStartedAt(null);
+        setNormalEndsAt(null);
         return;
       }
 
@@ -170,6 +217,8 @@ export function AuthProvider({ children }) {
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
+        setNormalStartedAt(null);
+        setNormalEndsAt(null);
         return;
       }
 
@@ -177,6 +226,8 @@ export function AuthProvider({ children }) {
       setProfilePlan(data?.product_tier || 'trial');
       setTrialStartedAt(data?.trial_started_at || null);
       setTrialEndsAt(data?.trial_ends_at || null);
+      setNormalStartedAt(data?.normal_started_at || null);
+      setNormalEndsAt(data?.normal_ends_at || null);
     }
 
     loadProfilePlan();
@@ -195,10 +246,30 @@ export function AuthProvider({ children }) {
         setCheckoutPulse(null);
         setSellerPulse(null);
         setPackagePulse(null);
+        setBillingOrder(null);
         return;
       }
 
       try {
+        let billingData = null;
+        try {
+          billingData = await apiRequest('/api/billing/orders/current', {
+            accessToken: session.access_token
+          });
+          if (!mounted) return;
+          setBillingOrder(billingData.order || null);
+          if (billingData.profile) {
+            setProfilePlan(billingData.profile.product_tier || 'trial');
+            setTrialStartedAt(billingData.profile.trial_started_at || null);
+            setTrialEndsAt(billingData.profile.trial_ends_at || null);
+            setNormalStartedAt(billingData.profile.normal_started_at || null);
+            setNormalEndsAt(billingData.profile.normal_ends_at || null);
+          }
+        } catch {
+          if (!mounted) return;
+          setBillingOrder(null);
+        }
+
         const data = await apiRequest('/api/shop/public/my-purchases', {
           accessToken: session.access_token
         });
@@ -233,12 +304,12 @@ export function AuthProvider({ children }) {
           hasAny: sellerRows.length > 0,
           spotlight: sellerSpotlight
         });
-        setPackagePulse(buildPackagePulse(rows));
+        setPackagePulse(buildPackagePulse(rows, buildNormalBillingSignal(billingData?.order, billingData?.profile)));
       } catch {
         if (!mounted) return;
         setCheckoutPulse(null);
         setSellerPulse(null);
-        setPackagePulse(null);
+        setPackagePulse(buildPackagePulse([], null));
       }
     }
 
@@ -257,11 +328,17 @@ export function AuthProvider({ children }) {
     profilePlan,
     trialStartedAt,
     trialEndsAt,
+    normalStartedAt,
+    normalEndsAt,
+    billingOrder,
     checkoutPulse,
     packagePulse,
     sellerPulse,
-    async login() {
-      const redirectTo = `${window.location.origin}/shop`;
+    async login(targetPath = null) {
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}` || '/shop';
+      const requestedPath = targetPath || currentPath;
+      const url = new URL(requestedPath, window.location.origin);
+      const redirectTo = url.origin === window.location.origin ? url.toString() : `${window.location.origin}/shop`;
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo }
@@ -271,7 +348,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       window.location.reload();
     }
-  }), [checkoutPulse, loading, packagePulse, profilePlan, profileRole, sellerPulse, session, trialEndsAt, trialStartedAt]);
+  }), [billingOrder, checkoutPulse, loading, normalEndsAt, normalStartedAt, packagePulse, profilePlan, profileRole, sellerPulse, session, trialEndsAt, trialStartedAt]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

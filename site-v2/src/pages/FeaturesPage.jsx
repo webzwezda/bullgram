@@ -43,7 +43,7 @@ export function FeaturesPage() {
           eyebrow: 'Практика',
           title: 'Хочу дожать первый реальный сценарий',
           text: 'Иди в Shop, добей P2P или группу, а потом возвращайся в /app и запускай операционку по-человечески.',
-          primary: { label: 'Открыть Shop', href: '/shop?offer=normal' }
+          primary: { label: 'Открыть Normal', href: SALES_LINKS.ops }
         }
       ];
     }
@@ -92,7 +92,7 @@ export function FeaturesPage() {
         title: 'Не смотри возможности как каталог. Используй их как аргумент для апгрейда.',
         text: 'Trial уже дал вход. Теперь нужен Normal, чтобы довести контур до боевой CRM, seller-flow и регулярной работы команды.',
         primary: { label: 'Перейти на Normal', href: SALES_LINKS.ops },
-        secondary: { label: 'Открыть Shop', href: '/shop?offer=normal' }
+        secondary: { label: 'Открыть Normal', href: SALES_LINKS.ops }
       };
     }
 

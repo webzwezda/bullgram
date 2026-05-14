@@ -1251,7 +1251,7 @@ export class UserbotService {
 
             await client.invoke(new Api.messages.ReadHistory({
                 peer: targetResolution.peer,
-                maxId: 0
+                maxId: 2147483647
             }));
 
             return { success: true };

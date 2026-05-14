@@ -3744,10 +3744,22 @@ export default function (supabase) {
                 }
 
                 if (!peer) {
+                    try {
+                        const dialogs = await client.getDialogs({ limit: 70 });
+                        for (const dialog of dialogs) {
+                            if (String(dialog.id) === tgUserId || (dialog.entity && String(dialog.entity.id) === tgUserId)) {
+                                peer = dialog.entity;
+                                break;
+                            }
+                        }
+                    } catch {}
+                }
+
+                if (!peer) {
                     return res.json({
                         success: true,
                         messages: [],
-                        unavailable_reason: 'Безопасный режим: тред открываем только по уже известному диалогу. Шумный поиск по чатам сейчас отключен.'
+                        unavailable_reason: 'Юзербот не нашёл диалог с этим пользователем.'
                     });
                 }
 

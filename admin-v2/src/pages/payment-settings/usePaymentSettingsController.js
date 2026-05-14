@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
 import {
   isValidSbpPhone,
@@ -96,7 +97,7 @@ export function usePaymentSettingsController({ accessToken, setState, settings }
           }
         }));
       }
-      window.alert('Настройки сохранены.');
+      toast.success('Настройки сохранены.');
     } catch (error) {
       setState((prev) => ({ ...prev, saving: false, error: error.message }));
     }

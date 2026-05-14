@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
 
 export function useBillingSettingsController({ accessToken, patchSettings, settings, userbots }) {
@@ -11,16 +12,16 @@ export function useBillingSettingsController({ accessToken, patchSettings, setti
         method: 'POST',
         body: { provider: settings.billing_provider || 'generic' }
       });
-      window.alert('Тестовое webhook-событие записано. Обнови журнал ниже.');
+      toast.success('Тестовое webhook-событие записано. Обнови журнал ниже.');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
   function fillAdminIdFromUserbot() {
     const userbot = userbots.find((item) => String(item.id) === String(selectedUserbotId)) || userbots[0];
     if (!userbot) {
-      window.alert('Сначала подключи юзербота.');
+      toast.error('Сначала подключи юзербота.');
       return;
     }
     patchSettings({ admin_tg_id: String(userbot.tg_account_id) });

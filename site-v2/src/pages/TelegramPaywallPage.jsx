@@ -24,24 +24,22 @@ export function TelegramPaywallPage() {
           
           {/* Main Headline */}
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
-            Монетизируйте Telegram <br className="hidden sm:block" />
-            на <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">абсолютном автопилоте</span>
+            P2P-касса для Telegram <br className="hidden sm:block" />
+            без <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">ручной сверки</span>
           </h1>
           
           {/* Subheadline */}
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-12 tracking-tight">
-            Вставьте токен от <span className="text-slate-800 font-bold">@BotFather</span> и забудьте о рутине. Система сама принимает оплату, выдает доступы, контролирует продления и исключает должников.
+            Подключите <span className="text-slate-800 font-bold">@BotFather</span> и соберите кассу для своего проекта: реквизиты продавца, чеки, заявки, выдача доступа и контроль продлений в одном месте.
           </p>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
             <a
-              href="/app/botfather"
-              target="_blank"
-              rel="noreferrer"
+              href="/pricing"
               className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
             >
-              Подключить токен
+              Смотреть тарифы
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a
@@ -55,10 +53,10 @@ export function TelegramPaywallPage() {
           {/* Subtle Trust Indicators */}
           <div className="mt-12 flex items-center justify-center gap-6 text-sm font-semibold text-slate-400">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Без комиссий платформы
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> P2P/TON-поток продавцу
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Настройка за 5 минут
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Normal оплачивается отдельно
             </div>
           </div>
         </section>
@@ -84,7 +82,7 @@ export function TelegramPaywallPage() {
                 </div>
                 <h3 className="text-2xl font-extrabold text-slate-900 mb-3 tracking-tight">Полная видимость</h3>
                 <p className="text-slate-500 font-medium leading-relaxed max-w-sm mb-8">
-                  Вы сразу видите, кто уже оплатил, кто получил доступ и кто так и не вошел в закрытый канал. Все статусы обновляются в реальном времени.
+                  Вы сразу видите, кто получил реквизиты, кто прислал чек, кто получил доступ и кто так и не вошел в закрытый канал.
                 </p>
                 {/* Abstract UI representation */}
                 <div className="mt-auto relative w-full h-48 bg-white rounded-t-2xl border-t border-l border-r border-slate-200/60 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] overflow-hidden flex flex-col">
@@ -123,7 +121,7 @@ export function TelegramPaywallPage() {
                   <h3 className="text-2xl font-extrabold text-white tracking-tight">Умный контроль</h3>
                 </div>
                 <p className="text-slate-400 font-medium leading-relaxed relative z-10">
-                  Система заранее напоминает об оплате и <strong className="text-slate-200 font-semibold">автоматически исключает</strong> должников. Просроченные подписки больше не висят неделями.
+                  BullRun напоминает о продлении и <strong className="text-slate-200 font-semibold">помогает исключать</strong> должников. Просроченные доступы больше не висят неделями.
                 </p>
               </div>
 
@@ -133,8 +131,8 @@ export function TelegramPaywallPage() {
                   <CreditCard className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-extrabold text-white mb-2 tracking-tight">Оплата прямо в боте</h3>
-                  <p className="text-blue-100 font-medium text-sm">Без переходов на сторонние сайты. Максимальная конверсия.</p>
+                  <h3 className="text-xl font-extrabold text-white mb-2 tracking-tight">P2P-касса на сайте</h3>
+                  <p className="text-blue-100 font-medium text-sm">Деньги идут продавцу по его TON/P2P-реквизитам, BullRun ведет чек, статус и выдачу.</p>
                 </div>
               </div>
 
@@ -171,7 +169,7 @@ export function TelegramPaywallPage() {
                          <div className="text-sm font-bold text-slate-900">Оплата получена</div>
                          <div className="text-xs text-slate-500">Доступ в канал открыт</div>
                        </div>
-                       <div className="ml-auto font-bold text-slate-900">2 900 ₽</div>
+                       <div className="ml-auto font-bold text-slate-900">900 ₽</div>
                      </div>
                      
                      <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex items-center gap-4 transform translate-x-8 rotate-1 hover:rotate-0 transition-transform">
@@ -196,11 +194,11 @@ export function TelegramPaywallPage() {
                 </h2>
                 
                 <p className="text-lg text-slate-500 font-medium leading-relaxed">
-                  Перестаньте проверять переводы на карту и удалять людей из канала вручную. BullRun берет весь жизненный цикл клиента на себя — от первого платежа до автоматического продления или исключения.
+                  Перестаньте сверять переводы, чеки и доступы вручную. BullRun ведет заявку от выдачи реквизитов до подтверждения оплаты, продления или исключения.
                 </p>
                 
                 <div className="flex flex-col gap-5 mt-4">
-                  {['Единый дашборд для каналов, оплат и доступов', 'Полная история клиента и статусы подписок', 'Бесшовная интеграция с @BotFather'].map((item) => (
+                  {['Единый дашборд для каналов, чеков и доступов', 'История клиента и статусы подписок', 'Бесшовная интеграция с @BotFather'].map((item) => (
                     <div key={item} className="flex items-center gap-4">
                       <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" strokeWidth={3} />
@@ -229,10 +227,10 @@ export function TelegramPaywallPage() {
                   <Zap className="w-10 h-10 text-amber-400 fill-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
                 </div>
                 <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight">
-                  Запустите продажи <br className="hidden sm:block" />за 5 минут
+                  Соберите P2P-кассу <br className="hidden sm:block" />без лишней ручки
                 </h2>
                 <p className="text-lg sm:text-xl text-slate-300 font-medium max-w-2xl leading-relaxed">
-                  Разверните свой первый рабочий контур монетизации прямо сейчас.
+                  Normal открывает кабинет BullRun. Платежи ваших клиентов остаются в P2P/TON-контуре продавца.
                 </p>
                 <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
                   <a

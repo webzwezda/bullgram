@@ -84,7 +84,7 @@ function packageCheckoutSignals(purchases = []) {
     };
 
     const trialSignal = buildSignal('trial', 'Trial checkout', '/shop?offer=trial');
-    const normalSignal = buildSignal('normal', 'Normal checkout', '/shop?offer=normal');
+    const normalSignal = buildSignal('normal', 'Normal checkout', '/billing/normal');
     const sellerSignal = buildSignal('seller', 'Seller checkout', '/shop?offer=seller');
 
     if (trialSignal) signals.push(trialSignal);
