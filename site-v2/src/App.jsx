@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, Newspaper, GraduationCap, AlertCircle, ArrowRight, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, Newspaper, GraduationCap, MessageCircle, Receipt, Wallet } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
+import { PurchasesPage } from './pages/PurchasesPage.jsx';
+import { MyPlanPage } from './pages/MyPlanPage.jsx';
 import { BillingNormalPage } from './pages/BillingNormalPage.jsx';
 import { BillingSuccessPage } from './pages/BillingSuccessPage.jsx';
 import { BillingFailPage } from './pages/BillingFailPage.jsx';
-import { SALES_LINKS } from './components/MarketingPrimitives.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
@@ -18,9 +19,26 @@ const navSections = [
     title: 'BullRun',
     items: [
       { to: '/', label: 'Главная', icon: LayoutDashboard },
-      { to: '/telegram', label: 'Telegram', icon: MessageCircle },
+      { to: '/telegram', label: 'Telegram', icon: MessageCircle, adminOnly: true }
+    ]
+  },
+  {
+    title: 'Оплата',
+    items: [
       { to: '/pricing', label: 'Тарифы', icon: CreditCard },
-      { to: '/shop', label: 'Shop', icon: ShoppingBag },
+      { to: '/plan', label: 'Мой тариф', icon: Wallet }
+    ]
+  },
+  {
+    title: 'Магазин',
+    items: [
+      { to: '/shop', label: 'Магазин', icon: ShoppingBag },
+      { to: '/purchases', label: 'Покупки', icon: Receipt }
+    ]
+  },
+  {
+    title: 'Контент',
+    items: [
       { href: '/courses/', label: 'Курсы', icon: GraduationCap, external: true },
       { href: '/blog/', label: 'Блог', icon: Newspaper, external: true }
     ]
@@ -35,12 +53,16 @@ export function App() {
   const isTelegramRoute = location.pathname === '/telegram';
   const isBillingReturnRoute = location.pathname === '/billing/success' || location.pathname === '/billing/fail';
   const isLegacyNormalShopRoute = location.pathname === '/shop' && new URLSearchParams(location.search).get('offer') === 'normal';
-  const { user, profilePlan, profileRole, trialEndsAt, checkoutPulse, sellerPulse, packagePulse } = useAuth();
-  const navItems = navSections.flatMap((section) => section.items);
+  const { user, profileRole } = useAuth();
+  const navItems = navSections
+    .flatMap((section) => section.items)
+    .filter((item) => !item.adminOnly || profileRole === 'admin');
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
     if (location.pathname.startsWith('/billing')) return 'Оплата Normal';
+    if (location.pathname.startsWith('/purchases')) return 'Мои покупки';
+    if (location.pathname === '/plan') return 'Мой тариф';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'BullRun';
   }, [location.pathname, navItems]);
@@ -49,103 +71,14 @@ export function App() {
     setMobileNavOpen(false);
   }, [location.pathname]);
 
-  const checkoutSignal = (() => {
-    if (!user || !checkoutPulse) return null;
-    if (checkoutPulse.failedCount > 0) {
-      return {
-        eyebrow: 'Handoff сломан',
-        title: 'Оплата уже есть, но передача прав где-то споткнулась',
-        text: 'Не начинай новые сделки вслепую. Сначала добей проблемный handoff в Shop.',
-        href: '/shop',
-        label: 'Открыть покупки'
-      };
-    }
-    if (checkoutPulse.awaitingReceiptCount > 0) {
-      return {
-        eyebrow: 'Ждет чек',
-        title: 'Есть P2P-покупка, которая ждет ручной проверки',
-        text: 'Открой покупки и не дублируй оплату.',
-        href: '/shop',
-        label: 'Открыть покупки'
-      };
-    }
-    if (checkoutPulse.pendingCount > 0) {
-      return {
-        eyebrow: 'Открытый checkout',
-        title: 'У тебя уже есть незакрытый счет',
-        text: 'Закрой текущий TON/P2P checkout перед переходом к следующему шагу.',
-        href: '/shop',
-        label: 'Вернуться к checkout'
-      };
-    }
-    if (profilePlan === 'trial' && checkoutPulse.paidCount > 0) {
-      return {
-        eyebrow: 'Пора апгрейдиться',
-        title: 'Trial уже сделал свою работу',
-        text: 'Переходи на Normal, чтобы открыть рабочий контур без trial-стопоров.',
-        href: SALES_LINKS.ops,
-        label: 'Перейти на Normal'
-      };
-    }
-    return null;
-  })();
-
-  const trialUrgencySignal = (() => {
-    if (!user || profilePlan !== 'trial' || !trialEndsAt) return null;
-    const endsAt = new Date(trialEndsAt).getTime();
-    const diffMs = endsAt - Date.now();
-    if (Number.isNaN(endsAt) || diffMs <= 0 || diffMs > 1000 * 60 * 60 * 72) return null;
-
-    const hoursLeft = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
-    return {
-      eyebrow: 'Trial скоро сгорит',
-      title: `Осталось около ${hoursLeft} ч`,
-      text: 'Переходи на Normal и снимай trial-лимиты до того, как входной режим начнет тормозить работу.',
-      href: SALES_LINKS.ops,
-      label: 'Открыть Normal'
-    };
-  })();
-
-  const sellerSignal = (() => {
-    if (!user || profilePlan !== 'normal' || !sellerPulse?.hasAny) return null;
-    if (sellerPulse.failedCount > 0) {
-      return {
-        eyebrow: 'Handoff сломан',
-        title: 'Seller checkout споткнулся',
-        text: 'Добей handoff в Shop, потом возвращайся к seller mode.',
-        href: '/shop?offer=seller',
-        label: 'Добить checkout'
-      };
-    }
-    if (sellerPulse.awaitingReceiptCount > 0) {
-      return {
-        eyebrow: 'Ждет чек',
-        title: 'Seller-покупка ждет проверки',
-        text: 'Не начинай новый апгрейд, пока этот хвост не закроется.',
-        href: '/shop?offer=seller',
-        label: 'Вернуться к checkout'
-      };
-    }
-    if (sellerPulse.pendingCount > 0) {
-      return {
-        eyebrow: 'Checkout открыт',
-        title: 'Seller mode ждет оплаты',
-        text: 'Закрой текущий checkout, потом двигайся дальше.',
-        href: '/shop?offer=seller',
-        label: 'Открыть checkout'
-      };
-    }
-    return null;
-  })();
-
-  const shellSignal = checkoutSignal || trialUrgencySignal || sellerSignal;
-
   const appRoutes = (
     <Routes>
       <Route path="/" element={<TelegramPaywallPage />} />
       <Route path="/telegram" element={<TelegramPaywallPage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/shop" element={isLegacyNormalShopRoute ? <Navigate to="/billing/normal" replace /> : <ShopPage />} />
+      <Route path="/purchases" element={<PurchasesPage />} />
+      <Route path="/plan" element={<MyPlanPage />} />
       <Route path="/billing/normal" element={<BillingNormalPage />} />
       <Route path="/billing/success" element={<BillingSuccessPage />} />
       <Route path="/billing/fail" element={<BillingFailPage />} />
@@ -191,13 +124,16 @@ export function App() {
         )}
 
         <nav className="flex flex-col gap-6 flex-1 overflow-y-auto">
-          {navSections.map((section) => (
+          {navSections.map((section) => {
+            const visibleItems = section.items.filter((item) => !item.adminOnly || profileRole === 'admin');
+            if (!visibleItems.length) return null;
+            return (
             <div key={section.title} className="flex flex-col gap-2">
               <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-400 mb-1">
                 {section.title}
               </div>
               <div className="flex flex-col gap-1">
-                {section.items.map((item) => {
+                {visibleItems.map((item) => {
                   const Icon = item.icon;
                   if (item.external) {
                     return (
@@ -234,35 +170,12 @@ export function App() {
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
-        {shellSignal && (
-          <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/60 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-2xl bg-amber-100 text-amber-600 shrink-0">
-                <AlertCircle className="w-6 h-6" strokeWidth={2.5} />
-              </div>
-              <div>
-                <div className="text-xs font-extrabold uppercase tracking-widest text-amber-600 mb-1.5">
-                  {shellSignal.eyebrow}
-                </div>
-                <h3 className="text-xl font-extrabold text-slate-900 mb-2">{shellSignal.title}</h3>
-                <p className="text-slate-600 font-medium leading-relaxed max-w-2xl">{shellSignal.text}</p>
-              </div>
-            </div>
-            <a
-              href={shellSignal.href}
-              className="shrink-0 group relative inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-6 py-3.5 text-sm font-bold text-white shadow-md shadow-amber-500/20 transition-all duration-200 hover:bg-amber-600"
-            >
-              {shellSignal.label}
-              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" strokeWidth={2.5} />
-            </a>
-          </div>
-        )}
-
         {(isHomeRoute || isPricingRoute || isTelegramRoute || isBillingReturnRoute || isLegacyNormalShopRoute) ? (
           appRoutes
         ) : (

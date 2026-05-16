@@ -343,10 +343,16 @@ function purchaseHasAssetType(row, type) {
   return (row.item?.assets || []).some((asset) => asset.asset_type === type);
 }
 
+function paymentMethodLabel(method) {
+  if (method === 'p2p') return 'СБП';
+  if (method === 'robokassa') return 'Robokassa';
+  return 'TON';
+}
+
 function paymentMethodsLabel(value) {
   const methods = Array.isArray(value) ? value : [];
   if (!methods.length) return 'TON + СБП';
-  return methods.map((method) => (method === 'p2p' ? 'СБП' : 'TON')).join(' + ');
+  return methods.map(paymentMethodLabel).join(' + ');
 }
 
 function salesChannelLabel(value) {
@@ -361,16 +367,16 @@ function itemPriceSummary(item) {
   if ((!methods.length || methods.includes('ton')) && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
+  if ((methods.includes('p2p') || methods.includes('robokassa')) && Number(item?.price_rub || 0) > 0) {
     parts.push(`${formatRub(item.price_rub)} RUB`);
   }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
 
 function purchaseAmountSummary(purchase) {
-  if (purchase?.payload?.payment_method === 'p2p') {
+  if (purchase?.payload?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'robokassa') {
     const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
+    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payload?.payment_method);
   }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
@@ -966,7 +972,7 @@ export function ShopAdminPage() {
       preview_text: 'Готовый серверный SOCKS5-прокси для одного Telegram-аккаунта.',
       description: `Прокси ${proxy.host}:${proxy.port}${proxy.last_check_country ? ` • ${proxy.last_check_country}` : ''}. Один прокси = один юзербот.`,
       sales_channel: 'admin_only',
-      payment_methods: ['ton', 'p2p'],
+      payment_methods: ['ton', 'p2p', 'robokassa'],
       price_ton: '5',
       price_rub: '',
       status: 'published',
@@ -983,7 +989,7 @@ export function ShopAdminPage() {
       preview_text: '',
       description: '',
       sales_channel: 'admin_only',
-      payment_methods: ['ton', 'p2p'],
+      payment_methods: ['ton', 'p2p', 'robokassa'],
       price_ton: '',
       price_rub: '',
       status: 'published',
@@ -1451,7 +1457,7 @@ export function ShopAdminPage() {
                     step="1"
                     value={proxyComposer.price_rub}
                     onChange={(event) => setProxyComposer((prev) => ({ ...prev, price_rub: event.target.value }))}
-                    placeholder="Цена в RUB для СБП"
+                    placeholder="Цена в RUB для СБП / Robokassa"
                   />
                   <select
                     className="field"
@@ -1475,7 +1481,8 @@ export function ShopAdminPage() {
                   <div className="payment-method-row__options">
                     {[
                       ['ton', 'TON'],
-                      ['p2p', 'СБП']
+                      ['p2p', 'СБП'],
+                      ['robokassa', 'Robokassa']
                     ].map(([method, label]) => (
                       <label key={method} className="checkbox-pill">
                         <input
@@ -1913,6 +1920,10 @@ export function ShopAdminPage() {
                             </div>
                           ) : null}
                         </>
+                      ) : purchase.payload?.payment_method === 'robokassa' ? (
+                        <div className="table-subtext">
+                          Robokassa • invoice {purchase.payload?.robokassa_invoice_id || 'еще не создан'}
+                        </div>
                       ) : (
                         <div className="table-subtext">TON • {purchase.payload?.seller_wallet || 'кошелек не указан'}</div>
                       )}

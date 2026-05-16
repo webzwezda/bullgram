@@ -21,7 +21,7 @@ const CustomerBasesPage = lazy(() => import('./pages/CustomerBasesPage.jsx').the
 const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').then((module) => ({ default: module.ClientDossierPage })));
 const ObserverPage = lazy(() => import('./pages/ObserverPage.jsx').then((module) => ({ default: module.ObserverPage })));
 const AdminGroupsPage = lazy(() => import('./pages/AdminGroupsPage.jsx').then((module) => ({ default: module.AdminGroupsPage })));
-const ShopAdminPage = lazy(() => import('./pages/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
+const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
 const ShopReceiptsPage = lazy(() => import('./pages/ShopReceiptsPage.jsx').then((module) => ({ default: module.ShopReceiptsPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
 const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
