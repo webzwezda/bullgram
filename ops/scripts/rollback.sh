@@ -60,6 +60,7 @@ restore_backend() {
       '$backup_dir/' '$BACKEND_DIR/'
     cd '$BACKEND_DIR'
     npm install --omit=dev
+    node scripts/restore-managed-proxies.mjs
     pm2 restart bullrun-tg-backend
     pm2 flush bullrun-tg-backend
     pm2 describe bullrun-tg-backend >/dev/null

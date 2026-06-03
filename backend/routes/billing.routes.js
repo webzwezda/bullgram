@@ -8,6 +8,10 @@ import {
     recordBillingEvent
 } from '../services/bullrun-billing.service.js';
 import { collectRobokassaParams } from '../services/robokassa.service.js';
+import {
+    handleShopRobokassaResult,
+    loadShopPurchasesByRobokassaInvoice
+} from './shop.routes.js';
 
 function statusFor(error) {
     return Number(error?.statusCode || error?.status || 500);
@@ -54,7 +58,13 @@ export default function billingRoutes(supabase) {
     router.all('/robokassa/result', robokassaParser, async (req, res) => {
         const params = collectRobokassaParams(req);
         try {
-            const result = await handleRobokassaResult(supabase, params);
+            let result;
+            try {
+                result = await handleRobokassaResult(supabase, params);
+            } catch (error) {
+                if (Number(error?.statusCode || error?.status || 500) !== 404) throw error;
+                result = await handleShopRobokassaResult(supabase, params);
+            }
             res.type('text/plain').send(result.responseText);
         } catch (error) {
             console.error('[Billing] Robokassa result error:', error);
@@ -67,14 +77,23 @@ export default function billingRoutes(supabase) {
         const invoiceId = String(params.InvId ?? params.inv_id ?? '').trim();
         try {
             const order = await loadOrderByProviderInvoice(supabase, invoiceId);
+            const shopPurchases = order ? [] : await loadShopPurchasesByRobokassaInvoice(supabase, invoiceId);
             await recordBillingEvent(supabase, {
                 billing_order_id: order?.id || null,
-                owner_id: null,
-                event_type: 'robokassa_success_return',
+                owner_id: shopPurchases[0]?.buyer_owner_id || null,
+                event_type: order ? 'robokassa_success_return' : 'shop_robokassa_success_return',
                 provider_invoice_id: invoiceId || null,
                 amount_rub: params.OutSum ? Number(params.OutSum) : null,
                 payload: params
             });
+            if (!order && shopPurchases.length) {
+                const hasUserbot = shopPurchases.some((purchase) => purchase.shop_items?.item_type === 'userbot' || purchase.shop_items?.item_type === 'bundle');
+                redirect(res, hasUserbot ? '/app/userbots' : '/app/proxies', {
+                    shop_payment: 'success',
+                    inv: invoiceId || ''
+                });
+                return;
+            }
             redirect(res, '/billing/success', {
                 order: order?.id || '',
                 inv: invoiceId || ''
@@ -90,14 +109,23 @@ export default function billingRoutes(supabase) {
         const invoiceId = String(params.InvId ?? params.inv_id ?? '').trim();
         try {
             const order = await loadOrderByProviderInvoice(supabase, invoiceId);
+            const shopPurchases = order ? [] : await loadShopPurchasesByRobokassaInvoice(supabase, invoiceId);
             await recordBillingEvent(supabase, {
                 billing_order_id: order?.id || null,
-                owner_id: null,
-                event_type: 'robokassa_fail_return',
+                owner_id: shopPurchases[0]?.buyer_owner_id || null,
+                event_type: order ? 'robokassa_fail_return' : 'shop_robokassa_fail_return',
                 provider_invoice_id: invoiceId || null,
                 amount_rub: params.OutSum ? Number(params.OutSum) : null,
                 payload: params
             });
+            if (!order && shopPurchases.length) {
+                const hasUserbot = shopPurchases.some((purchase) => purchase.shop_items?.item_type === 'userbot' || purchase.shop_items?.item_type === 'bundle');
+                redirect(res, hasUserbot ? '/app/userbots' : '/app/proxies', {
+                    shop_payment: 'fail',
+                    inv: invoiceId || ''
+                });
+                return;
+            }
         } catch (error) {
             console.error('[Billing] Robokassa fail event error:', error);
         }

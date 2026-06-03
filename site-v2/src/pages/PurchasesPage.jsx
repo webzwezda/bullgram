@@ -68,8 +68,7 @@ export function PurchasesPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [busyId, setBusyId] = useState('');
-  const [receiptNote, setReceiptNote] = useState('');
-  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptDrafts, setReceiptDrafts] = useState({});
 
   async function loadPurchases() {
     if (!accessToken) return;
@@ -114,13 +113,13 @@ export function PurchasesPage() {
   async function markPaid(purchaseId) {
     setBusyId(purchaseId);
     try {
+      const draft = receiptDrafts[purchaseId] || {};
       const formData = new FormData();
       formData.append('purchase_id', purchaseId);
-      formData.append('receipt_note', receiptNote);
-      if (receiptFile) formData.append('receipt_file', receiptFile);
+      formData.append('receipt_note', draft.note || '');
+      if (draft.file) formData.append('receipt_file', draft.file);
       await apiRequest('/api/shop/public/purchase/mark-paid', { accessToken, method: 'POST', body: formData });
-      setReceiptNote('');
-      setReceiptFile(null);
+      setReceiptDrafts((prev) => ({ ...prev, [purchaseId]: { note: '', file: null } }));
       await loadPurchases();
     } catch (e) {
       setError(e.message);
@@ -175,6 +174,7 @@ export function PurchasesPage() {
             const isPaid = p.status === 'paid';
             const isExpired = p.status === 'expired';
             const isFailed = p.ownership_transfer_status === 'failed';
+            const draft = receiptDrafts[p.id] || { note: '', file: null };
 
             return (
               <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
@@ -196,7 +196,7 @@ export function PurchasesPage() {
                 {/* TON payment */}
                 {method === 'ton' && (isPending || isAwaiting) && (
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
-                    <div className="text-sm"><span className="font-medium text-slate-700">Wallet:</span> <code className="text-xs break-all">{p.payload?.seller_wallet || '—'}</code></div>
+                    <div className="text-sm"><span className="font-medium text-slate-700">Кошелек:</span> <code className="text-xs break-all">{p.payload?.seller_wallet || '—'}</code></div>
                     <div className="text-sm"><span className="font-medium text-slate-700">Memo:</span> <code className="text-xs">{p.payload?.memo || '—'}</code></div>
                     {p.payload?.ton_qr && (
                       <div className="pt-2"><img src={p.payload.ton_qr} alt="TON QR" className="w-40 h-40 rounded-lg" /></div>
@@ -227,15 +227,21 @@ export function PurchasesPage() {
                     <textarea
                       className="w-full rounded-xl border border-slate-200 bg-white text-sm p-3 mt-2"
                       rows={2}
-                      placeholder="Комментарий к чеку: банк, сумма, время"
-                      value={receiptNote}
-                      onChange={(e) => setReceiptNote(e.target.value)}
+                      placeholder="Комментарий к оплате, если нужен: банк, сумма, время"
+                      value={draft.note || ''}
+                      onChange={(e) => setReceiptDrafts((prev) => ({
+                        ...prev,
+                        [p.id]: { ...(prev[p.id] || {}), note: e.target.value }
+                      }))}
                     />
                     <input
                       className="text-sm"
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                      onChange={(e) => setReceiptDrafts((prev) => ({
+                        ...prev,
+                        [p.id]: { ...(prev[p.id] || {}), file: e.target.files?.[0] || null }
+                      }))}
                     />
                     <button
                       className="site-button site-button--primary text-xs"
@@ -245,6 +251,7 @@ export function PurchasesPage() {
                     >
                       {busyId === p.id ? 'Отправляем...' : 'Я оплатил'}
                     </button>
+                    <div className="text-xs text-slate-500">Чек можно не прикладывать. Если у продавца включена автосверка, BullRun подтвердит оплату по банковскому уведомлению.</div>
                   </div>
                 )}
 
@@ -258,7 +265,7 @@ export function PurchasesPage() {
                 {/* Awaiting receipt — P2P already sent */}
                 {isAwaiting && (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Чек отправлен продавцу. Ожидайте подтверждения.
+                    Ждем подтверждение продавца или банковское уведомление. Чек не обязателен, если оплата найдется через автосверку.
                   </div>
                 )}
 
@@ -272,7 +279,13 @@ export function PurchasesPage() {
                 {/* Failed transfer */}
                 {isFailed && (
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                    Оплата прошла, но передача товара сломалась. Дождитесь решения продавца.
+                    Оплата подтверждена, но передача товара сломалась. Дождитесь решения продавца.
+                  </div>
+                )}
+
+                {isPaid && !isFailed && p.ownership_transfer_status !== 'completed' && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Оплата подтверждена. Передача товара еще выполняется.
                   </div>
                 )}
 

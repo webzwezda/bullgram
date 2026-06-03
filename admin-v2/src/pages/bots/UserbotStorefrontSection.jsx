@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ShieldCheck, Wallet, CreditCard, Box, Star, AlertCircle, Copy, Check, FileText, ShoppingCart, Loader2 } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, Wallet, CreditCard, Box, Star, AlertCircle, Copy, Check, FileText, ShoppingCart, Loader2, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -109,7 +109,7 @@ export function UserbotStorefrontSection({
                 ) : null}
                 {checkoutState.purchase.memo ? (
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Memo (Обязательно)</div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Memo обязателен</div>
                     <div className="flex items-center gap-3 rounded-xl bg-indigo-50/50 px-4 py-3 border-2 border-indigo-200 shadow-sm ring-4 ring-indigo-500/10">
                       <div className="break-all font-mono text-sm font-bold text-indigo-700">{checkoutState.purchase.memo}</div>
                     </div>
@@ -142,7 +142,7 @@ export function UserbotStorefrontSection({
                     </div>
                   ) : null}
                   <div className="mb-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    {tonCheckoutView === 'ton' ? 'Scan to pay' : 'Trust Wallet'}
+                    {tonCheckoutView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
                   </div>
                   <img
                     src={activeQrSrc}
@@ -170,7 +170,7 @@ export function UserbotStorefrontSection({
                     href={checkoutState.purchase.ton_uri}
                   >
                     <Wallet className="w-4 h-4 text-slate-400" />
-                    TON Wallet
+                    TON кошелек
                   </a>
                 ) : null}
               </div>
@@ -187,12 +187,31 @@ export function UserbotStorefrontSection({
               </Button>
             </div>
           </div>
+        ) : checkoutState.purchase.payment_method === 'robokassa' ? (
+          <div className="space-y-6">
+            <div className="flex items-start gap-3 rounded-xl bg-blue-50/80 px-4 py-3 border border-blue-100/50 shadow-sm">
+              <CreditCard className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-sm font-medium leading-relaxed text-blue-800">
+                Оплата идет через Robokassa. После успешного платежа BullRun автоматически передаст аккаунт и proxy в ваш кабинет.
+              </p>
+            </div>
+
+            {checkoutState.purchase.payment_url ? (
+              <a
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-bold !text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700"
+                href={checkoutState.purchase.payment_url}
+              >
+                <ExternalLink className="w-4 h-4" />
+                Перейти в Robokassa
+              </a>
+            ) : null}
+          </div>
         ) : (
           <div className="space-y-6">
             <div className="flex items-start gap-3 rounded-xl bg-amber-50 px-4 py-3 border border-amber-200/60 shadow-sm">
               <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-sm font-medium leading-relaxed text-amber-800">
-                Переведите средства по реквизитам ниже, затем прикрепите скриншот чека. Администратор проверит оплату вручную.
+                Переведите средства по реквизитам ниже и нажмите “Я оплатил”. Чек можно приложить, но он не обязателен, если у продавца включена автосверка.
               </p>
             </div>
             
@@ -225,8 +244,8 @@ export function UserbotStorefrontSection({
                       <CheckCircle2 className="w-6 h-6 text-emerald-600" />
                     </div>
                     <div>
-                      <div className="text-base font-bold text-emerald-900">Чек успешно отправлен</div>
-                      <div className="text-sm font-medium text-emerald-700 mt-1">Ожидайте подтверждения от продавца</div>
+                      <div className="text-base font-bold text-emerald-900">Оплата отмечена</div>
+                      <div className="text-sm font-medium text-emerald-700 mt-1">Ждем подтверждение продавца или банковское уведомление</div>
                     </div>
                     {checkoutState.purchase.receipt_file_url ? (
                       <a 
@@ -242,7 +261,7 @@ export function UserbotStorefrontSection({
                 ) : (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <span className="text-sm font-semibold text-slate-700">Скриншот чека</span>
+                      <span className="text-sm font-semibold text-slate-700">Чек или скриншот (опционально)</span>
                       <label className="flex flex-col items-center justify-center h-24 w-full rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition cursor-pointer relative overflow-hidden group shadow-sm">
                         <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-indigo-600 transition">
                           <FileText className="w-6 h-6" />
@@ -271,7 +290,7 @@ export function UserbotStorefrontSection({
                       disabled={checkoutState.checking}
                     >
                       {checkoutState.checking ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Отправка...</> : (
-                        <><Check className="w-4 h-4 mr-2" /> Отправить чек на проверку</>
+                        <><Check className="w-4 h-4 mr-2" /> Я оплатил</>
                       )}
                     </Button>
                   </div>
@@ -584,17 +603,18 @@ export function UserbotStorefrontSection({
                         </div>
 
                         <div className="pt-4 border-t border-slate-200/60 space-y-3">
-                          {['ton', 'p2p'].map((method) => {
+                          {methods.map((method) => {
                             const enabled = methods.includes(method);
                             const loading = checkoutState.loading && checkoutState.item?.id === item.id;
                             const isTon = method === 'ton';
+                            const isRobokassa = method === 'robokassa';
                             
                             return (
                               <Button
                                 key={`${item.id}:${method}`}
                                 className={`w-full h-12 rounded-xl text-sm font-bold shadow-sm transition-all duration-200 ${
                                   enabled
-                                    ? isTon
+                                    ? isTon || isRobokassa
                                       ? 'bg-[#0088CC] hover:bg-[#0077B5] text-white shadow-blue-500/20'
                                       : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-slate-200/50'
                                     : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-70'
@@ -608,7 +628,13 @@ export function UserbotStorefrontSection({
                                 title={!enabled ? 'Метод недоступен для данной комбинации' : undefined}
                               >
                                 {isTon ? <Wallet className="w-4 h-4 mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                                {loading && checkoutState.paymentMethod === method ? 'Обработка...' : (isTon ? 'Оплатить через TON' : 'Оплатить через СБП')}
+                                {loading && checkoutState.paymentMethod === method
+                                  ? 'Обработка...'
+                                  : isTon
+                                    ? 'Оплатить через TON'
+                                    : isRobokassa
+                                      ? 'Оплатить через Robokassa'
+                                      : 'Оплатить через СБП'}
                               </Button>
                             );
                           })}

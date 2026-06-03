@@ -49,6 +49,9 @@ echo "==> Deploying backend"
 echo "==> Installing backend dependencies on server"
 ssh "$SERVER" "cd '$BACKEND_DIR' && npm install --omit=dev"
 
+echo "==> Reconciling managed proxies on server"
+ssh "$SERVER" "cd '$BACKEND_DIR' && node scripts/restore-managed-proxies.mjs"
+
 echo "==> Restarting backend on server"
 ssh "$SERVER" "pm2 restart bullrun-tg-backend && pm2 flush bullrun-tg-backend && pm2 describe bullrun-tg-backend >/dev/null"
 

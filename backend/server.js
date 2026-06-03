@@ -9,6 +9,8 @@ import { normalizeSbpBankSelection } from './utils/payment-settings.js';
 // Импортируем роуты
 import userbotRoutes from './routes/userbot.routes.js';
 import officialBotRoutes, { initAllBots, getBotById } from './routes/official-bot.routes.js';
+import autopostRoutes from './routes/autopost.routes.js';
+import { AutopostService } from './services/autopost.service.js';
 import analyticsRoutes from './routes/analytics.routes.js'; // <-- НОВОЕ: Импорт роутов аналитики
 import accessRoutes from './routes/access.routes.js';
 import broadcastRoutes from './routes/broadcast.routes.js';
@@ -22,14 +24,18 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import clientDossierRoutes from './routes/client-dossier.routes.js';
 import referralRoutes from './routes/referral.routes.js';
 import shopRoutes from './routes/shop.routes.js';
+import p2pBankEventsRoutes from './routes/p2p-bank-events.routes.js';
 import observerRoutes from './routes/observer.routes.js';
 import agentMcpRoutes from './routes/agent-mcp.routes.js';
 import projectAdminRoutes from './routes/project-admin.routes.js';
+import integrationsRoutes from './routes/integrations.routes.js';
 
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
 import { startRetention } from './jobs/retention.job.js';
 import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
+import { startBrowseFollowup } from './jobs/browse-followup.job.js';
+import { startAutopostScheduler } from './jobs/autopost-scheduler.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
@@ -39,6 +45,7 @@ import { startReferralSettlementRetry } from './jobs/referral-settlement-retry.j
 import { startReferralPayoutSender } from './jobs/referral-payout-sender.job.js';
 import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirmation.job.js';
 import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.job.js';
+import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -94,6 +101,7 @@ const authenticateUser = async (req, res, next) => {
 // ==========================================
 app.use('/api/userbot', userbotRoutes(supabase));
 app.use('/api/official-bot', officialBotRoutes(supabase));
+app.use('/api/autopost', autopostRoutes(supabase));
 app.use('/api/analytics', analyticsRoutes(supabase)); // <-- НОВОЕ: Подключение роута аналитики
 app.use('/api/access', accessRoutes(supabase));
 app.use('/api/broadcast', broadcastRoutes(supabase, getBotById));
@@ -107,8 +115,11 @@ app.use('/api/dashboard', dashboardRoutes(supabase));
 app.use('/api/client-dossier', clientDossierRoutes(supabase));
 app.use('/api/referrals', referralRoutes(supabase));
 app.use('/api/shop', shopRoutes(supabase));
+app.use('/api/p2p', p2pBankEventsRoutes(supabase));
+app.use('/api/p2p-bank-events', p2pBankEventsRoutes(supabase));
 app.use('/api/observer', observerRoutes(supabase, getBotById));
 app.use('/api/mcp', agentMcpRoutes(supabase));
+app.use('/api/integrations', integrationsRoutes(supabase));
 app.use('/api/project-admin', projectAdminRoutes(supabase));
 
 // ==========================================
@@ -213,7 +224,8 @@ app.listen(PORT, async () => {
         crypto_rates_enabled: String(process.env.CRYPTO_RATES_ENABLED || 'true').trim().toLowerCase() !== 'false',
         referral_settlement_retry_enabled: String(process.env.REFERRAL_SETTLEMENT_RETRY_ENABLED || 'true').trim().toLowerCase() !== 'false',
         referral_payout_sender_enabled: envFlag('REFERRAL_PAYOUT_SENDER_ENABLED'),
-        referral_payout_confirmation_enabled: String(process.env.REFERRAL_PAYOUT_CONFIRMATION_ENABLED || 'true').trim().toLowerCase() !== 'false'
+        referral_payout_confirmation_enabled: String(process.env.REFERRAL_PAYOUT_CONFIRMATION_ENABLED || 'true').trim().toLowerCase() !== 'false',
+        managed_proxy_reconcile_enabled: String(process.env.MANAGED_PROXY_RECONCILE_ENABLED || 'true').trim().toLowerCase() !== 'false'
     });
 
     // Запускаем всех ботов из БД
@@ -222,7 +234,17 @@ app.listen(PORT, async () => {
     // Запускаем фоновые задачи (Cron)
     startAutoKick(supabase, getBotById);
     startRetention(supabase, getBotById);
-    startAbandonedCart(supabase, getBotById); // Наша новая фича работает!
+    startAbandonedCart(supabase, getBotById);
+    startBrowseFollowup(supabase, getBotById);
+    const autopostService = new AutopostService(supabase);
+    startAutopostScheduler(supabase, (botId) => autopostService.getBot(botId));
+    // Запускаем все активные autopost-боты
+    try {
+        const { data: autopostBots } = await supabase.from('autopost_bots').select('*').eq('is_active', true);
+        for (const ab of autopostBots || []) {
+            autopostService.startWebhookBot(ab.id, ab.bot_token);
+        }
+    } catch (e) { console.error('[Autopost] Ошибка запуска ботов:', e.message); }
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
     startAudienceSync(supabase);
@@ -232,4 +254,5 @@ app.listen(PORT, async () => {
     startReferralPayoutSender(supabase);
     startReferralPayoutConfirmation(supabase);
     startOfficialBotWebhookQueue(supabase);
+    startManagedProxyReconcile(supabase);
 });

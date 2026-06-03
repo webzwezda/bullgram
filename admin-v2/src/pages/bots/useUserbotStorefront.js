@@ -41,7 +41,7 @@ export function useUserbotStorefront({
     let cancelled = false;
 
     async function loadStorefront() {
-      if (!accessToken || profileRole === 'admin') {
+      if (!accessToken) {
         setStorefrontState({
           loading: false,
           error: '',
@@ -148,9 +148,13 @@ export function useUserbotStorefront({
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
-          receipt_file_url: ''
+          receipt_file_url: '',
+          payment_url: data.payment_url || ''
         }
       });
+      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
+        window.location.href = data.payment_url;
+      }
     } catch (error) {
       let existingPurchase = null;
       try {
@@ -182,7 +186,8 @@ export function useUserbotStorefront({
           sbp_phone: existingPurchase.payload?.sbp_phone || '',
           sbp_bank: existingPurchase.payload?.sbp_bank || '',
           sbp_fio: existingPurchase.payload?.sbp_fio || '',
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || ''
+          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
+          payment_url: existingPurchase.payload?.robokassa_payment_url || ''
         } : null,
         loading: false,
         checking: false,
@@ -256,6 +261,7 @@ export function useUserbotStorefront({
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
           receipt_file_url: '',
+          payment_url: data.payment_url || '',
           batch: true
         },
         paymentMethod: selectedPaymentMethod,
@@ -265,6 +271,9 @@ export function useUserbotStorefront({
         notice: '',
         noticeTone: 'default'
       });
+      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
+        window.location.href = data.payment_url;
+      }
     } catch (error) {
       await refreshPurchases().catch(() => null);
       setCheckoutState({
@@ -321,7 +330,7 @@ export function useUserbotStorefront({
       const notice = result?.status === 'paid'
         ? 'Оплата найдена. Дальше ждём передачу актива.'
         : result?.status === 'awaiting_receipt'
-          ? 'Чек уже отправлен продавцу. Жди ручную проверку.'
+          ? 'Оплата отмечена. Ждем подтверждение продавца или банковское уведомление.'
           : result?.status === 'rejected'
             ? 'Продавец отклонил этот платёж. Проверь детали и создай покупку заново.'
             : 'Оплата пока не найдена. Проверь сумму, memo и попробуй ещё раз через минуту.';
@@ -386,6 +395,7 @@ export function useUserbotStorefront({
         sbp_bank: purchase.payload?.sbp_bank || '',
         sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
+        payment_url: purchase.payload?.robokassa_payment_url || '',
         batch: !!purchase.batch
       },
       paymentMethod: purchase.payload?.payment_method || 'ton',

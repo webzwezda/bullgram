@@ -270,6 +270,8 @@ Technical preferences сохранены:
 
 Пароли Robokassa не сохранять в репозитории и не писать в чат.
 
+2026-05-15: production `Password #1/#2` были пересинхронизированы между кабинетом Robokassa и серверным `/var/www/backend/.env`, потому что боевые платежные ссылки начали возвращать Robokassa error `29`. После email-подтверждения изменений backend был перезапущен через PM2 с `--update-env`; контрольная production-ссылка Robokassa перестала возвращать `code:29` и начала редиректить на `/Merchant/Index/...`.
+
 На 2026-05-13 в кабинете Robokassa сгенерированы и сохранены:
 
 - production `Password #1`
@@ -420,11 +422,55 @@ Live test payment for `Normal` was completed in Robokassa test mode:
 - profile `webzwezda@gmail.com` has `product_tier = normal`, `normal_started_at = 2026-05-13 16:19:17 UTC`, `normal_ends_at = 2027-05-13 16:19:17 UTC`;
 - live `/billing/normal` shows `Normal активен до 14 мая 2027 г.` in local display.
 
+## Shop inventory Robokassa
+
+Добавлено 2026-05-15:
+
+- витрины `/app/userbots` и `/app/proxies` для покупки BullRun-инвентаря теперь используют Robokassa;
+- это касается `shop_items.item_type in ('userbot', 'proxy', 'bundle')`;
+- клиентский `Shop/P2P` остается отдельным контуром: TON/СБП не убирались из внутренних клиентских сценариев;
+- backend добавляет `robokassa` к существующим `available_payment_methods` для inventory items, если Robokassa включена и настроена;
+- TON/СБП остаются доступными, если они есть в `shop_items.payment_methods` и у продавца настроены соответствующие реквизиты;
+- у inventory-лота должна быть `payment_methods` с `robokassa` и `price_rub > 0`, иначе Robokassa-кнопка не показывается и Robokassa checkout отклоняется;
+- в `/app/shop` блок `Proxy` умеет сохранять `Robokassa` как отдельный способ оплаты рядом с `TON` и `СБП`;
+- в `/app/userbots` блок `Продажа юзербота` умеет сохранять `Robokassa` для `userbot` и `bundle` лотов; RUB-цена общая для `СБП / Robokassa`;
+- `shop_items.payment_methods` нельзя очищать ради Robokassa: это отдельный новый метод поверх существующих способов оплаты;
+- старые pending-покупки с `ton/p2p` могут продолжать отображаться как старые покупки, новые Robokassa-покупки получают `payload.payment_method = robokassa`.
+
+Платежный поток:
+
+1. Пользователь на `/app/userbots` или `/app/proxies` нажимает покупку.
+2. Frontend вызывает существующие endpoint'ы:
+   - `POST /api/shop/public/purchase`
+   - `POST /api/shop/public/purchase/batch`
+3. Backend создает `shop_purchases` в `pending`, генерирует numeric `robokassa_invoice_id` и кладет Robokassa данные в `shop_purchases.payload`:
+   - `payment_method`
+   - `amount_rub`
+   - `robokassa_invoice_id`
+   - `robokassa_payment_url`
+   - `robokassa_description`
+   - `robokassa_total_rub`
+4. Frontend сразу редиректит пользователя на `robokassa_payment_url`.
+5. Robokassa вызывает общий Result URL: `https://bullrun.ru/api/billing/robokassa/result`.
+6. `billing.routes.js` сначала пробует Normal billing order, а если order не найден, передает callback в shop handler.
+7. Shop handler проверяет подпись и сумму, пишет `billing_events`, переводит `shop_purchases.status = paid` и запускает текущий `transferShopAssets`.
+8. Success/Fail redirect возвращает пользователя на:
+   - `/app/userbots?shop_payment=success|fail&inv=...` для userbot/bundle;
+   - `/app/proxies?shop_payment=success|fail&inv=...` для proxy.
+
+Фискализация для shop inventory:
+
+- платежная ссылка строится через общий `buildRobokassaPaymentUrl()`;
+- чековая позиция сейчас одна на весь заказ;
+- описание составляется как `BullRun inventory: ...`;
+- для СМЗ это дистанционная услуга/цифровой доступ/инвентарь внутри BullRun, физической доставки нет.
+
 ## Важные ограничения
 
-- Не добавлять Robokassa в `shop_items.payment_methods`.
-- Не писать BullRun Normal payments в `shop_purchases`.
-- Не хранить Robokassa passwords в `payment_settings`.
+- Не писать BullRun Normal payments в `shop_purchases`: Normal остается только в `billing_orders`.
+- Не активировать Normal через shop inventory callbacks.
+- Не хранить Robokassa passwords в `payment_settings`, `shop_items`, `shop_purchases.payload`, frontend или логах.
+- Не ломать TON/СБП: Robokassa для `/app/userbots` и `/app/proxies` добавляется как новый метод, а не заменяет существующие способы.
 - Не активировать Normal с `SuccessURL`.
 - Не возвращать старый `/admin`; активный путь admin-v2 это `/app`.
 - Финальная проверка для этого проекта должна быть на live `https://bullrun.ru`, а не на localhost.

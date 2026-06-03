@@ -394,9 +394,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         <OfficialBotsSection {...officialBotsSectionProps} />
       ) : (
         <>
-          {!canSellUserbotAssets ? (
-            <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
-          ) : null}
+          <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}

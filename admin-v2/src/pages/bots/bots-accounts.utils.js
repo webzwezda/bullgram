@@ -148,12 +148,12 @@ export function formatRub(value) {
 }
 
 export function userbotLotPaymentMethods(item) {
-  const source = Array.isArray(item?.available_payment_methods) && item.available_payment_methods.length
+  const source = Array.isArray(item?.available_payment_methods)
     ? item.available_payment_methods
     : Array.isArray(item?.payment_methods) && item.payment_methods.length
       ? item.payment_methods
       : ['ton', 'p2p'];
-  return source.filter((method) => method === 'ton' || method === 'p2p');
+  return source.filter((method) => method === 'ton' || method === 'p2p' || method === 'robokassa');
 }
 
 export function batchUserbotLotPaymentMethods(items) {
@@ -170,6 +170,7 @@ export function batchUserbotLotPaymentMethods(items) {
 }
 
 export function paymentMethodLabel(value) {
+  if (value === 'robokassa') return 'Robokassa';
   return value === 'p2p' ? 'СБП' : 'TON';
 }
 
@@ -182,13 +183,16 @@ export function userbotItemPriceSummary(item) {
   if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
     parts.push(`${formatRub(item.price_rub)} RUB`);
   }
-  return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
+  if (methods.includes('robokassa') && Number(item?.price_rub || 0) > 0) {
+    parts.push(`${formatRub(item.price_rub)} RUB`);
+  }
+  return parts.join(' / ') || 'Нужна цена в RUB';
 }
 
 export function userbotPurchaseAmountSummary(purchase) {
-  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p') {
+  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p' || purchase?.payment_method === 'robokassa' || purchase?.payload?.payment_method === 'robokassa') {
     const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
+    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payment_method || purchase?.payload?.payment_method);
   }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }

@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Bot, Check, Copy, KeyRound, MessageSquare, RefreshCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { APP_CONFIG } from '../config.js';
+import { Badge } from '../components/ui/badge.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
+import { Input } from '../components/ui/input.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 function formatWhen(value) {
@@ -18,6 +24,70 @@ function maskToken(value) {
   return `${token.slice(0, 16)}...${token.slice(-6)}`;
 }
 
+function CopyInput({ value, monospace }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
+  return (
+    <div className="relative">
+      <Input
+        className={`h-9 bg-slate-50 pr-10 ${monospace ? 'font-mono text-xs' : 'text-sm font-medium text-slate-900'}`}
+        value={value || '—'}
+        readOnly
+      />
+      <button
+        type="button"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+        onClick={handleCopy}
+        title="Копировать"
+      >
+        {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
+
+function CodeBlock({ value, label }) {
+  const [copied, setCopied] = useState(false);
+  function handleCopy() {
+    if (!value) return;
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+        <span className="text-xs font-semibold text-slate-500">{label}</span>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? 'Скопировано' : 'Копировать'}
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto text-xs font-mono leading-5 text-slate-700"><code>{value}</code></pre>
+    </div>
+  );
+}
+
+function StepHeader({ number, title }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-2">
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600 ring-1 ring-indigo-200">
+        {number}
+      </div>
+      <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+    </div>
+  );
+}
+
 export function McpSettingsPage() {
   const { accessToken, profilePlan } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -30,7 +100,6 @@ export function McpSettingsPage() {
   const [lastCreatedToken, setLastCreatedToken] = useState('');
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
-  const [copyState, setCopyState] = useState('');
 
   async function loadTokens() {
     if (!accessToken) return;
@@ -40,7 +109,6 @@ export function McpSettingsPage() {
 
   useEffect(() => {
     let cancelled = false;
-
     async function bootstrap() {
       if (!accessToken) return;
       try {
@@ -55,11 +123,8 @@ export function McpSettingsPage() {
         if (!cancelled) setLoading(false);
       }
     }
-
     bootstrap();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [accessToken]);
 
   const activeTokens = useMemo(() => tokens.filter((item) => !item.revoked_at), [tokens]);
@@ -114,16 +179,6 @@ ${APP_CONFIG.backendUrl}/api/mcp
 MCP token:
 ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
 
-  async function copyText(value, mode) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopyState(mode);
-      window.setTimeout(() => setCopyState(''), 1600);
-    } catch {
-      setCopyState('');
-    }
-  }
-
   async function createToken() {
     try {
       setCreating(true);
@@ -137,6 +192,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
       setLastCreatedToken(data.token || '');
       setLastCreatedRecord(data.record || null);
       await loadTokens();
+      toast.success('MCP-токен создан.');
     } catch (nextError) {
       setError(nextError.message || 'Не удалось создать MCP токен.');
     } finally {
@@ -145,6 +201,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
   }
 
   async function revokeToken(tokenId) {
+    if (!window.confirm('После отзыва клешня больше не сможет обращаться к BullRun MCP.')) return;
     try {
       setRevokingId(String(tokenId));
       setError('');
@@ -159,6 +216,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
         setLastCreatedRecord(null);
         setTestResult(null);
       }
+      toast.success('Токен отозван.');
     } catch (nextError) {
       setError(nextError.message || 'Не удалось отозвать MCP токен.');
     } finally {
@@ -171,7 +229,6 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
       setTestResult({ ok: false, text: 'Сначала создай новый токен.' });
       return;
     }
-
     try {
       setTesting(true);
       setError('');
@@ -185,10 +242,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
         text: `MCP жив: ${data.proxy_total} proxy, ${data.userbot_total} userbot, tier ${data.product_tier}.`
       });
     } catch (nextError) {
-      setTestResult({
-        ok: false,
-        text: nextError.message || 'Проверка не прошла.'
-      });
+      setTestResult({ ok: false, text: nextError.message || 'Проверка не прошла.' });
     } finally {
       setTesting(false);
     }
@@ -200,262 +254,225 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
 
   return (
     <section className="page">
-      <div className="payment-overview proxy-surface-card mcp-overview">
-        <div className="payment-overview__top">
-          <div className="payment-overview__copy">
-            <div className="proxy-page__eyebrow">Claw / MCP</div>
-            <div className="page__header">
-              <h1>Подключение клешни</h1>
-            </div>
-            <p className="proxy-page__intro">
-              Тут выдаем персональный MCP-токен, копируем готовый config и проверяем, что клешня реально видит BullRun tools.
-            </p>
-          </div>
-          <div className="payment-overview__rule">
-            <div className="payment-overview__rule-label">Что даем агенту</div>
-            <div className="payment-overview__rule-title">Только MCP</div>
-            <div className="payment-overview__rule-text">
-              Без парсинга верстки и без второго bridge-контура. Клешня ходит в один BullRun MCP и получает только разрешенные tools.
-            </div>
-          </div>
-        </div>
-        <div className="payment-summary-grid">
-          <div className="proxy-summary-card proxy-summary-card--ok">
-            <div className="proxy-summary-card__label">Активные токены</div>
-            <div className="proxy-summary-card__value">{activeTokens.length}</div>
-            <div className="proxy-summary-card__hint">Сейчас живых MCP-токенов у этого аккаунта.</div>
-          </div>
-          <div className="proxy-summary-card proxy-summary-card--warning">
-            <div className="proxy-summary-card__label">Текущий tier</div>
-            <div className="proxy-summary-card__value">{String(profilePlan || 'trial').toUpperCase()}</div>
-            <div className="proxy-summary-card__hint">Клешня увидит те же лимиты и тот же контур, что и сам пользователь.</div>
-          </div>
-          <div className="proxy-summary-card proxy-summary-card--neutral">
-            <div className="proxy-summary-card__label">MCP endpoint</div>
-            <div className="proxy-summary-card__value table-mono">/api/mcp</div>
-            <div className="proxy-summary-card__hint">Один endpoint для initialize, tools/list и tools/call.</div>
-          </div>
-        </div>
-      </div>
-
       {error ? <div className="error-card" style={{ marginTop: 20 }}>{error}</div> : null}
 
-      <div className="mcp-layout">
-        <div className="toolbar-card proxy-surface-card">
-          <div className="proxy-surface-card__head">
-            <div>
-              <div className="toolbar-card__title">Выдать новый MCP-токен</div>
-              <div className="table-subtext">Токен показываем один раз. Потом на экране останется только hint и история использования.</div>
-            </div>
-          </div>
-          <div className="toolbar-card__body mcp-create-grid">
-            <label className="field-group">
-              <span>Название</span>
-              <input className="field" value={label} onChange={(event) => setLabel(event.target.value)} placeholder="OpenClaw на ноутбуке" />
-            </label>
-            <button className="ghost-button ghost-button--primary" type="button" onClick={createToken} disabled={creating}>
-              {creating ? 'Создаем...' : 'Создать токен'}
-            </button>
-          </div>
-
-          {lastCreatedToken ? (
-            <div className="mcp-secret-block">
-              <div className="mcp-secret-block__head">
-                <strong>Новый токен</strong>
-                <button className="ghost-button" type="button" onClick={() => copyText(lastCreatedToken, 'token')}>
-                  {copyState === 'token' ? 'Скопировано' : 'Скопировать токен'}
-                </button>
-              </div>
-              <pre className="mcp-code-block"><code>{lastCreatedToken}</code></pre>
-              <div className="table-subtext">Сохрани его сразу в клиенте. В списке ниже потом будет только сокращенный hint.</div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="toolbar-card proxy-surface-card">
-          <div className="proxy-surface-card__head">
-            <div>
-              <div className="toolbar-card__title">Как подключить обычному человеку</div>
-              <div className="table-subtext">Опираемся на card-step паттерн: сначала включить ACPX, потом открыть конфиг, вставить BullRun MCP и только после этого проверять.</div>
-            </div>
-          </div>
-
-          <div className="mcp-steps">
-            <article className="mcp-step-card">
-              <div className="mcp-step-card__badge">Шаг 1</div>
-              <div className="mcp-step-card__title">Включи ACPX runtime</div>
-              <div className="mcp-step-card__text">Если плагин ACPX еще не включен, выполни одну команду в терминале.</div>
-              <div className="mcp-secret-block">
-                <div className="mcp-secret-block__head">
-                  <strong>Команда</strong>
-                  <button className="ghost-button" type="button" onClick={() => copyText('openclaw plugins enable acpx', 'enable')}>
-                    {copyState === 'enable' ? 'Скопировано' : 'Скопировать'}
-                  </button>
+      <div className="space-y-6">
+        {/* Create token */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
+                  <KeyRound className="w-6 h-6" />
                 </div>
-                <pre className="mcp-code-block"><code>openclaw plugins enable acpx</code></pre>
-              </div>
-            </article>
-
-            <article className="mcp-step-card">
-              <div className="mcp-step-card__badge">Шаг 2</div>
-              <div className="mcp-step-card__title">Открой конфиг OpenClaw</div>
-              <div className="mcp-step-card__text">Нужный файл и точка вставки уже известны. Человеку не нужно гадать, куда именно класть BullRun MCP.</div>
-              <div className="mcp-inline-values">
-                <div className="mcp-inline-values__row">
-                  <span>Файл</span>
-                  <code>~/.openclaw/openclaw.json</code>
-                </div>
-                <div className="mcp-inline-values__row">
-                  <span>Секция</span>
-                  <code>plugins.entries.acpx.config.mcpServers</code>
+                <div>
+                  <CardTitle className="text-lg font-bold tracking-tight text-slate-900">MCP-токен</CardTitle>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                    Выдай персональный токен, скопируй готовый config и проверь, что клешня видит BullRun tools.
+                  </p>
                 </div>
               </div>
-            </article>
+              <Button asChild variant="outline" size="sm" className="h-9 rounded-xl">
+                <a href="/app/integrations">Все API-ключи</a>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 px-6 pb-6">
+            <div className="flex gap-3 items-end">
+              <label className="flex flex-col gap-1.5 flex-1 max-w-xs">
+                <span className="text-xs font-semibold text-slate-500">Название</span>
+                <Input className="h-9 bg-slate-50" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="OpenClaw на ноутбуке" />
+              </label>
+              <Button className="h-9 rounded-xl" type="button" onClick={createToken} disabled={creating}>
+                {creating ? 'Создаем...' : 'Создать токен'}
+              </Button>
+            </div>
 
-            <article className="mcp-step-card">
-              <div className="mcp-step-card__badge">Шаг 3</div>
-              <div className="mcp-step-card__title">Вставь BullRun MCP</div>
-              <div className="mcp-step-card__text">Если не хочется думать про структуру конфига, ниже уже готовый фрагмент с токеном и endpoint.</div>
-              <div className="mcp-secret-block">
-                <div className="mcp-secret-block__head">
-                  <strong>Готовый config</strong>
-                  <button className="ghost-button" type="button" onClick={() => copyText(openClawConfigSnippet, 'snippet')}>
-                    {copyState === 'snippet' ? 'Скопировано' : 'Скопировать config'}
-                  </button>
+            {lastCreatedToken ? (
+              <div className="space-y-3">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-slate-500">Новый токен</span>
+                  <CopyInput value={lastCreatedToken} monospace />
+                </label>
+                <p className="text-xs text-slate-400">Если потеряешь ключ, открой /app/integrations и скопируй повторно.</p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Setup steps */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Подключение клешни</CardTitle>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Включи ACPX, открой конфиг, вставь BullRun MCP и проверь подключение.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6 px-6 pb-6">
+            <div className="space-y-5">
+              <div>
+                <StepHeader number={1} title="Включи ACPX runtime" />
+                <p className="text-sm text-slate-500 mb-2 ml-9">Если плагин ACPX еще не включен, выполни команду.</p>
+                <div className="ml-9">
+                  <CodeBlock label="Команда" value="openclaw plugins enable acpx" />
                 </div>
-                <pre className="mcp-code-block"><code>{openClawConfigSnippet}</code></pre>
               </div>
-            </article>
 
-            <article className="mcp-step-card">
-              <div className="mcp-step-card__badge">Шаг 4</div>
-              <div className="mcp-step-card__title">Перезапусти и проверь</div>
-              <div className="mcp-step-card__text">После правки конфига запусти gateway заново и проверь токен прямо тут, не уходя в догадки.</div>
-              <div className="mcp-secret-block">
-                <div className="mcp-secret-block__head">
-                  <strong>Команда запуска</strong>
-                  <button className="ghost-button" type="button" onClick={() => copyText('openclaw gateway', 'gateway')}>
-                    {copyState === 'gateway' ? 'Скопировано' : 'Скопировать'}
-                  </button>
+              <div>
+                <StepHeader number={2} title="Открой конфиг OpenClaw" />
+                <p className="text-sm text-slate-500 mb-2 ml-9">Нужный файл и точка вставки уже известны.</p>
+                <div className="ml-9 grid gap-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Файл</span>
+                    <code className="font-mono text-xs text-slate-700">~/.openclaw/openclaw.json</code>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
+                    <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Секция</span>
+                    <code className="font-mono text-xs text-slate-700 break-all">plugins.entries.acpx.config.mcpServers</code>
+                  </div>
                 </div>
-                <pre className="mcp-code-block"><code>openclaw gateway</code></pre>
               </div>
-            </article>
-          </div>
 
-          <div className="mcp-secret-block" style={{ marginTop: 18 }}>
-            <div className="mcp-secret-block__head">
-              <strong>Быстрые значения</strong>
-              <button className="ghost-button" type="button" onClick={() => copyText(tokenForSetup, 'token-inline')}>
-                {copyState === 'token-inline' ? 'Скопировано' : 'Скопировать токен'}
-              </button>
-            </div>
-            <div className="mcp-inline-values">
-              <div className="mcp-inline-values__row">
-                <span>MCP endpoint</span>
-                <code>{APP_CONFIG.backendUrl}/api/mcp</code>
+              <div>
+                <StepHeader number={3} title="Вставь BullRun MCP" />
+                <p className="text-sm text-slate-500 mb-2 ml-9">Готовый фрагмент с токеном и endpoint.</p>
+                <div className="ml-9">
+                  <CodeBlock label="Готовый config" value={openClawConfigSnippet} />
+                </div>
               </div>
-              <div className="mcp-inline-values__row">
-                <span>Token</span>
-                <code>{tokenForSetup}</code>
+
+              <div>
+                <StepHeader number={4} title="Перезапусти и проверь" />
+                <p className="text-sm text-slate-500 mb-2 ml-9">Запусти gateway заново и проверь токен.</p>
+                <div className="ml-9">
+                  <CodeBlock label="Команда запуска" value="openclaw gateway" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="toolbar-card__body" style={{ paddingTop: 0 }}>
-            <button className="ghost-button ghost-button--primary" type="button" onClick={testToken} disabled={testing || !lastCreatedToken}>
-              {testing ? 'Проверяем...' : 'Проверить подключение'}
-            </button>
-          </div>
-          {testResult ? (
-            <div className={`mcp-test-result${testResult.ok ? ' mcp-test-result--ok' : ' mcp-test-result--error'}`}>
-              {testResult.text}
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Быстрые значения</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-slate-500">MCP endpoint</span>
+                  <CopyInput value={`${APP_CONFIG.backendUrl}/api/mcp`} monospace />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-semibold text-slate-500">Token</span>
+                  <CopyInput value={tokenForSetup} monospace />
+                </label>
+              </div>
             </div>
-          ) : null}
-        </div>
-      </div>
 
-      <div className="toolbar-card proxy-surface-card" style={{ marginTop: 20 }}>
-        <div className="proxy-surface-card__head">
-          <div>
-            <div className="toolbar-card__title">Если хочешь просто скинуть это самой клешне</div>
-            <div className="table-subtext">Копируешь один промпт, отправляешь его в OpenClaw и он сам правит свой конфиг, если у него есть доступ к файлам.</div>
-          </div>
-        </div>
-        <div className="mcp-secret-block">
-          <div className="mcp-secret-block__head">
-            <strong>Готовый промпт для клешни</strong>
-            <button className="ghost-button" type="button" onClick={() => copyText(agentSetupPrompt, 'agent-prompt')}>
-              {copyState === 'agent-prompt' ? 'Скопировано' : 'Скопировать промпт'}
-            </button>
-          </div>
-          <pre className="mcp-code-block"><code>{agentSetupPrompt}</code></pre>
-        </div>
-      </div>
+            <div className="flex items-center gap-3">
+              <Button className="h-9 rounded-xl" type="button" onClick={testToken} disabled={testing || !lastCreatedToken}>
+                {testing ? 'Проверяем...' : 'Проверить подключение'}
+              </Button>
+              {testResult ? (
+                <Badge variant="outline" className={testResult.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}>
+                  {testResult.text}
+                </Badge>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="table-card proxy-surface-card" style={{ marginTop: 20 }}>
-        <div className="proxy-surface-card__head">
-          <div>
-            <div className="table-card__title">Выданные токены</div>
-            <div className="table-subtext">Если устройство потеряли или хотим пересобрать контур, просто отзываем токен и выдаем новый.</div>
-          </div>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Название</th>
-                <th>Hint</th>
-                <th>Создан</th>
-                <th>Последний вход</th>
-                <th>Статус</th>
-                <th>Действие</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.length ? tokens.map((token) => (
-                <tr key={token.id}>
-                  <td>
-                    <div className="table-primary">{token.label || 'OpenClaw'}</div>
-                  </td>
-                  <td>
-                    <div className="table-primary table-mono">{token.token_hint || maskToken(token.token_prefix)}</div>
-                  </td>
-                  <td>
-                    <div className="table-primary">{formatWhen(token.created_at)}</div>
-                  </td>
-                  <td>
-                    <div className="table-primary">{formatWhen(token.last_used_at)}</div>
-                    {token.last_used_ip ? <div className="table-subtext table-mono">{token.last_used_ip}</div> : null}
-                  </td>
-                  <td>
-                    <span className={`pill ${token.revoked_at ? 'pill--danger' : 'pill--ok'}`}>
-                      {token.revoked_at ? 'Отозван' : 'Активен'}
-                    </span>
-                  </td>
-                  <td>
-                    {token.revoked_at ? (
-                      <div className="table-subtext">Ничего не делаем</div>
-                    ) : (
-                      <button className="ghost-button" type="button" onClick={() => revokeToken(token.id)} disabled={revokingId === String(token.id)}>
-                        {revokingId === String(token.id) ? 'Отзываем...' : 'Отозвать'}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="6">
-                    <div className="empty-state" style={{ minHeight: 120 }}>
-                      <strong>Пока нет MCP-токенов</strong>
-                      <span>Создай первый токен выше и сразу проверь, что клешня видит BullRun tools.</span>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* Agent prompt */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Промпт для клешни</CardTitle>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Скопируй один промпт и отправь в OpenClaw — он сам поправит свой конфиг.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
+          </CardContent>
+        </Card>
+
+        {/* Tokens table */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Все MCP-токены</CardTitle>
+                <p className="mt-1 text-sm text-slate-500">Потерял устройство — отзови токен и выдай новый.</p>
+              </div>
+              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
+                <RefreshCcw className="h-4 w-4" /> Обновить
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Название</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Hint</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Создан</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Последний вход</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
+                    <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Действие</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokens.length ? tokens.map((token) => (
+                    <tr key={token.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 pr-4 font-medium text-slate-900">{token.label || 'OpenClaw'}</td>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-700">{token.token_hint || maskToken(token.token_prefix)}</td>
+                      <td className="py-3 pr-4 text-slate-500">{formatWhen(token.created_at)}</td>
+                      <td className="py-3 pr-4">
+                        <div className="text-slate-700">{formatWhen(token.last_used_at)}</div>
+                        {token.last_used_ip ? <div className="font-mono text-xs text-slate-400">{token.last_used_ip}</div> : null}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <Badge variant="outline" className={token.revoked_at ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}>
+                          {token.revoked_at ? 'Отозван' : 'Активен'}
+                        </Badge>
+                      </td>
+                      <td className="py-3 text-right">
+                        {token.revoked_at ? (
+                          <span className="text-xs text-slate-400">—</span>
+                        ) : (
+                          <Button variant="ghost" size="sm" className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50" type="button" onClick={() => revokeToken(token.id)} disabled={revokingId === String(token.id)} title="Отозвать">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                            <ShieldCheck className="w-6 h-6 text-slate-400" />
+                          </div>
+                          <p className="text-sm text-slate-500 font-semibold">Пока нет MCP-токенов</p>
+                          <p className="mt-1 text-xs text-slate-400">Создай первый токен выше и проверь подключение.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </section>
   );

@@ -188,21 +188,22 @@ function normalizeOpenProxyPurchaseGroup(rows = []) {
 }
 
 function itemPaymentMethods(item) {
-  const source = Array.isArray(item?.available_payment_methods) && item.available_payment_methods.length
+  const source = Array.isArray(item?.available_payment_methods)
     ? item.available_payment_methods
     : Array.isArray(item?.payment_methods) && item.payment_methods.length
       ? item.payment_methods
       : ['ton', 'p2p'];
-  return source.filter((method) => method === 'ton' || method === 'p2p');
+  return source.filter((method) => method === 'ton' || method === 'p2p' || method === 'robokassa');
 }
 
 function paymentMethodLabel(value) {
+  if (value === 'robokassa') return 'Robokassa';
   return value === 'p2p' ? 'СБП' : 'TON';
 }
 
 function purchaseStatusMeta(status) {
   if (status === 'awaiting_receipt') {
-    return { text: 'Чек отправлен', className: 'pill pill--warning' };
+    return { text: 'Оплата отмечена', className: 'pill pill--warning' };
   }
   if (status === 'paid') {
     return { text: 'Оплата есть', className: 'pill pill--ok' };
@@ -219,13 +220,16 @@ function itemPriceSummary(item) {
   if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
     parts.push(`${formatRub(item.price_rub)} RUB`);
   }
-  return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
+  if (methods.includes('robokassa') && Number(item?.price_rub || 0) > 0) {
+    parts.push(`${formatRub(item.price_rub)} RUB`);
+  }
+  return parts.join(' / ') || 'Нужна цена в RUB';
 }
 
 function purchaseAmountSummary(purchase) {
-  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p') {
+  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p' || purchase?.payment_method === 'robokassa' || purchase?.payload?.payment_method === 'robokassa') {
     const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
+    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payment_method || purchase?.payload?.payment_method);
   }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
@@ -392,9 +396,7 @@ export function ProxyManagerPage() {
     async function loadShopItems() {
       try {
         const requests = [];
-        if (state.support?.profile_role === 'admin') {
-          requests.push(apiRequest('/api/shop/public/items'));
-        } else if (accessToken) {
+        if (accessToken) {
           requests.push(apiRequest('/api/shop/app/items', { accessToken }));
           requests.push(apiRequest('/api/shop/public/my-purchases', { accessToken }));
         } else {
@@ -403,14 +405,12 @@ export function ProxyManagerPage() {
         if (state.support?.profile_role === 'admin' && accessToken) {
           requests.push(apiRequest('/api/shop/seller/items', { accessToken }));
         }
-        const [publicData, secondData, thirdData] = await Promise.all(requests);
-        const purchasesData = state.support?.profile_role === 'admin' ? null : secondData;
-        const sellerData = state.support?.profile_role === 'admin' ? secondData : thirdData;
+        const [itemsData, purchasesData, sellerData] = await Promise.all(requests);
         if (cancelled) return;
         setShopState({
           loading: false,
           error: '',
-          items: (publicData.items || []).filter(isProxyShopItem),
+          items: (itemsData.items || []).filter(isProxyShopItem),
           sellerItems: sellerData?.items || [],
           purchases: purchasesData?.purchases || []
         });
@@ -501,8 +501,17 @@ export function ProxyManagerPage() {
       && JSON.stringify(itemPaymentMethods(item)) === paymentSignature
     );
 
-    const tonValues = visibleProxyItems.map((item) => Number(item.price_ton || 0)).filter((value) => value > 0);
-    const rubValues = visibleProxyItems.map((item) => Number(item.price_rub || 0)).filter((value) => value > 0);
+    const tonValues = visibleProxyItems
+      .filter((item) => itemPaymentMethods(item).includes('ton'))
+      .map((item) => Number(item.price_ton || 0))
+      .filter((value) => value > 0);
+    const rubValues = visibleProxyItems
+      .filter((item) => {
+        const methods = itemPaymentMethods(item);
+        return methods.includes('p2p') || methods.includes('robokassa');
+      })
+      .map((item) => Number(item.price_rub || 0))
+      .filter((value) => value > 0);
 
     return {
       title: 'Прокси BullRun',
@@ -510,7 +519,7 @@ export function ProxyManagerPage() {
       items: visibleProxyItems,
       unitPriceText: samePrice
         ? itemPriceSummary(first)
-        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}${tonValues.length && rubValues.length ? ' / ' : ''}${rubValues.length ? `от ${formatRub(Math.min(...rubValues))} RUB` : ''}`,
+        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}${tonValues.length && rubValues.length ? ' / ' : ''}${rubValues.length ? `от ${formatRub(Math.min(...rubValues))} RUB` : ''}` || 'Нужна цена в RUB',
       paymentMethods: itemPaymentMethods(first),
       samePrice
     };
@@ -947,9 +956,13 @@ export function ProxyManagerPage() {
           expires_at: data.expires_at,
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || ''
+          sbp_fio: data.sbp_fio || '',
+          payment_url: data.payment_url || ''
         }
       });
+      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
+        window.location.href = data.payment_url;
+      }
     } catch (error) {
       let existingPurchase = null;
       if (accessToken) {
@@ -983,7 +996,8 @@ export function ProxyManagerPage() {
           sbp_phone: existingPurchase.payload?.sbp_phone || '',
           sbp_bank: existingPurchase.payload?.sbp_bank || '',
           sbp_fio: existingPurchase.payload?.sbp_fio || '',
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || ''
+          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
+          payment_url: existingPurchase.payload?.robokassa_payment_url || ''
         } : null,
         loading: false,
         checking: false,
@@ -1057,6 +1071,7 @@ export function ProxyManagerPage() {
           sbp_phone: data.sbp_phone || '',
           sbp_bank: data.sbp_bank || '',
           sbp_fio: data.sbp_fio || '',
+          payment_url: data.payment_url || '',
           status: 'pending',
           batch: true
         },
@@ -1065,6 +1080,9 @@ export function ProxyManagerPage() {
         checking: false,
         error: ''
       });
+      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
+        window.location.href = data.payment_url;
+      }
     } catch (error) {
       const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken }).catch(() => null);
       if (purchasesData?.purchases) {
@@ -1166,6 +1184,7 @@ export function ProxyManagerPage() {
         sbp_bank: purchase.payload?.sbp_bank || '',
         sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
+        payment_url: purchase.payload?.robokassa_payment_url || '',
         batch: !!purchase.batch
       },
       paymentMethod: purchase.payload?.payment_method || 'ton',
@@ -1627,10 +1646,6 @@ function renderOpenProxyPurchases(rows) {
 
 
   function ProxyPurchaseSection() {
-    if (state.support?.profile_role === 'admin') {
-      return null;
-    }
-
     return (
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {/* VIEW TABS - навигация между состояниями */}
@@ -1756,13 +1771,15 @@ function renderOpenProxyPurchases(rows) {
                           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all${
                             method === 'ton'
                               ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
+                              : method === 'robokassa'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
                               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                           type="button"
                           disabled={checkoutState.loading || proxyBuyLimit <= 0}
                           onClick={() => createProxyBatchCheckout(method)}
                         >
-                          {checkoutState.loading ? 'Готовим...' : (method === 'ton' ? 'TON' : 'СБП')}
+                          {checkoutState.loading ? 'Готовим...' : paymentMethodLabel(method)}
                         </button>
                       ))}
                     </div>
@@ -1897,7 +1914,7 @@ function renderOpenProxyPurchases(rows) {
                           )}
                           <div className="flex items-center justify-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
                             <QrCode className="w-3.5 h-3.5" />
-                            {tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                            {tonCheckoutView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
                           </div>
                           <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50">
                             <img
@@ -1905,11 +1922,32 @@ function renderOpenProxyPurchases(rows) {
                               src={tonCheckoutView === 'ton'
                                 ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
                                 : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
-                              alt={tonCheckoutView === 'ton' ? 'TON QR' : 'Trust Wallet QR'}
+                              alt={tonCheckoutView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
                             />
                           </div>
                         </div>
                       )}
+                    </div>
+                  ) : checkoutState.purchase.payment_method === 'robokassa' ? (
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <CreditCard className="mt-1 h-5 w-5 shrink-0 text-blue-600" />
+                        <div>
+                          <div className="font-black text-slate-950">Оплата через Robokassa</div>
+                          <p className="mt-1 text-sm font-semibold leading-6 text-slate-700">
+                            После оплаты Robokassa сама отправит callback, а BullRun передаст proxy в твой кабинет.
+                          </p>
+                        </div>
+                      </div>
+                      {checkoutState.purchase.payment_url ? (
+                        <a
+                          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black !text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-700"
+                          href={checkoutState.purchase.payment_url}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Перейти в Robokassa
+                        </a>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
@@ -1945,8 +1983,8 @@ function renderOpenProxyPurchases(rows) {
 
                       {checkoutState.purchase.status === 'pending' ? (
                         <div className="space-y-3">
-                          <div className="font-semibold text-slate-900">Отправь чек продавцу</div>
-                          <div className="text-sm text-slate-600">После перевода приложи скриншот или PDF чека</div>
+                          <div className="font-semibold text-slate-900">Отметь оплату</div>
+                          <div className="text-sm text-slate-600">После перевода нажми “Я оплатил”. Чек можно приложить, но он не обязателен, если у продавца включена автосверка.</div>
                           <textarea
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                             rows="3"
@@ -1963,7 +2001,7 @@ function renderOpenProxyPurchases(rows) {
                         </div>
                       ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
                         <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                          Чек отправлен. Продавец скоро проверит его вручную.
+                          Ждем подтверждение продавца или банковское уведомление. Чек не обязателен, если оплата найдется через автосверку.
                         </div>
                       ) : null}
                     </div>
@@ -2008,6 +2046,13 @@ function renderOpenProxyPurchases(rows) {
                         >
                           {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
                         </button>
+                      ) : checkoutState.purchase.payment_method === 'robokassa' && checkoutState.purchase.payment_url ? (
+                        <a
+                          className="px-5 py-2.5 rounded-xl bg-blue-600 !text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
+                          href={checkoutState.purchase.payment_url}
+                        >
+                          Перейти в Robokassa
+                        </a>
                       ) : checkoutState.purchase.status === 'pending' ? (
                         <button
                           className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
@@ -2015,7 +2060,7 @@ function renderOpenProxyPurchases(rows) {
                           disabled={checkoutState.checking}
                           onClick={markCheckoutPaid}
                         >
-                          {checkoutState.checking ? 'Отправляем...' : 'Отправить чек'}
+                          {checkoutState.checking ? 'Отправляем...' : 'Я оплатил'}
                         </button>
                       ) : null}
                     </div>
@@ -2160,7 +2205,7 @@ function renderOpenProxyPurchases(rows) {
         </div>
       ) : null}
 
-      {state.support?.profile_role !== 'admin' ? <ProxyPurchaseSection /> : null}
+      <ProxyPurchaseSection />
 
       {state.support?.profile_role !== 'admin' ? (
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
@@ -2413,15 +2458,7 @@ function renderOpenProxyPurchases(rows) {
                         >
                           Проверить
                         </button>
-                        {(proxy.provision_source || 'manual_free') === 'manual_owned' ? (
-                          <>
-                            <button
-                              className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all"
-                              type="button"
-                              onClick={() => editProxy(proxy)}
-                            >
-                              Редактировать
-                            </button>
+                        {proxy.provision_source !== 'manual_admin' ? (
                             <button
                               className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
                               type="button"
@@ -2429,7 +2466,6 @@ function renderOpenProxyPurchases(rows) {
                             >
                               Удалить
                             </button>
-                          </>
                         ) : null}
                       </div>
                     </div>

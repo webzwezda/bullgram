@@ -18,8 +18,7 @@ const navSections = [
   {
     title: 'BullRun',
     items: [
-      { to: '/', label: 'Главная', icon: LayoutDashboard },
-      { to: '/telegram', label: 'Telegram', icon: MessageCircle, adminOnly: true }
+      { to: '/', label: 'Главная', icon: LayoutDashboard }
     ]
   },
   {
@@ -42,6 +41,13 @@ const navSections = [
       { href: '/courses/', label: 'Курсы', icon: GraduationCap, external: true },
       { href: '/blog/', label: 'Блог', icon: Newspaper, external: true }
     ]
+  },
+  {
+    title: 'Для админа',
+    adminOnly: true,
+    items: [
+      { to: '/telegram', label: 'Telegram', icon: MessageCircle }
+    ]
   }
 ];
 
@@ -55,8 +61,8 @@ export function App() {
   const isLegacyNormalShopRoute = location.pathname === '/shop' && new URLSearchParams(location.search).get('offer') === 'normal';
   const { user, profileRole } = useAuth();
   const navItems = navSections
-    .flatMap((section) => section.items)
-    .filter((item) => !item.adminOnly || profileRole === 'admin');
+    .filter((section) => !section.adminOnly || profileRole === 'admin')
+    .flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
@@ -124,16 +130,13 @@ export function App() {
         )}
 
         <nav className="flex flex-col gap-6 flex-1 overflow-y-auto">
-          {navSections.map((section) => {
-            const visibleItems = section.items.filter((item) => !item.adminOnly || profileRole === 'admin');
-            if (!visibleItems.length) return null;
-            return (
+          {navSections.filter((section) => !section.adminOnly || profileRole === 'admin').map((section) => (
             <div key={section.title} className="flex flex-col gap-2">
               <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-400 mb-1">
                 {section.title}
               </div>
               <div className="flex flex-col gap-1">
-                {visibleItems.map((item) => {
+                {section.items.map((item) => {
                   const Icon = item.icon;
                   if (item.external) {
                     return (
@@ -170,8 +173,7 @@ export function App() {
                 })}
               </div>
             </div>
-            );
-          })}
+          ))}
         </nav>
       </aside>
 

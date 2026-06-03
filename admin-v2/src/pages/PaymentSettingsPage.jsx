@@ -1,26 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
-import { BillingAdminIdSection } from './payment-settings/BillingAdminIdSection.jsx';
 import { BillingHeader } from './payment-settings/BillingHeader.jsx';
-import { BillingStatsGrid } from './payment-settings/BillingStatsGrid.jsx';
 import { BillingWebhookSection } from './payment-settings/BillingWebhookSection.jsx';
-import { FinalSettingsActions } from './payment-settings/FinalSettingsActions.jsx';
-import { PaymentEventsSection } from './payment-settings/PaymentEventsSection.jsx';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
+import { ReceiptVerificationSection } from './payment-settings/ReceiptVerificationSection.jsx';
+import { BankEventsSection } from './payment-settings/BankEventsSection.jsx';
+import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
 import { TariffsSection } from './payment-settings/TariffsSection.jsx';
-import { useBillingSettingsController } from './payment-settings/useBillingSettingsController.js';
 import { usePaymentSettingsController } from './payment-settings/usePaymentSettingsController.js';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
 import { useTariffsController } from './payment-settings/useTariffsController.js';
 
 export function PaymentSettingsPage({ mode = 'requisites' }) {
   const { user, accessToken } = useAuth();
-  const [paymentEventFilter, setPaymentEventFilter] = useState('all');
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -35,6 +32,8 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     bundleSupport: true,
     billingHealth: null,
     paymentEvents: [],
+    invoices: [],
+    selectedBotId: null,
     updatedAt: null
   });
   const {
@@ -47,17 +46,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     accessToken,
     setState,
     settings: state.settings
-  });
-  const {
-    fillAdminIdFromUserbot,
-    selectedUserbotId,
-    sendWebhookTest,
-    setSelectedUserbotId
-  } = useBillingSettingsController({
-    accessToken,
-    patchSettings,
-    settings: state.settings,
-    userbots: state.userbots
   });
   const {
     addBundleItem,
@@ -144,7 +132,17 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           .eq('is_active', true)
           .order('created_at', { ascending: false });
 
+        const invoicesResult = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('owner_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(200);
+
         if (tariffsResult.error) throw tariffsResult.error;
+        if (invoicesResult.error && !(invoicesResult.error.message || '').includes('invoices')) {
+          throw invoicesResult.error;
+        }
         tariffs = tariffsResult.data || [];
 
         const bundleItemsResult = await supabase
@@ -185,12 +183,9 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             bundleSupport,
             billingHealth: health || null,
             paymentEvents: paymentEvents || [],
+            invoices: invoicesResult.data || [],
             updatedAt: new Date().toISOString()
           });
-
-          if (!selectedUserbotId && nextUserbots.length > 0) {
-            setSelectedUserbotId(String(nextUserbots[0].id));
-          }
 
           setBundleDrafts((prev) => {
             const nextDrafts = { ...prev };
@@ -231,38 +226,57 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [user?.id, accessToken, selectedUserbotId]);
+  }, [user?.id, accessToken]);
 
   const {
-    filteredPaymentEvents,
-    billingStatsCards,
     prioritySignals,
-    showBillingStats,
     isRequisitesMode,
     isPlansMode,
     isBillingMode,
     pageCopy
-  } = usePaymentSettingsDerivedState({ mode, paymentEventFilter, state });
+  } = usePaymentSettingsDerivedState({ mode, paymentEventFilter: 'all', state });
+
+  const bots = useMemo(() => {
+    const botIds = new Set(state.tariffs.map((t) => t.bot_id).filter(Boolean));
+    return state.officialBots.filter((b) => botIds.has(b.id));
+  }, [state.tariffs, state.officialBots]);
+
+  const tariffBotMap = useMemo(() => {
+    const map = new Map();
+    for (const t of state.tariffs) {
+      if (t.bot_id) map.set(t.id, t.bot_id);
+    }
+    return map;
+  }, [state.tariffs]);
+
+  const invoiceMap = useMemo(() => {
+    const map = new Map();
+    for (const inv of state.invoices) {
+      map.set(inv.id, inv);
+    }
+    return map;
+  }, [state.invoices]);
+
+  const filteredPaymentEvents = useMemo(() => {
+    if (!state.selectedBotId) return state.paymentEvents;
+    return state.paymentEvents.filter((ev) => {
+      const inv = invoiceMap.get(ev.invoice_id);
+      const tariffId = inv?.tariff_id || ev.payload?.tariff_id;
+      return tariffBotMap.get(tariffId) === state.selectedBotId;
+    });
+  }, [state.paymentEvents, state.selectedBotId, invoiceMap, tariffBotMap]);
 
   if (state.loading) {
-    return <LoadingState text="Тянем реквизиты и billing..." />;
+    return <LoadingState text="Тянем реквизиты и кассу..." />;
   }
 
   return (
     <section className={`page${isRequisitesMode ? ' payment-page' : ''}`}>
-      {isBillingMode ? (
-        <BillingHeader pageCopy={pageCopy} refreshing={state.refreshing} updatedAt={state.updatedAt} />
-      ) : null}
-
       {!isRequisitesMode && prioritySignals.length > 0 ? (
         <PrioritySignalsGrid signals={prioritySignals} />
       ) : null}
 
       {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
-
-      {isBillingMode && showBillingStats ? (
-        <BillingStatsGrid cards={billingStatsCards} />
-      ) : null}
 
       {isRequisitesMode ? (
         <RequisitesSection
@@ -277,23 +291,47 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       ) : null}
 
       {isBillingMode ? (
-        <BillingAdminIdSection
-          fillAdminIdFromUserbot={fillAdminIdFromUserbot}
-          patchSettings={patchSettings}
-          selectedUserbotId={selectedUserbotId}
-          setSelectedUserbotId={setSelectedUserbotId}
-          settings={state.settings}
-          userbots={state.userbots}
-        />
-      ) : null}
-
-      {isBillingMode ? (
-        <BillingWebhookSection
-          billingHealth={state.billingHealth}
-          patchSettings={patchSettings}
-          sendWebhookTest={sendWebhookTest}
-          settings={state.settings}
-        />
+        <div className="space-y-6">
+          <RequisitesSection
+            fieldErrors={fieldErrors}
+            patchSettings={patchSettings}
+            saveSettings={saveSettings}
+            saving={state.saving}
+            settings={state.settings}
+            toggleSbpBank={toggleSbpBank}
+            validatePaymentFields={validatePaymentFields}
+          />
+          <BillingWebhookSection
+            accessToken={accessToken}
+          />
+          <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-bold text-slate-700">Оплаты:</span>
+              <button
+                type="button"
+                className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${!state.selectedBotId ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                onClick={() => setState((prev) => ({ ...prev, selectedBotId: null }))}
+              >
+                Все боты
+              </button>
+              {bots.map((bot) => (
+                <button
+                  key={bot.id}
+                  type="button"
+                  className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${state.selectedBotId === bot.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                  onClick={() => setState((prev) => ({ ...prev, selectedBotId: bot.id }))}
+                >
+                  @{bot.tg_username}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ReceiptVerificationSection paymentEvents={filteredPaymentEvents} invoiceMap={invoiceMap} tariffs={state.tariffs} />
+              <BankEventsSection accessToken={accessToken} />
+            </div>
+            <CryptoPurchasesSection paymentEvents={filteredPaymentEvents} invoiceMap={invoiceMap} tariffs={state.tariffs} />
+          </div>
+        </div>
       ) : null}
 
       {isPlansMode ? (
@@ -317,17 +355,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
         </>
       ) : null}
 
-      {isBillingMode ? (
-      <FinalSettingsActions isPlansMode={isPlansMode} onSave={saveSettings} saving={state.saving} />
-      ) : null}
-
-      {isBillingMode ? (
-      <PaymentEventsSection
-        filteredPaymentEvents={filteredPaymentEvents}
-        paymentEventFilter={paymentEventFilter}
-        setPaymentEventFilter={setPaymentEventFilter}
-      />
-      ) : null}
     </section>
   );
 }

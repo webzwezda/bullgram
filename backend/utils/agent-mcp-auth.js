@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { authenticateIntegrationToken } from '../services/integration-tokens.service.js';
 
 function hashToken(token) {
     return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex');
@@ -102,6 +103,31 @@ export async function authenticateAgentOrUserToken({ supabase, authorizationHead
 
     const token = authHeader.split(' ')[1];
     const tokenHash = hashToken(token);
+
+    const integrationToken = await authenticateIntegrationToken(supabase, {
+        authorizationHeader: authHeader,
+        requiredScopes: ['mcp:use'],
+        purpose: 'mcp',
+        requestIp
+    });
+
+    if (integrationToken?.ownerId) {
+        const user = {
+            id: integrationToken.ownerId,
+            email: null,
+            is_mcp_token: true,
+            is_integration_token: true
+        };
+        const profile = await loadProfileForUser(supabase, user);
+
+        return {
+            kind: 'integration_token',
+            user,
+            profile,
+            agentToken: integrationToken.token,
+            integrationToken: integrationToken.token
+        };
+    }
 
     const { data: agentToken, error: agentTokenError } = await supabase
         .from('agent_mcp_tokens')

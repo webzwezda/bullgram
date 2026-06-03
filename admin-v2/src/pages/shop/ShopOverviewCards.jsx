@@ -3,7 +3,7 @@ import { Package, ShoppingCart, FileCheck, Wallet } from 'lucide-react';
 const CARDS = [
   { key: 'published', icon: Package, color: 'indigo', label: 'На витрине', getValue: (d) => d.itemSummary.published, getSub: () => 'Опубликованные товары' },
   { key: 'orders', icon: ShoppingCart, color: 'slate', label: 'Заказов', getValue: (d) => d.purchaseSummary.total, getSub: () => 'Всего за текущий период' },
-  { key: 'receipt', icon: FileCheck, color: 'amber', label: 'К подтверждению', getValue: (d) => d.purchaseSummary.awaiting_receipt, getSub: () => 'Чеки ждут решения' },
+  { key: 'receipt', icon: FileCheck, color: 'amber', label: 'К подтверждению', getValue: (d) => d.purchaseSummary.awaiting_receipt, getSub: () => 'Оплаты ждут решения' },
   { key: 'earned', icon: Wallet, color: 'emerald', label: 'Получено', getValue: (d) => `${d.sellerStats.paidTon} TON`, getSub: (d) => `${d.purchaseSummary.paid} оплат` }
 ];
 

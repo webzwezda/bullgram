@@ -3,10 +3,17 @@ import QRCode from 'qrcode';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
 import { normalizeSbpBankSelection } from '../utils/payment-settings.js';
+import {
+    buildRobokassaPaymentUrl,
+    formatRobokassaAmount,
+    getRobokassaConfig,
+    verifyRobokassaCallback
+} from '../services/robokassa.service.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -123,18 +130,29 @@ function normalizePaymentMethods(value) {
 
     const methods = Array.from(new Set(source
         .map((item) => String(item || '').trim().toLowerCase())
-        .filter((item) => item === 'ton' || item === 'p2p')));
+        .filter((item) => item === 'ton' || item === 'p2p' || item === 'robokassa')));
 
     return methods.length ? methods : ['ton', 'p2p'];
 }
 
 function buildAvailablePaymentMethods(item, settings) {
     const allowed = normalizePaymentMethods(item?.payment_methods);
-    return allowed.filter((method) => {
+    const methods = allowed.filter((method) => {
         if (method === 'ton') return !!settings?.ton_wallet;
         if (method === 'p2p') return !!settings?.sbp_phone;
+        if (method === 'robokassa') return false;
         return false;
     });
+
+    if (isRobokassaInventoryItem(item)) {
+        const robokassa = getRobokassaConfig();
+        const rubPrice = Number(item?.price_rub || 0);
+        if (allowed.includes('robokassa') && robokassa.enabled && robokassa.configured && rubPrice > 0) {
+            methods.push('robokassa');
+        }
+    }
+
+    return Array.from(new Set(methods));
 }
 
 function isMissingPaymentMethodsColumn(error) {
@@ -178,7 +196,25 @@ function buildTrustWalletTonUri(wallet, amountTon, memo) {
 }
 
 function normalizePaymentMethod(value) {
+    if (value === 'robokassa') return 'robokassa';
     return value === 'p2p' ? 'p2p' : 'ton';
+}
+
+function isRobokassaInventoryItem(item) {
+    return item?.item_type === 'proxy' || item?.item_type === 'userbot' || item?.item_type === 'bundle';
+}
+
+function buildRobokassaShopDescription(items = []) {
+    const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (rows.length > 1) {
+        const hasUserbot = rows.some((item) => item.item_type === 'userbot' || item.item_type === 'bundle');
+        const hasProxy = rows.some((item) => item.item_type === 'proxy' || item.item_type === 'bundle');
+        if (hasUserbot && hasProxy) return `BullRun: аккаунты и proxy x${rows.length}`;
+        if (hasUserbot) return `BullRun: userbot x${rows.length}`;
+        return `BullRun: proxy x${rows.length}`;
+    }
+    const item = rows[0] || {};
+    return `BullRun: ${String(item.title || item.item_type || 'shop').slice(0, 90)}`;
 }
 
 function isVisibleInSalesChannel(item, channel = 'site') {
@@ -271,6 +307,79 @@ async function checkTonPayment(memo, expectedAmount, wallet) {
     }
 }
 
+async function generateRobokassaShopInvoiceId(supabase) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+        const invoiceId = String(crypto.randomInt(200000, 1999999999));
+        const { data, error } = await supabase
+            .from('shop_purchases')
+            .select('id')
+            .contains('payload', { robokassa_invoice_id: invoiceId })
+            .limit(1);
+        if (error) throw error;
+        if (!data || data.length === 0) return invoiceId;
+    }
+
+    const error = new Error('Не удалось выпустить номер счета Robokassa.');
+    error.statusCode = 500;
+    throw error;
+}
+
+async function attachRobokassaPaymentToPurchases(supabase, purchases, items, totalRub) {
+    const purchaseRows = Array.isArray(purchases) ? purchases.filter(Boolean) : [];
+    const itemRows = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!purchaseRows.length) {
+        const error = new Error('Нет покупок для счета Robokassa.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const amountRub = Number(totalRub || 0);
+    if (!Number.isFinite(amountRub) || amountRub <= 0) {
+        const error = new Error('Для оплаты через Robokassa нужна цена в рублях.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const invoiceId = await generateRobokassaShopInvoiceId(supabase);
+    const description = buildRobokassaShopDescription(itemRows);
+    const paymentUrl = buildRobokassaPaymentUrl({
+        order: {
+            amount_rub: amountRub,
+            provider_invoice_id: invoiceId
+        },
+        description
+    });
+
+    for (const purchase of purchaseRows) {
+        const item = itemRows.find((row) => String(row.id) === String(purchase.shop_item_id)) || itemRows[0] || {};
+        const itemAmountRub = Number(item.price_rub || purchase.payload?.amount_rub || 0);
+        const nextPayload = {
+            ...(purchase.payload || {}),
+            payment_method: 'robokassa',
+            amount_rub: Number.isFinite(itemAmountRub) && itemAmountRub > 0 ? itemAmountRub : amountRub,
+            robokassa_invoice_id: invoiceId,
+            robokassa_payment_url: paymentUrl,
+            robokassa_description: description,
+            robokassa_total_rub: amountRub
+        };
+
+        const { error } = await supabase
+            .from('shop_purchases')
+            .update({
+                payload: nextPayload,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', purchase.id);
+        if (error) throw error;
+    }
+
+    return {
+        invoiceId,
+        paymentUrl,
+        description
+    };
+}
+
 async function createOrRefreshBuyerPurchase({
     supabase,
     buyerOwnerId,
@@ -358,18 +467,21 @@ async function createOrRefreshBuyerPurchase({
         .limit(1)
         .maybeSingle();
 
-    let { data: settings, error: settingsError } = await supabase
-        .from('payment_settings')
-        .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio')
-        .eq('owner_id', item.owner_id)
-        .maybeSingle();
-    if (settingsError) throw settingsError;
-    settings = settings
-        ? {
-            ...settings,
-            sbp_bank: normalizeSbpBankSelection(settings.sbp_bank, { fallbackToDefault: false })
-        }
-        : null;
+    let settings = null;
+    if (paymentMethod !== 'robokassa') {
+        const { data: settingsData, error: settingsError } = await supabase
+            .from('payment_settings')
+            .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio')
+            .eq('owner_id', item.owner_id)
+            .maybeSingle();
+        if (settingsError) throw settingsError;
+        settings = settingsData
+            ? {
+                ...settingsData,
+                sbp_bank: normalizeSbpBankSelection(settingsData.sbp_bank, { fallbackToDefault: false })
+            }
+            : null;
+    }
 
     const availablePaymentMethods = buildAvailablePaymentMethods(item, settings);
     if (!availablePaymentMethods.includes(paymentMethod)) {
@@ -390,17 +502,29 @@ async function createOrRefreshBuyerPurchase({
         throw p2pError;
     }
 
+    if (paymentMethod === 'robokassa' && !isRobokassaInventoryItem(item)) {
+        const robokassaItemError = new Error('Robokassa доступна только для покупки proxy и userbot-инвентаря BullRun.');
+        robokassaItemError.statusCode = 400;
+        throw robokassaItemError;
+    }
+
     const memo = String(memoOverride || buildShopMemo()).trim();
     const amountTon = Number(item.price_ton || 0);
     const amountRub = Number(item.price_rub || 0);
+    if (paymentMethod === 'robokassa' && amountRub <= 0) {
+        const rubPriceError = new Error('Для оплаты через Robokassa у лота должна быть цена в рублях.');
+        rubPriceError.statusCode = 400;
+        throw rubPriceError;
+    }
+
     const payloadPatch = {
         payment_method: paymentMethod,
         memo,
-        amount_rub: paymentMethod === 'p2p' ? amountRub : null,
-        seller_wallet: settings.ton_wallet || null,
-        sbp_phone: settings.sbp_phone || null,
-        sbp_bank: settings.sbp_bank || null,
-        sbp_fio: settings.sbp_fio || null,
+        amount_rub: paymentMethod === 'p2p' || paymentMethod === 'robokassa' ? amountRub : null,
+        seller_wallet: settings?.ton_wallet || null,
+        sbp_phone: settings?.sbp_phone || null,
+        sbp_bank: settings?.sbp_bank || null,
+        sbp_fio: settings?.sbp_fio || null,
         post_purchase_message: item.post_purchase_message || null,
         batch_token: batchToken || null
     };
@@ -639,6 +763,216 @@ async function approveSellerPurchaseRecord(supabase, purchase) {
     }
 
     await applyShopOfferUnlock(supabase, purchase, item);
+}
+
+export async function confirmShopP2pPayment(supabase, {
+    sellerOwnerId,
+    purchaseIds = [],
+    batchToken = null,
+    confirmSource = 'manual',
+    bankEventId = null,
+    allowPending = false
+} = {}) {
+    const sellerId = String(sellerOwnerId || '').trim();
+    const ids = parsePurchaseIdsInput(purchaseIds);
+    const token = String(batchToken || '').trim();
+
+    if (!sellerId) {
+        const error = new Error('Не найден продавец для подтверждения P2P');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    let query = supabase
+        .from('shop_purchases')
+        .select('*')
+        .eq('seller_owner_id', sellerId);
+
+    if (ids.length) {
+        query = query.in('id', ids);
+    } else if (token) {
+        query = query.contains('payload', { batch_token: token });
+    } else {
+        const error = new Error('Нужно передать purchase_ids или batch_token');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const { data: purchases, error: purchasesError } = await query;
+    if (purchasesError) throw purchasesError;
+
+    if (ids.length && (purchases || []).length !== ids.length) {
+        const error = new Error('Часть продаж уже недоступна');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!(purchases || []).length) {
+        const error = new Error('Покупки для подтверждения не найдены');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    ensureSingleBatchContext(purchases || []);
+
+    const allowedStatuses = allowPending ? ['awaiting_receipt', 'pending'] : ['awaiting_receipt'];
+    for (const purchase of purchases || []) {
+        if (normalizePaymentMethod(purchase.payload?.payment_method) !== 'p2p') {
+            const error = new Error('Это действие только для P2P-счетов');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (purchase.status === 'paid') {
+            continue;
+        }
+
+        if (!allowedStatuses.includes(purchase.status)) {
+            const error = new Error(allowPending ? 'Этот счет уже обработан' : 'Автосверка подтверждает только счета после “Я оплатил”');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (purchase.status === 'pending' && isPendingPurchaseExpired(purchase)) {
+            await supabase
+                .from('shop_purchases')
+                .update({ status: 'expired', updated_at: new Date().toISOString() })
+                .eq('id', purchase.id);
+            const error = new Error('Время на оплату истекло. Создай покупку заново.');
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const buyerOwnerId = purchases?.[0]?.buyer_owner_id;
+    const { data: buyerProfile, error: buyerProfileError } = await supabase
+        .from('profiles')
+        .select('product_tier')
+        .eq('id', buyerOwnerId)
+        .maybeSingle();
+    if (buyerProfileError) throw buyerProfileError;
+
+    const itemIds = Array.from(new Set((purchases || []).map((purchase) => purchase.shop_item_id).filter(Boolean)));
+    const { data: itemsForLimit, error: itemsForLimitError } = await supabase
+        .from('shop_items')
+        .select('id, item_type')
+        .in('id', itemIds);
+    if (itemsForLimitError) throw itemsForLimitError;
+
+    await assertBuyerOwnershipLimits({
+        supabase,
+        profile: buyerProfile || {},
+        buyerOwnerId,
+        items: itemsForLimit || []
+    });
+
+    const confirmedAt = new Date().toISOString();
+    const completedPurchaseIds = [];
+    let transferFailed = false;
+    let transferErrorMessage = '';
+
+    for (const purchase of purchases || []) {
+        if (purchase.status === 'paid' && purchase.ownership_transfer_status === 'completed') {
+            completedPurchaseIds.push(purchase.id);
+            continue;
+        }
+
+        const { data: item, error: itemError } = await supabase
+            .from('shop_items')
+            .select('*')
+            .eq('id', purchase.shop_item_id)
+            .single();
+        if (itemError) throw itemError;
+
+        const textServiceItem = isTextServiceItem(item);
+        if (!textServiceItem && item.status === 'sold' && purchase.ownership_transfer_status !== 'completed') {
+            const error = new Error('Лот уже ушел другому покупателю. Этот заказ больше нельзя завершить.');
+            error.statusCode = 409;
+            throw error;
+        }
+
+        const claimPayload = {
+            ...(purchase.payload || {}),
+            confirmed_at: confirmedAt,
+            confirm_source: confirmSource,
+            bank_event_id: bankEventId || purchase.payload?.bank_event_id || null
+        };
+
+        const { data: claimedRows, error: claimError } = await supabase
+            .from('shop_purchases')
+            .update({
+                status: 'paid',
+                ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
+                ownership_transfer_error: null,
+                payload: claimPayload,
+                updated_at: confirmedAt
+            })
+            .eq('id', purchase.id)
+            .in('status', purchase.status === 'paid' ? ['paid'] : allowedStatuses)
+            .select('*');
+
+        if (claimError) throw claimError;
+        const claimed = (claimedRows || [])[0];
+        if (!claimed) {
+            const error = new Error('Счет уже обработан параллельно');
+            error.statusCode = 409;
+            throw error;
+        }
+
+        if (textServiceItem) {
+            await applyShopOfferUnlock(supabase, claimed, item);
+            completedPurchaseIds.push(claimed.id);
+            continue;
+        }
+
+        const { data: assets, error: assetsError } = await supabase
+            .from('shop_item_assets')
+            .select('*')
+            .eq('shop_item_id', purchase.shop_item_id)
+            .order('sort_order', { ascending: true });
+        if (assetsError) throw assetsError;
+
+        try {
+            await transferShopAssets(supabase, claimed, item, assets || []);
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    ownership_transfer_status: 'completed',
+                    ownership_transfer_error: null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', claimed.id);
+            completedPurchaseIds.push(claimed.id);
+        } catch (transferError) {
+            console.error('Ошибка P2P confirm handoff shop purchase:', transferError);
+            transferFailed = true;
+            transferErrorMessage = transferError.message || 'Неизвестная ошибка';
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    ownership_transfer_status: 'failed',
+                    ownership_transfer_error: transferErrorMessage,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', claimed.id);
+        }
+    }
+
+    if (transferFailed) {
+        const error = new Error('Оплата подтверждена, но передача прав сломалась');
+        error.statusCode = 500;
+        error.completedPurchaseIds = completedPurchaseIds;
+        error.transferErrorMessage = transferErrorMessage;
+        throw error;
+    }
+
+    return {
+        success: true,
+        status: 'paid',
+        ownership_transfer_status: 'completed',
+        purchase_ids: completedPurchaseIds,
+        batch_token: token || purchases?.[0]?.payload?.batch_token || null
+    };
 }
 
 async function rejectSellerPurchaseRecord(supabase, purchase, reason) {
@@ -1007,6 +1341,157 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
             }
         };
     }
+}
+
+async function completeRobokassaShopPurchase(supabase, purchase) {
+    const { data: item, error: itemError } = await supabase
+        .from('shop_items')
+        .select('*')
+        .eq('id', purchase.shop_item_id)
+        .single();
+    if (itemError) throw itemError;
+
+    const textServiceItem = isTextServiceItem(item);
+    if (!textServiceItem && item.status === 'sold' && purchase.ownership_transfer_status !== 'completed') {
+        const error = new Error('Лот уже ушел другому покупателю. Этот заказ больше нельзя завершить.');
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const { data: assets, error: assetsError } = await supabase
+        .from('shop_item_assets')
+        .select('*')
+        .eq('shop_item_id', purchase.shop_item_id)
+        .order('sort_order', { ascending: true });
+    if (assetsError) throw assetsError;
+
+    const paidAt = new Date().toISOString();
+    await supabase
+        .from('shop_purchases')
+        .update({
+            status: 'paid',
+            ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
+            ownership_transfer_error: null,
+            payload: {
+                ...(purchase.payload || {}),
+                robokassa_paid_at: paidAt
+            },
+            updated_at: paidAt
+        })
+        .eq('id', purchase.id);
+
+    if (textServiceItem) {
+        await applyShopOfferUnlock(supabase, purchase, item);
+        return;
+    }
+
+    try {
+        await transferShopAssets(supabase, purchase, item, assets || []);
+        await supabase
+            .from('shop_purchases')
+            .update({
+                ownership_transfer_status: 'completed',
+                ownership_transfer_error: null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', purchase.id);
+    } catch (transferError) {
+        console.error('Ошибка Robokassa handoff shop purchase:', transferError);
+        await supabase
+            .from('shop_purchases')
+            .update({
+                ownership_transfer_status: 'failed',
+                ownership_transfer_error: transferError.message || 'Неизвестная ошибка',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', purchase.id);
+        throw transferError;
+    }
+}
+
+async function recordShopRobokassaEvent(supabase, purchases, params, eventType, signatureValid = null) {
+    const rows = Array.isArray(purchases) && purchases.length ? purchases : [null];
+    for (const purchase of rows) {
+        const { error } = await supabase
+            .from('billing_events')
+            .insert({
+                billing_order_id: null,
+                owner_id: purchase?.buyer_owner_id || null,
+                event_type: eventType,
+                provider: 'robokassa',
+                provider_invoice_id: String(params.InvId ?? params.inv_id ?? '').trim() || null,
+                amount_rub: params.OutSum ? Number(params.OutSum) : null,
+                signature_valid: signatureValid,
+                payload: {
+                    ...(params || {}),
+                    shop_purchase_id: purchase?.id || null,
+                    shop_item_id: purchase?.shop_item_id || null
+                }
+            });
+        if (error && !String(error.message || '').includes('billing_events')) throw error;
+    }
+}
+
+export async function loadShopPurchasesByRobokassaInvoice(supabase, invoiceId) {
+    const normalizedInvoiceId = String(invoiceId || '').trim();
+    if (!normalizedInvoiceId) return [];
+    const { data, error } = await supabase
+        .from('shop_purchases')
+        .select('*, shop_items(id, item_type, title)')
+        .contains('payload', { robokassa_invoice_id: normalizedInvoiceId })
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data || [];
+}
+
+export async function handleShopRobokassaResult(supabase, params) {
+    const invoiceId = String(params.InvId ?? params.inv_id ?? '').trim();
+    const outSum = formatRobokassaAmount(params.OutSum ?? params.out_sum);
+    if (!invoiceId || !outSum) {
+        const error = new Error('Некорректный callback Robokassa для shop.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const purchases = await loadShopPurchasesByRobokassaInvoice(supabase, invoiceId);
+    if (!purchases.length) {
+        const error = new Error('Shop-покупка Robokassa не найдена.');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const config = getRobokassaConfig();
+    const signatureValid = verifyRobokassaCallback(params, config.password2);
+    await recordShopRobokassaEvent(
+        supabase,
+        purchases,
+        params,
+        signatureValid ? 'shop_robokassa_result' : 'shop_robokassa_result_invalid_signature',
+        signatureValid
+    );
+
+    if (!signatureValid) {
+        const error = new Error('Некорректная подпись Robokassa для shop.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const expectedAmount = purchases.reduce((sum, purchase) => sum + Number(purchase.payload?.amount_rub || 0), 0);
+    if (Number(formatRobokassaAmount(expectedAmount)) !== Number(outSum)) {
+        const error = new Error('Сумма Robokassa не совпадает с shop-покупкой.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    for (const purchase of purchases) {
+        if (purchase.status === 'paid' && purchase.ownership_transfer_status === 'completed') continue;
+        await completeRobokassaShopPurchase(supabase, purchase);
+    }
+
+    return {
+        responseText: `OK${invoiceId}`,
+        purchases
+    };
 }
 
 export default function shopRoutes(supabase) {
@@ -2280,7 +2765,8 @@ export default function shopRoutes(supabase) {
                             item_type: row.shop_items.item_type,
                             price_ton: Number(row.shop_items.price_ton || 0),
                             price_rub: Number(row.shop_items.price_rub || 0),
-                            preview_text: row.shop_items.preview_text || ''
+                            preview_text: row.shop_items.preview_text || '',
+                            payment_methods: normalizePaymentMethods(row.shop_items.payment_methods)
                         }
                         : null,
                     assets: row.shop_items?.id ? (assetsByItem.get(row.shop_items.id) || []) : []
@@ -2433,6 +2919,9 @@ export default function shopRoutes(supabase) {
                 itemId: item_id,
                 paymentMethod
             });
+            const robokassaPayment = paymentMethod === 'robokassa'
+                ? await attachRobokassaPaymentToPurchases(supabase, [purchase], [item], amountRub)
+                : null;
 
             const tonData = paymentMethod === 'ton'
                 ? await buildTonQrDataUrl(settings.ton_wallet, amountTon, memo)
@@ -2445,12 +2934,14 @@ export default function shopRoutes(supabase) {
                 success: true,
                 purchase_id: purchase.id,
                 amount_ton: amountTon,
-                amount_rub: paymentMethod === 'p2p' ? amountRub : null,
+                amount_rub: paymentMethod === 'p2p' || paymentMethod === 'robokassa' ? amountRub : null,
+                payment_url: robokassaPayment?.paymentUrl || null,
+                provider_invoice_id: robokassaPayment?.invoiceId || null,
                 payment_method: paymentMethod,
-                seller_wallet: settings.ton_wallet || null,
-                sbp_phone: settings.sbp_phone || null,
-                sbp_bank: settings.sbp_bank || null,
-                sbp_fio: settings.sbp_fio || null,
+                seller_wallet: settings?.ton_wallet || null,
+                sbp_phone: settings?.sbp_phone || null,
+                sbp_bank: settings?.sbp_bank || null,
+                sbp_fio: settings?.sbp_fio || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,
@@ -2477,7 +2968,7 @@ export default function shopRoutes(supabase) {
         try {
             const { data: items, error: itemsError } = await supabase
                 .from('shop_items')
-                .select('id, owner_id, status, visibility')
+                .select('*')
                 .in('id', itemIds);
 
             if (itemsError) throw itemsError;
@@ -2517,6 +3008,14 @@ export default function shopRoutes(supabase) {
             const first = created[0];
             const totalTon = created.reduce((sum, row) => sum + Number(row.amountTon || 0), 0);
             const totalRub = created.reduce((sum, row) => sum + Number(row.amountRub || 0), 0);
+            const robokassaPayment = paymentMethod === 'robokassa'
+                ? await attachRobokassaPaymentToPurchases(
+                    supabase,
+                    created.map((row) => row.purchase),
+                    created.map((row) => row.item),
+                    totalRub
+                )
+                : null;
             const tonData = paymentMethod === 'ton'
                 ? await buildTonQrDataUrl(first.settings.ton_wallet, totalTon, memo)
                 : { tonUri: null, qrCode: null };
@@ -2534,12 +3033,14 @@ export default function shopRoutes(supabase) {
                 batch_token: batchToken,
                 purchase_ids: created.map((row) => row.purchase.id),
                 amount_ton: totalTon,
-                amount_rub: paymentMethod === 'p2p' ? totalRub : null,
+                amount_rub: paymentMethod === 'p2p' || paymentMethod === 'robokassa' ? totalRub : null,
+                payment_url: robokassaPayment?.paymentUrl || null,
+                provider_invoice_id: robokassaPayment?.invoiceId || null,
                 payment_method: paymentMethod,
-                seller_wallet: first.settings.ton_wallet || null,
-                sbp_phone: first.settings.sbp_phone || null,
-                sbp_bank: first.settings.sbp_bank || null,
-                sbp_fio: first.settings.sbp_fio || null,
+                seller_wallet: first.settings?.ton_wallet || null,
+                sbp_phone: first.settings?.sbp_phone || null,
+                sbp_bank: first.settings?.sbp_bank || null,
+                sbp_fio: first.settings?.sbp_fio || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,
@@ -2804,30 +3305,14 @@ export default function shopRoutes(supabase) {
                 .single();
             if (purchaseError) throw purchaseError;
 
-            const { data: buyerProfile, error: buyerProfileError } = await supabase
-                .from('profiles')
-                .select('product_tier')
-                .eq('id', purchase.buyer_owner_id)
-                .maybeSingle();
-            if (buyerProfileError) throw buyerProfileError;
-
-            const { data: itemForLimit, error: itemForLimitError } = await supabase
-                .from('shop_items')
-                .select('id, item_type')
-                .eq('id', purchase.shop_item_id)
-                .single();
-            if (itemForLimitError) throw itemForLimitError;
-
-            await assertBuyerOwnershipLimits({
-                supabase,
-                profile: buyerProfile || {},
-                buyerOwnerId: purchase.buyer_owner_id,
-                items: [itemForLimit]
+            const result = await confirmShopP2pPayment(supabase, {
+                sellerOwnerId,
+                purchaseIds: [purchase.id],
+                confirmSource: 'manual',
+                allowPending: true
             });
 
-            await approveSellerPurchaseRecord(supabase, purchase);
-
-            res.json({ success: true, status: 'paid', ownership_transfer_status: 'completed' });
+            res.json(result);
         } catch (error) {
             console.error('Ошибка approve P2P shop purchase:', error);
             res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка подтверждения P2P-платежа' });
@@ -2856,33 +3341,14 @@ export default function shopRoutes(supabase) {
 
             ensureSingleBatchContext(purchases || []);
 
-            const buyerOwnerId = purchases?.[0]?.buyer_owner_id;
-            const { data: buyerProfile, error: buyerProfileError } = await supabase
-                .from('profiles')
-                .select('product_tier')
-                .eq('id', buyerOwnerId)
-                .maybeSingle();
-            if (buyerProfileError) throw buyerProfileError;
-
-            const itemIds = Array.from(new Set((purchases || []).map((purchase) => purchase.shop_item_id).filter(Boolean)));
-            const { data: itemsForLimit, error: itemsForLimitError } = await supabase
-                .from('shop_items')
-                .select('id, item_type')
-                .in('id', itemIds);
-            if (itemsForLimitError) throw itemsForLimitError;
-
-            await assertBuyerOwnershipLimits({
-                supabase,
-                profile: buyerProfile || {},
-                buyerOwnerId,
-                items: itemsForLimit || []
+            const result = await confirmShopP2pPayment(supabase, {
+                sellerOwnerId,
+                purchaseIds,
+                confirmSource: 'manual_batch',
+                allowPending: true
             });
 
-            for (const purchase of purchases || []) {
-                await approveSellerPurchaseRecord(supabase, purchase);
-            }
-
-            res.json({ success: true, status: 'paid', ownership_transfer_status: 'completed' });
+            res.json(result);
         } catch (error) {
             console.error('Ошибка batch approve P2P shop purchase:', error);
             res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка batch-подтверждения P2P-платежа' });

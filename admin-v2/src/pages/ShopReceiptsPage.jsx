@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, FileText, RefreshCcw, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { APP_CONFIG } from '../config.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 function formatWhen(value) {
@@ -27,21 +32,23 @@ function resolveBackendAssetUrl(value) {
   return `${APP_CONFIG.backendUrl}/${url}`;
 }
 
-function purchaseBadge(status) {
-  if (status === 'awaiting_receipt') return 'pill pill--warning';
-  if (status === 'paid' || status === 'completed') return 'pill pill--ok';
-  if (status === 'rejected' || status === 'failed') return 'pill pill--danger';
-  return 'pill';
+function statusBadge(status) {
+  const map = {
+    awaiting_receipt: { label: 'Ждет проверки', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    paid: { label: 'Подтверждено', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+    completed: { label: 'Закрыто', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+    rejected: { label: 'Отклонено', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+    failed: { label: 'Ошибка', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+    pending: { label: 'Ждет оплату', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
+  };
+  const entry = map[status] || { label: status || '—', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+  return <Badge variant="outline" className={entry.cls}>{entry.label}</Badge>;
 }
 
-function purchaseStatusText(status) {
-  if (status === 'awaiting_receipt') return 'Ждет проверки';
-  if (status === 'paid') return 'Оплата подтверждена';
-  if (status === 'completed') return 'Закрыто';
-  if (status === 'rejected') return 'Отклонено';
-  if (status === 'failed') return 'Ошибка handoff';
-  if (status === 'pending') return 'Ждет оплату';
-  return status || '—';
+function bankEventBadge(status) {
+  if (status === 'confirmed') return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Подтверждено</Badge>;
+  if (status === 'ignored') return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Скрыто</Badge>;
+  return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{status}</Badge>;
 }
 
 function normalizeReceiptGroup(rows = []) {
@@ -96,7 +103,8 @@ export function ShopReceiptsPage() {
     loading: true,
     refreshing: false,
     error: '',
-    purchases: []
+    purchases: [],
+    bankEvents: []
   });
 
   const groupedPurchases = useMemo(() => {
@@ -120,6 +128,19 @@ export function ShopReceiptsPage() {
     [groupedPurchases]
   );
 
+  const reconciliationStats = useMemo(() => {
+    const unresolvedBankEvents = state.bankEvents.filter((event) =>
+      ['matched', 'ambiguous', 'unmatched', 'auto_confirm_failed'].includes(event.status)
+    ).length;
+    const confirmedBankEvents = state.bankEvents.filter((event) => event.status === 'confirmed').length;
+    return {
+      awaiting: awaitingReceipts.length,
+      bankEvents: state.bankEvents.length,
+      unresolvedBankEvents,
+      confirmedBankEvents
+    };
+  }, [awaitingReceipts.length, state.bankEvents]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -135,14 +156,18 @@ export function ShopReceiptsPage() {
       }
 
       try {
-        const data = await apiRequest('/api/shop/seller/purchases', { accessToken });
+        const [purchasesData, bankEventsData] = await Promise.all([
+          apiRequest('/api/shop/seller/purchases', { accessToken }),
+          apiRequest('/api/p2p-bank-events', { accessToken })
+        ]);
         if (cancelled) return;
         setState((prev) => ({
           ...prev,
           loading: false,
           refreshing: false,
           error: '',
-          purchases: data.purchases || []
+          purchases: purchasesData.purchases || [],
+          bankEvents: bankEventsData.events || []
         }));
       } catch (error) {
         if (cancelled) return;
@@ -182,21 +207,62 @@ export function ShopReceiptsPage() {
           method: 'POST'
         });
       }
-      const data = await apiRequest('/api/shop/seller/purchases', { accessToken });
+      const [data, bankEventsData] = await Promise.all([
+        apiRequest('/api/shop/seller/purchases', { accessToken }),
+        apiRequest('/api/p2p-bank-events', { accessToken })
+      ]);
       setState((prev) => ({
         ...prev,
         error: '',
-        purchases: data.purchases || []
+        purchases: data.purchases || [],
+        bankEvents: bankEventsData.events || []
       }));
+      toast.success(action === 'approve' ? 'Оплата подтверждена.' : 'Оплата отклонена.');
     } catch (error) {
       setState((prev) => ({ ...prev, error: error.message }));
+      toast.error(error.message);
+    }
+  }
+
+  async function runBankEventAction(event, action) {
+    try {
+      if (action === 'ignore') {
+        await apiRequest(`/api/p2p-bank-events/${event.id}/ignore`, {
+          accessToken,
+          method: 'POST'
+        });
+      }
+      if (action === 'confirm') {
+        await apiRequest(`/api/p2p-bank-events/${event.id}/confirm`, {
+          accessToken,
+          method: 'POST',
+          body: {
+            purchase_ids: event.candidate_purchase_ids || event.matched_purchase_ids || [],
+            batch_token: event.candidate_batch_tokens?.[0] || event.matched_batch_token || null
+          }
+        });
+      }
+      const [purchasesData, bankEventsData] = await Promise.all([
+        apiRequest('/api/shop/seller/purchases', { accessToken }),
+        apiRequest('/api/p2p-bank-events', { accessToken })
+      ]);
+      setState((prev) => ({
+        ...prev,
+        error: '',
+        purchases: purchasesData.purchases || [],
+        bankEvents: bankEventsData.events || []
+      }));
+      toast.success(action === 'confirm' ? 'Банковское уведомление подтверждено.' : 'Банковское уведомление скрыто.');
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: error.message }));
+      toast.error(error.message);
     }
   }
 
   function renderReceiptLinks(purchase) {
     const receiptEntries = Array.isArray(purchase.payload?.receipt_entries) ? purchase.payload.receipt_entries : [];
     if (!receiptEntries.length && !purchase.payload?.receipt_file_url) {
-      return '—';
+      return <span className="text-xs text-slate-400">—</span>;
     }
 
     const fallbackEntries = receiptEntries.length
@@ -209,15 +275,15 @@ export function ShopReceiptsPage() {
         }];
 
     return (
-      <div className="list-stack" style={{ gap: 8 }}>
+      <div className="space-y-1">
         {fallbackEntries.map((entry, index) => (
-          <div key={`${entry.purchase_id || purchase.id}-${index}`} className="table-subtext">
+          <div key={`${entry.purchase_id || purchase.id}-${index}`} className="text-xs text-slate-500">
             {entry.receipt_file_url ? (
-              <a href={resolveBackendAssetUrl(entry.receipt_file_url)} target="_blank" rel="noreferrer">
-                {fallbackEntries.length > 1 ? `Открыть чек ${index + 1}` : 'Открыть чек'}
+              <a href={resolveBackendAssetUrl(entry.receipt_file_url)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                {fallbackEntries.length > 1 ? `Чек ${index + 1}` : 'Открыть чек'}
               </a>
-            ) : 'Файл не приложен'}
-            {entry.receipt_note ? ` • ${entry.receipt_note}` : ''}
+            ) : <span className="text-slate-400">Файл не приложен</span>}
+            {entry.receipt_note ? ` · ${entry.receipt_note}` : ''}
           </div>
         ))}
       </div>
@@ -225,89 +291,201 @@ export function ShopReceiptsPage() {
   }
 
   if (state.loading) {
-    return <LoadingState text="Грузим чеки..." />;
+    return <LoadingState text="Грузим сверку оплат..." />;
   }
 
   return (
-    <div className="page-stack">
-      <section className="table-card">
-        <div className="table-card__title">Проверка чеков</div>
-        <div className="table-subtext">Сюда падают СБП-оплаты, которые покупатель уже отметил и к которым приложил чек.</div>
-        {state.error ? <div className="error-inline" style={{ marginTop: 12 }}>{state.error}</div> : null}
-      </section>
+    <section className="page">
+      {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
 
-      <section className="table-card">
-        <div className="table-card__title">Ждут решения</div>
-        {!awaitingReceipts.length ? (
-          <div className="empty-inline">Сейчас нет чеков, которые нужно вручную подтвердить.</div>
-        ) : (
-          <div className="list-stack">
-            {awaitingReceipts.map((purchase) => (
-              <div key={purchase.id} className="list-item">
-                <div className="list-item__head">
-                  <div>
-                    <div className="list-item__title">{purchase.item?.title || 'Лот'}</div>
-                    <div className="list-item__meta">
-                      owner {purchase.buyer_owner_id} • {purchase.payload?.sbp_bank || 'СБП'} • {formatAmount(purchase)}{purchase.purchase_ids?.length > 1 ? ` • ${purchase.purchase_ids.length} счета` : ''}
+      <div className="space-y-6">
+        {/* Stats */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Сверка оплат</CardTitle>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Банковские уведомления и оплаты, которые BullRun не закрыл автоматически. Чек помогает, но не обязателен.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              <div className={`rounded-xl border p-3 ${reconciliationStats.awaiting > 0 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="text-xs font-semibold text-slate-400">Ждут решения</div>
+                <div className={`mt-1 text-xl font-bold ${reconciliationStats.awaiting > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{reconciliationStats.awaiting}</div>
+                <div className="mt-0.5 text-xs text-slate-500">Покупатель нажал «Я оплатил»</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold text-slate-400">Уведомления банка</div>
+                <div className="mt-1 text-xl font-bold text-slate-900">{reconciliationStats.bankEvents}</div>
+                <div className="mt-0.5 text-xs text-slate-500">SMS/Push Forward события</div>
+              </div>
+              <div className={`rounded-xl border p-3 ${reconciliationStats.unresolvedBankEvents > 0 ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
+                <div className="text-xs font-semibold text-slate-400">Спорные события</div>
+                <div className={`mt-1 text-xl font-bold ${reconciliationStats.unresolvedBankEvents > 0 ? 'text-rose-700' : 'text-slate-900'}`}>{reconciliationStats.unresolvedBankEvents}</div>
+                <div className="mt-0.5 text-xs text-slate-500">Нужна ручная проверка</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-xs font-semibold text-slate-400">Закрыто банком</div>
+                <div className="mt-1 text-xl font-bold text-slate-900">{reconciliationStats.confirmedBankEvents}</div>
+                <div className="mt-0.5 text-xs text-slate-500">Подтвержденные события</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bank events */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Входящие уведомления банка</CardTitle>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            {!state.bankEvents.length ? (
+              <p className="text-sm text-slate-500">Пока банк не присылал уведомления через SMS/Push Forward.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Дата</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Сумма</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Текст</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Кандидаты</th>
+                      <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.bankEvents.slice(0, 30).map((event) => {
+                      const candidateCount = (event.candidate_purchase_ids || event.matched_purchase_ids || []).length;
+                      const canConfirm = ['matched', 'auto_confirm_failed'].includes(event.status) && candidateCount > 0;
+                      return (
+                        <tr key={event.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-3 pr-4 text-slate-700">{formatWhen(event.received_at)}</td>
+                          <td className="py-3 pr-4 font-medium text-slate-900">{event.amount_rub ? `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(event.amount_rub)} RUB` : '—'}</td>
+                          <td className="py-3 pr-4">{bankEventBadge(event.status)}</td>
+                          <td className="py-3 pr-4">
+                            <div className="text-xs text-slate-500 max-w-xs truncate">{event.redacted_text || event.raw_text || '—'}</div>
+                            {event.match_reason ? <div className="text-xs text-slate-400 mt-0.5">{event.match_reason}</div> : null}
+                          </td>
+                          <td className="py-3 pr-4 text-slate-700">{candidateCount || '—'}</td>
+                          <td className="py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {canConfirm ? (
+                                <Button variant="ghost" size="sm" className="h-8 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" type="button" onClick={() => runBankEventAction(event, 'confirm')} title="Подтвердить">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                              {!['ignored', 'confirmed'].includes(event.status) ? (
+                                <Button variant="ghost" size="sm" className="h-8 px-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100" type="button" onClick={() => runBankEventAction(event, 'ignore')} title="Скрыть">
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Awaiting receipts */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Оплаты ждут решения</CardTitle>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            {!awaitingReceipts.length ? (
+              <p className="text-sm text-slate-500">Сейчас нет оплат, которые нужно вручную подтвердить.</p>
+            ) : (
+              <div className="space-y-4">
+                {awaitingReceipts.map((purchase) => (
+                  <div key={purchase.id} className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-slate-900">{purchase.item?.title || 'Лот'}</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          owner {purchase.buyer_owner_id} · {purchase.payload?.sbp_bank || 'СБП'} · {formatAmount(purchase)}{purchase.purchase_ids?.length > 1 ? ` · ${purchase.purchase_ids.length} счета` : ''}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Отмечена: {formatWhen(purchase.payload?.receipt_marked_at || purchase.updated_at)}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 shrink-0">
+                        {purchase.purchase_ids?.length > 1 ? 'Оплата отмечена' : 'Ждет проверки'}
+                      </Badge>
+                    </div>
+                    <div className="mt-3">
+                      {renderReceiptLinks(purchase)}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <Button size="sm" className="h-8 rounded-lg" type="button" onClick={() => runAction(purchase, 'approve')}>
+                        <CheckCircle2 className="h-4 w-4" /> Подтвердить
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 rounded-lg text-rose-600 hover:text-rose-700 hover:bg-rose-50" type="button" onClick={() => runAction(purchase, 'reject')}>
+                        <XCircle className="h-4 w-4" /> Отклонить
+                      </Button>
                     </div>
                   </div>
-                  <span className={purchaseBadge(purchase.status)}>{purchase.purchase_ids?.length > 1 && purchase.status === 'awaiting_receipt' ? 'Чеки отправлены' : purchaseStatusText(purchase.status)}</span>
-                </div>
-                <div className="table-subtext" style={{ marginTop: 8 }}>
-                  Отправлен: {formatWhen(purchase.payload?.receipt_marked_at || purchase.updated_at)}
-                </div>
-                <div style={{ marginTop: 8 }}>
-                  {renderReceiptLinks(purchase)}
-                </div>
-                <div className="table-actions" style={{ marginTop: 12, flexWrap: 'wrap' }}>
-                  <button className="inline-action" onClick={() => runAction(purchase, 'approve')}>Подтвердить оплату</button>
-                  <button className="inline-action" onClick={() => runAction(purchase, 'reject')}>Отклонить</button>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            )}
+          </CardContent>
+        </Card>
 
-      <section className="table-card">
-        <div className="table-card__title">Последние проверки</div>
-        {!recentReceipts.length ? (
-          <div className="empty-inline">Пока тут пусто.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Лот</th>
-                <th>Покупатель</th>
-                <th>Сумма</th>
-                <th>Статус</th>
-                <th>Чек</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentReceipts.slice(0, 30).map((purchase) => (
-                <tr key={purchase.id}>
-                  <td>
-                    <div>{purchase.item?.title || 'Лот'}</div>
-                    <div className="table-subtext">{purchase.item?.item_type || 'shop item'}{purchase.purchase_ids?.length > 1 ? ` • x${purchase.purchase_ids.length}` : ''}</div>
-                  </td>
-                  <td>
-                    <div>owner {purchase.buyer_owner_id}</div>
-                    <div className="table-subtext">{formatWhen(purchase.created_at)}</div>
-                  </td>
-                  <td>{formatAmount(purchase)}</td>
-                  <td>
-                    <span className={purchaseBadge(purchase.status)}>{purchaseStatusText(purchase.status)}</span>
-                  </td>
-                  <td>
-                    {renderReceiptLinks(purchase)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </div>
+        {/* Recent receipts */}
+        <Card className="border-slate-200/70 bg-white shadow-sm">
+          <CardHeader className="px-6 pt-6">
+            <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Последние проверки</CardTitle>
+          </CardHeader>
+          <CardContent className="px-6 pb-6">
+            {!recentReceipts.length ? (
+              <p className="text-sm text-slate-500">Пока тут пусто.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Лот</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Покупатель</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Сумма</th>
+                      <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
+                      <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Чек</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentReceipts.slice(0, 30).map((purchase) => (
+                      <tr key={purchase.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                        <td className="py-3 pr-4">
+                          <div className="font-medium text-slate-900">{purchase.item?.title || 'Лот'}</div>
+                          <div className="text-xs text-slate-400">{purchase.item?.item_type || 'shop item'}{purchase.purchase_ids?.length > 1 ? ` · x${purchase.purchase_ids.length}` : ''}</div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="text-slate-700">owner {purchase.buyer_owner_id}</div>
+                          <div className="text-xs text-slate-400">{formatWhen(purchase.created_at)}</div>
+                        </td>
+                        <td className="py-3 pr-4 font-medium text-slate-900">{formatAmount(purchase)}</td>
+                        <td className="py-3 pr-4">{statusBadge(purchase.status)}</td>
+                        <td className="py-3">{renderReceiptLinks(purchase)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </section>
   );
 }

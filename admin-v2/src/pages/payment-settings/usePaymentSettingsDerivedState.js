@@ -27,26 +27,18 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
   }, [paymentEventFilter, state.paymentEvents]);
 
   const billingStatsCards = useMemo(() => ([
-    { title: 'Webhook событий', value: billingStats.total, hint: `Дошли: ${billingStats.webhook}, закрылись: ${billingStats.completed}.` },
-    { title: 'TON задан', value: state.settings.ton_wallet ? 'Да' : 'Нет', hint: 'Кошелек, на который приходят TON оплаты.', tone: state.settings.ton_wallet ? 'ok' : 'warning' },
-    { title: 'Рефералка', value: state.settings.referral_enabled ? 'Вкл' : 'Выкл', hint: `Награда: ${state.settings.referral_reward_percent || 0}%`, tone: state.settings.referral_enabled ? 'ok' : 'default' },
-    { title: 'Billing mode', value: state.settings.billing_mode || 'manual', hint: `Провайдер: ${state.settings.billing_provider || 'generic'}` }
+    { title: 'Банковских событий', value: billingStats.total, hint: `Дошли: ${billingStats.webhook}, закрылись: ${billingStats.completed}.` },
+    { title: 'СБП реквизиты', value: state.settings.sbp_phone ? 'Да' : 'Нет', hint: 'Телефон, банк и получатель для рублевых переводов.', tone: state.settings.sbp_phone ? 'ok' : 'warning' },
+    { title: 'TON кошелек', value: state.settings.ton_wallet ? 'Да' : 'Нет', hint: 'Нужен только для TON оплат.', tone: state.settings.ton_wallet ? 'ok' : 'default' }
   ]), [billingStats, state.settings]);
 
   const prioritySignals = useMemo(() => {
     const signals = [];
-    if (!state.settings.ton_wallet) {
-      signals.push({
-        tone: 'danger',
-        title: 'TON-кошелек не указан',
-        text: 'Пока здесь пусто, P2P/TON деньги просто некуда принимать. Пропиши кошелек продавца и владельца.'
-      });
-    }
     if (state.billingHealth && state.billingHealth.success !== true) {
       signals.push({
         tone: 'warning',
-        title: 'Billing health не в норме',
-        text: 'Webhook или provider mode выглядят криво. Разбери health до того, как оплаты зависнут в серой зоне.'
+        title: 'Касса требует проверки',
+        text: 'Один из платежных контуров отвечает нештатно. Проверь настройки до запуска трафика.'
       });
     }
     if (billingStats.rejected > 0) {
@@ -60,15 +52,8 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
   }, [state.settings, state.billingHealth, billingStats]);
 
   const showBillingStats = useMemo(() => {
-    return (
-      billingStats.total > 0 ||
-      !!state.settings.ton_wallet ||
-      !!state.settings.billing_shop_id ||
-      !!state.settings.billing_api_key ||
-      !!state.settings.billing_webhook_secret ||
-      !!state.settings.referral_enabled
-    );
-  }, [billingStats.total, state.settings]);
+    return false;
+  }, []);
 
   const isRequisitesMode = mode === 'requisites';
   const isPlansMode = mode === 'plans';
@@ -76,15 +61,15 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
   const pageCopy = useMemo(() => {
     if (isBillingMode) {
       return {
-        title: 'Касса / webhook',
-        description: 'Тут живет касса: webhook, provider mode, ручная проверка и журнал событий. Реквизиты и тарифы вынесены отдельно.',
-        refreshHint: 'Экран обновляется сам раз в минуту, чтобы не пропускать потерянные оплаты.'
+        title: 'Касса',
+        description: 'Реквизиты, банковские уведомления и автосверка P2P оплат в одном рабочем контуре.',
+        refreshHint: 'Спорные оплаты и ручные решения смотри в “Сверке оплат”.'
       };
     }
     return {
       title: 'Реквизиты',
-      description: 'Укажи TON-кошелек и базовые реквизиты для первого checkout.',
-      refreshHint: ''
+      description: 'Эти реквизиты показываются покупателям в магазине, прокси, юзерботах и других P2P checkout.',
+      refreshHint: 'Автосверка подключается в “Кассе”.'
     };
   }, [isBillingMode]);
 

@@ -43,7 +43,7 @@ export function OrdersTab({
                   {purchaseSummary.total}
                 </Badge>
               </h2>
-              <p className="text-sm text-slate-500 mt-0.5">Оплаты, подтверждение чеков и статус заказов.</p>
+              <p className="text-sm text-slate-500 mt-0.5">Заказы, статусы оплаты и передача товара. Спорные P2P оплаты разбираются в сверке.</p>
             </div>
           </div>
         </div>
@@ -191,12 +191,15 @@ export function OrdersTab({
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                  Чеки на подтверждение
+                  Оплаты на подтверждение
                   <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0 text-xs rounded-full px-2">
                     {receiptQueue.length}
                   </Badge>
                 </h3>
-                <p className="text-xs text-slate-500">Покупатели прислали чеки — проверьте и подтвердите или отклоните.</p>
+                <p className="text-xs text-slate-500">Покупатели отметили оплату. Основное рабочее место для таких случаев — сверка оплат.</p>
+                <a href="/app/shop-receipts" className="mt-2 inline-flex text-xs font-bold text-amber-700 hover:text-amber-900">
+                  Открыть сверку оплат
+                </a>
               </div>
             </div>
           </div>

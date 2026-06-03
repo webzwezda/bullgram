@@ -3,7 +3,8 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, UserPlus, FileText, ShoppingBag, Database, Shield,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send, Target,
-  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark
+  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, Workflow, KeyRound,
+  Zap
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -34,22 +35,31 @@ const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then(
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
+const ApiN8nPage = lazy(() => import('./pages/ApiN8nPage.jsx').then((module) => ({ default: module.ApiN8nPage })));
+const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 export function App() {
   const { profileRole } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
     {
+      title: 'Quick Start',
+      items: [
+        { to: '/quick-start', label: 'Автопостер', icon: Zap },
+      ]
+    },
+    {
       title: 'Основное',
       items: [
         { to: '/', label: 'Командный центр', icon: LayoutDashboard },
-        { to: '/analytics', label: 'Аналитика', icon: Activity },
       ]
     },
     {
       title: 'Продажи и Клиенты',
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
+        { to: '/shop', label: 'Магазин', icon: ShoppingBag },
         { to: '/plans', label: 'Тарифы и доступ', icon: FileText },
       ]
     },
@@ -61,15 +71,14 @@ export function App() {
         { to: '/userbot-center', label: 'Центр юзербота', icon: Target },
         { to: '/proxies', label: 'Прокси', icon: Globe },
         { to: '/admin-groups', label: 'Группы и права', icon: Shield },
-        { to: '/claw', label: 'Клешня / MCP', icon: Settings },
+        { to: '/integrations', label: 'Интеграции', icon: KeyRound },
       ]
     },
     {
       title: 'Финансы',
       items: [
-        { to: '/billing', label: 'Касса / webhook', icon: Wallet },
-        { to: '/payments', label: 'Реквизиты', icon: Wallet },
-        { to: '/shop-receipts', label: 'Проверка чеков', icon: Receipt },
+        { to: '/billing', label: 'Касса', icon: Wallet },
+        { to: '/shop-receipts', label: 'Сверка оплат', icon: Receipt },
         ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
     },
@@ -81,9 +90,10 @@ export function App() {
     },
     ...(profileRole === 'admin'
       ? [{
-        title: 'Скрытые страницы',
+        title: 'Для админа',
         items: [
           { to: '/crm', label: 'CRM', icon: Users },
+          { to: '/analytics', label: 'Аналитика', icon: Activity },
           { to: '/orders', label: 'Заказы', icon: ShoppingBag },
           { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
           { to: '/access', label: 'Доступ', icon: LockKeyhole },
@@ -92,7 +102,8 @@ export function App() {
           { to: '/broadcast', label: 'Рассылки', icon: Send },
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
           { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
-          { to: '/shop', label: 'Shop', icon: ShoppingBag },
+          { to: '/api/mcp', label: 'MCP', icon: Settings },
+          { to: '/api/n8n', label: 'n8n', icon: Workflow },
         ]
       }]
       : [])
@@ -179,6 +190,7 @@ export function App() {
             <Suspense fallback={<LoadingState text="Грузим экран admin-v2..." />}>
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
+                <Route path="/quick-start" element={<QuickStartPage />} />
                 <Route path="/userbot-center" element={<UserbotCenterPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<CrmPage />} />
@@ -196,8 +208,13 @@ export function App() {
                 <Route path="/abandoned" element={<AbandonedPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
-                <Route path="/payments" element={<PaymentSettingsPage mode="requisites" />} />
+                <Route path="/payments" element={<Navigate to="/billing" replace />} />
                 <Route path="/claw" element={<McpSettingsPage />} />
+                <Route path="/integrations" element={<IntegrationsPage />} />
+                <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
+                <Route path="/api/mcp" element={<McpSettingsPage />} />
+                <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
+                <Route path="/api/n8n" element={<ApiN8nPage />} />
                 <Route path="/plans" element={<PaymentSettingsPage mode="plans" />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />
                 <Route path="/treasury" element={<ProjectTreasuryPage />} />

@@ -65,6 +65,8 @@ const USERBOT_PROFILE_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
 const USERBOT_PROFILE_UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'userbot-profiles');
 const USERBOT_CENTER_DIALOG_LIMIT = Number(process.env.USERBOT_CENTER_DIALOG_LIMIT || 80);
 const USERBOT_CENTER_ADMIN_CHECK_DELAY_MS = Number(process.env.USERBOT_CENTER_ADMIN_CHECK_DELAY_MS || 350);
+const USERBOT_HEALTH_CONNECT_TIMEOUT_MS = Number(process.env.USERBOT_HEALTH_CONNECT_TIMEOUT_MS || 25000);
+const USERBOT_HEALTH_INSPECT_TIMEOUT_MS = Number(process.env.USERBOT_HEALTH_INSPECT_TIMEOUT_MS || 35000);
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -81,6 +83,17 @@ function buildCheckResponse(status, reason = null, details = null, extra = {}) {
         details: details || null,
         ...extra
     };
+}
+
+function withTimeout(promise, timeoutMs, message) {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+    });
 }
 
 function safeUploadSegment(value) {
@@ -1483,6 +1496,24 @@ export default function (supabase) {
         }
     });
 
+    router.get('/proxies/managed-health', authenticateUser, async (req, res) => {
+        if (req.profile?.role !== 'admin') {
+            return res.status(403).json({ error: 'Managed proxy health доступен только админу.' });
+        }
+
+        try {
+            const health = await managedProxyService.getRuntimeHealth(supabase);
+            res.json({
+                success: true,
+                health
+            });
+        } catch (error) {
+            res.status(500).json({
+                error: error?.message || 'Не удалось проверить managed proxy runtime.'
+            });
+        }
+    });
+
     router.get('/agent/infra-summary', authenticateUser, async (req, res) => {
         try {
             const sourceSupported = await supportsProxyProvisionSource(supabase);
@@ -1908,7 +1939,7 @@ export default function (supabase) {
             const { error } = await supabase.from('proxies').delete().eq('id', req.params.id).eq('owner_id', req.user.id);
             if (error) throw error;
 
-            if (proxy?.provision_source === 'manual_admin' && proxy?.username) {
+            if (proxy?.username) {
                 await managedProxyService.releaseManagedProxy({
                     host: proxy.host,
                     port: proxy.port,
@@ -3170,11 +3201,43 @@ export default function (supabase) {
             const client = new TelegramClient(new StringSession(token), fingerprint.api_id, fingerprint.api_hash, clientConfig);
             userbotService.prepareServiceClient(client);
             userbotService._forceManagedIpv6Dc(client, proxyData);
-            await userbotService.connectWithProxyFallback(client, proxyData);
+            let connectOk = false;
+            let getMeOk = false;
             try {
-                const health = await userbotService.inspectAccountHealth(client, {
-                    userbotId: account.id
+                console.log('[USERBOT_CHECK] connect_start', {
+                    accountId: account.id,
+                    ownerId: req.user?.id || null,
+                    proxy: proxyData?.proxy_host && proxyData?.proxy_port
+                        ? `${proxyData.proxy_host}:${proxyData.proxy_port}`
+                        : null
                 });
+                await withTimeout(
+                    userbotService.connectWithProxyFallback(client, proxyData),
+                    USERBOT_HEALTH_CONNECT_TIMEOUT_MS,
+                    'Telegram не ответил на подключение за отведенное время. Проверь прокси и повтори проверку.'
+                );
+                connectOk = true;
+                console.log('[USERBOT_CHECK] connect_ok', {
+                    accountId: account.id,
+                    ownerId: req.user?.id || null
+                });
+                await withTimeout(
+                    client.getMe(),
+                    USERBOT_HEALTH_INSPECT_TIMEOUT_MS,
+                    'Telegram не отдал профиль аккаунта за отведенное время.'
+                );
+                getMeOk = true;
+                console.log('[USERBOT_CHECK] get_me_ok', {
+                    accountId: account.id,
+                    ownerId: req.user?.id || null
+                });
+                const health = await withTimeout(
+                    userbotService.inspectAccountHealth(client, {
+                        userbotId: account.id
+                    }),
+                    USERBOT_HEALTH_INSPECT_TIMEOUT_MS,
+                    'Telegram health-check завис на SpamBot/profile check. Проверь прокси и повтори проверку.'
+                );
                 await supabase.from('tg_accounts').update({
                     runtime_status: health.status || 'error',
                     runtime_error: health.reason || null,
@@ -3212,40 +3275,68 @@ export default function (supabase) {
                 }
             }
             catch (authErr) {
+                const rawCheckError = String(authErr?.message || authErr || '').trim();
+                const normalizedCheckError = rawCheckError.toUpperCase();
+                const isInspectTimeout = rawCheckError.includes('health-check') || rawCheckError.includes('SpamBot');
+                const isSessionInvalid = isExpiredUserbotSessionError(authErr)
+                    || normalizedCheckError.includes('USER_DEACTIVATED')
+                    || normalizedCheckError.includes('AUTH_KEY_INVALID');
+                const isConnectFailure = !connectOk && (
+                    rawCheckError.includes('подключение')
+                    || normalizedCheckError.includes('ECONNREFUSED')
+                    || normalizedCheckError.includes('ETIMEDOUT')
+                    || normalizedCheckError.includes('SOCKS')
+                    || normalizedCheckError.includes('NETWORK')
+                    || normalizedCheckError.includes('CONNECTION')
+                );
+                const isDegradedAfterAlive = getMeOk && isInspectTimeout;
+                const nextStatus = isConnectFailure ? 'dead_proxy'
+                    : (isSessionInvalid ? 'expired'
+                        : (isDegradedAfterAlive ? 'online'
+                            : (isInspectTimeout ? 'error' : 'expired')));
+                const nextReason = isDegradedAfterAlive
+                    ? 'Сессия отвечает, но SpamBot/profile check не успел завершиться.'
+                    : (rawCheckError || 'Проверка сессии не прошла.');
                 console.error('Ошибка health-check юзербота:', authErr);
                 await supabase.from('tg_accounts').update({
-                    runtime_status: 'expired',
-                    runtime_error: authErr?.message || 'Проверка сессии не прошла.',
+                    runtime_status: nextStatus,
+                    runtime_error: isDegradedAfterAlive ? null : nextReason,
                     last_checked_at: checkedAt
                 }).eq('id', account.id).eq('owner_id', req.user.id);
                 console.error('[USERBOT_CHECK] auth_failed', {
                     accountId: account.id,
                     ownerId: req.user?.id || null,
-                    nextStatus: 'expired',
-                    reason: authErr?.message || 'Проверка сессии не прошла.'
+                    nextStatus,
+                    connectOk,
+                    getMeOk,
+                    isInspectTimeout,
+                    reason: nextReason
                 });
-                await logTelegramErrorEvent(supabase, {
-                    owner_id: req.user.id,
-                    userbot_id: account.id,
-                    event_source: 'userbot_health',
-                    event_type: 'health_check',
-                    error: authErr,
-                    severity: 'danger',
-                    meta: {
-                        account_type: account.account_type || 'userbot'
-                    }
-                });
+                if (!isDegradedAfterAlive) {
+                    await logTelegramErrorEvent(supabase, {
+                        owner_id: req.user.id,
+                        userbot_id: account.id,
+                        event_source: 'userbot_health',
+                        event_type: 'health_check',
+                        restriction_kind: nextStatus,
+                        error: authErr,
+                        severity: nextStatus === 'expired' ? 'danger' : 'warning',
+                        meta: {
+                            account_type: account.account_type || 'userbot'
+                        }
+                    });
+                }
                 res.json(buildCheckResponse(
-                    'expired',
-                    authErr?.message || 'Проверка сессии не прошла.',
+                    nextStatus,
+                    nextReason,
                     {
-                        session: 'dead',
+                        session: isDegradedAfterAlive ? 'alive' : (nextStatus === 'expired' ? 'dead' : 'unknown'),
                         restriction: 'unknown',
                         restriction_reason: '',
                         spambot: {
-                            state: 'not_checked',
-                            reason: '',
-                            source: 'auth_error'
+                            state: isInspectTimeout ? 'error' : 'not_checked',
+                            reason: isInspectTimeout ? nextReason : '',
+                            source: isInspectTimeout ? 'inspection_timeout' : 'auth_error'
                         }
                     }
                 ));

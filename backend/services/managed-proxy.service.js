@@ -47,6 +47,15 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+function saveStateWithBackup(state) {
+  ensureStateDir();
+  if (fs.existsSync(STATE_FILE)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(STATE_FILE, path.join(STATE_DIR, `state.json.backup-${stamp}`));
+  }
+  saveState(state);
+}
+
 function renderConfig(state) {
   const usersLine = state.proxies.length
     ? `users ${state.proxies.map((proxy) => `${proxy.username}:CL:${proxy.password}`).join(' ')}`
@@ -73,13 +82,16 @@ async function run(command, args = []) {
   await execFileAsync(command, args);
 }
 
-async function detectPublicHost() {
+async function detectPublicHosts() {
   const { stdout } = await execFileAsync('bash', ['-lc', `ip -4 -brief addr show dev ${INTERFACE_NAME} | awk '{for (i=3; i<=NF; i++) print $i}' | cut -d/ -f1`]);
-  const hosts = String(stdout || '')
+  return String(stdout || '')
     .split('\n')
     .map((value) => value.trim())
     .filter(Boolean);
+}
 
+async function detectPublicHost() {
+  const hosts = await detectPublicHosts();
   if (hosts.length === 0) {
     throw new Error('Не удалось определить публичный IPv4 сервера для managed proxy.');
   }
@@ -179,6 +191,94 @@ function buildManagedRecord(state, inventoryGroup) {
   };
 }
 
+function parseManagedSequence(username) {
+  const match = String(username || '').trim().match(/^mp_(\d+)$/);
+  if (!match) return null;
+  const sequence = Number.parseInt(match[1], 10);
+  return Number.isInteger(sequence) && sequence > 0 ? sequence : null;
+}
+
+function sanitizeManagedProxyRow(row) {
+  const sequence = parseManagedSequence(row?.username);
+  const port = Number.parseInt(row?.port, 10);
+  if (!sequence || !Number.isInteger(port) || port <= 0 || port > 65535) {
+    return null;
+  }
+  if (!String(row?.password || '').trim()) {
+    return null;
+  }
+  return {
+    ...row,
+    sequence,
+    port,
+    username: String(row.username).trim(),
+    password: String(row.password)
+  };
+}
+
+function chooseManagedHost(rows, detectedHosts, fallbackHost) {
+  if (MANAGED_PROXY_PUBLIC_HOST) return MANAGED_PROXY_PUBLIC_HOST;
+  const hostCounts = new Map();
+  const detectedSet = new Set(detectedHosts || []);
+
+  for (const row of rows || []) {
+    const host = String(row?.host || '').trim();
+    if (!host || !detectedSet.has(host)) continue;
+    hostCounts.set(host, Number(hostCounts.get(host) || 0) + 1);
+  }
+
+  if (hostCounts.size) {
+    return Array.from(hostCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([host]) => host)[0];
+  }
+
+  return fallbackHost;
+}
+
+function buildComparableState(state) {
+  return {
+    sequence: Number(state?.sequence || 0),
+    publicHost: state?.publicHost || null,
+    ipv6Prefix: state?.ipv6Prefix || null,
+    proxies: (state?.proxies || []).map((proxy) => ({
+      sequence: Number(proxy.sequence || 0),
+      port: Number(proxy.port || 0),
+      username: proxy.username || null,
+      password: proxy.password || null,
+      ipv6: proxy.ipv6 || null,
+      inventory_group: normalizeManagedInventoryGroup(proxy.inventory_group)
+    })).sort((a, b) => a.port - b.port)
+  };
+}
+
+function statesEqual(left, right) {
+  return JSON.stringify(buildComparableState(left)) === JSON.stringify(buildComparableState(right));
+}
+
+async function listListeningTcpPorts() {
+  try {
+    const { stdout } = await execFileAsync('ss', ['-lnt']);
+    const ports = new Set();
+    for (const line of String(stdout || '').split('\n')) {
+      const match = line.match(/:(\d+)\s+/);
+      if (match) ports.add(Number.parseInt(match[1], 10));
+    }
+    return ports;
+  } catch {
+    return new Set();
+  }
+}
+
+async function isContainerRunning() {
+  try {
+    const { stdout } = await execFileAsync('docker', ['inspect', '-f', '{{.State.Running}}', CONTAINER_NAME]);
+    return String(stdout || '').trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export class ManagedProxyService {
   getStateSummary() {
     const state = loadState();
@@ -272,5 +372,123 @@ export class ManagedProxyService {
     await ensureAllIpv6Addresses(state);
     await ensureContainer(state);
     return { restored: true, proxies: state.proxies.length };
+  }
+
+  async loadManagedProxyRowsFromDatabase(supabase) {
+    const { data, error } = await supabase
+      .from('proxies')
+      .select('*')
+      .like('username', 'mp_%')
+      .order('port', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || [])
+      .map(sanitizeManagedProxyRow)
+      .filter(Boolean);
+  }
+
+  buildStateFromProxyRows(rows, { publicHost, ipv6Prefix }) {
+    const filteredRows = (rows || [])
+      .filter((row) => String(row.host || '').trim() === String(publicHost || '').trim())
+      .sort((a, b) => a.port - b.port);
+    const maxSequence = filteredRows.reduce((max, row) => Math.max(max, Number(row.sequence || 0)), 0);
+
+    return {
+      sequence: maxSequence,
+      publicHost,
+      ipv6Prefix,
+      proxies: filteredRows.map((row) => ({
+        sequence: Number(row.sequence),
+        port: Number(row.port),
+        username: row.username,
+        password: row.password,
+        ipv6: buildIpv6(ipv6Prefix, Number(row.sequence)),
+        inventory_group: normalizeManagedInventoryGroup(row.inventory_group)
+      }))
+    };
+  }
+
+  async getRuntimeHealth(supabase) {
+    const currentState = loadState();
+    const detectedHosts = await detectPublicHosts();
+    const fallbackHost = await detectPublicHost();
+    const rows = supabase ? await this.loadManagedProxyRowsFromDatabase(supabase) : [];
+    const publicHost = chooseManagedHost(rows, detectedHosts, currentState.publicHost || fallbackHost);
+    const matchingRows = rows.filter((row) => String(row.host || '') === String(publicHost || ''));
+    const listeningPorts = await listListeningTcpPorts();
+    const expectedPorts = matchingRows.map((row) => Number(row.port));
+    const statePorts = (currentState.proxies || []).map((proxy) => Number(proxy.port));
+    const containerRunning = await isContainerRunning();
+
+    return {
+      publicHost,
+      detectedHosts,
+      dbCount: matchingRows.length,
+      stateCount: statePorts.length,
+      listeningCount: expectedPorts.filter((port) => listeningPorts.has(port)).length,
+      expectedPorts,
+      statePorts,
+      listeningPorts: expectedPorts.filter((port) => listeningPorts.has(port)),
+      missingPorts: expectedPorts.filter((port) => !listeningPorts.has(port)),
+      extraStatePorts: statePorts.filter((port) => !expectedPorts.includes(port)),
+      containerRunning
+    };
+  }
+
+  async reconcileRuntimeFromDatabase(supabase, options = {}) {
+    if (!supabase) {
+      throw new Error('Supabase client is required for managed proxy reconciliation.');
+    }
+
+    const dryRun = options.dryRun === true;
+    const currentState = loadState();
+    const detectedHosts = await detectPublicHosts();
+    if (detectedHosts.length === 0) {
+      throw new Error('Не удалось определить публичные IPv4 сервера для managed proxy.');
+    }
+    const fallbackHost = MANAGED_PROXY_PUBLIC_HOST || currentState.publicHost || detectedHosts[0];
+    if (MANAGED_PROXY_PUBLIC_HOST && !detectedHosts.includes(MANAGED_PROXY_PUBLIC_HOST)) {
+      throw new Error(`MANAGED_PROXY_PUBLIC_HOST=${MANAGED_PROXY_PUBLIC_HOST} не найден на интерфейсе ${INTERFACE_NAME}.`);
+    }
+
+    const rows = await this.loadManagedProxyRowsFromDatabase(supabase);
+    const publicHost = chooseManagedHost(rows, detectedHosts, fallbackHost);
+    if (!detectedHosts.includes(publicHost)) {
+      throw new Error(`Managed proxy host ${publicHost} не найден на интерфейсе ${INTERFACE_NAME}.`);
+    }
+
+    const ipv6Prefix = currentState.ipv6Prefix || await detectIpv6Prefix();
+    const nextState = this.buildStateFromProxyRows(rows, { publicHost, ipv6Prefix });
+    const stateChanged = !statesEqual(currentState, nextState);
+    const listeningPorts = await listListeningTcpPorts();
+    const expectedPorts = nextState.proxies.map((proxy) => Number(proxy.port));
+    const missingPorts = expectedPorts.filter((port) => !listeningPorts.has(port));
+    const containerRunning = await isContainerRunning();
+    const shouldRestoreRuntime = stateChanged || missingPorts.length > 0 || !containerRunning;
+
+    if (!dryRun && stateChanged) {
+      saveStateWithBackup(nextState);
+    }
+
+    if (!dryRun && shouldRestoreRuntime) {
+      await ensureAllIpv6Addresses(nextState);
+      await ensureContainer(nextState);
+    }
+
+    return {
+      restored: !dryRun && shouldRestoreRuntime,
+      dryRun,
+      publicHost,
+      dbCount: nextState.proxies.length,
+      stateCountBefore: Array.isArray(currentState.proxies) ? currentState.proxies.length : 0,
+      stateCountAfter: nextState.proxies.length,
+      stateChanged,
+      missingPorts,
+      extraStatePorts: (currentState.proxies || [])
+        .map((proxy) => Number(proxy.port))
+        .filter((port) => !expectedPorts.includes(port)),
+      containerRunningBefore: containerRunning
+    };
   }
 }
