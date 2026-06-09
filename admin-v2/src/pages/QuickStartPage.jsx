@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, RefreshCw, X, Settings } from 'lucide-react';
+import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
-import { Badge } from '../components/ui/badge.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
@@ -20,23 +19,27 @@ export function QuickStartPage() {
   const [selectedBotId, setSelectedBotId] = useState('new');
   const [botToken, setBotToken] = useState('');
   
-  // Bot states
+  // Bot settings states
   const [existingBots, setExistingBots] = useState([]);
   const [createdBot, setCreatedBot] = useState(null);
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [inviteLink, setInviteLink] = useState('');
   
-  // Action loading states
+  // Modals & Action loading states
   const [initing, setIniting] = useState(false);
-  const [savingBotStatus, setSavingBotStatus] = useState(false);
-  const [savingChannelId, setSavingChannelId] = useState('');
-  const [refreshingChannelId, setRefreshingChannelId] = useState('');
+  const [savingChannel, setSavingChannel] = useState({ public: false, private: false });
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [newAdminTgId, setNewAdminTgId] = useState('');
   
-  // Channels local configs mapping
-  const [channelConfigs, setChannelConfigs] = useState({});
+  // Active Tab for connected channels config
+  const [activeTab, setActiveTab] = useState('public');
+  
+  // Configs for channels
+  const [channelConfigs, setChannelConfigs] = useState({
+    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] },
+    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] }
+  });
 
   const pollRef = useRef(null);
 
@@ -47,6 +50,7 @@ export function QuickStartPage() {
       const { data } = await supabase
         .from('autopost_bots')
         .select('*')
+        .eq('owner_id', user.id)
         .order('created_at', { ascending: false });
       setExistingBots(data || []);
     } catch (err) {
@@ -68,7 +72,10 @@ export function QuickStartPage() {
       setAdmins([]);
       setInviteLink('');
       setCreatedBot(null);
-      setChannelConfigs({});
+      setChannelConfigs({
+        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] },
+        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] }
+      });
       if (pollRef.current) clearInterval(pollRef.current);
       return;
     }
@@ -77,7 +84,7 @@ export function QuickStartPage() {
     if (!bot) return;
     
     setBotToken(bot.bot_token || '');
-    setCreatedBot({ id: bot.id, bot_username: bot.username, admin_tg_id: bot.admin_tg_id, is_active: bot.is_active });
+    setCreatedBot({ id: bot.id, bot_username: bot.username, admin_tg_id: bot.admin_tg_id });
     
     fetchChannels(bot.id);
     fetchAdmins(bot.id);
@@ -92,19 +99,27 @@ export function QuickStartPage() {
       if (data.channels) {
         setChannels(data.channels);
         
-        // Populate local configs for each channel
-        const newConfigs = {};
-        data.channels.forEach(ch => {
-          newConfigs[ch.id] = {
-            id: ch.id,
-            tgChatId: ch.tg_chat_id,
-            title: ch.title || '',
-            postsPerDay: String(ch.posts_per_day || 1),
-            autoAccept: ch.auto_accept_suggestions || false,
-            buttons: ch.buttons_config || []
-          };
+        const pubCh = data.channels.find(c => c.visibility === 'public');
+        const privCh = data.channels.find(c => c.visibility === 'private');
+        
+        setChannelConfigs({
+          public: {
+            id: pubCh?.id || null,
+            tgChatId: pubCh?.tg_chat_id || null,
+            title: pubCh?.title || '',
+            postsPerDay: String(pubCh?.posts_per_day || 1),
+            autoAccept: pubCh?.auto_accept_suggestions || false,
+            buttons: pubCh?.buttons_config || []
+          },
+          private: {
+            id: privCh?.id || null,
+            tgChatId: privCh?.tg_chat_id || null,
+            title: privCh?.title || '',
+            postsPerDay: String(privCh?.posts_per_day || 1),
+            autoAccept: privCh?.auto_accept_suggestions || false,
+            buttons: privCh?.buttons_config || []
+          }
         });
-        setChannelConfigs(newConfigs);
       }
     } catch (e) {
       console.error(e);
@@ -143,31 +158,29 @@ export function QuickStartPage() {
         if (chData.channels) {
           setChannels(chData.channels);
           
-          setChannelConfigs(prev => {
-            const updated = { ...prev };
-            chData.channels.forEach(ch => {
-              if (!updated[ch.id]) {
-                updated[ch.id] = {
-                  id: ch.id,
-                  tgChatId: ch.tg_chat_id,
-                  title: ch.title || '',
-                  postsPerDay: String(ch.posts_per_day || 1),
-                  autoAccept: ch.auto_accept_suggestions || false,
-                  buttons: ch.buttons_config || []
-                };
-              } else {
-                // Merge update safely
-                updated[ch.id] = {
-                  ...updated[ch.id],
-                  title: ch.title || updated[ch.id].title,
-                  postsPerDay: String(ch.posts_per_day || updated[ch.id].postsPerDay || 1),
-                  autoAccept: ch.auto_accept_suggestions ?? updated[ch.id].autoAccept ?? false,
-                  buttons: ch.buttons_config || updated[ch.id].buttons || []
-                };
-              }
-            });
-            return updated;
-          });
+          const pubCh = chData.channels.find(c => c.visibility === 'public');
+          const privCh = chData.channels.find(c => c.visibility === 'private');
+          
+          setChannelConfigs(prev => ({
+            public: {
+              ...prev.public,
+              id: pubCh?.id || null,
+              tgChatId: pubCh?.tg_chat_id || null,
+              title: pubCh?.title || '',
+              postsPerDay: String(pubCh?.posts_per_day || prev.public.postsPerDay || 1),
+              autoAccept: pubCh?.auto_accept_suggestions ?? prev.public.autoAccept ?? false,
+              buttons: pubCh?.buttons_config || prev.public.buttons || []
+            },
+            private: {
+              ...prev.private,
+              id: privCh?.id || null,
+              tgChatId: privCh?.tg_chat_id || null,
+              title: privCh?.title || '',
+              postsPerDay: String(privCh?.posts_per_day || prev.private.postsPerDay || 1),
+              autoAccept: privCh?.auto_accept_suggestions ?? prev.private.autoAccept ?? false,
+              buttons: privCh?.buttons_config || prev.private.buttons || []
+            }
+          }));
         }
 
         // Опрос списка админов
@@ -202,10 +215,10 @@ export function QuickStartPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка подключения бота');
       
-      setCreatedBot({ id: data.bot.id, bot_username: data.bot.username, admin_tg_id: null, is_active: true });
+      setCreatedBot({ id: data.bot.id, bot_username: data.bot.username, admin_tg_id: null });
       setExistingBots((prev) => [...prev, data.bot]);
       setSelectedBotId(data.bot.id);
-      toast.success('Бот успешно подключен! Активируйте его в Telegram.');
+      toast.success('Бот успешно инициализирован! Теперь активируйте его в Telegram.');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -213,38 +226,15 @@ export function QuickStartPage() {
     }
   }
 
-  // Переключить статус активности бота
-  async function handleToggleBotStatus(newStatus) {
-    if (!createdBot?.id || savingBotStatus) return;
-    setSavingBotStatus(true);
-    try {
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ is_active: newStatus })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка изменения статуса');
-      
-      setCreatedBot(prev => ({ ...prev, is_active: data.bot.is_active }));
-      setExistingBots(prev => prev.map(b => b.id === createdBot.id ? { ...b, is_active: data.bot.is_active } : b));
-      toast.success(newStatus ? 'Автопостер включен' : 'Автопостер отключен');
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setSavingBotStatus(false);
-    }
-  }
-
   // Сохранить настройки конкретного канала
-  async function handleSaveChannelConfig(channelId) {
-    const config = channelConfigs[channelId];
-    if (!config || !createdBot?.id) return;
+  async function handleSaveChannelConfig(type) {
+    const config = channelConfigs[type];
+    if (!config.id || !createdBot?.id) return;
     
-    setSavingChannelId(channelId);
+    setSavingChannel(prev => ({ ...prev, [type]: true }));
     try {
       const n = Number(config.postsPerDay);
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}/channels/${channelId}`, {
+      const res = await fetch(`/api/autopost/bots/${createdBot.id}/channels/${config.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
@@ -258,49 +248,11 @@ export function QuickStartPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка сохранения настроек канала');
       
-      toast.success(`Настройки для канала "${config.title}" сохранены`);
+      toast.success(`Настройки канала "${config.title}" успешно сохранены`);
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setSavingChannelId('');
-    }
-  }
-
-  // Обновить информацию о канале с Telegram
-  async function handleRefreshChannel(channel) {
-    const channelId = String(channel?.id || '').trim();
-    if (!channelId || !createdBot?.id) return;
-    
-    setRefreshingChannelId(channelId);
-    try {
-      await fetchChannels(createdBot.id);
-      toast.success('Информация о канале обновлена');
-    } catch (e) {
-      toast.error('Ошибка обновления информации');
-    } finally {
-      setRefreshingChannelId('');
-    }
-  }
-
-  // Удалить канал
-  async function handleDeleteChannel(channel) {
-    const channelId = String(channel?.id || '').trim();
-    if (!channelId || !createdBot?.id) return;
-    if (!confirm(`Отвязать канал "${channel.title || channel.tg_chat_id}" от автопостера?`)) return;
-    
-    try {
-      const { error } = await supabase.from('channels').delete().eq('id', channelId);
-      if (error) throw error;
-      
-      setChannels(prev => prev.filter(c => c.id !== channelId));
-      setChannelConfigs(prev => {
-        const updated = { ...prev };
-        delete updated[channelId];
-        return updated;
-      });
-      toast.success('Канал успешно отвязан');
-    } catch (err) {
-      toast.error(err.message);
+      setSavingChannel(prev => ({ ...prev, [type]: false }));
     }
   }
 
@@ -375,13 +327,12 @@ export function QuickStartPage() {
   }
 
   // Изменение кнопок
-  const handleAddButton = (channelId) => {
+  const handleAddButton = (type) => {
     setChannelConfigs(prev => {
-      const ch = prev[channelId];
-      if (!ch) return prev;
+      const ch = prev[type];
       return {
         ...prev,
-        [channelId]: {
+        [type]: {
           ...ch,
           buttons: [...ch.buttons, { text: '', url: '' }]
         }
@@ -389,13 +340,12 @@ export function QuickStartPage() {
     });
   };
 
-  const handleRemoveButton = (channelId, index) => {
+  const handleRemoveButton = (type, index) => {
     setChannelConfigs(prev => {
-      const ch = prev[channelId];
-      if (!ch) return prev;
+      const ch = prev[type];
       return {
         ...prev,
-        [channelId]: {
+        [type]: {
           ...ch,
           buttons: ch.buttons.filter((_, i) => i !== index)
         }
@@ -403,15 +353,14 @@ export function QuickStartPage() {
     });
   };
 
-  const handleButtonChange = (channelId, index, field, val) => {
+  const handleButtonChange = (type, index, field, val) => {
     setChannelConfigs(prev => {
-      const ch = prev[channelId];
-      if (!ch) return prev;
+      const ch = prev[type];
       const newButtons = [...ch.buttons];
       newButtons[index] = { ...newButtons[index], [field]: val };
       return {
         ...prev,
-        [channelId]: {
+        [type]: {
           ...ch,
           buttons: newButtons
         }
@@ -421,61 +370,75 @@ export function QuickStartPage() {
 
   if (loading) return <LoadingState text="Загружаем автопостер..." />;
 
+  // Определяем шаги онбординга
   const hasAdmin = admins.length > 0;
   const hasChannels = channels.length > 0;
 
   return (
-    <section className="page page--flush flex flex-col gap-6">
-      
-      {/* 1. Подключить нового бота */}
+    <section className="page page--flush space-y-6">
+      {/* Подключение бота */}
       <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="flex flex-row items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-              <Zap className="w-6 h-6 animate-pulse" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-row items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0 animate-pulse">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Бот Автопостинга</h2>
+                <p className="text-sm font-medium text-slate-500 mt-0.5">
+                  Подключите Telegram-бота для автоматического постинга и приема предложений
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Подключить новый автопостер</h2>
-              <p className="text-sm font-medium text-slate-500 mt-0.5">
-                Получите токен у @BotFather и вставьте его сюда для запуска автопостинга.
-              </p>
-            </div>
+            <Select value={selectedBotId} onValueChange={setSelectedBotId}>
+              <SelectTrigger className="h-10 w-[200px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
+                {existingBots.map((b) => (
+                  <SelectItem key={b.id} value={b.id} className="rounded-lg">
+                    @{b.username || 'Telegram Bot'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row items-end gap-4 max-w-4xl">
+        <div className="p-5 sm:p-6 space-y-4">
+          <div className="flex flex-col md:flex-row items-end gap-4">
             <div className="flex-1 w-full">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Токен бота</label>
               <Input
                 value={botToken}
                 onChange={selectedBotId === 'new' ? (e) => setBotToken(e.target.value) : undefined}
                 readOnly={selectedBotId !== 'new'}
-                placeholder="8123456789:AAE_x7v9Kq2Lm..."
+                placeholder="123456:ABC-DEF..."
                 spellCheck="false"
                 className="font-mono bg-white h-11 rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500"
               />
             </div>
-            <div className="flex gap-3 w-full sm:w-auto">
+            <div className="flex gap-2 w-full md:w-auto">
               {selectedBotId === 'new' ? (
                 <Button
                   onClick={handleConnect}
                   disabled={!botToken.trim() || initing}
-                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 w-full sm:w-auto"
+                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50 w-full md:w-auto"
                 >
-                  {initing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  {initing ? 'Подключение...' : 'Подключить'}
+                  {initing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Инициализация...</> : 'Подключить'}
                 </Button>
               ) : (
                 <Button
                   variant="ghost"
                   onClick={handleDelete}
-                  className="h-11 px-4 rounded-xl text-rose-600 hover:bg-rose-50 font-bold border border-rose-100 w-full sm:w-auto"
+                  className="h-11 px-4 rounded-xl text-rose-600 hover:bg-rose-50 font-bold border border-rose-100 w-full md:w-auto"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
                   Удалить бота
                 </Button>
               )}
-              <Button variant="outline" asChild className="h-11 rounded-xl w-full sm:w-auto text-slate-700 border-slate-200 shadow-sm font-semibold">
+              <Button variant="outline" asChild className="h-11 rounded-xl text-slate-700 border-slate-200 shadow-sm font-semibold">
                 <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="flex items-center gap-2">
                   @BotFather <ExternalLink className="w-4 h-4" />
                 </a>
@@ -485,399 +448,332 @@ export function QuickStartPage() {
         </div>
       </Card>
 
-      {/* 2. Выбор и статус бота (Настройка бота) */}
-      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="flex flex-row items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-              <Settings className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Настройка автопостинга</h2>
-              <p className="text-sm font-medium text-slate-500 mt-0.5">
-                Конфигурация активности автопостера и управление доступом.
-              </p>
-            </div>
+      {/* Onboarding State: Ожидание администратора */}
+      {createdBot && !hasAdmin && (
+        <Card className="border-0 shadow-lg shadow-indigo-100 ring-2 ring-indigo-500 bg-white overflow-hidden rounded-2xl p-6 sm:p-8 text-center space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600">
+            <Loader2 className="w-8 h-8 animate-spin" />
           </div>
-        </div>
-        
-        <div className="p-5 sm:p-6 bg-white space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Выбранный автопостер</label>
-              <Select value={selectedBotId} onValueChange={setSelectedBotId}>
-                <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-semibold text-slate-800">
-                  <SelectValue placeholder="Выберите бота" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
-                  {existingBots.map((b) => (
-                    <SelectItem key={b.id} value={b.id} className="rounded-lg py-2.5">
-                      <span className="font-semibold">@{b.username || 'Telegram Bot'}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {createdBot && (
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Состояние работы</label>
-                <div className="flex items-center gap-3 h-11">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={createdBot.is_active}
-                    disabled={savingBotStatus}
-                    onClick={() => handleToggleBotStatus(!createdBot.is_active)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
-                      savingBotStatus ? 'opacity-50 pointer-events-none' : ''
-                    } ${createdBot.is_active ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${createdBot.is_active ? 'translate-x-5' : 'translate-x-0'}`} />
-                  </button>
-                  <span className={`text-sm font-bold ${createdBot.is_active ? 'text-indigo-600' : 'text-slate-400'}`}>
-                    {createdBot.is_active ? 'Автопостинг включен' : 'Автопостинг выключен'}
-                  </span>
-                </div>
-              </div>
-            )}
+          <div className="max-w-md mx-auto space-y-2">
+            <h3 className="text-lg font-bold text-slate-900">Ожидание активации бота</h3>
+            <p className="text-sm text-slate-500">
+              Пожалуйста, откройте вашего бота в Telegram и отправьте ему команду запуска. Это привяжет ваш аккаунт в качестве главного администратора.
+            </p>
           </div>
-
-          {/* Onboarding State: Ожидание администратора */}
-          {createdBot && !hasAdmin && (
-            <div className="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-6 text-center space-y-4 max-w-2xl mx-auto">
-              <div className="mx-auto w-12 h-12 rounded-full bg-white flex items-center justify-center text-indigo-600 shadow-sm">
-                <Loader2 className="w-6 h-6 animate-spin" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-slate-900">Ожидание активации в Telegram</h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto">
-                  Откройте вашего бота в Telegram, введите команду <b>`/start`</b> и нажмите кнопку <b>`✅ Я администратор`</b> для подтверждения прав владельца.
-                </p>
-              </div>
-              <Button asChild className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-5 shadow-sm text-sm">
-                <a href={`https://t.me/${createdBot.bot_username}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5">
-                  Открыть @{createdBot.bot_username} <ExternalLink className="w-4 h-4" />
-                </a>
-              </Button>
-            </div>
-          )}
-
-          {/* Onboarding State: Ожидание подключения каналов */}
-          {createdBot && hasAdmin && !hasChannels && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-6 space-y-3 max-w-2xl mx-auto">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <div className="space-y-1.5">
-                  <h3 className="text-sm font-bold text-slate-900">Подключение каналов</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Администратор успешно привязан. Чтобы автопостер заработал, сделайте бота администратором в ваших каналах:
-                  </p>
-                  <ul className="list-disc list-inside text-xs text-slate-600 space-y-1">
-                    <li>Добавьте бота в ваш <b>Публичный канал</b> (с правами на посты).</li>
-                    <li>Добавьте бота в ваш <b>Приватный канал</b>.</li>
-                  </ul>
-                  <p className="text-[11px] text-indigo-500 font-semibold flex items-center gap-1">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Ожидание авто-привязки каналов...
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* 3. Подключенные каналы (PlacesSection) */}
-      {createdBot && hasAdmin && (
-        <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-          <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-            <div className="flex flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-                  <Globe className="w-6 h-6" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                    Настройки публикаций в каналах
-                    {channels.length > 0 && (
-                      <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-0 text-xs rounded-full px-2">
-                        {channels.length}
-                      </Badge>
-                    )}
-                  </h2>
-                  <p className="text-sm font-medium text-slate-500 mt-0.5">
-                    Индивидуальные параметры постинга, предложек и кнопок для каждого канала.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div className="pt-2">
+            <Button asChild size="lg" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-6 text-base shadow-lg shadow-indigo-200">
+              <a href={`https://t.me/${createdBot.bot_username}`} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                Открыть @{createdBot.bot_username} <ExternalLink className="w-5 h-5" />
+              </a>
+            </Button>
           </div>
-
-          {!channels.length ? (
-            <div className="p-12 text-center flex flex-col items-center justify-center bg-white">
-              <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-1 ring-slate-100">
-                <Globe className="w-8 h-8 text-slate-300" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900">Каналов пока нет</h3>
-              <p className="mt-1 text-sm text-slate-500 max-w-sm">
-                Назначьте бота администратором в вашем канале Telegram, чтобы он автоматически отобразился в этом списке.
-              </p>
-            </div>
-          ) : (
-            <div className="p-5 sm:p-6 space-y-4 bg-white">
-              {channels.map((channel) => {
-                const config = channelConfigs[channel.id];
-                if (!config) return null;
-                const isSaving = savingChannelId === channel.id;
-                const isRefreshing = refreshingChannelId === channel.id;
-                const username = String(channel?.username || '').trim().replace(/^@/, '');
-                
-                return (
-                  <div key={channel.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:border-slate-300 transition-colors space-y-5">
-                    {/* Channel Info Header */}
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2.5 flex-wrap mb-1">
-                          <span className="text-base font-bold text-slate-900 truncate">{channel.title || 'Без названия'}</span>
-                          <Badge variant="outline" className={`shadow-sm px-2 py-0.5 text-xs font-bold border ${
-                            channel.visibility === 'public' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}>
-                            {channel.visibility === 'public' ? 'Открытый канал 📢' : 'Закрытый канал 🔒'}
-                          </Badge>
-                          {username && (
-                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm px-2 py-0.5 text-xs font-bold">
-                              @{username}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-slate-400">
-                          <span className="font-mono bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">ID: {channel.tg_chat_id}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-xl text-slate-700 font-bold border-slate-200 shadow-sm hover:bg-slate-50"
-                          onClick={() => handleRefreshChannel(channel)}
-                          disabled={isRefreshing}
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                          {isRefreshing ? 'Обновление...' : 'Обновить'}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-9 rounded-xl text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 font-bold shadow-sm"
-                          onClick={() => handleDeleteChannel(channel)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                          Удалить
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Settings Form for this Channel */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" /> Частота постинга в день
-                        </label>
-                        <Select
-                          value={config.postsPerDay}
-                          onValueChange={(val) => setChannelConfigs(prev => ({
-                            ...prev,
-                            [channel.id]: { ...prev[channel.id], postsPerDay: val }
-                          }))}
-                        >
-                          <SelectTrigger className="h-10 w-full bg-white rounded-xl border-slate-200 shadow-sm font-semibold">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="rounded-xl">
-                            <SelectItem value="1" className="rounded-lg">1 пост в день (10:00)</SelectItem>
-                            <SelectItem value="2" className="rounded-lg">2 поста (10:00, 18:00)</SelectItem>
-                            <SelectItem value="3" className="rounded-lg">3 поста (08:00, 14:00, 20:00)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-start justify-between gap-4 bg-slate-50/50 p-3.5 border border-slate-100 rounded-xl">
-                        <div className="space-y-0.5">
-                          <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
-                          <span className="text-[11px] text-slate-500 font-medium leading-relaxed block">
-                            Автоматическая публикация предложенного пользователями контента без ручной модерации.
-                          </span>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-                          <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={config.autoAccept}
-                            onChange={(e) => setChannelConfigs(prev => ({
-                              ...prev,
-                              [channel.id]: { ...prev[channel.id], autoAccept: e.target.checked }
-                            }))}
-                          />
-                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Inline Buttons Constructor */}
-                    <div className="space-y-3 pt-2">
-                      <div className="space-y-0.5">
-                        <label className="text-sm font-bold text-slate-800 block">Кнопки под постами в канале</label>
-                        <span className="text-xs text-slate-400 font-medium leading-relaxed block">
-                          Инлайн-кнопки (например, ссылка на оплату подписки), которые прикрепляются к публикациям.
-                        </span>
-                      </div>
-                      
-                      <div className="space-y-2 max-w-2xl">
-                        {config.buttons.map((btn, idx) => (
-                          <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                            <div className="flex-1">
-                              <Input
-                                value={btn.text}
-                                onChange={(e) => handleButtonChange(channel.id, idx, 'text', e.target.value)}
-                                placeholder="Текст кнопки"
-                                className="bg-white h-9 rounded-lg border-slate-200 shadow-sm text-sm"
-                              />
-                            </div>
-                            <div className="flex-[2]">
-                              <Input
-                                value={btn.url}
-                                onChange={(e) => handleButtonChange(channel.id, idx, 'url', e.target.value)}
-                                placeholder="Ссылка (https://...)"
-                                className="bg-white h-9 rounded-lg border-slate-200 shadow-sm text-sm"
-                              />
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveButton(channel.id, idx)}
-                              className="h-9 w-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
-                        
-                        <Button
-                          variant="outline"
-                          onClick={() => handleAddButton(channel.id)}
-                          className="w-full max-w-xs h-9 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-xs"
-                        >
-                          <Plus className="w-3.5 h-3.5 mr-1" /> Добавить кнопку под пост
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Save Config Button */}
-                    <div className="flex justify-start pt-2 border-t border-slate-100">
-                      <Button
-                        onClick={() => handleSaveChannelConfig(channel.id)}
-                        disabled={isSaving}
-                        className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50 text-sm"
-                      >
-                        {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                        Сохранить настройки канала
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </Card>
       )}
 
-      {/* 4. Администраторы бота */}
-      {createdBot && hasAdmin && (
-        <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-          <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-            <div className="flex flex-row items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-                <Shield className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Администраторы автопостера</h3>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">
-                  Управляйте правами доступа и генерируйте приглашения для соадминистраторов.
-                </p>
-              </div>
+      {/* Onboarding State: Ожидание подключения каналов */}
+      {createdBot && hasAdmin && !hasChannels && (
+        <Card className="border-0 shadow-lg shadow-amber-100 ring-2 ring-amber-500 bg-white overflow-hidden rounded-2xl p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-4 text-amber-600">
+            <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Подключение каналов</h3>
+              <p className="text-sm text-slate-500">Администратор успешно привязан. Теперь подключите ваши каналы к автопостеру.</p>
             </div>
           </div>
-          
-          <div className="p-5 sm:p-6 bg-white space-y-6">
-            {inviteLink && (
-              <div className="space-y-1.5 max-w-xl">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Ссылка-приглашение соадмина</label>
-                <div className="flex gap-2">
-                  <Input
-                    readOnly
-                    value={inviteLink}
-                    onClick={handleCopyInvite}
-                    className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm cursor-pointer"
-                  />
-                  <Button onClick={handleCopyInvite} className="h-11 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-0">
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-                <span className="text-xs text-slate-400 font-medium block">
-                  Перейдя по этой ссылке, пользователь привяжет свой Telegram ID и сможет наполнять/управлять очередями постов.
-                </span>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Зарегистрированные администраторы ({admins.length})</label>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-w-md bg-slate-50/30">
-                {admins.map((adminId) => {
-                  const isOwner = String(adminId) === String(createdBot.admin_tg_id);
-                  return (
-                    <div key={adminId} className="flex items-center justify-between p-3.5 bg-white text-sm font-semibold">
-                      <span className="font-mono text-slate-700">{adminId}</span>
-                      {isOwner ? (
-                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 shadow-sm">Владелец</span>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveAdmin(adminId)}
-                          className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 rounded-lg font-bold"
-                        >
-                          Удалить
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="space-y-1.5 max-w-md">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Добавить вручную по Telegram ID</label>
-              <div className="flex gap-2">
-                <Input
-                  value={newAdminTgId}
-                  onChange={(e) => setNewAdminTgId(e.target.value)}
-                  placeholder="ID (например: 123456789)"
-                  className="bg-white h-11 rounded-xl border-slate-200 shadow-sm"
-                />
-                <Button
-                  onClick={handleAddAdmin}
-                  disabled={!newAdminTgId.trim() || addingAdmin}
-                  className="h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 shrink-0"
-                >
-                  {addingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
-                  Добавить
-                </Button>
-              </div>
-            </div>
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 space-y-3">
+            <p className="text-sm font-semibold text-slate-700">Инструкция по подключению:</p>
+            <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
+              <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> в ваш <b>Публичный канал</b> в качестве администратора (с правами на публикацию сообщений).</li>
+              <li>Добавьте бота в ваш <b>Приватный канал</b> в качестве администратора.</li>
+              <li>Бот автоматически поймает добавление и подключит каналы на эту страницу.</li>
+            </ol>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+            Ожидание добавления в каналы...
           </div>
         </Card>
+      )}
+
+      {/* Конфигурация настроек каналов (доступна, когда подключен хотя бы один канал) */}
+      {createdBot && hasAdmin && hasChannels && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Переключатель вкладок каналов */}
+          <div className="flex border-b border-slate-200 bg-slate-50/50 p-1.5 rounded-2xl ring-1 ring-slate-200/50">
+            <button
+              onClick={() => setActiveTab('public')}
+              className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'public'
+                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              Публичный канал
+              {channelConfigs.public.id ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
+              ) : (
+                <span className="text-xs font-medium text-slate-400">(не привязан)</span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab('private')}
+              className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'private'
+                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Lock className="w-4 h-4" />
+              Приватный канал
+              {channelConfigs.private.id ? (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
+              ) : (
+                <span className="text-xs font-medium text-slate-400">(не привязан)</span>
+              )}
+            </button>
+          </div>
+
+          {/* Контент активной вкладки */}
+          {['public', 'private'].map((tab) => {
+            if (activeTab !== tab) return null;
+            const config = channelConfigs[tab];
+            
+            if (!config.id) {
+              return (
+                <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl p-8 text-center space-y-4">
+                  <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                  </div>
+                  <div className="max-w-md mx-auto space-y-1">
+                    <h3 className="font-bold text-slate-800">Канал не подключен</h3>
+                    <p className="text-sm text-slate-500">
+                      Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
+                    </p>
+                  </div>
+                </Card>
+              );
+            }
+
+            return (
+              <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+                <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <Settings className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">{config.title}</h3>
+                      <p className="text-xs font-semibold text-slate-400">Настройки публикации и предложки для этого канала</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-5 sm:p-6 space-y-6">
+                  {/* Частота постинга */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> Частота постов в день
+                    </label>
+                    <Select
+                      value={config.postsPerDay}
+                      onValueChange={(val) => setChannelConfigs(prev => ({
+                        ...prev,
+                        [tab]: { ...prev[tab], postsPerDay: val }
+                      }))}
+                    >
+                      <SelectTrigger className="h-11 w-full max-w-md bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="1" className="rounded-lg">1 пост в день (10:00)</SelectItem>
+                        <SelectItem value="2" className="rounded-lg">2 поста (10:00, 18:00)</SelectItem>
+                        <SelectItem value="3" className="rounded-lg">3 поста (08:00, 14:00, 20:00)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* Автопринятие предложек */}
+                  <div className="flex items-start justify-between gap-4 max-w-2xl">
+                    <div className="space-y-1">
+                      <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
+                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
+                        Если включено, контент от пользователей в предложке будет автоматически одобряться и ставиться в расписание без вашей ручной модерации.
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={config.autoAccept}
+                        onChange={(e) => setChannelConfigs(prev => ({
+                          ...prev,
+                          [tab]: { ...prev[tab], autoAccept: e.target.checked }
+                        }))}
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* Конструктор кнопок */}
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-bold text-slate-800 block">Кнопки под каждым постом</label>
+                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
+                        Вы можете настроить инлайн-кнопки (например, ссылку на оплату подписки), которые будут автоматически прикрепляться под каждым постом в этом канале.
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 max-w-3xl">
+                      {config.buttons.map((btn, idx) => (
+                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <div className="flex-1">
+                            <Input
+                              value={btn.text}
+                              onChange={(e) => handleButtonChange(tab, idx, 'text', e.target.value)}
+                              placeholder="Текст кнопки"
+                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm"
+                            />
+                          </div>
+                          <div className="flex-[2]">
+                            <Input
+                              value={btn.url}
+                              onChange={(e) => handleButtonChange(tab, idx, 'url', e.target.value)}
+                              placeholder="Ссылка (https://...)"
+                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveButton(tab, idx)}
+                            className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+
+                      <Button
+                        variant="outline"
+                        onClick={() => handleAddButton(tab)}
+                        className="w-full max-w-xs h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Добавить кнопку
+                      </Button>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* Кнопка сохранения настроек канала */}
+                  <div className="flex justify-start">
+                    <Button
+                      onClick={() => handleSaveChannelConfig(tab)}
+                      disabled={savingChannel[tab]}
+                      className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50"
+                    >
+                      {savingChannel[tab] ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                      Сохранить настройки канала
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+
+          {/* Список Администраторов (В самом низу) */}
+          <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+            <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Администраторы бота</h3>
+                  <p className="text-xs font-semibold text-slate-400">Управляйте правами доступа и генерируйте приглашения</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-5 sm:p-6 space-y-6">
+              {/* Ссылка-приглашение */}
+              {inviteLink && (
+                <div className="space-y-2 max-w-xl">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Пригласить администратора</label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={inviteLink}
+                      onClick={handleCopyInvite}
+                      className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm cursor-pointer"
+                    />
+                    <Button onClick={handleCopyInvite} className="h-11 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-0">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <span className="text-xs text-slate-400 font-medium block">
+                    Пользователь перейдет по ссылке в бота и автоматически получит доступ к администрированию постов и модерации.
+                  </span>
+                </div>
+              )}
+
+              {/* Список текущих админов */}
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Список админов ({admins.length})</label>
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-w-md">
+                  {admins.map((adminId) => {
+                    const isOwner = String(adminId) === String(createdBot.admin_tg_id);
+                    return (
+                      <div key={adminId} className="flex items-center justify-between p-3.5 bg-white text-sm font-semibold">
+                        <span className="font-mono text-slate-700">{adminId}</span>
+                        {isOwner ? (
+                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">Владелец</span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveAdmin(adminId)}
+                            className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 rounded-lg"
+                          >
+                            Удалить
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Ручное добавление */}
+              <div className="space-y-2 max-w-md">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Добавить вручную по Telegram ID</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newAdminTgId}
+                    onChange={(e) => setNewAdminTgId(e.target.value)}
+                    placeholder="Пример: 123456789"
+                    className="bg-white h-11 rounded-xl border-slate-200 shadow-sm"
+                  />
+                  <Button
+                    onClick={handleAddAdmin}
+                    disabled={!newAdminTgId.trim() || addingAdmin}
+                    className="h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
+                  >
+                    {addingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                    Добавить
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
     </section>
   );
