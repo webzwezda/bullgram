@@ -45,17 +45,60 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
 
                         if (!botData) continue;
 
-                        await bot.telegram.sendPhoto(botData.target_channel_tg_id, item.file_id, {
-                            caption: item.caption || undefined,
-                            parse_mode: item.caption ? 'Markdown' : undefined
-                        });
+                        const targetChatId = item.target_channel_id || botData.target_channel_tg_id;
+                        if (!targetChatId) {
+                            console.warn(`[Autopost scheduler] Нет назначения для поста ${item.id}`);
+                            continue;
+                        }
+
+                        // Получаем настройки канала (для инлайн-кнопок)
+                        const { data: channel } = await supabase
+                            .from('channels')
+                            .select('buttons_config')
+                            .eq('tg_chat_id', targetChatId)
+                            .maybeSingle();
+
+                        let reply_markup = undefined;
+                        if (channel?.buttons_config && Array.isArray(channel.buttons_config) && channel.buttons_config.length > 0) {
+                            reply_markup = {
+                                inline_keyboard: [
+                                    channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
+                                ]
+                            };
+                        }
+
+                        // Если это альбом (несколько картинок)
+                        if (item.file_ids && item.file_ids.length > 1) {
+                            const media = item.file_ids.map((fid, idx) => ({
+                                type: 'photo',
+                                media: fid,
+                                caption: idx === 0 ? item.caption || undefined : undefined,
+                                parse_mode: (idx === 0 && item.caption) ? 'Markdown' : undefined
+                            }));
+                            await bot.telegram.sendMediaGroup(targetChatId, media);
+                        } else {
+                            // Одиночное фото или текстовый пост
+                            const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
+                            if (fileId) {
+                                await bot.telegram.sendPhoto(targetChatId, fileId, {
+                                    caption: item.caption || undefined,
+                                    parse_mode: item.caption ? 'Markdown' : undefined,
+                                    reply_markup
+                                });
+                            } else {
+                                await bot.telegram.sendMessage(targetChatId, item.caption, {
+                                    parse_mode: 'Markdown',
+                                    reply_markup
+                                });
+                            }
+                        }
 
                         await supabase
                             .from('autopost_items')
                             .update({ status: 'posted', posted_at: new Date().toISOString() })
                             .eq('id', item.id);
 
-                        console.log(`[Autopost scheduler] Опубликован пост ${item.id} в канал ${botData.target_channel_tg_id}`);
+                        console.log(`[Autopost scheduler] Опубликован пост ${item.id} в канал ${targetChatId}`);
                     } catch (sendErr) {
                         console.error(`[Autopost scheduler] Ошибка публикации ${item.id}:`, sendErr.message);
                         await supabase

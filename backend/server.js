@@ -242,7 +242,7 @@ app.listen(PORT, async () => {
     try {
         const { data: autopostBots } = await supabase.from('autopost_bots').select('*').eq('is_active', true);
         for (const ab of autopostBots || []) {
-            autopostService.startWebhookBot(ab.id, ab.bot_token);
+            autopostService.startBot(ab.id, ab.bot_token);
         }
     } catch (e) { console.error('[Autopost] Ошибка запуска ботов:', e.message); }
     startUserbotInboxWatch(supabase, getBotById);
