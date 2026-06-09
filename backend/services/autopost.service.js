@@ -253,13 +253,13 @@ export class AutopostService {
         const postsPerDay = channel.posts_per_day || 1;
         const postingTimes = channel.posting_times || ['10:00'];
 
-        // Находим последний запланированный/опубликованный пост для этого канала
+        // Находим последний запланированный пост для этого канала
         const { data: lastScheduled } = await this.supabase
             .from('autopost_items')
             .select('scheduled_at')
             .eq('bot_id', botId)
             .eq('target_channel_id', channel.tg_chat_id)
-            .in('status', ['scheduled', 'posted'])
+            .eq('status', 'scheduled')
             .order('scheduled_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -461,7 +461,7 @@ export class AutopostService {
                 }
             } else if (newStatus === 'left' || newStatus === 'kicked') {
                 try {
-                    await this.supabase.from('channels').delete().eq('tg_chat_id', chat.id).eq('autopost_bot_id', botId);
+                    await this.supabase.from('channels').update({ autopost_bot_id: null }).eq('tg_chat_id', chat.id).eq('autopost_bot_id', botId);
                     console.log(`[Autopost] Канал ${chat.title || chat.id} отвязан от бота ${botId}`);
 
                     const { data: botData } = await this.supabase
