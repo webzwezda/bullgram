@@ -7,20 +7,57 @@ export class AutopostService {
         this.supabase = supabase;
     }
 
-    async createBot({ ownerId, botToken, targetChannelTgId, postsPerDay = 1, postingTimes = ['10:00'] }) {
+    async createBot({ ownerId, botToken, targetChannelTgId, postsPerDay = 1, postingTimes = ['10:00'], username, adminTgId }) {
         const { data, error } = await this.supabase
             .from('autopost_bots')
             .insert({
                 owner_id: ownerId,
                 bot_token: botToken,
-                target_channel_tg_id: targetChannelTgId,
+                target_channel_tg_id: targetChannelTgId || null,
                 posts_per_day: postsPerDay,
-                posting_times: postingTimes
+                posting_times: postingTimes,
+                is_active: true,
+                username: username || null,
+                admin_tg_id: adminTgId || null
             })
             .select()
             .single();
         if (error) throw error;
         return data;
+    }
+
+    async validateAndCreateBot({ ownerId, botToken, adminTgId }) {
+        const tempBot = new Telegraf(botToken);
+        const botInfo = await tempBot.telegram.getMe();
+        if (!botInfo?.id) throw new Error('Не удалось проверить токен бота');
+
+        const bot = await this.createBot({ ownerId, botToken, username: botInfo.username, adminTgId: adminTgId || null });
+
+        // Запускаем бота — он начнёт ловить my_chat_member
+        this.startBot(bot.id, botToken);
+
+        return { ...bot, bot_username: botInfo.username, bot_first_name: botInfo.first_name };
+    }
+
+    async updateBot(botId, updates) {
+        const { data, error } = await this.supabase
+            .from('autopost_bots')
+            .update(updates)
+            .eq('id', botId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    }
+
+    async getBotChannels(botId) {
+        const { data, error } = await this.supabase
+            .from('channels')
+            .select('id, tg_chat_id, title, chat_type, username')
+            .eq('autopost_bot_id', botId)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
     }
 
     async addItem(botId, { fileId, fileUniqueId, caption }) {
@@ -197,6 +234,45 @@ export class AutopostService {
     }
 
     registerHandlers(bot, botId) {
+        // Ловим добавление бота в канал/группу как администратора
+        bot.on('my_chat_member', async (ctx) => {
+            const chat = ctx.myChatMember.chat;
+            const newStatus = ctx.myChatMember.new_chat_member.status;
+
+            if (newStatus === 'administrator') {
+                try {
+                    const { data: botData } = await this.supabase
+                        .from('autopost_bots')
+                        .select('owner_id')
+                        .eq('id', botId)
+                        .single();
+
+                    if (botData?.owner_id) {
+                        await this.supabase.from('channels').upsert({
+                            owner_id: botData.owner_id,
+                            autopost_bot_id: botId,
+                            tg_chat_id: chat.id,
+                            title: chat.title || String(chat.id),
+                            chat_type: chat.type || 'channel',
+                            username: chat.username || null,
+                            visibility: chat.username ? 'public' : 'private',
+                            last_visibility_check_at: new Date().toISOString()
+                        }, { onConflict: 'tg_chat_id' });
+                        console.log(`[Autopost] Канал ${chat.title || chat.id} привязан к боту ${botId}`);
+                    }
+                } catch (err) {
+                    console.error('[Autopost] Ошибка сохранения канала:', err.message);
+                }
+            } else if (newStatus === 'left' || newStatus === 'kicked') {
+                try {
+                    await this.supabase.from('channels').delete().eq('tg_chat_id', chat.id).eq('autopost_bot_id', botId);
+                    console.log(`[Autopost] Канал ${chat.title || chat.id} отвязан от бота ${botId}`);
+                } catch (err) {
+                    console.error('[Autopost] Ошибка удаления канала:', err.message);
+                }
+            }
+        });
+
         bot.start(async (ctx) => {
             const adminContext = await this.getBotAdminContext(botId);
             if (!adminContext) return ctx.reply('Бот не настроен.');

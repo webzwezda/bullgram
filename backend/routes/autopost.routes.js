@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { AutopostService } from '../services/autopost.service.js';
+import { authenticateUser } from '../middlewares/auth.middleware.js';
 
 export default function autopostRoutes(supabase) {
     const service = new AutopostService(supabase);
     const router = Router();
+
+    // Все эндпоинты требуют авторизацию
+    router.use(authenticateUser);
 
     // Список ботов
     router.get('/bots', async (req, res) => {
@@ -20,7 +24,65 @@ export default function autopostRoutes(supabase) {
         }
     });
 
-    // Создать бота
+    // Инициализация бота — валидация токена + создание + запуск
+    router.post('/bots/init', async (req, res) => {
+        try {
+            const { botToken, adminTgId } = req.body;
+            if (!botToken?.trim()) return res.status(400).json({ error: 'Токен обязателен' });
+
+            const bot = await service.validateAndCreateBot({
+                ownerId: req.user.id,
+                botToken: botToken.trim(),
+                adminTgId: adminTgId || undefined
+            });
+            res.json({ bot });
+        } catch (err) {
+            console.error('[Autopost] Ошибка init:', err.message);
+            if (err.message.includes('401') || err.message.includes('unauthorized')) {
+                return res.status(400).json({ error: 'Неверный токен бота' });
+            }
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Обновление бота (канал, расписание)
+    router.patch('/bots/:botId', async (req, res) => {
+        try {
+            const { targetChannelTgId, postsPerDay, postingTimes, adminTgId } = req.body;
+            const updates = {};
+            if (targetChannelTgId !== undefined) updates.target_channel_tg_id = targetChannelTgId;
+            if (postsPerDay !== undefined) updates.posts_per_day = postsPerDay;
+            if (postingTimes !== undefined) updates.posting_times = postingTimes;
+            if (adminTgId !== undefined) updates.admin_tg_id = adminTgId;
+
+            // Проверяем владельца
+            const { data: existing } = await supabase
+                .from('autopost_bots')
+                .select('owner_id')
+                .eq('id', req.params.botId)
+                .single();
+            if (!existing || existing.owner_id !== req.user.id) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
+
+            const bot = await service.updateBot(req.params.botId, updates);
+            res.json({ bot });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Каналы, привязанные к боту
+    router.get('/bots/:botId/channels', async (req, res) => {
+        try {
+            const channels = await service.getBotChannels(req.params.botId);
+            res.json({ channels });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Создать бота (legacy — полный набор полей)
     router.post('/bots', async (req, res) => {
         try {
             const { botToken, targetChannelTgId, postsPerDay, postingTimes } = req.body;
@@ -82,6 +144,28 @@ export default function autopostRoutes(supabase) {
                 .from('autopost_items')
                 .delete()
                 .eq('id', req.params.itemId);
+            if (error) throw error;
+            res.json({ ok: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Удалить бота
+    router.delete('/bots/:botId', async (req, res) => {
+        try {
+            const { data: existing } = await supabase
+                .from('autopost_bots')
+                .select('owner_id')
+                .eq('id', req.params.botId)
+                .single();
+            if (!existing || existing.owner_id !== req.user.id) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
+            const { error } = await supabase
+                .from('autopost_bots')
+                .delete()
+                .eq('id', req.params.botId);
             if (error) throw error;
             res.json({ ok: true });
         } catch (err) {

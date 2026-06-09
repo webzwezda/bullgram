@@ -46,7 +46,8 @@ export function App() {
     {
       title: 'Quick Start',
       items: [
-        { to: '/quick-start', label: 'Автопостер', icon: Zap },
+        { to: '/autopost', label: 'Автопостер', icon: Zap },
+        { to: '/botfather', label: 'Бот продаж', icon: Bot },
       ]
     },
     {
@@ -66,7 +67,6 @@ export function App() {
     {
       title: 'Инфраструктура',
       items: [
-        { to: '/botfather', label: 'Бот продаж', icon: Bot },
         { to: '/userbots', label: 'Юзерботы', icon: Rocket },
         { to: '/userbot-center', label: 'Центр юзербота', icon: Target },
         { to: '/proxies', label: 'Прокси', icon: Globe },
@@ -190,7 +190,7 @@ export function App() {
             <Suspense fallback={<LoadingState text="Грузим экран admin-v2..." />}>
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
-                <Route path="/quick-start" element={<QuickStartPage />} />
+                <Route path="/autopost" element={<QuickStartPage />} />
                 <Route path="/userbot-center" element={<UserbotCenterPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<CrmPage />} />
