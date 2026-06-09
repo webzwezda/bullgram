@@ -9,7 +9,7 @@ function getInviteCode(botId) {
 
 async function getAdminKeyboard(botId, tgUserId, supabase) {
     const { data: bot } = await supabase.from('autopost_bots').select('*').eq('id', botId).single();
-    const { data: channels } = await supabase.from('channels').eq('autopost_bot_id', botId);
+    const { data: channels } = await supabase.from('channels').select('*').eq('autopost_bot_id', botId);
     
     let modeLabel = '🔄 Направление: ⚠️ Нет каналов';
     if (channels && channels.length > 0) {
@@ -287,7 +287,10 @@ export class AutopostService {
 
         const bot = new Telegraf(token);
         this.registerHandlers(bot, botId);
-        bot.launch().then(() => console.log(`[Autopost] Бот ${botId} запущен (polling)`));
+        bot.launch()
+            .then(() => console.log(`[Autopost] Бот ${botId} остановлен (polling)`))
+            .catch(err => console.error(`[Autopost] Ошибка запуска/работы бота ${botId}:`, err.message));
+        console.log(`[Autopost] Бот ${botId} запущен (polling)`);
         activeAutopostBots.set(botId, bot);
     }
 
@@ -334,7 +337,7 @@ export class AutopostService {
                 try {
                     const { data: botData } = await this.supabase
                         .from('autopost_bots')
-                        .select('owner_id')
+                        .select('*')
                         .eq('id', botId)
                         .single();
 
@@ -350,6 +353,17 @@ export class AutopostService {
                             last_visibility_check_at: new Date().toISOString()
                         }, { onConflict: 'tg_chat_id' });
                         console.log(`[Autopost] Канал ${chat.title || chat.id} привязан к боту ${botId}`);
+
+                        // Уведомляем администраторов и обновляем их клавиатуру
+                        const adminTgIds = botData.admin_tg_ids || [];
+                        for (const adminId of adminTgIds) {
+                            try {
+                                const keyboard = await getAdminKeyboard(botId, adminId, this.supabase);
+                                await ctx.telegram.sendMessage(adminId, `✅ Канал/группа "${chat.title || chat.id}" успешно привязана к автопостеру!`, keyboard);
+                            } catch (e) {
+                                console.error(`Failed to notify admin ${adminId} about channel addition:`, e.message);
+                            }
+                        }
                     }
                 } catch (err) {
                     console.error('[Autopost] Ошибка сохранения канала:', err.message);
@@ -358,6 +372,24 @@ export class AutopostService {
                 try {
                     await this.supabase.from('channels').delete().eq('tg_chat_id', chat.id).eq('autopost_bot_id', botId);
                     console.log(`[Autopost] Канал ${chat.title || chat.id} отвязан от бота ${botId}`);
+
+                    const { data: botData } = await this.supabase
+                        .from('autopost_bots')
+                        .select('*')
+                        .eq('id', botId)
+                        .single();
+
+                    if (botData) {
+                        const adminTgIds = botData.admin_tg_ids || [];
+                        for (const adminId of adminTgIds) {
+                            try {
+                                const keyboard = await getAdminKeyboard(botId, adminId, this.supabase);
+                                await ctx.telegram.sendMessage(adminId, `⚠️ Канал/группа "${chat.title || chat.id}" отключена от автопостера.`, keyboard);
+                            } catch (e) {
+                                console.error(`Failed to notify admin ${adminId} about channel removal:`, e.message);
+                            }
+                        }
+                    }
                 } catch (err) {
                     console.error('[Autopost] Ошибка удаления канала:', err.message);
                 }
