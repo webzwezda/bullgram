@@ -37,8 +37,8 @@ export function QuickStartPage() {
   
   // Configs for channels
   const [channelConfigs, setChannelConfigs] = useState({
-    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] },
-    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] }
+    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: 'Europe/Moscow' },
+    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: 'Europe/Moscow' }
   });
 
   const pollRef = useRef(null);
@@ -72,9 +72,10 @@ export function QuickStartPage() {
       setAdmins([]);
       setInviteLink('');
       setCreatedBot(null);
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
       setChannelConfigs({
-        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] },
-        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [] }
+        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz },
+        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz }
       });
       if (pollRef.current) clearInterval(pollRef.current);
       return;
@@ -102,6 +103,7 @@ export function QuickStartPage() {
         const pubCh = data.channels.find(c => c.visibility === 'public');
         const privCh = data.channels.find(c => c.visibility === 'private');
         
+        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
         setChannelConfigs({
           public: {
             id: pubCh?.id || null,
@@ -109,7 +111,8 @@ export function QuickStartPage() {
             title: pubCh?.title || '',
             postsPerDay: String(pubCh?.posts_per_day || 1),
             autoAccept: pubCh?.auto_accept_suggestions || false,
-            buttons: pubCh?.buttons_config || []
+            buttons: pubCh?.buttons_config || [],
+            timezone: pubCh?.timezone || browserTz
           },
           private: {
             id: privCh?.id || null,
@@ -117,7 +120,8 @@ export function QuickStartPage() {
             title: privCh?.title || '',
             postsPerDay: String(privCh?.posts_per_day || 1),
             autoAccept: privCh?.auto_accept_suggestions || false,
-            buttons: privCh?.buttons_config || []
+            buttons: privCh?.buttons_config || [],
+            timezone: privCh?.timezone || browserTz
           }
         });
       }
@@ -161,6 +165,7 @@ export function QuickStartPage() {
           const pubCh = chData.channels.find(c => c.visibility === 'public');
           const privCh = chData.channels.find(c => c.visibility === 'private');
           
+          const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
           setChannelConfigs(prev => ({
             public: {
               ...prev.public,
@@ -169,7 +174,8 @@ export function QuickStartPage() {
               title: pubCh?.title || '',
               postsPerDay: String(pubCh?.posts_per_day || prev.public.postsPerDay || 1),
               autoAccept: pubCh?.auto_accept_suggestions ?? prev.public.autoAccept ?? false,
-              buttons: pubCh?.buttons_config || prev.public.buttons || []
+              buttons: pubCh?.buttons_config || prev.public.buttons || [],
+              timezone: pubCh?.timezone || prev.public.timezone || browserTz
             },
             private: {
               ...prev.private,
@@ -178,7 +184,8 @@ export function QuickStartPage() {
               title: privCh?.title || '',
               postsPerDay: String(privCh?.posts_per_day || prev.private.postsPerDay || 1),
               autoAccept: privCh?.auto_accept_suggestions ?? prev.private.autoAccept ?? false,
-              buttons: privCh?.buttons_config || prev.private.buttons || []
+              buttons: privCh?.buttons_config || prev.private.buttons || [],
+              timezone: privCh?.timezone || prev.private.timezone || browserTz
             }
           }));
         }
@@ -241,7 +248,8 @@ export function QuickStartPage() {
           auto_accept_suggestions: config.autoAccept,
           buttons_config: config.buttons,
           posts_per_day: n,
-          posting_times: postingTimesFor(n)
+          posting_times: postingTimesFor(n),
+          timezone: config.timezone
         })
       });
       
@@ -593,6 +601,41 @@ export function QuickStartPage() {
                         <SelectItem value="3" className="rounded-lg">3 поста (08:00, 14:00, 20:00)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Часовой пояс канала */}
+                  <div className="space-y-2 max-w-md">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5" /> Часовой пояс для публикаций
+                    </label>
+                    <Select
+                      value={config.timezone}
+                      onValueChange={(val) => setChannelConfigs(prev => ({
+                        ...prev,
+                        [tab]: { ...prev[tab], timezone: val }
+                      }))}
+                    >
+                      <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="Europe/Moscow" className="rounded-lg">Europe/Moscow (МСК, UTC+3)</SelectItem>
+                        <SelectItem value="Europe/Kaliningrad" className="rounded-lg">Europe/Kaliningrad (MSK-1, UTC+2)</SelectItem>
+                        <SelectItem value="Europe/Samara" className="rounded-lg">Europe/Samara (MSK+1, UTC+4)</SelectItem>
+                        <SelectItem value="Asia/Yekaterinburg" className="rounded-lg">Asia/Yekaterinburg (MSK+2, UTC+5)</SelectItem>
+                        <SelectItem value="Asia/Omsk" className="rounded-lg">Asia/Omsk (MSK+3, UTC+6)</SelectItem>
+                        <SelectItem value="Asia/Krasnoyarsk" className="rounded-lg">Asia/Krasnoyarsk (MSK+4, UTC+7)</SelectItem>
+                        <SelectItem value="Asia/Irkutsk" className="rounded-lg">Asia/Irkutsk (MSK+5, UTC+8)</SelectItem>
+                        <SelectItem value="Asia/Yakutsk" className="rounded-lg">Asia/Yakutsk (MSK+6, UTC+9)</SelectItem>
+                        <SelectItem value="Asia/Vladivostok" className="rounded-lg">Asia/Vladivostok (MSK+7, UTC+10)</SelectItem>
+                        <SelectItem value="Asia/Magadan" className="rounded-lg">Asia/Magadan (MSK+8, UTC+11)</SelectItem>
+                        <SelectItem value="Asia/Kamchatka" className="rounded-lg">Asia/Kamchatka (MSK+9, UTC+12)</SelectItem>
+                        <SelectItem value="UTC" className="rounded-lg">UTC (Всемирное время)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                      Посты будут планироваться по времени выбранного часового пояса. По умолчанию используется часовой пояс вашего браузера.
+                    </p>
                   </div>
 
                   <hr className="border-slate-100" />

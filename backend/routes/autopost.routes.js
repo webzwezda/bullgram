@@ -104,7 +104,7 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times } = req.body;
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone } = req.body;
             
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
@@ -120,6 +120,7 @@ export default function autopostRoutes(supabase) {
             if (buttons_config !== undefined) updates.buttons_config = buttons_config;
             if (posts_per_day !== undefined) updates.posts_per_day = Number(posts_per_day);
             if (posting_times !== undefined) updates.posting_times = posting_times;
+            if (timezone !== undefined) updates.timezone = timezone;
             
             const { data: channel, error } = await supabase
                 .from('channels')
@@ -130,6 +131,14 @@ export default function autopostRoutes(supabase) {
                 .single();
                 
             if (error) throw error;
+            
+            // Пересобираем очередь при смене лимитов, времени или таймзоны
+            if (posts_per_day !== undefined || posting_times !== undefined || timezone !== undefined) {
+                if (channel.tg_chat_id) {
+                    await service.collapseQueue(req.params.botId, channel.tg_chat_id);
+                }
+            }
+            
             res.json({ channel });
         } catch (err) {
             res.status(500).json({ error: err.message });

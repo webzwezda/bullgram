@@ -7,6 +7,48 @@ function getInviteCode(botId) {
     return crypto.createHash('sha256').update(botId).digest('hex').substring(0, 12);
 }
 
+function getTzOffset(date, timeZone) {
+    try {
+        const tzString = date.toLocaleString('en-US', { timeZone, timeZoneName: 'longOffset' });
+        const offsetMatch = tzString.match(/GMT([+-]\d+)(?::(\d+))?/);
+        if (!offsetMatch) return 0;
+        const hours = parseInt(offsetMatch[1], 10);
+        const minutes = parseInt(offsetMatch[2] || '0', 10);
+        const totalMinutes = hours * 60 + (hours >= 0 ? minutes : -minutes);
+        return totalMinutes * 60 * 1000;
+    } catch (e) {
+        return 3 * 60 * 60 * 1000; // Europe/Moscow (+3) default fallback
+    }
+}
+
+function getUtcDateForLocal(year, month, day, hour, minute, timeZone) {
+    const utcDate = new Date(Date.UTC(year, month, day, hour, minute));
+    const offsetMs = getTzOffset(utcDate, timeZone);
+    return new Date(utcDate.getTime() - offsetMs);
+}
+
+function getLocalDateParts(date, timeZone) {
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone,
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+        }).formatToParts(date);
+        return {
+            year: Number(parts.find(p => p.type === 'year').value),
+            month: Number(parts.find(p => p.type === 'month').value) - 1,
+            day: Number(parts.find(p => p.type === 'day').value)
+        };
+    } catch (e) {
+        return {
+            year: date.getUTCFullYear(),
+            month: date.getUTCMonth(),
+            day: date.getUTCDate()
+        };
+    }
+}
+
 async function getAdminKeyboard(botId, tgUserId, supabase) {
     const { data: bot } = await supabase.from('autopost_bots').select('*').eq('id', botId).single();
     const { data: channels } = await supabase.from('channels').select('*').eq('autopost_bot_id', botId);
@@ -223,17 +265,17 @@ export class AutopostService {
             .maybeSingle();
 
         // Начинаем планирование со следующего дня (или сегодня, если нет запланированных)
-        let startDate = new Date();
-        startDate.setDate(startDate.getDate() + 1);
-        startDate.setHours(0, 0, 0, 0);
+        const tz = channel.timezone || 'Europe/Moscow';
+        let todayParts = getLocalDateParts(new Date(), tz);
+        let startTzDate = new Date(Date.UTC(todayParts.year, todayParts.month, todayParts.day));
+        startTzDate.setUTCDate(startTzDate.getUTCDate() + 1);
 
         if (lastScheduled?.scheduled_at) {
-            const lastDate = new Date(lastScheduled.scheduled_at);
-            const nextDay = new Date(lastDate);
-            nextDay.setDate(nextDay.getDate() + 1);
-            nextDay.setHours(0, 0, 0, 0);
-            if (nextDay > startDate) {
-                startDate = nextDay;
+            const lastParts = getLocalDateParts(new Date(lastScheduled.scheduled_at), tz);
+            let lastTzDate = new Date(Date.UTC(lastParts.year, lastParts.month, lastParts.day));
+            lastTzDate.setUTCDate(lastTzDate.getUTCDate() + 1);
+            if (lastTzDate > startTzDate) {
+                startTzDate = lastTzDate;
             }
         }
 
@@ -249,7 +291,7 @@ export class AutopostService {
         if (!unscheduled || unscheduled.length === 0) return 0;
 
         let scheduled = 0;
-        let currentDate = new Date(startDate);
+        let currentDate = new Date(startTzDate);
         let itemIndex = 0;
 
         while (itemIndex < unscheduled.length) {
@@ -257,8 +299,14 @@ export class AutopostService {
                 const timeStr = postingTimes[i % postingTimes.length] || '10:00';
                 const [hours, minutes] = timeStr.split(':').map(Number);
 
-                const scheduledAt = new Date(currentDate);
-                scheduledAt.setHours(hours || 10, minutes || 0, 0, 0);
+                const scheduledAt = getUtcDateForLocal(
+                    currentDate.getUTCFullYear(),
+                    currentDate.getUTCMonth(),
+                    currentDate.getUTCDate(),
+                    hours || 10,
+                    minutes || 0,
+                    tz
+                );
 
                 await this.supabase
                     .from('autopost_items')
@@ -268,7 +316,7 @@ export class AutopostService {
                 itemIndex++;
                 scheduled++;
             }
-            currentDate.setDate(currentDate.getDate() + 1);
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
         }
 
         return scheduled;
