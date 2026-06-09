@@ -499,6 +499,7 @@ export class AutopostService {
             
             const { data: channels } = await this.supabase
                 .from('channels')
+                .select('*')
                 .eq('autopost_bot_id', botId);
                 
             if (!channels || channels.length === 0) {
@@ -558,6 +559,7 @@ export class AutopostService {
             
             const { data: channels } = await this.supabase
                 .from('channels')
+                .select('*')
                 .eq('autopost_bot_id', botId)
                 .eq('visibility', type);
                 
@@ -769,6 +771,7 @@ export class AutopostService {
             
             const { data: channels } = await this.supabase
                 .from('channels')
+                .select('*')
                 .eq('autopost_bot_id', botId);
                 
             if (!channels || channels.length < 2) {
@@ -1064,6 +1067,7 @@ export class AutopostService {
                 
                 const { data: channels } = await this.supabase
                     .from('channels')
+                    .select('*')
                     .eq('autopost_bot_id', botId);
                     
                 if (!channels || channels.length === 0) {
