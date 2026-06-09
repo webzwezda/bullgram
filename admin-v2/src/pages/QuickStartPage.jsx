@@ -166,28 +166,43 @@ export function QuickStartPage() {
           const privCh = chData.channels.find(c => c.visibility === 'private');
           
           const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-          setChannelConfigs(prev => ({
-            public: {
-              ...prev.public,
-              id: pubCh?.id || null,
-              tgChatId: pubCh?.tg_chat_id || null,
-              title: pubCh?.title || '',
-              postsPerDay: String(pubCh?.posts_per_day || prev.public.postsPerDay || 1),
-              autoAccept: pubCh?.auto_accept_suggestions ?? prev.public.autoAccept ?? false,
-              buttons: pubCh?.buttons_config || prev.public.buttons || [],
-              timezone: pubCh?.timezone || prev.public.timezone || browserTz
-            },
-            private: {
-              ...prev.private,
-              id: privCh?.id || null,
-              tgChatId: privCh?.tg_chat_id || null,
-              title: privCh?.title || '',
-              postsPerDay: String(privCh?.posts_per_day || prev.private.postsPerDay || 1),
-              autoAccept: privCh?.auto_accept_suggestions ?? prev.private.autoAccept ?? false,
-              buttons: privCh?.buttons_config || prev.private.buttons || [],
-              timezone: privCh?.timezone || prev.private.timezone || browserTz
+          setChannelConfigs(prev => {
+            const nextConfig = { ...prev };
+            
+            // Если публичный канал удален из базы, сбрасываем локальный стейт
+            if (!pubCh && prev.public.id) {
+              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz };
+            } else if (pubCh && !prev.public.id) {
+              // Инициализируем только при первом обнаружении
+              nextConfig.public = {
+                id: pubCh.id,
+                tgChatId: pubCh.tg_chat_id,
+                title: pubCh.title,
+                postsPerDay: String(pubCh.posts_per_day || 1),
+                autoAccept: pubCh.auto_accept_suggestions || false,
+                buttons: pubCh.buttons_config || [],
+                timezone: pubCh.timezone || browserTz
+              };
             }
-          }));
+            
+            // Если приватный канал удален из базы, сбрасываем локальный стейт
+            if (!privCh && prev.private.id) {
+              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz };
+            } else if (privCh && !prev.private.id) {
+              // Инициализируем только при первом обнаружении
+              nextConfig.private = {
+                id: privCh.id,
+                tgChatId: privCh.tg_chat_id,
+                title: privCh.title,
+                postsPerDay: String(privCh.posts_per_day || 1),
+                autoAccept: privCh.auto_accept_suggestions || false,
+                buttons: privCh.buttons_config || [],
+                timezone: privCh.timezone || browserTz
+              };
+            }
+            
+            return nextConfig;
+          });
         }
 
         // Опрос списка админов
