@@ -31,6 +31,49 @@ async function getAdminKeyboard(botId, tgUserId, supabase) {
     ]).resize();
 }
 
+async function showQueueForChannel(ctx, botId, channel, supabase) {
+    const { data: items, error } = await supabase
+        .from('autopost_items')
+        .select('*')
+        .eq('bot_id', botId)
+        .eq('target_channel_id', channel.tg_chat_id)
+        .in('status', ['queued', 'scheduled'])
+        .order('sort_order', { ascending: true })
+        .limit(10);
+        
+    if (error || !items || items.length === 0) {
+        return ctx.reply(`Очередь постов для канала "${channel.title}" пуста.`);
+    }
+    
+    await ctx.reply(`📋 **Очередь постов (${channel.title}):**`);
+    
+    const type = channel.visibility || (channel.username ? 'public' : 'private');
+    
+    for (const item of items) {
+        const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
+        const statusText = item.status === 'scheduled' ? `📅 Запланирован на ${new Date(item.scheduled_at).toLocaleString('ru-RU')}` : '📦 В очереди';
+        const buttons = [
+            [
+                Markup.button.callback('⚡️ Опубликовать', `post_now:${item.id}`),
+                Markup.button.callback('📝 Изменить текст', `edit_post_txt:${item.id}`)
+            ],
+            [
+                Markup.button.callback(type === 'public' ? '🔒 В Приват' : '📢 В Паблик', `move_post:${item.id}`),
+                Markup.button.callback('❌ Удалить', `del_post:${item.id}`)
+            ]
+        ];
+        
+        if (fileId) {
+            await ctx.replyWithPhoto(fileId, {
+                caption: `${statusText}\n\n${item.caption || ''}`,
+                ...Markup.inlineKeyboard(buttons)
+            });
+        } else {
+            await ctx.reply(`${statusText}\n\n${item.caption || ''}`, Markup.inlineKeyboard(buttons));
+        }
+    }
+}
+
 export class AutopostService {
     constructor(supabase) {
         this.supabase = supabase;
@@ -539,16 +582,26 @@ export class AutopostService {
         // Показ очереди
         bot.hears('📋 Очередь', async (ctx) => {
             const tgUserId = ctx.from.id;
-            const { isAdmin } = await this.getBotAdminContext(botId, tgUserId);
+            const { bot: botData, isAdmin } = await this.getBotAdminContext(botId, tgUserId);
             if (!isAdmin) return ctx.reply('Доступ запрещен.');
             
-            await ctx.reply(
-                'Какую очередь показать?',
-                Markup.inlineKeyboard([
-                    [Markup.button.callback('📢 Публичная', `show_queue:public`)],
-                    [Markup.button.callback('🔒 Приватная', `show_queue:private`)]
-                ])
-            );
+            const { data: channels } = await this.supabase
+                .from('channels')
+                .select('*')
+                .eq('autopost_bot_id', botId);
+                
+            if (!channels || channels.length === 0) {
+                return ctx.reply('Нет подключенных каналов. Пожалуйста, добавьте бота в каналы как администратора.');
+            }
+            
+            const activeModes = botData.active_modes || {};
+            const activeId = activeModes[String(tgUserId)];
+            let activeChannel = channels.find(c => String(c.tg_chat_id) === String(activeId));
+            if (!activeChannel) {
+                activeChannel = channels[0];
+            }
+            
+            await showQueueForChannel(ctx, botId, activeChannel, this.supabase);
         });
 
         bot.action(/show_queue:(public|private)/, async (ctx) => {
@@ -568,48 +621,8 @@ export class AutopostService {
                 return ctx.reply(`Канал типа "${type === 'public' ? 'публичный' : 'приватный'}" не подключен.`);
             }
             
-            const channel = channels[0];
-            
-            const { data: items, error } = await this.supabase
-                .from('autopost_items')
-                .select('*')
-                .eq('bot_id', botId)
-                .eq('target_channel_id', channel.tg_chat_id)
-                .in('status', ['queued', 'scheduled'])
-                .order('sort_order', { ascending: true })
-                .limit(10);
-                
             await ctx.answerCbQuery();
-            
-            if (error || !items || items.length === 0) {
-                return ctx.reply(`Очередь постов для канала "${channel.title}" пуста.`);
-            }
-            
-            await ctx.reply(`📋 **Очередь постов (${type === 'public' ? 'Публичный' : 'Приватный'}):**`);
-            
-            for (const item of items) {
-                const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
-                const statusText = item.status === 'scheduled' ? `📅 Запланирован на ${new Date(item.scheduled_at).toLocaleString('ru-RU')}` : '📦 В очереди';
-                const buttons = [
-                    [
-                        Markup.button.callback('⚡️ Опубликовать', `post_now:${item.id}`),
-                        Markup.button.callback('📝 Изменить текст', `edit_post_txt:${item.id}`)
-                    ],
-                    [
-                        Markup.button.callback(type === 'public' ? '🔒 В Приват' : '📢 В Паблик', `move_post:${item.id}`),
-                        Markup.button.callback('❌ Удалить', `del_post:${item.id}`)
-                    ]
-                ];
-                
-                if (fileId) {
-                    await ctx.replyWithPhoto(fileId, {
-                        caption: `${statusText}\n\n${item.caption || ''}`,
-                        ...Markup.inlineKeyboard(buttons)
-                    });
-                } else {
-                    await ctx.reply(`${statusText}\n\n${item.caption || ''}`, Markup.inlineKeyboard(buttons));
-                }
-            }
+            await showQueueForChannel(ctx, botId, channels[0], this.supabase);
         });
 
         // Модерация предложек
