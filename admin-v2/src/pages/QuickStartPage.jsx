@@ -748,7 +748,7 @@ export function QuickStartPage() {
                     </div>
                   </div>
                   
-                  <div className="p-6 sm:p-10 max-w-4xl mx-auto space-y-8">
+                  <div className="p-5 sm:p-6 space-y-6">
                     {/* Время публикаций (основная очередь) */}
                     <div className="space-y-4">
                       <div className="space-y-1">
@@ -829,7 +829,7 @@ export function QuickStartPage() {
                     <hr className="border-slate-100" />
 
                     {/* Автопринятие предложений */}
-                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all max-w-2xl">
+                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
                       <div className="space-y-1">
                         <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
                         <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
