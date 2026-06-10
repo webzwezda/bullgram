@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings } from 'lucide-react';
+import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Eye, Layout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -738,234 +738,296 @@ export function QuickStartPage() {
                 <div key={tab} className="animate-fade-in divide-y divide-slate-100">
                   <div className="bg-slate-50/30 p-5 sm:p-6">
                     <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                      <Settings className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900">{config.title}</h3>
-                      <p className="text-xs font-semibold text-slate-400">Настройки публикации и предложки для этого канала</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-5 sm:p-6 space-y-6">
-                  {/* Время публикаций (основная очередь) */}
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" /> Время публикаций (основная очередь)
-                      </label>
-                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
-                        Настройте точное время, в которое бот будет автоматически выкладывать посты из очереди.
-                      </span>
-                    </div>
-
-                    <div className="space-y-3 max-w-md">
-                      {(config.postingTimes || ['10:00']).map((time, idx) => (
-                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                          <span className="text-xs font-bold text-slate-400 w-8 text-center font-mono">#{idx + 1}</span>
-                          <div className="flex-1">
-                            <Input
-                              type="time"
-                              value={time}
-                              onChange={(e) => handlePostingTimeChange(tab, idx, e.target.value)}
-                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold"
-                            />
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemovePostingTime(tab, idx)}
-                            className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-
-                      <Button
-                        variant="outline"
-                        onClick={() => handleAddPostingTime(tab)}
-                        className="w-full h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Добавить время публикации
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Часовой пояс канала */}
-                  <div className="space-y-2 max-w-md">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5" /> Часовой пояс для публикаций
-                    </label>
-                    <Select
-                      value={config.timezone}
-                      onValueChange={(val) => setChannelConfigs(prev => ({
-                        ...prev,
-                        [tab]: { ...prev[tab], timezone: val }
-                      }))}
-                    >
-                      <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-medium">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="Europe/Moscow" className="rounded-lg">Europe/Moscow (МСК, UTC+3)</SelectItem>
-                        <SelectItem value="Europe/Kaliningrad" className="rounded-lg">Europe/Kaliningrad (MSK-1, UTC+2)</SelectItem>
-                        <SelectItem value="Europe/Samara" className="rounded-lg">Europe/Samara (MSK+1, UTC+4)</SelectItem>
-                        <SelectItem value="Asia/Yekaterinburg" className="rounded-lg">Asia/Yekaterinburg (MSK+2, UTC+5)</SelectItem>
-                        <SelectItem value="Asia/Omsk" className="rounded-lg">Asia/Omsk (MSK+3, UTC+6)</SelectItem>
-                        <SelectItem value="Asia/Krasnoyarsk" className="rounded-lg">Asia/Krasnoyarsk (MSK+4, UTC+7)</SelectItem>
-                        <SelectItem value="Asia/Irkutsk" className="rounded-lg">Asia/Irkutsk (MSK+5, UTC+8)</SelectItem>
-                        <SelectItem value="Asia/Yakutsk" className="rounded-lg">Asia/Yakutsk (MSK+6, UTC+9)</SelectItem>
-                        <SelectItem value="Asia/Vladivostok" className="rounded-lg">Asia/Vladivostok (MSK+7, UTC+10)</SelectItem>
-                        <SelectItem value="Asia/Magadan" className="rounded-lg">Asia/Magadan (MSK+8, UTC+11)</SelectItem>
-                        <SelectItem value="Asia/Kamchatka" className="rounded-lg">Asia/Kamchatka (MSK+9, UTC+12)</SelectItem>
-                        <SelectItem value="UTC" className="rounded-lg">UTC (Всемирное время)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
-                      Посты будут планироваться по времени выбранного часового пояса. По умолчанию используется часовой пояс вашего браузера.
-                    </p>
-                  </div>
-
-                  <hr className="border-slate-100" />
-
-                  {/* Автопринятие предложек */}
-                  <div className="flex items-start justify-between gap-4 max-w-2xl">
-                    <div className="space-y-1">
-                      <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
-                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
-                        Если включено, контент от пользователей в предложке будет автоматически одобряться и ставиться в расписание без вашей ручной модерации.
-                      </span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={config.autoAccept}
-                        onChange={(e) => setChannelConfigs(prev => ({
-                          ...prev,
-                          [tab]: { ...prev[tab], autoAccept: e.target.checked }
-                        }))}
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
-                  </div>
-
-                  {/* Планировщик предложений (Показываем только если включен тумблер автопринятия) */}
-                  {config.autoAccept && (
-                    <div className="space-y-4 pt-4 border-t border-slate-100 animate-fade-in">
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
-                        </label>
-                        <span className="text-xs text-slate-500 font-medium leading-relaxed block">
-                          Настройте отдельное расписание для автопринятых предложений от подписчиков.
-                        </span>
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <Settings className="w-5 h-5" />
                       </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{config.title}</h3>
+                        <p className="text-xs font-semibold text-slate-400">Настройки публикации и предложки для этого канала</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-5 sm:p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      {/* Левая колонка - настройки */}
+                      <div className="lg:col-span-7 space-y-6">
+                        {/* Время публикаций (основная очередь) */}
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций (основная очередь)
+                            </label>
+                            <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                              Настройте точное время автоматической выкладки постов из очереди.
+                            </span>
+                          </div>
 
-                      <div className="space-y-3 max-w-md">
-                        {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
-                          <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                            <span className="text-xs font-bold text-slate-400 w-8 text-center font-mono">#{idx + 1}</span>
-                            <div className="flex-1">
-                              <Input
-                                type="time"
-                                value={time}
-                                onChange={(e) => handleSuggestionTimeChange(tab, idx, e.target.value)}
-                                className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold"
-                              />
-                            </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {(config.postingTimes || ['10:00']).map((time, idx) => (
+                              <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-105/70 p-2 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                                <span className="text-[10px] font-bold text-slate-400 font-mono w-5 text-center">#{idx + 1}</span>
+                                <input
+                                  type="time"
+                                  value={time}
+                                  onChange={(e) => handlePostingTimeChange(tab, idx, e.target.value)}
+                                  className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full border-0 p-0 focus:ring-0 cursor-pointer"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRemovePostingTime(tab, idx)}
+                                  className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveSuggestionTime(tab, idx)}
-                              className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                              variant="outline"
+                              onClick={() => handleAddPostingTime(tab)}
+                              className="h-10 rounded-xl border-dashed text-slate-605 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
                             </Button>
                           </div>
-                        ))}
+                        </div>
 
-                        <Button
-                          variant="outline"
-                          onClick={() => handleAddSuggestionTime(tab)}
-                          className="w-full h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
-                        >
-                          <Plus className="w-4 h-4 mr-2 text-indigo-500" /> Добавить время публикации предложений
-                        </Button>
+                        {/* Часовой пояс канала */}
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-indigo-500" /> Часовой пояс для публикаций
+                          </label>
+                          <Select
+                            value={config.timezone}
+                            onValueChange={(val) => setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], timezone: val }
+                            }))}
+                          >
+                            <SelectTrigger className="h-11 w-full max-w-md bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-medium">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-xl">
+                              <SelectItem value="Europe/Moscow" className="rounded-lg">Europe/Moscow (МСК, UTC+3)</SelectItem>
+                              <SelectItem value="Europe/Kaliningrad" className="rounded-lg">Europe/Kaliningrad (MSK-1, UTC+2)</SelectItem>
+                              <SelectItem value="Europe/Samara" className="rounded-lg">Europe/Samara (MSK+1, UTC+4)</SelectItem>
+                              <SelectItem value="Asia/Yekaterinburg" className="rounded-lg">Asia/Yekaterinburg (MSK+2, UTC+5)</SelectItem>
+                              <SelectItem value="Asia/Omsk" className="rounded-lg">Asia/Omsk (MSK+3, UTC+6)</SelectItem>
+                              <SelectItem value="Asia/Krasnoyarsk" className="rounded-lg">Asia/Krasnoyarsk (MSK+4, UTC+7)</SelectItem>
+                              <SelectItem value="Asia/Irkutsk" className="rounded-lg">Asia/Irkutsk (MSK+5, UTC+8)</SelectItem>
+                              <SelectItem value="Asia/Yakutsk" className="rounded-lg">Asia/Yakutsk (MSK+6, UTC+9)</SelectItem>
+                              <SelectItem value="Asia/Vladivostok" className="rounded-lg">Asia/Vladivostok (MSK+7, UTC+10)</SelectItem>
+                              <SelectItem value="Asia/Magadan" className="rounded-lg">Asia/Magadan (MSK+8, UTC+11)</SelectItem>
+                              <SelectItem value="Asia/Kamchatka" className="rounded-lg">Asia/Kamchatka (MSK+9, UTC+12)</SelectItem>
+                              <SelectItem value="UTC" className="rounded-lg">UTC (Всемирное время)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                            По умолчанию используется часовой пояс вашего браузера.
+                          </p>
+                        </div>
+
+                        <hr className="border-slate-100" />
+
+                        {/* Автопринятие предложений */}
+                        <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all max-w-2xl">
+                          <div className="space-y-1">
+                            <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
+                            <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                              Если включено, контент от пользователей в предложке будет автоматически публиковаться без ручной модерации.
+                            </span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={config.autoAccept}
+                              onChange={(e) => setChannelConfigs(prev => ({
+                                ...prev,
+                                [tab]: { ...prev[tab], autoAccept: e.target.checked }
+                              }))}
+                            />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          </label>
+                        </div>
+
+                        {/* Планировщик предложений (Показываем только если включен тумблер автопринятия) */}
+                        {config.autoAccept && (
+                          <div className="space-y-4 pt-4 border-t border-slate-100 animate-fade-in">
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
+                              </label>
+                              <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                                Отдельное расписание для автопринятых предложений от подписчиков.
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 p-2 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                                  <span className="text-[10px] font-bold text-slate-400 font-mono w-5 text-center">#{idx + 1}</span>
+                                  <input
+                                    type="time"
+                                    value={time}
+                                    onChange={(e) => handleSuggestionTimeChange(tab, idx, e.target.value)}
+                                    className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full border-0 p-0 focus:ring-0 cursor-pointer"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleRemoveSuggestionTime(tab, idx)}
+                                    className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+
+                              <Button
+                                variant="outline"
+                                onClick={() => handleAddSuggestionTime(tab)}
+                                className="h-10 rounded-xl border-dashed text-slate-650 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                              >
+                                <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        <hr className="border-slate-100" />
+
+                        {/* Конструктор кнопок */}
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                              <Layout className="w-3.5 h-3.5 text-indigo-500" /> Кнопки под каждым постом
+                            </label>
+                            <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                              Бот будет автоматически прикреплять эти кнопки под сообщениями в канале.
+                            </span>
+                          </div>
+
+                          <div className="space-y-3">
+                            {config.buttons.map((btn, idx) => (
+                              <div key={idx} className="flex items-center gap-3 bg-slate-50/50 hover:bg-slate-100 p-3 rounded-xl border border-slate-100 transition-all">
+                                <div className="flex-1">
+                                  <Input
+                                    value={btn.text}
+                                    onChange={(e) => handleButtonChange(tab, idx, 'text', e.target.value)}
+                                    placeholder="Текст кнопки"
+                                    className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold text-xs"
+                                  />
+                                </div>
+                                <div className="flex-[2]">
+                                  <Input
+                                    value={btn.url}
+                                    onChange={(e) => handleButtonChange(tab, idx, 'url', e.target.value)}
+                                    placeholder="Ссылка (https://...)"
+                                    className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold text-xs"
+                                  />
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRemoveButton(tab, idx)}
+                                  className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+
+                            <Button
+                              variant="outline"
+                              onClick={() => handleAddButton(tab)}
+                              className="h-10 px-4 rounded-xl border-dashed text-slate-650 border-slate-200 hover:bg-slate-50 hover:text-indigo-650 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <Plus className="w-4 h-4 text-indigo-500" /> Добавить кнопку
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Правая колонка - Live Telegram Preview */}
+                      <div className="lg:col-span-5">
+                        <div className="lg:sticky lg:top-6 space-y-4">
+                          <div className="border border-slate-100 rounded-3xl bg-[#eff3f6] p-4 sm:p-5 shadow-inner">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5 select-none">
+                              <Eye className="w-3.5 h-3.5 text-slate-400" /> Предпросмотр в Telegram
+                            </div>
+                            
+                            {/* Сообщение в стиле Telegram */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden max-w-sm mx-auto">
+                              {/* Шапка канала */}
+                              <div className="p-3 border-b border-slate-50 flex items-center gap-2 select-none">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                  {config.title ? config.title.charAt(0).toUpperCase() : 'C'}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-bold text-slate-800 leading-tight">
+                                    {config.title || (tab === 'public' ? 'Публичный канал' : 'Приватный канал')}
+                                  </div>
+                                  <div className="text-[9px] text-slate-400 font-medium">сегодня в {config.postingTimes?.[0] || '10:00'}</div>
+                                </div>
+                              </div>
+
+                              {/* Тело сообщения */}
+                              <div className="p-3.5 space-y-3">
+                                <div className="aspect-video w-full rounded-xl bg-slate-50 flex flex-col items-center justify-center border border-slate-200/50 text-slate-400 gap-1.5 relative overflow-hidden select-none">
+                                  <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/[0.02]"></div>
+                                  <Globe className="w-8 h-8 opacity-30 text-indigo-500" />
+                                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Медиа вложение (фото/видео)</span>
+                                </div>
+
+                                <div className="text-xs text-slate-650 leading-relaxed font-semibold">
+                                  Это демонстрация того, как посты будут выглядеть в ленте вашего канала. Кнопки ниже будут автоматически прикреплены к сообщению.
+                                </div>
+                              </div>
+
+                              {/* Сетка инлайн кнопок */}
+                              {config.buttons && config.buttons.length > 0 && (
+                                <div className="px-3 pb-3 pt-1 border-t border-slate-50 bg-slate-50/20">
+                                  <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(config.buttons.length, 2)}, minmax(0, 1fr))` }}>
+                                    {config.buttons.map((btn, idx) => (
+                                      <a
+                                        key={idx}
+                                        href={btn.url || '#'}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center justify-center px-3 py-2 text-[10px] font-bold text-sky-600 bg-white border border-sky-100 hover:border-sky-200 rounded-xl hover:bg-sky-50 transition-all shadow-sm text-center truncate"
+                                      >
+                                        {btn.text || 'Кнопка'}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  <hr className="border-slate-100" />
+                    <hr className="border-slate-100 my-6" />
 
-                  {/* Конструктор кнопок */}
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-sm font-bold text-slate-800 block">Кнопки под каждым постом</label>
-                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
-                        Вы можете настроить инлайн-кнопки (например, ссылку на оплату подписки), которые будут автоматически прикрепляться под каждым постом в этом канале.
-                      </span>
-                    </div>
-
-                    <div className="space-y-3 max-w-3xl">
-                      {config.buttons.map((btn, idx) => (
-                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                          <div className="flex-1">
-                            <Input
-                              value={btn.text}
-                              onChange={(e) => handleButtonChange(tab, idx, 'text', e.target.value)}
-                              placeholder="Текст кнопки"
-                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm"
-                            />
-                          </div>
-                          <div className="flex-[2]">
-                            <Input
-                              value={btn.url}
-                              onChange={(e) => handleButtonChange(tab, idx, 'url', e.target.value)}
-                              placeholder="Ссылка (https://...)"
-                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm"
-                            />
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveButton(tab, idx)}
-                            className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-
+                    {/* Кнопка сохранения настроек канала */}
+                    <div className="flex justify-start">
                       <Button
-                        variant="outline"
-                        onClick={() => handleAddButton(tab)}
-                        className="w-full max-w-xs h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
+                        onClick={() => handleSaveChannelConfig(tab)}
+                        disabled={savingChannel[tab]}
+                        className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50 transition-all"
                       >
-                        <Plus className="w-4 h-4 mr-2" /> Добавить кнопку
+                        {savingChannel[tab] ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                        Сохранить настройки канала
                       </Button>
                     </div>
                   </div>
-
-                  <hr className="border-slate-100" />
-
-                  {/* Кнопка сохранения настроек канала */}
-                  <div className="flex justify-start">
-                    <Button
-                      onClick={() => handleSaveChannelConfig(tab)}
-                      disabled={savingChannel[tab]}
-                      className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50"
-                    >
-                      {savingChannel[tab] ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                      Сохранить настройки канала
-                    </Button>
-                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </Card>
 
           {/* Список Администраторов (В самом низу) */}
