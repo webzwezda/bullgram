@@ -104,7 +104,7 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone } = req.body;
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times } = req.body;
             
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
@@ -121,6 +121,8 @@ export default function autopostRoutes(supabase) {
             if (posts_per_day !== undefined) updates.posts_per_day = Number(posts_per_day);
             if (posting_times !== undefined) updates.posting_times = posting_times;
             if (timezone !== undefined) updates.timezone = timezone;
+            if (suggestion_posts_per_day !== undefined) updates.suggestion_posts_per_day = Number(suggestion_posts_per_day);
+            if (suggestion_posting_times !== undefined) updates.suggestion_posting_times = suggestion_posting_times;
             
             const { data: channel, error } = await supabase
                 .from('channels')
@@ -133,7 +135,13 @@ export default function autopostRoutes(supabase) {
             if (error) throw error;
             
             // Пересобираем очередь при смене лимитов, времени или таймзоны
-            if (posts_per_day !== undefined || posting_times !== undefined || timezone !== undefined) {
+            if (
+                posts_per_day !== undefined || 
+                posting_times !== undefined || 
+                timezone !== undefined || 
+                suggestion_posts_per_day !== undefined || 
+                suggestion_posting_times !== undefined
+            ) {
                 if (channel.tg_chat_id) {
                     await service.collapseQueue(req.params.botId, channel.tg_chat_id);
                 }
@@ -293,6 +301,33 @@ export default function autopostRoutes(supabase) {
                 .eq('id', req.params.itemId);
             if (error) throw error;
             res.json({ ok: true });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Отвязать канал от бота автопостера
+    router.delete('/bots/:botId/channels/:channelId', async (req, res) => {
+        try {
+            // Проверяем владельца бота
+            const { data: bot, error: botErr } = await supabase
+                .from('autopost_bots')
+                .select('id')
+                .eq('id', req.params.botId)
+                .eq('owner_id', req.user.id)
+                .single();
+            if (botErr || !bot) return res.status(403).json({ error: 'Нет доступа или бот не найден' });
+            
+            const { data: channel, error } = await supabase
+                .from('channels')
+                .update({ autopost_bot_id: null })
+                .eq('id', req.params.channelId)
+                .eq('autopost_bot_id', req.params.botId)
+                .select()
+                .single();
+                
+            if (error) throw error;
+            res.json({ success: true, channel });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }

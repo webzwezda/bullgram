@@ -37,8 +37,8 @@ export function QuickStartPage() {
   
   // Configs for channels
   const [channelConfigs, setChannelConfigs] = useState({
-    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: 'Europe/Moscow' },
-    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: 'Europe/Moscow' }
+    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'] },
+    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'] }
   });
 
   const pollRef = useRef(null);
@@ -74,8 +74,8 @@ export function QuickStartPage() {
       setCreatedBot(null);
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
       setChannelConfigs({
-        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz },
-        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz }
+        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] },
+        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] }
       });
       if (pollRef.current) clearInterval(pollRef.current);
       return;
@@ -110,18 +110,22 @@ export function QuickStartPage() {
             tgChatId: pubCh?.tg_chat_id || null,
             title: pubCh?.title || '',
             postsPerDay: String(pubCh?.posts_per_day || 1),
+            postingTimes: pubCh?.posting_times || ['10:00'],
             autoAccept: pubCh?.auto_accept_suggestions || false,
             buttons: pubCh?.buttons_config || [],
-            timezone: pubCh?.timezone || browserTz
+            timezone: pubCh?.timezone || browserTz,
+            suggestionPostingTimes: pubCh?.suggestion_posting_times || ['12:00']
           },
           private: {
             id: privCh?.id || null,
             tgChatId: privCh?.tg_chat_id || null,
             title: privCh?.title || '',
             postsPerDay: String(privCh?.posts_per_day || 1),
+            postingTimes: privCh?.posting_times || ['10:00'],
             autoAccept: privCh?.auto_accept_suggestions || false,
             buttons: privCh?.buttons_config || [],
-            timezone: privCh?.timezone || browserTz
+            timezone: privCh?.timezone || browserTz,
+            suggestionPostingTimes: privCh?.suggestion_posting_times || ['12:00']
           }
         });
       }
@@ -171,7 +175,7 @@ export function QuickStartPage() {
             
             // Если публичный канал удален из базы, сбрасываем локальный стейт
             if (!pubCh && prev.public.id) {
-              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz };
+              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] };
             } else if (pubCh && !prev.public.id) {
               // Инициализируем только при первом обнаружении
               nextConfig.public = {
@@ -179,15 +183,17 @@ export function QuickStartPage() {
                 tgChatId: pubCh.tg_chat_id,
                 title: pubCh.title,
                 postsPerDay: String(pubCh.posts_per_day || 1),
+                postingTimes: pubCh.posting_times || ['10:00'],
                 autoAccept: pubCh.auto_accept_suggestions || false,
                 buttons: pubCh.buttons_config || [],
-                timezone: pubCh.timezone || browserTz
+                timezone: pubCh.timezone || browserTz,
+                suggestionPostingTimes: pubCh.suggestion_posting_times || ['12:00']
               };
             }
             
             // Если приватный канал удален из базы, сбрасываем локальный стейт
             if (!privCh && prev.private.id) {
-              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', autoAccept: false, buttons: [], timezone: browserTz };
+              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] };
             } else if (privCh && !prev.private.id) {
               // Инициализируем только при первом обнаружении
               nextConfig.private = {
@@ -195,9 +201,11 @@ export function QuickStartPage() {
                 tgChatId: privCh.tg_chat_id,
                 title: privCh.title,
                 postsPerDay: String(privCh.posts_per_day || 1),
+                postingTimes: privCh.posting_times || ['10:00'],
                 autoAccept: privCh.auto_accept_suggestions || false,
                 buttons: privCh.buttons_config || [],
-                timezone: privCh.timezone || browserTz
+                timezone: privCh.timezone || browserTz,
+                suggestionPostingTimes: privCh.suggestion_posting_times || ['12:00']
               };
             }
             
@@ -255,21 +263,34 @@ export function QuickStartPage() {
     
     setSavingChannel(prev => ({ ...prev, [type]: true }));
     try {
-      const n = Number(config.postsPerDay);
+      const sortedPostingTimes = [...(config.postingTimes || ['10:00'])].sort();
+      const sortedSuggestionTimes = [...(config.suggestionPostingTimes || ['12:00'])].sort();
+
       const res = await fetch(`/api/autopost/bots/${createdBot.id}/channels/${config.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
           auto_accept_suggestions: config.autoAccept,
           buttons_config: config.buttons,
-          posts_per_day: n,
-          posting_times: postingTimesFor(n),
-          timezone: config.timezone
+          posts_per_day: sortedPostingTimes.length,
+          posting_times: sortedPostingTimes,
+          timezone: config.timezone,
+          suggestion_posts_per_day: sortedSuggestionTimes.length,
+          suggestion_posting_times: sortedSuggestionTimes
         })
       });
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка сохранения настроек канала');
+
+      setChannelConfigs(prev => ({
+        ...prev,
+        [type]: {
+          ...prev[type],
+          postingTimes: sortedPostingTimes,
+          suggestionPostingTimes: sortedSuggestionTimes
+        }
+      }));
       
       toast.success(`Настройки канала "${config.title}" успешно сохранены`);
     } catch (err) {
@@ -386,6 +407,102 @@ export function QuickStartPage() {
         [type]: {
           ...ch,
           buttons: newButtons
+        }
+      };
+    });
+  };
+
+  // Изменение времени публикаций
+  const handleAddPostingTime = (type) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const currentTimes = ch.postingTimes || ['10:00'];
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          postingTimes: [...currentTimes, '12:00']
+        }
+      };
+    });
+  };
+
+  const handleRemovePostingTime = (type, index) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const currentTimes = ch.postingTimes || ['10:00'];
+      if (currentTimes.length <= 1) {
+        toast.error('Должно быть выбрано хотя бы одно время публикации');
+        return prev;
+      }
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          postingTimes: currentTimes.filter((_, i) => i !== index)
+        }
+      };
+    });
+  };
+
+  const handlePostingTimeChange = (type, index, val) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const newTimes = [...(ch.postingTimes || ['10:00'])];
+      newTimes[index] = val;
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          postingTimes: newTimes
+        }
+      };
+    });
+  };
+
+  // Изменение времени публикаций для предложений
+  const handleAddSuggestionTime = (type) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const currentTimes = ch.suggestionPostingTimes || ['12:00'];
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          suggestionPostingTimes: [...currentTimes, '12:00']
+        }
+      };
+    });
+  };
+
+  const handleRemoveSuggestionTime = (type, index) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const currentTimes = ch.suggestionPostingTimes || ['12:00'];
+      if (currentTimes.length <= 1) {
+        toast.error('Должно быть выбрано хотя бы одно время публикации предложений');
+        return prev;
+      }
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          suggestionPostingTimes: currentTimes.filter((_, i) => i !== index)
+        }
+      };
+    });
+  };
+
+  const handleSuggestionTimeChange = (type, index, val) => {
+    setChannelConfigs(prev => {
+      const ch = prev[type];
+      const newTimes = [...(ch.suggestionPostingTimes || ['12:00'])];
+      newTimes[index] = val;
+      return {
+        ...prev,
+        [type]: {
+          ...ch,
+          suggestionPostingTimes: newTimes
         }
       };
     });
@@ -595,27 +712,48 @@ export function QuickStartPage() {
                 </div>
                 
                 <div className="p-5 sm:p-6 space-y-6">
-                  {/* Частота постинга */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" /> Частота постов в день
-                    </label>
-                    <Select
-                      value={config.postsPerDay}
-                      onValueChange={(val) => setChannelConfigs(prev => ({
-                        ...prev,
-                        [tab]: { ...prev[tab], postsPerDay: val }
-                      }))}
-                    >
-                      <SelectTrigger className="h-11 w-full max-w-md bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500 font-medium">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="1" className="rounded-lg">1 пост в день (10:00)</SelectItem>
-                        <SelectItem value="2" className="rounded-lg">2 поста (10:00, 18:00)</SelectItem>
-                        <SelectItem value="3" className="rounded-lg">3 поста (08:00, 14:00, 20:00)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  {/* Время публикаций (основная очередь) */}
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" /> Время публикаций (основная очередь)
+                      </label>
+                      <span className="text-xs text-slate-500 font-medium leading-relaxed block">
+                        Настройте точное время, в которое бот будет автоматически выкладывать посты из очереди.
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 max-w-md">
+                      {(config.postingTimes || ['10:00']).map((time, idx) => (
+                        <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <span className="text-xs font-bold text-slate-400 w-8 text-center font-mono">#{idx + 1}</span>
+                          <div className="flex-1">
+                            <Input
+                              type="time"
+                              value={time}
+                              onChange={(e) => handlePostingTimeChange(tab, idx, e.target.value)}
+                              className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemovePostingTime(tab, idx)}
+                            className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+
+                      <Button
+                        variant="outline"
+                        onClick={() => handleAddPostingTime(tab)}
+                        className="w-full h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Добавить время публикации
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Часовой пояс канала */}
@@ -676,6 +814,52 @@ export function QuickStartPage() {
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
+
+                  {/* Планировщик предложений (Показываем только если включен тумблер автопринятия) */}
+                  {config.autoAccept && (
+                    <div className="space-y-4 pt-4 border-t border-slate-100 animate-fade-in">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
+                        </label>
+                        <span className="text-xs text-slate-500 font-medium leading-relaxed block">
+                          Настройте отдельное расписание для автопринятых предложений от подписчиков.
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 max-w-md">
+                        {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
+                          <div key={idx} className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                            <span className="text-xs font-bold text-slate-400 w-8 text-center font-mono">#{idx + 1}</span>
+                            <div className="flex-1">
+                              <Input
+                                type="time"
+                                value={time}
+                                onChange={(e) => handleSuggestionTimeChange(tab, idx, e.target.value)}
+                                className="bg-white h-10 rounded-lg border-slate-200 shadow-sm font-semibold"
+                              />
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRemoveSuggestionTime(tab, idx)}
+                              className="h-10 w-10 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleAddSuggestionTime(tab)}
+                          className="w-full h-10 rounded-lg border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800 font-semibold text-sm"
+                        >
+                          <Plus className="w-4 h-4 mr-2 text-indigo-500" /> Добавить время публикации предложений
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   <hr className="border-slate-100" />
 

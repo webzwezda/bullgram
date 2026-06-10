@@ -193,7 +193,7 @@ export class AutopostService {
         });
     }
 
-    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued' }) {
+    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false }) {
         const { count } = await this.supabase
             .from('autopost_items')
             .select('*', { count: 'exact', head: true })
@@ -208,7 +208,8 @@ export class AutopostService {
                 file_id: fileIds && fileIds.length > 0 ? fileIds[0] : null,
                 caption: caption || '',
                 status,
-                sort_order: (count || 0) + 1
+                sort_order: (count || 0) + 1,
+                is_suggestion: isSuggestion
             })
             .select()
             .single();
@@ -219,26 +220,48 @@ export class AutopostService {
     async collapseQueue(botId, channelId) {
         if (!channelId) return;
         
-        // Reset all scheduled posts to queued for this channel
+        // Reset all scheduled posts to queued for this channel (separately for admin posts and suggestions)
         await this.supabase
             .from('autopost_items')
             .update({ status: 'queued', scheduled_at: null })
             .eq('bot_id', botId)
             .eq('target_channel_id', channelId)
-            .eq('status', 'scheduled');
+            .eq('status', 'scheduled')
+            .eq('is_suggestion', false);
+
+        await this.supabase
+            .from('autopost_items')
+            .update({ status: 'queued', scheduled_at: null })
+            .eq('bot_id', botId)
+            .eq('target_channel_id', channelId)
+            .eq('status', 'scheduled')
+            .eq('is_suggestion', true);
             
-        // Re-run scheduling
-        await this.scheduleNextBatch(botId, channelId);
+        // Re-run scheduling for both queues
+        await this.scheduleNextBatch(botId, channelId, false);
+        await this.scheduleNextBatch(botId, channelId, true);
     }
 
-    async scheduleNextBatch(botId, channelId = null) {
+    async scheduleNextBatch(botId, channelId = null, isSuggestion = null) {
         // If channelId is null, schedule for all channels of this bot
         if (!channelId) {
             const channels = await this.getBotChannels(botId);
             let total = 0;
             for (const ch of channels) {
-                total += await this.scheduleNextBatch(botId, ch.tg_chat_id);
+                if (isSuggestion === null) {
+                    total += await this.scheduleNextBatch(botId, ch.tg_chat_id, false);
+                    total += await this.scheduleNextBatch(botId, ch.tg_chat_id, true);
+                } else {
+                    total += await this.scheduleNextBatch(botId, ch.tg_chat_id, isSuggestion);
+                }
             }
+            return total;
+        }
+
+        if (isSuggestion === null) {
+            let total = 0;
+            total += await this.scheduleNextBatch(botId, channelId, false);
+            total += await this.scheduleNextBatch(botId, channelId, true);
             return total;
         }
 
@@ -250,16 +273,21 @@ export class AutopostService {
             .single();
         if (!channel) return 0;
 
-        const postsPerDay = channel.posts_per_day || 1;
-        const postingTimes = channel.posting_times || ['10:00'];
+        const postsPerDay = isSuggestion
+            ? (channel.suggestion_posts_per_day || 1)
+            : (channel.posts_per_day || 1);
+        const postingTimes = isSuggestion
+            ? (channel.suggestion_posting_times || ['12:00'])
+            : (channel.posting_times || ['10:00']);
 
-        // Находим последний запланированный пост для этого канала
+        // Находим последний запланированный пост для этого канала и этой категории
         const { data: lastScheduled } = await this.supabase
             .from('autopost_items')
             .select('scheduled_at')
             .eq('bot_id', botId)
             .eq('target_channel_id', channel.tg_chat_id)
             .eq('status', 'scheduled')
+            .eq('is_suggestion', isSuggestion)
             .order('scheduled_at', { ascending: false })
             .limit(1)
             .maybeSingle();
@@ -279,13 +307,14 @@ export class AutopostService {
             }
         }
 
-        // Находим нераспределённые посты для этого канала
+        // Находим нераспределённые посты для этой категории
         const { data: unscheduled } = await this.supabase
             .from('autopost_items')
             .select('*')
             .eq('bot_id', botId)
             .eq('target_channel_id', channel.tg_chat_id)
             .eq('status', 'queued')
+            .eq('is_suggestion', isSuggestion)
             .order('sort_order', { ascending: true });
 
         if (!unscheduled || unscheduled.length === 0) return 0;
@@ -296,14 +325,14 @@ export class AutopostService {
 
         while (itemIndex < unscheduled.length) {
             for (let i = 0; i < postsPerDay && itemIndex < unscheduled.length; i++) {
-                const timeStr = postingTimes[i % postingTimes.length] || '10:00';
+                const timeStr = postingTimes[i % postingTimes.length] || '12:00';
                 const [hours, minutes] = timeStr.split(':').map(Number);
 
                 const scheduledAt = getUtcDateForLocal(
                     currentDate.getUTCFullYear(),
                     currentDate.getUTCMonth(),
                     currentDate.getUTCDate(),
-                    hours || 10,
+                    hours || 12,
                     minutes || 0,
                     tz
                 );
@@ -1185,7 +1214,8 @@ export class AutopostService {
                                 targetChannelId: targetChannel.tg_chat_id,
                                 fileIds: group.photos,
                                 caption,
-                                status
+                                status,
+                                isSuggestion: true
                             });
                             
                             if (autoAccept) {
@@ -1218,7 +1248,8 @@ export class AutopostService {
                             targetChannelId: targetChannel.tg_chat_id,
                             fileIds: [photo.file_id],
                             caption,
-                            status
+                            status,
+                            isSuggestion: true
                         });
                         
                         if (autoAccept) {
