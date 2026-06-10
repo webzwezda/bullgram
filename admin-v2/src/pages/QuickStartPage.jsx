@@ -640,100 +640,104 @@ export function QuickStartPage() {
       {/* Конфигурация настроек каналов (доступна, когда подключен хотя бы один канал) */}
       {createdBot && hasAdmin && hasChannels && (
         <div className="space-y-6 animate-fade-in">
-          {/* Интуитивный современный переключатель каналов на основе карточек */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              onClick={() => setActiveTab('public')}
-              className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
-                activeTab === 'public'
-                  ? 'border-indigo-600 bg-indigo-50/20 ring-1 ring-indigo-600 shadow-md shadow-indigo-100/50'
-                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50 shadow-sm'
-              }`}
-            >
-              <div className="flex items-start justify-between w-full">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                  activeTab === 'public' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  <Globe className="w-5 h-5" />
-                </div>
-                {channelConfigs.public.id ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                    Подключен
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                    Ожидание
-                  </span>
-                )}
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">Публичный канал</h4>
-                <p className="text-xs text-slate-400 font-semibold mt-1">
-                  Предложка новостей и открытая лента
-                </p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('private')}
-              className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
-                activeTab === 'private'
-                  ? 'border-indigo-600 bg-indigo-50/20 ring-1 ring-indigo-600 shadow-md shadow-indigo-100/50'
-                  : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50 shadow-sm'
-              }`}
-            >
-              <div className="flex items-start justify-between w-full">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                  activeTab === 'private' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  <Lock className="w-5 h-5" />
-                </div>
-                {channelConfigs.private.id ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                    Подключен
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                    Ожидание
-                  </span>
-                )}
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">Приватный канал</h4>
-                <p className="text-xs text-slate-400 font-semibold mt-1">
-                  Платный доступ по подписке
-                </p>
-              </div>
-            </button>
-          </div>
-
-          {/* Контент активной вкладки */}
-          {['public', 'private'].map((tab) => {
-            if (activeTab !== tab) return null;
-            const config = channelConfigs[tab];
-
-            if (!config.id) {
-              return (
-                <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl p-8 text-center space-y-4">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                    {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+          {/* Объединенное окно конфигурации каналов */}
+          <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+            {/* Интегрированный современный переключатель каналов внутри шапки карточки */}
+            <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => setActiveTab('public')}
+                  className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                    activeTab === 'public'
+                      ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
+                      : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-start justify-between w-full">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                      activeTab === 'public' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    {channelConfigs.public.id ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                        Подключен
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                        Ожидание
+                      </span>
+                    )}
                   </div>
-                  <div className="max-w-md mx-auto space-y-1">
-                    <h3 className="font-bold text-slate-800">Канал не подключен</h3>
-                    <p className="text-sm text-slate-500">
-                      Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900">Публичный канал</h4>
+                    <p className="text-xs text-slate-400 font-semibold mt-1">
+                      Предложка новостей и открытая лента
                     </p>
                   </div>
-                </Card>
-              );
-            }
+                </button>
 
-            return (
-              <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-                <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-                  <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setActiveTab('private')}
+                  className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                    activeTab === 'private'
+                      ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
+                      : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-start justify-between w-full">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                      activeTab === 'private' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    {channelConfigs.private.id ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                        Подключен
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
+                        Ожидание
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900">Приватный канал</h4>
+                    <p className="text-xs text-slate-400 font-semibold mt-1">
+                      Платный доступ по подписке
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Контент activeTab */}
+            {['public', 'private'].map((tab) => {
+              if (activeTab !== tab) return null;
+              const config = channelConfigs[tab];
+
+              if (!config.id) {
+                return (
+                  <div key={tab} className="p-8 text-center space-y-4 animate-fade-in">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                    </div>
+                    <div className="max-w-md mx-auto space-y-1">
+                      <h3 className="font-bold text-slate-800">Канал не подключен</h3>
+                      <p className="text-sm text-slate-500">
+                        Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={tab} className="animate-fade-in divide-y divide-slate-100">
+                  <div className="bg-slate-50/30 p-5 sm:p-6">
+                    <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                       <Settings className="w-5 h-5" />
                     </div>
@@ -959,9 +963,10 @@ export function QuickStartPage() {
                     </Button>
                   </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
+        </Card>
 
           {/* Список Администраторов (В самом низу) */}
           <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
