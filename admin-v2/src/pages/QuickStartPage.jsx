@@ -640,58 +640,64 @@ export function QuickStartPage() {
       {/* Конфигурация настроек каналов (доступна, когда подключен хотя бы один канал) */}
       {createdBot && hasAdmin && hasChannels && (
         <div className="space-y-6 animate-fade-in">
-          {/* Переключатель вкладок каналов */}
-          <div className="flex border-b border-slate-200 bg-slate-50/50 p-1.5 rounded-2xl ring-1 ring-slate-200/50">
-            <button
-              onClick={() => setActiveTab('public')}
-              className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'public'
-                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <Globe className="w-4 h-4" />
-              Публичный канал
-              {channelConfigs.public.id ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
-              ) : (
-                <span className="text-xs font-medium text-slate-400">(не привязан)</span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab('private')}
-              className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'private'
-                  ? 'bg-white text-slate-900 shadow-md shadow-slate-200/60'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <Lock className="w-4 h-4" />
-              Приватный канал
-              {channelConfigs.private.id ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
-              ) : (
-                <span className="text-xs font-medium text-slate-400">(не привязан)</span>
-              )}
-            </button>
-          </div>
-
           {/* Контент активной вкладки */}
           {['public', 'private'].map((tab) => {
             if (activeTab !== tab) return null;
             const config = channelConfigs[tab];
+
+            const tabSelector = (
+              <div className="flex border border-slate-200 bg-white p-1 rounded-xl w-full">
+                <button
+                  onClick={() => setActiveTab('public')}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'public'
+                      ? 'bg-slate-50 text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Globe className="w-4 h-4" />
+                  Публичный канал
+                  {channelConfigs.public.id ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-400">(не привязан)</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('private')}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    activeTab === 'private'
+                      ? 'bg-slate-50 text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                  Приватный канал
+                  {channelConfigs.private.id ? (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-400">(не привязан)</span>
+                  )}
+                </button>
+              </div>
+            );
             
             if (!config.id) {
               return (
-                <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl p-8 text-center space-y-4">
-                  <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                    {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+                  <div className="bg-slate-50/50 border-b border-slate-100 p-4 sm:p-5">
+                    {tabSelector}
                   </div>
-                  <div className="max-w-md mx-auto space-y-1">
-                    <h3 className="font-bold text-slate-800">Канал не подключен</h3>
-                    <p className="text-sm text-slate-500">
-                      Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
-                    </p>
+                  <div className="p-8 text-center space-y-4">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                    </div>
+                    <div className="max-w-md mx-auto space-y-1">
+                      <h3 className="font-bold text-slate-800">Канал не подключен</h3>
+                      <p className="text-sm text-slate-500">
+                        Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
+                      </p>
+                    </div>
                   </div>
                 </Card>
               );
@@ -699,8 +705,9 @@ export function QuickStartPage() {
 
             return (
               <Card key={tab} className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-                <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-                  <div className="flex items-center gap-3">
+                <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-5">
+                  {tabSelector}
+                  <div className="flex items-center gap-3 pt-4 border-t border-slate-100/80">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                       <Settings className="w-5 h-5" />
                     </div>
