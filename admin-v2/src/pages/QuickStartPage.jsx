@@ -517,7 +517,7 @@ export function QuickStartPage() {
   return (
     <section className="page page--flush space-y-6">
       {/* Подключение бота */}
-      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-row items-center gap-4">
@@ -641,7 +641,7 @@ export function QuickStartPage() {
       {createdBot && hasAdmin && hasChannels && (
         <div className="space-y-6 animate-fade-in">
           {/* Объединенное окно конфигурации каналов */}
-          <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+          <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
             {/* Интегрированный современный переключатель каналов внутри шапки карточки */}
             <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -967,7 +967,7 @@ export function QuickStartPage() {
         </Card>
 
           {/* Список Администраторов (В самом низу) */}
-          <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+          <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
             <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
