@@ -49,8 +49,6 @@ export function useOfficialBotsController({
       return;
     }
 
-    const nextBotKind = normalizeBotKind(botForm.botKind);
-
     setState((prev) => ({ ...prev, savingBot: true }));
     try {
       const addResponse = await apiRequest('/api/official-bot/add', {
@@ -59,7 +57,7 @@ export function useOfficialBotsController({
         body: {
           botToken: botForm.botToken.trim(),
           botRole: 'sales',
-          bot_kind: nextBotKind,
+          bot_kind: 'sales',
           admin_tg_id: paymentAdminTgId || ''
         }
       });
@@ -69,52 +67,15 @@ export function useOfficialBotsController({
         && String(account.tg_account_id || '') === String(addResponse?.bot?.id || '')
       ));
 
-      if (nextBotKind === 'template' && !addedBotAccount?.id) {
-        showUiMessage('Бот подключен, но тип не подтвердился. Переключи его на "Заготовка" вручную ниже.', 'error');
-        setBotForm({ botToken: '', botKind: 'sales' });
-        return;
-      }
-
       if (addedBotAccount?.id) {
         setSelectedOfficialBotId(String(addedBotAccount.id));
       }
       setBotForm({ botToken: '', botKind: 'sales' });
-      showUiMessage(nextBotKind === 'template' ? 'Бот подключен как заготовка.' : 'Бот подключен.', 'success');
+      showUiMessage('Бот подключен.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
       setState((prev) => ({ ...prev, savingBot: false }));
-    }
-  }
-
-  async function saveBotKind(account, botKind) {
-    const accountId = String(account?.id || '');
-    if (!accountId) return;
-
-    const nextBotKind = normalizeBotKind(botKind);
-
-    setState((prev) => ({ ...prev, savingBotKindId: accountId }));
-    try {
-      await apiRequest('/api/official-bot/type', {
-        accessToken,
-        method: 'POST',
-        body: {
-          account_id: account.id,
-          bot_kind: nextBotKind
-        }
-      });
-      await reloadAccounts();
-      if (nextBotKind === 'template') {
-        showUiMessage('Бот переведен в заготовку.', 'success');
-      } else if (normalizeBotKind(account.bot_kind) === 'template') {
-        showUiMessage('Бот переведен в продажи. Если ты уже назначал его админом в Telegram, перевесь права или синхронизируй группы, чтобы BullRun увидел места для контура.', 'success');
-      } else {
-        showUiMessage('Бот переведен в продажи.', 'success');
-      }
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    } finally {
-      setState((prev) => ({ ...prev, savingBotKindId: '' }));
     }
   }
 
@@ -176,7 +137,6 @@ export function useOfficialBotsController({
     officialBots,
     refreshOfficialBotWebhookStatus,
     saveBotAdmin,
-    saveBotKind,
     selectedOfficialBot,
     selectedOfficialBotId,
     setBotAdminDrafts,

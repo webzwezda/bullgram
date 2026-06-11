@@ -118,21 +118,7 @@ function ConnectBotSection({ botForm, setBotForm, state, addOfficialBot }) {
               className="font-mono bg-white h-11 rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500"
             />
           </div>
-          <div className="w-full sm:w-[200px]">
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Тип</label>
-            <Select
-              value={botForm.botKind}
-              onValueChange={(value) => setBotForm((prev) => ({ ...prev, botKind: value }))}
-            >
-              <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
-                <SelectValue placeholder="Тип бота" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="sales" className="rounded-lg">Бот продаж</SelectItem>
-                <SelectItem value="template" className="rounded-lg">Заготовка</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
           <div className="flex gap-3 w-full sm:w-auto">
             <Button
               onClick={addOfficialBot}
@@ -162,14 +148,12 @@ function BotConfigSection({
   botAdminDrafts,
   setBotAdminDrafts,
   saveBotAdmin,
-  saveBotKind,
   state,
   salesContourSectionProps
 }) {
   if (!selectedOfficialBot) return null;
 
   const selectedBotId = String(selectedOfficialBot.id);
-  const kind = normalizeBotKind(selectedOfficialBot.bot_kind);
   const adminDraftValue = Object.prototype.hasOwnProperty.call(botAdminDrafts, selectedBotId)
     ? botAdminDrafts[selectedBotId]
     : selectedOfficialBot.admin_tg_id || '';
@@ -193,7 +177,7 @@ function BotConfigSection({
       </div>
       
       <div className="p-5 sm:p-6 bg-white">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Выбранный бот</label>
             <Select
@@ -209,23 +193,6 @@ function BotConfigSection({
                     <span className="font-medium text-slate-900">{botTitle(account)}</span>
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Тип бота</label>
-            <Select
-              value={kind}
-              onValueChange={(value) => saveBotKind(selectedOfficialBot, value)}
-              disabled={state.savingBotKindId === selectedBotId}
-            >
-              <SelectTrigger className="data-[size=default]:h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
-                <SelectValue placeholder="Тип бота" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="sales" className="rounded-lg">Бот продаж</SelectItem>
-                <SelectItem value="template" className="rounded-lg">Заготовка</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -259,7 +226,7 @@ function BotConfigSection({
         </div>
       </div>
 
-      {kind === 'sales' && salesContourSectionProps?.isVisible ? (
+      {salesContourSectionProps?.isVisible ? (
         <div className="border-t border-slate-100 bg-slate-50/50">
           <UserbotsSection
             salesContourSectionProps={salesContourSectionProps}
@@ -273,13 +240,6 @@ function BotConfigSection({
             botRightsByTarget={salesContourSectionProps?.botRightsByTarget}
             contourError={salesContourSectionProps?.contourError}
           />
-        </div>
-      ) : kind === 'template' ? (
-        <div className="border-t border-slate-100 p-5 sm:p-6 bg-slate-50/50">
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-sm text-indigo-800 font-medium flex items-center gap-3">
-            <Bot className="w-5 h-5 text-indigo-500 shrink-0" />
-            <p>Это заготовка. Магазин и привязка площадок для неё не нужны. Настройте профиль и переведите в тип "Бот продаж", когда будете готовы.</p>
-          </div>
         </div>
       ) : null}
     </Card>
@@ -804,7 +764,6 @@ export function OfficialBotsSection({
   botAdminDrafts,
   setBotAdminDrafts,
   saveBotAdmin,
-  saveBotKind,
   refreshOfficialBotWebhookStatus,
   channelsByBotId,
   deleteTelegramPlace,
@@ -835,7 +794,6 @@ export function OfficialBotsSection({
         botAdminDrafts={botAdminDrafts}
         setBotAdminDrafts={setBotAdminDrafts}
         saveBotAdmin={saveBotAdmin}
-        saveBotKind={saveBotKind}
         state={state}
         salesContourSectionProps={salesContourSectionProps}
       />

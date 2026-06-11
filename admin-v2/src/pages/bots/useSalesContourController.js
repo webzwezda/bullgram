@@ -799,7 +799,7 @@ export function useSalesContourController({
     contourError: officialBotContoursError,
     contourWarnings,
     draft,
-    isVisible: !!selectedBotId && selectedBotKind === 'sales',
+    isVisible: !!selectedBotId,
     paidChannelOptions,
     prepareUserbotAdmin,
     preparingUserbot: preparingUserbotKey === prepareKey,
