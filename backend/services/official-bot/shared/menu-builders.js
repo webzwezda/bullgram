@@ -2,15 +2,24 @@ export function createMenuBuilders({ service, botId }) {
     const sendAdminMenu = async (ctx) => {
         const adminContext = await service.getBotAdminContext(botId);
         const inlineKeyboard = [
-            [{ text: '🎁 Промокод на тариф', callback_data: 'admin_gift_code' }],
-            [{ text: '⚙️ Управление тарифами', callback_data: 'admin_tariffs' }],
-            [{ text: '💸 Партнерка', callback_data: 'admin_referral' }],
-            [{ text: '👤 Профиль администратора', callback_data: 'admin_profile' }],
-            [{ text: '📊 Статистика', callback_data: 'admin_stats' }],
+            [{ text: '🎁 Выпустить промокод', callback_data: 'admin_gift_code' }],
+            [
+                { text: '📊 Статистика', callback_data: 'admin_stats' },
+                { text: '💸 Партнерка', callback_data: 'admin_referral' }
+            ],
+            [
+                { text: '👤 Мой профиль', callback_data: 'admin_profile' },
+                { text: '⚙️ Тарифы', callback_data: 'admin_tariffs' }
+            ],
             [{ text: '🔙 Режим пользователя', callback_data: 'user_menu' }]
         ];
 
-        const text = `🔧 <b>Панель администратора</b>\n\n${service.buildAdminOwnershipHint(adminContext, 'sales')}\n\nВыберите действие:`;
+        const text = `🛠 <b>ПАНЕЛЬ УПРАВЛЕНИЯ</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Вы находитесь в режиме администратора.\n\n` +
+            `${service.buildAdminOwnershipHint(adminContext, 'sales')}\n\n` +
+            `Выберите действие на панели управления:`;
+
         if (ctx.callbackQuery) {
             await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
         } else {
@@ -30,28 +39,32 @@ export function createMenuBuilders({ service, botId }) {
             const inlineKeyboard = [];
 
             if (isAdmin) {
-                inlineKeyboard.push([{ text: '🔧 Админка', callback_data: 'admin_panel' }]);
+                inlineKeyboard.push([{ text: '🛠 Админ-панель', callback_data: 'admin_panel' }]);
             }
 
-            inlineKeyboard.push([{ text: '💳 Покупка тарифа', callback_data: 'buy_tariff' }]);
+            inlineKeyboard.push([{ text: '💳 Оформить подписку / Купить', callback_data: 'buy_tariff' }]);
 
             const existingReferralProfile = adminContext.referralEnabled
                 ? null
                 : await service.getReferralProfile(ownerId, ctx.from.id).catch(() => null);
 
             if (adminContext.referralEnabled || existingReferralProfile) {
-                inlineKeyboard.push([{ text: '🤝 Стать партнером', callback_data: 'referral_info' }]);
+                inlineKeyboard.push([{ text: '🤝 Партнерская программа', callback_data: 'referral_info' }]);
             }
 
-            inlineKeyboard.push([{ text: '👤 Мой статус', callback_data: 'my_status' }]);
+            inlineKeyboard.push([{ text: '👤 Мой статус & Промокоды', callback_data: 'my_status' }]);
 
             const firstName = ctx.from?.first_name || '';
-            const welcomeText = firstName ? `Добро пожаловать, ${firstName}!` : 'Добро пожаловать!';
+            const userGreeting = firstName ? `, <b>${firstName}</b>` : '';
+            const welcomeText = `👋 Приветствуем${userGreeting} в нашем боте!\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Здесь вы можете мгновенно получить доступ в приватные группы/каналы или приобрести цифровые товары.\n\n` +
+                `👇 Выберите необходимое действие ниже:`;
 
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                await ctx.editMessageText(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             } else {
-                await ctx.reply(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                await ctx.reply(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             }
         } catch (error) {
             console.error('Ошибка меню:', error);
@@ -146,9 +159,18 @@ export function createMenuBuilders({ service, botId }) {
                     `📞 Реквизиты: \`${settings.sbp_phone}\``
                 ].filter(Boolean).join('\n');
                 const discountLine = referralDiscountPercent > 0
-                    ? `\nСкидка по рефке: **-${referralDiscountPercent}%** (${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
+                    ? `\n🎉 Партнерская скидка: **-${referralDiscountPercent}%** (-${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
                     : '';
-                const caption = `💳 **Оплата картой (СБП)**\n\nТариф: **${service.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**${discountLine}\nСумма: **${invoiceAmount} RUB**\n\n${sbpLines}\n\n⚠️ *Переведите точную сумму и нажмите «Я оплатил».*`;
+                const caption = `💳 **СЧЕТ НА ОПЛАТУ (СБП)**\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
+                    `💼 Содержимое: **${bundleSummary}**\n` +
+                    `💰 Сумма к оплате: **${invoiceAmount} RUB**${discountLine}\n\n` +
+                    `**Реквизиты для перевода:**\n` +
+                    `🏦 Банк: \`${settings.sbp_bank || 'Не указан'}\`\n` +
+                    (settings.sbp_fio ? `👤 Получатель: \`${settings.sbp_fio}\`\n` : '') +
+                    `📞 Номер/Телефон: \`${settings.sbp_phone}\` (нажмите, чтобы скопировать)\n\n` +
+                    `⚠️ **ВАЖНО:** Переведите точную сумму (**${invoiceAmount} RUB**). После оплаты нажмите кнопку ниже и отправьте скриншот чека в чат для проверки.`;
 
                 await ctx.deleteMessage().catch(() => {});
                 await ctx.reply(caption, {
@@ -163,9 +185,17 @@ export function createMenuBuilders({ service, botId }) {
                 const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
                 const discountLine = referralDiscountPercent > 0
-                    ? `\nСкидка по рефке: **-${referralDiscountPercent}%** (${referralDiscountAmount} ${tariff.currency})\nЦена до скидки: **${originalAmount} ${tariff.currency}**`
+                    ? `\n🎉 Партнерская скидка: **-${referralDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
                     : '';
-                const caption = `💎 **Счет сформирован!**\n\nТариф: **${service.getTariffDisplayTitle(tariff)}**\nЧто входит: **${bundleSummary}**${discountLine}\nСумма: **${invoiceAmount} ${tariff.currency}**\nКошелек: \`${settings.ton_wallet}\`\nКомментарий: \`${memo}\``;
+                const caption = `💎 **СЧЕТ НА ОПЛАТУ (TON)**\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
+                    `💼 Содержимое: **${bundleSummary}**\n` +
+                    `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
+                    `**Реквизиты для перевода:**\n` +
+                    `👛 Адрес: \`${settings.ton_wallet}\` (нажмите, чтобы скопировать)\n` +
+                    `💬 Комментарий (MEMO): \`${memo}\` (нажмите, чтобы скопировать)\n\n` +
+                    `⚠️ **ВАЖНО:** Вы должны обязательно указать комментарий \`${memo}\` при отправке TON, иначе система не сможет зачислить платеж автоматически.`;
 
                 await ctx.deleteMessage().catch(() => {});
                 await ctx.replyWithPhoto({ source: qrBuffer }, {
