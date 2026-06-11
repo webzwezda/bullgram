@@ -106,10 +106,28 @@ async function showQueueForChannel(ctx, botId, channel, supabase) {
         ];
         
         if (fileId) {
-            await ctx.replyWithPhoto(fileId, {
-                caption: `${statusText}\n\n${item.caption || ''}`,
-                ...Markup.inlineKeyboard(buttons)
-            });
+            const type = item.media_type || 'photo';
+            if (type === 'video') {
+                await ctx.replyWithVideo(fileId, {
+                    caption: `${statusText}\n\n${item.caption || ''}`,
+                    ...Markup.inlineKeyboard(buttons)
+                });
+            } else if (type === 'animation') {
+                await ctx.replyWithAnimation(fileId, {
+                    caption: `${statusText}\n\n${item.caption || ''}`,
+                    ...Markup.inlineKeyboard(buttons)
+                });
+            } else if (type === 'document') {
+                await ctx.replyWithDocument(fileId, {
+                    caption: `${statusText}\n\n${item.caption || ''}`,
+                    ...Markup.inlineKeyboard(buttons)
+                });
+            } else {
+                await ctx.replyWithPhoto(fileId, {
+                    caption: `${statusText}\n\n${item.caption || ''}`,
+                    ...Markup.inlineKeyboard(buttons)
+                });
+            }
         } else {
             await ctx.reply(`${statusText}\n\n${item.caption || ''}`, Markup.inlineKeyboard(buttons));
         }
@@ -193,7 +211,7 @@ export class AutopostService {
         });
     }
 
-    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false }) {
+    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false, mediaType = 'photo', suggestedByTgId = null }) {
         const { count } = await this.supabase
             .from('autopost_items')
             .select('*', { count: 'exact', head: true })
@@ -209,7 +227,9 @@ export class AutopostService {
                 caption: caption || '',
                 status,
                 sort_order: (count || 0) + 1,
-                is_suggestion: isSuggestion
+                is_suggestion: isSuggestion,
+                media_type: mediaType,
+                suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
             })
             .select()
             .single();
@@ -567,7 +587,32 @@ export class AutopostService {
                 }
             }
             
-            // Deep links для предложек от гостей
+            // Deep links для предложек от гостей (по ID канала)
+            if (startPayload && startPayload.startsWith('suggest_ch')) {
+                const channelId = startPayload.replace('suggest_ch', '');
+                try {
+                    const { data: channel } = await this.supabase
+                        .from('channels')
+                        .select('*')
+                        .eq('id', channelId)
+                        .single();
+                        
+                    if (channel) {
+                        this.guestSessions.set(tgUserId, {
+                            botId,
+                            targetChannelId: channel.tg_chat_id
+                        });
+                        return ctx.reply(`Отлично! Пришлите фото (или альбом из нескольких фото) с текстом подписи, чтобы предложить пост в канал "${channel.title}".`);
+                    } else {
+                        return ctx.reply('Канал для предложения новостей не найден.');
+                    }
+                } catch (err) {
+                    console.error('[Autopost] Ошибка получения канала по ссылке предложки:', err.message);
+                    return ctx.reply('Не удалось найти указанный канал.');
+                }
+            }
+            
+            // Legacy / fallback deep links
             if (startPayload && (startPayload === 'suggest_pub' || startPayload === 'suggest_priv')) {
                 this.guestSessions.set(tgUserId, {
                     botId,
@@ -745,10 +790,28 @@ export class AutopostService {
                 const captionText = `Канал назначения: ${destTitle}\n\n${item.caption || ''}`;
                 
                 if (fileId) {
-                    await ctx.replyWithPhoto(fileId, {
-                        caption: captionText,
-                        ...Markup.inlineKeyboard(buttons)
-                    });
+                    const type = item.media_type || 'photo';
+                    if (type === 'video') {
+                        await ctx.replyWithVideo(fileId, {
+                            caption: captionText,
+                            ...Markup.inlineKeyboard(buttons)
+                        });
+                    } else if (type === 'animation') {
+                        await ctx.replyWithAnimation(fileId, {
+                            caption: captionText,
+                            ...Markup.inlineKeyboard(buttons)
+                        });
+                    } else if (type === 'document') {
+                        await ctx.replyWithDocument(fileId, {
+                            caption: captionText,
+                            ...Markup.inlineKeyboard(buttons)
+                        });
+                    } else {
+                        await ctx.replyWithPhoto(fileId, {
+                            caption: captionText,
+                            ...Markup.inlineKeyboard(buttons)
+                        });
+                    }
                 } else {
                     await ctx.reply(captionText, Markup.inlineKeyboard(buttons));
                 }
@@ -759,7 +822,7 @@ export class AutopostService {
         bot.action(/post_now:(.+)/, async (ctx) => {
             const itemId = ctx.match[1];
             const tgUserId = ctx.from.id;
-            const { isAdmin } = await this.getBotAdminContext(botId, tgUserId);
+            const { bot: botData, isAdmin } = await this.getBotAdminContext(botId, tgUserId);
             if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
             
             const { data: item } = await this.supabase
@@ -780,12 +843,22 @@ export class AutopostService {
                     .maybeSingle();
                     
                 let reply_markup = undefined;
+                const inline_keyboard = [];
                 if (channel?.buttons_config && Array.isArray(channel.buttons_config) && channel.buttons_config.length > 0) {
-                    reply_markup = {
-                        inline_keyboard: [
-                            channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
-                        ]
-                    };
+                    inline_keyboard.push(
+                        channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
+                    );
+                }
+                
+                if (channel?.suggest_button_enabled && botData?.username) {
+                    const suggestUrl = `https://t.me/${botData.username}?start=suggest_ch${channel.id}`;
+                    inline_keyboard.push([
+                        { text: 'Предложить новость ✉️', url: suggestUrl }
+                    ]);
+                }
+                
+                if (inline_keyboard.length > 0) {
+                    reply_markup = { inline_keyboard };
                 }
                 
                 if (item.file_ids && item.file_ids.length > 1) {
@@ -796,10 +869,28 @@ export class AutopostService {
                     }));
                     await ctx.telegram.sendMediaGroup(item.target_channel_id, media);
                 } else if (fileId) {
-                    await ctx.telegram.sendPhoto(item.target_channel_id, fileId, {
-                        caption: item.caption || undefined,
-                        reply_markup
-                    });
+                    const type = item.media_type || 'photo';
+                    if (type === 'video') {
+                        await ctx.telegram.sendVideo(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else if (type === 'animation') {
+                        await ctx.telegram.sendAnimation(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else if (type === 'document') {
+                        await ctx.telegram.sendDocument(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else {
+                        await ctx.telegram.sendPhoto(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    }
                 } else {
                     await ctx.telegram.sendMessage(item.target_channel_id, item.caption, {
                         reply_markup
@@ -940,7 +1031,7 @@ export class AutopostService {
         bot.action(/sug_post_now:(.+)/, async (ctx) => {
             const itemId = ctx.match[1];
             const tgUserId = ctx.from.id;
-            const { isAdmin } = await this.getBotAdminContext(botId, tgUserId);
+            const { bot: botData, isAdmin } = await this.getBotAdminContext(botId, tgUserId);
             if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
             
             const { data: item } = await this.supabase
@@ -961,12 +1052,22 @@ export class AutopostService {
                     .maybeSingle();
                     
                 let reply_markup = undefined;
+                const inline_keyboard = [];
                 if (channel?.buttons_config && Array.isArray(channel.buttons_config) && channel.buttons_config.length > 0) {
-                    reply_markup = {
-                        inline_keyboard: [
-                            channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
-                        ]
-                    };
+                    inline_keyboard.push(
+                        channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
+                    );
+                }
+                
+                if (channel?.suggest_button_enabled && botData?.username) {
+                    const suggestUrl = `https://t.me/${botData.username}?start=suggest_ch${channel.id}`;
+                    inline_keyboard.push([
+                        { text: 'Предложить новость ✉️', url: suggestUrl }
+                    ]);
+                }
+                
+                if (inline_keyboard.length > 0) {
+                    reply_markup = { inline_keyboard };
                 }
                 
                 if (item.file_ids && item.file_ids.length > 1) {
@@ -977,10 +1078,28 @@ export class AutopostService {
                     }));
                     await ctx.telegram.sendMediaGroup(item.target_channel_id, media);
                 } else if (fileId) {
-                    await ctx.telegram.sendPhoto(item.target_channel_id, fileId, {
-                        caption: item.caption || undefined,
-                        reply_markup
-                    });
+                    const type = item.media_type || 'photo';
+                    if (type === 'video') {
+                        await ctx.telegram.sendVideo(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else if (type === 'animation') {
+                        await ctx.telegram.sendAnimation(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else if (type === 'document') {
+                        await ctx.telegram.sendDocument(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    } else {
+                        await ctx.telegram.sendPhoto(item.target_channel_id, fileId, {
+                            caption: item.caption || undefined,
+                            reply_markup
+                        });
+                    }
                 } else {
                     await ctx.telegram.sendMessage(item.target_channel_id, item.caption, {
                         reply_markup
@@ -1141,8 +1260,8 @@ export class AutopostService {
             return next();
         });
 
-        // Приём картинок и альбомов
-        bot.on('photo', async (ctx) => {
+        // Приём картинок, видео, гифок, файлов и альбомов
+        bot.on(['photo', 'video', 'animation', 'document'], async (ctx) => {
             try {
                 const tgUserId = ctx.from.id;
                 const { bot, isAdmin } = await this.getBotAdminContext(botId, tgUserId);
@@ -1170,14 +1289,59 @@ export class AutopostService {
                     const activeId = activeModes[String(tgUserId)];
                     targetChannel = channels.find(c => String(c.tg_chat_id) === String(activeId)) || channels[0];
                 } else {
-                    const type = guestSession.targetChannelType;
-                    targetChannel = channels.find(c => c.visibility === type) || channels[0];
+                    if (guestSession.targetChannelId) {
+                        targetChannel = channels.find(c => String(c.tg_chat_id) === String(guestSession.targetChannelId));
+                    }
+                    if (!targetChannel) {
+                        const type = guestSession.targetChannelType;
+                        targetChannel = channels.find(c => c.visibility === type) || channels[0];
+                    }
                 }
                 
-                const photo = ctx.message.photo[ctx.message.photo.length - 1];
+                // Проверяем лимиты предложений (если гость)
+                if (!isAdmin && targetChannel) {
+                    const maxLimit = targetChannel.max_suggestions_per_day !== undefined ? targetChannel.max_suggestions_per_day : 5;
+                    if (maxLimit > 0) {
+                        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                        const { count, error } = await this.supabase
+                            .from('autopost_items')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('target_channel_id', targetChannel.tg_chat_id)
+                            .eq('suggested_by_tg_id', String(tgUserId))
+                            .gte('created_at', twentyFourHoursAgo);
+                            
+                        if (!error && count >= maxLimit) {
+                            return ctx.reply(`⚠️ Вы превысили суточный лимит предложений для канала "${targetChannel.title}" (максимум ${maxLimit} в сутки). Пожалуйста, попробуйте позже.`);
+                        }
+                    }
+                }
+                
+                let fileId = null;
+                let mediaType = 'photo';
+                
+                if (ctx.message.photo) {
+                    const photo = ctx.message.photo[ctx.message.photo.length - 1];
+                    fileId = photo.file_id;
+                    mediaType = 'photo';
+                } else if (ctx.message.video) {
+                    fileId = ctx.message.video.file_id;
+                    mediaType = 'video';
+                } else if (ctx.message.animation) {
+                    fileId = ctx.message.animation.file_id;
+                    mediaType = 'animation';
+                } else if (ctx.message.document) {
+                    fileId = ctx.message.document.file_id;
+                    mediaType = 'document';
+                }
+                
+                if (!fileId) {
+                    return ctx.reply('❌ Неподдерживаемый тип файла.');
+                }
+                
                 const mediaGroupId = ctx.message.media_group_id;
                 
-                if (mediaGroupId) {
+                if (mediaGroupId && ctx.message.photo) {
+                    // Группировка в альбомы поддерживается только для фото
                     let group = this.mediaGroups.get(mediaGroupId);
                     if (!group) {
                         group = {
@@ -1187,7 +1351,7 @@ export class AutopostService {
                         };
                         this.mediaGroups.set(mediaGroupId, group);
                     }
-                    group.photos.push(photo.file_id);
+                    group.photos.push(fileId);
                     if (ctx.message.caption) group.captions.push(ctx.message.caption);
                     
                     if (group.timer) clearTimeout(group.timer);
@@ -1215,7 +1379,9 @@ export class AutopostService {
                                 fileIds: group.photos,
                                 caption,
                                 status,
-                                isSuggestion: true
+                                isSuggestion: true,
+                                mediaType: 'photo',
+                                suggestedByTgId: tgUserId
                             });
                             
                             if (autoAccept) {
@@ -1233,12 +1399,14 @@ export class AutopostService {
                         await this.addPostItem({
                             botId,
                             targetChannelId: targetChannel.tg_chat_id,
-                            fileIds: [photo.file_id],
+                            fileIds: [fileId],
                             caption,
-                            status: 'queued'
+                            status: 'queued',
+                            mediaType
                         });
                         await this.collapseQueue(botId, targetChannel.tg_chat_id);
-                        await ctx.reply(`✅ Картинка добавлена в очередь для канала "${targetChannel.title}".`);
+                        const typeLabel = mediaType === 'video' ? 'Видео добавлено' : mediaType === 'animation' ? 'Гифка добавлена' : mediaType === 'document' ? 'Файл добавлен' : 'Картинка добавлена';
+                        await ctx.reply(`✅ ${typeLabel} в очередь для канала "${targetChannel.title}".`);
                     } else {
                         const autoAccept = targetChannel.auto_accept_suggestions || false;
                         const status = autoAccept ? 'queued' : 'suggested';
@@ -1246,10 +1414,12 @@ export class AutopostService {
                         await this.addPostItem({
                             botId,
                             targetChannelId: targetChannel.tg_chat_id,
-                            fileIds: [photo.file_id],
+                            fileIds: [fileId],
                             caption,
                             status,
-                            isSuggestion: true
+                            isSuggestion: true,
+                            mediaType,
+                            suggestedByTgId: tgUserId
                         });
                         
                         if (autoAccept) {

@@ -39,7 +39,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
                     try {
                         const { data: botData } = await supabase
                             .from('autopost_bots')
-                            .select('target_channel_tg_id')
+                            .select('target_channel_tg_id, username')
                             .eq('id', item.bot_id)
                             .single();
 
@@ -54,17 +54,27 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
                         // Получаем настройки канала (для инлайн-кнопок)
                         const { data: channel } = await supabase
                             .from('channels')
-                            .select('buttons_config')
+                            .select('id, buttons_config, suggest_button_enabled')
                             .eq('tg_chat_id', targetChatId)
                             .maybeSingle();
 
                         let reply_markup = undefined;
+                        const inline_keyboard = [];
                         if (channel?.buttons_config && Array.isArray(channel.buttons_config) && channel.buttons_config.length > 0) {
-                            reply_markup = {
-                                inline_keyboard: [
-                                    channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
-                                ]
-                            };
+                            inline_keyboard.push(
+                                channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
+                            );
+                        }
+
+                        if (channel?.suggest_button_enabled && botData?.username) {
+                            const suggestUrl = `https://t.me/${botData.username}?start=suggest_ch${channel.id}`;
+                            inline_keyboard.push([
+                                { text: 'Предложить новость ✉️', url: suggestUrl }
+                            ]);
+                        }
+
+                        if (inline_keyboard.length > 0) {
+                            reply_markup = { inline_keyboard };
                         }
 
                         // Если это альбом (несколько картинок)

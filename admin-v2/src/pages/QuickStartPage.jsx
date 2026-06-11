@@ -37,8 +37,8 @@ export function QuickStartPage() {
   
   // Configs for channels
   const [channelConfigs, setChannelConfigs] = useState({
-    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'] },
-    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'] }
+    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
+    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
   });
 
   const pollRef = useRef(null);
@@ -74,8 +74,8 @@ export function QuickStartPage() {
       setCreatedBot(null);
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
       setChannelConfigs({
-        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] },
-        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] }
+        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
+        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
       });
       if (pollRef.current) clearInterval(pollRef.current);
       return;
@@ -114,7 +114,9 @@ export function QuickStartPage() {
             autoAccept: pubCh?.auto_accept_suggestions || false,
             buttons: pubCh?.buttons_config || [],
             timezone: pubCh?.timezone || browserTz,
-            suggestionPostingTimes: pubCh?.suggestion_posting_times || ['12:00']
+            suggestionPostingTimes: pubCh?.suggestion_posting_times || ['12:00'],
+            suggestButtonEnabled: pubCh?.suggest_button_enabled || false,
+            maxSuggestionsPerDay: pubCh?.max_suggestions_per_day !== undefined ? pubCh.max_suggestions_per_day : 5
           },
           private: {
             id: privCh?.id || null,
@@ -125,7 +127,9 @@ export function QuickStartPage() {
             autoAccept: privCh?.auto_accept_suggestions || false,
             buttons: privCh?.buttons_config || [],
             timezone: privCh?.timezone || browserTz,
-            suggestionPostingTimes: privCh?.suggestion_posting_times || ['12:00']
+            suggestionPostingTimes: privCh?.suggestion_posting_times || ['12:00'],
+            suggestButtonEnabled: privCh?.suggest_button_enabled || false,
+            maxSuggestionsPerDay: privCh?.max_suggestions_per_day !== undefined ? privCh.max_suggestions_per_day : 5
           }
         });
       }
@@ -175,7 +179,7 @@ export function QuickStartPage() {
             
             // Если публичный канал удален из базы, сбрасываем локальный стейт
             if (!pubCh && prev.public.id) {
-              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] };
+              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
             } else if (pubCh && !prev.public.id) {
               // Инициализируем только при первом обнаружении
               nextConfig.public = {
@@ -187,13 +191,15 @@ export function QuickStartPage() {
                 autoAccept: pubCh.auto_accept_suggestions || false,
                 buttons: pubCh.buttons_config || [],
                 timezone: pubCh.timezone || browserTz,
-                suggestionPostingTimes: pubCh.suggestion_posting_times || ['12:00']
+                suggestionPostingTimes: pubCh.suggestion_posting_times || ['12:00'],
+                suggestButtonEnabled: pubCh.suggest_button_enabled || false,
+                maxSuggestionsPerDay: pubCh.max_suggestions_per_day !== undefined ? pubCh.max_suggestions_per_day : 5
               };
             }
             
             // Если приватный канал удален из базы, сбрасываем локальный стейт
             if (!privCh && prev.private.id) {
-              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'] };
+              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
             } else if (privCh && !prev.private.id) {
               // Инициализируем только при первом обнаружении
               nextConfig.private = {
@@ -205,7 +211,9 @@ export function QuickStartPage() {
                 autoAccept: privCh.auto_accept_suggestions || false,
                 buttons: privCh.buttons_config || [],
                 timezone: privCh.timezone || browserTz,
-                suggestionPostingTimes: privCh.suggestion_posting_times || ['12:00']
+                suggestionPostingTimes: privCh.suggestion_posting_times || ['12:00'],
+                suggestButtonEnabled: privCh.suggest_button_enabled || false,
+                maxSuggestionsPerDay: privCh.max_suggestions_per_day !== undefined ? privCh.max_suggestions_per_day : 5
               };
             }
             
@@ -276,7 +284,9 @@ export function QuickStartPage() {
           posting_times: sortedPostingTimes,
           timezone: config.timezone,
           suggestion_posts_per_day: sortedSuggestionTimes.length,
-          suggestion_posting_times: sortedSuggestionTimes
+          suggestion_posting_times: sortedSuggestionTimes,
+          suggest_button_enabled: config.suggestButtonEnabled,
+          max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5)
         })
       });
       
@@ -288,7 +298,9 @@ export function QuickStartPage() {
         [type]: {
           ...prev[type],
           postingTimes: sortedPostingTimes,
-          suggestionPostingTimes: sortedSuggestionTimes
+          suggestionPostingTimes: sortedSuggestionTimes,
+          suggestButtonEnabled: config.suggestButtonEnabled,
+          maxSuggestionsPerDay: config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5
         }
       }));
       
@@ -827,6 +839,55 @@ export function QuickStartPage() {
                     </div>
 
                     <hr className="border-slate-100" />
+
+                    {/* Кнопка предложки под постами */}
+                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
+                      <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
+                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                          Добавляет под каждым публикуемым постом кнопку со ссылкой на бота для сбора предложений.
+                        </span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={config.suggestButtonEnabled || false}
+                          onChange={(e) => setChannelConfigs(prev => ({
+                            ...prev,
+                            [tab]: { ...prev[tab], suggestButtonEnabled: e.target.checked }
+                          }))}
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    {/* Суточный лимит предложений */}
+                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3.5 transition-all">
+                      <div className="space-y-1">
+                        <label className="text-sm font-bold text-slate-800 block">Лимит предложений в сутки</label>
+                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                          Максимальное количество предложений от одного пользователя за последние 24 часа. Укажите «0» для отключения ограничений.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="number"
+                          min="0"
+                          max="1000"
+                          className="w-24 px-3 py-1.5 text-sm font-bold text-center border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 bg-white"
+                          value={config.maxSuggestionsPerDay !== undefined ? config.maxSuggestionsPerDay : 5}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                            setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], maxSuggestionsPerDay: val }
+                            }));
+                          }}
+                        />
+                        <span className="text-xs text-slate-400 font-semibold">постов / 24 часа</span>
+                      </div>
+                    </div>
 
                     {/* Автопринятие предложений */}
                     <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">

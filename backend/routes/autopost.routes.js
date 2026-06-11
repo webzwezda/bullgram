@@ -104,7 +104,7 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times } = req.body;
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day } = req.body;
             
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
@@ -123,6 +123,8 @@ export default function autopostRoutes(supabase) {
             if (timezone !== undefined) updates.timezone = timezone;
             if (suggestion_posts_per_day !== undefined) updates.suggestion_posts_per_day = Number(suggestion_posts_per_day);
             if (suggestion_posting_times !== undefined) updates.suggestion_posting_times = suggestion_posting_times;
+            if (suggest_button_enabled !== undefined) updates.suggest_button_enabled = suggest_button_enabled;
+            if (max_suggestions_per_day !== undefined) updates.max_suggestions_per_day = Number(max_suggestions_per_day);
             
             const { data: channel, error } = await supabase
                 .from('channels')
