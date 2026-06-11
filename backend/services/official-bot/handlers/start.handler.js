@@ -1,6 +1,6 @@
 import { loadReferralReserveState } from '../../referral-reserve.service.js';
 
-export function registerStartHandlers(bot, { service, botId, sendMainMenu }) {
+export function registerStartHandlers(bot, { service, botId, sendMainMenu, createInvoiceForTariff }) {
     bot.start(async (ctx) => {
         try {
             const ownerId = await service.getBotOwner(botId);
@@ -24,6 +24,43 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu }) {
                         start_payload: startPayload || null
                     }
                 });
+
+                // Обработка прямой ссылки на покупку тарифа/товара
+                if (startPayload.startsWith('buy_')) {
+                    const tariffId = startPayload.replace(/^buy_tariff_/, '').replace(/^buy_/, '');
+                    const { data: tariff, error } = await service.supabase
+                        .from('tariffs')
+                        .select('*')
+                        .eq('id', tariffId)
+                        .maybeSingle();
+
+                    if (!error && tariff && tariff.is_active) {
+                        const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
+                        await service.logCustomerFunnelEvent({
+                            ownerId,
+                            botId,
+                            tgUserId: ctx.from.id,
+                            tariffId: tariff.id,
+                            eventType: 'tariff_card_opened',
+                            referralCode: referralAttribution?.referral_code || null,
+                            sessionKey: service.buildCustomerFunnelSessionKey({
+                                botId,
+                                tgUserId: ctx.from.id,
+                                eventType: 'tariff_card_opened',
+                                tariffId: tariff.id
+                            }),
+                            payload: {
+                                start_payload: startPayload,
+                                source: 'deep_link'
+                            }
+                        });
+
+                        return createInvoiceForTariff(ctx, tariff);
+                    } else {
+                        await ctx.reply('❌ Этот тариф или цифровой товар сейчас недоступен.');
+                        return sendMainMenu(ctx);
+                    }
+                }
 
                 if (startPayload.startsWith('ref_')) {
                     const settings = await service.getReferralSettings(ownerId);
@@ -61,7 +98,7 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu }) {
                 }
             }
         } catch (error) {
-            console.error('Ошибка referral start payload:', error);
+            console.error('Ошибка в start handler:', error);
         }
 
         await sendMainMenu(ctx);

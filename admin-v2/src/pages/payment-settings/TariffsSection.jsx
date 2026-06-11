@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Users, Clock, Trash2, MessageCircle, Link2, CreditCard, Package } from 'lucide-react';
+import { toast } from 'sonner';
 
 function getTariffPaymentGroupKey(tariff) {
   return [
@@ -740,6 +741,42 @@ export function TariffsSection({
                         }
                       })}
                     </div>
+                  </div>
+
+                  {/* Ссылка на покупку */}
+                  <div className="tariff-card__section border-t border-slate-100 pt-3.5 mt-3.5">
+                    <div className="tariff-card__section-title flex items-center gap-1">
+                      <Link2 size={12} className="text-slate-400" />
+                      Ссылка на покупку (Deep Link)
+                    </div>
+                    {(() => {
+                      const bot = tariff.bot_id ? botsById.get(String(tariff.bot_id)) : null;
+                      if (!bot) {
+                        return <div className="text-[11px] text-slate-400 font-semibold mt-1">Для получения ссылки выберите бота в настройках тарифа.</div>;
+                      }
+                      const buyUrl = `https://t.me/${bot.tg_username || `bot-${bot.tg_account_id}`}?start=buy_${tariff.id}`;
+                      return (
+                        <div className="flex items-center gap-2 mt-1.5 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
+                          <input
+                            type="text"
+                            readOnly
+                            value={buyUrl}
+                            onClick={(e) => e.target.select()}
+                            className="bg-transparent text-xs font-mono select-all focus:outline-none flex-1 overflow-x-auto text-slate-600 font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(buyUrl);
+                              toast.success('Ссылка на покупку скопирована!');
+                            }}
+                            className="text-[10px] bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 px-2 py-1 rounded-lg font-bold shrink-0 shadow-sm transition-all"
+                          >
+                            Копировать
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Footer Stats */}
