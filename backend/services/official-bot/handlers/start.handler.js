@@ -36,22 +36,68 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
 
                     if (!error && tariff && tariff.is_active) {
                         const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
+                        const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+
+                        const { data: siblingTariffs } = await service.supabase.from('tariffs')
+                            .select('*')
+                            .eq('owner_id', tariff.owner_id)
+                            .eq('is_active', true);
+
+                        const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+
+                        if (paymentGroup.variants.length > 1) {
+                            await service.logCustomerFunnelEvent({
+                                ownerId,
+                                botId,
+                                tgUserId: ctx.from.id,
+                                tariffId: tariff.id,
+                                eventType: 'tariff_card_opened',
+                                referralCode: referralAttribution?.referral_code || null,
+                                sessionKey: service.buildCustomerFunnelSessionKey({
+                                    botId,
+                                    tgUserId: ctx.from.id,
+                                    eventType: 'tariff_card_opened',
+                                    tariffId: tariff.id
+                                }),
+                                payload: {
+                                    start_payload: startPayload,
+                                    source: 'deep_link_group',
+                                    variants_count: paymentGroup.variants.length
+                                }
+                            });
+
+                            const keyboard = service.sortTariffPaymentVariants(paymentGroup.variants)
+                                .map((variant) => ([{
+                                    text: `${service.getTariffCurrencyIcon(variant.currency)} ${service.formatTariffPaymentOptions([variant], referralDiscountPercent)}`,
+                                    callback_data: `pay_tariff_${variant.id}`
+                                }]));
+                            keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+                            await ctx.reply(
+                                `Выберите способ оплаты для «${service.getTariffDisplayTitle(paymentGroup.lead)}»:`,
+                                { reply_markup: { inline_keyboard: keyboard } }
+                            );
+                            return;
+                        }
+
+                        // Если вариант только один, сразу выставляем инвойс
                         await service.logCustomerFunnelEvent({
                             ownerId,
                             botId,
                             tgUserId: ctx.from.id,
                             tariffId: tariff.id,
-                            eventType: 'tariff_card_opened',
+                            eventType: 'payment_method_selected',
                             referralCode: referralAttribution?.referral_code || null,
                             sessionKey: service.buildCustomerFunnelSessionKey({
                                 botId,
                                 tgUserId: ctx.from.id,
-                                eventType: 'tariff_card_opened',
+                                eventType: 'payment_method_selected',
                                 tariffId: tariff.id
                             }),
                             payload: {
                                 start_payload: startPayload,
-                                source: 'deep_link'
+                                source: 'deep_link_single',
+                                currency: tariff.currency
                             }
                         });
 
