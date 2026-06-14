@@ -26,7 +26,10 @@ function accessIssueClass(row) {
 
 function accessIssueText(row) {
   if (row.status === 'active' && !row.last_join_approved_at) return 'Вход не подтвержден';
-  if (row.status === 'expired') return 'Сгорел и не кикнут';
+  if (row.status === 'expired') {
+    if (row.kick_attempts >= 5) return 'Ошибка авто-кика';
+    return 'Сгорел и не кикнут';
+  }
   return row.status || 'Неизвестно';
 }
 
@@ -308,6 +311,11 @@ export function AccessPage() {
                   <td>
                     <div>TG ID {row.tg_user_id}</div>
                     <div className="table-subtext">{row.access_note || 'Без заметки'}</div>
+                    {row.kick_attempts >= 5 && (
+                      <div className="table-subtext" style={{ color: '#ef4444', marginTop: '4px', fontWeight: 'bold' }}>
+                        ⚠️ Превышен лимит попыток кика ({row.kick_attempts}/5). Ошибка: {row.kick_failed_reason || 'Неизвестная ошибка'}
+                      </div>
+                    )}
                   </td>
                   <td>{row.channel_title}</td>
                   <td>

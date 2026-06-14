@@ -267,17 +267,23 @@ function UserbotsSection({
     return '#cbd5e1';
   }
 
-  function handleAdd(optionId) {
+  async function handleAdd(optionId) {
     const next = [...selectedIds, String(optionId)];
     if (setFieldValue) {
-      setFieldValue({
-        selectedUserbotIds: next,
-        selectedUserbotId: '',
-        userbotMode: 'pool'
-      }, null, { autoSave: true });
+      try {
+        await setFieldValue({
+          selectedUserbotIds: next,
+          selectedUserbotId: '',
+          userbotMode: 'pool'
+        }, null, { autoSave: true });
+        setAdding(false);
+        salesContourSectionProps?.triggerJoinAll?.();
+      } catch (err) {
+        console.error('Failed to add userbot to contour:', err);
+      }
+    } else {
+      setAdding(false);
     }
-    setAdding(false);
-    salesContourSectionProps?.triggerJoinAll?.();
   }
 
   function handleRemove(optionId) {

@@ -33,6 +33,7 @@ import integrationsRoutes from './routes/integrations.routes.js';
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
 import { startRetention } from './jobs/retention.job.js';
+import { startBotRightsMonitor } from './jobs/bot-rights-monitor.job.js';
 import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
 import { startBrowseFollowup } from './jobs/browse-followup.job.js';
 import { startAutopostScheduler } from './jobs/autopost-scheduler.job.js';
@@ -234,6 +235,7 @@ app.listen(PORT, async () => {
     // Запускаем фоновые задачи (Cron)
     startAutoKick(supabase, getBotById);
     startRetention(supabase, getBotById);
+    startBotRightsMonitor(supabase);
     startAbandonedCart(supabase, getBotById);
     startBrowseFollowup(supabase, getBotById);
     const autopostService = new AutopostService(supabase);

@@ -149,10 +149,17 @@ export class OfficialBotService {
         return String(value || '').replace(/([_*[\]()`])/g, '\\$1');
     }
 
+    escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     formatResourceLine(item, index) {
-        const title = this.escapeMarkdownText(item.title || 'Материал');
-        const value = this.escapeMarkdownText(item.url || '');
-        return `${index + 1}. **${title}**\n${value}`;
+        const title = this.escapeHtml(item.title || 'Материал');
+        const value = this.escapeHtml(item.url || '');
+        return `${index + 1}. <b>${title}</b>\n${value}`;
     }
 
     getTariffPaymentGroupKey(tariff) {
@@ -1618,6 +1625,38 @@ export class OfficialBotService {
         }
     }
 
+    async getBrowseFollowupDiscount(ownerId, tgUserId) {
+        try {
+            const { data: settings } = await this.supabase
+                .from('payment_settings')
+                .select('abandoned_discount_percent')
+                .eq('owner_id', ownerId)
+                .maybeSingle();
+
+            const discountPercent = Number(settings?.abandoned_discount_percent || 0);
+            if (discountPercent <= 0) return 0;
+
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: recentFollowUp } = await this.supabase
+                .from('customer_funnel_events')
+                .select('id')
+                .eq('tg_user_id', String(tgUserId))
+                .eq('owner_id', ownerId)
+                .in('event_type', ['tariff_list_opened', 'tariff_card_opened'])
+                .eq('followed_up', true)
+                .gte('created_at', oneDayAgo)
+                .limit(1);
+
+            if (recentFollowUp && recentFollowUp.length > 0) {
+                return discountPercent;
+            }
+            return 0;
+        } catch (err) {
+            console.error('[getBrowseFollowupDiscount] error:', err.message);
+            return 0;
+        }
+    }
+
     async processReferralReward(bot, invoice, tariff, ownerId) {
         try {
             const settings = await this.getReferralSettings(ownerId);
@@ -1966,17 +2005,17 @@ export class OfficialBotService {
             }
 
             const expText = telegramTargets.length === 0
-                ? `Материалы: **отправлены**`
+                ? `Материалы: <b>отправлены</b>`
                 : finalExpiresAt
-                    ? `Продлен до: **${new Date(finalExpiresAt).toLocaleDateString('ru-RU')}**`
-                    : `Доступ: **Навсегда**`;
+                    ? `Продлен до: <b>${new Date(finalExpiresAt).toLocaleDateString('ru-RU')}</b>`
+                    : `Доступ: <b>Навсегда</b>`;
 
             const accessLines = inviteLinks
-                .map((item, index) => `${index + 1}. **${item.title}**\n👉 ${item.url}`)
+                .map((item, index) => `${index + 1}. <b>${item.title}</b>\n👉 ${item.url}`)
                 .join('\n\n') || 'Telegram-доступ в этом тарифе не включен.';
 
             const resourceLines = resourceTargets.length > 0
-                ? `\n\n**Доп. материалы:**\n${resourceTargets.map((item, index) => this.formatResourceLine(item, index)).join('\n\n')}`
+                ? `\n\n<b>Доп. материалы:</b>\n${resourceTargets.map((item, index) => this.formatResourceLine(item, index)).join('\n\n')}`
                 : '';
             const deliveryNote = telegramTargets.length > 0
                 ? '\n\nВсе ссылки работают через запрос на вступление. Бот пропустит только аккаунт с активной подпиской.'
@@ -1984,8 +2023,8 @@ export class OfficialBotService {
 
             await bot.telegram.sendMessage(
                 invoice.tg_user_id,
-                `🎉 **Оплата успешно подтверждена!**\n\nТариф: «${this.getTariffDisplayTitle(tariff)}»\n⏳ ${expText}\n\n**Что ты получил:**\n${accessLines}${resourceLines}${deliveryNote}`,
-                { parse_mode: 'Markdown', disable_web_page_preview: true }
+                `🎉 <b>Оплата успешно подтверждена!</b>\n\nТариф: «${this.getTariffDisplayTitle(tariff)}»\n⏳ ${expText}\n\n<b>Что ты получил:</b>\n${accessLines}${resourceLines}${deliveryNote}`,
+                { parse_mode: 'HTML', disable_web_page_preview: true }
             );
 
             await this.processReferralReward(bot, invoice, tariff, ownerId);
@@ -2004,8 +2043,8 @@ export class OfficialBotService {
 
                     await bot.telegram.sendMessage(
                         invoice.tg_user_id,
-                        `🔥 **Что дальше**\n\nТы сейчас зашел через пробник. Если захочешь остаться надолго, следующий шаг уже готов:\n\n**${upsellTariff.title}**\n💰 ${upsellTariff.price} ${upsellTariff.currency}\n⏳ ${upsellDuration}\n\nНапиши /start и выбери основной тариф, когда будешь готов зайти плотнее.`,
-                        { parse_mode: 'Markdown' }
+                        `🔥 <b>Что дальше</b>\n\nТы сейчас зашел через пробник. Если захочешь остаться надолго, следующий шаг уже готов:\n\n<b>${this.escapeHtml(upsellTariff.title)}</b>\n💰 ${upsellTariff.price} ${upsellTariff.currency}\n⏳ ${upsellDuration}\n\nНапиши /start и выбери основной тариф, когда будешь готов зайти плотнее.`,
+                        { parse_mode: 'HTML' }
                     );
                 }
             }

@@ -41,21 +41,28 @@ export const startRetention = (supabase, getBotFunction) => {
 
     setInterval(async () => {
         const now = new Date();
-        // Ищем подписки, которые истекают ровно через 24 часа (+- 5 минут)
-        const targetStart = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-        const targetEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000 + 5 * 60 * 1000).toISOString();
+        // Ищем подписки, которые истекают в ближайшие 24 часа и напоминание для которых еще не отправлялось
+        const targetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
         try {
             const { data: expiringSubs, error } = await supabase
                 .from('subscriptions')
                 .select(`id, tg_user_id, channel_id, channels ( owner_id, bot_id, title )`)
                 .eq('status', 'active')
-                .gte('expires_at', targetStart)
-                .lt('expires_at', targetEnd);
+                .eq('expiry_reminder_sent', false)
+                .lt('expires_at', targetTime)
+                .gt('expires_at', now.toISOString())
+                .limit(100);
 
             if (error || !expiringSubs || expiringSubs.length === 0) return;
 
             for (const sub of expiringSubs) {
+                // Отмечаем как отправленное, чтобы избежать повторной обработки
+                await supabase
+                    .from('subscriptions')
+                    .update({ expiry_reminder_sent: true })
+                    .eq('id', sub.id);
+
                 const ownerId = sub.channels.owner_id;
                 const botId = sub.channels.bot_id;
                 const bot = getBotFunction(botId);

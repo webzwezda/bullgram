@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
+import { parsePdfReceipt } from '../services/receipt-parser.service.js';
 import { normalizeSbpBankSelection } from '../utils/payment-settings.js';
 import {
     buildRobokassaPaymentUrl,
@@ -973,6 +974,176 @@ export async function confirmShopP2pPayment(supabase, {
         purchase_ids: completedPurchaseIds,
         batch_token: token || purchases?.[0]?.payload?.batch_token || null
     };
+}
+
+async function processPdfAutoConfirmation(supabase, { purchases, file, sellerOwnerId, currentPayload }) {
+    if (!file || !file.path || !file.originalname?.toLowerCase().endsWith('.pdf')) {
+        return { autoConfirmed: false, payload: currentPayload };
+    }
+
+    try {
+        // 1. Check if PDF auto-confirm is enabled
+        const { data: settings } = await supabase
+            .from('p2p_webhook_settings')
+            .select('pdf_auto_confirm_enabled, match_clock_skew_minutes')
+            .eq('owner_id', sellerOwnerId)
+            .maybeSingle();
+
+        if (settings?.pdf_auto_confirm_enabled === false) {
+            return { autoConfirmed: false, payload: currentPayload };
+        }
+
+        // 2. Parse PDF
+        const parsed = await parsePdfReceipt(file.path);
+        if (!parsed.success) {
+            const nextPayload = {
+                ...currentPayload,
+                parsed_receipt_metadata: {
+                    success: false,
+                    reason: parsed.reason,
+                    parsed_at: new Date().toISOString()
+                }
+            };
+            return { autoConfirmed: false, payload: nextPayload };
+        }
+
+        const parsedMetadata = {
+            success: true,
+            amount_rub: parsed.amountRub,
+            event_time: parsed.eventTime,
+            transaction_id: parsed.transactionId || null,
+            bank_name: parsed.bankName || 'Unknown',
+            parsed_at: new Date().toISOString(),
+            is_pdf: true
+        };
+
+        // 3. Ensure the amount in the PDF matches the total purchase amount expected
+        const expectedTotalRub = purchases.reduce((sum, p) => sum + Number(p.payload?.amount_rub || p.amount_rub || 0), 0);
+        if (Math.abs(parsed.amountRub - expectedTotalRub) >= 0.01) {
+            const nextPayload = {
+                ...currentPayload,
+                parsed_receipt_metadata: {
+                    ...parsedMetadata,
+                    match_failed_reason: `Сумма в чеке (${parsed.amountRub}) не совпадает с суммой заказа (${expectedTotalRub})`
+                }
+            };
+            return { autoConfirmed: false, payload: nextPayload };
+        }
+
+        const nextPayload = {
+            ...currentPayload,
+            parsed_receipt_metadata: parsedMetadata
+        };
+
+        // 4. Try to find a matching bank event
+        // Look for received/unmatched events with the exact amount and within skew
+        const skewMinutes = settings?.match_clock_skew_minutes || 10;
+        const skewMs = skewMinutes * 60 * 1000;
+        const parsedTimeMs = parsed.eventTime ? new Date(parsed.eventTime).getTime() : new Date().getTime();
+
+        const { data: bankEvents, error: eventsError } = await supabase
+            .from('p2p_bank_events')
+            .select('*')
+            .eq('owner_id', sellerOwnerId)
+            .eq('amount_rub', parsed.amountRub)
+            .in('status', ['received', 'unmatched', 'ambiguous', 'auto_confirm_failed']);
+
+        if (eventsError) throw eventsError;
+
+        let bestMatch = null;
+        if (bankEvents && bankEvents.length > 0) {
+            // Filter by time window
+            const timedEvents = bankEvents.filter(event => {
+                if (!event.event_time && !event.received_at) return false;
+                const eventMs = new Date(event.event_time || event.received_at).getTime();
+                return Math.abs(eventMs - parsedTimeMs) <= skewMs;
+            });
+
+            // If we have a transaction ID in the PDF, try to match it directly
+            if (parsed.transactionId) {
+                const idMatch = timedEvents.find(event => {
+                    const cleanText = String(event.raw_text || event.redacted_text || '').toLowerCase();
+                    return cleanText.includes(parsed.transactionId.toLowerCase());
+                });
+                if (idMatch) {
+                    bestMatch = idMatch;
+                }
+            }
+
+            // Fallback to time matching if there's exactly one timed event and no transaction ID mismatch
+            if (!bestMatch && timedEvents.length === 1) {
+                bestMatch = timedEvents[0];
+            }
+        }
+
+        if (bestMatch) {
+            const now = new Date().toISOString();
+            const finalPayload = {
+                ...nextPayload,
+                parsed_receipt_metadata: {
+                    ...parsedMetadata,
+                    matched_event_id: bestMatch.id,
+                    matched_at: now
+                }
+            };
+
+            // Update the purchases in database with finalPayload first, so confirmShopP2pPayment gets it
+            const purchaseIds = purchases.map(p => p.id);
+            for (const p of purchases) {
+                await supabase
+                    .from('shop_purchases')
+                    .update({
+                        payload: {
+                            ...(p.payload || {}),
+                            ...finalPayload
+                        },
+                        updated_at: now
+                    })
+                    .eq('id', p.id);
+            }
+
+            // Confirm payment!
+            await confirmShopP2pPayment(supabase, {
+                sellerOwnerId,
+                purchaseIds,
+                batchToken: purchases[0]?.payload?.batch_token || null,
+                confirmSource: 'receipt_pdf_matched',
+                bankEventId: bestMatch.id,
+                allowPending: true
+            });
+
+            // Update bank event
+            await supabase
+                .from('p2p_bank_events')
+                .update({
+                    status: 'confirmed',
+                    matched_purchase_ids: purchaseIds,
+                    matched_batch_token: purchases[0]?.payload?.batch_token || null,
+                    resolution_type: 'auto_confirmed',
+                    resolved_at: now,
+                    confirm_source: 'receipt_pdf_matched',
+                    updated_at: now
+                })
+                .eq('id', bestMatch.id);
+
+            return { autoConfirmed: true, payload: finalPayload };
+        }
+
+        return { autoConfirmed: false, payload: nextPayload };
+    } catch (err) {
+        console.error('Error in processPdfAutoConfirmation:', err);
+        return {
+            autoConfirmed: false,
+            payload: {
+                ...currentPayload,
+                parsed_receipt_metadata: {
+                    success: false,
+                    reason: `Auto-reconciliation error: ${err.message}`,
+                    parsed_at: new Date().toISOString()
+                }
+            }
+        };
+    }
 }
 
 async function rejectSellerPurchaseRecord(supabase, purchase, reason) {
@@ -3183,7 +3354,7 @@ export default function shopRoutes(supabase) {
                 return res.status(400).json({ error: 'Время на оплату истекло. Создай покупку заново.' });
             }
 
-            const payload = {
+            const initialPayload = {
                 ...(purchase.payload || {}),
                 receipt_note: String(receipt_note || '').trim() || null,
                 receipt_marked_at: new Date().toISOString(),
@@ -3191,17 +3362,31 @@ export default function shopRoutes(supabase) {
                 receipt_file_url: req.file ? `/uploads/shop-receipts/${path.basename(req.file.path)}` : (purchase.payload?.receipt_file_url || null)
             };
 
+            // Call processPdfAutoConfirmation to parse PDF and try to match with bank webhook events
+            const autoConfirmResult = await processPdfAutoConfirmation(supabase, {
+                purchases: [purchase],
+                file: req.file,
+                sellerOwnerId: purchase.seller_owner_id,
+                currentPayload: initialPayload
+            });
+
+            // If auto-confirmed, tryAutoConfirm already marked status as paid and handled handoff
+            if (autoConfirmResult.autoConfirmed) {
+                return res.json({ success: true, status: 'paid', auto_confirmed: true });
+            }
+
+            // Otherwise, update purchase to awaiting_receipt with the parsed/initial payload
             const { error: updateError } = await supabase
                 .from('shop_purchases')
                 .update({
                     status: 'awaiting_receipt',
-                    payload,
+                    payload: autoConfirmResult.payload,
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', purchase.id);
             if (updateError) throw updateError;
 
-            res.json({ success: true, status: 'awaiting_receipt' });
+            res.json({ success: true, status: 'awaiting_receipt', auto_confirmed: false });
         } catch (error) {
             if (req.file?.path && fs.existsSync(req.file.path)) {
                 fs.unlinkSync(req.file.path);
@@ -3261,13 +3446,27 @@ export default function shopRoutes(supabase) {
 
             const receiptPayload = {
                 ...(req.file ? {
-                    receipt_file_name: req.file.filename,
-                    receipt_file_url: `/uploads/shop-receipts/${req.file.filename}`
+                    receipt_file_name: req.file.originalname,
+                    receipt_file_url: `/uploads/shop-receipts/${path.basename(req.file.path)}`
                 } : {}),
                 receipt_note: String(receiptNote || '').trim() || null,
                 receipt_marked_at: new Date().toISOString()
             };
 
+            // Call processPdfAutoConfirmation to parse PDF and try to match with bank webhook events
+            const autoConfirmResult = await processPdfAutoConfirmation(supabase, {
+                purchases,
+                file: req.file,
+                sellerOwnerId: purchases[0].seller_owner_id,
+                currentPayload: receiptPayload
+            });
+
+            // If auto-confirmed, tryAutoConfirm already marked status as paid and handled handoff
+            if (autoConfirmResult.autoConfirmed) {
+                return res.json({ success: true, status: 'paid', auto_confirmed: true });
+            }
+
+            // Otherwise, update purchases to awaiting_receipt with the parsed/initial payload
             for (const purchase of purchases) {
                 const { error: updateError } = await supabase
                     .from('shop_purchases')
@@ -3275,7 +3474,7 @@ export default function shopRoutes(supabase) {
                         status: 'awaiting_receipt',
                         payload: {
                             ...(purchase.payload || {}),
-                            ...receiptPayload
+                            ...autoConfirmResult.payload
                         },
                         updated_at: new Date().toISOString()
                     })
@@ -3285,7 +3484,7 @@ export default function shopRoutes(supabase) {
                 if (updateError) throw updateError;
             }
 
-            return res.json({ success: true });
+            return res.json({ success: true, status: 'awaiting_receipt', auto_confirmed: false });
         } catch (error) {
             console.error('Ошибка отправки batch P2P receipt:', error);
             res.status(500).json({ error: 'Ошибка отправки общего чека' });

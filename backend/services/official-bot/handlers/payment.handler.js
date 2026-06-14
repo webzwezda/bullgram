@@ -15,7 +15,7 @@ export function registerPaymentRegexHandlers(bot, { service, botId }) {
             .maybeSingle();
 
         if (!invoice) {
-            await ctx.editMessageText('Не нашел этот счет у тебя в истории. Открой оплату заново и повтори шаг.', { parse_mode: 'Markdown' });
+            await ctx.editMessageText('❌ Не удалось найти этот счет в истории. Пожалуйста, откройте оплату заново.', { parse_mode: 'HTML' });
             return;
         }
 
@@ -37,7 +37,12 @@ export function registerPaymentRegexHandlers(bot, { service, botId }) {
             });
         }
 
-        await ctx.editMessageText(`Отлично! Пожалуйста, **отправьте прямо в этот чат фотографию чека или PDF-файл** об успешном переводе.\nID платежа: \`${memo}\``, { parse_mode: 'Markdown' });
+        const uploadPromptText = `💳 <b>ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Отлично! Пожалуйста, <b>отправьте прямо в этот чат скриншот чека или PDF-документ</b>, подтверждающий успешный перевод.\n\n` +
+            `<b>ID платежа:</b> <code>${memo}</code>`;
+
+        await ctx.editMessageText(uploadPromptText, { parse_mode: 'HTML' });
     });
 
     bot.action(/check_payment_(.+)/, async (ctx) => {
@@ -46,7 +51,7 @@ export function registerPaymentRegexHandlers(bot, { service, botId }) {
         try {
             const { data: invoice } = await service.supabase.from('invoices').select('*').eq('memo', memo).single();
             if (!invoice) return;
-            if (invoice.status === 'paid') return ctx.reply('✅ Этот счет уже оплачен!');
+            if (invoice.status === 'paid') return ctx.reply('✅ <b>Этот счет уже успешно оплачен!</b>', { parse_mode: 'HTML' });
 
             const ownerId = await service.getBotOwner(botId);
             const { data: settings } = await service.supabase.from('payment_settings').select('ton_wallet').eq('owner_id', ownerId).single();
@@ -73,7 +78,12 @@ export function registerPaymentRegexHandlers(bot, { service, botId }) {
                 });
                 await service.activateSubscription(bot, invoice);
             } else {
-                await ctx.reply(`⏳ **Оплата пока не найдена.**\nID заказа: \`${memo}\`\nПодождите пару минут и проверьте еще раз.`, { parse_mode: 'Markdown' });
+                const notFoundText = `⏳ <b>ОПЛАТА НЕ НАЙДЕНА</b>\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `Пока не удалось обнаружить транзакцию в блокчейне.\n\n` +
+                    `<b>ID заказа:</b> <code>${memo}</code>\n` +
+                    `Пожалуйста, подождите пару минут и нажмите кнопку «Проверить оплату» повторно.`;
+                await ctx.reply(notFoundText, { parse_mode: 'HTML' });
             }
         } catch (err) { console.error('Ошибка в чекере крипты:', err); }
     });

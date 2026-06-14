@@ -18,10 +18,15 @@ function statusBadge(status) {
   return <Badge variant="outline" className={entry.cls}>{entry.label}</Badge>;
 }
 
-export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Map(), tariffs = [] }) {
+export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Map(), tariffs = [], plain = false }) {
   const tonEvents = useMemo(() => {
     return paymentEvents
       .filter((ev) => {
+        // Only show final resolved actions in crypto log (approved, confirmed, rejected, expired),
+        // filtering out intermediate draft creation events.
+        const isResolvedEventType = ['payment_confirmed', 'admin_approved', 'admin_rejected', 'expired'].includes(ev.event_type);
+        if (!isResolvedEventType) return false;
+
         const inv = invoiceMap.get(ev.invoice_id);
         const currency = inv?.currency || ev.payload?.currency;
         const provider = ev.provider || '';
@@ -49,7 +54,7 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
   );
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5">
+    <div className={plain ? "space-y-5" : "bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5"}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20 shrink-0">
           <Coins className="w-5 h-5" />

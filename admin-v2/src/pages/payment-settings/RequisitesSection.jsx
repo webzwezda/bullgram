@@ -39,7 +39,8 @@ export function RequisitesSection({
   saving,
   settings,
   toggleSbpBank,
-  validatePaymentFields
+  validatePaymentFields,
+  plain = false
 }) {
   const tonReady = Boolean(settings.ton_wallet);
   const sbpReady = Boolean(settings.sbp_phone && settings.sbp_bank);
@@ -48,7 +49,7 @@ export function RequisitesSection({
   const activeIndex = TABS.findIndex((t) => t.value === tab);
 
   return (
-    <div className="@container bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+    <div className={plain ? "@container space-y-6" : "@container bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]"}>
       {/* Header + Tabs */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-6">
         <div className="flex items-center gap-3">

@@ -456,6 +456,59 @@ function getAbandonedReason(row) {
   return 'Счет создан, оплаты пока нет';
 }
 
+function formatAttemptAmount(amount, currency) {
+  if (currency === 'TON') return `${Number(amount).toFixed(2)} TON`;
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(amount))} ₽`;
+}
+
+function formatAttemptTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}.${month} ${hours}:${minutes}`;
+}
+
+function formatAttemptsReason(invoices) {
+  if (!invoices || !invoices.length) return '—';
+  if (invoices.length === 1) {
+    const inv = invoices[0];
+    const amtStr = formatAttemptAmount(inv.amount, inv.currency);
+    const timeStr = formatAttemptTime(inv.created_at);
+    const tariffStr = inv.tariffs?.title || inv.tariff_title || 'тариф';
+    
+    if (inv.status === 'awaiting_receipt') {
+      return `Нажал «я оплатил» для "${tariffStr}" на ${amtStr} (${timeStr}), но чек не загрузил.`;
+    }
+    return `Создал счет на "${tariffStr}" на ${amtStr} (${timeStr}), оплаты нет.`;
+  }
+
+  const latest = invoices[0];
+  const latestAmtStr = formatAttemptAmount(latest.amount, latest.currency);
+  const latestTimeStr = formatAttemptTime(latest.created_at);
+  const latestTariffStr = latest.tariffs?.title || latest.tariff_title || 'тариф';
+
+  const parts = [];
+  parts.push(`Всего попыток: ${invoices.length}.`);
+  parts.push(`Последняя: "${latestTariffStr}" на ${latestAmtStr} в ${latestTimeStr} (${latest.status === 'awaiting_receipt' ? 'нажал оплачено, без чека' : 'оплаты нет'}).`);
+
+  const prevAttempts = invoices.slice(1, 4).map((inv) => {
+    const amt = formatAttemptAmount(inv.amount, inv.currency);
+    const time = formatAttemptTime(inv.created_at);
+    const tariff = inv.tariffs?.title || inv.tariff_title || 'тариф';
+    return `"${tariff}" на ${amt} в ${time}`;
+  });
+
+  if (prevAttempts.length > 0) {
+    const ellipsis = invoices.length > 4 ? '...' : '';
+    parts.push(`Ранее: ${prevAttempts.join(', ')}${ellipsis}.`);
+  }
+
+  return parts.join(' ');
+}
+
 function getCustomerReason(row) {
   if (row.status === 'active') {
     if (row.in_group === true) return 'Вход подтвержден';
@@ -878,7 +931,9 @@ export function CustomersPage() {
 
       setReconciliation((prev) => ({ ...prev, loading: true, error: '' }));
       try {
-        const data = await apiRequest('/api/customers/reconciliation-sources', { accessToken });
+        const params = new URLSearchParams();
+        if (selectedBotId) params.set('bot_id', selectedBotId);
+        const data = await apiRequest(`/api/customers/reconciliation-sources${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
         if (cancelled) return;
 
         setReconciliation((prev) => ({
@@ -906,7 +961,7 @@ export function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, profileRole]);
+  }, [accessToken, profileRole, selectedBotId]);
 
   useEffect(() => {
     try {
@@ -1058,21 +1113,39 @@ export function CustomersPage() {
       created_at: row.created_at,
       href: '/app/customers?tab=started'
     })),
-    abandoned: state.abandoned.map((row) => ({
-      id: row.id,
-      tg_user_id: row.tg_user_id,
-      tg_username: row.tg_username,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      channel_id: row.channel_id,
-      title: row.tariffs?.title || 'Тариф',
-      status: getInvoiceStatus(row),
-      reason: getAbandonedReason(row),
-      abandoned_status: row.abandoned_status,
-      created_at: row.created_at,
-      href: '/app/customers?tab=abandoned'
-    })),
+    abandoned: (() => {
+      const grouped = new Map();
+      for (const row of state.abandoned) {
+        const userId = row.tg_user_id ? String(row.tg_user_id) : `inv-${row.id}`;
+        const existing = grouped.get(userId) || [];
+        existing.push(row);
+        grouped.set(userId, existing);
+      }
+
+      return Array.from(grouped.values()).map((invoices) => {
+        invoices.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const latest = invoices[0];
+        const attempts = invoices.length;
+        const reasonText = formatAttemptsReason(invoices);
+
+        return {
+          id: latest.id,
+          tg_user_id: latest.tg_user_id,
+          tg_username: latest.tg_username,
+          display_name: latest.display_name,
+          first_name: latest.first_name,
+          last_name: latest.last_name,
+          channel_id: latest.channel_id,
+          title: latest.tariffs?.title || latest.tariff_title || 'Тариф',
+          status: getInvoiceStatus(latest),
+          reason: reasonText,
+          abandoned_status: latest.abandoned_status,
+          created_at: latest.created_at,
+          attempts_count: attempts,
+          href: '/app/customers?tab=abandoned'
+        };
+      });
+    })(),
     viewed: state.viewed.map((row) => ({
       id: row.id,
       tg_user_id: row.tg_user_id,
@@ -1176,7 +1249,7 @@ export function CustomersPage() {
   const stats = useMemo(() => ({
     started: state.started.length,
     viewed: state.viewed.length,
-    abandoned: state.abandoned.length,
+    abandoned: new Set(state.abandoned.map((row) => row.tg_user_id ? String(row.tg_user_id) : `inv-${row.id}`)).size,
     activeCustomers: state.crm.filter((row) => row.status === 'active').length,
     expiredCustomers: state.crm.filter((row) => row.status === 'expired').length,
     removedAdmin: state.removedAdmin.length,
@@ -1315,7 +1388,7 @@ export function CustomersPage() {
         title_snapshot: row.title || '',
         username_snapshot: row.username || null,
         role: row.role,
-        bot_id: row.already_bound_bot_id || row.linked_bot_id || null,
+        bot_id: row.already_bound_bot_id || row.linked_bot_id || selectedBotId || null,
         is_active: true,
         scan_enabled: true,
         admin_verified: row.admin_rights_status === 'admin',
@@ -1339,6 +1412,7 @@ export function CustomersPage() {
         accessToken,
         method: 'POST',
         body: {
+          bot_id: selectedBotId,
           userbot_id: reconciliation.selectedUserbotId,
           sources: activeSources
         }
@@ -1482,7 +1556,9 @@ export function CustomersPage() {
     if (!accessToken) return;
     try {
       setAudienceState((prev) => ({ ...prev, loading: true, error: '' }));
-      const data = await apiRequest('/api/audience', { accessToken });
+      const params = new URLSearchParams();
+      if (selectedBotId) params.set('contourId', selectedBotId);
+      const data = await apiRequest(`/api/audience${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
       setAudienceState((prev) => ({
         ...prev,
         loading: false,
@@ -1493,7 +1569,7 @@ export function CustomersPage() {
     } catch (err) {
       setAudienceState((prev) => ({ ...prev, loading: false, error: err.message }));
     }
-  }, [accessToken]);
+  }, [accessToken, selectedBotId]);
 
   useEffect(() => { loadAudience(); }, [loadAudience]);
 
@@ -2051,8 +2127,15 @@ export function CustomersPage() {
                           {/* Client Col */}
                           <td className="px-6 py-4">
                             <div className="min-w-0">
-                                <div className="font-black text-slate-900 text-sm truncate">
-                                  {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
+                                <div className="font-black text-slate-900 text-sm truncate flex items-center gap-1.5">
+                                  <span>
+                                    {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
+                                  </span>
+                                  {row.attempts_count > 1 && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wide shrink-0">
+                                      {row.attempts_count} {row.attempts_count >= 2 && row.attempts_count <= 4 ? 'попытки' : 'попыток'}
+                                    </span>
+                                  )}
                                 </div>
                                 {row.tg_user_id ? (
                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">

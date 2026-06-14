@@ -160,7 +160,7 @@ function isManualAdminRemoval(eventSource = null, payload = {}, accessNote = '')
 }
 
 async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selectedBotId = null) {
-    const contour = await listCustomerReconciliationContour(supabase, ownerId);
+    const contour = await listCustomerReconciliationContour(supabase, ownerId, selectedBotId);
     const activeSources = (contour.contour?.sources || []).filter((source) => (
         source.is_active
         && source.role !== 'ignored'
@@ -685,7 +685,8 @@ export default function customersRoutes(supabase) {
     router.get('/reconciliation-sources', authenticateUser, async (req, res) => {
         try {
             const ownerId = req.user.id;
-            const result = await listCustomerReconciliationContour(supabase, ownerId);
+            const botId = String(req.query.bot_id || '').trim() || null;
+            const result = await listCustomerReconciliationContour(supabase, ownerId, botId);
             res.json({ success: true, ...result });
         } catch (error) {
             return handleContourError(error, res);
@@ -1812,7 +1813,7 @@ export default function customersRoutes(supabase) {
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('customer_bases')
-                    .select('id, name, description, created_at, updated_at')
+                    .select('id, name, description, contour_id, created_at, updated_at')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false }),
                 supabase
@@ -1940,9 +1941,15 @@ export default function customersRoutes(supabase) {
             const paymentEvents = paymentEventsResp.data || [];
             const referralEvents = referralEventsResp.data || [];
             const baseMembers = baseMembersResp.data || [];
+            const filteredBaseMembers = selectedBotId
+                ? baseMembers.filter(member => {
+                    const sourceChannelIds = Array.isArray(member.source_channel_ids) ? member.source_channel_ids : [];
+                    return sourceChannelIds.some(cid => channelIds.includes(cid));
+                })
+                : baseMembers;
 
             const presentByUserChannel = new Set();
-            for (const member of baseMembers) {
+            for (const member of filteredBaseMembers) {
                 if (!member.present_now || !member.tg_user_id) continue;
                 const sourceChannelIds = Array.isArray(member.source_channel_ids) ? member.source_channel_ids : [];
                 for (const channelId of sourceChannelIds) {
@@ -1972,7 +1979,7 @@ export default function customersRoutes(supabase) {
                 sub => `${sub.tg_user_id}:${sub.channel_id}`
             );
             const latestBaseProfileByUser = latestBy(
-                baseMembers.filter(member => member.tg_user_id),
+                filteredBaseMembers.filter(member => member.tg_user_id),
                 member => String(member.tg_user_id),
                 'last_seen_at'
             );
@@ -2173,7 +2180,7 @@ export default function customersRoutes(supabase) {
                 }, new Map());
 
             const baseStatsById = new Map();
-            for (const member of baseMembers) {
+            for (const member of filteredBaseMembers) {
                 if (!baseStatsById.has(member.base_id)) {
                     baseStatsById.set(member.base_id, { total: 0, humans: 0, bots: 0, present: 0 });
                 }
@@ -2184,10 +2191,12 @@ export default function customersRoutes(supabase) {
                 if (member.present_now) stats.present += 1;
             }
 
-            const bases = (basesResp.data || []).map(base => ({
-                ...base,
-                stats: baseStatsById.get(base.id) || { total: 0, humans: 0, bots: 0, present: 0 }
-            }));
+            const bases = (basesResp.data || [])
+                .filter(base => !selectedBotId || String(base.contour_id || '') === selectedBotId)
+                .map(base => ({
+                    ...base,
+                    stats: baseStatsById.get(base.id) || { total: 0, humans: 0, bots: 0, present: 0 }
+                }));
 
             const segments = {
                 startedContacts: Array.from(startedContacts.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),

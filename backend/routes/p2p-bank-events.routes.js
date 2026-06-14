@@ -97,12 +97,19 @@ function extractAmountRub(text) {
 }
 
 function redactBankText(text) {
-    return String(text || '')
+    let result = String(text || '')
         .replace(/\b\d{4}\s?\d{4}\s?\d{4}\s?\d{4,7}\b/g, '[card]')
         .replace(/\b(?:\+7|8)\s?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}\b/g, '[phone]')
-        .replace(/\b(?:баланс|остаток)[:\s]*[^\s,;]+(?:\s?[₽р]| rub)?/gi, 'баланс [hidden]')
-        .replace(/\b\d{10,}\b/g, '[number]')
-        .slice(0, 1000);
+        .replace(/\b(?:баланс|остаток)[:\s]*[^\s,;]+(?:\s?[₽р]| rub)?/gi, 'баланс [hidden]');
+    
+    // Mask middle digits of 10-20 digit numbers to preserve transaction prefixes/suffixes
+    result = result.replace(/\b\d{10,20}\b/g, (num) => {
+        const keep = Math.min(4, Math.floor(num.length / 3));
+        const stars = num.length - keep * 2;
+        return num.slice(0, keep) + '*'.repeat(stars) + num.slice(num.length - keep);
+    });
+
+    return result.slice(0, 1000);
 }
 
 function buildDedupeKey({ body, rawText, amountRub, eventTime, sender }) {
@@ -171,7 +178,8 @@ async function matchP2pBankEventToPaymentGroup(supabase, {
     ownerId,
     amountRub,
     eventTime,
-    settings
+    settings,
+    bankEventText = ''
 }) {
     if (!Number.isFinite(Number(amountRub)) || Number(amountRub) <= 0) {
         return { status: 'unmatched', reason: 'amount_missing', candidates: [], autoCandidates: [] };
@@ -199,12 +207,29 @@ async function matchP2pBankEventToPaymentGroup(supabase, {
         return { status: 'unmatched', reason: 'event_time_missing', candidates: groups, autoCandidates: [] };
     }
 
-    if (autoCandidates.length === 1) {
-        return { status: 'matched', reason: 'single_awaiting_receipt_group', candidates: autoCandidates, autoCandidates };
+    let finalAutoCandidates = autoCandidates;
+
+    // Resolve multiple candidates using parsed receipt transaction ID if available
+    if (autoCandidates.length > 1 && bankEventText) {
+        const matchingById = autoCandidates.filter((group) => {
+            return group.purchases.some((p) => {
+                const txId = p.payload?.parsed_receipt_metadata?.transaction_id;
+                if (!txId) return false;
+                return String(bankEventText).toLowerCase().includes(String(txId).toLowerCase());
+            });
+        });
+        if (matchingById.length === 1) {
+            finalAutoCandidates = matchingById;
+            return { status: 'matched', reason: 'resolved_via_transaction_id', candidates: finalAutoCandidates, autoCandidates: finalAutoCandidates };
+        }
     }
 
-    if (autoCandidates.length > 1) {
-        return { status: 'ambiguous', reason: 'multiple_awaiting_receipt_groups', candidates: autoCandidates, autoCandidates };
+    if (finalAutoCandidates.length === 1) {
+        return { status: 'matched', reason: 'single_awaiting_receipt_group', candidates: finalAutoCandidates, autoCandidates: finalAutoCandidates };
+    }
+
+    if (finalAutoCandidates.length > 1) {
+        return { status: 'ambiguous', reason: 'multiple_awaiting_receipt_groups', candidates: finalAutoCandidates, autoCandidates: finalAutoCandidates };
     }
 
     if (timedGroups.length > 0) {
@@ -232,6 +257,7 @@ function mergeP2pSettingsWithToken(settings, tokenRecord, ownerId) {
         owner_id: ownerId,
         enabled: tokenRecord ? true : false,
         auto_confirm_enabled: true,
+        pdf_auto_confirm_enabled: true,
         match_clock_skew_minutes: 10,
         ...(settings || {}),
         token_prefix: tokenRecord?.token_prefix || settings?.token_prefix || null,
@@ -273,7 +299,7 @@ export default function p2pBankEventsRoutes(supabase) {
         try {
             const { data, error } = await supabase
                 .from('p2p_webhook_settings')
-                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
+                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, pdf_auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
                 .eq('owner_id', req.user.id)
                 .maybeSingle();
             if (error) throw error;
@@ -313,13 +339,14 @@ export default function p2pBankEventsRoutes(supabase) {
                 token_hint: null,
                 enabled: true,
                 auto_confirm_enabled: req.body?.auto_confirm_enabled !== false,
+                pdf_auto_confirm_enabled: req.body?.pdf_auto_confirm_enabled !== false,
                 updated_at: now
             };
 
             const { data, error } = await supabase
                 .from('p2p_webhook_settings')
                 .upsert(payload, { onConflict: 'owner_id' })
-                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
+                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, pdf_auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
                 .single();
             if (error) throw error;
 
@@ -341,13 +368,14 @@ export default function p2pBankEventsRoutes(supabase) {
                 owner_id: req.user.id,
                 enabled: req.body?.enabled !== false,
                 auto_confirm_enabled: req.body?.auto_confirm_enabled !== false,
+                pdf_auto_confirm_enabled: req.body?.pdf_auto_confirm_enabled !== false,
                 match_clock_skew_minutes: Math.max(0, Math.min(60, Number(req.body?.match_clock_skew_minutes || 10))),
                 updated_at: new Date().toISOString()
             };
             const { data, error } = await supabase
                 .from('p2p_webhook_settings')
                 .upsert(payload, { onConflict: 'owner_id' })
-                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
+                .select('owner_id, token_prefix, token_hint, enabled, auto_confirm_enabled, pdf_auto_confirm_enabled, match_clock_skew_minutes, last_webhook_at, last_used_at, last_used_ip, updated_at')
                 .single();
             if (error) throw error;
             res.json({ success: true, settings: data });
@@ -388,7 +416,8 @@ export default function p2pBankEventsRoutes(supabase) {
                 ownerId: req.user.id,
                 amountRub: parsed.amountRub,
                 eventTime: parsed.eventTime,
-                settings: settings || {}
+                settings: settings || {},
+                bankEventText: parsed.rawText || ''
             });
             res.json({
                 success: true,
@@ -473,7 +502,8 @@ export default function p2pBankEventsRoutes(supabase) {
                 ownerId: settings.owner_id,
                 amountRub: parsed.amountRub,
                 eventTime: parsed.eventTime,
-                settings
+                settings,
+                bankEventText: parsed.rawText || ''
             });
 
             let status = match.status;

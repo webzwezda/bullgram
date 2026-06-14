@@ -35,9 +35,10 @@ export default function(supabase) {
                 channelIds.length > 0
                     ? supabase
                         .from('subscriptions')
-                        .select('id, tg_user_id, channel_id, status, expires_at, last_join_request_at, last_join_approved_at, last_access_event, access_note')
+                        .select('id, tg_user_id, channel_id, status, expires_at, last_join_request_at, last_join_approved_at, last_access_event, access_note, kick_attempts, kick_failed_reason')
                         .in('channel_id', channelIds)
                         .order('created_at', { ascending: false })
+                        .limit(200)
                     : Promise.resolve({ data: [], error: null })
             ]);
 

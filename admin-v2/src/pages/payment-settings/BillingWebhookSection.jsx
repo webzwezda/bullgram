@@ -34,7 +34,7 @@ function InlineCopy({ value, prefix = '' }) {
   );
 }
 
-export function BillingWebhookSection({ accessToken }) {
+export function BillingWebhookSection({ accessToken, plain = false }) {
   const [state, setState] = useState({
     loading: true,
     saving: false,
@@ -108,14 +108,14 @@ export function BillingWebhookSection({ accessToken }) {
 
   if (state.loading) {
     return (
-      <div className="bg-white border border-slate-200/60 rounded-3xl p-10 text-center text-sm font-semibold text-slate-500">
+      <div className={plain ? "py-10 text-center text-sm font-semibold text-slate-500" : "bg-white border border-slate-200/60 rounded-3xl p-10 text-center text-sm font-semibold text-slate-500"}>
         Загружаем подключение кассы...
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6">
+    <div className={plain ? "space-y-6" : "bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-6"}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
           <Bell className="w-5 h-5" />
@@ -157,6 +157,35 @@ export function BillingWebhookSection({ accessToken }) {
           <RotateCcw className="h-4 w-4" />
           {state.settings?.token_hint ? 'Перевыпустить token' : 'Сгенерировать token'}
         </Button>
+      </div>
+
+      <div className="border-t border-slate-100 pt-6">
+        <label className="flex items-center justify-between cursor-pointer group">
+          <div className="flex-1 pr-4">
+            <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 block transition-colors">
+              Автосверка по PDF-чекам
+            </span>
+            <span className="text-xs text-slate-500 mt-1 block leading-relaxed">
+              Автоматически парсить текстовые PDF-чеки из банковских приложений, извлекать сумму, дату и номер транзакции и подтверждать оплату при совпадении с СМС-уведомлением.
+            </span>
+          </div>
+          <button
+            type="button"
+            className={`w-11 h-6 rounded-full transition-all duration-200 relative focus:outline-none shrink-0 ${
+              state.settings?.pdf_auto_confirm_enabled !== false ? 'bg-indigo-600' : 'bg-slate-200'
+            }`}
+            onClick={() => saveSettings({ pdf_auto_confirm_enabled: state.settings?.pdf_auto_confirm_enabled === false })}
+            disabled={state.saving}
+            title={state.settings?.pdf_auto_confirm_enabled !== false ? 'Отключить' : 'Включить'}
+          >
+            <span
+              className="w-5 h-5 rounded-full bg-white absolute top-0.5 shadow-sm transition-all duration-200"
+              style={{
+                left: state.settings?.pdf_auto_confirm_enabled !== false ? '22px' : '2px'
+              }}
+            />
+          </button>
+        </label>
       </div>
 
     </div>

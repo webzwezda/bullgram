@@ -16,7 +16,7 @@ function bankEventBadge(status) {
   return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{status}</Badge>;
 }
 
-export function BankEventsSection({ accessToken }) {
+export function BankEventsSection({ accessToken, plain = false }) {
   const [state, setState] = useState({
     loading: true,
     error: '',
@@ -77,7 +77,7 @@ export function BankEventsSection({ accessToken }) {
   }
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5">
+    <div className={plain ? "space-y-5" : "bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5"}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
           <Bell className="w-5 h-5" />

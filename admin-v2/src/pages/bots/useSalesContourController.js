@@ -608,6 +608,7 @@ export function useSalesContourController({
       showUiMessage('Контур продаж сохранён.', 'success');
     } catch (error) {
       showUiMessage(error.message, 'error');
+      throw error;
     } finally {
       setState((prev) => ({
         ...prev,
@@ -810,7 +811,7 @@ export function useSalesContourController({
     savingContour: String(state?.savingContourBotId || '') === selectedBotId,
     selectedBotKind,
     setBotRightsTarget,
-    setFieldValue(fieldOrPatch, value, options = {}) {
+    async setFieldValue(fieldOrPatch, value, options = {}) {
       const patch = typeof fieldOrPatch === 'object' && fieldOrPatch !== null
         ? { ...fieldOrPatch }
         : { [fieldOrPatch]: value };
@@ -820,7 +821,7 @@ export function useSalesContourController({
       const nextDraft = updateDraft(patch);
       clearRightsForFields(Object.keys(patch));
       if (options.autoSave && nextDraft) {
-        saveContour(nextDraft, { auto: true });
+        return await saveContour(nextDraft, { auto: true });
       }
     },
     setUserbotMode,

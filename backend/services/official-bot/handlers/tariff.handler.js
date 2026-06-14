@@ -1,146 +1,87 @@
+export async function renderTariffSelection(ctx, { service, botId }) {
+    try {
+        const adminContext = await service.getBotAdminContext(botId);
+        const ownerId = adminContext?.ownerId;
+        if (!ownerId) return;
+
+        const { data: tariffs, error } = await service.supabase.from('tariffs')
+            .select('*')
+            .eq('owner_id', ownerId)
+            .eq('is_active', true)
+            .or(`bot_id.eq.${botId},bot_id.is.null`)
+            .order('price', { ascending: true });
+
+        if (error || !tariffs || tariffs.length === 0) {
+            const msg = '😔 К сожалению, сейчас нет доступных тарифов.';
+            return ctx.reply(msg);
+        }
+
+        const tariffGroups = service.buildTariffPaymentGroups(tariffs);
+        const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
+        const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+        const browseDiscountPercent = await service.getBrowseFollowupDiscount(ownerId, ctx.from.id);
+        const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
+
+        await service.logCustomerFunnelEvent({
+            ownerId,
+            botId,
+            tgUserId: ctx.from.id,
+            eventType: 'tariff_list_opened',
+            referralCode: referralAttribution?.referral_code || null,
+            sessionKey: service.buildCustomerFunnelSessionKey({
+                botId,
+                tgUserId: ctx.from.id,
+                eventType: 'tariff_list_opened'
+            }),
+            payload: {
+                callback: ctx.callbackQuery ? 'buy_tariff' : 'reply_keyboard',
+                tariffs_count: tariffGroups.length
+            }
+        });
+
+        const inlineKeyboard = tariffGroups.map((group) => {
+            const tariff = group.lead;
+            const icon = service.getTariffGroupIcon(group);
+            const paymentOptions = service.formatTariffPaymentOptions(group.variants, activeDiscountPercent);
+            return [
+                { text: `${icon} ${service.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }
+            ];
+        });
+        inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+
+        const discountLine = activeDiscountPercent > 0
+            ? `\n\n🎁 Доступна скидка: <b>-${activeDiscountPercent}%</b>. В счете уже будет цена со скидкой.`
+            : '';
+        
+        const text = `💳 <b>ВЫБОР ТАРИФА</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `Выберите подходящий вариант подписки или цифрового товара ниже.${discountLine}\n\n` +
+            `${service.buildAdminOwnershipHint(adminContext, 'sales')}`;
+
+        if (ctx.callbackQuery) {
+            await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' }).catch(async () => {
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+            });
+        } else {
+            await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+        }
+    } catch (error) {
+        console.error('Ошибка покупки тарифа:', error);
+    }
+}
+
 export function registerTariffExactHandlers(bot, { service, botId, createInvoiceForTariff }) {
     bot.action('buy_tariff', async (ctx) => {
         await ctx.answerCbQuery();
-        try {
-            const adminContext = await service.getBotAdminContext(botId);
-            const ownerId = adminContext?.ownerId;
-            if (!ownerId) return;
+        await renderTariffSelection(ctx, { service, botId });
+    });
 
-            const { data: tariffs, error } = await service.supabase.from('tariffs')
-                .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
-
-            if (error || !tariffs || tariffs.length === 0) {
-                const msg = '😔 К сожалению, сейчас нет доступных тарифов.';
-                return ctx.reply(msg);
-            }
-
-            const tariffGroups = service.buildTariffPaymentGroups(tariffs);
-            const tariffsWithBundles = await Promise.all(tariffGroups.map(async group => ({
-                group,
-                tariff: group.lead,
-                bundleItems: await service.getTariffBundleItems(group.lead, ownerId)
-            })));
-            const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
-            const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
-
-            await service.logCustomerFunnelEvent({
-                ownerId,
-                botId,
-                tgUserId: ctx.from.id,
-                eventType: 'tariff_list_opened',
-                referralCode: referralAttribution?.referral_code || null,
-                sessionKey: service.buildCustomerFunnelSessionKey({
-                    botId,
-                    tgUserId: ctx.from.id,
-                    eventType: 'tariff_list_opened'
-                }),
-                payload: {
-                    callback: 'buy_tariff',
-                    tariffs_count: tariffGroups.length
-                }
-            });
-
-            const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
-                const icon = service.getTariffGroupIcon(group);
-                const paymentOptions = service.formatTariffPaymentOptions(group.variants, referralDiscountPercent);
-                return [
-                    [{ text: `${icon} ${service.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
-                    [{ text: `📦 ${service.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
-                ];
-            });
-            inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
-
-            const discountLine = referralDiscountPercent > 0
-                ? `\n\n🤝 Твоя партнерская скидка: <b>-${referralDiscountPercent}%</b>. В счете уже будет цена со скидкой.`
-                : '';
-            const text = `💳 <b>Выберите тариф</b>${discountLine}\n\n${service.buildAdminOwnershipHint(adminContext, 'sales')}`;
-            await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
-        } catch (error) {
-            console.error('Ошибка покупки тарифа:', error);
-        }
+    bot.hears('💳 Купить подписку', async (ctx) => {
+        await renderTariffSelection(ctx, { service, botId });
     });
 }
 
 export function registerTariffRegexHandlers(bot, { service, botId, createInvoiceForTariff }) {
-    bot.action(/^show_tariff_(.+)$/, async (ctx) => {
-        const tariffId = ctx.match[1];
-        await ctx.answerCbQuery();
-
-        try {
-            const { data: tariff } = await service.supabase.from('tariffs').select('*').eq('id', tariffId).single();
-            if (!tariff) return ctx.reply('❌ Тариф не найден.');
-            const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
-            await service.logCustomerFunnelEvent({
-                ownerId: tariff.owner_id,
-                botId,
-                tgUserId: ctx.from.id,
-                tariffId: tariff.id,
-                eventType: 'tariff_card_opened',
-                referralCode: referralAttribution?.referral_code || null,
-                sessionKey: service.buildCustomerFunnelSessionKey({
-                    botId,
-                    tgUserId: ctx.from.id,
-                    eventType: 'tariff_card_opened',
-                    tariffId: tariff.id
-                }),
-                payload: {
-                    callback: 'show_tariff',
-                    tariff_title: tariff.title,
-                    currency: tariff.currency,
-                    price: tariff.price
-                }
-            });
-            const { data: siblingTariffs } = await service.supabase.from('tariffs')
-                .select('*')
-                .eq('owner_id', tariff.owner_id)
-                .eq('is_active', true);
-            const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
-            const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
-            const paymentLines = service.sortTariffPaymentVariants(paymentGroup.variants)
-                .map((variant) => {
-                    const currency = variant.currency || 'TON';
-                    const price = Number(variant.price || 0);
-                    const discountedPrice = service.formatDiscountedAmount(price, currency, referralDiscountPercent);
-                    const priceText = referralDiscountPercent > 0 && discountedPrice < price
-                        ? `${discountedPrice} ${currency} вместо ${price} ${currency}`
-                        : `${price} ${currency}`;
-                    return `• **${priceText}**`;
-                })
-                .join('\n');
-
-            const bundleItems = await service.getTariffBundleItems(tariff, tariff.owner_id);
-            const channelItems = bundleItems.filter(item => item.item_type === 'channel' && item.channels);
-            const resourceItems = bundleItems.filter(item => item.item_type === 'resource');
-            const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
-            let primaryChannel = null;
-            if (tariff.channel_id) {
-                const { data } = await service.supabase.from('channels').select('id, title, tg_chat_id').eq('id', tariff.channel_id).single();
-                primaryChannel = data || null;
-            }
-            const lines = [];
-            for (const ci of channelItems) {
-                lines.push(`• ${ci.channels.title}`);
-            }
-            for (const ri of resourceItems) {
-                lines.push(`• ${ri.resource_title}: ${ri.resource_url}`);
-            }
-            if (primaryChannel && !channelItems.some(ci => ci.channels?.id === primaryChannel.id)) {
-                lines.unshift(`• ${primaryChannel.title}`);
-            }
-            const discountNote = referralDiscountPercent > 0
-                ? `\nСкидка по рефке: **-${referralDiscountPercent}%**`
-                : '';
-
-            await ctx.reply(
-                `📦 **${service.getTariffDisplayTitle(tariff)}**\n\nЦена:\n${paymentLines}\nСрок: **${durationText}**${discountNote}\n\n${lines.join('\n')}`,
-                { parse_mode: 'Markdown' }
-            );
-        } catch (error) {
-            console.error('Ошибка показа тарифа:', error);
-            await ctx.reply('❌ Не получилось показать состав тарифа');
-        }
-    });
-
     bot.action(/^buy_(?!tariff$)(.+)$/, async (ctx) => {
         const tariffId = ctx.match[1];
         await ctx.answerCbQuery();
@@ -151,10 +92,13 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
             const { data: siblingTariffs } = await service.supabase.from('tariffs')
                 .select('*')
                 .eq('owner_id', tariff.owner_id)
-                .eq('is_active', true);
+                .eq('is_active', true)
+                .or(`bot_id.eq.${botId},bot_id.is.null`);
             const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
             const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
             const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+            const browseDiscountPercent = await service.getBrowseFollowupDiscount(tariff.owner_id, ctx.from.id);
+            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
 
             if (paymentGroup.variants.length > 1) {
                 await service.logCustomerFunnelEvent({
@@ -178,16 +122,22 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
                 });
                 const keyboard = service.sortTariffPaymentVariants(paymentGroup.variants)
                     .map((variant) => ([{
-                        text: `${service.getTariffCurrencyIcon(variant.currency)} ${service.formatTariffPaymentOptions([variant], referralDiscountPercent)}`,
+                        text: `${service.getTariffCurrencyIcon(variant.currency)} ${service.formatTariffPaymentOptions([variant], activeDiscountPercent)}`,
                         callback_data: `pay_tariff_${variant.id}`
                     }]));
-                keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+                keyboard.push([{ text: '🔙 Назад', callback_data: 'buy_tariff' }]);
 
                 await ctx.deleteMessage().catch(() => {});
-                await ctx.reply(
-                    `Выберите способ оплаты для «${service.getTariffDisplayTitle(paymentGroup.lead)}»:`,
-                    { reply_markup: { inline_keyboard: keyboard } }
-                );
+                
+                const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
+
+                const text = `💳 <b>СПОСОБ ОПЛАТЫ</b>\n` +
+                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                    `📦 Тариф: <b>${service.getTariffDisplayTitle(paymentGroup.lead)}</b>\n` +
+                    `⏳ Срок доступа: <code>${durationText}</code>\n\n` +
+                    `Выберите удобный способ оплаты ниже:`;
+                
+                await ctx.reply(text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' });
                 return;
             }
 
@@ -254,7 +204,11 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
             if (!ownerId) return;
 
             const { data: tariffs, error } = await service.supabase.from('tariffs')
-                .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('is_active', true)
+                .or(`bot_id.eq.${botId},bot_id.is.null`)
+                .order('price', { ascending: true });
 
             if (error || !tariffs) return;
 
@@ -289,7 +243,11 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
             if (!ownerId) return;
 
             const { data: tariffs, error } = await service.supabase.from('tariffs')
-                .select('*').eq('owner_id', ownerId).eq('is_active', true).order('price', { ascending: true });
+                .select('*')
+                .eq('owner_id', ownerId)
+                .eq('is_active', true)
+                .or(`bot_id.eq.${botId},bot_id.is.null`)
+                .order('price', { ascending: true });
 
             if (error || !tariffs) return;
 
@@ -300,11 +258,10 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
                 return ctx.reply('В этой категории пока нет тарифов.');
             }
 
-            const tariffsWithBundles = await Promise.all(categoryTariffs.map(async group => ({
-                group,
-                tariff: group.lead,
-                bundleItems: await service.getTariffBundleItems(group.lead, ownerId)
-            })));
+            const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
+            const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+            const browseDiscountPercent = await service.getBrowseFollowupDiscount(ownerId, ctx.from.id);
+            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
 
             await service.logCustomerFunnelEvent({
                 ownerId,
@@ -323,15 +280,15 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
                 }
             });
 
-            const inlineKeyboard = tariffsWithBundles.flatMap(({ group, tariff, bundleItems }) => {
+            const inlineKeyboard = categoryTariffs.map((group) => {
+                const tariff = group.lead;
                 const icon = service.getTariffGroupIcon(group);
-                const paymentOptions = service.formatTariffPaymentOptions(group.variants);
+                const paymentOptions = service.formatTariffPaymentOptions(group.variants, activeDiscountPercent);
                 return [
-                    [{ text: `${icon} ${service.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }],
-                    [{ text: `📦 ${service.formatTariffBundleSummary(tariff, bundleItems)}`, callback_data: `show_tariff_${tariff.id}` }]
+                    { text: `${icon} ${service.getTariffDisplayTitle(tariff)} — ${paymentOptions}`, callback_data: `buy_${tariff.id}` }
                 ];
             });
-            inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
+            inlineKeyboard.push([{ text: '🔙 Назад', callback_data: 'buy_tariff' }]);
 
             const categoryLabels = {
                 trial: '🧪 Пробные',
@@ -342,11 +299,15 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
             };
             const label = categoryLabels[category] || '📦 Тарифы';
 
-            const text = `${label}\n\n${service.buildAdminOwnershipHint(adminContext, 'sales')}`;
+            const text = `📁 <b>КАТЕГОРИЯ: ${label.toUpperCase()}</b>\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Выберите подходящий вариант подписки ниже:\n\n` +
+                `${service.buildAdminOwnershipHint(adminContext, 'sales')}`;
+
             if (ctx.callbackQuery) {
-                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                await ctx.editMessageText(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             } else {
-                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+                await ctx.reply(text, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             }
         } catch (error) {
             console.error('Ошибка категории:', error);

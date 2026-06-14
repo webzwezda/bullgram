@@ -41,7 +41,8 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
                         const { data: siblingTariffs } = await service.supabase.from('tariffs')
                             .select('*')
                             .eq('owner_id', tariff.owner_id)
-                            .eq('is_active', true);
+                            .eq('is_active', true)
+                            .or(`bot_id.eq.${botId},bot_id.is.null`);
 
                         const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
 
@@ -73,10 +74,15 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
                                 }]));
                             keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
 
-                            await ctx.reply(
-                                `Выберите способ оплаты для «${service.getTariffDisplayTitle(paymentGroup.lead)}»:`,
-                                { reply_markup: { inline_keyboard: keyboard } }
-                            );
+                            const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
+
+                            const text = `💳 <b>СПОСОБ ОПЛАТЫ</b>\n` +
+                                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                                `📦 Тариф: <b>${service.getTariffDisplayTitle(paymentGroup.lead)}</b>\n` +
+                                `⏳ Срок доступа: <code>${durationText}</code>\n\n` +
+                                `Выберите удобный способ оплаты ниже:`;
+
+                            await ctx.reply(text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' });
                             return;
                         }
 
@@ -134,12 +140,35 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
                                 : '';
                             const welcomeText = settings.referral_welcome_text
                                 || `Тебя привели по партнерской ссылке. Скидка ${discountPercent}% уже закреплена, выбирай тариф.`;
-                            await ctx.reply(`🤝 ${welcomeText}${expiresAt ? `\n\nСкидка действует до ${expiresAt}.` : ''}`);
+
+                            let formattedWelcomeText = welcomeText;
+                            if (!settings.referral_welcome_text) {
+                                formattedWelcomeText = `🤝 <b>ПАРТНЕРСКОЕ ПРИГЛАШЕНИЕ</b>\n` +
+                                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                                    `Тебя пригласили по партнерской ссылке. Скидка <b>${discountPercent}%</b> уже закреплена за твоим профилем!\n\n` +
+                                    `Выбирай тариф в меню и забирай доступ по лучшей цене.`;
+                            } else {
+                                formattedWelcomeText = `🤝 <b>ПАРТНЕРСКОЕ ПРИГЛАШЕНИЕ</b>\n` +
+                                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                                    `${welcomeText}`;
+                            }
+                            if (expiresAt) {
+                                formattedWelcomeText += `\n\n⌛ <b>Скидка действует до:</b> <code>${expiresAt}</code>`;
+                            }
+                            await ctx.reply(formattedWelcomeText, { parse_mode: 'HTML' });
                         } else {
-                            await ctx.reply('🤝 Переход по партнерской ссылке записан, но скидка для новых клиентов сейчас на паузе. Если ты был закреплен раньше, старые условия сохранятся.');
+                            const msg = `🤝 <b>ПАРТНЕРСКОЕ ПРИГЛАШЕНИЕ</b>\n` +
+                                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                                `Переход по партнерской ссылке зарегистрирован.\n\n` +
+                                `⚠️ Скидки для новых клиентов сейчас на паузе. Если вы были закреплены за этим партнером ранее, ваши старые условия сохраняются.`;
+                            await ctx.reply(msg, { parse_mode: 'HTML' });
                         }
                     } else {
-                        await ctx.reply('🤝 Партнерская программа сейчас выключена. Если ты уже был закреплен раньше, старые условия сохранятся.');
+                        const msg = `🤝 <b>ПАРТНЕРСКОЕ ПРИГЛАШЕНИЕ</b>\n` +
+                            `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                            `Переход зарегистрирован, однако партнерская программа сейчас отключена.\n\n` +
+                            `Если вы уже были закреплены за этим партнером ранее, ваши условия будут сохранены.`;
+                        await ctx.reply(msg, { parse_mode: 'HTML' });
                     }
                 }
             }

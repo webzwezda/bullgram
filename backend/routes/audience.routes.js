@@ -21,6 +21,25 @@ function buildDisplayName(user) {
     return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || `ID ${user.tg_user_id}`;
 }
 
+async function getParticipantsSafely(client, chatId) {
+    let participants = [];
+    let offset = 0;
+    const limit = 100;
+    while (true) {
+        const chunk = await client.getParticipants(chatId, { limit, offset });
+        if (!chunk || chunk.length === 0) {
+            break;
+        }
+        participants.push(...chunk);
+        if (chunk.length < limit) {
+            break;
+        }
+        offset += chunk.length;
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    return participants;
+}
+
 export default function audienceRoutes(supabase) {
     const router = express.Router();
     const userbotService = new UserbotService(
@@ -41,22 +60,62 @@ export default function audienceRoutes(supabase) {
     }
 
     async function loadContourUserbot(contour) {
-        const userbotId = contour.userbot_mode === 'single'
-            ? contour.selected_userbot_id
-            : (contour.selected_userbot_ids || [])[0] || null;
-        if (!userbotId) return null;
+        let userbotIds = [];
+        if (contour.userbot_mode === 'single') {
+            if (contour.selected_userbot_id) {
+                userbotIds = [contour.selected_userbot_id];
+            }
+        } else if (contour.userbot_mode === 'pool') {
+            const { data: activeBindings, error: bindingsError } = await supabase
+                .from('official_bot_userbot_bindings')
+                .select('userbot_id')
+                .eq('bot_id', contour.bot_id)
+                .eq('is_active', true);
+            
+            if (!bindingsError && activeBindings) {
+                const activeSet = new Set(activeBindings.map((r) => String(r.userbot_id)));
+                userbotIds = (contour.selected_userbot_ids || []).filter((id) => activeSet.has(String(id)));
+            }
+        }
 
-        const { data, error } = await supabase
-            .from('tg_accounts')
-            .select('*, proxies(host, port, username, password, is_working, provision_source)')
-            .eq('id', userbotId)
-            .eq('owner_id', contour.owner_id)
-            .eq('account_type', 'userbot')
-            .single();
+        if (userbotIds.length === 0) return null;
 
-        if (error || !data) return null;
-        if (data.proxies?.is_working === false) return null;
-        return data;
+        for (const userbotId of userbotIds) {
+            const { data: userbot, error } = await supabase
+                .from('tg_accounts')
+                .select('*, proxies(id, host, port, username, password, is_working, provision_source)')
+                .eq('id', userbotId)
+                .eq('owner_id', contour.owner_id)
+                .eq('account_type', 'userbot')
+                .single();
+
+            if (error || !userbot) continue;
+
+            let operationalUserbot = userbot;
+            if (operationalUserbot.proxy_id && operationalUserbot.proxies?.is_working === false) {
+                try {
+                    const failover = await userbotService.tryAutoFailoverUserbot(operationalUserbot);
+                    if (failover?.switched && failover?.account) {
+                        operationalUserbot = {
+                            ...operationalUserbot,
+                            ...failover.account,
+                            proxies: failover.account.proxies || operationalUserbot.proxies
+                        };
+                    }
+                } catch (failoverErr) {
+                    console.error(`[loadContourUserbot] failover failed for userbot ${userbotId}:`, failoverErr);
+                }
+            }
+
+            if (operationalUserbot.proxy_id && operationalUserbot.proxies?.is_working === false) {
+                console.warn(`[loadContourUserbot] Skipping userbot ${userbotId} because proxy is dead.`);
+                continue;
+            }
+
+            return operationalUserbot;
+        }
+
+        return null;
     }
 
     async function findOrCreateBase(ownerId, contourId, targetType, channelId) {
@@ -237,7 +296,7 @@ export default function audienceRoutes(supabase) {
                     .eq('base_id', baseId)
                     .eq('owner_id', req.user.id);
 
-                const participants = await client.getParticipants(channel.tg_chat_id, { limit: 5000 });
+                const participants = await getParticipantsSafely(client, channel.tg_chat_id);
 
                 for (const p of participants || []) {
                     const tgUserId = String(p.id);

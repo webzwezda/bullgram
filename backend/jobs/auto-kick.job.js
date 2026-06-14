@@ -47,9 +47,11 @@ export const startAutoKick = (supabase, getBotFunction) => {
         try {
             const { data: expiredSubs, error } = await supabase
                 .from('subscriptions')
-                .select(`id, tg_user_id, channel_id, channels ( tg_chat_id, bot_id, owner_id, title )`)
+                .select(`id, tg_user_id, channel_id, kick_attempts, channels ( tg_chat_id, bot_id, owner_id, title )`)
                 .eq('status', 'active')
-                .lt('expires_at', now);
+                .lt('expires_at', now)
+                .lt('kick_attempts', 5)
+                .limit(100);
 
             if (error) throw error;
             if (!expiredSubs || expiredSubs.length === 0) return;
@@ -59,6 +61,7 @@ export const startAutoKick = (supabase, getBotFunction) => {
                 const chatId = sub.channels.tg_chat_id;
                 const bot = getBotFunction(botId);
                 let kicked = false;
+                let kickErrors = [];
 
                 if (bot) {
                     try {
@@ -66,7 +69,9 @@ export const startAutoKick = (supabase, getBotFunction) => {
                         await bot.telegram.unbanChatMember(chatId, sub.tg_user_id);
                         kicked = true;
                     } catch (kickError) {
-                        console.error(`[AutoKick] Официальный бот не смог исключить ${sub.tg_user_id}:`, kickError.message);
+                        const errMsg = `Официальный бот: ${kickError.message}`;
+                        console.error(`[AutoKick] ${errMsg} (${sub.tg_user_id})`);
+                        kickErrors.push(errMsg);
                     }
                 }
 
@@ -77,12 +82,17 @@ export const startAutoKick = (supabase, getBotFunction) => {
                         if (userbot) {
                             await userbotService.kickMemberFromChannel(userbot, chatId, sub.tg_user_id);
                             kicked = true;
+                        } else {
+                            kickErrors.push('Юзербот: Нет доступного юзербота для кика');
                         }
                     } catch (userbotKickError) {
-                        console.error(`[AutoKick] Юзербот не смог исключить ${sub.tg_user_id}:`, userbotKickError.message);
+                        const errMsg = `Юзербот: ${userbotKickError.message}`;
+                        console.error(`[AutoKick] ${errMsg} (${sub.tg_user_id})`);
+                        kickErrors.push(errMsg);
                     }
                 } else if (!kicked) {
                     console.log(`[AutoKick] USERBOT_AUTO_KICK_FALLBACK_ENABLED=false, не исключаем ${sub.tg_user_id} через юзербота автоматически`);
+                    kickErrors.push('Юзербот-фоллбэк выключен в конфигурации');
                 }
 
                 if (kicked) {
@@ -127,7 +137,16 @@ export const startAutoKick = (supabase, getBotFunction) => {
                     await supabase.from('subscriptions').update({
                         status: 'expired',
                         last_access_event: 'kicked',
-                        access_note: 'Исключен системой после окончания подписки'
+                        access_note: 'Исключен системой после окончания подписки',
+                        kick_failed_reason: null
+                    }).eq('id', sub.id);
+                } else {
+                    const newAttempts = (sub.kick_attempts || 0) + 1;
+                    const reason = kickErrors.join('; ');
+                    await supabase.from('subscriptions').update({
+                        kick_attempts: newAttempts,
+                        kick_failed_reason: reason,
+                        access_note: `Не удалось исключить (попытка ${newAttempts}/5): ${reason}`
                     }).eq('id', sub.id);
                 }
             }

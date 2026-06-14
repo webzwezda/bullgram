@@ -505,18 +505,42 @@ function buildPersistedSourcePayload(rawInput, existingSource = null) {
     return persisted;
 }
 
-export async function listCustomerReconciliationContour(supabase, ownerId) {
+export async function listCustomerReconciliationContour(supabase, ownerId, selectedBotId = null) {
     const context = await loadContourContext(supabase, ownerId);
     const visibleUserbots = (context.userbots || []).filter((userbot) => userbot.visible_in_reconciliation !== false);
+
+    const filteredSources = selectedBotId
+        ? context.sources.filter((source) => String(source.bot_id) === String(selectedBotId))
+        : context.sources;
+
     const activeUserbotIds = Array.from(new Set(
-        context.sources
+        filteredSources
             .filter((source) => source.is_active && source.role !== 'ignored')
             .map((source) => String(source.userbot_id))
     ));
     const visibleUserbotIds = new Set(visibleUserbots.map((userbot) => String(userbot.id)));
-    const selectedUserbotId = activeUserbotIds.find((id) => visibleUserbotIds.has(String(id)))
-        || visibleUserbots[0]?.id
-        || null;
+
+    let selectedUserbotId = null;
+    if (selectedBotId) {
+        const { data: contour } = await supabase
+            .from('sales_bot_contours')
+            .select('userbot_mode, selected_userbot_id, selected_userbot_ids')
+            .eq('bot_id', selectedBotId)
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+
+        if (contour) {
+            selectedUserbotId = contour.userbot_mode === 'single'
+                ? contour.selected_userbot_id
+                : (contour.selected_userbot_ids || [])[0] || null;
+        }
+    }
+
+    if (!selectedUserbotId) {
+        selectedUserbotId = activeUserbotIds.find((id) => visibleUserbotIds.has(String(id)))
+            || visibleUserbots[0]?.id
+            || null;
+    }
 
     return {
         roles: RECONCILIATION_SOURCE_ROLES,
@@ -529,12 +553,12 @@ export async function listCustomerReconciliationContour(supabase, ownerId) {
                 single_active_userbot: activeUserbotIds.length <= 1
             },
             summary: {
-                total_sources: context.sources.length,
-                active_sources: context.sources.filter((source) => source.is_active).length,
-                active_scannable_sources: context.sources.filter((source) => source.is_active && source.scan_enabled && source.role !== 'ignored').length,
-                verified_sources: context.sources.filter((source) => source.admin_verified).length
+                total_sources: filteredSources.length,
+                active_sources: filteredSources.filter((source) => source.is_active).length,
+                active_scannable_sources: filteredSources.filter((source) => source.is_active && source.scan_enabled && source.role !== 'ignored').length,
+                verified_sources: filteredSources.filter((source) => source.admin_verified).length
             },
-            sources: context.sources
+            sources: filteredSources
         }
     };
 }
@@ -657,7 +681,8 @@ export async function upsertCustomerReconciliationSources(supabase, ownerId, pay
         const existingSource = existingByKey.get(`${candidateUserbotId}:${candidateChatId}`) || null;
         const merged = buildPersistedSourcePayload({
             ...item,
-            userbot_id: candidateUserbotId
+            userbot_id: candidateUserbotId,
+            bot_id: item.bot_id ?? normalizeOptionalUuid(payload.bot_id) ?? null
         }, existingSource);
         merged.owner_id = ownerId;
         return merged;
@@ -739,7 +764,7 @@ export async function upsertCustomerReconciliationSources(supabase, ownerId, pay
         if (error) throw error;
     }
 
-    return listCustomerReconciliationContour(supabase, ownerId);
+    return listCustomerReconciliationContour(supabase, ownerId, normalizeOptionalUuid(payload.bot_id));
 }
 
 export async function patchCustomerReconciliationSource(supabase, ownerId, sourceId, patch = {}) {
@@ -790,7 +815,7 @@ export async function patchCustomerReconciliationSource(supabase, ownerId, sourc
         throw error;
     }
 
-    return listCustomerReconciliationContour(supabase, ownerId);
+    return listCustomerReconciliationContour(supabase, ownerId, existingSource.bot_id);
 }
 
 export async function scanCustomerReconciliationSource(supabase, ownerId, sourceId) {
@@ -872,7 +897,7 @@ export async function scanCustomerReconciliationSource(supabase, ownerId, source
                 .eq('id', normalizedSourceId)
                 .eq('owner_id', ownerId);
 
-            return listCustomerReconciliationContour(supabase, ownerId);
+            return listCustomerReconciliationContour(supabase, ownerId, source.bot_id);
         }
 
         const entity = dialog?.entity || {};
@@ -910,7 +935,7 @@ export async function scanCustomerReconciliationSource(supabase, ownerId, source
             .eq('id', normalizedSourceId)
             .eq('owner_id', ownerId);
 
-        return listCustomerReconciliationContour(supabase, ownerId);
+        return listCustomerReconciliationContour(supabase, ownerId, source.bot_id);
     } catch (error) {
         const scannedAt = new Date().toISOString();
         const cooldownUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();

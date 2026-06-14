@@ -129,7 +129,7 @@ export function AbandonedPage() {
         if (tariffIds.length > 0) {
           const { data, error } = await supabase
             .from('invoices')
-            .select('*, tariffs(title, is_trial, trial_label)')
+            .select('*, tariffs(title, is_trial, trial_label, price)')
             .in('tariff_id', tariffIds)
             .in('status', ['pending', 'awaiting_receipt'])
             .order('created_at', { ascending: false })
@@ -492,7 +492,19 @@ export function AbandonedPage() {
                         {inv.tariffs?.is_trial ? (inv.tariffs?.trial_label || 'Пробник') : 'Обычный тариф'}
                       </span>
                     </td>
-                    <td>{inv.amount} {inv.currency}</td>
+                    <td>
+                      <div>{inv.amount} {inv.currency}</div>
+                      {(() => {
+                        const originalPrice = Number(inv.tariffs?.price || 0);
+                        const hasDiscount = originalPrice > 0 && Number(inv.amount) < originalPrice;
+                        const discountPercent = hasDiscount ? Math.round(((originalPrice - inv.amount) / originalPrice) * 100) : 0;
+                        return hasDiscount ? (
+                          <div className="table-subtext" style={{ color: '#059669', fontSize: '11px', fontWeight: 'bold', marginTop: '2px' }}>
+                            Скидка {discountPercent}% (было {originalPrice} {inv.currency})
+                          </div>
+                        ) : null;
+                      })()}
+                    </td>
                     <td>{formatWhen(inv.created_at)}</td>
                     <td>
                       <span className={invoiceStatus.className}>{invoiceStatus.text}</span>

@@ -23,7 +23,6 @@ const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').the
 const ObserverPage = lazy(() => import('./pages/ObserverPage.jsx').then((module) => ({ default: module.ObserverPage })));
 const AdminGroupsPage = lazy(() => import('./pages/AdminGroupsPage.jsx').then((module) => ({ default: module.AdminGroupsPage })));
 const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
-const ShopReceiptsPage = lazy(() => import('./pages/ShopReceiptsPage.jsx').then((module) => ({ default: module.ShopReceiptsPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
 const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage.jsx').then((module) => ({ default: module.ReferralsPage })));
@@ -78,7 +77,6 @@ export function App() {
       title: 'Финансы',
       items: [
         { to: '/billing', label: 'Касса', icon: Wallet },
-        { to: '/shop-receipts', label: 'Сверка оплат', icon: Receipt },
         ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
     },
@@ -202,7 +200,7 @@ export function App() {
                 <Route path="/botfather" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />
                 <Route path="/shop" element={<ShopAdminPage />} />
-                <Route path="/shop-receipts" element={<ShopReceiptsPage />} />
+                <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />
                 <Route path="/abandoned" element={<AbandonedPage />} />

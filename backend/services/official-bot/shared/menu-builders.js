@@ -2,6 +2,7 @@ export function createMenuBuilders({ service, botId }) {
     const sendAdminMenu = async (ctx) => {
         const adminContext = await service.getBotAdminContext(botId);
         const inlineKeyboard = [
+            [{ text: '🔎 Проверка чеков', callback_data: 'admin_verify_receipts' }],
             [{ text: '🎁 Выпустить промокод', callback_data: 'admin_gift_code' }],
             [
                 { text: '📊 Статистика', callback_data: 'admin_stats' },
@@ -54,6 +55,14 @@ export function createMenuBuilders({ service, botId }) {
 
             inlineKeyboard.push([{ text: '👤 Мой статус & Промокоды', callback_data: 'my_status' }]);
 
+            const replyKeyboard = [
+                [{ text: '💳 Купить подписку' }, { text: '👤 Мой статус' }],
+                [{ text: '🤝 Партнерка' }]
+            ];
+            if (isAdmin) {
+                replyKeyboard[1].push({ text: '🛠 Админка' });
+            }
+
             const firstName = ctx.from?.first_name || '';
             const userGreeting = firstName ? `, <b>${firstName}</b>` : '';
             const welcomeText = `👋 Приветствуем${userGreeting} в нашем боте!\n` +
@@ -64,7 +73,14 @@ export function createMenuBuilders({ service, botId }) {
             if (ctx.callbackQuery) {
                 await ctx.editMessageText(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
             } else {
-                await ctx.reply(welcomeText, { reply_markup: { inline_keyboard: inlineKeyboard }, parse_mode: 'HTML' });
+                await ctx.reply(welcomeText, {
+                    reply_markup: {
+                        keyboard: replyKeyboard,
+                        resize_keyboard: true,
+                        is_persistent: true
+                    },
+                    parse_mode: 'HTML'
+                });
             }
         } catch (error) {
             console.error('Ошибка меню:', error);
@@ -85,8 +101,7 @@ export function createMenuBuilders({ service, botId }) {
 
     const createInvoiceForTariff = async (ctx, tariff) => {
         try {
-            const bundleItems = await service.getTariffBundleItems(tariff, tariff.owner_id);
-            const bundleSummary = service.formatTariffBundleSummary(tariff, bundleItems);
+            const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
 
             const { data: settings } = await service.supabase.from('payment_settings').select('*').eq('owner_id', tariff.owner_id).single();
             if (!settings) return ctx.reply('❌ Администратор не настроил реквизиты.');
@@ -95,8 +110,10 @@ export function createMenuBuilders({ service, botId }) {
             const memo = 'sub_' + Math.random().toString(36).substr(2, 6);
             const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, userId);
             const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
+            const browseDiscountPercent = await service.getBrowseFollowupDiscount(tariff.owner_id, userId);
+            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
             const originalAmount = Number(tariff.price || 0);
-            const invoiceAmount = service.formatDiscountedAmount(originalAmount, tariff.currency, referralDiscountPercent);
+            const invoiceAmount = service.formatDiscountedAmount(originalAmount, tariff.currency, activeDiscountPercent);
             const referralDiscountAmount = Number((originalAmount - invoiceAmount).toFixed(tariff.currency === 'RUB' ? 2 : 4));
 
             const { error: insertErr } = await service.supabase.from('invoices').insert({
@@ -129,7 +146,7 @@ export function createMenuBuilders({ service, botId }) {
                     amount: invoiceAmount,
                     currency: tariff.currency,
                     original_amount: originalAmount,
-                    referral_discount_percent: referralDiscountPercent
+                    referral_discount_percent: activeDiscountPercent
                 }
             });
 
@@ -144,7 +161,7 @@ export function createMenuBuilders({ service, botId }) {
                     amount: invoiceAmount,
                     currency: tariff.currency,
                     memo,
-                    referral_discount_percent: referralDiscountPercent,
+                    referral_discount_percent: activeDiscountPercent,
                     referral_discount_amount: referralDiscountAmount,
                     original_amount: originalAmount,
                     referral_code: referralAttribution?.referral_code || null
@@ -153,18 +170,13 @@ export function createMenuBuilders({ service, botId }) {
 
             if (tariff.currency === 'RUB') {
                 if (!settings.sbp_phone) return ctx.reply('❌ Реквизиты СБП не указаны.');
-                const sbpLines = [
-                    `🏦 Банк: **${settings.sbp_bank || 'Не указан'}**`,
-                    settings.sbp_fio ? `👤 Получатель: **${settings.sbp_fio}**` : null,
-                    `📞 Реквизиты: \`${settings.sbp_phone}\``
-                ].filter(Boolean).join('\n');
-                const discountLine = referralDiscountPercent > 0
-                    ? `\n🎉 Партнерская скидка: **-${referralDiscountPercent}%** (-${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
+                const discountLine = activeDiscountPercent > 0
+                    ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
                     : '';
                 const caption = `💳 **СЧЕТ НА ОПЛАТУ (СБП)**\n` +
                     `━━━━━━━━━━━━━━━━━━━━━━\n` +
                     `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
-                    `💼 Содержимое: **${bundleSummary}**\n` +
+                    `⏳ Срок доступа: **${durationText}**\n` +
                     `💰 Сумма к оплате: **${invoiceAmount} RUB**${discountLine}\n\n` +
                     `**Реквизиты для перевода:**\n` +
                     `🏦 Банк: \`${settings.sbp_bank || 'Не указан'}\`\n` +
@@ -184,13 +196,13 @@ export function createMenuBuilders({ service, botId }) {
                 const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
                 const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
-                const discountLine = referralDiscountPercent > 0
-                    ? `\n🎉 Партнерская скидка: **-${referralDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
+                const discountLine = activeDiscountPercent > 0
+                    ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
                     : '';
                 const caption = `💎 **СЧЕТ НА ОПЛАТУ (TON)**\n` +
                     `━━━━━━━━━━━━━━━━━━━━━━\n` +
                     `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
-                    `💼 Содержимое: **${bundleSummary}**\n` +
+                    `⏳ Срок доступа: **${durationText}**\n` +
                     `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
                     `**Реквизиты для перевода:**\n` +
                     `👛 Адрес: \`${settings.ton_wallet}\` (нажмите, чтобы скопировать)\n` +

@@ -197,7 +197,7 @@ export function OrdersTab({
                   </Badge>
                 </h3>
                 <p className="text-xs text-slate-500">Покупатели отметили оплату. Основное рабочее место для таких случаев — сверка оплат.</p>
-                <a href="/app/shop-receipts" className="mt-2 inline-flex text-xs font-bold text-amber-700 hover:text-amber-900">
+                <a href="/app/billing" className="mt-2 inline-flex text-xs font-bold text-amber-700 hover:text-amber-900">
                   Открыть сверку оплат
                 </a>
               </div>

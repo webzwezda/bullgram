@@ -989,7 +989,7 @@ export class SalesContourService {
         };
     }
 
-    async loadFirstContourUserbot(ownerId, contour) {
+    async loadFirstContourUserbot(ownerId, contour, userbotService = null) {
         const userbotState = await this.loadOwnedUserbots(ownerId);
         let candidateIds = [];
 
@@ -999,14 +999,46 @@ export class SalesContourService {
             candidateIds = contour.selected_userbot_ids.map(String);
         }
 
+        const ineligibleReasons = [];
+
         for (const id of candidateIds) {
             const option = userbotState.optionById.get(id);
-            if (option && option.eligible_for_contour) {
-                return option;
+            if (!option) continue;
+
+            let eligible = option.eligible_for_contour;
+            let currentOption = option;
+
+            if (!eligible && currentOption.availability_status === 'proxy_dead' && userbotService) {
+                try {
+                    const rawUserbot = userbotState.userbots.find((u) => String(u.id) === String(id));
+                    if (rawUserbot) {
+                        const failover = await userbotService.tryAutoFailoverUserbot(rawUserbot);
+                        if (failover?.switched && failover?.account) {
+                            const updatedOption = buildUserbotOption(failover.account, userbotState.reservedUserbotIds);
+                            if (updatedOption.eligible_for_contour) {
+                                currentOption = updatedOption;
+                                eligible = true;
+                            }
+                        }
+                    }
+                } catch (failoverErr) {
+                    console.error(`[loadFirstContourUserbot] auto-failover failed for userbot ${id}:`, failoverErr);
+                }
+            }
+
+            if (eligible) {
+                return currentOption;
+            } else {
+                ineligibleReasons.push(
+                    `@${currentOption.tg_username || id}: ${currentOption.availability_reason || 'недоступен'}`
+                );
             }
         }
 
-        throw new SalesContourError('Нет доступного юзербота в контуре.', 409, 'no_eligible_userbot');
+        const reasonSuffix = ineligibleReasons.length
+            ? ` (${ineligibleReasons.join('; ')})`
+            : ' (В настройках контура этого бота не привязано ни одного юзербота)';
+        throw new SalesContourError(`Нет доступного юзербота в контуре.${reasonSuffix}`, 409, 'no_eligible_userbot');
     }
 
     async joinUserbotToAllTargets(ownerId, input = {}, botApi, userbotService) {
@@ -1036,7 +1068,7 @@ export class SalesContourService {
             throw new SalesContourError('В контуре нет привязанных площадок.', 409, 'no_targets');
         }
 
-        const userbot = await this.loadFirstContourUserbot(ownerId, contour);
+        const userbot = await this.loadFirstContourUserbot(ownerId, contour, userbotService);
         const userbotAccount = await this.loadFullUserbotAccount(userbot.id);
         if (!userbotAccount?.session_data) {
             throw new SalesContourError('У юзербота нет данных сессии.', 409, 'userbot_session_missing');

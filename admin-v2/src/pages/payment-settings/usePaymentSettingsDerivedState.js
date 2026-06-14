@@ -6,7 +6,7 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
       stats.total += 1;
       if (event.event_type === 'webhook_received' || event.event_type === 'webhook_test') stats.webhook += 1;
       if (event.event_type === 'invoice_completed') stats.completed += 1;
-      if (event.event_type === 'rejected_secret' || event.status === 'rejected') stats.rejected += 1;
+      if (event.event_type === 'rejected_secret' || event.event_type === 'webhook_rejected') stats.rejected += 1;
       return stats;
     }, { total: 0, webhook: 0, completed: 0, rejected: 0 });
   }, [state.paymentEvents]);
