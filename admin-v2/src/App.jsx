@@ -38,7 +38,7 @@ const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then(
 const ApiN8nPage = lazy(() => import('./pages/ApiN8nPage.jsx').then((module) => ({ default: module.ApiN8nPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 export function App() {
-  const { profileRole } = useAuth();
+  const { user, profileRole } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -117,6 +117,15 @@ export function App() {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
+
+  if (!user) {
+    return (
+      <>
+        <AuthGate />
+        <Toaster position="bottom-right" richColors duration={4000} />
+      </>
+    );
+  }
 
   return (
     <div className="app-shell">
