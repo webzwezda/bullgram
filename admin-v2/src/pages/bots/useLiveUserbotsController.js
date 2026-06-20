@@ -23,7 +23,7 @@ function initialSaleComposer() {
     sale_type: 'userbot',
     price_ton: '',
     price_rub: '',
-    payment_methods: ['ton', 'p2p', 'robokassa'],
+    payment_methods: ['ton', 'p2p'],
     saving: false,
     error: ''
   };
@@ -81,7 +81,7 @@ export function useLiveUserbotsController({
       sale_type: account.proxy_id ? 'bundle' : 'userbot',
       price_ton: '15',
       price_rub: '',
-      payment_methods: ['ton', 'p2p', 'robokassa'],
+      payment_methods: ['ton', 'p2p'],
       saving: false,
       error: ''
     });
@@ -99,10 +99,9 @@ export function useLiveUserbotsController({
       return {
         ...prev,
         payment_methods: nextMethods,
-        price_rub: (method === 'p2p' || method === 'robokassa')
+        price_rub: method === 'p2p'
           && !enabled
           && !nextMethods.includes('p2p')
-          && !nextMethods.includes('robokassa')
           ? ''
           : prev.price_rub
       };
@@ -351,8 +350,8 @@ export function useLiveUserbotsController({
       setSaleComposer((prev) => ({ ...prev, error: 'Выбери хотя бы один способ оплаты.' }));
       return;
     }
-    if ((saleComposer.payment_methods || []).some((method) => method === 'p2p' || method === 'robokassa') && Number(saleComposer.price_rub || 0) <= 0) {
-      setSaleComposer((prev) => ({ ...prev, error: 'Для СБП или Robokassa нужна цена в рублях.' }));
+    if ((saleComposer.payment_methods || []).some((method) => method === 'p2p') && Number(saleComposer.price_rub || 0) <= 0) {
+      setSaleComposer((prev) => ({ ...prev, error: 'Для СБП нужна цена в рублях.' }));
       return;
     }
     if ((saleComposer.payment_methods || []).includes('ton') && Number(saleComposer.price_ton || 0) <= 0) {

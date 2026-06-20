@@ -1,7 +1,7 @@
 export const SALES_LINKS = {
   trial: '/shop?offer=trial',
   p2p: '/shop?offer=p2p',
-  ops: '/billing/normal',
+  ops: 'https://t.me/webzwezda',
   seller: '/shop?offer=seller'
 };
 

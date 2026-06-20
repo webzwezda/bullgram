@@ -92,7 +92,7 @@ export function ProxyComposerDialog({ open, onOpenChange, composer, setComposer,
                 type="number"
                 min="0"
                 step="1"
-                placeholder="Для СБП / Robokassa"
+                placeholder="Для СБП"
                 value={composer.price_rub}
                 onChange={(e) => setComposer((p) => ({ ...p, price_rub: e.target.value }))}
               />
@@ -132,8 +132,7 @@ export function ProxyComposerDialog({ open, onOpenChange, composer, setComposer,
             <div className="flex gap-2">
               {[
                 ['ton', 'TON'],
-                ['p2p', 'СБП'],
-                ['robokassa', 'Robokassa']
+                ['p2p', 'СБП']
               ].map(([method, label]) => (
                 <button
                   key={method}

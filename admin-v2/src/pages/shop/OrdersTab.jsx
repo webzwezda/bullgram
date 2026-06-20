@@ -109,7 +109,7 @@ export function OrdersTab({
                           <span>•</span>
                           <span>{paymentMethodLabel(purchase.payload?.payment_method)}</span>
                           <span>•</span>
-                          <span>{purchase.payload?.payment_method === 'p2p' ? (purchase.payload?.sbp_bank || 'СБП') : purchase.payload?.payment_method === 'robokassa' ? 'Robokassa' : 'TON'}</span>
+                          <span>{purchase.payload?.payment_method === 'p2p' ? (purchase.payload?.sbp_bank || 'СБП') : 'TON'}</span>
                         </div>
 
                         <div className="text-xs text-slate-400 mt-1">

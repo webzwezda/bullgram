@@ -874,7 +874,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                     <div className="p-6 md:p-8 space-y-8">
                       <div>
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                          <h3 className="text-lg font-black text-slate-900">Очередь транзакций Robokassa</h3>
+                          <h3 className="text-lg font-black text-slate-900">Очередь P2P / СБП транзакций</h3>
                           <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                             {filteredAwaitingReceipts.length} оплат ждет
                           </span>
@@ -883,7 +883,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                         {!filteredAwaitingReceipts.length ? (
                           <div className="text-center py-12 text-slate-500 space-y-2">
                             <div className="text-4xl">🎉</div>
-                            <p className="text-sm font-black text-slate-900">Транзакции Robokassa полностью разобраны!</p>
+                            <p className="text-sm font-black text-slate-900">Транзакции P2P полностью разобраны!</p>
                             <p className="text-xs text-slate-400 font-semibold">Новых ручных или авто-чеков пока не поступало.</p>
                           </div>
                         ) : (

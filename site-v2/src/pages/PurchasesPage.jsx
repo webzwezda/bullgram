@@ -20,16 +20,11 @@ function purchaseAmountSummary(p) {
     const rub = Number(p?.amount_rub || p?.payload?.amount_rub || p?.item?.price_rub || 0);
     return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
   }
-  if (p?.payload?.payment_method === 'robokassa') {
-    const rub = Number(p?.amount_rub || p?.payload?.amount_rub || p?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : 'Robokassa';
-  }
   return `${formatTon(p?.amount_ton || p?.item?.price_ton || 0)} TON`;
 }
 
 function paymentMethodLabel(v) {
   if (v === 'p2p') return 'СБП';
-  if (v === 'robokassa') return 'Robokassa';
   return 'TON';
 }
 
@@ -255,12 +250,7 @@ export function PurchasesPage() {
                   </div>
                 )}
 
-                {/* Robokassa payment */}
-                {method === 'robokassa' && isPending && p.payload?.robokassa_url && (
-                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
-                    <a href={p.payload.robokassa_url} className="site-button site-button--primary text-xs">Перейти к оплате</a>
-                  </div>
-                )}
+
 
                 {/* Awaiting receipt — P2P already sent */}
                 {isAwaiting && (

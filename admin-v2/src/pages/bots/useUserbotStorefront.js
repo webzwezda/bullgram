@@ -152,9 +152,6 @@ export function useUserbotStorefront({
           payment_url: data.payment_url || ''
         }
       });
-      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
-        window.location.href = data.payment_url;
-      }
     } catch (error) {
       let existingPurchase = null;
       try {
@@ -187,7 +184,7 @@ export function useUserbotStorefront({
           sbp_bank: existingPurchase.payload?.sbp_bank || '',
           sbp_fio: existingPurchase.payload?.sbp_fio || '',
           receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
-          payment_url: existingPurchase.payload?.robokassa_payment_url || ''
+          payment_url: ''
         } : null,
         loading: false,
         checking: false,
@@ -271,9 +268,6 @@ export function useUserbotStorefront({
         notice: '',
         noticeTone: 'default'
       });
-      if (selectedPaymentMethod === 'robokassa' && data.payment_url) {
-        window.location.href = data.payment_url;
-      }
     } catch (error) {
       await refreshPurchases().catch(() => null);
       setCheckoutState({
@@ -395,7 +389,7 @@ export function useUserbotStorefront({
         sbp_bank: purchase.payload?.sbp_bank || '',
         sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
-        payment_url: purchase.payload?.robokassa_payment_url || '',
+        payment_url: '',
         batch: !!purchase.batch
       },
       paymentMethod: purchase.payload?.payment_method || 'ton',

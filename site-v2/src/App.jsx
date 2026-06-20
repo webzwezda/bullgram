@@ -6,9 +6,6 @@ import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
 import { PurchasesPage } from './pages/PurchasesPage.jsx';
 import { MyPlanPage } from './pages/MyPlanPage.jsx';
-import { BillingNormalPage } from './pages/BillingNormalPage.jsx';
-import { BillingSuccessPage } from './pages/BillingSuccessPage.jsx';
-import { BillingFailPage } from './pages/BillingFailPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
@@ -57,8 +54,6 @@ export function App() {
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
   const isTelegramRoute = location.pathname === '/telegram';
-  const isBillingReturnRoute = location.pathname === '/billing/success' || location.pathname === '/billing/fail';
-  const isLegacyNormalShopRoute = location.pathname === '/shop' && new URLSearchParams(location.search).get('offer') === 'normal';
   const { user, profileRole } = useAuth();
   const navItems = navSections
     .filter((section) => !section.adminOnly || profileRole === 'admin')
@@ -66,7 +61,6 @@ export function App() {
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
-    if (location.pathname.startsWith('/billing')) return 'Оплата Normal';
     if (location.pathname.startsWith('/purchases')) return 'Мои покупки';
     if (location.pathname === '/plan') return 'Мой тариф';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
@@ -82,12 +76,9 @@ export function App() {
       <Route path="/" element={<TelegramPaywallPage />} />
       <Route path="/telegram" element={<TelegramPaywallPage />} />
       <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/shop" element={isLegacyNormalShopRoute ? <Navigate to="/billing/normal" replace /> : <ShopPage />} />
+      <Route path="/shop" element={<ShopPage />} />
       <Route path="/purchases" element={<PurchasesPage />} />
       <Route path="/plan" element={<MyPlanPage />} />
-      <Route path="/billing/normal" element={<BillingNormalPage />} />
-      <Route path="/billing/success" element={<BillingSuccessPage />} />
-      <Route path="/billing/fail" element={<BillingFailPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -178,7 +169,7 @@ export function App() {
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
-        {(isHomeRoute || isPricingRoute || isTelegramRoute || isBillingReturnRoute || isLegacyNormalShopRoute) ? (
+        {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>

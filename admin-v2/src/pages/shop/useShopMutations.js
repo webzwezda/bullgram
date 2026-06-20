@@ -123,7 +123,7 @@ export function useShopMutations({ accessToken, state, setState, loadShop, formS
       preview_text: 'Готовый серверный SOCKS5-прокси для одного Telegram-аккаунта.',
       description: `Прокси ${proxy.host}:${proxy.port}${proxy.last_check_country ? ` • ${proxy.last_check_country}` : ''}. Один прокси = один юзербот.`,
       sales_channel: 'admin_only',
-      payment_methods: ['ton', 'p2p', 'robokassa'],
+      payment_methods: ['ton', 'p2p'],
       price_ton: '5',
       price_rub: '',
       status: 'published',

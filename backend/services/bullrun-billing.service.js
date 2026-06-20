@@ -1,9 +1,4 @@
-import {
-    buildRobokassaPaymentUrl,
-    formatRobokassaAmount,
-    getRobokassaConfig,
-    verifyRobokassaCallback
-} from './robokassa.service.js';
+// Robokassa service integration removed
 
 export const NORMAL_PLAN = {
     code: 'normal_365d',
@@ -54,12 +49,11 @@ function sanitizeProfile(profile) {
 }
 
 export function getBillingReadiness() {
-    const robokassa = getRobokassaConfig();
     return {
         robokassa: {
-            enabled: robokassa.enabled,
-            configured: robokassa.configured,
-            test_mode: robokassa.testMode
+            enabled: false,
+            configured: false,
+            test_mode: false
         }
     };
 }
@@ -141,63 +135,9 @@ export async function getCurrentBillingState(supabase, ownerId) {
 }
 
 export async function createNormalCheckoutOrder(supabase, ownerId) {
-    await downgradeExpiredNormal(supabase, ownerId);
-    await expireStaleOrders(supabase, ownerId);
-
-    const readiness = getBillingReadiness();
-    if (!readiness.robokassa.enabled || !readiness.robokassa.configured) {
-        const error = new Error('Robokassa еще не настроена. Можно войти в Trial, а Normal включим после регистрации магазина.');
-        error.statusCode = 503;
-        throw error;
-    }
-
-    const ttlMinutes = minutes(process.env.BILLING_PENDING_ORDER_TTL_MINUTES, 30);
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000).toISOString();
-    const payload = {
-        title: NORMAL_PLAN.title,
-        created_by: 'bullrun_billing',
-        checkout_ttl_minutes: ttlMinutes
-    };
-
-    const { data: inserted, error: insertError } = await supabase
-        .from('billing_orders')
-        .insert({
-            owner_id: ownerId,
-            plan_code: NORMAL_PLAN.code,
-            amount_rub: NORMAL_PLAN.amountRub,
-            currency: 'RUB',
-            duration_days: NORMAL_PLAN.durationDays,
-            provider: 'robokassa',
-            status: 'pending',
-            expires_at: expiresAt,
-            payload
-        })
-        .select('*')
-        .single();
-    if (insertError) throw insertError;
-
-    const paymentUrl = buildRobokassaPaymentUrl({
-        order: inserted,
-        description: `${NORMAL_PLAN.title}: ${NORMAL_PLAN.durationDays} дней доступа`
-    });
-
-    const { data: order, error: updateError } = await supabase
-        .from('billing_orders')
-        .update({
-            payment_url: paymentUrl,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', inserted.id)
-        .select('*')
-        .single();
-    if (updateError) throw updateError;
-
-    return {
-        plan: NORMAL_PLAN,
-        readiness,
-        order: sanitizeOrder(order)
-    };
+    const error = new Error('Онлайн-оплата тарифа временно недоступна. Пожалуйста, обратитесь в поддержку для активации тарифа Normal.');
+    error.statusCode = 503;
+    throw error;
 }
 
 export async function recordBillingEvent(supabase, event) {
@@ -247,91 +187,4 @@ export async function activateNormalForOrder(supabase, order) {
     if (error) throw error;
     return sanitizeProfile(data);
 }
-
-export async function handleRobokassaResult(supabase, params) {
-    const invoiceId = String(params.InvId ?? params.inv_id ?? '').trim();
-    const outSum = formatRobokassaAmount(params.OutSum ?? params.out_sum);
-    if (!invoiceId || !outSum) {
-        const error = new Error('Некорректный callback Robokassa.');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    const { data: order, error: orderError } = await supabase
-        .from('billing_orders')
-        .select('*')
-        .eq('provider', 'robokassa')
-        .eq('provider_invoice_id', invoiceId)
-        .maybeSingle();
-    if (orderError) throw orderError;
-    if (!order) {
-        const error = new Error('Заказ Robokassa не найден.');
-        error.statusCode = 404;
-        throw error;
-    }
-
-    const config = getRobokassaConfig();
-    const signatureValid = verifyRobokassaCallback(params, config.password2);
-    await recordBillingEvent(supabase, {
-        billing_order_id: order.id,
-        owner_id: order.owner_id,
-        event_type: signatureValid ? 'robokassa_result' : 'robokassa_result_invalid_signature',
-        provider_invoice_id: invoiceId,
-        amount_rub: Number(outSum),
-        signature_valid: signatureValid,
-        payload: params
-    });
-
-    if (!signatureValid) {
-        const error = new Error('Некорректная подпись Robokassa.');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    if (Number(formatRobokassaAmount(order.amount_rub)) !== Number(outSum)) {
-        const error = new Error('Сумма оплаты не совпадает с заказом.');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    if (order.status === 'paid') {
-        return { order: sanitizeOrder(order), profile: null, responseText: `OK${invoiceId}` };
-    }
-
-    const paidAt = new Date().toISOString();
-    const { data: paidOrder, error: updateError } = await supabase
-        .from('billing_orders')
-        .update({
-            status: 'paid',
-            paid_at: paidAt,
-            provider_payment_id: String(params.PaymentMethod ?? params.payment_method ?? '') || null,
-            updated_at: paidAt,
-            payload: {
-                ...(order.payload || {}),
-                robokassa_result: params
-            }
-        })
-        .eq('id', order.id)
-        .select('*')
-        .single();
-    if (updateError) throw updateError;
-
-    const profile = await activateNormalForOrder(supabase, paidOrder);
-    return {
-        order: sanitizeOrder(paidOrder),
-        profile,
-        responseText: `OK${invoiceId}`
-    };
-}
-
-export async function loadOrderByProviderInvoice(supabase, invoiceId) {
-    if (!invoiceId) return null;
-    const { data, error } = await supabase
-        .from('billing_orders')
-        .select('*')
-        .eq('provider', 'robokassa')
-        .eq('provider_invoice_id', String(invoiceId))
-        .maybeSingle();
-    if (error) throw error;
-    return sanitizeOrder(data);
-}
+// Robokassa result and load helpers removed

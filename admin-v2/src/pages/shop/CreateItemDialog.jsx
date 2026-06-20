@@ -70,7 +70,7 @@ export function CreateItemDialog({ open, onOpenChange, formState, setFormState, 
                 type="number"
                 min="0"
                 step="1"
-                placeholder="Для СБП / Robokassa"
+                placeholder="Для СБП"
                 value={formState.price_rub}
                 onChange={(e) => setFormState((p) => ({ ...p, price_rub: e.target.value }))}
               />

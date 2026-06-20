@@ -78,9 +78,9 @@ const plans = [
 ];
 
 const normalDelivery = [
-  'Покупатель выбирает тариф Normal на странице оплаты BullRun.',
-  'Перед оплатой видит стоимость, срок доступа и состав услуги.',
-  'После оплаты через Robokassa получает доступ к рабочему кабинету BullRun.',
+  'Покупатель связывается с поддержкой в Telegram для оформления тарифа Normal.',
+  'Согласовывает детали оплаты и получает реквизиты.',
+  'После оплаты и ручного подтверждения получает доступ к рабочему кабинету BullRun.',
   'Услуга оказывается дистанционно в течение оплаченного периода 365 дней.'
 ];
 
@@ -218,7 +218,7 @@ export function PricingPage() {
       <section className="border-b border-slate-200 py-12">
         <div className="max-w-3xl">
           <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Правила покупки</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Информация для оплаты через Robokassa</h2>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Информация об оплате и правилах покупки</h2>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {complianceBlocks.map(({ icon: Icon, title, text, href, linkLabel }) => (
@@ -247,7 +247,7 @@ export function PricingPage() {
           <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Контакты и реквизиты</div>
           <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Продавец и поддержка</h2>
           <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Для самозанятого Robokassa ожидает полные ФИО, ИНН и регион/город продавца.
+            Информация о продавце и реквизитах для связи с поддержкой.
             Паспортные данные на публичной странице не размещаются.
           </p>
         </div>

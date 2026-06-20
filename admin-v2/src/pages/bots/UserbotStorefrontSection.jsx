@@ -187,25 +187,7 @@ export function UserbotStorefrontSection({
               </Button>
             </div>
           </div>
-        ) : checkoutState.purchase.payment_method === 'robokassa' ? (
-          <div className="space-y-6">
-            <div className="flex items-start gap-3 rounded-xl bg-blue-50/80 px-4 py-3 border border-blue-100/50 shadow-sm">
-              <CreditCard className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-sm font-medium leading-relaxed text-blue-800">
-                Оплата идет через Robokassa. После успешного платежа BullRun автоматически передаст аккаунт и proxy в ваш кабинет.
-              </p>
-            </div>
 
-            {checkoutState.purchase.payment_url ? (
-              <a
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 text-sm font-bold !text-white shadow-md shadow-blue-500/20 transition hover:bg-blue-700"
-                href={checkoutState.purchase.payment_url}
-              >
-                <ExternalLink className="w-4 h-4" />
-                Перейти в Robokassa
-              </a>
-            ) : null}
-          </div>
         ) : (
           <div className="space-y-6">
             <div className="flex items-start gap-3 rounded-xl bg-amber-50 px-4 py-3 border border-amber-200/60 shadow-sm">
@@ -607,14 +589,13 @@ export function UserbotStorefrontSection({
                             const enabled = methods.includes(method);
                             const loading = checkoutState.loading && checkoutState.item?.id === item.id;
                             const isTon = method === 'ton';
-                            const isRobokassa = method === 'robokassa';
                             
                             return (
                               <Button
                                 key={`${item.id}:${method}`}
                                 className={`w-full h-12 rounded-xl text-sm font-bold shadow-sm transition-all duration-200 ${
                                   enabled
-                                    ? isTon || isRobokassa
+                                    ? isTon
                                       ? 'bg-[#0088CC] hover:bg-[#0077B5] text-white shadow-blue-500/20'
                                       : 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-slate-200/50'
                                     : 'bg-slate-50 text-slate-400 border border-slate-200 cursor-not-allowed opacity-70'
@@ -632,9 +613,7 @@ export function UserbotStorefrontSection({
                                   ? 'Обработка...'
                                   : isTon
                                     ? 'Оплатить через TON'
-                                    : isRobokassa
-                                      ? 'Оплатить через Robokassa'
-                                      : 'Оплатить через СБП'}
+                                    : 'Оплатить через СБП'}
                               </Button>
                             );
                           })}

@@ -28,9 +28,6 @@ function itemPriceSummary(item) {
   if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
     parts.push(`${formatRub(item.price_rub)} RUB`);
   }
-  if (methods.includes('robokassa') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
-  }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
 
@@ -89,15 +86,11 @@ export function ShopPage() {
         item_id: item.id,
         payment_method: paymentMethod
       };
-      const data = await apiRequest('/api/shop/public/purchase', {
+      await apiRequest('/api/shop/public/purchase', {
         accessToken,
         method: 'POST',
         body
       });
-      if (paymentMethod === 'robokassa' && data.payload?.robokassa_url) {
-        window.location.href = data.payload.robokassa_url;
-        return;
-      }
       window.location.href = '/purchases';
     } catch (e) {
       setError(e.message);
@@ -153,7 +146,6 @@ export function ShopPage() {
             const methods = item?.payment_methods?.length ? item.payment_methods : ['ton'];
             const hasP2p = methods.includes('p2p');
             const hasTon = methods.includes('ton');
-            const hasRobokassa = methods.includes('robokassa');
             const isHighlighted = highlightId && String(item.id) === String(highlightId);
 
             return (
@@ -196,16 +188,6 @@ export function ShopPage() {
                       onClick={() => handleBuy(item, 'p2p')}
                     >
                       {busyId === item.id ? '...' : 'Купить СБП'}
-                    </button>
-                  )}
-                  {hasRobokassa && (
-                    <button
-                      className="site-button text-xs"
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => handleBuy(item, 'robokassa')}
-                    >
-                      {busyId === item.id ? '...' : 'Оплатить картой'}
                     </button>
                   )}
                 </div>

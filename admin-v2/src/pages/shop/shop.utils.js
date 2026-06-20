@@ -111,7 +111,6 @@ export function salesChannelLabel(value) {
 
 export function paymentMethodLabel(method) {
   if (method === 'p2p') return 'СБП';
-  if (method === 'robokassa') return 'Robokassa';
   return 'TON';
 }
 
@@ -129,14 +128,14 @@ export function itemPriceSummary(item) {
   if ((!methods.length || methods.includes('ton')) && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if ((methods.includes('p2p') || methods.includes('robokassa')) && Number(item?.price_rub || 0) > 0) {
+  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
     parts.push(`${formatRub(item.price_rub)} RUB`);
   }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
 
 export function purchaseAmountSummary(purchase) {
-  if (purchase?.payload?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'robokassa') {
+  if (purchase?.payload?.payment_method === 'p2p') {
     const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
     return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payload?.payment_method);
   }
@@ -257,7 +256,7 @@ export const INITIAL_PROXY_COMPOSER = {
   preview_text: '',
   description: '',
   sales_channel: 'admin_only',
-  payment_methods: ['ton', 'p2p', 'robokassa'],
+  payment_methods: ['ton', 'p2p'],
   price_ton: '',
   price_rub: '',
   status: 'published',

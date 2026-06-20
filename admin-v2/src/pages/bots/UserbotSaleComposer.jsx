@@ -133,9 +133,9 @@ export function UserbotSaleComposer({
                   />
                 </button>
               </div>
-              {(saleComposer.payment_methods || []).some((method) => method === 'p2p' || method === 'robokassa') ? (
+              {(saleComposer.payment_methods || []).includes('p2p') ? (
                 <label className="mt-4 block">
-                  <span className="mb-2 block text-[13px] font-medium text-slate-600">Цена в RUB для СБП / Robokassa</span>
+                  <span className="mb-2 block text-[13px] font-medium text-slate-600">Цена в RUB для СБП</span>
                   <input
                     className="h-11 w-full rounded-[14px] border border-slate-200 bg-slate-50 px-4 text-[14px] text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                     inputMode="numeric"
@@ -143,35 +143,6 @@ export function UserbotSaleComposer({
                     onChange={(event) => setSaleComposer((prev) => ({ ...prev, price_rub: event.target.value }))}
                   />
                 </label>
-              ) : null}
-            </div>
-            <div className="rounded-[18px] border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-[15px] font-semibold text-slate-900">Robokassa</div>
-                  <div className="mt-1 text-[13px] text-slate-500">Покупатель оплачивает в Robokassa, а BullRun передает аккаунт после callback.</div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={(saleComposer.payment_methods || []).includes('robokassa')}
-                  aria-label="Оплата Robokassa"
-                  onClick={() => toggleSalePaymentMethod('robokassa', !(saleComposer.payment_methods || []).includes('robokassa'))}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-[2px] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
-                    (saleComposer.payment_methods || []).includes('robokassa') ? 'bg-emerald-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`size-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      (saleComposer.payment_methods || []).includes('robokassa') ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              {(saleComposer.payment_methods || []).includes('robokassa') ? (
-                <div className="mt-4 rounded-[14px] border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-medium leading-5 text-blue-900">
-                  Для Robokassa используется та же цена в RUB. Если RUB-цена пустая, покупатель не увидит Robokassa в способах оплаты.
-                </div>
               ) : null}
             </div>
           </div>
