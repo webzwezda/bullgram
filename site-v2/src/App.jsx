@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, Newspaper, GraduationCap, MessageCircle, Receipt, Wallet } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
@@ -30,13 +30,6 @@ const navSections = [
     items: [
       { to: '/shop', label: 'Магазин', icon: ShoppingBag },
       { to: '/purchases', label: 'Покупки', icon: Receipt }
-    ]
-  },
-  {
-    title: 'Контент',
-    items: [
-      { href: '/courses/', label: 'Курсы', icon: GraduationCap, external: true },
-      { href: '/blog/', label: 'Блог', icon: Newspaper, external: true }
     ]
   },
   {
