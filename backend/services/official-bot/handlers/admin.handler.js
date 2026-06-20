@@ -82,7 +82,8 @@ export function registerAdminHandlers(bot, { service, botId }) {
         ]);
 
         if (hasReceipt) {
-            inlineKeyboard.push([{ text: '📄 Посмотреть чек', url: `https://bullrun.ru${hasReceipt}` }]);
+            const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
+            inlineKeyboard.push([{ text: '📄 Посмотреть чек', url: `${publicAppOrigin}${hasReceipt}` }]);
         }
 
         const paginationRow = [];

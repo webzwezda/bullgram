@@ -1,7 +1,7 @@
 const pluginRss = require("@11ty/eleventy-plugin-rss").default;
 
 const BLOG_BASE_PATH = "/blog";
-const SITE_URL = "https://bullrun.ru";
+const SITE_URL = "https://bullgram.xyz";
 
 function blogPath(value = "/") {
   if (/^https?:\/\//.test(value)) {

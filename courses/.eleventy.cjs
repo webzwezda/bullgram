@@ -1,5 +1,5 @@
 const COURSES_BASE_PATH = "/courses";
-const SITE_URL = "https://bullrun.ru";
+const SITE_URL = "https://bullgram.xyz";
 
 function coursesPath(value = "/") {
   if (typeof value !== "string") {

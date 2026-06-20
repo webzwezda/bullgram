@@ -52,7 +52,7 @@ import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.j
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
 // ==========================================
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
 const corsOrigins = Array.from(new Set([
     publicAppOrigin,
     'http://localhost:8080'

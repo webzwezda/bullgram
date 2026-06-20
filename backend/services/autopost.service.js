@@ -134,6 +134,42 @@ async function showQueueForChannel(ctx, botId, channel, supabase) {
     }
 }
 
+function getNextSlots(afterDateTime, postsPerDay, postingTimes, tz, count) {
+    const slots = [];
+    const sortedPostingTimes = postingTimes && postingTimes.length > 0 ? [...postingTimes].sort() : ['12:00'];
+    const effectivePostsPerDay = Math.max(1, postsPerDay || 1);
+    
+    let currentLocalParts = getLocalDateParts(afterDateTime, tz);
+    let currentTzDate = new Date(Date.UTC(currentLocalParts.year, currentLocalParts.month, currentLocalParts.day));
+    
+    let iterations = 0;
+    while (slots.length < count && iterations < 1000) {
+        iterations++;
+        for (let i = 0; i < effectivePostsPerDay; i++) {
+            const timeStr = sortedPostingTimes[i % sortedPostingTimes.length] || '12:00';
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            
+            const slotUtcDate = getUtcDateForLocal(
+                currentTzDate.getUTCFullYear(),
+                currentTzDate.getUTCMonth(),
+                currentTzDate.getUTCDate(),
+                hours || 12,
+                minutes || 0,
+                tz
+            );
+            
+            if (slotUtcDate.getTime() > afterDateTime.getTime()) {
+                slots.push(slotUtcDate);
+                if (slots.length === count) {
+                    break;
+                }
+            }
+        }
+        currentTzDate.setUTCDate(currentTzDate.getUTCDate() + 1);
+    }
+    return slots;
+}
+
 export class AutopostService {
     constructor(supabase) {
         this.supabase = supabase;
@@ -312,20 +348,7 @@ export class AutopostService {
             .limit(1)
             .maybeSingle();
 
-        // Начинаем планирование со следующего дня (или сегодня, если нет запланированных)
         const tz = channel.timezone || 'Europe/Moscow';
-        let todayParts = getLocalDateParts(new Date(), tz);
-        let startTzDate = new Date(Date.UTC(todayParts.year, todayParts.month, todayParts.day));
-        startTzDate.setUTCDate(startTzDate.getUTCDate() + 1);
-
-        if (lastScheduled?.scheduled_at) {
-            const lastParts = getLocalDateParts(new Date(lastScheduled.scheduled_at), tz);
-            let lastTzDate = new Date(Date.UTC(lastParts.year, lastParts.month, lastParts.day));
-            lastTzDate.setUTCDate(lastTzDate.getUTCDate() + 1);
-            if (lastTzDate > startTzDate) {
-                startTzDate = lastTzDate;
-            }
-        }
 
         // Находим нераспределённые посты для этой категории
         const { data: unscheduled } = await this.supabase
@@ -339,33 +362,20 @@ export class AutopostService {
 
         if (!unscheduled || unscheduled.length === 0) return 0;
 
+        const afterDateTime = lastScheduled?.scheduled_at ? new Date(lastScheduled.scheduled_at) : new Date();
+        const slots = getNextSlots(afterDateTime, postsPerDay, postingTimes, tz, unscheduled.length);
+
         let scheduled = 0;
-        let currentDate = new Date(startTzDate);
-        let itemIndex = 0;
+        for (let idx = 0; idx < unscheduled.length; idx++) {
+            const scheduledAt = slots[idx];
+            if (!scheduledAt) break;
 
-        while (itemIndex < unscheduled.length) {
-            for (let i = 0; i < postsPerDay && itemIndex < unscheduled.length; i++) {
-                const timeStr = postingTimes[i % postingTimes.length] || '12:00';
-                const [hours, minutes] = timeStr.split(':').map(Number);
+            await this.supabase
+                .from('autopost_items')
+                .update({ status: 'scheduled', scheduled_at: scheduledAt.toISOString() })
+                .eq('id', unscheduled[idx].id);
 
-                const scheduledAt = getUtcDateForLocal(
-                    currentDate.getUTCFullYear(),
-                    currentDate.getUTCMonth(),
-                    currentDate.getUTCDate(),
-                    hours || 12,
-                    minutes || 0,
-                    tz
-                );
-
-                await this.supabase
-                    .from('autopost_items')
-                    .update({ status: 'scheduled', scheduled_at: scheduledAt.toISOString() })
-                    .eq('id', unscheduled[itemIndex].id);
-
-                itemIndex++;
-                scheduled++;
-            }
-            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+            scheduled++;
         }
 
         return scheduled;

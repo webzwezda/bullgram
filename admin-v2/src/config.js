@@ -1,4 +1,4 @@
-const DEFAULT_APP_ORIGIN = 'https://bullrun.ru';
+const DEFAULT_APP_ORIGIN = 'https://bullgram.xyz';
 
 function getRuntimeOrigin() {
   if (typeof window === 'undefined' || !window.location?.origin) {

@@ -1,9 +1,9 @@
 export default {
   title: "BullRun Blog",
   description: "Практические заметки о монетизации закрытых Telegram-сообществ, оплатах, доступах и операционном контуре BullRun.",
-  url: "https://bullrun.ru",
+  url: "https://bullgram.xyz",
   blogPath: "/blog",
-  blogUrl: "https://bullrun.ru/blog",
+  blogUrl: "https://bullgram.xyz/blog",
   assetVersion: "20260501-6",
   nav: [
     { href: "/", label: "Главная", icon: "dashboard" },
