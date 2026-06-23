@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -8,6 +8,15 @@ import { Input } from '../components/ui/input.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
+import {
+    fetchChannels,
+    fetchAdmins,
+    initBot,
+    patchChannel,
+    addAdmin,
+    removeAdmin,
+    deleteBot
+} from './autopost/api.js';
 
 function postingTimesFor(n) {
   return n === 1 ? ['10:00'] : n === 2 ? ['10:00', '18:00'] : ['08:00', '14:00', '20:00'];
@@ -40,8 +49,6 @@ export function QuickStartPage() {
     public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
     private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
   });
-
-  const pollRef = useRef(null);
 
   // Загрузка существующих ботов
   const loadBots = useCallback(async () => {
@@ -77,73 +84,83 @@ export function QuickStartPage() {
         public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
         private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
       });
-      if (pollRef.current) clearInterval(pollRef.current);
       return;
     }
-    
+
     const bot = existingBots.find((b) => b.id === selectedBotId);
     if (!bot) return;
-    
+
     setBotToken(bot.bot_token || '');
-    setCreatedBot({ id: bot.id, bot_username: bot.username, admin_tg_id: bot.admin_tg_id });
-    
-    fetchChannels(bot.id);
-    fetchAdmins(bot.id);
+    setCreatedBot({ id: bot.id, bot_username: bot.username });
+
+    loadChannels(bot.id);
+    loadAdmins(bot.id);
   }, [selectedBotId, existingBots]);
 
-  async function fetchChannels(botId) {
+  async function loadChannels(botId, { merge = false } = {}) {
     try {
-      const res = await fetch(`/api/autopost/bots/${botId}/channels`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
-      if (data.channels) {
-        setChannels(data.channels);
-        
-        const pubCh = data.channels.find(c => c.visibility === 'public');
-        const privCh = data.channels.find(c => c.visibility === 'private');
-        
-        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-        setChannelConfigs({
-          public: {
-            id: pubCh?.id || null,
-            tgChatId: pubCh?.tg_chat_id || null,
-            title: pubCh?.title || '',
-            postsPerDay: String(pubCh?.posts_per_day || 1),
-            postingTimes: pubCh?.posting_times || ['10:00'],
-            autoAccept: pubCh?.auto_accept_suggestions || false,
-            buttons: pubCh?.buttons_config || [],
-            timezone: pubCh?.timezone || browserTz,
-            suggestionPostingTimes: pubCh?.suggestion_posting_times || ['12:00'],
-            suggestButtonEnabled: pubCh?.suggest_button_enabled || false,
-            maxSuggestionsPerDay: pubCh?.max_suggestions_per_day !== undefined ? pubCh.max_suggestions_per_day : 5
-          },
-          private: {
-            id: privCh?.id || null,
-            tgChatId: privCh?.tg_chat_id || null,
-            title: privCh?.title || '',
-            postsPerDay: String(privCh?.posts_per_day || 1),
-            postingTimes: privCh?.posting_times || ['10:00'],
-            autoAccept: privCh?.auto_accept_suggestions || false,
-            buttons: privCh?.buttons_config || [],
-            timezone: privCh?.timezone || browserTz,
-            suggestionPostingTimes: privCh?.suggestion_posting_times || ['12:00'],
-            suggestButtonEnabled: privCh?.suggest_button_enabled || false,
-            maxSuggestionsPerDay: privCh?.max_suggestions_per_day !== undefined ? privCh.max_suggestions_per_day : 5
-          }
-        });
+      const data = await fetchChannels(botId, accessToken);
+      if (!data.channels) return;
+      setChannels(data.channels);
+      if (merge) {
+        mergeChannelsIntoConfig(data.channels);
+      } else {
+        applyChannelsToConfig(data.channels);
       }
     } catch (e) {
       console.error(e);
     }
   }
 
-  async function fetchAdmins(botId) {
+  function mapChannelRow(row) {
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+    return {
+      id: row?.id || null,
+      tgChatId: row?.tg_chat_id || null,
+      title: row?.title || '',
+      postsPerDay: String(row?.posts_per_day || 1),
+      postingTimes: row?.posting_times || ['10:00'],
+      autoAccept: row?.auto_accept_suggestions || false,
+      buttons: row?.buttons_config || [],
+      timezone: row?.timezone || browserTz,
+      suggestionPostingTimes: row?.suggestion_posting_times || ['12:00'],
+      suggestButtonEnabled: row?.suggest_button_enabled || false,
+      maxSuggestionsPerDay: row?.max_suggestions_per_day !== undefined ? row.max_suggestions_per_day : 5
+    };
+  }
+
+  function emptyChannelConfig() {
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+    return { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
+  }
+
+  function applyChannelsToConfig(channelsList) {
+    const pubCh = channelsList.find(c => c.visibility === 'public');
+    const privCh = channelsList.find(c => c.visibility === 'private');
+    setChannelConfigs({
+      public: mapChannelRow(pubCh),
+      private: mapChannelRow(privCh)
+    });
+  }
+
+  // Polling-режим: не затираем поля, которые уже редактирует пользователь.
+  // Заполняем конфиг только при первом обнаружении канала и сбрасываем при исчезновении.
+  function mergeChannelsIntoConfig(channelsList) {
+    const pubCh = channelsList.find(c => c.visibility === 'public');
+    const privCh = channelsList.find(c => c.visibility === 'private');
+    setChannelConfigs(prev => ({
+      public: !pubCh && prev.public.id
+        ? emptyChannelConfig()
+        : pubCh && !prev.public.id ? mapChannelRow(pubCh) : prev.public,
+      private: !privCh && prev.private.id
+        ? emptyChannelConfig()
+        : privCh && !prev.private.id ? mapChannelRow(privCh) : prev.private
+    }));
+  }
+
+  async function loadAdmins(botId) {
     try {
-      const res = await fetch(`/api/autopost/bots/${botId}/admins`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
+      const data = await fetchAdmins(botId, accessToken);
       if (data.admin_tg_ids) {
         setAdmins(data.admin_tg_ids);
         setInviteLink(data.invite_link || '');
@@ -153,89 +170,29 @@ export function QuickStartPage() {
     }
   }
 
-  // Поллинг состояния каналов и админов (для онбординга)
+  // Realtime-подписка: канал подключён/отключён, либо обновился список админов.
+  // Заменяет setInterval-поллинг. Инициальная загрузка — в useEffect выбора бота.
   useEffect(() => {
-    if (selectedBotId === 'new' || !createdBot?.id) {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
-    }
+    const botId = createdBot?.id;
+    if (selectedBotId === 'new' || !botId) return;
 
-    pollRef.current = setInterval(async () => {
-      try {
-        // Опрос каналов
-        const chRes = await fetch(`/api/autopost/bots/${createdBot.id}/channels`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        const chData = await chRes.json();
-        if (chData.channels) {
-          setChannels(chData.channels);
-          
-          const pubCh = chData.channels.find(c => c.visibility === 'public');
-          const privCh = chData.channels.find(c => c.visibility === 'private');
-          
-          const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-          setChannelConfigs(prev => {
-            const nextConfig = { ...prev };
-            
-            // Если публичный канал удален из базы, сбрасываем локальный стейт
-            if (!pubCh && prev.public.id) {
-              nextConfig.public = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
-            } else if (pubCh && !prev.public.id) {
-              // Инициализируем только при первом обнаружении
-              nextConfig.public = {
-                id: pubCh.id,
-                tgChatId: pubCh.tg_chat_id,
-                title: pubCh.title,
-                postsPerDay: String(pubCh.posts_per_day || 1),
-                postingTimes: pubCh.posting_times || ['10:00'],
-                autoAccept: pubCh.auto_accept_suggestions || false,
-                buttons: pubCh.buttons_config || [],
-                timezone: pubCh.timezone || browserTz,
-                suggestionPostingTimes: pubCh.suggestion_posting_times || ['12:00'],
-                suggestButtonEnabled: pubCh.suggest_button_enabled || false,
-                maxSuggestionsPerDay: pubCh.max_suggestions_per_day !== undefined ? pubCh.max_suggestions_per_day : 5
-              };
-            }
-            
-            // Если приватный канал удален из базы, сбрасываем локальный стейт
-            if (!privCh && prev.private.id) {
-              nextConfig.private = { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
-            } else if (privCh && !prev.private.id) {
-              // Инициализируем только при первом обнаружении
-              nextConfig.private = {
-                id: privCh.id,
-                tgChatId: privCh.tg_chat_id,
-                title: privCh.title,
-                postsPerDay: String(privCh.posts_per_day || 1),
-                postingTimes: privCh.posting_times || ['10:00'],
-                autoAccept: privCh.auto_accept_suggestions || false,
-                buttons: privCh.buttons_config || [],
-                timezone: privCh.timezone || browserTz,
-                suggestionPostingTimes: privCh.suggestion_posting_times || ['12:00'],
-                suggestButtonEnabled: privCh.suggest_button_enabled || false,
-                maxSuggestionsPerDay: privCh.max_suggestions_per_day !== undefined ? privCh.max_suggestions_per_day : 5
-              };
-            }
-            
-            return nextConfig;
-          });
-        }
+    const channel = supabase
+      .channel(`autopost-bot-${botId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'channels', filter: `autopost_bot_id=eq.${botId}` },
+        () => { loadChannels(botId, { merge: true }); }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'autopost_bots', filter: `id=eq.${botId}` },
+        () => { loadAdmins(botId); }
+      )
+      .subscribe();
 
-        // Опрос списка админов
-        const admRes = await fetch(`/api/autopost/bots/${createdBot.id}/admins`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        const admData = await admRes.json();
-        if (admData.admin_tg_ids) {
-          setAdmins(admData.admin_tg_ids);
-          setInviteLink(admData.invite_link || '');
-        }
-      } catch (err) {
-        console.error('Polling error:', err);
-      }
-    }, 3000);
-
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [createdBot?.id, selectedBotId, accessToken]);
 
   // Подключение бота (валидация токена + создание)
@@ -243,17 +200,9 @@ export function QuickStartPage() {
     if (!botToken.trim() || initing) return;
     setIniting(true);
     try {
-      const res = await fetch('/api/autopost/bots/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          botToken: botToken.trim()
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка подключения бота');
-      
-      setCreatedBot({ id: data.bot.id, bot_username: data.bot.username, admin_tg_id: null });
+      const data = await initBot({ botToken: botToken.trim() }, accessToken);
+
+      setCreatedBot({ id: data.bot.id, bot_username: data.bot.username });
       setExistingBots((prev) => [...prev, data.bot]);
       setSelectedBotId(data.bot.id);
       toast.success('Бот успешно инициализирован! Теперь активируйте его в Telegram.');
@@ -274,24 +223,17 @@ export function QuickStartPage() {
       const sortedPostingTimes = [...(config.postingTimes || ['10:00'])].sort();
       const sortedSuggestionTimes = [...(config.suggestionPostingTimes || ['12:00'])].sort();
 
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}/channels/${config.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          auto_accept_suggestions: config.autoAccept,
-          buttons_config: config.buttons,
-          posts_per_day: sortedPostingTimes.length,
-          posting_times: sortedPostingTimes,
-          timezone: config.timezone,
-          suggestion_posts_per_day: sortedSuggestionTimes.length,
-          suggestion_posting_times: sortedSuggestionTimes,
-          suggest_button_enabled: config.suggestButtonEnabled,
-          max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5)
-        })
-      });
-      
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка сохранения настроек канала');
+      await patchChannel(createdBot.id, config.id, {
+        auto_accept_suggestions: config.autoAccept,
+        buttons_config: config.buttons,
+        posts_per_day: sortedPostingTimes.length,
+        posting_times: sortedPostingTimes,
+        timezone: config.timezone,
+        suggestion_posts_per_day: sortedSuggestionTimes.length,
+        suggestion_posting_times: sortedSuggestionTimes,
+        suggest_button_enabled: config.suggestButtonEnabled,
+        max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5)
+      }, accessToken);
 
       setChannelConfigs(prev => ({
         ...prev,
@@ -317,14 +259,8 @@ export function QuickStartPage() {
     if (!newAdminTgId.trim() || addingAdmin || !createdBot?.id) return;
     setAddingAdmin(true);
     try {
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}/admins`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ adminTgId: newAdminTgId.trim() })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка добавления администратора');
-      
+      const data = await addAdmin(createdBot.id, newAdminTgId.trim(), accessToken);
+
       setAdmins(data.admin_tg_ids || []);
       setNewAdminTgId('');
       toast.success('Администратор добавлен');
@@ -340,13 +276,8 @@ export function QuickStartPage() {
     if (!createdBot?.id) return;
     if (!confirm(`Удалить администратора ${tgId}?`)) return;
     try {
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}/admins/${tgId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка удаления администратора');
-      
+      const data = await removeAdmin(createdBot.id, tgId, accessToken);
+
       setAdmins(data.admin_tg_ids || []);
       toast.success('Администратор удален из списка');
     } catch (err) {
@@ -359,14 +290,8 @@ export function QuickStartPage() {
     if (!createdBot?.id) return;
     if (!confirm('Удалить бота и все связанные каналы/посты навсегда?')) return;
     try {
-      const res = await fetch(`/api/autopost/bots/${createdBot.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Ошибка удаления');
-      }
+      await deleteBot(createdBot.id, accessToken);
+
       setExistingBots((prev) => prev.filter((b) => b.id !== createdBot.id));
       setSelectedBotId('new');
       toast.success('Бот удалён');
@@ -1067,8 +992,8 @@ export function QuickStartPage() {
               <div className="space-y-3">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Список админов ({admins.length})</label>
                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-w-md">
-                  {admins.map((adminId) => {
-                    const isOwner = String(adminId) === String(createdBot.admin_tg_id);
+                  {admins.map((adminId, idx) => {
+                    const isOwner = idx === 0;
                     return (
                       <div key={adminId} className="flex items-center justify-between p-3.5 bg-white text-sm font-semibold">
                         <span className="font-mono text-slate-700">{adminId}</span>
