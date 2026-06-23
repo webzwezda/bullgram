@@ -23,6 +23,15 @@ export const startAutopostStuckEditingRecovery = (supabase, service) => {
                 console.error('[Autopost stuck-editing] Ошибка запроса:', error.message);
             } else if (stuck && stuck.length > 0) {
                 for (const item of stuck) {
+                    // Bug 10 fix: если админ сейчас активно редактирует этот пост
+                    // (есть запись в adminStates), не возвращаем его в очередь —
+                    // иначе длинная правка подписи молча потеряет текст.
+                    const isBeingEdited = service?.adminStates
+                        && Array.from(service.adminStates.values()).some(
+                            s => s.action === 'edit_caption' && s.itemId === item.id
+                        );
+                    if (isBeingEdited) continue;
+
                     const { error: updErr } = await supabase
                         .from('autopost_items')
                         .update({ status: 'queued', scheduled_at: null })
@@ -51,6 +60,15 @@ export const startAutopostStuckEditingRecovery = (supabase, service) => {
                     await service.pruneExpiredGuestSessions();
                 } catch (e) {
                     console.error('[Autopost stuck-editing] Ошибка чистки guest sessions:', e.message);
+                }
+            }
+
+            // Чистим протухший album cache (> 1h)
+            if (service?.pruneExpiredAlbumCache) {
+                try {
+                    await service.pruneExpiredAlbumCache();
+                } catch (e) {
+                    console.error('[Autopost stuck-editing] Ошибка чистки album cache:', e.message);
                 }
             }
         } catch (err) {

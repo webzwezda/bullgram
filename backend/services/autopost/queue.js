@@ -128,21 +128,22 @@ export async function scheduleNextBatch(supabase, botId, channelId = null, isSug
 export async function collapseQueue(supabase, botId, channelId) {
     if (!channelId) return;
 
-    await supabase
-        .from('autopost_items')
-        .update({ status: 'queued', scheduled_at: null })
-        .eq('bot_id', botId)
-        .eq('target_channel_id', channelId)
-        .eq('status', 'scheduled')
-        .eq('is_suggestion', false);
-
-    await supabase
-        .from('autopost_items')
-        .update({ status: 'queued', scheduled_at: null })
-        .eq('bot_id', botId)
-        .eq('target_channel_id', channelId)
-        .eq('status', 'scheduled')
-        .eq('is_suggestion', true);
+    // Bug 12 fix: одна атомарная RPC вместо 4 апдектов. Раньше рестарт бэкенда
+    // между апдектами оставлял канал в полусобранном состоянии.
+    // Сначала сбрасываем всё scheduled → queued, потом пересчитываем слоты.
+    const { error } = await supabase.rpc('autopost_collapse_queue', {
+        p_bot_id: botId,
+        p_channel_id: channelId
+    });
+    if (error) {
+        // Fallback на старый путь, если RPC вдруг отсутствует (старая схема)
+        await supabase
+            .from('autopost_items')
+            .update({ status: 'queued', scheduled_at: null })
+            .eq('bot_id', botId)
+            .eq('target_channel_id', channelId)
+            .eq('status', 'scheduled');
+    }
 
     await scheduleNextBatch(supabase, botId, channelId, false);
     await scheduleNextBatch(supabase, botId, channelId, true);

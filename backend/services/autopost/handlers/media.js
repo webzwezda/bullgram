@@ -34,12 +34,25 @@ export function registerMediaHandler(bot, service, botId) {
                 const activeId = activeModes[String(tgUserId)];
                 targetChannel = channels.find(c => String(c.tg_chat_id) === String(activeId)) || channels[0];
             } else {
+                // Bug 11 fix: раньше если гостевая сессия указывала на удалённый
+                // канал, мы молча падали на channels[0] — предложка улетала не туда.
+                // Теперь явно инвалидируем сессию и просим стартовать заново.
                 if (guestSession.targetChannelId) {
                     targetChannel = channels.find(c => String(c.tg_chat_id) === String(guestSession.targetChannelId));
+                    if (!targetChannel) {
+                        await service.deleteGuestSession(botId, tgUserId);
+                        return ctx.reply('Канал, в который вы предлагали новость, больше не доступен. Откройте свежую ссылку "Предложить новость" под постом в нужном канале.');
+                    }
                 }
                 if (!targetChannel) {
                     const type = guestSession.targetChannelType;
-                    targetChannel = channels.find(c => c.visibility === type) || channels[0];
+                    if (type) {
+                        targetChannel = channels.find(c => c.visibility === type);
+                    }
+                    if (!targetChannel) {
+                        await service.deleteGuestSession(botId, tgUserId);
+                        return ctx.reply('Не удалось определить канал для предложения. Откройте ссылку "Предложить новость" под постом в нужном канале.');
+                    }
                 }
             }
 
@@ -111,7 +124,9 @@ export function registerMediaHandler(bot, service, botId) {
 
                     if (isAdmin) {
                         const cacheId = `${tgUserId}:${Date.now()}`;
-                        service.albumCache.set(cacheId, {
+                        await service.setAlbumCache(cacheId, {
+                            botId,
+                            tgUserId,
                             photos: fileIds,
                             mediaTypes,
                             caption,

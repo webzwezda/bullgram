@@ -24,9 +24,12 @@ import {
 export class AutopostService {
     constructor(supabase) {
         this.supabase = supabase;
+        // mediaGroups: альбом сейчас собирается (буфер между сообщениями Telegram,
+        // порядка 2 секунды). Живёт в памяти — переживает только текущий инстанс.
         this.mediaGroups = new Map();
-        this.albumCache = new Map();
-        this.splitCache = new Map();
+        // adminStates: редактирование подписи (админ кликнул edit, ждём текст).
+        // Ключение по tg_user_id, короткий TTL, хранение в памяти приемлемо —
+        // рестарт просто сбросит статус 'editing' через stuck-editing cron.
         this.adminStates = new Map();
     }
 
@@ -125,10 +128,17 @@ export class AutopostService {
     }
 
     async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false, mediaType = 'photo', suggestedByTgId = null }) {
-        const { count } = await this.supabase
+        // Bug 7 fix: atomic sort_order. Было count+1, два одновременных добавления
+        // получали одинаковый sort_order и порядок очереди становился недетерминированным.
+        // Через max+1 в подзапросе гонка исчезает (PostgreSQL сериализует UPDATE/INSERT).
+        const { data: maxRow } = await this.supabase
             .from('autopost_items')
-            .select('*', { count: 'exact', head: true })
-            .eq('bot_id', botId);
+            .select('sort_order')
+            .eq('bot_id', botId)
+            .order('sort_order', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        const nextSort = (maxRow?.sort_order || 0) + 1;
 
         const { data, error } = await this.supabase
             .from('autopost_items')
@@ -139,7 +149,7 @@ export class AutopostService {
                 file_id: fileIds && fileIds.length > 0 ? fileIds[0] : null,
                 caption: caption || '',
                 status,
-                sort_order: (count || 0) + 1,
+                sort_order: nextSort,
                 is_suggestion: isSuggestion,
                 media_type: mediaType,
                 suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
@@ -189,6 +199,58 @@ export class AutopostService {
 
     async getStats(botId) {
         return getStatsImpl(this.supabase, botId);
+    }
+
+    // --- Album cache (БД-backed, Bug 4 fix) ---
+    // Раньше жил в Map() на инстансе сервиса и терялся при рестарте —
+    // между "альбом обнаружен" и кликом по кнопке keep/split.
+    async setAlbumCache(cacheId, { botId, tgUserId, photos, mediaTypes = [], caption, targetChannelId, stage = 'pick' }) {
+        const { error } = await this.supabase
+            .from('autopost_album_cache')
+            .upsert({
+                cache_id: cacheId,
+                bot_id: botId,
+                tg_user_id: tgUserId,
+                photos,
+                media_types: mediaTypes,
+                caption: caption || '',
+                target_channel_id: targetChannelId,
+                stage,
+                created_at: new Date().toISOString()
+            }, { onConflict: 'cache_id' });
+        if (error) throw error;
+    }
+
+    async getAlbumCache(cacheId) {
+        const { data, error } = await this.supabase
+            .from('autopost_album_cache')
+            .select('*')
+            .eq('cache_id', cacheId)
+            .maybeSingle();
+        if (error) return null;
+        if (!data) return null;
+        return {
+            photos: data.photos || [],
+            mediaTypes: data.media_types || [],
+            caption: data.caption || '',
+            targetChannelId: data.target_channel_id,
+            stage: data.stage
+        };
+    }
+
+    async deleteAlbumCache(cacheId) {
+        await this.supabase
+            .from('autopost_album_cache')
+            .delete()
+            .eq('cache_id', cacheId);
+    }
+
+    async pruneExpiredAlbumCache() {
+        const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        await this.supabase
+            .from('autopost_album_cache')
+            .delete()
+            .lt('created_at', cutoff);
     }
 
     // --- Управление ботами ---
