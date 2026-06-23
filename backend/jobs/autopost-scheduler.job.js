@@ -3,6 +3,9 @@
  * Запускается каждые 5 минут.
  */
 
+import { sendItemToChannel } from '../services/autopost/sender.js';
+import { log } from '../services/autopost/logger.js';
+
 export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
     setInterval(async () => {
         try {
@@ -27,90 +30,62 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
                     .limit(5);
 
                 if (error) {
-                    console.error(`[Autopost scheduler] Ошибка запроса для бота ${botConfig.id}:`, error.message);
+                    log.error('scheduler', 'query_failed', { botId: botConfig.id, err: error.message });
                     continue;
                 }
                 if (!dueItems || dueItems.length === 0) continue;
 
                 const bot = getAutopostBotFunction(botConfig.id);
-                if (!bot) continue;
+                if (!bot) {
+                    log.warn('scheduler', 'bot_not_running', { botId: botConfig.id, dueCount: dueItems.length });
+                    continue;
+                }
 
                 for (const item of dueItems) {
                     try {
                         const { data: botData } = await supabase
                             .from('autopost_bots')
-                            .select('target_channel_tg_id, username')
+                            .select('username')
                             .eq('id', item.bot_id)
                             .single();
 
                         if (!botData) continue;
 
-                        const targetChatId = item.target_channel_id || botData.target_channel_tg_id;
+                        const targetChatId = item.target_channel_id;
                         if (!targetChatId) {
-                            console.warn(`[Autopost scheduler] Нет назначения для поста ${item.id}`);
+                            log.warn('scheduler', 'item_without_channel', { botId: botConfig.id, itemId: item.id });
                             continue;
                         }
 
-                        // Получаем настройки канала (для инлайн-кнопок)
                         const { data: channel } = await supabase
                             .from('channels')
                             .select('id, buttons_config, suggest_button_enabled')
                             .eq('tg_chat_id', targetChatId)
                             .maybeSingle();
 
-                        let reply_markup = undefined;
-                        const inline_keyboard = [];
-                        if (channel?.buttons_config && Array.isArray(channel.buttons_config) && channel.buttons_config.length > 0) {
-                            inline_keyboard.push(
-                                channel.buttons_config.map(b => ({ text: b.text, url: b.url }))
-                            );
-                        }
-
-                        if (channel?.suggest_button_enabled && botData?.username) {
-                            const suggestUrl = `https://t.me/${botData.username}?start=suggest_ch${channel.id}`;
-                            inline_keyboard.push([
-                                { text: 'Предложить новость ✉️', url: suggestUrl }
-                            ]);
-                        }
-
-                        if (inline_keyboard.length > 0) {
-                            reply_markup = { inline_keyboard };
-                        }
-
-                        // Если это альбом (несколько картинок)
-                        if (item.file_ids && item.file_ids.length > 1) {
-                            const media = item.file_ids.map((fid, idx) => ({
-                                type: 'photo',
-                                media: fid,
-                                caption: idx === 0 ? item.caption || undefined : undefined,
-                                parse_mode: (idx === 0 && item.caption) ? 'Markdown' : undefined
-                            }));
-                            await bot.telegram.sendMediaGroup(targetChatId, media);
-                        } else {
-                            // Одиночное фото или текстовый пост
-                            const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
-                            if (fileId) {
-                                await bot.telegram.sendPhoto(targetChatId, fileId, {
-                                    caption: item.caption || undefined,
-                                    parse_mode: item.caption ? 'Markdown' : undefined,
-                                    reply_markup
-                                });
-                            } else {
-                                await bot.telegram.sendMessage(targetChatId, item.caption, {
-                                    parse_mode: 'Markdown',
-                                    reply_markup
-                                });
-                            }
-                        }
+                        await sendItemToChannel(bot.telegram, targetChatId, item, {
+                            channel,
+                            botUsername: botData?.username
+                        });
 
                         await supabase
                             .from('autopost_items')
                             .update({ status: 'posted', posted_at: new Date().toISOString() })
                             .eq('id', item.id);
 
-                        console.log(`[Autopost scheduler] Опубликован пост ${item.id} в канал ${targetChatId}`);
+                        log.info('scheduler', 'post_published', {
+                            botId: botConfig.id,
+                            itemId: item.id,
+                            channelId: String(targetChatId),
+                            isSuggestion: Boolean(item.is_suggestion)
+                        });
                     } catch (sendErr) {
-                        console.error(`[Autopost scheduler] Ошибка публикации ${item.id}:`, sendErr.message);
+                        log.error('scheduler', 'publish_failed', {
+                            botId: botConfig.id,
+                            itemId: item.id,
+                            channelId: String(item.target_channel_id),
+                            err: sendErr.message
+                        });
                         await supabase
                             .from('autopost_items')
                             .update({ status: 'failed' })
@@ -119,7 +94,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
                 }
             }
         } catch (err) {
-            console.error('[Autopost scheduler] Ошибка cron:', err.message);
+            log.error('scheduler', 'tick_failed', { err: err.message });
         }
     }, 5 * 60 * 1000);
 };

@@ -37,6 +37,7 @@ import { startBotRightsMonitor } from './jobs/bot-rights-monitor.job.js';
 import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
 import { startBrowseFollowup } from './jobs/browse-followup.job.js';
 import { startAutopostScheduler } from './jobs/autopost-scheduler.job.js';
+import { startAutopostStuckEditingRecovery } from './jobs/autopost-stuck-editing.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
@@ -71,6 +72,28 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
     console.error('[FATAL] Uncaught Exception:', error);
 });
+
+// ==========================================
+// GRACEFUL SHUTDOWN
+// ==========================================
+import { stopAllAutopostBots } from './services/autopost/bot-lifecycle.js';
+
+let shuttingDown = false;
+async function gracefulShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Shutdown] Получен ${signal}, корректно завершаем работу…`);
+    try {
+        stopAllAutopostBots();
+        console.log('[Shutdown] Autopost polling-боты остановлены');
+    } catch (e) {
+        console.error('[Shutdown] Ошибка остановки autopost-ботов:', e.message);
+    }
+    // Даём Time Telegram-клиентам закрыться чисто
+    setTimeout(() => process.exit(0), 1500);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // ==========================================
 // НАСТРОЙКА EXPRESS
@@ -240,6 +263,7 @@ app.listen(PORT, async () => {
     startBrowseFollowup(supabase, getBotById);
     const autopostService = new AutopostService(supabase);
     startAutopostScheduler(supabase, (botId) => autopostService.getBot(botId));
+    startAutopostStuckEditingRecovery(supabase, autopostService);
     // Запускаем все активные autopost-боты
     try {
         const { data: autopostBots } = await supabase.from('autopost_bots').select('*').eq('is_active', true);

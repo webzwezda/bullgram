@@ -14,6 +14,7 @@ export function getTierRules(profile) {
             id: 'pro',
             maxUserbots: Number.POSITIVE_INFINITY,
             maxOwnedProxies: Number.POSITIVE_INFINITY,
+            maxAutopostBots: 3,
             canSendBroadcasts: true,
             canUseShopSeller: true,
             canUseTrialProxy: false,
@@ -26,6 +27,7 @@ export function getTierRules(profile) {
             id: 'normal',
             maxUserbots: Number.POSITIVE_INFINITY,
             maxOwnedProxies: Number.POSITIVE_INFINITY,
+            maxAutopostBots: 3,
             canSendBroadcasts: true,
             canUseShopSeller: true,
             canUseTrialProxy: false,
@@ -37,6 +39,7 @@ export function getTierRules(profile) {
         id: 'trial',
         maxUserbots: 1,
         maxOwnedProxies: 1,
+        maxAutopostBots: 1,
         canSendBroadcasts: false,
         canUseShopSeller: false,
         canUseTrialProxy: false,
@@ -98,5 +101,24 @@ export function ensureShopSellerAllowed(profile) {
     const rules = getTierRules(profile);
     if (!rules.canUseShopSeller) {
         throw new Error('На Trial seller-mode закрыт. Сначала перейди на Normal.');
+    }
+}
+
+export async function enforceAutopostBotQuota({ supabase, ownerId, profile }) {
+    if (profile?.role === 'admin') return;
+
+    const rules = getTierRules(profile);
+    if (!Number.isFinite(rules.maxAutopostBots)) return;
+
+    const { data, error } = await supabase
+        .from('autopost_bots')
+        .select('id')
+        .eq('owner_id', ownerId);
+
+    if (error) throw error;
+
+    if ((data || []).length >= rules.maxAutopostBots) {
+        const word = rules.maxAutopostBots === 1 ? 'одного автопостера' : `${rules.maxAutopostBots} автопостеров`;
+        throw new Error(`На тарифе ${rules.id === 'trial' ? 'Trial' : 'Normal'} можно держать только ${word}. Перейдите на Normal, чтобы добавить ещё.`);
     }
 }

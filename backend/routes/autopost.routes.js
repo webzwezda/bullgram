@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { AutopostService } from '../services/autopost.service.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
-import crypto from 'crypto';
+import { enforceAutopostBotQuota } from '../utils/product-tier.js';
+import { rateLimit } from '../middlewares/rate-limit.middleware.js';
 
 export default function autopostRoutes(supabase) {
     const service = new AutopostService(supabase);
@@ -26,10 +27,17 @@ export default function autopostRoutes(supabase) {
     });
 
     // Инициализация бота — валидация токена + создание + запуск
-    router.post('/bots/init', async (req, res) => {
+    // Rate-limit: 5 попыток в час с одного IP (защита от брутфорса токенов)
+    router.post('/bots/init', rateLimit({ windowMs: 60 * 60 * 1000, max: 5 }), async (req, res) => {
         try {
             const { botToken, adminTgId } = req.body;
             if (!botToken?.trim()) return res.status(400).json({ error: 'Токен обязателен' });
+
+            await enforceAutopostBotQuota({
+                supabase,
+                ownerId: req.user.id,
+                profile: req.profile
+            });
 
             const bot = await service.validateAndCreateBot({
                 ownerId: req.user.id,
@@ -42,23 +50,24 @@ export default function autopostRoutes(supabase) {
             if (err.message.includes('401') || err.message.includes('unauthorized')) {
                 return res.status(400).json({ error: 'Неверный токен бота' });
             }
+            if (err.message.startsWith('На тарифе')) {
+                return res.status(403).json({ error: err.message });
+            }
             res.status(500).json({ error: err.message });
         }
     });
 
-    // Обновление бота (канал, расписание)
+    // Обновление бота (расписание, статус, админы)
     router.patch('/bots/:botId', async (req, res) => {
         try {
-            const { targetChannelTgId, postsPerDay, postingTimes, adminTgId, is_active } = req.body;
+            const { postsPerDay, postingTimes, adminTgId, is_active } = req.body;
             const updates = {};
-            if (targetChannelTgId !== undefined) updates.target_channel_tg_id = targetChannelTgId;
             if (postsPerDay !== undefined) updates.posts_per_day = postsPerDay;
             if (postingTimes !== undefined) updates.posting_times = postingTimes;
             if (is_active !== undefined) updates.is_active = is_active;
-            
+
             // Если adminTgId передан, синхронизируем с admin_tg_ids массивом
             if (adminTgId !== undefined) {
-                updates.admin_tg_id = adminTgId || null;
                 if (adminTgId) {
                     updates.admin_tg_ids = [Number(adminTgId)];
                 } else {
@@ -160,20 +169,44 @@ export default function autopostRoutes(supabase) {
         try {
             const { data: bot, error } = await supabase
                 .from('autopost_bots')
-                .select('admin_tg_ids, username')
+                .select('admin_tg_ids, username, invite_secret')
                 .eq('id', req.params.botId)
                 .eq('owner_id', req.user.id)
                 .single();
             if (error) throw error;
             if (!bot) return res.status(404).json({ error: 'Бот не найден' });
-            
-            const inviteCode = crypto.createHash('sha256').update(req.params.botId).digest('hex').substring(0, 12);
-            const inviteLink = bot.username ? `https://t.me/${bot.username}?start=add_admin_${inviteCode}` : null;
-            
+
+            const inviteLink = (bot.username && bot.invite_secret)
+                ? `https://t.me/${bot.username}?start=add_admin_${bot.invite_secret}`
+                : null;
+
             res.json({
                 admin_tg_ids: bot.admin_tg_ids || [],
                 invite_link: inviteLink
             });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Сгенерировать новый инвайт-ссылку (старая перестанет работать)
+    router.post('/bots/:botId/admins/regenerate-invite', async (req, res) => {
+        try {
+            const { data: bot, error } = await supabase
+                .from('autopost_bots')
+                .select('username')
+                .eq('id', req.params.botId)
+                .eq('owner_id', req.user.id)
+                .single();
+            if (error) throw error;
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const updated = await service.regenerateInviteSecret(req.params.botId);
+            const inviteLink = bot.username
+                ? `https://t.me/${bot.username}?start=add_admin_${updated.invite_secret}`
+                : null;
+
+            res.json({ invite_link: inviteLink });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -239,14 +272,13 @@ export default function autopostRoutes(supabase) {
         }
     });
 
-    // Создать бота (legacy — полный набор полей)
+    // Создать бота (legacy — полный набор полей; без валидации токена)
     router.post('/bots', async (req, res) => {
         try {
-            const { botToken, targetChannelTgId, postsPerDay, postingTimes } = req.body;
+            const { botToken, postsPerDay, postingTimes } = req.body;
             const bot = await service.createBot({
                 ownerId: req.user.id,
                 botToken,
-                targetChannelTgId,
                 postsPerDay: postsPerDay || 1,
                 postingTimes: postingTimes || ['10:00']
             });
@@ -261,6 +293,72 @@ export default function autopostRoutes(supabase) {
         try {
             const stats = await service.getStats(req.params.botId);
             res.json(stats);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Метрики для оператора: состояние очереди, channels, health-флаги.
+    // Отличается от /stats тем, что показывает per-channel breakdown и флаг здоровья.
+    router.get('/bots/:botId/metrics', async (req, res) => {
+        try {
+            const botId = req.params.botId;
+            const { data: bot, error: botErr } = await supabase
+                .from('autopost_bots')
+                .select('id, username, is_active, created_at')
+                .eq('id', botId)
+                .eq('owner_id', req.user.id)
+                .maybeSingle();
+            if (botErr) throw botErr;
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const [stats, channels] = await Promise.all([
+                service.getStats(botId),
+                supabase
+                    .from('channels')
+                    .select('id, tg_chat_id, title, visibility, posts_per_day, posting_times')
+                    .eq('autopost_bot_id', botId)
+            ]);
+
+            const { data: perChannel } = await supabase
+                .from('autopost_items')
+                .select('target_channel_id, status, is_suggestion')
+                .eq('bot_id', botId)
+                .in('status', ['queued', 'scheduled']);
+
+            const byChannel = {};
+            for (const row of perChannel || []) {
+                const key = String(row.target_channel_id);
+                byChannel[key] = byChannel[key] || { queued: 0, scheduled: 0, suggestion: 0 };
+                if (row.status === 'queued') byChannel[key].queued++;
+                if (row.status === 'scheduled') byChannel[key].scheduled++;
+                if (row.is_suggestion) byChannel[key].suggestion++;
+            }
+
+            const lastFailure = await supabase
+                .from('autopost_items')
+                .select('id, target_channel_id, updated_at')
+                .eq('bot_id', botId)
+                .eq('status', 'failed')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            res.json({
+                bot: { id: bot.id, username: bot.username, isActive: bot.is_active },
+                totals: stats,
+                channels: (channels.data || []).map(ch => ({
+                    id: ch.id,
+                    tgChatId: String(ch.tg_chat_id),
+                    title: ch.title,
+                    visibility: ch.visibility,
+                    postsPerDay: ch.posts_per_day,
+                    postingTimes: ch.posting_times,
+                    pending: byChannel[String(ch.tg_chat_id)] || { queued: 0, scheduled: 0, suggestion: 0 }
+                })),
+                lastFailure: lastFailure.data || null,
+                healthy: Boolean(bot.is_active) && !(stats.failed > 0 && stats.queued === 0 && stats.scheduled === 0)
+            });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
