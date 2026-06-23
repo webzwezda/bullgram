@@ -36,7 +36,7 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
 
             await supabase
                 .from('autopost_items')
-                .update({ status: 'posted', posted_at: new Date().toISOString() })
+                .update({ status: 'posted', posted_at: new Date().toISOString(), error_message: null })
                 .eq('id', itemId);
 
             await ctx.answerCbQuery('Опубликовано!');
@@ -47,6 +47,10 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             }
         } catch (err) {
             console.error('[Autopost] Ошибка публикации:', err.message);
+            await supabase
+                .from('autopost_items')
+                .update({ status: 'failed', error_message: String(err.message || '').slice(0, 1000) })
+                .eq('id', itemId);
             await ctx.answerCbQuery('Ошибка: ' + err.message);
         }
     });
@@ -57,6 +61,24 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
         const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
         if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
 
+        // Bug 6 guard: если админ уже редактирует другой пост — сбрасываем
+        // старый предмет обратно в его прежний статус, иначе он зависнет в 'editing'
+        // на 10 минут до того, как stuck-editing cron до него доберётся.
+        const prevState = service.adminStates.get(tgUserId);
+        if (prevState && prevState.action === 'edit_caption' && prevState.itemId !== itemId) {
+            await supabase
+                .from('autopost_items')
+                .update({ status: prevState.prevStatus || 'queued', scheduled_at: prevState.prevScheduledAt || null })
+                .eq('id', prevState.itemId);
+            service.adminStates.delete(tgUserId);
+        }
+
+        const { data: itemBefore } = await supabase
+            .from('autopost_items')
+            .select('status, scheduled_at')
+            .eq('id', itemId)
+            .single();
+
         await supabase
             .from('autopost_items')
             .update({ status: 'editing' })
@@ -66,7 +88,9 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             action: 'edit_caption',
             itemId,
             messageId: ctx.callbackQuery.message.message_id,
-            chatId: ctx.chat.id
+            chatId: ctx.chat.id,
+            prevStatus: itemBefore?.status || 'queued',
+            prevScheduledAt: itemBefore?.scheduled_at || null
         });
 
         await ctx.reply('Введите новый текст для этого поста (или напишите "нет" для пустой подписи):');
@@ -153,9 +177,18 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             newCaption = '';
         }
 
+        // Важно: апдейтим caption + восстанавливаем прежний status/scheduled_at.
+        // Раньше код сбрасывал status → 'queued' и scheduled_at → null,
+        // после чего collapseQueue пересчитывал весь канал. Это означало, что
+        // правка подписи у одного поста незаметно сдвигала расписание всех остальных.
+        // Теперь status/scheduled_at сохраняются — правка текста не двигает расписание.
         await supabase
             .from('autopost_items')
-            .update({ caption: newCaption, status: 'queued', scheduled_at: null })
+            .update({
+                caption: newCaption,
+                status: state.prevStatus || 'queued',
+                scheduled_at: state.prevScheduledAt || null
+            })
             .eq('id', state.itemId);
 
         const { data: item } = await supabase
@@ -163,10 +196,6 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             .select('*')
             .eq('id', state.itemId)
             .single();
-
-        if (item && item.target_channel_id) {
-            await service.collapseQueue(botId, item.target_channel_id);
-        }
 
         try {
             const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;

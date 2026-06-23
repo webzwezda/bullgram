@@ -84,25 +84,41 @@ export function registerMediaHandler(bot, service, botId) {
 
             const mediaGroupId = ctx.message.media_group_id;
 
-            if (mediaGroupId && ctx.message.photo) {
+            // Bug 2: раньше условие было `mediaGroupId && ctx.message.photo`,
+            // то есть альбомы видео/гифок/документов тихо превращались в
+            // одиночные посты без вопроса. Теперь ловим альбом любого типа.
+            if (mediaGroupId) {
                 let group = service.mediaGroups.get(mediaGroupId);
                 if (!group) {
-                    group = { photos: [], captions: [], timer: null };
+                    group = { items: [], captions: [], timer: null };
                     service.mediaGroups.set(mediaGroupId, group);
                 }
-                group.photos.push(fileId);
+                group.items.push({ fileId, mediaType });
                 if (ctx.message.caption) group.captions.push(ctx.message.caption);
 
+                // Bug 3: 1c маловато для тормозных клиентов — поднимаем до 2с.
+                // Поздно пришедшая фотка не должна молча уйти отдельным постом.
                 if (group.timer) clearTimeout(group.timer);
                 group.timer = setTimeout(async () => {
                     service.mediaGroups.delete(mediaGroupId);
                     const caption = group.captions.join('\n') || '';
+                    const fileIds = group.items.map(i => i.fileId);
+                    const mediaTypes = group.items.map(i => i.mediaType);
+                    // Доминирующий тип — для колонки media_type на айтеме
+                    const dominantType = mediaTypes.sort((a, b) =>
+                        mediaTypes.filter(v => v === a).length - mediaTypes.filter(v => v === b).length
+                    ).pop();
 
                     if (isAdmin) {
                         const cacheId = `${tgUserId}:${Date.now()}`;
-                        service.albumCache.set(cacheId, { photos: group.photos, caption, targetChannelId: targetChannel.tg_chat_id });
+                        service.albumCache.set(cacheId, {
+                            photos: fileIds,
+                            mediaTypes,
+                            caption,
+                            targetChannelId: targetChannel.tg_chat_id
+                        });
                         await ctx.reply(
-                            `📸 **Обнаружен альбом из ${group.photos.length} картинок!**`,
+                            `📸 **Обнаружен альбом из ${fileIds.length} позиций!**`,
                             Markup.inlineKeyboard([
                                 [Markup.button.callback('📦 Опубликовать альбомом', `album:keep:${cacheId}`)],
                                 [Markup.button.callback('✂️ Разбить на отдельные посты', `album:split:${cacheId}`)]
@@ -115,11 +131,11 @@ export function registerMediaHandler(bot, service, botId) {
                         await service.addPostItem({
                             botId,
                             targetChannelId: targetChannel.tg_chat_id,
-                            fileIds: group.photos,
+                            fileIds,
                             caption,
                             status,
                             isSuggestion: true,
-                            mediaType: 'photo',
+                            mediaType: dominantType || 'photo',
                             suggestedByTgId: tgUserId
                         });
 
@@ -131,7 +147,7 @@ export function registerMediaHandler(bot, service, botId) {
                             await service.notifyAdmins(botData, `📥 Получено новое предложение для канала "${targetChannel.title}"!`);
                         }
                     }
-                }, 1000);
+                }, 2000);
             } else {
                 const caption = ctx.message.caption || '';
                 if (isAdmin) {

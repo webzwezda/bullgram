@@ -177,10 +177,13 @@ export class AutopostService {
             .eq('id', itemId);
     }
 
-    async markFailed(itemId) {
+    async markFailed(itemId, errorMessage = null) {
         await this.supabase
             .from('autopost_items')
-            .update({ status: 'failed' })
+            .update({
+                status: 'failed',
+                error_message: errorMessage ? String(errorMessage).slice(0, 1000) : null
+            })
             .eq('id', itemId);
     }
 

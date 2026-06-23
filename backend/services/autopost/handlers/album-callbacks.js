@@ -21,7 +21,8 @@ export function registerAlbumCallbacksHandler(bot, service, botId) {
                 targetChannelId: albumData.targetChannelId,
                 fileIds: albumData.photos,
                 caption: albumData.caption,
-                status: 'queued'
+                status: 'queued',
+                mediaType: (albumData.mediaTypes && albumData.mediaTypes[0]) || 'photo'
             });
             await service.collapseQueue(botId, albumData.targetChannelId);
             await ctx.answerCbQuery('Добавлено как альбом в очередь');

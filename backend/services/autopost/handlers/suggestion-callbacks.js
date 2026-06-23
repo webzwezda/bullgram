@@ -61,7 +61,7 @@ export function registerSuggestionCallbacksHandler(bot, service, botId) {
 
             await supabase
                 .from('autopost_items')
-                .update({ status: 'posted', posted_at: new Date().toISOString() })
+                .update({ status: 'posted', posted_at: new Date().toISOString(), error_message: null })
                 .eq('id', itemId);
 
             await ctx.answerCbQuery('Опубликовано!');
@@ -72,6 +72,10 @@ export function registerSuggestionCallbacksHandler(bot, service, botId) {
             }
         } catch (err) {
             console.error('[Autopost] Ошибка публикации предложки:', err.message);
+            await supabase
+                .from('autopost_items')
+                .update({ status: 'failed', error_message: String(err.message || '').slice(0, 1000) })
+                .eq('id', itemId);
             await ctx.answerCbQuery('Ошибка: ' + err.message);
         }
     });

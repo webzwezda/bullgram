@@ -337,7 +337,7 @@ export default function autopostRoutes(supabase) {
 
             const lastFailure = await supabase
                 .from('autopost_items')
-                .select('id, target_channel_id, updated_at')
+                .select('id, target_channel_id, updated_at, error_message')
                 .eq('bot_id', botId)
                 .eq('status', 'failed')
                 .order('updated_at', { ascending: false })
