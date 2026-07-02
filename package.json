@@ -6,14 +6,16 @@
     "npm": "10.x"
   },
   "scripts": {
-    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install",
+    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install && npm --prefix userbot-web install",
     "build:site": "npm --prefix site-v2 run build",
     "build:admin": "npm --prefix admin-v2 run build",
+    "build:userbot-web": "npm --prefix userbot-web run build",
     "build:v2": "npm run build:site && npm run build:admin",
     "mcp:supabase:tunnel": "./ops/scripts/supabase-mcp-tunnel.sh",
     "audit:cutover": "./ops/scripts/audit-cutover.sh",
     "deploy": "./ops/scripts/deploy.sh",
     "deploy:v2": "./ops/scripts/deploy-v2.sh",
+    "deploy:telegram-web": "./ops/scripts/deploy-telegram-web.sh",
     "rollback": "./ops/scripts/rollback.sh",
     "rollback:v2": "./ops/scripts/rollback.sh v2",
     "rollback:backend": "./ops/scripts/rollback.sh backend",
