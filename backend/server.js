@@ -3,6 +3,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import http from 'http';
+import { WebSocketServer } from 'ws';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
 import { normalizeSbpBankSelection } from './utils/payment-settings.js';
 
@@ -29,6 +31,9 @@ import observerRoutes from './routes/observer.routes.js';
 import agentMcpRoutes from './routes/agent-mcp.routes.js';
 import projectAdminRoutes from './routes/project-admin.routes.js';
 import integrationsRoutes from './routes/integrations.routes.js';
+import userbotWebRoutes from './routes/userbot-web.routes.js';
+import { UserbotService } from './services/userbot.service.js';
+import { MtprotoBridgeService } from './services/mtproto-bridge.service.js';
 
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
@@ -58,6 +63,12 @@ const corsOrigins = Array.from(new Set([
     publicAppOrigin,
     'http://localhost:8080'
 ]));
+
+// ==========================================
+// ИНИЦИАЛИЗАЦИЯ СЕРВИСОВ ДЛЯ TELEGRAM WEB
+// ==========================================
+const userbotServiceForBridge = new UserbotService(supabase, 4, '014b35b6184100b085b0d0572f9b5103');
+const mtprotoBridgeService = new MtprotoBridgeService(supabase, userbotServiceForBridge);
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -104,6 +115,20 @@ app.use(cors({ origin: corsOrigins }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // ==========================================
+// HTTP + WEBSOCKET SERVER (для MTProto bridge)
+// ==========================================
+const httpServer = http.createServer(app);
+const mtprotoBridgeWss = new WebSocketServer({
+    server: httpServer,
+    path: '/api/mtproto-bridge',
+    maxPayload: 4 * 1024 * 1024
+});
+mtprotoBridgeWss.on('connection', (ws, req) => {
+    mtprotoBridgeService.handleConnection(ws, req);
+});
+mtprotoBridgeService.start();
+
+// ==========================================
 // МИДДЛВАР: ПРОВЕРКА АВТОРИЗАЦИИ
 // ==========================================
 const authenticateUser = async (req, res, next) => {
@@ -145,6 +170,7 @@ app.use('/api/observer', observerRoutes(supabase, getBotById));
 app.use('/api/mcp', agentMcpRoutes(supabase));
 app.use('/api/integrations', integrationsRoutes(supabase));
 app.use('/api/project-admin', projectAdminRoutes(supabase));
+app.use('/api/userbot-web', userbotWebRoutes(supabase, mtprotoBridgeService));
 
 // ==========================================
 // РОУТЫ НАСТРОЕК КАССЫ (Остались локально)
@@ -233,7 +259,7 @@ app.get('/api/payment-settings', authenticateUser, async (req, res) => {
 // ==========================================
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, async () => {
+httpServer.listen(PORT, async () => {
     console.log(`✅ Бэкенд запущен на порту ${PORT}`);
     console.log('[UserbotAutomation]', {
         manual_dm_enabled: envFlag('USERBOT_DM_ENABLED'),
