@@ -1150,19 +1150,25 @@ export class OfficialBotService {
         try {
             const { data: botAccount, error: botError } = await this.supabase
                 .from('tg_accounts')
-                .select('owner_id, admin_tg_id')
+                .select('owner_id, admin_tg_id, admin_tg_ids')
                 .eq('id', botId)
                 .maybeSingle();
 
             if (botError) throw botError;
 
             const ownerId = botAccount?.owner_id || ownerIdFallback || null;
+            // admin_tg_ids — канонический список всех админов бота (мульти-админка).
+            // admin_tg_id (scalar) — для backward-compat с notifications-кодом.
+            const botAdminIds = Array.isArray(botAccount?.admin_tg_ids)
+                ? botAccount.admin_tg_ids.map((n) => String(n)).filter(Boolean)
+                : [];
 
             if (!ownerId) {
                 const botAdminTgId = botAccount?.admin_tg_id ? String(botAccount.admin_tg_id) : '';
                 return {
                     ownerId: null,
                     botAdminTgId,
+                    botAdminIds,
                     fallbackAdminTgId: '',
                     adminTgId: botAdminTgId,
                     adminLabel: botAdminTgId ? `TG ID ${botAdminTgId}` : 'Админ проекта',
@@ -1194,6 +1200,7 @@ export class OfficialBotService {
             return {
                 ownerId,
                 botAdminTgId,
+                botAdminIds,
                 fallbackAdminTgId,
                 adminTgId,
                 adminLabel,
@@ -1204,6 +1211,7 @@ export class OfficialBotService {
             return {
                 ownerId: ownerIdFallback || null,
                 botAdminTgId: '',
+                botAdminIds: [],
                 fallbackAdminTgId: '',
                 adminTgId: '',
                 adminLabel: 'Админ проекта',
@@ -1237,7 +1245,11 @@ export class OfficialBotService {
             const botAdminId = adminContext.botAdminTgId ? String(adminContext.botAdminTgId) : '';
             const fallbackAdminId = adminContext.fallbackAdminTgId ? String(adminContext.fallbackAdminTgId) : '';
 
-            if (tgUserId === botAdminId || tgUserId === fallbackAdminId) {
+            // Мульти-админка: если TG ID есть в admin_tg_ids — это админ.
+            const isMultiAdmin = Array.isArray(adminContext.botAdminIds)
+                && adminContext.botAdminIds.map((id) => String(id)).includes(tgUserId);
+
+            if (isMultiAdmin || tgUserId === botAdminId || tgUserId === fallbackAdminId) {
                 return 'admin';
             }
 

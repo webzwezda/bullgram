@@ -31,6 +31,34 @@ export class AutopostService {
         // Ключение по tg_user_id, короткий TTL, хранение в памяти приемлемо —
         // рестарт просто сбросит статус 'editing' через stuck-editing cron.
         this.adminStates = new Map();
+        // adminStickyModes: липкий маршрут для следующего поста админа.
+        // Выставляется текстом "1" (public) или "2" (private). Читается
+        // media-хендлером, очищается после первого же поста. TTL 5 мин чтобы
+        // забытый режим не увёл фото в неправильный канал через час.
+        this.adminStickyModes = new Map();
+    }
+
+    setStickyMode(tgUserId, visibility) {
+        const prev = this.adminStickyModes.get(tgUserId);
+        if (prev?.timer) clearTimeout(prev.timer);
+        const entry = { visibility };
+        entry.timer = setTimeout(() => {
+            this.adminStickyModes.delete(tgUserId);
+        }, 5 * 60 * 1000);
+        this.adminStickyModes.set(tgUserId, entry);
+    }
+
+    getStickyMode(tgUserId) {
+        const entry = this.adminStickyModes.get(tgUserId);
+        return entry?.visibility || null;
+    }
+
+    consumeStickyMode(tgUserId) {
+        const entry = this.adminStickyModes.get(tgUserId);
+        if (!entry) return null;
+        if (entry.timer) clearTimeout(entry.timer);
+        this.adminStickyModes.delete(tgUserId);
+        return entry.visibility;
     }
 
     // --- Guest sessions (БД-backed, переживают рестарт) ---
@@ -254,6 +282,70 @@ export class AutopostService {
     }
 
     // --- Управление ботами ---
+
+    /**
+     * Публикует пост в канал и фиксирует результат на item.
+     * Выносит общую логику publish + UPDATE, которая раньше дублировалась
+     * в scheduler / post_now / sug_post_now. Дополнительно сохраняет
+     * posted_message_ids для последующего lookup'а реакций.
+     *
+     * Если у channel.seed_reaction_emoji выставлено значение (например '❤️'),
+     * бот сразу ставит эту реакцию на первое сообщение поста — social proof.
+     * Боты не получают собственные message_reaction апдейты → это НЕ засчитывается
+     * в reaction_total, счётчик остаётся чистым по реальным юзерам.
+     */
+    async publishItem(bot, item, channel, botUsername) {
+        const messageIds = await sendItemToChannel(bot.telegram, item.target_channel_id, item, {
+            channel,
+            botUsername
+        });
+
+        // Реакцию ставим ДО записи в БД — она должна появиться вместе с постом,
+        // а не после DB-апдейта. Если setMessageReaction упадёт (нет прав),
+        // пост всё равно считается опубликованным.
+        if (channel?.seed_reaction_emoji && messageIds && messageIds.length > 0) {
+            try {
+                await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], [
+                    { type: 'emoji', emoji: channel.seed_reaction_emoji }
+                ]);
+            } catch (e) {
+                console.error('[Autopost] seed reaction failed (non-fatal):', e.message);
+            }
+        }
+
+        await this.supabase
+            .from('autopost_items')
+            .update({
+                status: 'posted',
+                posted_at: new Date().toISOString(),
+                posted_message_ids: messageIds || [],
+                error_message: null
+            })
+            .eq('id', item.id);
+
+        return messageIds || [];
+    }
+
+    /**
+     * Применяет дельту реакций к посту по message_id.
+     * Используется GIN-индексом posted_message_ids для O(1) lookup.
+     * Возвращает обновлённый item id или null если пост не найден
+     * (например, message_id не наш — пришёл для чужого сообщения).
+     */
+    async applyReactionDelta(messageId, delta) {
+        if (!delta) return null;
+
+        const { data, error } = await this.supabase.rpc('autopost_apply_reaction_delta', {
+            p_message_id: Number(messageId),
+            p_delta: delta
+        });
+
+        if (error) {
+            console.error('[Autopost] applyReactionDelta failed:', error.message);
+            return null;
+        }
+        return data || null;
+    }
 
     startBot(botId, token) {
         startAutopostBot(botId, token, (bot, id) => this.registerHandlers(bot, id));

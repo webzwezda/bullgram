@@ -59,7 +59,7 @@ export function App() {
       title: 'Продажи и Клиенты',
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
-        { to: '/shop', label: 'Магазин', icon: ShoppingBag },
+        ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
         { to: '/plans', label: 'Тарифы и доступ', icon: FileText },
       ]
     },
@@ -208,7 +208,7 @@ export function App() {
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
                 <Route path="/botfather" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />
-                <Route path="/shop" element={<ShopAdminPage />} />
+                <Route path="/shop" element={profileRole === 'admin' ? <ShopAdminPage /> : <Navigate to="/" replace />} />
                 <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />

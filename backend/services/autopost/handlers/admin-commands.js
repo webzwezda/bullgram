@@ -4,6 +4,8 @@
  */
 import { Markup } from 'telegraf';
 import { getAdminKeyboard, showQueueForChannel, suggestionInlineKeyboard } from '../keyboard.js';
+import { formatMonthLabel } from '../best-of.js';
+import { classifyMonthInTz } from '../timezone.js';
 
 export function registerAdminCommandsHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -50,6 +52,26 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
         if (!isAdmin) return ctx.reply('Доступ запрещен.');
         ctx.reply('Просто отправьте мне фото или альбом с текстом подписи, и я подготовлю пост.');
+    });
+
+    // Sticky-маршрут для следующего поста: "1" → public, "2" → private.
+    // Удобно для пересланных постов с готовой подписью — не надо переключать
+    // "🔄 Направление" и не надо заменять подпись на маркер.
+    bot.hears(/^[12]$/, async (ctx, next) => {
+        const tgUserId = ctx.from.id;
+
+        // Если админ сейчас редактирует подпись — "1"/"2" это текст новой подписи,
+        // не сигнал маршрутизации. Пропускаем к edit-caption хендлеру.
+        const state = service.adminStates.get(tgUserId);
+        if (state && state.action === 'edit_caption') return next();
+
+        const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return next();
+
+        const visibility = ctx.message.text === '1' ? 'public' : 'private';
+        service.setStickyMode(tgUserId, visibility);
+        const label = visibility === 'public' ? '📢 Публичный' : '🔒 Приватный';
+        await ctx.reply(`✅ Следующий пост → ${label}. Жду фото или альбом (в течение 5 мин).`);
     });
 
     bot.hears('📋 Очередь', async (ctx) => {
@@ -146,6 +168,137 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         }
     });
 
+    // Подборка "Лучшее за месяц" по reaction_total.
+    // Сначала показывает календарь: для каждого месяца, где есть посты с
+    // реакциями в активном канале, кнопка "Месяц YYYY (N)". Текущий месяц
+    // всегда в списке, даже с нулём реакций.
+    bot.hears('🏆 Лучшее', async (ctx) => {
+        const tgUserId = ctx.from.id;
+        const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.reply('Доступ запрещен.');
+
+        const channel = await resolveActiveChannel(botData, tgUserId);
+        if (!channel) {
+            return ctx.reply('Сначала подключите канал и добавьте бота туда как администратора.');
+        }
+
+        const tz = channel.timezone || 'UTC';
+        const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: rows } = await supabase
+            .from('autopost_items')
+            .select('posted_at')
+            .eq('bot_id', botId)
+            .eq('target_channel_id', String(channel.tg_chat_id))
+            .eq('status', 'posted')
+            .gt('reaction_total', 0)
+            .gte('posted_at', cutoff)
+            .order('posted_at', { ascending: false });
+
+        const monthCounts = new Map();
+        for (const r of rows || []) {
+            const key = classifyMonthInTz(r.posted_at, tz);
+            if (!key) continue;
+            monthCounts.set(key, (monthCounts.get(key) || 0) + 1);
+        }
+
+        // Текущий месяц в tz канала (не UTC!).
+        const nowParts = classifyMonthInTz(new Date().toISOString(), tz);
+        if (nowParts) monthCounts.set(nowParts, monthCounts.get(nowParts) || 0);
+
+        const sorted = Array.from(monthCounts.keys()).sort((a, b) => b.localeCompare(a)).slice(0, 12);
+
+        const buttons = sorted.map(key => {
+            const [yStr, mStr] = key.split('-');
+            const year = parseInt(yStr, 10);
+            const month = parseInt(mStr, 10);
+            const count = monthCounts.get(key);
+            const label = formatMonthLabel(year, month);
+            const suffix = count > 0 ? ` (${count})` : '';
+            return [Markup.button.callback(`📅 ${label}${suffix}`, `bestof:prev:${key}`)];
+        });
+
+        const message = buttons.length === 0
+            ? `🏆 Лучшее за месяц\n\nВ канале «${channel.title}» пока нет постов с реакциями.\nПодписчики начнут реагировать — здесь появятся месяцы.`
+            : `🏆 Лучшее за месяц\n\nКанал: «${channel.title}».\nВыберите месяц — пришлю предпросмотр топа. Потом можно опубликовать в канал.`;
+
+        await ctx.reply(message, Markup.inlineKeyboard(buttons));
+    });
+
+    // Управление seed-реакцией на активном канале.
+    // После нажатия показывает текущую реакцию и предлагает выбрать одну из
+    // предустановленных (или выключить). Применяется к active-каналу админа
+    // (active_modes[tgUserId], fallback channels[0]).
+    bot.hears('❤️ Автореакция', async (ctx) => {
+        const tgUserId = ctx.from.id;
+        const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.reply('Доступ запрещен.');
+
+        const channel = await resolveActiveChannel(botData, tgUserId);
+        if (!channel) {
+            return ctx.reply('Сначала подключите канал.');
+        }
+
+        const current = channel.seed_reaction_emoji || 'выключено';
+        const options = [
+            { emoji: '👍', label: '👍 Лайк' },
+            { emoji: '👎', label: '👎 Дизлайк' },
+            { emoji: '❤️', label: '❤️ Сердце' },
+            { emoji: '🔥', label: '🔥 Огонь' },
+            { emoji: '🥰', label: '🥰 Восхищение' },
+            { emoji: '🎉', label: '🎉 Праздник' }
+        ];
+
+        // По 2 кнопки в ряд: 👍👎 / ❤️🔥 / 🥰🎉 — компактнее на экране.
+        const rows = [];
+        for (let i = 0; i < options.length; i += 2) {
+            const pair = options.slice(i, i + 2).map(opt => {
+                const mark = channel.seed_reaction_emoji === opt.emoji ? '✅ ' : '';
+                return Markup.button.callback(`${mark}${opt.label}`, `seed_set:${opt.emoji}`);
+            });
+            rows.push(pair);
+        }
+        rows.push([Markup.button.callback(
+            channel.seed_reaction_emoji ? '🚫 Выключить' : '🚫 Уже выключено',
+            `seed_set:off`
+        )]);
+
+        await ctx.reply(
+            `Бот будет ставить выбранную реакцию под каждый новый пост в канале «${channel.title}».\n\n` +
+            `Сейчас: ${current}\n\nВыберите новую:`,
+            Markup.inlineKeyboard(rows)
+        );
+    });
+
+    bot.action(/seed_set:(.+)/, async (ctx) => {
+        const raw = ctx.match[1];
+        const tgUserId = ctx.from.id;
+        const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
+
+        const channel = await resolveActiveChannel(botData, tgUserId);
+        if (!channel) {
+            await ctx.answerCbQuery('Канал не найден');
+            return;
+        }
+
+        const ALLOWED = ['❤️', '👍', '👎', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '💯', '💩', '🤣', '⚡'];
+        const value = raw === 'off' ? null : raw;
+        if (value !== null && !ALLOWED.includes(value)) {
+            return ctx.answerCbQuery('Недопустимый эмодзи');
+        }
+
+        await supabase
+            .from('channels')
+            .update({ seed_reaction_emoji: value })
+            .eq('id', channel.id);
+
+        await ctx.answerCbQuery(value ? `Установлено: ${value}` : 'Выключено');
+        try { await ctx.deleteMessage(); } catch (e) {}
+        const label = value ? value : 'выключено';
+        await ctx.reply(`Готово. Реакция для «${channel.title}»: ${label}`);
+    });
+
     bot.command('stats', async (ctx) => {
         try {
             const stats = await service.getStats(botId);
@@ -180,4 +333,16 @@ export function registerAdminCommandsHandler(bot, service, botId) {
             await ctx.reply('❌ Ошибка при планировании.');
         }
     });
+
+    async function resolveActiveChannel(botData, tgUserId) {
+        const { data: channels } = await supabase
+            .from('channels')
+            .select('*')
+            .eq('autopost_bot_id', botId);
+        if (!channels || channels.length === 0) return null;
+        const activeModes = botData?.active_modes || {};
+        const activeId = activeModes[String(tgUserId)];
+        const active = channels.find(c => String(c.tg_chat_id) === String(activeId));
+        return active || channels[0];
+    }
 }

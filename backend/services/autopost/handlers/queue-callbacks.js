@@ -1,9 +1,9 @@
 /**
  * Callback'и управления очередью: post_now, edit_post_txt, move_post, del_post
- * + text-input handler для редактирования подписи.
+ * + text-input handler для редактирования подписи + пагинация очереди.
  */
 import { Markup } from 'telegraf';
-import { sendItemToChannel } from '../sender.js';
+import { showQueueForChannel } from '../keyboard.js';
 
 export function registerQueueCallbacksHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -29,15 +29,7 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
                 .eq('tg_chat_id', item.target_channel_id)
                 .maybeSingle();
 
-            await sendItemToChannel(ctx.telegram, item.target_channel_id, item, {
-                channel,
-                botUsername: botData?.username
-            });
-
-            await supabase
-                .from('autopost_items')
-                .update({ status: 'posted', posted_at: new Date().toISOString(), error_message: null })
-                .eq('id', itemId);
+            await service.publishItem(bot, item, channel, botData?.username);
 
             await ctx.answerCbQuery('Опубликовано!');
             try { await ctx.deleteMessage(); } catch (e) {}
@@ -221,5 +213,30 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
 
         try { await ctx.deleteMessage(); } catch (e) {}
         return ctx.reply('✅ Подпись успешно изменена!');
+    });
+
+    // Пагинация очереди: callback_data = queue_page:CHANNEL_ID:offset (число или 'last')
+    bot.action(/queue_page:(-?\d+):(\d+|last)/, async (ctx) => {
+        const channelId = ctx.match[1];
+        const offsetRaw = ctx.match[2];
+        const offset = offsetRaw === 'last' ? 'last' : parseInt(offsetRaw, 10);
+
+        const tgUserId = ctx.from.id;
+        const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
+
+        const { data: channel } = await supabase
+            .from('channels')
+            .select('*')
+            .eq('tg_chat_id', String(channelId))
+            .eq('autopost_bot_id', botId)
+            .maybeSingle();
+        if (!channel) {
+            return ctx.answerCbQuery('Канал не найден');
+        }
+
+        try { await ctx.deleteMessage(); } catch (e) {}
+        await ctx.answerCbQuery();
+        await showQueueForChannel(ctx, botId, channel, supabase, offset);
     });
 }

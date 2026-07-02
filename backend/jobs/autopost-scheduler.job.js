@@ -3,10 +3,9 @@
  * Запускается каждые 5 минут.
  */
 
-import { sendItemToChannel } from '../services/autopost/sender.js';
 import { log } from '../services/autopost/logger.js';
 
-export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
+export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopostService) => {
     // In-flight mutex по botId. Без него setInterval мог стартовать новый тик
     // поверх предыдущего, если публикация затянулась — пост мог уйти в канал дважды.
     const inFlight = new Set();
@@ -80,19 +79,11 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction) => {
 
                 const { data: channel } = await supabase
                     .from('channels')
-                    .select('id, buttons_config, suggest_button_enabled')
+                    .select('id, buttons_config, suggest_button_enabled, seed_reaction_emoji')
                     .eq('tg_chat_id', targetChatId)
                     .maybeSingle();
 
-                await sendItemToChannel(bot.telegram, targetChatId, item, {
-                    channel,
-                    botUsername: botData?.username
-                });
-
-                await supabase
-                    .from('autopost_items')
-                    .update({ status: 'posted', posted_at: new Date().toISOString(), error_message: null })
-                    .eq('id', item.id);
+                await autopostService.publishItem(bot, item, channel, botData?.username);
 
                 log.info('scheduler', 'post_published', {
                     botId: botConfig.id,

@@ -23,7 +23,8 @@ export async function getAdminKeyboard(botId, tgUserId, supabase) {
     return Markup.keyboard([
         [modeLabel],
         ['➕ Добавить пост', '📋 Очередь'],
-        ['📥 Предложки']
+        ['📥 Предложки', '🏆 Лучшее'],
+        ['❤️ Автореакция']
     ]).resize();
 }
 
@@ -55,23 +56,54 @@ export function suggestionInlineKeyboard(item) {
 }
 
 /**
- * Рендерит ленту очереди (до 10 постов) с inline-кнопками управления.
+ * Рендерит страницу очереди (10 постов) с inline-кнопками управления
+ * + пагинация. offset: число или 'last' (прыжок в конец).
+ *
+ * Сортировка: scheduled asc nulls first (сначала ждущие без слота, потом
+ * по времени публикации), затем sort_order asc. Раньше было sort_order asc
+ * + limit 10 — новые посты (sort_order = max+1) никогда не попадали в выдачу.
  */
-export async function showQueueForChannel(ctx, botId, channel, supabase) {
-    const { data: items, error } = await supabase
-        .from('autopost_items')
-        .select('*')
-        .eq('bot_id', botId)
-        .eq('target_channel_id', channel.tg_chat_id)
-        .in('status', ['queued', 'scheduled'])
-        .order('sort_order', { ascending: true })
-        .limit(10);
+export async function showQueueForChannel(ctx, botId, channel, supabase, offset = 0) {
+    const PAGE_SIZE = 10;
+    const channelId = channel.tg_chat_id;
 
-    if (error || !items || items.length === 0) {
-        return ctx.reply(`Очередь постов для канала "${channel.title}" пуста.`);
+    let actualOffset = typeof offset === 'number' ? offset : 0;
+    let total = 0;
+
+    if (offset === 'last') {
+        const { count } = await supabase
+            .from('autopost_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('bot_id', botId)
+            .eq('target_channel_id', channelId)
+            .in('status', ['queued', 'scheduled']);
+        total = count || 0;
+        actualOffset = total > PAGE_SIZE ? total - PAGE_SIZE : 0;
     }
 
-    await ctx.reply(`📋 **Очередь постов (${channel.title}):**`);
+    const { data: items, count, error } = await supabase
+        .from('autopost_items')
+        .select('*', { count: 'exact' })
+        .eq('bot_id', botId)
+        .eq('target_channel_id', channelId)
+        .in('status', ['queued', 'scheduled'])
+        .order('scheduled_at', { ascending: true, nullsFirst: true })
+        .order('sort_order', { ascending: true })
+        .range(actualOffset, actualOffset + PAGE_SIZE - 1);
+
+    if (offset !== 'last') total = count || 0;
+
+    if (error) {
+        return ctx.reply('❌ Не удалось загрузить очередь. Попробуйте позже.');
+    }
+    if (!items || items.length === 0) {
+        const msg = actualOffset > 0
+            ? `На этой странице постов нет (возможно, они были опубликованы или удалены). Всего в очереди: ${total}.`
+            : `Очередь постов для канала "${channel.title}" пуста.`;
+        return ctx.reply(msg);
+    }
+
+    await ctx.reply(`📋 **Очередь постов (${channel.title})** — посты ${actualOffset + 1}–${actualOffset + items.length} из ${total}`);
 
     for (const item of items) {
         const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
@@ -95,5 +127,21 @@ export async function showQueueForChannel(ctx, botId, channel, supabase) {
         } else {
             await ctx.reply(`${statusText}\n\n${item.caption || ''}`, inlineKeyboard);
         }
+    }
+
+    const hasNext = actualOffset + items.length < total;
+    const isAtStart = actualOffset === 0;
+    const rows = [];
+    if (!isAtStart) {
+        rows.push([Markup.button.callback('⬅️ В начало', `queue_page:${channelId}:0`)]);
+    }
+    if (hasNext) {
+        rows.push([
+            Markup.button.callback('➡️ Следующие +10', `queue_page:${channelId}:${actualOffset + PAGE_SIZE}`),
+            Markup.button.callback('⏩ Последние 10', `queue_page:${channelId}:last`)
+        ]);
+    }
+    if (rows.length > 0) {
+        await ctx.reply('📖 Листание:', Markup.inlineKeyboard(rows));
     }
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout } from 'lucide-react';
+import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -13,6 +13,8 @@ import {
     fetchAdmins,
     initBot,
     patchChannel,
+    unlinkChannel,
+    refreshChannel,
     addAdmin,
     removeAdmin,
     deleteBot
@@ -38,6 +40,8 @@ export function QuickStartPage() {
   // Modals & Action loading states
   const [initing, setIniting] = useState(false);
   const [savingChannel, setSavingChannel] = useState({ public: false, private: false });
+  const [unlinkingChannel, setUnlinkingChannel] = useState({ public: false, private: false });
+  const [refreshingChannel, setRefreshingChannel] = useState({ public: false, private: false });
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [newAdminTgId, setNewAdminTgId] = useState('');
   
@@ -46,8 +50,8 @@ export function QuickStartPage() {
   
   // Configs for channels
   const [channelConfigs, setChannelConfigs] = useState({
-    public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
-    private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
+    public: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null },
+    private: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null }
   });
 
   // Загрузка существующих ботов
@@ -81,8 +85,8 @@ export function QuickStartPage() {
       setCreatedBot(null);
       const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
       setChannelConfigs({
-        public: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 },
-        private: { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 }
+        public: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null },
+        private: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null }
       });
       return;
     }
@@ -118,6 +122,8 @@ export function QuickStartPage() {
       id: row?.id || null,
       tgChatId: row?.tg_chat_id || null,
       title: row?.title || '',
+      username: row?.username || null,
+      visibility: row?.visibility || null,
       postsPerDay: String(row?.posts_per_day || 1),
       postingTimes: row?.posting_times || ['10:00'],
       autoAccept: row?.auto_accept_suggestions || false,
@@ -125,13 +131,14 @@ export function QuickStartPage() {
       timezone: row?.timezone || browserTz,
       suggestionPostingTimes: row?.suggestion_posting_times || ['12:00'],
       suggestButtonEnabled: row?.suggest_button_enabled || false,
-      maxSuggestionsPerDay: row?.max_suggestions_per_day !== undefined ? row.max_suggestions_per_day : 5
+      maxSuggestionsPerDay: row?.max_suggestions_per_day !== undefined ? row.max_suggestions_per_day : 5,
+      seedReactionEmoji: row?.seed_reaction_emoji || null
     };
   }
 
   function emptyChannelConfig() {
     const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-    return { id: null, tgChatId: null, title: '', postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5 };
+    return { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null };
   }
 
   function applyChannelsToConfig(channelsList) {
@@ -232,7 +239,8 @@ export function QuickStartPage() {
         suggestion_posts_per_day: sortedSuggestionTimes.length,
         suggestion_posting_times: sortedSuggestionTimes,
         suggest_button_enabled: config.suggestButtonEnabled,
-        max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5)
+        max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5),
+        seed_reaction_emoji: config.seedReactionEmoji || null
       }, accessToken);
 
       setChannelConfigs(prev => ({
@@ -242,7 +250,8 @@ export function QuickStartPage() {
           postingTimes: sortedPostingTimes,
           suggestionPostingTimes: sortedSuggestionTimes,
           suggestButtonEnabled: config.suggestButtonEnabled,
-          maxSuggestionsPerDay: config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5
+          maxSuggestionsPerDay: config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5,
+          seedReactionEmoji: config.seedReactionEmoji || null
         }
       }));
       
@@ -251,6 +260,46 @@ export function QuickStartPage() {
       toast.error(err.message);
     } finally {
       setSavingChannel(prev => ({ ...prev, [type]: false }));
+    }
+  }
+
+  // Отвязать канал от автопостера (только в BullRun, бот остаётся админом в Telegram)
+  async function handleUnlinkChannel(type) {
+    const cfg = channelConfigs[type];
+    if (!cfg.id || !createdBot?.id) return;
+    if (!confirm(`Отвязать канал "${cfg.title}" от автопостера?\n\nБот останется админом в Telegram — вы сможете привязать канал заново без повторного добавления.`)) return;
+
+    setUnlinkingChannel(prev => ({ ...prev, [type]: true }));
+    try {
+      await unlinkChannel(createdBot.id, cfg.id, accessToken);
+      toast.success(`Канал "${cfg.title}" отвязан`);
+      // UI обновится через realtime
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUnlinkingChannel(prev => ({ ...prev, [type]: false }));
+    }
+  }
+
+  // Обновить метаданные канала из Telegram (title, username, visibility).
+  // Если бот больше не админ — бэкенд авто-отвяжет канал.
+  async function handleRefreshChannel(type) {
+    const cfg = channelConfigs[type];
+    if (!cfg.id || !createdBot?.id) return;
+
+    setRefreshingChannel(prev => ({ ...prev, [type]: true }));
+    try {
+      const data = await refreshChannel(createdBot.id, cfg.id, accessToken);
+      if (data.unbound) {
+        toast.error(`Канал отвязан: ${data.reason}`);
+      } else {
+        toast.success(`Данные канала обновлены`);
+      }
+      // UI обновится через realtime
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRefreshingChannel(prev => ({ ...prev, [type]: false }));
     }
   }
 
@@ -675,14 +724,70 @@ export function QuickStartPage() {
                 <div key={tab} className="animate-fade-in divide-y divide-slate-100">
                   <div className="bg-slate-50/30 p-5 sm:p-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
                         <Settings className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-900">{config.title}</h3>
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-bold text-slate-900 truncate">{config.title}</h3>
                         <p className="text-xs font-semibold text-slate-400">Настройки публикации и предложки для этого канала</p>
                       </div>
+                      <div className="ml-auto flex gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRefreshChannel(tab)}
+                          disabled={refreshingChannel[tab] || unlinkingChannel[tab] || savingChannel[tab]}
+                          className="text-xs h-8"
+                        >
+                          {refreshingChannel[tab]
+                            ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                          Обновить
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUnlinkChannel(tab)}
+                          disabled={refreshingChannel[tab] || unlinkingChannel[tab] || savingChannel[tab]}
+                          className="text-xs h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 hover:border-rose-200"
+                        >
+                          {unlinkingChannel[tab]
+                            ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            : <Unlink className="w-3.5 h-3.5 mr-1.5" />}
+                          Отвязать
+                        </Button>
+                      </div>
                     </div>
+                    {(config.tgChatId || config.username) && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-3 ml-[52px]">
+                        {config.tgChatId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(String(config.tgChatId));
+                              toast.success('ID канала скопирован');
+                            }}
+                            title="Скопировать ID канала"
+                            className="font-mono text-[11px] text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 transition-colors cursor-pointer"
+                          >
+                            {config.tgChatId}
+                          </button>
+                        )}
+                        {config.username && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`@${config.username}`);
+                              toast.success('Username скопирован');
+                            }}
+                            title="Скопировать @username"
+                            className="text-[11px] font-medium text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-md border border-indigo-200 transition-colors cursor-pointer"
+                          >
+                            @{config.username}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   <div className="p-5 sm:p-6 space-y-6">
@@ -785,6 +890,61 @@ export function QuickStartPage() {
                         />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                       </label>
+                    </div>
+
+                    {/* Автореакция на посты */}
+                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3 transition-all">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <label className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
+                          <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                            Бот будет ставить выбранную реакцию под каждый новый пост сразу после публикации.
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={Boolean(config.seedReactionEmoji)}
+                            onChange={(e) => setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], seedReactionEmoji: e.target.checked ? (prev[tab].seedReactionEmoji || '❤️') : null }
+                            }))}
+                          />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+                      {Boolean(config.seedReactionEmoji) && (
+                        <div className="flex items-center gap-2 flex-wrap pt-1 animate-fade-in">
+                          {[
+                            { emoji: '👍', label: 'Лайк' },
+                            { emoji: '👎', label: 'Дизлайк' },
+                            { emoji: '❤️', label: 'Сердце' },
+                            { emoji: '🔥', label: 'Огонь' },
+                            { emoji: '🥰', label: 'Восхищение' },
+                            { emoji: '🎉', label: 'Праздник' }
+                          ].map(opt => {
+                            const active = config.seedReactionEmoji === opt.emoji;
+                            return (
+                              <button
+                                key={opt.emoji}
+                                type="button"
+                                onClick={() => setChannelConfigs(prev => ({
+                                  ...prev,
+                                  [tab]: { ...prev[tab], seedReactionEmoji: opt.emoji }
+                                }))}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                                  active
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300'
+                                }`}
+                              >
+                                {opt.emoji} {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Суточный лимит предложений */}

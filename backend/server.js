@@ -288,7 +288,7 @@ httpServer.listen(PORT, async () => {
     startAbandonedCart(supabase, getBotById);
     startBrowseFollowup(supabase, getBotById);
     const autopostService = new AutopostService(supabase);
-    startAutopostScheduler(supabase, (botId) => autopostService.getBot(botId));
+    startAutopostScheduler(supabase, (botId) => autopostService.getBot(botId), autopostService);
     startAutopostStuckEditingRecovery(supabase, autopostService);
     // Запускаем все активные autopost-боты
     try {

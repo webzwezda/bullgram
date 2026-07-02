@@ -414,6 +414,11 @@ export default function (supabase) {
             const normalizedRole = botRole === 'ops' ? 'ops' : 'sales';
             const normalizedAdminTgId = String(admin_tg_id || '').trim() || null;
             const adminTgUsername = await resolveBotAdminUsername(botToken, normalizedAdminTgId);
+            // Seed admin_tg_ids with the creator as owner (first element).
+            // admin_tg_id (scalar) stays for backward-compat notification code.
+            const seedAdminIds = normalizedAdminTgId
+                ? Array.from(new Set([Number(normalizedAdminTgId)].filter((n) => !isNaN(n))))
+                : [];
 
             const { data: insertedAccount, error } = await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
@@ -424,7 +429,8 @@ export default function (supabase) {
                 bot_role: normalizedRole,
                 bot_kind: normalizedKind,
                 admin_tg_id: normalizedAdminTgId,
-                admin_tg_username: adminTgUsername
+                admin_tg_username: adminTgUsername,
+                admin_tg_ids: seedAdminIds
             }, { onConflict: 'owner_id, tg_account_id' }).select().single();
 
             if (error) throw error;
@@ -723,7 +729,7 @@ export default function (supabase) {
 
             const { data: channel, error: channelError } = await supabase
                 .from('channels')
-                .select('id, owner_id, bot_id, tg_chat_id, title, chat_type')
+                .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, visibility')
                 .eq('id', channelId)
                 .eq('owner_id', req.user.id)
                 .maybeSingle();
@@ -783,7 +789,50 @@ export default function (supabase) {
 
             if (error) throw error;
 
-            res.json({ success: true, channel: data });
+            // Ребаланс контура: если канал привязан к слоту, который не соответствует
+            // текущей видимости, переносим в правильный слот.
+            // Старый обитатель целевого слота (если был) падает в «Свободные площадки».
+            // Проверка идёт всегда (даже без смены visibility) — чтобы чинить связи,
+            // оставшиеся с предыдущих refresh-ов до того, как логика ребаланса появилась.
+            let contourChange = null;
+            if (visibility === 'public' || visibility === 'private') {
+                const { data: contours } = await supabase
+                    .from('sales_bot_contours')
+                    .select('bot_id, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id')
+                    .or(`public_channel_id.eq.${channel.id},paid_channel_id.eq.${channel.id},public_chat_id.eq.${channel.id},paid_chat_id.eq.${channel.id}`)
+                    .eq('owner_id', req.user.id);
+
+                const c = (contours || [])[0];
+                if (c) {
+                    const isChannel = chatType === 'channel';
+                    const targetField = isChannel
+                        ? (visibility === 'public' ? 'public_channel_id' : 'paid_channel_id')
+                        : (visibility === 'public' ? 'public_chat_id' : 'paid_chat_id');
+
+                    const contourFields = ['public_channel_id', 'paid_channel_id', 'public_chat_id', 'paid_chat_id'];
+                    const currentField = contourFields.find((f) => c[f] === channel.id);
+
+                    if (currentField && currentField !== targetField) {
+                        const displacedChannelId = c[targetField] || null;
+                        const { error: updErr } = await supabase
+                            .from('sales_bot_contours')
+                            .update({
+                                [currentField]: null,
+                                [targetField]: channel.id
+                            })
+                            .eq('bot_id', c.bot_id)
+                            .eq('owner_id', req.user.id);
+                        if (updErr) throw updErr;
+                        contourChange = {
+                            from: currentField,
+                            to: targetField,
+                            displacedChannelId
+                        };
+                    }
+                }
+            }
+
+            res.json({ success: true, channel: data, contourChange });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось обновить информацию о Telegram-площадке');
         }
@@ -841,6 +890,129 @@ export default function (supabase) {
             res.json({ success: true });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось удалить Telegram-площадку');
+        }
+    });
+
+    // ===== Управление администраторами бота (мульти-админка, как в автопостере) =====
+
+    function buildBotAdminInviteLink(tgUsername, secret) {
+        if (!tgUsername || !secret) return null;
+        return `https://t.me/${tgUsername}?start=add_admin_${secret}`;
+    }
+
+    function generateBotAdminInviteSecret() {
+        return randomBytes(16).toString('hex');
+    }
+
+    async function loadOwnedOfficialBotForAdmins(supabase, ownerId, accountId) {
+        const id = String(accountId || '').trim();
+        if (!id) return null;
+        const { data, error } = await supabase
+            .from('tg_accounts')
+            .select('id, tg_username, admin_tg_ids, admin_invite_secret')
+            .eq('id', id)
+            .eq('owner_id', ownerId)
+            .eq('account_type', 'bot')
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    }
+
+    // Получить список администраторов бота и инвайт-ссылку
+    router.get('/:accountId/admins', authenticateUser, async (req, res) => {
+        try {
+            const bot = await loadOwnedOfficialBotForAdmins(supabase, req.user.id, req.params.accountId);
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const inviteLink = buildBotAdminInviteLink(bot.tg_username, bot.admin_invite_secret);
+            res.json({
+                admin_tg_ids: bot.admin_tg_ids || [],
+                invite_link: inviteLink
+            });
+        } catch (err) {
+            console.error('Ошибка получения администраторов бота:', err.message);
+            res.status(500).json({ error: 'Не получилось получить список администраторов' });
+        }
+    });
+
+    // Сгенерировать новую инвайт-ссылку (старая перестанет работать)
+    router.post('/:accountId/admins/regenerate-invite', authenticateUser, async (req, res) => {
+        try {
+            const bot = await loadOwnedOfficialBotForAdmins(supabase, req.user.id, req.params.accountId);
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const newSecret = generateBotAdminInviteSecret();
+            const { error: updateErr } = await supabase
+                .from('tg_accounts')
+                .update({ admin_invite_secret: newSecret })
+                .eq('id', bot.id)
+                .eq('owner_id', req.user.id);
+            if (updateErr) throw updateErr;
+
+            res.json({ invite_link: buildBotAdminInviteLink(bot.tg_username, newSecret) });
+        } catch (err) {
+            console.error('Ошибка регенерации invite-ссылки:', err.message);
+            res.status(500).json({ error: 'Не получилось обновить приглашение' });
+        }
+    });
+
+    // Добавить администратора вручную по Telegram ID
+    router.post('/:accountId/admins', authenticateUser, async (req, res) => {
+        try {
+            const { adminTgId } = req.body;
+            const newAdmin = Number(adminTgId);
+            if (!adminTgId || isNaN(newAdmin)) {
+                return res.status(400).json({ error: 'ID администратора должен быть числовым Telegram ID' });
+            }
+
+            const bot = await loadOwnedOfficialBotForAdmins(supabase, req.user.id, req.params.accountId);
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const currentAdmins = (bot.admin_tg_ids || []).map(Number);
+            if (currentAdmins.includes(newAdmin)) {
+                return res.status(409).json({ error: 'Этот пользователь уже администратор' });
+            }
+            currentAdmins.push(newAdmin);
+
+            const { error: updateErr } = await supabase
+                .from('tg_accounts')
+                .update({ admin_tg_ids: currentAdmins })
+                .eq('id', bot.id)
+                .eq('owner_id', req.user.id);
+            if (updateErr) throw updateErr;
+
+            res.json({ ok: true, admin_tg_ids: currentAdmins });
+        } catch (err) {
+            console.error('Ошибка добавления администратора бота:', err.message);
+            res.status(500).json({ error: 'Не получилось добавить администратора' });
+        }
+    });
+
+    // Удалить администратора из списка (нельзя удалить владельца — admin_tg_ids[0])
+    router.delete('/:accountId/admins/:tgId', authenticateUser, async (req, res) => {
+        try {
+            const bot = await loadOwnedOfficialBotForAdmins(supabase, req.user.id, req.params.accountId);
+            if (!bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            const targetId = Number(req.params.tgId);
+            const currentAdmins = (bot.admin_tg_ids || []).map(Number);
+
+            if (currentAdmins[0] === targetId) {
+                return res.status(400).json({ error: 'Нельзя удалить владельца бота' });
+            }
+
+            const nextAdmins = currentAdmins.filter((id) => id !== targetId);
+            const { error: updateErr } = await supabase
+                .from('tg_accounts')
+                .update({ admin_tg_ids: nextAdmins })
+                .eq('id', bot.id)
+                .eq('owner_id', req.user.id);
+            if (updateErr) throw updateErr;
+
+            res.json({ ok: true, admin_tg_ids: nextAdmins });
+        } catch (err) {
+            console.error('Ошибка удаления администратора бота:', err.message);
+            res.status(500).json({ error: 'Не получилось удалить администратора' });
         }
     });
 

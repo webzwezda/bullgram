@@ -44,3 +44,42 @@ export function getLocalDateParts(date, timeZone) {
         };
     }
 }
+
+/**
+ * Возвращает [start, end) месяца в указанной таймзоне как ISO-строки UTC.
+ * month — 1-based (1 = January), чтобы совпадать с человеческим "июнь = 6".
+ *
+ * Используется компилятором best-of для фильтра posted_at по местному месяцу канала
+ * (Europe/Moscow, Asia/Vladivostok и т.д.) вместо голого UTC.
+ */
+export function monthBoundsInTz(year, month, timeZone) {
+    const tz = timeZone || 'UTC';
+    const startUtc = getUtcDateForLocal(year, month - 1, 1, 0, 0, tz);
+    const endUtc = getUtcDateForLocal(year, month, 1, 0, 0, tz);
+    return { start: startUtc.toISOString(), end: endUtc.toISOString() };
+}
+
+/**
+ * Классифицирует posted_at (ISO) в 'YYYY-MM' по указанной таймзоне.
+ * Используется календарём best-of для группировки постов по месяцам канала.
+ *
+ * Возвращает 'YYYY-MM' (например '2026-06') или null при невалидной дате/таймзоне.
+ */
+export function classifyMonthInTz(postedAtIso, timeZone) {
+    try {
+        if (postedAtIso === null || postedAtIso === undefined) return null;
+        const date = new Date(postedAtIso);
+        if (isNaN(date.getTime())) return null;
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: timeZone || 'UTC',
+            year: 'numeric',
+            month: '2-digit'
+        }).formatToParts(date);
+        const y = parts.find(p => p.type === 'year')?.value;
+        const m = parts.find(p => p.type === 'month')?.value;
+        if (!y || !m) return null;
+        return `${y}-${m}`;
+    } catch (e) {
+        return null;
+    }
+}

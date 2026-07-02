@@ -1,7 +1,21 @@
 /**
  * Приём фото/видео/гифок/файлов от админов и гостей + сборка альбомов.
+ *
+ * Маркер маршрутизации (только для админа): caption ровно "1" → public,
+ * ровно "2" → private. Сам маркер из подписи вырезается (пост уходит без
+ * текста). Любой другой caption → активный канал из active_modes.
  */
 import { Markup } from 'telegraf';
+
+function pickChannelByMarker(caption, channels) {
+    if (caption === '1') return channels.find(c => c.visibility === 'public') || null;
+    if (caption === '2') return channels.find(c => c.visibility === 'private') || null;
+    return null;
+}
+
+function isMarkerCaption(caption) {
+    return caption === '1' || caption === '2';
+}
 
 export function registerMediaHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -30,9 +44,25 @@ export function registerMediaHandler(bot, service, botId) {
 
             let targetChannel = null;
             if (isAdmin) {
-                const activeModes = botData.active_modes || {};
-                const activeId = activeModes[String(tgUserId)];
-                targetChannel = channels.find(c => String(c.tg_chat_id) === String(activeId)) || channels[0];
+                // 1) Маркер в подписи (явный сигнал на самом посте)
+                const markerChannel = pickChannelByMarker(ctx.message.caption || '', channels);
+                if (markerChannel) {
+                    targetChannel = markerChannel;
+                } else {
+                    // 2) Sticky-режим (для пересланных постов с чужой подписью).
+                    //    Не очищаем здесь — иначе второй фотке альбома уже не хватит.
+                    const sticky = service.getStickyMode(tgUserId);
+                    if (sticky) {
+                        const stickyChannel = channels.find(c => c.visibility === sticky);
+                        if (stickyChannel) targetChannel = stickyChannel;
+                    }
+                    // 3) active_modes — финальный фолбэк
+                    if (!targetChannel) {
+                        const activeModes = botData.active_modes || {};
+                        const activeId = activeModes[String(tgUserId)];
+                        targetChannel = channels.find(c => String(c.tg_chat_id) === String(activeId)) || channels[0];
+                    }
+                }
             } else {
                 // Bug 11 fix: раньше если гостевая сессия указывала на удалённый
                 // канал, мы молча падали на channels[0] — предложка улетала не туда.
@@ -103,18 +133,28 @@ export function registerMediaHandler(bot, service, botId) {
             if (mediaGroupId) {
                 let group = service.mediaGroups.get(mediaGroupId);
                 if (!group) {
-                    group = { items: [], captions: [], timer: null };
+                    group = { items: [], captions: [], timer: null, markerChannel: null };
                     service.mediaGroups.set(mediaGroupId, group);
                 }
                 group.items.push({ fileId, mediaType });
                 if (ctx.message.caption) group.captions.push(ctx.message.caption);
+
+                // Маркер маршрутизации имеет смысл только на первой подписи альбома
+                // (Telegram разрешает caption только на первом сообщении группы).
+                if (isAdmin && group.captions.length === 1) {
+                    group.markerChannel = pickChannelByMarker(group.captions[0], channels);
+                }
 
                 // Bug 3: 1c маловато для тормозных клиентов — поднимаем до 2с.
                 // Поздно пришедшая фотка не должна молча уйти отдельным постом.
                 if (group.timer) clearTimeout(group.timer);
                 group.timer = setTimeout(async () => {
                     service.mediaGroups.delete(mediaGroupId);
-                    const caption = group.captions.join('\n') || '';
+                    const rawCaption = group.captions.join('\n') || '';
+                    const isMarker = !!group.markerChannel;
+                    const caption = isMarker ? '' : rawCaption;
+                    // Маркер переопределяет targetChannel для альбома целиком.
+                    const albumTargetChannel = group.markerChannel || targetChannel;
                     const fileIds = group.items.map(i => i.fileId);
                     const mediaTypes = group.items.map(i => i.mediaType);
                     // Доминирующий тип — для колонки media_type на айтеме
@@ -130,8 +170,11 @@ export function registerMediaHandler(bot, service, botId) {
                             photos: fileIds,
                             mediaTypes,
                             caption,
-                            targetChannelId: targetChannel.tg_chat_id
+                            targetChannelId: albumTargetChannel.tg_chat_id
                         });
+                        // Sticky расходуется на альбом целиком — даже если админ
+                        // ещё не кликнул keep/split, канал уже выбран.
+                        service.consumeStickyMode(tgUserId);
                         await ctx.reply(
                             `📸 **Обнаружен альбом из ${fileIds.length} позиций!**`,
                             Markup.inlineKeyboard([
@@ -140,12 +183,12 @@ export function registerMediaHandler(bot, service, botId) {
                             ])
                         );
                     } else {
-                        const autoAccept = targetChannel.auto_accept_suggestions || false;
+                        const autoAccept = albumTargetChannel.auto_accept_suggestions || false;
                         const status = autoAccept ? 'queued' : 'suggested';
 
                         await service.addPostItem({
                             botId,
-                            targetChannelId: targetChannel.tg_chat_id,
+                            targetChannelId: albumTargetChannel.tg_chat_id,
                             fileIds,
                             caption,
                             status,
@@ -155,26 +198,29 @@ export function registerMediaHandler(bot, service, botId) {
                         });
 
                         if (autoAccept) {
-                            await service.collapseQueue(botId, targetChannel.tg_chat_id);
+                            await service.collapseQueue(botId, albumTargetChannel.tg_chat_id);
                             await ctx.reply('🎉 Спасибо! Ваш пост принят и автоматически запланирован к публикации.');
                         } else {
                             await ctx.reply('🎉 Спасибо! Ваше предложение отправлено на модерацию администраторам.');
-                            await service.notifyAdmins(botData, `📥 Получено новое предложение для канала "${targetChannel.title}"!`);
+                            await service.notifyAdmins(botData, `📥 Получено новое предложение для канала "${albumTargetChannel.title}"!`);
                         }
                     }
                 }, 2000);
             } else {
-                const caption = ctx.message.caption || '';
+                const rawCaption = ctx.message.caption || '';
+                const strippedCaption = isMarkerCaption(rawCaption) ? '' : rawCaption;
                 if (isAdmin) {
                     await service.addPostItem({
                         botId,
                         targetChannelId: targetChannel.tg_chat_id,
                         fileIds: [fileId],
-                        caption,
+                        caption: strippedCaption,
                         status: 'queued',
                         mediaType
                     });
                     await service.collapseQueue(botId, targetChannel.tg_chat_id);
+                    // Sticky-режим расходуется на первый же пост
+                    service.consumeStickyMode(tgUserId);
                     const typeLabel = mediaType === 'video' ? 'Видео добавлено' : mediaType === 'animation' ? 'Гифка добавлена' : mediaType === 'document' ? 'Файл добавлен' : 'Картинка добавлена';
                     await ctx.reply(`✅ ${typeLabel} в очередь для канала "${targetChannel.title}".`);
                 } else {
@@ -185,7 +231,7 @@ export function registerMediaHandler(bot, service, botId) {
                         botId,
                         targetChannelId: targetChannel.tg_chat_id,
                         fileIds: [fileId],
-                        caption,
+                        caption: rawCaption,
                         status,
                         isSuggestion: true,
                         mediaType,

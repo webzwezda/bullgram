@@ -1,7 +1,6 @@
 /**
  * Callback'и модерации предложек: sug_approve, sug_post_now, sug_reject.
  */
-import { sendItemToChannel } from '../sender.js';
 
 export function registerSuggestionCallbacksHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -54,15 +53,7 @@ export function registerSuggestionCallbacksHandler(bot, service, botId) {
                 .eq('tg_chat_id', item.target_channel_id)
                 .maybeSingle();
 
-            await sendItemToChannel(ctx.telegram, item.target_channel_id, item, {
-                channel,
-                botUsername: botData?.username
-            });
-
-            await supabase
-                .from('autopost_items')
-                .update({ status: 'posted', posted_at: new Date().toISOString(), error_message: null })
-                .eq('id', itemId);
+            await service.publishItem(bot, item, channel, botData?.username);
 
             await ctx.answerCbQuery('Опубликовано!');
             try { await ctx.deleteMessage(); } catch (e) {}

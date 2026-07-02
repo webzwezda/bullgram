@@ -113,8 +113,8 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day } = req.body;
-            
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day, seed_reaction_emoji } = req.body;
+
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
                 .from('autopost_bots')
@@ -123,7 +123,7 @@ export default function autopostRoutes(supabase) {
                 .eq('owner_id', req.user.id)
                 .single();
             if (botErr || !bot) return res.status(403).json({ error: 'Нет доступа или бот не найден' });
-            
+
             const updates = {};
             if (auto_accept_suggestions !== undefined) updates.auto_accept_suggestions = auto_accept_suggestions;
             if (buttons_config !== undefined) updates.buttons_config = buttons_config;
@@ -134,6 +134,15 @@ export default function autopostRoutes(supabase) {
             if (suggestion_posting_times !== undefined) updates.suggestion_posting_times = suggestion_posting_times;
             if (suggest_button_enabled !== undefined) updates.suggest_button_enabled = suggest_button_enabled;
             if (max_suggestions_per_day !== undefined) updates.max_suggestions_per_day = Number(max_suggestions_per_day);
+            if (seed_reaction_emoji !== undefined) {
+                // null = выключить; иначе валидируем что это одиночный эмодзи и он есть в стандартном наборе Telegram.
+                const ALLOWED = ['❤️', '👍', '👎', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '💯', '💩', '🤣', '⚡'];
+                const val = seed_reaction_emoji === null ? null : String(seed_reaction_emoji).trim();
+                if (val !== null && !ALLOWED.includes(val)) {
+                    return res.status(400).json({ error: 'Недопустимый эмодзи. Разрешены: ' + ALLOWED.join(' ') });
+                }
+                updates.seed_reaction_emoji = val;
+            }
             
             const { data: channel, error } = await supabase
                 .from('channels')
@@ -417,7 +426,7 @@ export default function autopostRoutes(supabase) {
                 .eq('owner_id', req.user.id)
                 .single();
             if (botErr || !bot) return res.status(403).json({ error: 'Нет доступа или бот не найден' });
-            
+
             const { data: channel, error } = await supabase
                 .from('channels')
                 .update({ autopost_bot_id: null })
@@ -425,9 +434,57 @@ export default function autopostRoutes(supabase) {
                 .eq('autopost_bot_id', req.params.botId)
                 .select()
                 .single();
-                
+
             if (error) throw error;
             res.json({ success: true, channel });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Обновить метаданные канала (title, username, visibility) через getChat.
+    // Если бот больше не админ в канале — авто-отвязываем (связь протухла).
+    router.post('/bots/:botId/channels/:channelId/refresh', async (req, res) => {
+        try {
+            const { data: bot, error: botErr } = await supabase
+                .from('autopost_bots')
+                .select('id')
+                .eq('id', req.params.botId)
+                .eq('owner_id', req.user.id)
+                .single();
+            if (botErr || !bot) return res.status(403).json({ error: 'Нет доступа или бот не найден' });
+
+            const { data: channel, error: chErr } = await supabase
+                .from('channels')
+                .select('id, tg_chat_id')
+                .eq('id', req.params.channelId)
+                .eq('autopost_bot_id', req.params.botId)
+                .single();
+            if (chErr || !channel) return res.status(404).json({ error: 'Канал не найден' });
+
+            const tgBot = service.getBot(req.params.botId);
+            if (!tgBot) return res.status(503).json({ error: 'Бот не запущен' });
+
+            let chat;
+            try {
+                chat = await tgBot.telegram.getChat(channel.tg_chat_id);
+            } catch (e) {
+                await supabase.from('channels')
+                    .update({ autopost_bot_id: null })
+                    .eq('id', channel.id);
+                return res.json({ unbound: true, reason: 'Бот больше не админ в этом канале' });
+            }
+
+            const visibility = chat.username ? 'public' : 'private';
+            const { data: updated, error: updErr } = await supabase.from('channels').update({
+                title: chat.title || String(chat.id),
+                username: chat.username || null,
+                visibility,
+                last_visibility_check_at: new Date().toISOString()
+            }).eq('id', channel.id).select().single();
+
+            if (updErr) throw updErr;
+            res.json({ channel: updated, unbound: false });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }

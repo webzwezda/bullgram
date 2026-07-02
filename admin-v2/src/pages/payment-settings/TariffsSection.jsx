@@ -1,6 +1,21 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Users, Clock, Trash2, MessageCircle, Link2, CreditCard, Package } from 'lucide-react';
+import {
+  Package, Plus, Trash2, Clock, Bot as BotIcon, Tag, Key, CreditCard,
+  Users, MessageCircle, Link2, Loader2, Check, Infinity as InfinityIcon,
+  AlertCircle, Search
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '../../components/ui/button.jsx';
+import { Card } from '../../components/ui/card.jsx';
+import { Input } from '../../components/ui/input.jsx';
+import { Textarea } from '../../components/ui/textarea.jsx';
+import { Badge } from '../../components/ui/badge.jsx';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '../../components/ui/select.jsx';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs.jsx';
+
+/* ---------------- data helpers (unchanged) ---------------- */
 
 function getTariffPaymentGroupKey(tariff) {
   return [
@@ -24,9 +39,7 @@ function buildTariffGroups(tariffs = []) {
   const groupsByKey = new Map();
   tariffs.forEach((tariff) => {
     const key = getTariffPaymentGroupKey(tariff);
-    if (!groupsByKey.has(key)) {
-      groupsByKey.set(key, { key, variants: [] });
-    }
+    if (!groupsByKey.has(key)) groupsByKey.set(key, { key, variants: [] });
     groupsByKey.get(key).variants.push(tariff);
   });
 
@@ -46,54 +59,162 @@ function buildTariffGroups(tariffs = []) {
 function dedupeBundleItems(items = []) {
   const byKey = new Map();
   items.forEach((item) => {
-    const key = [
-      item.item_type,
-      item.channel_id || '',
-      item.resource_title || '',
-      item.resource_url || ''
-    ].join('|');
-
-    if (!byKey.has(key)) {
-      byKey.set(key, { ...item, itemIds: [item.id] });
-      return;
-    }
-
-    byKey.get(key).itemIds.push(item.id);
+    const key = [item.item_type, item.channel_id || '', item.resource_title || '', item.resource_url || ''].join('|');
+    if (!byKey.has(key)) byKey.set(key, { ...item, itemIds: [item.id] });
+    else byKey.get(key).itemIds.push(item.id);
   });
   return Array.from(byKey.values());
 }
 
-function formatPaymentVariants(variants = []) {
-  return sortTariffPaymentVariants(variants)
-    .map((variant) => `${variant.price} ${variant.currency || 'TON'}`)
-    .join(' / ');
+/* ---------------- small UI primitives ---------------- */
+
+function Toggle({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+        checked ? 'bg-indigo-600' : 'bg-slate-200'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
 }
 
-function getBundleSummaryForItems(tariff, items = []) {
-  if (items.length === 0 && tariff.channel_id) {
-    return `Пока только базовый доступ в ${tariff.channels?.title || 'основной канал'}`;
-  }
-  if (items.length === 0) {
-    return 'Бот пока ничего не выдает после оплаты';
-  }
-
-  const channelCount = items.filter((item) => item.item_type === 'channel').length;
-  const resourceCount = items.filter((item) => item.item_type === 'resource').length;
-  const parts = [];
-  if (tariff.channel_id) parts.push('основная группа');
-  if (channelCount > 0) parts.push(`${channelCount} Telegram-целей`);
-  if (resourceCount > 0) parts.push(`${resourceCount} доп. материалов`);
-  return parts.join(' + ');
+function FieldLabel({ children, required }) {
+  return (
+    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 mb-1.5">
+      {children}
+      {required && <span className="text-rose-500">*</span>}
+    </label>
+  );
 }
 
-function CreateTariffForm({
-  newTariff,
-  setNewTariff,
-  channels,
-  officialBots,
-  onCreate
+function ErrorText({ children }) {
+  if (!children) return null;
+  return <div className="text-xs text-rose-600 font-semibold mt-1">{children}</div>;
+}
+
+function priceBadgeClass(currency) {
+  if (currency === 'TON') return 'bg-slate-900 text-white border-0';
+  if (currency === 'RUB') return 'bg-emerald-600 text-white border-0';
+  return 'bg-slate-100 text-slate-700 border border-slate-200';
+}
+
+function currencyGlyph(currency) {
+  if (currency === 'TON') return 'TON';
+  if (currency === 'RUB') return '₽';
+  return currency;
+}
+
+/* ---------------- tariff row ---------------- */
+
+function AccessChip({ icon: Icon, label }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+      <Icon className="w-3 h-3 text-slate-400" />
+      <span className="max-w-[140px] truncate">{label}</span>
+    </span>
+  );
+}
+
+function TariffRow({ group, botsById, deleteTariff }) {
+  const tariff = group.lead;
+  const bundleItems = dedupeBundleItems(group.bundleItems || []);
+  const hasGroup = tariff.channel_id || tariff.channels;
+
+  const bot = tariff.bot_id ? botsById.get(String(tariff.bot_id)) : null;
+  const botLabel = bot
+    ? (bot.tg_username ? `@${bot.tg_username}` : `Bot ${bot.tg_account_id}`)
+    : 'Все боты';
+  const durationLabel = !tariff.duration_days || tariff.duration_days === 0
+    ? 'Навсегда'
+    : `${tariff.duration_days} дн.`;
+  const isLifetime = !tariff.duration_days || tariff.duration_days === 0;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:gap-6 p-4 hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-b-0">
+      {/* Left zone: identity + chips */}
+      <div className="flex items-start gap-3 min-w-0">
+        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+          <Package className="w-5 h-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-base text-slate-900 truncate max-w-full">{tariff.title}</h3>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              {isLifetime ? <InfinityIcon className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+              {durationLabel}
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+              <BotIcon className="w-3 h-3" />
+              {botLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+            {hasGroup && (
+              <AccessChip icon={Users} label={tariff.channels?.title || 'Закрытый канал'} />
+            )}
+            {bundleItems.map((item) => (
+              <AccessChip
+                key={item.itemIds?.[0] || item.id}
+                icon={item.item_type === 'channel' ? MessageCircle : Link2}
+                label={item.item_type === 'channel'
+                  ? (item.channels?.title || 'Чат')
+                  : (item.resource_title || 'Ссылка / текст')}
+              />
+            ))}
+            {!hasGroup && bundleItems.length === 0 && (
+              <span className="text-[11px] text-slate-400 italic font-medium">Только базовая выдача</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Right zone: prices + actions */}
+      <div className="flex items-center justify-between md:justify-end gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {group.variants.map((variant) => (
+            <span
+              key={variant.id}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black ${priceBadgeClass(variant.currency)}`}
+            >
+              {variant.price} {currencyGlyph(variant.currency)}
+            </span>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (!window.confirm(`Удалить тариф «${tariff.title}»? Все варианты оплаты будут удалены.`)) return;
+            deleteTariff(group.tariffIds);
+          }}
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 shrink-0 transition-colors"
+          title="Удалить тариф"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- create dialog ---------------- */
+
+function CreateTariffPanel({
+  onClose, newTariff, setNewTariff, channels, officialBots, onCreate, creating, bundleSupport
 }) {
   const [errors, setErrors] = useState({});
+  const [tab, setTab] = useState('basic');
+
   const groupAccess = newTariff.access_methods?.group || { enabled: true };
   const chatAccess = newTariff.access_methods?.chat || { enabled: false, channel_id: '' };
   const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
@@ -105,10 +226,15 @@ function CreateTariffForm({
   const botChannels = selectedBotId
     ? channels.filter((channel) => channel.bot_id === selectedBotId)
     : channels;
-  const groupChannels = botChannels.filter((channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
-  const chatChannels = botChannels.filter((channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase()));
+  const isChannel = (channel) => !['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase());
+  const isChat = (channel) => ['group', 'supergroup'].includes(String(channel.chat_type || '').toLowerCase());
+  // "Closed" = private (or unknown visibility — treat as private until Telegram tells us otherwise).
+  // Public channels can be joined freely, so they shouldn't appear as "what buyer gets after paying".
+  const isClosed = (channel) => String(channel.visibility || '').toLowerCase() !== 'public';
 
-  // Автоматически выбираем первый вариант, если значение не задано
+  const groupChannels = botChannels.filter((channel) => isChannel(channel) && isClosed(channel));
+  const chatChannels = botChannels.filter((channel) => isChat(channel) && isClosed(channel));
+
   useEffect(() => {
     if (groupAccess.enabled && !newTariff.channel_id && groupChannels.length > 0) {
       setNewTariff((prev) => ({ ...prev, channel_id: groupChannels[0].id }));
@@ -122,11 +248,10 @@ function CreateTariffForm({
   }, [chatAccess.enabled, chatChannels.length]);
 
   useEffect(() => {
-    setNewTariff((prev) => {
-      const updates = { channel_id: '' };
-      if (groupChannels.length > 0) updates.channel_id = groupChannels[0].id;
-      return { ...prev, ...updates };
-    });
+    setNewTariff((prev) => ({
+      ...prev,
+      channel_id: groupChannels.length > 0 ? groupChannels[0].id : ''
+    }));
     updateAccessMethod('chat', { channel_id: chatChannels.length > 0 ? chatChannels[0].id : '' });
   }, [selectedBotId]);
 
@@ -135,10 +260,7 @@ function CreateTariffForm({
       ...prev,
       payment_methods: {
         ...prev.payment_methods,
-        [method]: {
-          ...prev.payment_methods?.[method],
-          ...patch
-        }
+        [method]: { ...prev.payment_methods?.[method], ...patch }
       }
     }));
   };
@@ -148,663 +270,586 @@ function CreateTariffForm({
       ...prev,
       access_methods: {
         ...prev.access_methods,
-        [method]: {
-          ...prev.access_methods?.[method],
-          ...patch
-        }
+        [method]: { ...prev.access_methods?.[method], ...patch }
       }
     }));
   };
 
-  const validateAndCreate = () => {
-    const newErrors = {};
-
-    if (!newTariff.title?.trim()) {
-      newErrors.title = 'Укажи название тарифа';
-    }
-
+  const handleCreate = () => {
+    const nextErrors = {};
+    if (!newTariff.title?.trim()) nextErrors.title = 'Укажи название тарифа';
     if (!isLifetime && (!newTariff.duration_days || Number(newTariff.duration_days) <= 0)) {
-      newErrors.duration_days = 'Укажи срок действия';
+      nextErrors.duration_days = 'Укажи срок действия';
     }
-
     const hasAnyAccess = groupAccess.enabled || chatAccess.enabled || resourceAccess.enabled;
-    if (!hasAnyAccess) {
-      newErrors.access = 'Выбери хотя бы один метод выдачи';
-    }
-
+    if (!hasAnyAccess) nextErrors.access = 'Выбери хотя бы один метод выдачи';
     if (groupAccess.enabled && !newTariff.channel_id) {
-      if (groupChannels.length === 0) {
-        newErrors.group_channel = 'Нет доступных закрытых групп';
-      } else {
-        newErrors.group_channel = 'Выбери закрытую группу';
-      }
+      nextErrors.group_channel = groupChannels.length === 0 ? 'У бота нет закрытых каналов' : 'Выбери закрытый канал';
     }
-
     if (chatAccess.enabled && !chatAccess.channel_id) {
-      if (chatChannels.length === 0) {
-        newErrors.chat_channel = 'Нет доступных чатов';
-      } else {
-        newErrors.chat_channel = 'Выбери чат';
-      }
+      nextErrors.chat_channel = chatChannels.length === 0 ? 'У бота нет закрытых чатов' : 'Выбери закрытый чат';
     }
-
     if (resourceAccess.enabled && !resourceAccess.text?.trim()) {
-      newErrors.resource_text = 'Заполни ссылку или текст';
+      nextErrors.resource_text = 'Заполни ссылку или текст';
     }
-
     const hasAnyPayment = tonPayment.enabled || rubPayment.enabled;
-    if (!hasAnyPayment) {
-      newErrors.payment = 'Включи хотя бы один способ оплаты';
-    }
-
+    if (!hasAnyPayment) nextErrors.payment = 'Включи хотя бы один способ оплаты';
     if (tonPayment.enabled && (!tonPayment.price || Number(tonPayment.price) <= 0)) {
-      newErrors.ton_price = 'Укажи стоимость в TON';
+      nextErrors.ton_price = 'Укажи стоимость в TON';
     }
-
     if (rubPayment.enabled && (!rubPayment.price || Number(rubPayment.price) <= 0)) {
-      newErrors.rub_price = 'Укажи стоимость в RUB';
+      nextErrors.rub_price = 'Укажи стоимость в RUB';
     }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const firstErrorTab = nextErrors.title || nextErrors.duration_days ? 'basic'
+        : (nextErrors.access || nextErrors.group_channel || nextErrors.chat_channel || nextErrors.resource_text) ? 'access'
+        : 'payment';
+      setTab(firstErrorTab);
       return;
     }
-
     setErrors({});
     onCreate();
   };
 
-  const getAccessCount = () => {
-    let count = 0;
-    if (groupAccess.enabled) count++;
-    if (chatAccess.enabled) count++;
-    if (resourceAccess.enabled) count++;
-    return count;
-  };
+  const accessCount = [groupAccess.enabled, chatAccess.enabled, resourceAccess.enabled].filter(Boolean).length;
+  const paymentCount = [tonPayment.enabled, rubPayment.enabled].filter(Boolean).length;
 
   return (
-    <div className="create-tariff-form">
-      <div className="create-tariff-window">
-        {/* Заголовок формы */}
-        <div className="create-tariff-window__header">
-          <div className="create-tariff-window__title">Создать новый тариф</div>
-          <div className="create-tariff-window__subtitle">Настройте параметры тарифа для продажи доступа</div>
+    <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Plus className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-slate-900">Создать тариф</h2>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Заполни секции по очереди — состояние сохраняется при переключении табов</p>
+          </div>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onClose}
+          className="h-9 px-3 text-slate-500 hover:text-slate-900 font-bold shrink-0"
+        >
+          Отмена
+        </Button>
+      </div>
 
-        {/* Секции формы */}
-        <div className="create-tariff-window__sections">
-          {/* Базовые настройки */}
-          <div className="create-tariff-section">
-            <div className="create-tariff-section__header">
-              <div className="create-tariff-section__title">
-                <span className="create-tariff-section__number">1</span>
-                Базовые настройки
+      <div className="p-5 sm:p-6">
+        <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="grid w-full grid-cols-3 h-10">
+              <TabsTrigger value="basic">
+                <Tag className="w-3.5 h-3.5" />
+                Основное
+              </TabsTrigger>
+              <TabsTrigger value="access">
+                <Key className="w-3.5 h-3.5" />
+                Доступ
+                {accessCount > 0 && (
+                  <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 rounded px-1.5 font-black">{accessCount}</span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="payment">
+                <CreditCard className="w-3.5 h-3.5" />
+                Оплата
+                {paymentCount > 0 && (
+                  <span className="ml-1 text-[10px] bg-emerald-100 text-emerald-700 rounded px-1.5 font-black">{paymentCount}</span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab: Basic */}
+            <TabsContent value="basic" className="mt-5 space-y-4">
+              <div>
+                <FieldLabel required>Название тарифа</FieldLabel>
+                <Input
+                  value={newTariff.title}
+                  onChange={(e) => setNewTariff((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="VIP месяц"
+                  className={`h-11 ${errors.title ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
+                />
+                <ErrorText>{errors.title}</ErrorText>
               </div>
-              <div className="create-tariff-section__hint">Название и срок действия тарифа</div>
-            </div>
-            <div className="create-tariff-section__body">
-              <div className="form-grid">
-                <div className={`field-group ${errors.title ? 'field-group--error' : ''}`}>
-                  <label className="field-label">Название тарифа</label>
-                  <input
-                    className="field"
-                    value={newTariff.title}
-                    onChange={(e) => setNewTariff((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder="VIP месяц"
-                  />
-                  {errors.title && <div className="error-text">{errors.title}</div>}
-                </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {!isLifetime ? (
-                  <div className={`field-group ${errors.duration_days ? 'field-group--error' : ''}`}>
-                    <label className="field-label">Срок (дни)</label>
-                    <input
-                      className="field"
+                  <div>
+                    <FieldLabel required>Срок (дни)</FieldLabel>
+                    <Input
                       type="number"
                       min="1"
                       value={newTariff.duration_days}
                       onChange={(e) => setNewTariff((prev) => ({ ...prev, duration_days: e.target.value }))}
                       placeholder="30"
+                      className={`h-11 ${errors.duration_days ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
                     />
-                    {errors.duration_days && <div className="error-text">{errors.duration_days}</div>}
+                    <ErrorText>{errors.duration_days}</ErrorText>
                   </div>
                 ) : (
-                  <div className="field-group">
-                    <label className="field-label">Срок доступа</label>
-                    <div className="field" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534', fontWeight: '600' }}>
-                      ✓ Навсегда
+                  <div>
+                    <FieldLabel>Срок доступа</FieldLabel>
+                    <div className="h-11 px-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                      <InfinityIcon className="w-4 h-4" />
+                      Навсегда
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Переключатель "Навсегда" */}
-              <div className="create-tariff-option" style={{ marginTop: '12px' }}>
-                <div
-                  className="create-tariff-option__head"
-                  onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: !prev.is_lifetime }))}
-                >
-                  <div className="create-tariff-option__info">
-                    <div className="create-tariff-option__title">Навсегда</div>
-                    <div className="create-tariff-option__hint">Пожизненный доступ без ограничения по сроку</div>
-                  </div>
-                  <div
-                    className={`toggle-switch ${isLifetime ? 'toggle-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={isLifetime}
-                    aria-label="Навсегда"
+                <div>
+                  <FieldLabel>Тип срока</FieldLabel>
+                  <button
+                    type="button"
+                    onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: !prev.is_lifetime }))}
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-sm font-bold text-slate-900 hover:bg-slate-50"
                   >
-                    <span className="toggle-switch__thumb" />
-                  </div>
+                    <span>{isLifetime ? 'Пожизненный' : 'Ограниченный'}</span>
+                    <Toggle checked={isLifetime} onChange={(v) => setNewTariff((prev) => ({ ...prev, is_lifetime: v }))} label="Пожизненный" />
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="create-tariff-divider" />
-
-          {/* Официальный бот */}
-          <div className="create-tariff-section">
-            <div className="create-tariff-section__header">
-              <div className="create-tariff-section__title">
-                <span className="create-tariff-section__number">2</span>
-                Официальный бот
-              </div>
-              <div className="create-tariff-section__hint">Бот который будет выдавать доступ после оплаты</div>
-            </div>
-            <div className="create-tariff-section__body">
-              <div className={`field-group ${errors.bot ? 'field-group--error' : ''}`}>
-                <label className="field-label">Выбери бота</label>
+              <div>
+                <FieldLabel>Официальный бот</FieldLabel>
                 {officialBots.length > 0 ? (
-                  <select
-                    className="field"
-                    value={selectedBotId}
-                    onChange={(e) => setNewTariff((prev) => ({ ...prev, bot_id: e.target.value }))}
+                  <Select
+                    value={selectedBotId || '__all__'}
+                    onValueChange={(v) => setNewTariff((prev) => ({ ...prev, bot_id: v === '__all__' ? '' : v }))}
                   >
-                    <option value="">Все боты</option>
-                    {officialBots.map((bot) => (
-                      <option key={bot.id} value={bot.id}>
-                        {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
+                      <SelectValue placeholder="Все боты" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="__all__">Все боты</SelectItem>
+                      {officialBots.map((bot) => (
+                        <SelectItem key={bot.id} value={bot.id}>
+                          {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
-                  <select className="field" disabled>
-                    <option value="">Нет подключённых ботов</option>
-                  </select>
+                  <Input value="Нет подключённых ботов" disabled className="bg-slate-50 text-slate-400 h-11" />
                 )}
-                {errors.bot && <div className="error-text">{errors.bot}</div>}
               </div>
-            </div>
-          </div>
+            </TabsContent>
 
-          <div className="create-tariff-divider" />
+            {/* Tab: Access */}
+            <TabsContent value="access" className="mt-5 space-y-3">
+              <ErrorText>{errors.access}</ErrorText>
 
-          {/* Методы доступа */}
-          <div className="create-tariff-section">
-            <div className="create-tariff-section__header">
-              <div className="create-tariff-section__title">
-                <span className="create-tariff-section__number">3</span>
-                Что выдаём после оплаты
-                <span className="create-tariff-badge">{getAccessCount()} опций</span>
-              </div>
-              <div className="create-tariff-section__hint">Выбери одну или несколько опций для пакета</div>
-            </div>
-            <div className="create-tariff-section__body">
-              {/* Закрытая группа */}
-              <div className={`create-tariff-option ${groupAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div
-                  className="create-tariff-option__head"
-                  onClick={() => updateAccessMethod('group', { enabled: !groupAccess.enabled })}
-                >
-                  <div className="create-tariff-option__info">
-                    <div className="create-tariff-option__title">Закрытая группа</div>
-                    <div className="create-tariff-option__hint">Бот отправит ссылку на вступление</div>
+              {/* Closed channel (private) */}
+              <div className={`rounded-xl border transition-all ${groupAccess.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-slate-900">Закрытый канал</div>
+                    <div className="text-xs text-slate-500 font-medium">Приватный канал — бот выдаст доступ после оплаты</div>
                   </div>
-                  <div
-                    className={`toggle-switch ${groupAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={groupAccess.enabled}
-                    aria-label="Закрытая группа"
-                  >
-                    <span className="toggle-switch__thumb" />
-                  </div>
+                  <Toggle checked={groupAccess.enabled} onChange={(v) => updateAccessMethod('group', { enabled: v })} label="Закрытый канал" />
                 </div>
                 {groupAccess.enabled && (
-                  <div className="create-tariff-option__body">
-                    <label className={`field-group ${errors.group_channel ? 'field-group--error' : ''}`}>
-                      {groupChannels.length > 0 ? (
-                        <select
-                          className="field"
-                          value={newTariff.channel_id}
-                          onChange={(e) => setNewTariff((prev) => ({ ...prev, channel_id: e.target.value }))}
-                        >
+                  <div className="px-3 pb-3 space-y-2">
+                    {groupChannels.length > 0 ? (
+                      <Select
+                        value={newTariff.channel_id}
+                        onValueChange={(v) => setNewTariff((prev) => ({ ...prev, channel_id: v }))}
+                      >
+                        <SelectTrigger className={`h-10 w-full bg-white rounded-xl shadow-sm ${errors.group_channel ? 'border-rose-300' : 'border-slate-200'}`}>
+                          <SelectValue placeholder="Выбери закрытый канал" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
                           {groupChannels.map((channel) => (
-                            <option key={channel.id} value={channel.id}>{channel.title}</option>
+                            <SelectItem key={channel.id} value={channel.id}>{channel.title}</SelectItem>
                           ))}
-                        </select>
-                      ) : (
-                        <select className="field" disabled>
-                          <option value="">Нет доступных групп</option>
-                        </select>
-                      )}
-                      {errors.group_channel && <div className="error-text">{errors.group_channel}</div>}
-                    </label>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input value="Нет закрытых каналов у этого бота" disabled className="bg-slate-50 text-slate-400 h-10" />
+                        <div className="flex items-start gap-2 text-[11px] font-medium text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                          <span>
+                            Создай приватный канал в Telegram, добавь бота админом с правом приглашать, затем привяжи в <a href="/app/botfather" className="text-indigo-600 font-bold underline">/app/botfather</a> и обнови данные канала.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <ErrorText>{errors.group_channel}</ErrorText>
                   </div>
                 )}
               </div>
 
-              {/* Чат */}
-              <div className={`create-tariff-option ${chatAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div
-                  className="create-tariff-option__head"
-                  onClick={() => updateAccessMethod('chat', { enabled: !chatAccess.enabled })}
-                >
-                  <div className="create-tariff-option__info">
-                    <div className="create-tariff-option__title">Чат</div>
-                    <div className="create-tariff-option__hint">Бот отправит ссылку на вступление в чат</div>
+              {/* Closed chat (private) — only if bundleSupport */}
+              {bundleSupport && (
+                <div className={`rounded-xl border transition-all ${chatAccess.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
+                  <div className="flex items-center justify-between gap-3 p-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-900">Закрытый чат</div>
+                      <div className="text-xs text-slate-500 font-medium">Приватная группа — бот отправит ссылку на вступление</div>
+                    </div>
+                    <Toggle checked={chatAccess.enabled} onChange={(v) => updateAccessMethod('chat', { enabled: v })} label="Закрытый чат" />
                   </div>
-                  <div
-                    className={`toggle-switch ${chatAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={chatAccess.enabled}
-                    aria-label="Чат"
-                  >
-                    <span className="toggle-switch__thumb" />
-                  </div>
-                </div>
-                {chatAccess.enabled && (
-                  <div className="create-tariff-option__body">
-                    <label className={`field-group ${errors.chat_channel ? 'field-group--error' : ''}`}>
+                  {chatAccess.enabled && (
+                    <div className="px-3 pb-3">
                       {chatChannels.length > 0 ? (
-                        <select
-                          className="field"
+                        <Select
                           value={chatAccess.channel_id || ''}
-                          onChange={(e) => updateAccessMethod('chat', { channel_id: e.target.value })}
+                          onValueChange={(v) => updateAccessMethod('chat', { channel_id: v })}
                         >
-                          {chatChannels.map((channel) => (
-                            <option key={channel.id} value={channel.id}>{channel.title}</option>
-                          ))}
-                        </select>
+                          <SelectTrigger className={`h-10 w-full bg-white rounded-xl shadow-sm ${errors.chat_channel ? 'border-rose-300' : 'border-slate-200'}`}>
+                            <SelectValue placeholder="Выбери закрытый чат" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-xl">
+                            {chatChannels.map((channel) => (
+                              <SelectItem key={channel.id} value={channel.id}>{channel.title}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
-                        <select className="field" disabled>
-                          <option value="">Нет доступных чатов</option>
-                        </select>
+                        <Input value="Нет закрытых чатов у этого бота" disabled className="bg-slate-50 text-slate-400 h-10" />
                       )}
-                      {errors.chat_channel && <div className="error-text">{errors.chat_channel}</div>}
-                    </label>
-                  </div>
-                )}
-              </div>
-
-              {/* Ссылка / текст */}
-              <div className={`create-tariff-option ${resourceAccess.enabled ? 'create-tariff-option--active' : ''}`}>
-                <div
-                  className="create-tariff-option__head"
-                  onClick={() => updateAccessMethod('resource', { enabled: !resourceAccess.enabled })}
-                >
-                  <div className="create-tariff-option__info">
-                    <div className="create-tariff-option__title">Ссылка / текст</div>
-                    <div className="create-tariff-option__hint">Бот отправит материал после оплаты</div>
-                  </div>
-                  <div
-                    className={`toggle-switch ${resourceAccess.enabled ? 'toggle-switch--on' : ''}`}
-                    role="switch"
-                    aria-checked={resourceAccess.enabled}
-                    aria-label="Ссылка / текст"
-                  >
-                    <span className="toggle-switch__thumb" />
-                  </div>
+                      <ErrorText>{errors.chat_channel}</ErrorText>
+                    </div>
+                  )}
                 </div>
-                {resourceAccess.enabled && (
-                  <div className="create-tariff-option__body">
-                    <div className="form-grid">
-                      <div className="field-group">
-                        <label className="field-label">Название материала</label>
-                        <input
-                          className="field"
+              )}
+
+              {/* Resource (only if bundleSupport) */}
+              {bundleSupport && (
+                <div className={`rounded-xl border transition-all ${resourceAccess.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
+                  <div className="flex items-center justify-between gap-3 p-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-900">Ссылка / текст</div>
+                      <div className="text-xs text-slate-500 font-medium">Бот отправит материал после оплаты</div>
+                    </div>
+                    <Toggle checked={resourceAccess.enabled} onChange={(v) => updateAccessMethod('resource', { enabled: v })} label="Ссылка / текст" />
+                  </div>
+                  {resourceAccess.enabled && (
+                    <div className="px-3 pb-3 space-y-3">
+                      <div>
+                        <FieldLabel>Название материала</FieldLabel>
+                        <Input
                           value={resourceAccess.title || ''}
                           onChange={(e) => updateAccessMethod('resource', { title: e.target.value })}
                           placeholder="Гайд / курс / ссылка"
+                          className="h-10"
                         />
                       </div>
-                      <div className={`field-group ${errors.resource_text ? 'field-group--error' : ''}`}>
-                        <label className="field-label">URL или текст</label>
-                        <textarea
-                          className="field textarea-field"
+                      <div>
+                        <FieldLabel required>URL или текст</FieldLabel>
+                        <Textarea
                           value={resourceAccess.text || ''}
                           onChange={(e) => updateAccessMethod('resource', { text: e.target.value })}
                           placeholder="https://... или текст, который получит покупатель"
                           rows={2}
+                          className={errors.resource_text ? 'border-rose-300 focus-visible:ring-rose-500' : ''}
                         />
-                        {errors.resource_text && <div className="error-text">{errors.resource_text}</div>}
+                        <ErrorText>{errors.resource_text}</ErrorText>
                       </div>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {!bundleSupport && (
+                <div className="flex items-start gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>Bundle-пакеты в БД не активированы — доступны только закрытые группы.</span>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Tab: Payment */}
+            <TabsContent value="payment" className="mt-5 space-y-3">
+              <ErrorText>{errors.payment}</ErrorText>
+
+              <div className={`rounded-xl border transition-all ${tonPayment.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Badge className="bg-slate-900 text-white border-0 text-xs font-black">TON</Badge>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">TON</div>
+                      <div className="text-xs text-slate-500 font-medium">Криптоплатёж</div>
+                    </div>
+                  </div>
+                  <Toggle checked={tonPayment.enabled} onChange={(v) => updatePaymentMethod('ton', { enabled: v })} label="TON" />
+                </div>
+                {tonPayment.enabled && (
+                  <div className="px-3 pb-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={tonPayment.price}
+                      onChange={(e) => updatePaymentMethod('ton', { price: e.target.value })}
+                      placeholder="Стоимость в TON"
+                      className={`h-10 ${errors.ton_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
+                    />
+                    <ErrorText>{errors.ton_price}</ErrorText>
                   </div>
                 )}
               </div>
 
-              {errors.access && <div className="error-text">{errors.access}</div>}
-            </div>
-          </div>
-
-          <div className="create-tariff-divider" />
-
-          {/* Способы оплаты */}
-          <div className="create-tariff-section">
-            <div className="create-tariff-section__header">
-              <div className="create-tariff-section__title">
-                <span className="create-tariff-section__number">4</span>
-                Способы оплаты
-              </div>
-              <div className="create-tariff-section__hint">Включи один или оба способа</div>
-            </div>
-            <div className="create-tariff-section__body">
-              <div className="create-tariff-payment">
-                <div className={`create-tariff-payment-option ${tonPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
-                  <div
-                    className="create-tariff-payment-option__head"
-                    onClick={() => updatePaymentMethod('ton', { enabled: !tonPayment.enabled })}
-                  >
-                    <div className="create-tariff-payment-option__info">
-                      <div className="create-tariff-payment-option__currency">TON</div>
-                    </div>
-                    <div
-                      className={`toggle-switch ${tonPayment.enabled ? 'toggle-switch--on' : ''}`}
-                      role="switch"
-                      aria-checked={tonPayment.enabled}
-                      aria-label="TON"
-                    >
-                      <span className="toggle-switch__thumb" />
+              <div className={`rounded-xl border transition-all ${rubPayment.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center justify-between gap-3 p-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Badge className="bg-emerald-600 text-white border-0 text-xs font-black">₽</Badge>
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">RUB / СБП</div>
+                      <div className="text-xs text-slate-500 font-medium">Перевод по номеру телефона</div>
                     </div>
                   </div>
-                  {tonPayment.enabled && (
-                    <div className="create-tariff-payment-option__body">
-                      <div className={`field-group ${errors.ton_price ? 'field-group--error' : ''}`}>
-                        <input
-                          className="field"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={tonPayment.price}
-                          onChange={(e) => updatePaymentMethod('ton', { price: e.target.value })}
-                          placeholder="Стоимость в TON"
-                        />
-                        {errors.ton_price && <div className="error-text">{errors.ton_price}</div>}
-                      </div>
-                    </div>
-                  )}
+                  <Toggle checked={rubPayment.enabled} onChange={(v) => updatePaymentMethod('rub', { enabled: v })} label="RUB" />
                 </div>
-
-                <div className={`create-tariff-payment-option ${rubPayment.enabled ? 'create-tariff-payment-option--active' : ''}`}>
-                  <div
-                    className="create-tariff-payment-option__head"
-                    onClick={() => updatePaymentMethod('rub', { enabled: !rubPayment.enabled })}
-                  >
-                    <div className="create-tariff-payment-option__info">
-                      <div className="create-tariff-payment-option__currency">RUB / СБП</div>
-                    </div>
-                    <div
-                      className={`toggle-switch ${rubPayment.enabled ? 'toggle-switch--on' : ''}`}
-                      role="switch"
-                      aria-checked={rubPayment.enabled}
-                      aria-label="RUB / СБП"
-                    >
-                      <span className="toggle-switch__thumb" />
-                    </div>
+                {rubPayment.enabled && (
+                  <div className="px-3 pb-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rubPayment.price}
+                      onChange={(e) => updatePaymentMethod('rub', { price: e.target.value })}
+                      placeholder="Стоимость в RUB"
+                      className={`h-10 ${errors.rub_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
+                    />
+                    <ErrorText>{errors.rub_price}</ErrorText>
                   </div>
-                  {rubPayment.enabled && (
-                    <div className="create-tariff-payment-option__body">
-                      <div className={`field-group ${errors.rub_price ? 'field-group--error' : ''}`}>
-                        <input
-                          className="field"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={rubPayment.price}
-                          onChange={(e) => updatePaymentMethod('rub', { price: e.target.value })}
-                          placeholder="Стоимость в RUB"
-                        />
-                        {errors.rub_price && <div className="error-text">{errors.rub_price}</div>}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
-
-              {errors.payment && <div className="error-text">{errors.payment}</div>}
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         </div>
 
-        {/* Кнопка создания */}
-        <div className="create-tariff-window__footer">
-          <button
+        <div className="bg-slate-50/50 border-t border-slate-100 px-5 sm:px-6 py-4 flex items-center justify-end gap-2">
+          <Button
             type="button"
-            className="button button--primary button--large"
-            onClick={validateAndCreate}
+            onClick={handleCreate}
+            disabled={creating}
+            className="h-10 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
           >
-            Создать тариф
-          </button>
+            {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+            {creating ? 'Создание...' : 'Создать тариф'}
+          </Button>
         </div>
-      </div>
-    </div>
+      </Card>
   );
 }
 
+/* ---------------- empty state ---------------- */
+
+function EmptyState({ onCreate }) {
+  return (
+    <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <div className="p-10 text-center space-y-4">
+        <div className="mx-auto w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+          <Package className="w-7 h-7" />
+        </div>
+        <div className="max-w-md mx-auto space-y-1.5">
+          <h3 className="font-bold text-lg text-slate-900">Пока нет тарифов</h3>
+          <p className="text-sm text-slate-500 font-medium">Создай первый тариф — он станет доступен для покупки через бота</p>
+        </div>
+        <Button
+          type="button"
+          onClick={onCreate}
+          className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 mt-2"
+        >
+          <Plus className="w-4 h-4 mr-2" /> Создать тариф
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/* ---------------- main export ---------------- */
+
 export function TariffsSection({
-  addBundleItem,
-  bundleDrafts,
   bundleSupport,
   channels,
   createTariff,
-  deleteBundleItem,
   deleteTariff,
-  ensureBundleDraft,
   getTariffBundleItems,
   newTariff,
   officialBots,
-  setBundleDrafts,
   setNewTariff,
-  tariffs
+  tariffs,
+  creating
 }) {
-  const tariffGroups = useMemo(() => buildTariffGroups(tariffs), [tariffs]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filterBotId, setFilterBotId] = useState('');
+
+  // Auto-select first bot if any exist (don't default to "All bots")
+  useEffect(() => {
+    if (!filterBotId && officialBots && officialBots.length > 0) {
+      setFilterBotId(String(officialBots[0].id));
+    }
+  }, [officialBots, filterBotId]);
+
+  // Default new tariff's bot to first bot when create panel opens
+  useEffect(() => {
+    if (createOpen && officialBots && officialBots.length > 0 && !newTariff.bot_id) {
+      setNewTariff((prev) => ({ ...prev, bot_id: String(officialBots[0].id) }));
+    }
+  }, [createOpen, officialBots, newTariff.bot_id, setNewTariff]);
+
+  const tariffGroups = useMemo(() => {
+    const groups = buildTariffGroups(tariffs).map((group) => ({
+      ...group,
+      bundleItems: getTariffBundleItems(group.tariffIds)
+    }));
+    return groups;
+  }, [tariffs, getTariffBundleItems]);
+
   const botsById = useMemo(() => {
     const map = new Map();
     (officialBots || []).forEach((bot) => map.set(String(bot.id), bot));
     return map;
   }, [officialBots]);
 
-  return (
-    <>
-      <section className="plans-tariffs-section">
-        {!bundleSupport ? (
-          <div className="empty-inline" style={{ marginBottom: 16 }}>
-            Bundle-пакеты в БД не активированы. Пока будет работать только схема один тариф → один основной канал.
-          </div>
-        ) : null}
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tariffGroups.filter((group) => {
+      if (q && !String(group.lead?.title || '').toLowerCase().includes(q)) return false;
+      if (filterBotId) {
+        const botId = String(group.lead?.bot_id || '');
+        if (botId && botId !== filterBotId) return false;
+      }
+      return true;
+    });
+  }, [tariffGroups, search, filterBotId]);
 
-        {/* Новая форма создания тарифа */}
-        <CreateTariffForm
+  const hasTariffs = tariffGroups.length > 0;
+
+  return (
+    <section className="space-y-5">
+      {/* Page header */}
+      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                <Package className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-slate-900 truncate">Тарифы и доступ</h1>
+                <p className="text-sm text-slate-500 mt-0.5 truncate">Подписки, цены и пакеты доступа для твоих каналов</p>
+              </div>
+            </div>
+            {officialBots.length > 0 && (
+              <div className="w-full max-w-[260px] shrink-0">
+                <Select value={filterBotId || '__all__'} onValueChange={(v) => setFilterBotId(v === '__all__' ? '' : v)}>
+                  <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
+                    <span className="flex items-center gap-2">
+                      <BotIcon className="w-4 h-4 text-slate-400" />
+                      <SelectValue placeholder="Все боты" />
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="__all__">Все боты</SelectItem>
+                    {officialBots.map((bot) => (
+                      <SelectItem key={bot.id} value={bot.id}>
+                        {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Create panel (inline, above the list) */}
+      {createOpen && (
+        <CreateTariffPanel
+          onClose={() => setCreateOpen(false)}
           newTariff={newTariff}
           setNewTariff={setNewTariff}
           channels={channels}
           officialBots={officialBots}
           onCreate={createTariff}
+          creating={creating}
+          bundleSupport={bundleSupport}
         />
+      )}
 
-        {tariffGroups.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__icon">📦</div>
-            <div className="empty-state__title">Пока нет тарифов</div>
-            <div className="empty-state__hint">Создай первый тариф с помощью формы выше</div>
+      {/* Toolbar + list, OR empty state */}
+      {hasTariffs ? (
+        <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+          {/* Card header with title + create */}
+          <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Check className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  Активные тарифы
+                  <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-0 text-xs rounded-full px-2">
+                    {filteredGroups.length}
+                  </Badge>
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
+                  {filterBotId ? 'Отфильтровано по выбранному боту' : 'Доступны для покупки через бота'}
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setCreateOpen((v) => !v)}
+              className={`h-10 px-4 rounded-xl font-bold shadow-md shrink-0 transition-colors ${
+                createOpen
+                  ? 'bg-slate-200 text-slate-700 hover:bg-slate-300 shadow-slate-200'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+              }`}
+            >
+              {createOpen ? (
+                <>Отмена</>
+              ) : (
+                <><Plus className="w-4 h-4 mr-2" /> Создать</>
+              )}
+            </Button>
           </div>
-        ) : (
-          <div className="tariffs-grid">
-            {tariffGroups.map((group) => {
-              const tariff = group.lead;
-              const bundleItems = dedupeBundleItems(getTariffBundleItems(group.tariffIds));
-              const hasGroup = tariff.channel_id || tariff.channels;
-              const hasBundleItems = bundleItems.length > 0;
 
-              return (
-                <div key={group.key} className="tariff-card">
-                  {/* Header */}
-                  <div className="tariff-card__header">
-                    <div className="tariff-card__title-block">
-                      <h3 className="tariff-card__title">{tariff.title}</h3>
-                      <div className="tariff-card__meta">
-                        <span className="tariff-card__meta-item">
-                          <Users size={14} />
-                          {(() => {
-                            const bot = tariff.bot_id ? botsById.get(String(tariff.bot_id)) : null;
-                            return bot ? (bot.tg_username ? `@${bot.tg_username}` : `Bot ${bot.tg_account_id}`) : (tariff.channels?.title || 'Нет группы');
-                          })()}
-                        </span>
-                        <span className="tariff-card__meta-item">
-                          <Clock size={14} />
-                          {tariff.duration_days === 0 || !tariff.duration_days ? 'Навсегда' : `${tariff.duration_days} дней`}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      className="tariff-card__delete"
-                      onClick={() => deleteTariff(group.tariffIds)}
-                      title="Удалить тариф"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Payment Methods */}
-                  <div className="tariff-card__section">
-                    <div className="tariff-card__section-title">Способы оплаты</div>
-                    <div className="payment-methods-list">
-                      {group.variants.map((variant) => (
-                        <div key={variant.id} className="payment-method-item">
-                          <span className="payment-method-item__currency">{variant.currency}</span>
-                          {variant.price}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Access Methods */}
-                  <div className="tariff-card__section">
-                    <div className="tariff-card__section-title">Что выдаётся</div>
-                    <div className="access-methods-list">
-                      {hasGroup && (
-                        <div className="access-method-item">
-                          <div className="access-method-item__icon">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <circle cx="9" cy="7" r="4" />
-                            </svg>
-                          </div>
-                          <div className="access-method-item__content">
-                            <div className="access-method-item__label">Основная группа</div>
-                            <div className="access-method-item__value">{tariff.channels?.title || 'Закрытый канал'}</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {bundleItems.map((item) => {
-                        if (item.item_type === 'channel') {
-                          return (
-                            <div key={item.id} className="access-method-item">
-                              <div className="access-method-item__icon">
-                                <MessageCircle size={16} />
-                              </div>
-                              <div className="access-method-item__content">
-                                <div className="access-method-item__label">Доп. чат</div>
-                                <div className="access-method-item__value">{item.channels?.title || 'Telegram-чат'}</div>
-                              </div>
-                            </div>
-                          );
-                        } else {
-                          return (
-                            <div key={item.id} className="access-method-item">
-                              <div className="access-method-item__icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102 1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656 0l4 4a4 4 0 105.656 5.656l-1.101 1.101m0-4.899L19.07 4.93a4 4 0 00-5.656 0l-4 4a4 4 0 00-5.656 0l4 4a4 4 0 005.656 5.656l-1.101 1.101M7 17h.01" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </div>
-                              <div className="access-method-item__content">
-                                <div className="access-method-item__label">Материал</div>
-                                <div className="access-method-item__value">{item.resource_title || 'Ссылка или текст'}</div>
-                              </div>
-                            </div>
-                          );
-                        }
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Ссылка на покупку */}
-                  <div className="tariff-card__section border-t border-slate-100 pt-3.5 mt-3.5">
-                    <div className="tariff-card__section-title flex items-center gap-1">
-                      <Link2 size={12} className="text-slate-400" />
-                      Ссылка на покупку (Deep Link)
-                    </div>
-                    {(() => {
-                      const bot = tariff.bot_id ? botsById.get(String(tariff.bot_id)) : null;
-                      if (!bot) {
-                        return <div className="text-[11px] text-slate-400 font-semibold mt-1">Для получения ссылки выберите бота в настройках тарифа.</div>;
-                      }
-                      const buyUrl = `https://t.me/${bot.tg_username || `bot-${bot.tg_account_id}`}?start=buy_${tariff.id}`;
-                      return (
-                        <div className="flex items-center gap-2 mt-1.5 bg-slate-50 border border-slate-100 px-3 py-2 rounded-xl">
-                          <input
-                            type="text"
-                            readOnly
-                            value={buyUrl}
-                            onClick={(e) => e.target.select()}
-                            className="bg-transparent text-xs font-mono select-all focus:outline-none flex-1 overflow-x-auto text-slate-600 font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(buyUrl);
-                              toast.success('Ссылка на покупку скопирована!');
-                            }}
-                            className="text-[10px] bg-white border border-slate-200 hover:border-indigo-200 hover:text-indigo-600 px-2 py-1 rounded-lg font-bold shrink-0 shadow-sm transition-all"
-                          >
-                            Копировать
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Footer Stats */}
-                  <div className="tariff-card__footer">
-                    {group.variants.length > 1 && (
-                      <div className="tariff-badge">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="2" y="5" width="20" height="14" rx="2" />
-                          <line x1="2" y1="10" x2="22" y2="10" />
-                        </svg>
-                        {group.variants.length} {group.variants.length === 1 ? 'способ оплаты' : group.variants.length > 1 && group.variants.length < 5 ? 'способа оплаты' : 'способов оплаты'}
-                      </div>
-                    )}
-                    {hasBundleItems && (
-                      <div className="tariff-badge tariff-badge--bundle">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-                        </svg>
-                        Пакет из {bundleItems.length + (hasGroup ? 1 : 0)} {bundleItems.length + (hasGroup ? 1 : 0) === 1 ? 'элемента' : (bundleItems.length + (hasGroup ? 1 : 0)) < 5 ? 'элементов' : 'элементов'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+          {/* Toolbar (search only) */}
+          <div className="bg-white border-b border-slate-100 p-4 sm:p-5">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Поиск по названию тарифа..."
+                className="w-full pl-10 pr-4 h-11 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+              />
+            </div>
           </div>
-        )}
-      </section>
-    </>
+
+          {/* Rows */}
+          {filteredGroups.length === 0 ? (
+            <div className="p-10 text-center space-y-2">
+              <Search className="w-8 h-8 text-slate-300 mx-auto" />
+              <div className="text-sm font-bold text-slate-700">Ничего не найдено</div>
+              <div className="text-xs text-slate-500 font-medium">Попробуй изменить запрос или бота в шапке</div>
+            </div>
+          ) : (
+            <div>
+              {filteredGroups.map((group) => (
+                <TariffRow
+                  key={group.key}
+                  group={group}
+                  botsById={botsById}
+                  deleteTariff={deleteTariff}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : (
+        <EmptyState onCreate={() => setCreateOpen(true)} />
+      )}
+    </section>
   );
 }

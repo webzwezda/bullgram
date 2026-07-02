@@ -27,6 +27,7 @@ const navSections = [
   },
   {
     title: 'Магазин',
+    adminOnly: true,
     items: [
       { to: '/shop', label: 'Магазин', icon: ShoppingBag },
       { to: '/purchases', label: 'Покупки', icon: Receipt }
@@ -69,8 +70,8 @@ export function App() {
       <Route path="/" element={<TelegramPaywallPage />} />
       <Route path="/telegram" element={<TelegramPaywallPage />} />
       <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/shop" element={<ShopPage />} />
-      <Route path="/purchases" element={<PurchasesPage />} />
+      <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
+      <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
       <Route path="/plan" element={<MyPlanPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

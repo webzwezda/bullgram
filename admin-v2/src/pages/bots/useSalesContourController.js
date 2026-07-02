@@ -426,19 +426,31 @@ export function useSalesContourController({
   };
 
   const publicChannelOptions = useMemo(() => {
-    return rawChannelOptions.filter((option) => toId(option.id) !== toId(draft.paidChannelId));
+    return rawChannelOptions.filter((option) =>
+      toId(option.id) !== toId(draft.paidChannelId) &&
+      option.visibility !== 'private'
+    );
   }, [draft.paidChannelId, rawChannelOptions]);
 
   const paidChannelOptions = useMemo(() => {
-    return rawChannelOptions.filter((option) => toId(option.id) !== toId(draft.publicChannelId));
+    return rawChannelOptions.filter((option) =>
+      toId(option.id) !== toId(draft.publicChannelId) &&
+      option.visibility !== 'public'
+    );
   }, [draft.publicChannelId, rawChannelOptions]);
 
   const publicChatOptions = useMemo(() => {
-    return rawChatOptions.filter((option) => toId(option.id) !== toId(draft.paidChatId));
+    return rawChatOptions.filter((option) =>
+      toId(option.id) !== toId(draft.paidChatId) &&
+      option.visibility !== 'private'
+    );
   }, [draft.paidChatId, rawChatOptions]);
 
   const paidChatOptions = useMemo(() => {
-    return rawChatOptions.filter((option) => toId(option.id) !== toId(draft.publicChatId));
+    return rawChatOptions.filter((option) =>
+      toId(option.id) !== toId(draft.publicChatId) &&
+      option.visibility !== 'public'
+    );
   }, [draft.publicChatId, rawChatOptions]);
 
   const normalizedRightsTarget = normalizeContourTarget(botRightsTarget);

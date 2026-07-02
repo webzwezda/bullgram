@@ -25,6 +25,64 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
                     }
                 });
 
+                // Обработка ссылки-приглашения в админы бота: /start add_admin_<secret>
+                if (startPayload.startsWith('add_admin_')) {
+                    const inviteSecret = String(startPayload.replace(/^add_admin_/, '')).trim();
+                    const tgUserId = Number(ctx.from?.id);
+                    if (!inviteSecret || isNaN(tgUserId)) {
+                        await ctx.reply('Приглашение недействительно.');
+                        return sendMainMenu(ctx);
+                    }
+
+                    const { data: botAccount, error: botErr } = await service.supabase
+                        .from('tg_accounts')
+                        .select('id, admin_tg_ids, admin_invite_secret')
+                        .eq('id', botId)
+                        .maybeSingle();
+
+                    const secretMatches = !botErr
+                        && botAccount
+                        && botAccount.admin_invite_secret
+                        && String(botAccount.admin_invite_secret) === String(inviteSecret);
+
+                    if (!secretMatches) {
+                        await ctx.reply(
+                            '❌ Приглашение недействительно или отозвано.\n\n' +
+                            'Попросите у владельца бота новую ссылку-приглашение.',
+                            { parse_mode: 'HTML' }
+                        );
+                        return sendMainMenu(ctx);
+                    }
+
+                    const currentAdmins = Array.isArray(botAccount.admin_tg_ids)
+                        ? botAccount.admin_tg_ids.map(Number)
+                        : [];
+
+                    if (currentAdmins.includes(tgUserId)) {
+                        await ctx.reply('✅ Вы уже являетесь администратором этого бота.', { parse_mode: 'HTML' });
+                        return sendMainMenu(ctx);
+                    }
+
+                    currentAdmins.push(tgUserId);
+                    const { error: updateErr } = await service.supabase
+                        .from('tg_accounts')
+                        .update({ admin_tg_ids: currentAdmins })
+                        .eq('id', botId);
+
+                    if (updateErr) {
+                        console.error('Ошибка добавления admin по invite-ссылке:', updateErr.message);
+                        await ctx.reply('Не удалось добавить вас в администраторы. Попробуйте позже.');
+                        return sendMainMenu(ctx);
+                    }
+
+                    await ctx.reply(
+                        '🎉 <b>Доступ администратора получен</b>\n\n' +
+                        'Теперь вы можете управлять этим ботом — публиковать посты, модерировать предложения и смотреть статистику.',
+                        { parse_mode: 'HTML' }
+                    );
+                    return sendMainMenu(ctx);
+                }
+
                 // Обработка прямой ссылки на покупку тарифа/товара
                 if (startPayload.startsWith('buy_')) {
                     const tariffId = startPayload.replace(/^buy_tariff_/, '').replace(/^buy_/, '');

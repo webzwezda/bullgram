@@ -13,7 +13,19 @@ export function startAutopostBot(botId, token, registerHandlers) {
 
     const bot = new Telegraf(token);
     registerHandlers(bot, botId);
-    bot.launch()
+    // message_reaction — опциональный update, по дефолту Telegram его не шлёт.
+    // Нужен для подсчёта реакций и best-of. chat_member уже использовался в chat-member.js.
+    bot.launch({
+        allowed_updates: [
+            'message',
+            'edited_message',
+            'callback_query',
+            'channel_post',
+            'edited_channel_post',
+            'message_reaction',
+            'chat_member'
+        ]
+    })
         .then(() => log.info('lifecycle', 'bot_started', { botId }))
         .catch(err => log.error('lifecycle', 'bot_launch_failed', { botId, err }));
     activeAutopostBots.set(botId, bot);

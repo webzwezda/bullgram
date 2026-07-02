@@ -44,6 +44,20 @@ export function patchChannel(botId, channelId, payload, token) {
     });
 }
 
+export function unlinkChannel(botId, channelId, token) {
+    return request(`/api/autopost/bots/${botId}/channels/${channelId}`, {
+        method: 'DELETE',
+        token
+    });
+}
+
+export function refreshChannel(botId, channelId, token) {
+    return request(`/api/autopost/bots/${botId}/channels/${channelId}/refresh`, {
+        method: 'POST',
+        token
+    });
+}
+
 export function addAdmin(botId, adminTgId, token) {
     return request(`/api/autopost/bots/${botId}/admins`, {
         method: 'POST',

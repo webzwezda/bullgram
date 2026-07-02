@@ -63,7 +63,7 @@ export function useTariffsController({
     }
 
     if (groupAccess.enabled && !newTariff.channel_id) {
-      toast.error('Выбери закрытую группу для выдачи доступа.');
+      toast.error('Выбери закрытый канал для выдачи доступа.');
       return;
     }
 

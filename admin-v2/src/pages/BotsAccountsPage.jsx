@@ -39,9 +39,16 @@ function showUiMessage(text, tone = 'default') {
   return toast(text);
 }
 
+const CONTOUR_ROLE_LABELS = {
+  public_channel_id: 'Открытый канал',
+  paid_channel_id: 'Закрытый канал',
+  public_chat_id: 'Открытый чат',
+  paid_chat_id: 'Закрытый чат'
+};
+
 // Shared inventory data lives in hooks; page still owns userbot mutations and selection sync outside official-bot slice.
 function BotsAccountsPageContent({ mode = 'userbots' }) {
-  const { accessToken, user, profilePlan } = useAuth();
+  const { accessToken, user, profilePlan, profileRole } = useAuth();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
   const [refreshingTelegramPlaceId, setRefreshingTelegramPlaceId] = useState('');
@@ -101,15 +108,26 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   const {
     addOfficialBot,
+    addingBotAdmin,
     botAdminDrafts,
+    botAdmins,
+    botAdminsLoading,
     botForm,
+    handleAddBotAdmin,
+    handleRemoveBotAdmin,
+    handleRegenerateBotAdminInvite,
+    inviteLink,
+    newAdminTgId,
     officialBots,
     refreshOfficialBotWebhookStatus,
+    regeneratingInvite,
+    reregisterWebhook,
     saveBotAdmin,
     selectedOfficialBot,
     selectedOfficialBotId,
     setBotAdminDrafts,
     setBotForm,
+    setNewAdminTgId,
     setSelectedOfficialBotId
   } = useOfficialBotsController({
     accessToken,
@@ -158,12 +176,23 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
     setRefreshingTelegramPlaceId(placeId);
     try {
-      await apiRequest(`/api/official-bot/channels/${placeId}/refresh`, {
+      const data = await apiRequest(`/api/official-bot/channels/${placeId}/refresh`, {
         accessToken,
         method: 'POST'
       });
       await reloadAccounts();
-      showUiMessage('Информация о Telegram-площадке обновлена.', 'success');
+      const change = data?.contourChange;
+      if (change && change.from && change.to) {
+        const from = CONTOUR_ROLE_LABELS[change.from] || change.from;
+        const to = CONTOUR_ROLE_LABELS[change.to] || change.to;
+        if (change.displacedChannelId) {
+          showUiMessage(`Канал перенесён из «${from}» в «${to}». Предыдущий канал из «${to}» перемещён в свободные площадки.`, 'success');
+        } else {
+          showUiMessage(`Канал автоматически перенесён из «${from}» в «${to}».`, 'success');
+        }
+      } else {
+        showUiMessage('Информация о Telegram-площадке обновлена.', 'success');
+      }
     } catch (error) {
       showUiMessage(error.message, 'error');
     } finally {
@@ -269,11 +298,22 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     setBotAdminDrafts,
     saveBotAdmin,
     refreshOfficialBotWebhookStatus,
+    reregisterWebhook,
     channelsByBotId,
     deleteTelegramPlace,
     refreshTelegramPlaceInfo,
     refreshingTelegramPlaceId,
-    salesContourSectionProps
+    salesContourSectionProps,
+    addingBotAdmin,
+    botAdmins,
+    botAdminsLoading,
+    handleAddBotAdmin,
+    handleRemoveBotAdmin,
+    handleRegenerateBotAdminInvite,
+    inviteLink,
+    newAdminTgId,
+    regeneratingInvite,
+    setNewAdminTgId
   };
 
   const onboardingSectionCommonProps = {
@@ -392,7 +432,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         <OfficialBotsSection {...officialBotsSectionProps} />
       ) : (
         <>
-          <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+          {profileRole === 'admin' && <UserbotStorefrontSection {...buyerStorefrontSectionProps} />}
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}

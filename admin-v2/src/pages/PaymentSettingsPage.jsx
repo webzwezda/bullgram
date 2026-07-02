@@ -411,7 +411,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             .order('created_at', { ascending: false }),
           supabase
             .from('channels')
-            .select('id, title, tg_chat_id, chat_type, bot_id')
+            .select('id, title, tg_chat_id, chat_type, bot_id, visibility, username')
             .eq('owner_id', user.id)
             .order('created_at', { ascending: false }),
           supabase
@@ -1098,6 +1098,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             bundleSupport={state.bundleSupport}
             channels={state.channels}
             createTariff={createTariff}
+            creating={state.saving}
             deleteBundleItem={deleteBundleItem}
             deleteTariff={deleteTariff}
             ensureBundleDraft={ensureBundleDraft}
