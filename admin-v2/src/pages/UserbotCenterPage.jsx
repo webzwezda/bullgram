@@ -1602,18 +1602,32 @@ export function UserbotCenterPage() {
                 ))}
               </select>
             </div>
-            <button
-              className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
-              onClick={refreshCenterNow}
-              disabled={state.refreshing}
-            >
-              {state.refreshing ? (
-                <>
-                  <span className="inline-block size-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
-                  <span>Проверяем {formatElapsed(scanElapsedSeconds)}</span>
-                </>
-              ) : 'Проверить сейчас'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
+                onClick={refreshCenterNow}
+                disabled={state.refreshing}
+              >
+                {state.refreshing ? (
+                  <>
+                    <span className="inline-block size-3 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                    <span>Проверяем {formatElapsed(scanElapsedSeconds)}</span>
+                  </>
+                ) : 'Проверить сейчас'}
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={() => {
+                  if (!selectedUserbotId) return;
+                  window.open(`/app/telegram-web/${selectedUserbotId}`, '_blank', 'noopener');
+                }}
+                disabled={!selectedUserbotId}
+                title={selectedUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
+              >
+                Telegram Web
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
