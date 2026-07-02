@@ -66,48 +66,111 @@ async function bootstrap() {
   // Notification permission.
   installBullrunSafety();
 
-  // Phase 0: tab lock. Probe for ~600ms so any existing leader can claim.
+  // Run tab-lock probe and bridge token fetch in parallel. Lock probe
+  // needs ~600ms to settle (heartbeat interval is 2s); fetch typically
+  // takes 100-300ms. Sequential cost ~900ms; parallel cost ~600ms.
   const userbotIdForLock = extractUserbotIdFromUrl();
-  if (userbotIdForLock) {
-    const lock = acquireBullrunTabLock(userbotIdForLock);
-    // Give the leadership election 600ms to settle (heartbeat interval is 2s;
-    // a contender who just started needs to wait for an existing leader's
-    // response if one exists).
-    await new Promise((r) => setTimeout(r, 600));
-    if (!lock.isLeader) {
-      lock.release();
-      renderTabLockBlocker(userbotIdForLock);
-      return;
-    }
-    // Keep `lock` alive for the lifetime of this tab — release fires on
-    // beforeunload via the lock's own listener.
-  }
 
-  // Phase 1: resolve bridge token before anything else touches GramJS.
-  let bridgeConfig: BullrunBridgeConfig | null = null;
+  const lockProbe: Promise<{ isLeader: boolean; release: () => void } | null> = userbotIdForLock
+    ? (async () => {
+      const lock = acquireBullrunTabLock(userbotIdForLock);
+      await new Promise((r) => setTimeout(r, 600));
+      return lock;
+    })()
+    : Promise.resolve(null);
+
+  const bridgeConfigPromise = fetchBridgeConfig();
+
+  let lockResult: { isLeader: boolean; release: () => void } | null;
+  let bridgeConfig: BullrunBridgeConfig;
   try {
-    bridgeConfig = await fetchBridgeConfig();
+    [lockResult, bridgeConfig] = await Promise.all([
+      lockProbe,
+      bridgeConfigPromise,
+    ]);
   } catch (err) {
+    // Fetch (or lock) failed. Drain lockProbe to avoid unhandled rejection,
+    // then surface the bootstrap error.
+    try {
+      const drain = await lockProbe.catch(() => null);
+      drain?.release();
+    } catch {
+      // ignore
+    }
     renderBootstrapError(err);
     return;
   }
 
-  // Phase 2: nuke any prior gramjs IDB (defense in depth — MemorySession
-  // should be the only place auth_key lives, but stale IDB from older
-  // builds could otherwise resurrect a different account).
-  try {
-    indexedDB.deleteDatabase('gramjs');
-  } catch (err) {
-    if (DEBUG) {
-      // eslint-disable-next-line no-console
-      console.warn('[bullrun-bridge] indexedDB.deleteDatabase("gramjs") failed', err);
-    }
+  if (lockResult && !lockResult.isLeader) {
+    lockResult.release();
+    renderTabLockBlocker(userbotIdForLock!);
+    return;
   }
+  // Keep `lockResult` alive for the lifetime of this tab — release fires
+  // on beforeunload via the lock's own listener.
+
+  // Nuke any prior gramjs IDB. Must complete before init() runs: GramJS
+  // opens its own IDB during init, and an in-flight deleteDatabase would
+  // block that open indefinitely (this was the root cause of the
+  // "first load hangs, works on reload" bug).
+  await nukeGramjsIdb();
 
   setBridgeConfig(bridgeConfig);
 
-  // Phase 3: upstream init sequence.
   await init();
+}
+
+async function nukeGramjsIdb(): Promise<void> {
+  const DB_NAME = 'gramjs';
+
+  // Skip if no such DB exists (avoids the open-request-blocked-by-delete
+  // quirk). `databases()` is supported in Chrome/Edge/FF but not Safari;
+  // on Safari we fall through and attempt the delete unconditionally.
+  try {
+    if (typeof (indexedDB as any).databases === 'function') {
+      const dbs = await (indexedDB as any).databases();
+      if (!Array.isArray(dbs) || !dbs.some((db) => db?.name === DB_NAME)) {
+        return;
+      }
+    }
+  } catch {
+    // Best-effort — fall through to attempt delete anyway.
+  }
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve();
+      }
+    };
+    const timeout = setTimeout(finish, 2000);
+
+    let req: IDBOpenDBRequest;
+    try {
+      req = indexedDB.deleteDatabase(DB_NAME);
+    } catch {
+      finish();
+      return;
+    }
+
+    req.onsuccess = finish;
+    req.onerror = () => {
+      if (DEBUG) {
+        // eslint-disable-next-line no-console
+        console.warn('[bullrun-bridge] indexedDB.deleteDatabase("gramjs") errored', req.error);
+      }
+      finish();
+    };
+    req.onblocked = () => {
+      if (DEBUG) {
+        // eslint-disable-next-line no-console
+        console.warn('[bullrun-bridge] indexedDB.deleteDatabase("gramjs") blocked — waiting up to 2s');
+      }
+    };
+  });
 }
 
 async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
