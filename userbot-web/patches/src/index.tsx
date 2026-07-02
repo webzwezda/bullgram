@@ -46,6 +46,8 @@ import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import updateWebmanifest from './util/updateWebmanifest';
 import { setBridgeConfig, type BullrunBridgeConfig } from './util/bullrunBridge';
+import { installBullrunSafety } from './util/bullrunSafety';
+import { acquireBullrunTabLock, renderTabLockBlocker } from './util/bullrunTabLock';
 
 import App from './components/App';
 
@@ -59,6 +61,28 @@ if (STRICTERDOM_ENABLED) {
 void bootstrap();
 
 async function bootstrap() {
+  // Install runtime safety guards (WebRTC, push, media devices) BEFORE
+  // any other module can construct an RTCPeerConnection or request
+  // Notification permission.
+  installBullrunSafety();
+
+  // Phase 0: tab lock. Probe for ~600ms so any existing leader can claim.
+  const userbotIdForLock = extractUserbotIdFromUrl();
+  if (userbotIdForLock) {
+    const lock = acquireBullrunTabLock(userbotIdForLock);
+    // Give the leadership election 600ms to settle (heartbeat interval is 2s;
+    // a contender who just started needs to wait for an existing leader's
+    // response if one exists).
+    await new Promise((r) => setTimeout(r, 600));
+    if (!lock.isLeader) {
+      lock.release();
+      renderTabLockBlocker(userbotIdForLock);
+      return;
+    }
+    // Keep `lock` alive for the lifetime of this tab — release fires on
+    // beforeunload via the lock's own listener.
+  }
+
   // Phase 1: resolve bridge token before anything else touches GramJS.
   let bridgeConfig: BullrunBridgeConfig | null = null;
   try {
