@@ -47,8 +47,8 @@ export default function (supabase, mtprotoBridgeService) {
             if (message === 'FORBIDDEN') {
                 return res.status(403).json({ error: 'FORBIDDEN' });
             }
-            if (message === 'SESSION_INVALID') {
-                return res.status(422).json({ error: 'SESSION_INVALID' });
+            if (message === 'SESSION_INVALID' || message === 'SESSION_DECODE_FAILED') {
+                return res.status(422).json({ error: message });
             }
             console.error('[userbot-web] issueBridgeToken failed:', message);
             return res.status(500).json({ error: 'INTERNAL_ERROR' });

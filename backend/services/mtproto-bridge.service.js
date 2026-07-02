@@ -1,6 +1,7 @@
 import { SocksClient } from 'socks';
 import { randomBytes } from 'crypto';
 import net from 'net';
+import { StringSession } from 'telegram/sessions/index.js';
 import { decrypt } from '../utils/crypto.js';
 
 const TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -8,6 +9,24 @@ const TTL_CLEAN_INTERVAL_MS = 60 * 1000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const TCP_CONNECT_TIMEOUT_MS = 10_000;
 const ALLOWED_ORIGIN_SUFFIXES = ['bullgram.xyz', 'bullrun.ru', 'localhost'];
+
+function decodeStringSessionToApiForm(stringSession) {
+    if (!stringSession || typeof stringSession !== 'string') return null;
+    try {
+        const ss = new StringSession(stringSession);
+        const dcId = Number(ss._dcId);
+        const keyHex = ss._key ? Buffer.from(ss._key).toString('hex') : null;
+        if (!dcId || !keyHex) return null;
+        return {
+            mainDcId: dcId,
+            keys: { [dcId]: keyHex },
+            isTest: false
+        };
+    } catch (err) {
+        console.error('[mtproto-bridge] decode StringSession failed:', err.message);
+        return null;
+    }
+}
 
 export class MtprotoBridgeService {
     constructor(supabase, userbotService) {
@@ -90,6 +109,9 @@ export class MtprotoBridgeService {
         const { token, fingerprint } = this.userbotService.parseSessionData(decrypted);
         if (!token) throw new Error('SESSION_INVALID');
 
+        const sessionData = decodeStringSessionToApiForm(token);
+        if (!sessionData) throw new Error('SESSION_DECODE_FAILED');
+
         const proxyConfig = this.userbotService._buildProxy(userbot) || null;
         const bridgeToken = randomBytes(32).toString('hex');
         const sessionToken = randomBytes(16).toString('hex');
@@ -121,6 +143,7 @@ export class MtprotoBridgeService {
             sessionToken,
             wsUrl: process.env.TELEGRAM_WEB_WS_URL || '/api/mtproto-bridge',
             fingerprint,
+            sessionData,
             expiresAt: now + TOKEN_TTL_MS
         };
     }

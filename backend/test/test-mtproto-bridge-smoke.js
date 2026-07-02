@@ -49,6 +49,10 @@ async function main() {
   assert(typeof issued.sessionToken === 'string' && issued.sessionToken.length === 32, 'sessionToken is 32-char hex');
   assert(issued.fingerprint && typeof issued.fingerprint.api_id === 'number', 'fingerprint has api_id');
   assert(issued.expiresAt > Date.now(), 'expiresAt is in the future');
+  assert(issued.sessionData && typeof issued.sessionData.mainDcId === 'number', 'sessionData has mainDcId');
+  assert(issued.sessionData.keys && Object.keys(issued.sessionData.keys).length > 0, 'sessionData has keys');
+  assert(typeof issued.sessionData.keys[issued.sessionData.mainDcId] === 'string', 'mainDcId key present as hex');
+  console.log(`    ↳ sessionData decoded: dc=${issued.sessionData.mainDcId}, keyHex=${issued.sessionData.keys[issued.sessionData.mainDcId].slice(0, 16)}…`);
 
   console.log('\n[Test 4] Audit row written for session_issued');
   await new Promise((r) => setTimeout(r, 300));
