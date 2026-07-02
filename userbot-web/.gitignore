@@ -1,5 +1,6 @@
 node_modules
 dist
+upstream
 .vite
 *.log
 .DS_Store

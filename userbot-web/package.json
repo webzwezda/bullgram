@@ -1,19 +1,12 @@
 {
-  "name": "bullrun-userbot-web",
+  "name": "bullrun-userbot-web-builder",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "description": "Build orchestrator for the vendored Ajaxy/telegram-tt fork with BullRun MTProto bridge patches",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.4.0",
-    "vite": "^6.2.0"
+    "fetch": "bash scripts/fetch-upstream.sh",
+    "patch": "bash scripts/apply-patches.sh",
+    "build": "bash scripts/build.sh",
+    "clean": "bash scripts/clean.sh"
   }
 }
