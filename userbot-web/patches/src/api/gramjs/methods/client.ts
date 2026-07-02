@@ -120,6 +120,12 @@ export async function init(initialArgs: ApiInitialArgs) {
       systemVersion: bullrunFingerprint.systemVersion || platform || DEFAULT_PLATFORM,
       appVersion: bullrunFingerprint.appVersion || `${APP_VERSION} ${APP_CODE_NAME}`,
       useWSS: true,
+      // BullRun: our patched getDC returns IPv6 literals. TelegramClient's
+      // _initSession compares `serverAddress.includes(':') !== _useIPV6`
+      // and if they mismatch, calls setDC again — which unconditionally
+      // deletes the auth_key we just loaded. useIPV6=true keeps the
+      // check consistent so the auth_key survives into connect().
+      useIPV6: true,
       additionalDcsDisabled: IS_TEST,
       shouldDebugExportedSenders,
       shouldForceHttpTransport,
