@@ -30,11 +30,15 @@ BullRun backend (single PM2 process, port 3000)
   └─ socks-proxy-agent → userbot's proxy → Telegram DC IP:443 (raw TCP)
 ```
 
-**Протокол моста (уточнённый):**
-- Первый binary frame от браузера: 4-байт заголовок `[magic=0xB7, version=0x01, dcId, reserved=0x00]`. Backend парсит dcId, открывает raw TCP к соответствующему DC IP:443 через SOCKS5-прокси юзербота.
-- Все последующие binary frames в обе стороны — payload = сырые MTProto bytes (codec уже отработал в браузерном GramJS). Backend пишет их verbatim в TCP-сокет, без WS-framing на Telegram-стороне.
+**Протокол моста (уточнённый после Phase 0 spike):**
+- Первый text frame от браузера: `JSON.stringify({ip, port, dcId, version})`. Backend парсит JSON, открывает raw TCP к `ip:port` через SOCKS5-прокси юзербота. `dcId` факультативный — для логирования и audit, не для resolution.
+- Bridge НЕ держит DC IP таблицу. GramJS резолвит DC IP из StringSession и передаёт его в `socket.connect(port, ip)` — bridge просто форвардит то, что пришло. Подтверждено Phase 0: GramJS коннектится к `2001:b28:f23d:f001::a:80` (IPv6), `socks` library корректно форвардит IPv6 destination через IPv4-прокси.
+- Все последующие binary frames в обе стороны — payload = сырые MTProto bytes (codec уже отработал в браузерном GramJS). Backend пишет их verbatim в TCP-сокет.
 - TCP-ответы от Telegram → verbatim как WS binary frames обратно в браузер.
+- Bridge отправляет ACK в виде text frame `"ok"` после успешного TCP-connect, либо `"error:<msg>"` + close.
 - Bridge token — **multi-use с TTL 5 минут**. Одна сессия GramJS открывает несколько WS (main DC + file DCs DC2/DC4) под одним токеном. После 5 мин — GramJS рефетчит токен через REST.
+
+> **Phase 0 spike (2026-07-02):** end-to-end доказано на реальном userbot Erik (`43cd7bf3...`). `getMe` + `getDialogs` через мост возвращают реальные данные. Source IP аккаунта — тот же SOCKS5 (`193.23.197.169:21130`), что и `createAuthorizedClient`. См. `backend/test/spike-mtproto-bridge/README.md`.
 
 **Почему это безопасно для аккаунтов:** даже если мост полностью сломается, source IP аккаунта не меняется — тот же SOCKS5-прокси, что и `createAuthorizedClient`. Худший исход = неработающий UI, не забаненный аккаунт.
 
@@ -60,7 +64,7 @@ BullRun backend (single PM2 process, port 3000)
 - `ops/scripts/deploy-v2.sh` — extend pattern with separate rsync target for `/var/www/bullrun-telegram-web`.
 
 **New files:**
-- `backend/services/mtproto-bridge.service.js` (~350 LOC) — bridge state machine, multi-use tokens, DC IP table, TCP pipe.
+- `backend/services/mtproto-bridge.service.js` (~300 LOC) — bridge state machine, multi-use tokens, TCP pipe. DC IP table НЕ нужна (см. Phase 0 spike findings).
 - `backend/routes/userbot-web.routes.js` (~100 LOC) — token issuance endpoint.
 - `backend/migrations/NNN_telegram_web_audit.sql` — new table for audit (see §6).
 - `backend/test/test-mtproto-bridge.js` (~250 LOC) — mock browser integration test.
@@ -76,8 +80,7 @@ BullRun backend (single PM2 process, port 3000)
 ## Phased Implementation
 
 ### Phase 1 — Repo scaffolding (no runtime changes)
-- Создать `userbot-web/` как git submodule форка `Ajaxy/telegram-tt` (пин к последнему stable tag).
-- Заглушка `userbot-web/index.html` — "BullRun Telegram Web — coming soon".
+- Stub-директория `userbot-web/` с заглушкой `index.html` ("BullRun Telegram Web — coming soon"). Submodule форка `Ajaxy/telegram-tt` добавляется в Phase 3, когда есть что патчить — сейчас это пустая трата 100+ MB в репо.
 - Stub `vite.config.ts`, `package.json`, чтобы собиралось в `userbot-web/dist/`.
 - nginx: добавить **перед `location /app/`** (строка 77) блок:
   ```nginx
@@ -104,10 +107,11 @@ BullRun backend (single PM2 process, port 3000)
   ```
 - **New `backend/services/mtproto-bridge.service.js`:**
   - In-memory `Map<bridgeToken, { userbotId, ownerId, proxyConfig, fingerprint, sessionToken, expiresAt, createdAt }>` (TTL 5 мин, multi-use).
-  - DC IP таблица. **Замечание:** в GramJS-исходниках захардкожен только дефолтный IP `149.154.167.91` (`node_modules/telegram/client/telegramBaseClient.js:26`); полный список DC1-DC5 GramJS получает рантаймно через `help.getConfig`. Для bootstrap моста используем публичные IP из [core.telegram.org/dcs](https://core.telegram.org/dcs): DC1=149.154.175.50, DC2=149.154.167.51, DC3=149.154.175.100, DC4=149.154.167.91, DC5=91.108.56.130. Media DCs используют те же IP, но разные порты/пути. Список может меняться — мост должен уметь принимать обновлённый список через конфиг.
+  - DC IP таблица НЕ нужна. GramJS резолвит DC IP из StringSession и передает его в `socket.connect(port, ip)` — bridge просто форвардит. Подтверждено Phase 0 spike.
   - `issueBridgeToken(userbotId, adminId, adminIp, userAgent)` → валидация ownership (`tg_accounts.owner_id`), decrypt session via `decrypt()`, parseSessionData, build proxy config via `_buildProxy(userbot)`, сгенерировать `crypto.randomBytes(32).toString('hex')`, сохранить в Map, записать в `telegram_web_audit`, вернуть `{ bridgeToken, wsUrl, sessionToken, fingerprint, expiresAt }`.
   - `handleConnection(ws, req)` → распарсить `bridge_token` из query, найти в Map (401 + close если нет/expired), повесить обработчики.
-  - На первый binary frame: распарсить 4-байт header → dcId → lookup DC IP → открыть raw TCP через `socks-proxy-agent` (использовать тот же `_buildProxy` output) → дождаться TCP connect ACK → отправить обратно 4-байт ACK `[0xB7, 0x01, dcId, 0x00]`. При ошибке — 1-байт error code + close.
+  - На первый text frame: распарсить `JSON.parse(data.toString())` → `{ip, port, dcId}`. Открыть raw TCP через `SocksClient.createConnection({ proxy: proxyConfig, destination: { host: ip, port } })` (использовать тот же `_buildProxy` output) → дождаться TCP connect → отправить обратно text frame `"ok"`. При ошибке — text frame `"error:<msg>"` + close. JSON-frame fallback: text `"ip:port"` парсится через `lastIndexOf(':')` для IPv6-совместимости.
+  - **Использовать `socks` (SocksClient), не `socks-proxy-agent`** — последний плохо работает с IPv6 destination. Phase 0 spike использует `SocksClient.createConnection` напрямую, работает с IPv6 DC out-of-the-box.
   - Все последующие binary frames: `ws.on('message', (data) => tcpSocket.write(data))` и `tcpSocket.on('data', (chunk) => ws.send(chunk))`. Verbatim byte pipe.
   - Cleanup: на close любой стороны — `tcpSocket.destroy()`, log duration+bytes в audit, **НЕ** удалять токен из Map (multi-use). Token evictит TTL cleaner.
   - TTL cleaner: `setInterval` раз в минуту, удаляет expired tokens из Map.
