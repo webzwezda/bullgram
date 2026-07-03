@@ -415,14 +415,6 @@ export default function dashboardRoutes(supabase) {
                     hint: 'Без прокси можно держать только один direct-аккаунт. Остальным нужен живой прокси.'
                 },
                 {
-                    id: 'groups_need_bot',
-                    title: 'Группы без bot-админа',
-                    value: channelsWithoutBot.length,
-                    tone: channelsWithoutBot.length > 0 ? 'warning' : 'ok',
-                    href: '/app/admin-groups',
-                    hint: 'Пока нет официального бота-админа, группа не готова к продажам и нормальному доступу.'
-                },
-                {
                     id: 'ops_signal_setup',
                     title: 'Сигналы от юзерботов не собраны',
                     value: signalRoutingReady ? 0 : 1,
