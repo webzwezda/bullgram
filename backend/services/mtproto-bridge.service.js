@@ -81,7 +81,10 @@ export class MtprotoBridgeService {
                     userbot_id: entry.userbotId,
                     action: 'token_expired',
                     admin_ip: entry.adminIp,
-                    user_agent: entry.userAgent
+                    user_agent: entry.userAgent,
+                    proxy_used: entry.proxyConfig
+                        ? `${entry.proxyConfig.ip}:${entry.proxyConfig.port}`
+                        : null
                 }).catch(() => {});
             }
         }
@@ -148,12 +151,17 @@ export class MtprotoBridgeService {
             expiresAt: now + TOKEN_TTL_MS
         });
 
+        const proxyUsedAtIssue = proxyConfig
+            ? `${proxyConfig.ip}:${proxyConfig.port}`
+            : null;
+
         await this._audit({
             admin_id: adminId,
             userbot_id: userbotId,
             action: 'session_issued',
             admin_ip: adminIp,
-            user_agent: userAgent
+            user_agent: userAgent,
+            proxy_used: proxyUsedAtIssue
         });
 
         return {
@@ -177,7 +185,10 @@ export class MtprotoBridgeService {
                 userbot_id: entry.userbotId,
                 action: 'token_expired',
                 admin_ip: entry.adminIp,
-                user_agent: entry.userAgent
+                user_agent: entry.userAgent,
+                proxy_used: entry.proxyConfig
+                    ? `${entry.proxyConfig.ip}:${entry.proxyConfig.port}`
+                    : null
             }).catch(() => {});
             return null;
         }
