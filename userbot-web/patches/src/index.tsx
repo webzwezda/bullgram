@@ -64,10 +64,11 @@ if (STRICTERDOM_ENABLED) {
   enableStrict();
 }
 
-void bootstrap();
-
 // L2.1: phase timings. Exposed on window.__bullrunTimings for inspection
 // via DevTools console. Logged live when DEBUG.
+// NOTE: must be declared before `void bootstrap()` below — async functions
+// start executing synchronously until first await, so bootstrap() would
+// hit the temporal dead zone on `bootstrapT0`/`timings` otherwise.
 const bootstrapT0 = performance.now();
 const timings: Array<[string, number]> = [];
 (window as any).__bullrunTimings = timings;
@@ -79,6 +80,8 @@ function mark(name: string) {
     console.log(`[bullrun-timing] +${ms.toFixed(0)}ms ${name}`);
   }
 }
+
+void bootstrap();
 
 async function bootstrap() {
   mark('bootstrap-start');
