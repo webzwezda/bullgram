@@ -1,7 +1,9 @@
+import { SUPPORT_TELEGRAM } from '../contacts.js';
+
 export const SALES_LINKS = {
   trial: '/shop?offer=trial',
   p2p: '/shop?offer=p2p',
-  ops: 'https://t.me/webzwezda',
+  ops: SUPPORT_TELEGRAM,
   seller: '/shop?offer=seller'
 };
 

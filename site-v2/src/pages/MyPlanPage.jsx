@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
+import { SUPPORT_TELEGRAM } from '../contacts.js';
 
 function formatWhen(value) {
   if (!value) return '—';
@@ -24,7 +25,7 @@ function planMeta(profilePlan, trialEndsAt, normalEndsAt) {
       days,
       expired: days !== null && days <= 0,
       cta: days !== null && days <= 30 ? 'Продлить' : null,
-      ctaHref: 'https://t.me/webzwezda'
+      ctaHref: SUPPORT_TELEGRAM
     };
   }
   if (profilePlan === 'trial') {
@@ -36,7 +37,7 @@ function planMeta(profilePlan, trialEndsAt, normalEndsAt) {
       days,
       expired: days !== null && days <= 0,
       cta: 'Перейти на Normal',
-      ctaHref: 'https://t.me/webzwezda'
+      ctaHref: SUPPORT_TELEGRAM
     };
   }
   return {
@@ -46,7 +47,7 @@ function planMeta(profilePlan, trialEndsAt, normalEndsAt) {
     days: null,
     expired: false,
     cta: 'Активировать Normal',
-    ctaHref: 'https://t.me/webzwezda'
+    ctaHref: SUPPORT_TELEGRAM
   };
 }
 

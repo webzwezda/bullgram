@@ -11,6 +11,7 @@ import {
   Truck
 } from 'lucide-react';
 import { SALES_LINKS } from '../components/MarketingPrimitives.jsx';
+import { SUPPORT_EMAIL } from '../contacts.js';
 
 const sellerDetails = {
   name: 'BullRun',
@@ -18,7 +19,7 @@ const sellerDetails = {
   legalName: 'Козель Илья Сергеевич',
   taxId: '270415104864',
   address: 'Хабаровский край',
-  email: 'webzwezda@gmail.com',
+  email: SUPPORT_EMAIL,
   phone: '+7 908 461-04-34',
   telegram: '+7 908 461-04-34'
 };
