@@ -941,9 +941,22 @@ export function UserbotCenterPage() {
                 />
                 <div className="min-w-0">
                   <div className="truncate text-[20px] font-black tracking-tight text-slate-950">
-                    {selectedProfileTitle}
+                    {selectedProfileName || 'Имя пока не подтянуто'}
                   </div>
-                  <div className="mt-1 text-[12px] font-medium text-slate-500">
+                  {(() => {
+                    const parts = [
+                      selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '',
+                      selectedUserbot.tg_phone || '',
+                      selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''
+                    ].filter(Boolean);
+                    if (!parts.length) return null;
+                    return (
+                      <div className="mt-1 text-[13px] font-medium text-slate-500 truncate">
+                        {parts.join(' • ')}
+                      </div>
+                    );
+                  })()}
+                  <div className="mt-1 text-[12px] font-medium text-slate-400">
                     Последнее обновление: {selectedProfileSyncedAt}
                   </div>
                 </div>
@@ -978,18 +991,6 @@ export function UserbotCenterPage() {
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
                   placeholder="Фамилия аккаунта"
                 />
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3 border border-slate-100">
-                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Username</div>
-                <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
-                  {selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '—'}
-                </div>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3 border border-slate-100">
-                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Телефон / TG ID</div>
-                <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
-                  {[selectedUserbot.tg_phone, selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''].filter(Boolean).join(' • ') || '—'}
-                </div>
               </div>
             </div>
 
