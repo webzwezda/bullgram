@@ -91,14 +91,15 @@ export class MtprotoBridgeService {
         admin_id, userbot_id, action,
         dc_id = null, bytes_in = 0, bytes_out = 0,
         duration_ms = null, error_code = null, error_message = null,
-        admin_ip = null, user_agent = null
+        admin_ip = null, user_agent = null,
+        proxy_used = null
     }) {
         try {
             await this.supabase.from('telegram_web_audit').insert({
                 admin_id, userbot_id, action,
                 dc_id, bytes_in, bytes_out,
                 duration_ms, error_code, error_message,
-                admin_ip, user_agent
+                admin_ip, user_agent, proxy_used
             });
         } catch (err) {
             console.error('[mtproto-bridge] audit insert failed:', err.message);
@@ -231,6 +232,9 @@ export class MtprotoBridgeService {
             if (state.tcpSocket && !state.tcpSocket.destroyed) state.tcpSocket.destroy();
             const duration_ms = Date.now() - state.openedAt;
             const action = state.handshakeDone && code === 1000 ? 'bridge_closed' : (state.handshakeDone ? 'bridge_error' : 'bridge_error');
+            const proxyUsed = entry.proxyConfig
+                ? `${entry.proxyConfig.ip}:${entry.proxyConfig.port}`
+                : null;
             this._audit({
                 admin_id: entry.adminId,
                 userbot_id: entry.userbotId,
@@ -242,7 +246,8 @@ export class MtprotoBridgeService {
                 error_code: errorCode,
                 error_message: errorMessage,
                 admin_ip: entry.adminIp,
-                user_agent: entry.userAgent
+                user_agent: entry.userAgent,
+                proxy_used: proxyUsed
             }).catch(() => {});
             try {
                 if (ws.readyState === ws.OPEN || ws.readyState === ws.CONNECTING) {
@@ -312,13 +317,27 @@ export class MtprotoBridgeService {
                     state.handshakeTimer = null;
                 }
 
+                const proxyUsed = entry.proxyConfig
+                    ? `${entry.proxyConfig.ip}:${entry.proxyConfig.port}`
+                    : null;
+
+                console.log('[mtproto-bridge] OPENED', JSON.stringify({
+                    userbot_id: entry.userbotId,
+                    admin_id: entry.adminId,
+                    dc_id: state.dcId,
+                    admin_ip: entry.adminIp,
+                    proxy_used: proxyUsed,
+                    direct: !entry.proxyConfig
+                }));
+
                 this._audit({
                     admin_id: entry.adminId,
                     userbot_id: entry.userbotId,
                     action: 'bridge_opened',
                     dc_id: state.dcId,
                     admin_ip: entry.adminIp,
-                    user_agent: entry.userAgent
+                    user_agent: entry.userAgent,
+                    proxy_used: proxyUsed
                 }).catch(() => {});
 
                 ws.send('ok');

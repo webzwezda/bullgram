@@ -1299,6 +1299,10 @@ export function UserbotCenterPage() {
           </div>
           <div className="text-sm text-slate-500 mb-4">
             Кто и когда открывал этот юзербот в Telegram Web, сколько трафика прошло через мост, какие ошибки.
+            <span className="block mt-1 text-xs text-slate-400">
+              Зеленая точка в колонке «Прокси» = соединение шло через привязанный прокси юзербота (безопасно).
+              Красная надпись «НЕТ ПРОКСИ» = мост пошёл напрямую с сервера — это риск бана аккаунта.
+            </span>
           </div>
           {webAuditState.error ? (
             <div className="text-sm text-slate-500">{webAuditState.error}</div>
@@ -1315,6 +1319,7 @@ export function UserbotCenterPage() {
                     <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">DC</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Трафик ↓/↑</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Длина</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Прокси</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">IP админа</th>
                     <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Когда</th>
                   </tr>
@@ -1351,6 +1356,18 @@ export function UserbotCenterPage() {
                           {row.bytes_out ? formatBytes(row.bytes_out) : '—'}
                         </td>
                         <td className="px-4 py-3 text-sm text-slate-700">{row.duration_ms ? formatDurationMs(row.duration_ms) : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-mono">
+                          {row.proxy_used ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Соединение через прокси юзербота" />
+                              {row.proxy_used}
+                            </span>
+                          ) : (
+                            <span className="text-rose-600 font-bold" title="Прямое соединение без прокси — критично для аккаунта!">
+                              НЕТ ПРОКСИ
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-slate-600 font-mono">{row.admin_ip || '—'}</td>
                         <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.created_at)}</td>
                       </tr>

@@ -67,7 +67,7 @@ export default function (supabase, mtprotoBridgeService) {
 
             let query = supabase
                 .from('telegram_web_audit')
-                .select('id, admin_id, userbot_id, action, dc_id, bytes_in, bytes_out, duration_ms, error_code, error_message, admin_ip, user_agent, created_at', { count: 'exact' })
+                .select('id, admin_id, userbot_id, action, dc_id, bytes_in, bytes_out, duration_ms, error_code, error_message, admin_ip, user_agent, proxy_used, created_at', { count: 'exact' })
                 .eq('admin_id', req.user.id)
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1);

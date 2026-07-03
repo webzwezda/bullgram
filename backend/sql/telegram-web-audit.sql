@@ -17,8 +17,23 @@ create table if not exists public.telegram_web_audit (
     error_message text,
     admin_ip text,
     user_agent text,
+    proxy_used text,
     created_at timestamptz not null default now()
 );
+
+-- Idempotent column add for existing installs created before proxy_used.
+do $$
+begin
+    if not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'telegram_web_audit'
+          and column_name = 'proxy_used'
+    ) then
+        alter table public.telegram_web_audit
+            add column proxy_used text;
+    end if;
+end $$;
 
 create index if not exists idx_telegram_web_audit_admin
     on public.telegram_web_audit(admin_id, created_at desc);
