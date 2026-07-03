@@ -1,15 +1,22 @@
 // Smoke test for MtprotoBridgeService: verifies token issuance, audit logging,
 // and feature flag behavior without needing a real ADMIN_JWT.
 //
-// Run:   SUPABASE_URL=https://bullgram.xyz node test/test-mtproto-bridge-smoke.js <userbot_id> <admin_id>
+// Usage: node test/test-mtproto-bridge-smoke.js <userbot_id> <admin_id>
+// Requires SUPABASE_URL + SUPABASE_SERVICE_KEY env (load backend/.env).
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { UserbotService } from '../services/userbot.service.js';
 import { MtprotoBridgeService } from '../services/mtproto-bridge.service.js';
 
-const USERBOT_ID = process.argv[2] || '43cd7bf3-d38f-4e12-bcf5-c86c4906528b';
-const ADMIN_ID = process.argv[3] || '9fd78a21-33b6-4d68-b0f7-a8ddf2e0bce3';
+const USERBOT_ID = process.argv[2];
+const ADMIN_ID = process.argv[3];
+
+if (!USERBOT_ID || !ADMIN_ID) {
+  console.error('Usage: node test/test-mtproto-bridge-smoke.js <userbot_id> <admin_id>');
+  console.error('Both IDs must exist in tg_accounts with the given admin as owner.');
+  process.exit(1);
+}
 
 async function main() {
   process.env.TELEGRAM_WEB_ENABLED = 'true';
