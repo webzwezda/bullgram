@@ -1173,116 +1173,6 @@ export function UserbotCenterPage() {
             ) : null}
           </div>
         ) : null}
-
-        <div className="border-t border-slate-100 p-6 md:p-8">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
-            <div className="text-[15px] font-bold text-slate-900">Активные сессии</div>
-          </div>
-          <div className="text-sm text-slate-500 mb-4">Залогиненные устройства. Можно выкинуть все, кроме серверной сессии BullRun.</div>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
-              onClick={loadAuthorizations}
-              disabled={authorizationsState.loading || !selectedUserbotId}
-            >
-              {authorizationsState.loading ? 'Тянем сессии...' : 'Показать сессии'}
-            </button>
-            <button
-              className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all disabled:opacity-50"
-              onClick={resetOtherSessions}
-              disabled={actionState.resettingAuthorizations || !selectedUserbotId}
-            >
-              {actionState.resettingAuthorizations ? 'Чистим...' : 'Разлогинить остальные'}
-            </button>
-          </div>
-
-          {authorizationsState.error ? (
-            <div className="text-sm text-slate-500">{authorizationsState.error}</div>
-          ) : authorizationsState.loading ? (
-            <div className="text-sm text-slate-500">Тянем авторизации...</div>
-          ) : authorizationsState.rows.length === 0 ? (
-            <div className="text-sm text-slate-500">Нажми «Показать сессии», чтобы загрузить список.</div>
-          ) : (
-            <div className="overflow-x-auto -mx-2">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Устройство</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Приложение</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Где</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Последний движ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {authorizationsState.rows.map((item) => (
-                    <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900">
-                          {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
-                          {item.current ? <span className="ml-2 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">BullRun</span> : null}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
-                        <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800">{item.country || '—'}</div>
-                        <div className="text-xs text-slate-500">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-slate-100 p-6 md:p-8">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ef4444' }} />
-            <div className="text-[15px] font-bold text-slate-900">Telegram-ошибки</div>
-          </div>
-          <div className="text-sm text-slate-500 mb-4">Последние flood/restricted/session ошибки по этому аккаунту.</div>
-          {errorEventsState.error ? (
-            <div className="text-sm text-slate-500">{errorEventsState.error}</div>
-          ) : errorEventsState.loading ? (
-            <div className="text-sm text-slate-500">Загружаем журнал ошибок...</div>
-          ) : errorEventsState.rows.length === 0 ? (
-            <div className="text-sm text-slate-500">Свежих ошибок по этому аккаунту нет.</div>
-          ) : (
-            <div className="overflow-x-auto -mx-2">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Что случилось</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Кому</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Откуда</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Когда</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {errorEventsState.rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-900">{row.restriction_kind || row.event_type}</div>
-                        <div className="text-xs text-slate-500">{row.error_message || 'Без текста ошибки'}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.tg_user_id || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{row.event_source || 'telegram'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.happened_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </>
     );
   }
@@ -1724,10 +1614,7 @@ export function UserbotCenterPage() {
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mt-6">
           <div className="p-6 md:p-8 border-b border-slate-100">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8b5cf6' }} />
-                <div className="text-[15px] font-bold text-slate-900">Telegram Web — мосты</div>
-              </div>
+              <div className="text-[15px] font-bold text-slate-900">Telegram-диагностика</div>
               {webAuditState.activeBridges > 0 && (
                 <div className="px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
@@ -1736,11 +1623,129 @@ export function UserbotCenterPage() {
               )}
             </div>
             <div className="text-sm text-slate-500 mt-1">
-              Последние 3 сессии. Кто открывал этот юзербот в Telegram Web, через какой прокси шёл трафик, какие ошибки.
+              Активные сессии аккаунта, свежие flood/restricted/session ошибки, последние мосты Telegram Web.
             </div>
           </div>
 
           <div className="p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+              <div className="text-[15px] font-bold text-slate-900">Активные сессии</div>
+            </div>
+            <div className="text-sm text-slate-500 mb-4">Залогиненные устройства. Можно выкинуть все, кроме серверной сессии BullRun.</div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                onClick={loadAuthorizations}
+                disabled={authorizationsState.loading || !selectedUserbotId}
+              >
+                {authorizationsState.loading ? 'Тянем сессии...' : 'Показать сессии'}
+              </button>
+              <button
+                className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all disabled:opacity-50"
+                onClick={resetOtherSessions}
+                disabled={actionState.resettingAuthorizations || !selectedUserbotId}
+              >
+                {actionState.resettingAuthorizations ? 'Чистим...' : 'Разлогинить остальные'}
+              </button>
+            </div>
+            {authorizationsState.error ? (
+              <div className="text-sm text-slate-500">{authorizationsState.error}</div>
+            ) : authorizationsState.loading ? (
+              <div className="text-sm text-slate-500">Тянем авторизации...</div>
+            ) : authorizationsState.rows.length === 0 ? (
+              <div className="text-sm text-slate-500">Нажми «Показать сессии», чтобы загрузить список.</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Устройство</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Приложение</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Где</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Последний движ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {authorizationsState.rows.map((item) => (
+                      <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">
+                            {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
+                            {item.current ? <span className="ml-2 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase">BullRun</span> : null}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
+                          <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{item.country || '—'}</div>
+                          <div className="text-xs text-slate-500">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 p-6 md:p-8">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+              <div className="text-[15px] font-bold text-slate-900">Telegram-ошибки</div>
+            </div>
+            <div className="text-sm text-slate-500 mb-4">Последние flood/restricted/session ошибки по этому аккаунту.</div>
+            {errorEventsState.error ? (
+              <div className="text-sm text-slate-500">{errorEventsState.error}</div>
+            ) : errorEventsState.loading ? (
+              <div className="text-sm text-slate-500">Загружаем журнал ошибок...</div>
+            ) : errorEventsState.rows.length === 0 ? (
+              <div className="text-sm text-slate-500">Свежих ошибок по этому аккаунту нет.</div>
+            ) : (
+              <div className="overflow-x-auto -mx-2">
+                <table className="w-full">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Что случилось</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Кому</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Откуда</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Когда</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {errorEventsState.rows.map((row) => (
+                      <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{row.restriction_kind || row.event_type}</div>
+                          <div className="text-xs text-slate-500">{row.error_message || 'Без текста ошибки'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.tg_user_id || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.event_source || 'telegram'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.happened_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 p-6 md:p-8">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8b5cf6' }} />
+                <div className="text-[15px] font-bold text-slate-900">Telegram Web — мосты</div>
+              </div>
+            </div>
+            <div className="text-sm text-slate-500 mb-3">
+              Последние 3 сессии. Кто открывал этот юзербот в Telegram Web, через какой прокси шёл трафик, какие ошибки.
+            </div>
             <div className="text-xs text-slate-400 mb-4">
               Зеленая точка в колонке «Прокси» = соединение шло через привязанный прокси юзербота (безопасно).
               Красная надпись «НЕТ ПРОКСИ» = мост пошёл напрямую с сервера — это риск бана аккаунта.
