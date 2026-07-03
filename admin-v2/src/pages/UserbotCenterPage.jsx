@@ -194,6 +194,7 @@ export function UserbotCenterPage() {
     activeBridges: 0,
     total: 0
   });
+  const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
   const trialHoursLeft = useMemo(() => {
     if (!trialEndsAt) return null;
     const diffMs = new Date(trialEndsAt).getTime() - Date.now();
@@ -616,6 +617,18 @@ export function UserbotCenterPage() {
       cancelled = true;
     };
   }, [accessToken, selectedUserbotId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/userbot-web/status', { method: 'GET' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (cancelled || !data) return;
+        setTelegramWebEnabled(Boolean(data.enabled));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const data = state.data || {};
   const userbots = data.userbots || [];
@@ -1572,18 +1585,20 @@ export function UserbotCenterPage() {
                   </>
                 ) : 'Проверить сейчас'}
               </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => {
-                  if (!selectedUserbotId) return;
-                  window.open(`/app/telegram-web/${selectedUserbotId}`, '_blank', 'noopener');
-                }}
-                disabled={!selectedUserbotId}
-                title={selectedUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
-              >
-                Telegram Web
-              </button>
+              {telegramWebEnabled ? (
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => {
+                    if (!selectedUserbotId) return;
+                    window.open(`/app/telegram-web/${selectedUserbotId}`, '_blank', 'noopener');
+                  }}
+                  disabled={!selectedUserbotId}
+                  title={selectedUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
+                >
+                  Telegram Web
+                </button>
+              ) : null}
             </div>
           </div>
 

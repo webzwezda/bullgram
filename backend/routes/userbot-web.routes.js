@@ -5,6 +5,17 @@ import { rateLimit } from '../middlewares/rate-limit.middleware.js';
 export default function (supabase, mtprotoBridgeService) {
     const router = express.Router();
 
+    // Unauthenticated feature-flag probe so admin-v2 can hide the
+    // "Open in Telegram Web" button without exposing any sensitive data.
+    // Returns 200 + { enabled: bool, ws_url: string }. No auth needed.
+    router.get('/status', (req, res) => {
+        res.set('Cache-Control', 'public, max-age=30');
+        return res.json({
+            enabled: mtprotoBridgeService.isEnabled(),
+            ws_url: process.env.TELEGRAM_WEB_WS_URL || '/api/mtproto-bridge'
+        });
+    });
+
     const issueLimit = rateLimit({
         windowMs: 60_000,
         max: 5,

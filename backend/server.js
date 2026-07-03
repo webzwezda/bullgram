@@ -46,6 +46,7 @@ import { startAutopostStuckEditingRecovery } from './jobs/autopost-stuck-editing
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
+import { startTelegramWebHealth } from './jobs/telegram-web-health.job.js';
 import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
 import { startCryptoRatesRefresh } from './jobs/crypto-rates.job.js';
 import { startReferralSettlementRetry } from './jobs/referral-settlement-retry.job.js';
@@ -300,6 +301,7 @@ httpServer.listen(PORT, async () => {
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
     startAudienceSync(supabase);
+    startTelegramWebHealth(supabase);
     startTonReserveWatch(supabase);
     startCryptoRatesRefresh(supabase);
     startReferralSettlementRetry(supabase, getBotById);
