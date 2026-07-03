@@ -940,7 +940,7 @@ export function UserbotCenterPage() {
         {selectedUserbot ? (
           <div className="p-6 md:p-8">
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#818cf8' }} />
+              <div className="w-2 h-2 rounded-full bg-indigo-400" />
               <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
             </div>
             <div className="text-sm text-slate-500 mb-6">Редактируй имя, описание и аватарку. Изменения улетают прямо в Telegram.</div>
@@ -948,7 +948,7 @@ export function UserbotCenterPage() {
               <div className="flex min-w-0 items-start gap-4">
                 <button
                   type="button"
-                  className="group relative size-16 shrink-0 overflow-hidden rounded-[18px] text-left ring-1 ring-slate-200 transition hover:ring-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="group relative size-16 shrink-0 overflow-hidden rounded-2xl text-left ring-1 ring-slate-200 transition hover:ring-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
                   title="Загрузить аватарку"
@@ -986,7 +986,7 @@ export function UserbotCenterPage() {
               </div>
               <button
                 type="button"
-                className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 onClick={syncSelectedUserbotProfile}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedUserbotId}
               >
@@ -998,7 +998,7 @@ export function UserbotCenterPage() {
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Имя</label>
                 <input
-                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                  className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                   value={selectedDraftFirstName}
                   maxLength={64}
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
@@ -1008,20 +1008,20 @@ export function UserbotCenterPage() {
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Фамилия</label>
                 <input
-                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                  className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                   value={selectedDraftLastName}
                   maxLength={64}
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
                   placeholder="Фамилия аккаунта"
                 />
               </div>
-              <div className="rounded-[14px] bg-slate-50 px-4 py-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 px-4 py-3 border border-slate-100">
                 <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Username</div>
                 <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
                   {selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '—'}
                 </div>
               </div>
-              <div className="rounded-[14px] bg-slate-50 px-4 py-3 border border-slate-100">
+              <div className="rounded-xl bg-slate-50 px-4 py-3 border border-slate-100">
                 <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Телефон / TG ID</div>
                 <div className="mt-1 truncate text-[13px] font-semibold text-slate-800">
                   {[selectedUserbot.tg_phone, selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''].filter(Boolean).join(' • ') || '—'}
@@ -1032,7 +1032,7 @@ export function UserbotCenterPage() {
             <div className="mt-4 space-y-1.5">
               <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Описание</label>
               <textarea
-                className="w-full px-4 py-3 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 resize-none"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
                 rows={3}
                 value={selectedDraftAbout}
                 maxLength={70}
@@ -1045,7 +1045,7 @@ export function UserbotCenterPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="h-11 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-indigo-200/50"
                 onClick={saveSelectedUserbotProfile}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !profileDirty}
               >
@@ -1053,7 +1053,7 @@ export function UserbotCenterPage() {
               </button>
               <button
                 type="button"
-                className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
               >
@@ -1062,7 +1062,7 @@ export function UserbotCenterPage() {
               {profileDirty ? (
                 <button
                   type="button"
-                  className="h-9 px-4 rounded-xl border border-slate-200 text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50"
+                  className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                   onClick={() => setProfileDraft({
                     accountId: String(selectedUserbot.id),
                     firstName: selectedUserbot.tg_first_name || '',
@@ -1111,7 +1111,7 @@ export function UserbotCenterPage() {
         <div className="bg-slate-50/60 rounded-xl border border-slate-100 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <input
-              className="h-11 flex-1 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+              className="h-11 flex-1 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
               type="text"
               value={manualInviteLink}
               onChange={(event) => setManualInviteLink(event.target.value)}
@@ -1163,8 +1163,8 @@ export function UserbotCenterPage() {
       ) : null}
 
       {state.loading && initialHandoff ? (
-        <div className="mb-4 p-3 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 font-medium text-sm flex items-center gap-2">
-          <span className="inline-block size-3 animate-spin rounded-full border-2 border-blue-400 border-t-blue-700" />
+        <div className="mb-4 p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-800 font-medium text-sm flex items-center gap-2">
+          <span className="inline-block size-3 animate-spin rounded-full border-2 border-indigo-400 border-t-indigo-700" />
           Подтягиваем данные юзербота...
         </div>
       ) : null}
@@ -1180,7 +1180,7 @@ export function UserbotCenterPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3">
               <select
-                className="h-11 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                className="h-11 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                 value={selectedUserbotId}
                 onChange={(event) => setSelectedUserbotId(event.target.value)}
               >
@@ -1196,7 +1196,7 @@ export function UserbotCenterPage() {
             </div>
             <div className="flex gap-2">
               <button
-                className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-sm shadow-indigo-200/50"
+                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-sm shadow-indigo-200/50"
                 onClick={refreshCenterNow}
                 disabled={state.refreshing}
               >
@@ -1215,7 +1215,7 @@ export function UserbotCenterPage() {
               {telegramWebEnabled ? (
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => {
                     if (!selectedUserbotId) return;
                     window.open(`/app/telegram-web/${selectedUserbotId}`, '_blank', 'noopener');
@@ -1283,7 +1283,7 @@ export function UserbotCenterPage() {
           <div className="p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap gap-2">
               <button
-                className="h-9 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                 onClick={loadAuthorizations}
                 disabled={authorizationsState.loading || !selectedUserbotId}
               >
@@ -1295,7 +1295,7 @@ export function UserbotCenterPage() {
                 {authorizationsState.loading ? 'Тянем сессии...' : 'Показать сессии'}
               </button>
               <button
-                className="h-9 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 text-[13px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                className="h-10 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 text-[13px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                 onClick={resetOtherSessions}
                 disabled={actionState.resettingAuthorizations || !selectedUserbotId}
               >
