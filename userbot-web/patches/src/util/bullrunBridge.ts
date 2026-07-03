@@ -73,3 +73,62 @@ export function hasBridgeConfig(): boolean {
     return false;
   }
 }
+
+// sessionStorage cache for bridge tokens. Bridge tokens are multi-use with
+// a 5-minute TTL (backend). On tab reload within that window we can skip
+// the POST /web-session round-trip and reuse the same token — saves
+// 100-300ms on the critical path. sessionStorage auto-clears on tab close,
+// so we never leak stale tokens across sessions.
+
+const SESSION_STORAGE_PREFIX = 'bullrun-bridge-';
+
+export function saveBridgeConfigToSession(config: BullrunBridgeConfig): void {
+  try {
+    sessionStorage.setItem(
+      SESSION_STORAGE_PREFIX + config.userbotId,
+      JSON.stringify(config),
+    );
+  } catch {
+    // sessionStorage unavailable (private mode, sandboxed iframe, quota).
+    // Bridge config stays in-memory only; reload will refetch. Acceptable.
+  }
+}
+
+export function loadBridgeConfigFromSession(userbotId: string): BullrunBridgeConfig | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_PREFIX + userbotId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!isValidCachedConfig(parsed, userbotId)) return null;
+    return parsed as BullrunBridgeConfig;
+  } catch {
+    return null;
+  }
+}
+
+export function clearBridgeConfigFromSession(userbotId: string): void {
+  try {
+    sessionStorage.removeItem(SESSION_STORAGE_PREFIX + userbotId);
+  } catch {
+    // ignore
+  }
+}
+
+function isValidCachedConfig(
+  cfg: unknown,
+  expectedUserbotId: string,
+): cfg is BullrunBridgeConfig {
+  if (!cfg || typeof cfg !== 'object') return false;
+  const c = cfg as BullrunBridgeConfig;
+  if (c.userbotId !== expectedUserbotId) return false;
+  if (typeof c.bridgeToken !== 'string' || !c.bridgeToken) return false;
+  if (typeof c.wsUrl !== 'string' || !c.wsUrl) return false;
+  if (typeof c.expiresAt !== 'number') return false;
+  // 30s buffer so a token that's about to expire doesn't get reused.
+  if (c.expiresAt <= Date.now() + 30_000) return false;
+  if (!c.sessionData || typeof c.sessionData.mainDcId !== 'number') return false;
+  if (!c.sessionData.keys || typeof c.sessionData.keys !== 'object') return false;
+  if (!c.fingerprint || typeof c.fingerprint.api_id !== 'number') return false;
+  if (!c.fingerprint.api_hash || typeof c.fingerprint.api_hash !== 'string') return false;
+  return true;
+}

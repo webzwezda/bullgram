@@ -45,7 +45,13 @@ import { MULTITAB_STORAGE_KEY } from './util/multiaccount';
 import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import updateWebmanifest from './util/updateWebmanifest';
-import { setBridgeConfig, type BullrunBridgeConfig } from './util/bullrunBridge';
+import {
+  clearBridgeConfigFromSession,
+  loadBridgeConfigFromSession,
+  saveBridgeConfigToSession,
+  setBridgeConfig,
+  type BullrunBridgeConfig,
+} from './util/bullrunBridge';
 import { installBullrunSafety } from './util/bullrunSafety';
 import { acquireBullrunTabLock, renderTabLockBlocker } from './util/bullrunTabLock';
 
@@ -60,11 +66,28 @@ if (STRICTERDOM_ENABLED) {
 
 void bootstrap();
 
+// L2.1: phase timings. Exposed on window.__bullrunTimings for inspection
+// via DevTools console. Logged live when DEBUG.
+const bootstrapT0 = performance.now();
+const timings: Array<[string, number]> = [];
+(window as any).__bullrunTimings = timings;
+function mark(name: string) {
+  const ms = performance.now() - bootstrapT0;
+  timings.push([name, ms]);
+  if (DEBUG) {
+    // eslint-disable-next-line no-console
+    console.log(`[bullrun-timing] +${ms.toFixed(0)}ms ${name}`);
+  }
+}
+
 async function bootstrap() {
+  mark('bootstrap-start');
+
   // Install runtime safety guards (WebRTC, push, media devices) BEFORE
   // any other module can construct an RTCPeerConnection or request
   // Notification permission.
   installBullrunSafety();
+  mark('safety-installed');
 
   // Run tab-lock probe and bridge token fetch in parallel. Lock probe
   // needs ~600ms to settle (heartbeat interval is 2s); fetch typically
@@ -106,6 +129,8 @@ async function bootstrap() {
     renderTabLockBlocker(userbotIdForLock!);
     return;
   }
+  mark('lock-resolved');
+
   // Keep `lockResult` alive for the lifetime of this tab — release fires
   // on beforeunload via the lock's own listener.
 
@@ -114,10 +139,13 @@ async function bootstrap() {
   // block that open indefinitely (this was the root cause of the
   // "first load hangs, works on reload" bug).
   await nukeGramjsIdb();
+  mark('idb-nuked');
 
   setBridgeConfig(bridgeConfig);
+  mark('bridge-set');
 
   await init();
+  mark('init-done');
 }
 
 async function nukeGramjsIdb(): Promise<void> {
@@ -179,6 +207,15 @@ async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
     throw new Error('В URL не указан id юзербота. Откройте Telegram Web из админки BullRun.');
   }
 
+  // L1.3: bridge tokens are multi-use for 5 minutes. On tab reload within
+  // that window, reuse the cached token from sessionStorage instead of
+  // round-tripping to the backend. Saves 100-300ms on the critical path.
+  const cached = loadBridgeConfigFromSession(userbotId);
+  if (cached) {
+    mark('bridge-resolved:cache');
+    return cached;
+  }
+
   const accessToken = readAdminAccessToken();
   if (!accessToken) {
     throw new Error('Не найдена сессия администратора. Откройте Telegram Web из авторизованной админки BullRun в том же браузере.');
@@ -225,6 +262,8 @@ async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
     throw new Error('Некорректный ответ сервера: отсутствует bridge_token / sessionData / fingerprint.');
   }
 
+  saveBridgeConfigToSession(cfg);
+  mark('bridge-resolved:network');
   return cfg;
 }
 
