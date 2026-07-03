@@ -146,7 +146,6 @@ export function UserbotCenterPage() {
   const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage || loadDraft('manual_msg'));
   const [activeTab, setActiveTab] = useState(initialThreadUserId ? 'messages' : 'profile');
   const [chatHistory, setChatHistory] = useState(() => initialThreadUserId ? loadHistory(initialThreadUserId) : []);
-  const [groupFilter, setGroupFilter] = useState('all');
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -1027,7 +1026,7 @@ export function UserbotCenterPage() {
 
   const TAB_OPTIONS = [
     { id: 'profile', label: 'Профиль' },
-    { id: 'groups', label: 'Группы' },
+    { id: 'groups', label: 'Вступить' },
     { id: 'messages', label: 'Сообщения' }
   ];
 
@@ -1191,125 +1190,27 @@ export function UserbotCenterPage() {
   }
 
   function renderGroupsTab() {
-    const GROUP_FILTERS = [
-      { id: 'all', label: 'Все' },
-      { id: 'admin', label: 'Админ' },
-      { id: 'linked', label: 'Привязанные' },
-      { id: 'unlinked', label: 'Не привязанные' }
-    ];
-
-    const filteredGroups = groups.filter((group) => {
-      if (groupFilter === 'admin') return group.userbot_admin;
-      if (groupFilter === 'linked') return !!group.linked_channel_id;
-      if (groupFilter === 'unlinked') return !group.linked_channel_id;
-      return true;
-    });
-
     return (
-      <>
-        <div className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
-            <div>
-              <div className="text-[15px] font-bold text-slate-900">Группы и каналы</div>
-              <div className="text-sm text-slate-500 mt-0.5">Все чаты где юзербот состоит.</div>
-            </div>
-            <div className="px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-bold text-slate-600">
-              {filteredGroups.length}
-            </div>
-          </div>
-          <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
-            {GROUP_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`px-4 py-2 text-[12px] font-black uppercase tracking-wider rounded-xl transition-all whitespace-nowrap ${
-                  groupFilter === f.id
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-                onClick={() => setGroupFilter(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
+      <div className="p-6 md:p-8">
+        <div className="text-[15px] font-bold text-slate-900 mb-0.5">Загнать по инвайту</div>
+        <div className="text-sm text-slate-500 mb-4">Заведи юзербота в группу или чат по invite-ссылке.</div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            className="h-11 flex-1 px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+            type="text"
+            value={manualInviteLink}
+            onChange={(event) => setManualInviteLink(event.target.value)}
+            placeholder="https://t.me/+..."
+          />
+          <button
+            className="h-11 px-5 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50"
+            onClick={joinInviteLink}
+            disabled={actionState.joiningInvite}
+          >
+            {actionState.joiningInvite ? 'Заходим...' : 'Зайти'}
+          </button>
         </div>
-
-        {filteredGroups.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-400 font-bold">Нет групп с этим фильтром.</div>
-        ) : (
-          <div className="divide-y divide-slate-100 border-b border-slate-100">
-            {filteredGroups.map((group) => (
-              <div key={group.chat_id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="text-[14px] font-bold text-slate-900 truncate">{group.title}</div>
-                      <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
-                        group.type === 'channel' ? 'bg-violet-50 text-violet-600 border border-violet-200' : 'bg-blue-50 text-blue-600 border border-blue-200'
-                      }`}>
-                        {group.type === 'channel' ? 'Канал' : 'Группа'}
-                      </span>
-                      {group.userbot_admin ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase">Админ</span>
-                      ) : null}
-                      {group.admin_check_skipped ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-black uppercase">Не проверено</span>
-                      ) : null}
-                      {group.admin_error ? (
-                        <span className="text-[10px] text-red-500 font-medium">{group.admin_error}</span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500">
-                      <span className="font-mono">{group.chat_id}</span>
-                      {(group.unread_count || 0) > 0 ? (
-                        <span className="font-bold text-blue-600">{group.unread_count} непрочитанных</span>
-                      ) : null}
-                      <span>В системе: {group.linked_channel_title || '—'}</span>
-                    </div>
-                    {group.last_message_preview ? (
-                      <div className="mt-1.5 text-[13px] text-slate-600 truncate">{group.last_message_preview}</div>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {group.linked_channel_id ? (
-                      <a
-                        className="h-8 px-3 rounded-lg bg-blue-600 text-white text-[12px] font-bold hover:bg-blue-700 transition-all inline-flex items-center"
-                        href={`/app/customers?tab=customers&channel=${encodeURIComponent(group.linked_channel_id)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Клиенты
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="p-6 md:p-8">
-          <div className="text-[15px] font-bold text-slate-900 mb-0.5">Загнать по инвайту</div>
-          <div className="text-sm text-slate-500 mb-4">Заведи юзербота в группу или чат по invite-ссылке.</div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              className="h-11 flex-1 px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-              type="text"
-              value={manualInviteLink}
-              onChange={(event) => setManualInviteLink(event.target.value)}
-              placeholder="https://t.me/+..."
-            />
-            <button
-              className="h-11 px-5 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50"
-              onClick={joinInviteLink}
-              disabled={actionState.joiningInvite}
-            >
-              {actionState.joiningInvite ? 'Заходим...' : 'Зайти'}
-            </button>
-          </div>
-        </div>
-      </>
+      </div>
     );
   }
 
