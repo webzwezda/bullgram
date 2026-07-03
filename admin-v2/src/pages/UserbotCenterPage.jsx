@@ -307,9 +307,6 @@ export function UserbotCenterPage() {
 
   async function syncSelectedUserbotProfile() {
     if (!accessToken || !selectedUserbotId) return;
-    if (!window.confirm('Обновить профиль юзербота из Telegram? Это живой запрос к аккаунту. Подтянем аватарку, имя, фамилию, username, телефон и описание. Группы сканировать не будем.')) {
-      return;
-    }
 
     setProfileSyncState({ pulling: true, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
     try {
@@ -322,21 +319,16 @@ export function UserbotCenterPage() {
         applyProfileAccount(result.account);
       }
 
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: result.cached ? 'warning' : 'success',
-        text: result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль обновлен.')
-      });
+      const message = result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль стянут из Telegram.');
+      if (result.cached) {
+        toast.warning(message);
+      } else {
+        toast.success(message);
+      }
+      setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
     } catch (error) {
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: 'error',
-        text: error.message
-      });
+      toast.error(`Не получилось стянуть профиль: ${error.message}`);
+      setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'error', text: error.message });
     }
   }
 
@@ -384,6 +376,7 @@ export function UserbotCenterPage() {
         tone: 'success',
         text: result.message || 'Профиль сохранен в Telegram и Supabase.'
       });
+      toast.success(result.message || 'Профиль сохранен в Telegram.');
     } catch (error) {
       setProfileSyncState({
         pulling: false,
@@ -392,6 +385,7 @@ export function UserbotCenterPage() {
         tone: 'error',
         text: error.message
       });
+      toast.error(`Не получилось сохранить: ${error.message}`);
     }
   }
 
@@ -446,6 +440,7 @@ export function UserbotCenterPage() {
         tone: 'success',
         text: result.message || 'Аватарка сохранена в Telegram и на сервере.'
       });
+      toast.success(result.message || 'Аватарка обновлена.');
     } catch (error) {
       setProfileSyncState({
         pulling: false,
@@ -454,6 +449,7 @@ export function UserbotCenterPage() {
         tone: 'error',
         text: error.message
       });
+      toast.error(`Не получилось загрузить аватарку: ${error.message}`);
     }
   }
 
