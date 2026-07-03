@@ -1311,7 +1311,18 @@ function parseTelegramInvite(rawValue = '') {
     const value = String(rawValue || '').trim();
     if (!value) return null;
 
-    const plusMatch = value.match(/(?:https?:\/\/)?t\.me\/\+([A-Za-z0-9_-]+)/i);
+    // Strip leading @ and any t.me/ prefix wrappers so we end up with
+    // the canonical identifier.
+    const stripped = value
+        .replace(/^@/, '')
+        .replace(/^(https?:\/\/)?t\.me\//i, '')
+        .replace(/^(https?:\/\/)?telegram\.me\//i, '')
+        .replace(/\/+$/, '')
+        .trim();
+
+    // t.me/+hash or t.me/joinchat/hash → invite hash
+    const plusMatch = value.match(/(?:https?:\/\/)?t\.me\/\+([A-Za-z0-9_-]+)/i)
+        || value.match(/^@(?:joinchat)\+(.+)$/i);
     if (plusMatch) {
         return { kind: 'invite_hash', value: plusMatch[1] };
     }
@@ -1321,9 +1332,33 @@ function parseTelegramInvite(rawValue = '') {
         return { kind: 'invite_hash', value: joinchatMatch[1] };
     }
 
-    const usernameMatch = value.match(/(?:https?:\/\/)?t\.me\/([A-Za-z0-9_]{5,})\/?$/i);
-    if (usernameMatch) {
-        return { kind: 'username', value: usernameMatch[1] };
+    // t.me/s/<username> (web embed/preview view) — strip the /s/ and treat
+    // as public username.
+    const sMatch = value.match(/(?:https?:\/\/)?t\.me\/s\/([A-Za-z0-9_]{5,})/i);
+    if (sMatch) {
+        return { kind: 'username', value: sMatch[1] };
+    }
+
+    // t.me/c/<id> — private permalink. Can't "join" via this link; needs
+    // an invite hash. Surface a clear error.
+    const privatePermalinkMatch = value.match(/(?:https?:\/\/)?t\.me\/c\/(\d+)/i);
+    if (privatePermalinkMatch) {
+        return { kind: 'private_permalink', value: privatePermalinkMatch[1] };
+    }
+
+    // Public username from t.me/<username> or bare <username>.
+    // Telegram usernames: 5+ chars, alphanumeric + underscore, must start
+    // with a letter. We're permissive on first char to allow namespace
+    // expansions, but require the canonical charset.
+    const usernameFromUrlMatch = value.match(/(?:https?:\/\/)?t\.me\/([A-Za-z][A-Za-z0-9_]{4,})\/?$/i);
+    if (usernameFromUrlMatch) {
+        return { kind: 'username', value: usernameFromUrlMatch[1] };
+    }
+
+    // Bare username (e.g. "@mygroup" or "mygroup") — only accept if it
+    // looks like a real username, not a random URL fragment.
+    if (!/\s/.test(value) && /^[A-Za-z][A-Za-z0-9_]{4,}$/.test(stripped)) {
+        return { kind: 'username', value: stripped };
     }
 
     return null;
@@ -3909,7 +3944,12 @@ export default function (supabase) {
 
             const parsedInvite = parseTelegramInvite(inviteLink);
             if (!parsedInvite) {
-                return res.status(400).json({ error: 'Ссылка кривовата. Жду t.me/+hash, joinchat или публичный t.me/username.' });
+                return res.status(400).json({ error: 'Ссылка кривовата. Поддерживаются: t.me/+hash, t.me/joinchat/hash, t.me/username, @username.' });
+            }
+            if (parsedInvite.kind === 'private_permalink') {
+                return res.status(400).json({
+                    error: 'Это ссылка на сообщение в приватном канале (t.me/c/<id>). Чтобы зайти в приватный канал/группу, нужна пригласительная ссылка (t.me/+hash или t.me/joinchat/hash).'
+                });
             }
 
             const { userbot, error: userbotError } = await loadOperationalUserbot(supabase, req.user.id, userbotId, {

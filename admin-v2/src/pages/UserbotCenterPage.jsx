@@ -743,7 +743,7 @@ export function UserbotCenterPage() {
       return;
     }
     if (!manualInviteLink.trim()) {
-      toast.error('Вставь ссылку-приглашение.');
+      toast.error('Вставь ссылку на группу или чат.');
       return;
     }
 
@@ -916,8 +916,7 @@ export function UserbotCenterPage() {
 
   const TAB_OPTIONS = [
     { id: 'profile', label: 'Профиль' },
-    { id: 'groups', label: 'Вступить' },
-    { id: 'messages', label: 'Сообщения' }
+    { id: 'groups', label: 'Вступить' }
   ];
 
   function renderProfileTab() {
@@ -1082,32 +1081,26 @@ export function UserbotCenterPage() {
   function renderGroupsTab() {
     return (
       <div className="p-6 md:p-8">
-        <div className="text-[15px] font-bold text-slate-900 mb-0.5">Загнать по инвайту</div>
-        <div className="text-sm text-slate-500 mb-4">Заведи юзербота в группу или чат по invite-ссылке.</div>
+        <div className="text-[15px] font-bold text-slate-900 mb-0.5">Вступить в группу или чат</div>
+        <div className="text-sm text-slate-500 mb-4">
+          Любая ссылка: публичная (t.me/groupname, @groupname), приватная (t.me/+hash, t.me/joinchat/hash) или s/-превью (t.me/s/groupname).
+        </div>
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             className="h-11 flex-1 px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
             type="text"
             value={manualInviteLink}
             onChange={(event) => setManualInviteLink(event.target.value)}
-            placeholder="https://t.me/+..."
+            placeholder="t.me/groupname, @groupname или t.me/+hash"
           />
           <button
             className="h-11 px-5 rounded-[14px] bg-blue-600 text-[14px] font-bold text-white hover:bg-blue-700 transition-all disabled:opacity-50"
             onClick={joinInviteLink}
             disabled={actionState.joiningInvite}
           >
-            {actionState.joiningInvite ? 'Заходим...' : 'Зайти'}
+            {actionState.joiningInvite ? 'Заходим...' : 'Вступить'}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  function renderMessagesTab() {
-    return (
-      <div className="p-8 text-center text-sm text-slate-500">
-        Раздел в разработке.
       </div>
     );
   }
@@ -1213,7 +1206,6 @@ export function UserbotCenterPage() {
 
         {activeTab === 'profile' ? renderProfileTab() : null}
         {activeTab === 'groups' ? renderGroupsTab() : null}
-        {activeTab === 'messages' ? renderMessagesTab() : null}
       </div>
 
       {selectedUserbotId ? (
