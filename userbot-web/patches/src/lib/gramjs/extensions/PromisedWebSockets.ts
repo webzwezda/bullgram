@@ -45,6 +45,11 @@ export default class PromisedWebSockets {
 
     private disconnectedCallback: () => void;
 
+    // Bound 'offline' handler — kept on the instance so we can remove it
+    // in close(). Without this, every connect() would leak another
+    // window listener (each reconnect calls addEventListener again).
+    private offlineHandler: (() => void) | undefined;
+
     constructor(disconnectedCallback: () => void) {
         this.client = undefined;
         this.closed = true;
@@ -52,6 +57,7 @@ export default class PromisedWebSockets {
         this.disconnectedCallback = disconnectedCallback;
         this.timeout = CONNECTION_TIMEOUT;
         this.handshakeDone = false;
+        this.offlineHandler = undefined;
     }
 
     async readExactly(number: number) {
@@ -197,10 +203,15 @@ export default class PromisedWebSockets {
             }, this.timeout);
 
             // eslint-disable-next-line no-restricted-globals
-            self.addEventListener('offline', async () => {
-                await this.close();
-                this.resolveRead?.(false);
-            });
+            // Bound handler so we can remove it on close (avoids leaking
+            // one listener per reconnect across long sessions).
+            if (!this.offlineHandler) {
+                this.offlineHandler = async () => {
+                    await this.close();
+                    this.resolveRead?.(false);
+                };
+            }
+            self.addEventListener('offline', this.offlineHandler);
 
             // Expose a handshake resolver so this.receive() can flip
             // handshakeDone + resolve the connect() promise.
@@ -225,6 +236,10 @@ export default class PromisedWebSockets {
     }
 
     async close() {
+        if (this.offlineHandler) {
+            // eslint-disable-next-line no-restricted-globals
+            self.removeEventListener('offline', this.offlineHandler);
+        }
         await this.client?.close();
         this.closed = true;
     }
