@@ -1,7 +1,12 @@
+import 'dotenv/config';
 import pkg from 'pg';
 const { Client } = pkg;
 
-const connectionString = "postgresql://supabase_admin:4Y4ndClhovK4G0@127.0.0.1:5432/postgres";
+const connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+if (!connectionString) {
+  console.error('DATABASE_URL (or SUPABASE_DB_URL) env required. Load backend/.env first.');
+  process.exit(1);
+}
 
 async function run() {
   const client = new Client({ connectionString });
