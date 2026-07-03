@@ -2,7 +2,13 @@
 
 set -euo pipefail
 
-SERVER="root@64.188.70.180"
+DEPLOY_HOST="${DEPLOY_HOST:-}"
+DEPLOY_USER="${DEPLOY_USER:-root}"
+if [ -z "$DEPLOY_HOST" ]; then
+  echo "DEPLOY_HOST env required (e.g. DEPLOY_HOST=1.2.3.4 ./ops/scripts/rollback.sh)" >&2
+  exit 1
+fi
+SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
 BACKUP_ROOT="/var/backups/bullrun-deploy"
 BACKEND_DIR="/var/www/backend"
 SITE_DIR="/var/www/bullrun-site-v2"

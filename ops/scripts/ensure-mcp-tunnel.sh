@@ -5,8 +5,12 @@
 #   localhost:5432  -> PostgreSQL direct (supabase-db container 172.19.0.11:5432)
 # Safe to call multiple times — exits silently if tunnel is already alive.
 
-REMOTE_HOST="${REMOTE_HOST:-64.188.70.180}"
+REMOTE_HOST="${REMOTE_HOST:-${DEPLOY_HOST:-}}"
 REMOTE_USER="${REMOTE_USER:-root}"
+if [ -z "$REMOTE_HOST" ]; then
+  echo "REMOTE_HOST (or DEPLOY_HOST) env required" >&2
+  exit 1
+fi
 PID_FILE="/tmp/supabase-mcp-tunnel.pid"
 
 # Check if tunnel is already alive

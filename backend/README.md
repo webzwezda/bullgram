@@ -172,7 +172,7 @@ pm2 logs bullrun-tg-backend
 npm run deploy
 ```
 
-Синхронизирует файлы на сервер `root@64.188.70.180:/var/www/backend/` и исключает `node_modules`, `.git`, `logs`, `.env`.
+Синхронизирует файлы на сервер `${DEPLOY_USER:-root}@${DEPLOY_HOST}:/var/www/backend/` и исключает `node_modules`, `.git`, `logs`, `.env`. Требует `DEPLOY_HOST` env: `DEPLOY_HOST=1.2.3.4 npm run deploy`.
 
 **После деплоя обязательно перезапустите PM2:**
 ```bash

@@ -19,7 +19,13 @@
 
 set -euo pipefail
 
-SERVER="root@64.188.70.180"
+DEPLOY_HOST="${DEPLOY_HOST:-}"
+DEPLOY_USER="${DEPLOY_USER:-root}"
+if [ -z "$DEPLOY_HOST" ]; then
+  echo "DEPLOY_HOST env required (e.g. DEPLOY_HOST=1.2.3.4 ./ops/scripts/rollback-telegram-web.sh)" >&2
+  exit 1
+fi
+SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
 BACKEND_ENV="/var/www/backend/.env"
 NGINX_CONF="/etc/nginx/sites-available/bullgram.xyz"
 KILLSWITCH_CONF="/etc/nginx/conf.d/telegram-web-killswitch.conf"

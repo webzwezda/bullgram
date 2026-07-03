@@ -3,7 +3,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SERVER="root@64.188.70.180"
+DEPLOY_HOST="${DEPLOY_HOST:-}"
+DEPLOY_USER="${DEPLOY_USER:-root}"
+if [ -z "$DEPLOY_HOST" ]; then
+  echo "DEPLOY_HOST env required (e.g. DEPLOY_HOST=1.2.3.4 ./ops/scripts/deploy-v2.sh)" >&2
+  exit 1
+fi
+SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
 SITE_DIR="/var/www/bullrun-site-v2"
 APP_DIR="/var/www/bullrun-admin-v2"
 
