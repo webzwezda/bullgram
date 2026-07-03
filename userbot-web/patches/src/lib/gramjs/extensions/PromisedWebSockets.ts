@@ -19,6 +19,7 @@
 //      codec as upstream — bytes are MTProto-encrypted already.
 
 import { Mutex } from 'async-mutex';
+import { ensureFreshBridgeConfig } from '../../../util/bullrunBridge';
 
 const mutex = new Mutex();
 
@@ -26,19 +27,6 @@ const closeError = new Error('WebSocket was closed');
 const CONNECTION_TIMEOUT = 3000;
 const MAX_TIMEOUT = 30000;
 const HANDSHAKE_TIMEOUT = 10000;
-
-interface BullrunBridgeConfig {
-    wsUrl: string;
-    bridgeToken: string;
-}
-
-function readBridgeConfig(): BullrunBridgeConfig {
-    const cfg = (globalThis as any).__BULLRUN_BRIDGE__ as BullrunBridgeConfig | undefined;
-    if (!cfg || !cfg.wsUrl || !cfg.bridgeToken) {
-        throw new Error('BullRun bridge config missing on window.__BULLRUN_BRIDGE__');
-    }
-    return cfg;
-}
 
 export default class PromisedWebSockets {
     private closed: boolean;
@@ -121,7 +109,7 @@ export default class PromisedWebSockets {
         }
     }
 
-    connect(port: number, ip: string, isTestServer = false, isPremium = false, dcId?: number) {
+    async connect(port: number, ip: string, isTestServer = false, isPremium = false, dcId?: number) {
         this.stream = Buffer.alloc(0);
         this.canRead = new Promise((resolve) => {
             this.resolveRead = resolve;
@@ -129,12 +117,20 @@ export default class PromisedWebSockets {
         this.closed = false;
         this.handshakeDone = false;
 
-        const cfg = readBridgeConfig();
+        // Bridge token has a 5-minute TTL on the backend. On reconnect
+        // (after tab has been open >5 min), the cached token would be
+        // rejected with 4401 INVALID_OR_EXPIRED_TOKEN — silent UI freeze.
+        // Refresh first if we're within 60s of expiry. ensureFreshBridgeConfig
+        // dedups parallel calls (GramJS opens main DC + file DC WS at once).
+        const cfg = await ensureFreshBridgeConfig();
         const url = `${cfg.wsUrl}?bridge_token=${encodeURIComponent(cfg.bridgeToken)}`;
         this.client = new WebSocket(url, 'binary');
 
-        return new Promise((resolve, reject) => {
-            if (!this.client) return;
+        return new Promise<this>((resolve, reject) => {
+            if (!this.client) {
+                reject(new Error('Bridge WebSocket not initialized'));
+                return;
+            }
             let hasResolved = false;
             let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
             let handshakeTimeout: ReturnType<typeof globalThis.setTimeout> | undefined;

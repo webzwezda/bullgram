@@ -46,10 +46,11 @@ import { checkAndAssignPermanentWebVersion } from './util/permanentWebVersion';
 import { onBeforeUnload } from './util/schedulers';
 import updateWebmanifest from './util/updateWebmanifest';
 import {
-  clearBridgeConfigFromSession,
   loadBridgeConfigFromSession,
   saveBridgeConfigToSession,
   setBridgeConfig,
+  fetchBridgeConfigFromNetwork,
+  extractUserbotIdFromUrl,
   type BullrunBridgeConfig,
 } from './util/bullrunBridge';
 import { installBullrunSafety } from './util/bullrunSafety';
@@ -219,88 +220,10 @@ async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
     return cached;
   }
 
-  const accessToken = readAdminAccessToken();
-  if (!accessToken) {
-    throw new Error('Не найдена сессия администратора. Откройте Telegram Web из авторизованной админки BullRun в том же браузере.');
-  }
-
-  const endpoint = `/api/userbot-web/web-session/${encodeURIComponent(userbotId)}`;
-  const resp = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-  });
-
-  if (resp.status === 403 || resp.status === 401) {
-    let body: any = null;
-    try { body = await resp.json(); } catch {}
-    const reason = body?.error || body?.message || 'доступ запрещён';
-    throw new Error(`Админ-доступ отсутствует (${resp.status}): ${reason}. Перевойдите в админку BullRun.`);
-  }
-  if (resp.status === 503) {
-    throw new Error('Telegram Web отключён фича-флагом TELEGRAM_WEB_ENABLED на сервере.');
-  }
-  if (!resp.ok) {
-    let body: any = null;
-    try { body = await resp.json(); } catch {}
-    const reason = body?.error || body?.message || resp.statusText;
-    throw new Error(`Не удалось получить bridge-токен (${resp.status}): ${reason}`);
-  }
-
-  const payload = await resp.json();
-  // Backend returns snake_case `bridge_token` etc; normalize.
-  const cfg: BullrunBridgeConfig = {
-    wsUrl: payload.wsUrl || payload.ws_url || '/api/mtproto-bridge',
-    bridgeToken: payload.bridgeToken || payload.bridge_token,
-    sessionData: payload.sessionData || payload.session_data,
-    fingerprint: payload.fingerprint,
-    expiresAt: payload.expiresAt || payload.expires_at,
-    userbotId,
-  };
-
-  if (!cfg.bridgeToken || !cfg.sessionData?.mainDcId || !cfg.fingerprint?.api_id) {
-    throw new Error('Некорректный ответ сервера: отсутствует bridge_token / sessionData / fingerprint.');
-  }
-
+  const cfg = await fetchBridgeConfigFromNetwork(userbotId);
   saveBridgeConfigToSession(cfg);
   mark('bridge-resolved:network');
   return cfg;
-}
-
-function extractUserbotIdFromUrl(): string | null {
-  // Expected path shape: /app/telegram-web/<userbotId>(/...)?
-  const m = window.location.pathname.match(/\/app\/telegram-web\/([^/]+)/);
-  if (!m) return null;
-  const id = decodeURIComponent(m[1]);
-  // Filter out obvious non-ids (index.html, static assets handled by nginx before reaching here).
-  if (id === 'index.html' || id.startsWith('static') || id.startsWith('assets')) return null;
-  return id;
-}
-
-function readAdminAccessToken(): string | null {
-  // Supabase stores session under `sb-<host-first-segment>-auth-token`.
-  // We scan for matching keys rather than hardcode the hostname so the
-  // same code works on bullgram.xyz (production) and localhost (dev).
-  try {
-    const keys = Object.keys(localStorage).filter((k) => /^sb-[\w.-]+-auth-token$/.test(k));
-    for (const key of keys) {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        const token = parsed?.access_token || parsed?.provider_token;
-        if (typeof token === 'string' && token.length > 20) return token;
-      } catch {
-        // Not JSON — try next key.
-      }
-    }
-  } catch {
-    // localStorage not available (SSR / sandboxed) — no fallback.
-  }
-  return null;
 }
 
 function renderBootstrapError(err: unknown) {

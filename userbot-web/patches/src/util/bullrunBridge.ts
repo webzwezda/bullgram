@@ -47,6 +47,17 @@ export interface BullrunBridgeConfig {
 
 let cachedConfig: BullrunBridgeConfig | null = null;
 
+// Module-level dedup. When multiple PromisedWebSockets instances try to
+// refresh the token in parallel (GramJS opens 1 main DC + 2-3 file DC WS
+// near-simultaneously on reconnect), they all share one fetch.
+let refreshInFlight: Promise<BullrunBridgeConfig> | null = null;
+
+// Refresh if token expires within next 60s. GramJS reconnects within
+// seconds, so a 60s buffer covers any in-flight operation. Backend TTL
+// is 5 min, so on the very first connect after tab open we won't refresh
+// (cache is fresh from bootstrap).
+const REFRESH_BUFFER_MS = 60_000;
+
 export function setBridgeConfig(config: BullrunBridgeConfig) {
   cachedConfig = config;
   (globalThis as any).__BULLRUN_BRIDGE__ = config;
@@ -72,6 +83,36 @@ export function hasBridgeConfig(): boolean {
   } catch {
     return false;
   }
+}
+
+// Ensure the bridge token has at least REFRESH_BUFFER_MS left before
+// expiry. If not, refetch via POST /web-session and update the cache.
+//
+// Called from PromisedWebSockets.connect() on every reconnect attempt.
+// Without this, after the 5-minute TTL expires, every reconnect silently
+// fails with 4401 INVALID_OR_EXPIRED_TOKEN — the admin sees a frozen UI
+// with no indication of what went wrong.
+export async function ensureFreshBridgeConfig(): Promise<BullrunBridgeConfig> {
+  const current = cachedConfig;
+  if (current && current.expiresAt - Date.now() > REFRESH_BUFFER_MS) {
+    return current;
+  }
+
+  // Stale or missing — refresh with dedup.
+  const userbotId = current?.userbotId ?? extractUserbotIdFromUrl();
+  if (!userbotId) {
+    throw new Error('[bullrun-bridge] cannot refresh: no userbotId in cached config or URL.');
+  }
+
+  if (!refreshInFlight) {
+    refreshInFlight = fetchBridgeConfigFromNetwork(userbotId)
+      .finally(() => { refreshInFlight = null; });
+  }
+
+  const fresh = await refreshInFlight;
+  setBridgeConfig(fresh);
+  saveBridgeConfigToSession(fresh);
+  return fresh;
 }
 
 // sessionStorage cache for bridge tokens. Bridge tokens are multi-use with
@@ -131,4 +172,89 @@ function isValidCachedConfig(
   if (!c.fingerprint || typeof c.fingerprint.api_id !== 'number') return false;
   if (!c.fingerprint.api_hash || typeof c.fingerprint.api_hash !== 'string') return false;
   return true;
+}
+
+// Network fetch + response normalization. Shared between bootstrap
+// (initial load) and ensureFreshBridgeConfig (reconnect-time refresh).
+export async function fetchBridgeConfigFromNetwork(
+  userbotId: string,
+): Promise<BullrunBridgeConfig> {
+  const accessToken = readAdminAccessToken();
+  if (!accessToken) {
+    throw new Error(
+      'Не найдена сессия администратора. Откройте Telegram Web из авторизованной админки BullRun в том же браузере.',
+    );
+  }
+
+  const endpoint = `/api/userbot-web/web-session/${encodeURIComponent(userbotId)}`;
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+  });
+
+  if (resp.status === 403 || resp.status === 401) {
+    let body: any = null;
+    try { body = await resp.json(); } catch {}
+    const reason = body?.error || body?.message || 'доступ запрещён';
+    throw new Error(`Админ-доступ отсутствует (${resp.status}): ${reason}. Перевойдите в админку BullRun.`);
+  }
+  if (resp.status === 503) {
+    throw new Error('Telegram Web отключён фича-флагом TELEGRAM_WEB_ENABLED на сервере.');
+  }
+  if (!resp.ok) {
+    let body: any = null;
+    try { body = await resp.json(); } catch {}
+    const reason = body?.error || body?.message || resp.statusText;
+    throw new Error(`Не удалось получить bridge-токен (${resp.status}): ${reason}`);
+  }
+
+  const payload = await resp.json();
+  const cfg: BullrunBridgeConfig = {
+    wsUrl: payload.wsUrl || payload.ws_url || '/api/mtproto-bridge',
+    bridgeToken: payload.bridgeToken || payload.bridge_token,
+    sessionData: payload.sessionData || payload.session_data,
+    fingerprint: payload.fingerprint,
+    expiresAt: payload.expiresAt || payload.expires_at,
+    userbotId,
+  };
+
+  if (!cfg.bridgeToken || !cfg.sessionData?.mainDcId || !cfg.fingerprint?.api_id) {
+    throw new Error('Некорректный ответ сервера: отсутствует bridge_token / sessionData / fingerprint.');
+  }
+
+  return cfg;
+}
+
+export function extractUserbotIdFromUrl(): string | null {
+  // Expected path shape: /app/telegram-web/<userbotId>(/...)?
+  const m = window.location.pathname.match(/\/app\/telegram-web\/([^/]+)/);
+  if (!m) return null;
+  const id = decodeURIComponent(m[1]);
+  if (id === 'index.html' || id.startsWith('static') || id.startsWith('assets')) return null;
+  return id;
+}
+
+function readAdminAccessToken(): string | null {
+  // Supabase stores session under `sb-<host-first-segment>-auth-token`.
+  try {
+    const keys = Object.keys(localStorage).filter((k) => /^sb-[\w.-]+-auth-token$/.test(k));
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        const token = parsed?.access_token || parsed?.provider_token;
+        if (typeof token === 'string' && token.length > 20) return token;
+      } catch {
+        // Not JSON — try next key.
+      }
+    }
+  } catch {
+    // localStorage not available.
+  }
+  return null;
 }

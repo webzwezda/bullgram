@@ -8,6 +8,12 @@ const TOKEN_TTL_MS = 5 * 60 * 1000;
 const TTL_CLEAN_INTERVAL_MS = 60 * 1000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const TCP_CONNECT_TIMEOUT_MS = 10_000;
+// Per-token WS connection rate limit. GramJS opens 1-3 concurrent WS per
+// session (main DC + file DCs) and reconnects occasionally; 10/min is
+// generous for legitimate use but stops a leaked bridge_token from
+// hammering the bridge (each WS opens a SOCKS5 TCP to a Telegram DC).
+const MAX_CONNECTIONS_PER_MINUTE = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const ALLOWED_ORIGIN_SUFFIXES = ['bullgram.xyz', 'bullrun.ru', 'localhost'];
 
 // Whitelist of Telegram DC IP literals the bridge is allowed to open TCP
@@ -173,7 +179,8 @@ export class MtprotoBridgeService {
             adminIp,
             userAgent,
             createdAt: now,
-            expiresAt: now + TOKEN_TTL_MS
+            expiresAt: now + TOKEN_TTL_MS,
+            connectionAttempts: []
         });
 
         const proxyUsedAtIssue = proxyConfig
@@ -249,6 +256,28 @@ export class MtprotoBridgeService {
             ws.close(4403, 'ORIGIN_NOT_ALLOWED');
             return;
         }
+
+        // Rate-limit: sliding window of connection timestamps per token.
+        // A leaked token can be used to spam WS connections (each opens a
+        // SOCKS5 TCP to a Telegram DC); this caps the blast radius.
+        const now = Date.now();
+        entry.connectionAttempts = (entry.connectionAttempts || []).filter(
+            (ts) => now - ts < RATE_LIMIT_WINDOW_MS
+        );
+        if (entry.connectionAttempts.length >= MAX_CONNECTIONS_PER_MINUTE) {
+            this._audit({
+                admin_id: entry.adminId,
+                userbot_id: entry.userbotId,
+                action: 'bridge_error',
+                error_code: 4429,
+                error_message: 'rate_limited',
+                admin_ip: entry.adminIp,
+                user_agent: entry.userAgent
+            }).catch(() => {});
+            ws.close(4429, 'RATE_LIMITED');
+            return;
+        }
+        entry.connectionAttempts.push(now);
 
         const state = {
             tcpSocket: null,
@@ -355,7 +384,6 @@ export class MtprotoBridgeService {
                 });
 
                 state.tcpSocket = socket;
-                state.handshakeDone = true;
                 if (state.handshakeTimer) {
                     clearTimeout(state.handshakeTimer);
                     state.handshakeTimer = null;
@@ -384,7 +412,12 @@ export class MtprotoBridgeService {
                     proxy_used: proxyUsed
                 }).catch(() => {});
 
+                // Send the ACK BEFORE flipping handshakeDone. If we flip
+                // first and ws.send throws (e.g. ws in CLOSING state),
+                // finishWith() will treat it as a post-handshake success
+                // and log bridge_closed instead of bridge_error.
                 ws.send('ok');
+                state.handshakeDone = true;
             } catch (err) {
                 finishWith({ code: 1011, reason: 'TCP_CONNECT_FAILED', errorMessage: String(err.message || err) });
             }
