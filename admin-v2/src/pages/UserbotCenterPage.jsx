@@ -16,6 +16,24 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatBytes(n) {
+  const v = Number(n || 0);
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  if (v < 1024 * 1024 * 1024) return `${(v / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(v / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatDurationMs(ms) {
+  const v = Math.max(0, Number(ms || 0));
+  if (v < 1000) return `${Math.round(v)} мс`;
+  const s = v / 1000;
+  if (s < 60) return `${s.toFixed(1)} с`;
+  const m = Math.floor(s / 60);
+  const rest = Math.round(s % 60);
+  return `${m}м ${rest}с`;
+}
+
 function formatElapsed(seconds) {
   const value = Math.max(0, Number(seconds || 0));
   const minutes = Math.floor(value / 60);
@@ -168,6 +186,13 @@ export function UserbotCenterPage() {
     loading: false,
     error: '',
     rows: []
+  });
+  const [webAuditState, setWebAuditState] = useState({
+    loading: false,
+    error: '',
+    rows: [],
+    activeBridges: 0,
+    total: 0
   });
   const trialHoursLeft = useMemo(() => {
     if (!trialEndsAt) return null;
@@ -545,6 +570,48 @@ export function UserbotCenterPage() {
     }
 
     loadErrorEvents();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedUserbotId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWebAudit() {
+      if (!accessToken || !selectedUserbotId) {
+        setWebAuditState({ loading: false, error: '', rows: [], activeBridges: 0, total: 0 });
+        return;
+      }
+
+      setWebAuditState((prev) => ({ ...prev, loading: true, error: '' }));
+      try {
+        const query = new URLSearchParams({
+          userbot_id: selectedUserbotId,
+          limit: '20'
+        });
+        const data = await apiRequest(`/api/userbot-web/audit?${query.toString()}`, { accessToken });
+        if (cancelled) return;
+        setWebAuditState({
+          loading: false,
+          error: '',
+          rows: data.events || [],
+          activeBridges: data.active_bridges || 0,
+          total: data.total || 0
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setWebAuditState({
+          loading: false,
+          error: error.message,
+          rows: [],
+          activeBridges: 0,
+          total: 0
+        });
+      }
+    }
+
+    loadWebAudit();
     return () => {
       cancelled = true;
     };
@@ -1211,6 +1278,84 @@ export function UserbotCenterPage() {
                       <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.happened_at)}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-slate-100 p-6 md:p-8">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8b5cf6' }} />
+              <div className="text-[15px] font-bold text-slate-900">Telegram Web — мосты</div>
+            </div>
+            {webAuditState.activeBridges > 0 && (
+              <div className="px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 text-xs font-bold flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+                Активных мостов: {webAuditState.activeBridges}
+              </div>
+            )}
+          </div>
+          <div className="text-sm text-slate-500 mb-4">
+            Кто и когда открывал этот юзербот в Telegram Web, сколько трафика прошло через мост, какие ошибки.
+          </div>
+          {webAuditState.error ? (
+            <div className="text-sm text-slate-500">{webAuditState.error}</div>
+          ) : webAuditState.loading ? (
+            <div className="text-sm text-slate-500">Загружаем журнал мостов...</div>
+          ) : webAuditState.rows.length === 0 ? (
+            <div className="text-sm text-slate-500">Этот аккаунт ещё не открывали в Telegram Web.</div>
+          ) : (
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Событие</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">DC</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Трафик ↓/↑</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Длина</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">IP админа</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Когда</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {webAuditState.rows.map((row) => {
+                    const tone = row.action === 'bridge_error' || row.action === 'token_expired'
+                      ? 'text-rose-700 bg-rose-50'
+                      : row.action === 'session_issued'
+                        ? 'text-violet-700 bg-violet-50'
+                        : 'text-slate-600 bg-slate-50';
+                    const label = {
+                      session_issued: 'Сессия выдана',
+                      bridge_opened: 'Мост открыт',
+                      bridge_closed: 'Мост закрыт',
+                      bridge_error: 'Ошибка моста',
+                      token_expired: 'Токен истёк'
+                    }[row.action] || row.action;
+                    return (
+                      <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold ${tone}`}>{label}</span>
+                          {row.error_message && (
+                            <div className="text-xs text-rose-600 mt-1">{row.error_message}</div>
+                          )}
+                          {row.user_agent && (
+                            <div className="text-xs text-slate-400 mt-1 truncate max-w-[280px]" title={row.user_agent}>{row.user_agent}</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.dc_id || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700 font-mono">
+                          {row.bytes_in ? formatBytes(row.bytes_in) : '—'}
+                          <span className="text-slate-400 mx-1">/</span>
+                          {row.bytes_out ? formatBytes(row.bytes_out) : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{row.duration_ms ? formatDurationMs(row.duration_ms) : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600 font-mono">{row.admin_ip || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(row.created_at)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

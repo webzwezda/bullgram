@@ -55,5 +55,50 @@ export default function (supabase, mtprotoBridgeService) {
         }
     });
 
+    // Read-only audit log for the bridge. Filterable by userbot + action.
+    // Auth-scoped to the current admin: rows are filtered by admin_id to
+    // respect multi-tenancy (admin only sees their own bridge activity).
+    router.get('/audit', authenticateUser, async (req, res) => {
+        try {
+            const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 200);
+            const offset = Math.max(Number(req.query.offset) || 0, 0);
+            const userbotId = req.query.userbot_id ? String(req.query.userbot_id) : null;
+            const action = req.query.action ? String(req.query.action) : null;
+
+            let query = supabase
+                .from('telegram_web_audit')
+                .select('id, admin_id, userbot_id, action, dc_id, bytes_in, bytes_out, duration_ms, error_code, error_message, admin_ip, user_agent, created_at', { count: 'exact' })
+                .eq('admin_id', req.user.id)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+
+            if (userbotId) {
+                query = query.eq('userbot_id', userbotId);
+            }
+            if (action) {
+                query = query.eq('action', action);
+            }
+
+            const { data, error: queryError, count } = await query;
+            if (queryError) throw queryError;
+
+            const activeBridges = mtprotoBridgeService.countActiveBridges({
+                adminId: req.user.id,
+                userbotId: userbotId || undefined
+            });
+
+            res.set('Cache-Control', 'no-store, private, max-age=0');
+            return res.json({
+                success: true,
+                events: data || [],
+                total: count ?? 0,
+                active_bridges: activeBridges
+            });
+        } catch (err) {
+            console.error('[userbot-web] audit query failed:', err.message);
+            return res.status(500).json({ error: err.message || 'AUDIT_QUERY_FAILED' });
+        }
+    });
+
     return router;
 }

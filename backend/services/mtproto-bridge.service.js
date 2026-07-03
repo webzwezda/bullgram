@@ -54,6 +54,23 @@ export class MtprotoBridgeService {
         return String(process.env.TELEGRAM_WEB_ENABLED || 'false').trim().toLowerCase() === 'true';
     }
 
+    /**
+     * Count currently-issued (non-expired) bridge tokens. Optional filter
+     * by adminId / userbotId. Used by the audit UI to show "live bridges"
+     * count alongside historical entries.
+     */
+    countActiveBridges({ adminId = null, userbotId = null } = {}) {
+        const now = Date.now();
+        let count = 0;
+        for (const entry of this.tokens.values()) {
+            if (entry.expiresAt <= now) continue;
+            if (adminId && String(entry.adminId) !== String(adminId)) continue;
+            if (userbotId && String(entry.userbotId) !== String(userbotId)) continue;
+            count++;
+        }
+        return count;
+    }
+
     _evictExpired() {
         const now = Date.now();
         for (const [token, entry] of this.tokens) {
