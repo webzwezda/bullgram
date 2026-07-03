@@ -1625,7 +1625,7 @@ export function UserbotCenterPage() {
         {activeTab === 'messages' ? renderMessagesTab() : null}
       </div>
 
-      {activeTab === 'profile' && selectedUserbotId ? (
+      {selectedUserbotId ? (
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mt-6">
           <div className="p-6 md:p-8 border-b border-slate-100">
             <div className="flex items-center justify-between gap-3 flex-wrap">
