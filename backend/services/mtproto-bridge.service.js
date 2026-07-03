@@ -10,6 +10,31 @@ const HANDSHAKE_TIMEOUT_MS = 10_000;
 const TCP_CONNECT_TIMEOUT_MS = 10_000;
 const ALLOWED_ORIGIN_SUFFIXES = ['bullgram.xyz', 'bullrun.ru', 'localhost'];
 
+// Whitelist of Telegram DC IP literals the bridge is allowed to open TCP
+// to. Matches the IPv6 set in userbot-web/patches/src/lib/gramjs/Utils.ts.
+// Without this, a leaked bridge_token could be used to pipe raw bytes to
+// arbitrary internal endpoints (127.0.0.1:6379, 10.x, internal services)
+// = SSRF.
+const ALLOWED_DC_IPS = new Set([
+    '2001:b28:f23d:f001::a',   // DC1
+    '2001:67c:4e8:f002::a',    // DC2
+    '2001:b28:f23d:f003::a',   // DC3
+    '2001:67c:4e8:f004::a',    // DC4
+    '2001:b28:f23f:f005::a',   // DC5
+    // IPv4 fallback (used when proxy doesn't support IPv6)
+    '149.154.175.50',          // DC1
+    '149.154.167.51',          // DC2
+    '149.154.175.100',         // DC3
+    '149.154.167.91',          // DC4
+    '91.108.56.130'             // DC5
+]);
+
+function isAllowedDestination(ip, port) {
+    if (typeof ip !== 'string' || !ip) return false;
+    if (!Number.isFinite(port) || port < 1 || port > 65535) return false;
+    return ALLOWED_DC_IPS.has(ip);
+}
+
 function decodeStringSessionToApiForm(stringSession) {
     if (!stringSession || typeof stringSession !== 'string') return null;
     try {
@@ -196,7 +221,10 @@ export class MtprotoBridgeService {
     }
 
     _isOriginAllowed(origin) {
-        if (!origin) return true;
+        // Browser WebSocket always sets Origin (same-origin or cross-origin).
+        // Missing Origin = non-browser client (curl, attacker with leaked
+        // token). Reject — defense in depth on top of the token requirement.
+        if (!origin || typeof origin !== 'string') return false;
         try {
             const host = new URL(origin).hostname;
             return ALLOWED_ORIGIN_SUFFIXES.some((suffix) => host === suffix || host.endsWith('.' + suffix));
@@ -302,6 +330,19 @@ export class MtprotoBridgeService {
                     });
                 }
 
+                // CRITICAL: attach error listener IMMEDIATELY after socket
+                // creation. Between SocksClient.createConnection returning
+                // and this line, any emitted 'error' would be unhandled and
+                // crash the PM2 worker (Node default for unhandled socket
+                // error). Same for direct-connect path above.
+                socket.on('error', (err) => {
+                    if (!state.handshakeDone) {
+                        finishWith({ code: 1011, reason: 'TCP_CONNECT_FAILED', errorMessage: String(err.message || err) });
+                    } else {
+                        finishWith({ code: 1011, reason: 'TCP_ERROR', errorMessage: String(err.message || err) });
+                    }
+                });
+
                 socket.on('data', (chunk) => {
                     state.bytesOut += chunk.length;
                     if (ws.readyState === ws.OPEN) ws.send(chunk);
@@ -310,14 +351,6 @@ export class MtprotoBridgeService {
                 socket.on('close', () => {
                     if (state.handshakeDone) {
                         finishWith({ code: 1000, reason: 'TCP_CLOSED' });
-                    }
-                });
-
-                socket.on('error', (err) => {
-                    if (!state.handshakeDone) {
-                        finishWith({ code: 1011, reason: 'TCP_CONNECT_FAILED', errorMessage: String(err.message || err) });
-                    } else {
-                        finishWith({ code: 1011, reason: 'TCP_ERROR', errorMessage: String(err.message || err) });
                     }
                 });
 
@@ -377,6 +410,11 @@ export class MtprotoBridgeService {
                 }
                 if (!parsed || !parsed.ip || !Number.isFinite(parsed.port)) {
                     finishWith({ code: 1040, reason: 'BAD_HANDSHAKE', errorMessage: 'bad_handshake_format' });
+                    return;
+                }
+                // SSRF guard: only allow known Telegram DC IPs.
+                if (!isAllowedDestination(parsed.ip, parsed.port)) {
+                    finishWith({ code: 1041, reason: 'DESTINATION_NOT_ALLOWED', errorMessage: `destination_blocked:${parsed.ip}:${parsed.port}` });
                     return;
                 }
                 if (Number.isFinite(parsed.dcId)) state.dcId = parsed.dcId;

@@ -80,7 +80,9 @@ async function main() {
   assert(bridge._isOriginAllowed('https://app.bullgram.xyz') === true, 'subdomain allowed');
   assert(bridge._isOriginAllowed('http://localhost:5173') === true, 'localhost allowed');
   assert(bridge._isOriginAllowed('https://evil.com') === false, 'evil.com rejected');
-  assert(bridge._isOriginAllowed('') === true, 'empty origin allowed (server-to-server)');
+  assert(bridge._isOriginAllowed('') === false, 'empty origin rejected (browser WS always sets it)');
+  assert(bridge._isOriginAllowed(undefined) === false, 'missing origin rejected');
+  assert(bridge._isOriginAllowed(null) === false, 'null origin rejected');
 
   console.log('\n[Test 7] Forbidden userbot (wrong admin)');
   process.env.TELEGRAM_WEB_ENABLED = 'true';
