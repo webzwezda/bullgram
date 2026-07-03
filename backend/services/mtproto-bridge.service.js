@@ -299,7 +299,18 @@ export class MtprotoBridgeService {
             }
             if (state.tcpSocket && !state.tcpSocket.destroyed) state.tcpSocket.destroy();
             const duration_ms = Date.now() - state.openedAt;
-            const action = state.handshakeDone && code === 1000 ? 'bridge_closed' : (state.handshakeDone ? 'bridge_error' : 'bridge_error');
+            // Action classification:
+            //   bridge_closed = clean close from either side (code 1000)
+            //                   regardless of handshake progress
+            //   bridge_error  = abnormal close (non-1000 code) OR explicit
+            //                   errorCode/errorMessage from a known failure
+            //                   path (TCP connect fail, SSRF block, etc.)
+            // Without this split, an admin closing the tab during loading
+            // (clean code 1000, but handshake not yet complete) would log
+            // as 'bridge_error' with null error_code — polluting the
+            // health-job error count and triggering false alerts.
+            const isCleanClose = code === 1000 && !errorCode && !errorMessage;
+            const action = isCleanClose ? 'bridge_closed' : 'bridge_error';
             const proxyUsed = entry.proxyConfig
                 ? `${entry.proxyConfig.ip}:${entry.proxyConfig.port}`
                 : null;
