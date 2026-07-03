@@ -2,29 +2,14 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
-  FileText,
   Mail,
-  Phone,
   ReceiptText,
   RotateCcw,
   ShieldCheck,
   Truck
 } from 'lucide-react';
 import { SALES_LINKS } from '../components/MarketingPrimitives.jsx';
-import { SUPPORT_EMAIL } from '../contacts.js';
-
-const sellerDetails = {
-  name: 'BullRun',
-  sellerType: 'Самозанятый',
-  legalName: 'Козель Илья Сергеевич',
-  taxId: '270415104864',
-  address: 'Хабаровский край',
-  email: SUPPORT_EMAIL,
-  phone: '+7 908 461-04-34',
-  telegram: '+7 908 461-04-34'
-};
-
-const offerHref = '/docs/oferta_270415104864.docx';
+import { SUPPORT_EMAIL, SUPPORT_TELEGRAM } from '../contacts.js';
 
 const plans = [
   {
@@ -86,13 +71,6 @@ const normalDelivery = [
 ];
 
 const complianceBlocks = [
-  {
-    icon: FileText,
-    title: 'Оферта',
-    text: 'Оплата означает согласие с условиями публичной оферты. В оферте указаны состав услуги, цена, срок оказания, отказ и возврат.',
-    href: offerHref,
-    linkLabel: 'Скачать публичную оферту'
-  },
   {
     icon: Truck,
     title: 'Получение услуги',
@@ -229,15 +207,6 @@ export function PricingPage() {
                 <h3 className="text-lg font-black text-slate-950">{title}</h3>
               </div>
               <p className="mt-3 text-sm font-medium leading-6 text-slate-600">{text}</p>
-              {href ? (
-                <a
-                  href={href}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 ring-1 ring-inset ring-blue-200 transition hover:bg-blue-100"
-                >
-                  <FileText className="h-4 w-4" strokeWidth={2.5} />
-                  {linkLabel}
-                </a>
-              ) : null}
             </article>
           ))}
         </div>
@@ -245,40 +214,22 @@ export function PricingPage() {
 
       <section className="grid gap-8 py-12 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Контакты и реквизиты</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Продавец и поддержка</h2>
+          <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Поддержка</div>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Связь с командой</h2>
           <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Информация о продавце и реквизитах для связи с поддержкой.
-            Паспортные данные на публичной странице не размещаются.
+            Оплата и возвраты — в криптовалюте. По любым вопросам доступа, оплаты и тарифов пишите в поддержку.
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <dl className="grid gap-4 text-sm">
-            {[
-              ['Наименование ресурса', sellerDetails.name],
-              ['Статус продавца', sellerDetails.sellerType],
-              ['Продавец', sellerDetails.legalName],
-              ['ИНН', sellerDetails.taxId],
-              ['Регион', sellerDetails.address]
-            ].map(([label, value]) => (
-              <div key={label} className="grid gap-1 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0 sm:grid-cols-[160px_1fr]">
-                <dt className="font-black text-slate-400">{label}</dt>
-                <dd className="font-semibold text-slate-800">{value}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <a className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100" href={`mailto:${sellerDetails.email}`}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <a className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100" href={`mailto:${SUPPORT_EMAIL}`}>
               <Mail className="h-4 w-4" strokeWidth={2.5} />
-              {sellerDetails.email}
+              {SUPPORT_EMAIL}
             </a>
-            <div className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-              <Phone className="h-4 w-4" strokeWidth={2.5} />
-              {sellerDetails.phone}
-            </div>
-          </div>
-          <div className="mt-3 rounded-lg bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800">
-            Telegram поддержки: {sellerDetails.telegram}
+            <a className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100" href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer">
+              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+              Telegram поддержки
+            </a>
           </div>
         </div>
       </section>
