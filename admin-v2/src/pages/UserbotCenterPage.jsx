@@ -19,14 +19,6 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function formatElapsed(seconds) {
-  const value = Math.max(0, Number(seconds || 0));
-  const minutes = Math.floor(value / 60);
-  const rest = value % 60;
-  if (minutes <= 0) return `${rest} с`;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
-}
-
 const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
 
 function consumeUserbotCenterHandoff() {
@@ -138,8 +130,6 @@ export function UserbotCenterPage() {
     error: '',
     data: null
   });
-  const [scanStartedAt, setScanStartedAt] = useState(null);
-  const [scanElapsedSeconds, setScanElapsedSeconds] = useState(0);
   const [actionState, setActionState] = useState({
     sendingReply: false,
     joiningInvite: false,
@@ -174,20 +164,6 @@ export function UserbotCenterPage() {
     return Math.ceil(diffMs / (1000 * 60 * 60));
   }, [trialEndsAt]);
   const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
-
-  useEffect(() => {
-    if (!scanStartedAt || !state.refreshing) {
-      setScanElapsedSeconds(0);
-      return undefined;
-    }
-
-    const tick = () => {
-      setScanElapsedSeconds(Math.floor((Date.now() - scanStartedAt) / 1000));
-    };
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [scanStartedAt, state.refreshing]);
 
   function applyCenterData(nextData, preferredUserbotId = selectedUserbotId, preferredThreadUserId = threadUserId) {
     const nextUserbotId = String(nextData.selected_userbot_id || preferredUserbotId || '');
@@ -249,14 +225,6 @@ export function UserbotCenterPage() {
       if (trackScanWait) {
         setScanStartedAt(null);
       }
-    }
-  }
-
-  async function refreshCenterNow() {
-    try {
-      await reloadCenter({ scan: true });
-    } catch {
-      // Ошибка уже записана в состояние страницы.
     }
   }
 
@@ -1165,12 +1133,6 @@ export function UserbotCenterPage() {
         </div>
       ) : null}
 
-      {state.scanRequired ? (
-        <div className="mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 font-medium text-sm">
-          Экран открылся в safe-preview режиме. Нажми «Проверить сейчас» чтобы подтянуть живые данные из Telegram.
-        </div>
-      ) : null}
-
       <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -1191,23 +1153,6 @@ export function UserbotCenterPage() {
               </select>
             </div>
             <div className="flex gap-2">
-              <button
-                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-sm shadow-indigo-200/50"
-                onClick={refreshCenterNow}
-                disabled={state.refreshing}
-              >
-                {state.refreshing ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Проверяем {formatElapsed(scanElapsedSeconds)}</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Проверить сейчас</span>
-                  </>
-                )}
-              </button>
               {telegramWebEnabled ? (
                 <button
                   type="button"
