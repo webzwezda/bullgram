@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.
 const apiLinks = [
   {
     title: 'MCP',
-    text: 'Агентский вход в BullRun tools. Подходит для клешни и других MCP-клиентов.',
+    text: 'Агентский вход в Bullgram tools. Подходит для клешни и других MCP-клиентов.',
     href: '/app/api/mcp',
     icon: Bot,
     action: 'Открыть MCP'
@@ -42,7 +42,7 @@ export function ApiN8nPage() {
                 <div>
                   <CardTitle className="text-lg font-bold tracking-tight text-slate-900">n8n сценарии</CardTitle>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                    Контур для автоматизаций: дернуть BullRun по API, принять webhook из внешнего сценария и связать с кассой, MCP или операционными экранами.
+                    Контур для автоматизаций: дернуть Bullgram по API, принять webhook из внешнего сценария и связать с кассой, MCP или операционными экранами.
                   </p>
                 </div>
               </div>
@@ -53,7 +53,7 @@ export function ApiN8nPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-semibold text-slate-400">Входящие события</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">webhook → BullRun</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">webhook → Bullgram</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-semibold text-slate-400">Исходящие команды</div>

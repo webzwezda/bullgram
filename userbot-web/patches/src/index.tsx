@@ -1,9 +1,9 @@
-// BullRun-patched index.tsx (app entry).
+// Bullgram-patched index.tsx (app entry).
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): initializes GramJS via phone/QR
 // auth flow, persists session to localStorage.
 //
-// BullRun patch: before any other init runs, bootstrap the bridge:
+// Bullgram patch: before any other init runs, bootstrap the bridge:
 //   1) Extract `userbotId` from URL pathname `/app/telegram-web/:userbotId`.
 //   2) Read admin's Supabase JWT from localStorage (same origin as admin-v2).
 //   3) POST /api/userbot-web/web-session/:userbotId → bridge token +
@@ -208,7 +208,7 @@ async function nukeGramjsIdb(): Promise<void> {
 async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
   const userbotId = extractUserbotIdFromUrl();
   if (!userbotId) {
-    throw new Error('В URL не указан id юзербота. Откройте Telegram Web из админки BullRun.');
+    throw new Error('В URL не указан id юзербота. Откройте Telegram Web из админки Bullgram.');
   }
 
   // L1.3: bridge tokens are multi-use for 5 minutes. On tab reload within
@@ -238,7 +238,7 @@ function renderBootstrapError(err: unknown) {
       <p style="margin: 0 0 12px; line-height: 1.5; color: #4b5563;">${escapeHtml(message)}</p>
       <p style="margin: 0; line-height: 1.5; color: #6b7280; font-size: 14px;">
         Закройте эту вкладку и откройте Telegram Web заново из раздела
-        <em>Центр юзерботов</em> в админке BullRun.
+        <em>Центр юзерботов</em> в админке Bullgram.
       </p>
     </div>
   `;

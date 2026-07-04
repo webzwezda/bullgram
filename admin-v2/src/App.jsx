@@ -109,7 +109,7 @@ export function App() {
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Командный центр';
     const current = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to));
-    return current?.label || 'BullRun';
+    return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function App() {
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20">
             BR
           </div>
-          <span className="font-black text-xl tracking-tight text-slate-900">BullRun</span>
+          <span className="font-black text-xl tracking-tight text-slate-900">Bullgram</span>
         </div>
         
         <nav className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1" style={{ scrollbarWidth: 'none' }}>

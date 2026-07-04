@@ -18,7 +18,7 @@ const plans = [
     title: 'Trial',
     price: '0 ₽',
     period: 'на 14 дней',
-    description: 'Пробный доступ к BullRun, чтобы проверить сценарий платного Telegram-доступа без оплаты.',
+    description: 'Пробный доступ к Bullgram, чтобы проверить сценарий платного Telegram-доступа без оплаты.',
     href: SALES_LINKS.trial,
     action: 'Начать Trial',
     features: [
@@ -34,12 +34,12 @@ const plans = [
     title: 'Normal',
     price: '900 ₽',
     period: 'за 365 дней доступа',
-    description: 'Основной платный тариф для доступа к BullRun: P2P/TON-касса, доступ, CRM, продления и Shop.',
+    description: 'Основной платный тариф для доступа к Bullgram: P2P/TON-касса, доступ, CRM, продления и Shop.',
     href: SALES_LINKS.ops,
     action: 'Оформить Normal',
     highlighted: true,
     features: [
-      'доступ к кабинету BullRun на 365 дней',
+      'доступ к кабинету Bullgram на 365 дней',
       'P2P/TON-касса для Telegram-канала или группы',
       'CRM, заказы, продления и исключение из доступа',
       'Shop/P2P-сценарий с прямым денежным потоком продавцу'
@@ -66,7 +66,7 @@ const plans = [
 const normalDelivery = [
   'Покупатель связывается с поддержкой в Telegram для оформления тарифа Normal.',
   'Согласовывает детали оплаты и получает реквизиты.',
-  'После оплаты и ручного подтверждения получает доступ к рабочему кабинету BullRun.',
+  'После оплаты и ручного подтверждения получает доступ к рабочему кабинету Bullgram.',
   'Услуга оказывается дистанционно в течение оплаченного периода 365 дней.'
 ];
 
@@ -74,7 +74,7 @@ const complianceBlocks = [
   {
     icon: Truck,
     title: 'Получение услуги',
-    text: 'Normal открывает дистанционный доступ к сервису BullRun и рабочим сценариям для Telegram-проекта на оплаченный срок.'
+    text: 'Normal открывает дистанционный доступ к сервису Bullgram и рабочим сценариям для Telegram-проекта на оплаченный срок.'
   },
   {
     icon: RotateCcw,
@@ -172,7 +172,7 @@ export function PricingPage() {
           <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Что оплачивает покупатель</div>
           <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Normal на 365 дней</h2>
           <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Это услуга дистанционного доступа к сервису BullRun для управления платным Telegram-проектом:
+            Это услуга дистанционного доступа к сервису Bullgram для управления платным Telegram-проектом:
             P2P/TON-касса, заявки, чеки, выдача доступа, CRM, продления, исключения и Shop/P2P-сценарии.
           </p>
         </div>

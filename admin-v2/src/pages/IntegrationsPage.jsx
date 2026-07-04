@@ -11,17 +11,17 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 
 const PURPOSES = {
   mcp: {
-    title: 'BullRun MCP',
-    description: 'Ключ для клешни и агентов. Агент видит только разрешенные BullRun tools.',
+    title: 'Bullgram MCP',
+    description: 'Ключ для клешни и агентов. Агент видит только разрешенные Bullgram tools.',
     icon: Bot,
     gradient: 'from-indigo-500 to-indigo-600',
     shadow: 'shadow-indigo-500/20',
-    label: 'BullRun MCP',
+    label: 'Bullgram MCP',
     cta: { href: '/app/api/mcp', label: 'Открыть MCP' }
   },
   p2p_webhook: {
     title: 'P2P касса / SMS Forward',
-    description: 'Bearer token для SMS/Push Forward, чтобы BullRun принимал банковские уведомления.',
+    description: 'Bearer token для SMS/Push Forward, чтобы Bullgram принимал банковские уведомления.',
     icon: Smartphone,
     gradient: 'from-blue-500 to-blue-600',
     shadow: 'shadow-blue-500/20',
@@ -305,7 +305,7 @@ export function IntegrationsPage() {
   }
 
   async function revokeToken(token) {
-    if (!window.confirm('После отзыва эта интеграция больше не сможет обращаться к BullRun.')) return;
+    if (!window.confirm('После отзыва эта интеграция больше не сможет обращаться к Bullgram.')) return;
     setBusyId(token.id);
     try {
       await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/revoke`, {

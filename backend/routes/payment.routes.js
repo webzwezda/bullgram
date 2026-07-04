@@ -2,7 +2,7 @@ import express from 'express';
 import { OfficialBotService } from '../services/official-bot.service.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 
-const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
 
 function normalizeWebhookPayload(provider, body = {}) {
     const payload = body || {};

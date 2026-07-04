@@ -1,6 +1,6 @@
 # userbot-web
 
-Vendored [Ajaxy/telegram-tt](https://github.com/Ajaxy/telegram-tt) with BullRun
+Vendored [Ajaxy/telegram-tt](https://github.com/Ajaxy/telegram-tt) with Bullgram
 MTProto bridge patches. Built into `dist/` and deployed to
 `/var/www/bullrun-telegram-web/`, served at `/app/telegram-web/`.
 
@@ -44,7 +44,7 @@ file at the same relative path. To add or modify a patch:
 Current patches:
 
 - `src/lib/gramjs/extensions/PromisedWebSockets.ts` — transport rewrite.
-  Routes MTProto bytes through BullRun backend MTProto bridge via WebSocket.
+  Routes MTProto bytes through Bullgram backend MTProto bridge via WebSocket.
   Handshake: text frame `JSON.stringify({ip, port, dcId, isTestServer,
   isPremium})` → wait for text `"ok"` → binary frames verbatim. Reads
   `window.__BULLRUN_BRIDGE__ = { wsUrl, bridgeToken }` set by app entry.

@@ -1,11 +1,11 @@
-// BullRun-patched setupServiceWorker.ts.
+// Bullgram-patched setupServiceWorker.ts.
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): registers a Service Worker at
 // `serviceWorker.js` to handle push notifications, push-induced message
 // loads, share intents, and tab focus. Without SW, upstream shows a
 // "SERVICE_WORKER_DISABLED" error dialog to desktop users.
 //
-// BullRun patch: zero SW registration.
+// Bullgram patch: zero SW registration.
 //   - Same origin (bullgram.xyz) already has admin-v2's SW. A second SW
 //     with overlapping scope would race for `fetch` events on /app/* and
 //     /app/telegram-web/*, breaking both apps.
@@ -38,5 +38,5 @@ function subscribeToWorker() {
 
 if (DEBUG) {
   // eslint-disable-next-line no-console
-  console.log('[BullRun] Service Worker registration skipped (BullRun Web = memory-only, no SW).');
+  console.log('[Bullgram] Service Worker registration skipped (Bullgram Web = memory-only, no SW).');
 }

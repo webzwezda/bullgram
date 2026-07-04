@@ -1138,7 +1138,7 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
     const now = new Date();
 
     if (offerCode === 'normal') {
-        console.warn('[Shop] Игнорируем Normal unlock из Shop. Normal теперь выдается только через BullRun billing.');
+        console.warn('[Shop] Игнорируем Normal unlock из Shop. Normal теперь выдается только через Bullgram billing.');
         return;
     }
 

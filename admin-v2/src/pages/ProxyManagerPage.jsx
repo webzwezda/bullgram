@@ -510,7 +510,7 @@ export function ProxyManagerPage() {
       .filter((value) => value > 0);
 
     return {
-      title: 'Прокси BullRun',
+      title: 'Прокси Bullgram',
       previewText: 'Один живой seller-лот с выбором количества. После брони оплаты появятся ниже в блоке «Нужно оплатить».',
       items: visibleProxyItems,
       unitPriceText: samePrice
@@ -2519,7 +2519,7 @@ function renderOpenProxyPurchases(rows) {
                       placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым — поднимется на сервере' : '192.168.1.1'}
                     />
                     {state.support?.profile_role === 'admin' && !formState.id && !formState.host.trim() ? (
-                      <div className="text-[12px] text-blue-600 font-medium">Прокси будет создан автоматически на сервере BullRun</div>
+                      <div className="text-[12px] text-blue-600 font-medium">Прокси будет создан автоматически на сервере Bullgram</div>
                     ) : null}
                   </div>
 

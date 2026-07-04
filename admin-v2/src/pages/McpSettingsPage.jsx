@@ -157,7 +157,7 @@ export function McpSettingsPage() {
   }
 }`, [mcpServerSnippet]);
 
-  const agentSetupPrompt = useMemo(() => `Ты настраиваешь OpenClaw для подключения к BullRun MCP.
+  const agentSetupPrompt = useMemo(() => `Ты настраиваешь OpenClaw для подключения к Bullgram MCP.
 
 Сделай по шагам:
 1. Убедись, что ACPX plugin включен. Если нет, выполни:
@@ -171,9 +171,9 @@ ${mcpServerSnippet}
 5. Сохрани файл
 6. Перезапусти gateway командой:
    openclaw gateway
-7. После этого используй BullRun MCP и скажи, какие tools доступны
+7. После этого используй Bullgram MCP и скажи, какие tools доступны
 
-BullRun MCP endpoint:
+Bullgram MCP endpoint:
 ${APP_CONFIG.backendUrl}/api/mcp
 
 MCP token:
@@ -201,7 +201,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
   }
 
   async function revokeToken(tokenId) {
-    if (!window.confirm('После отзыва клешня больше не сможет обращаться к BullRun MCP.')) return;
+    if (!window.confirm('После отзыва клешня больше не сможет обращаться к Bullgram MCP.')) return;
     try {
       setRevokingId(String(tokenId));
       setError('');
@@ -268,7 +268,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                 <div>
                   <CardTitle className="text-lg font-bold tracking-tight text-slate-900">MCP-токен</CardTitle>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                    Выдай персональный токен, скопируй готовый config и проверь, что клешня видит BullRun tools.
+                    Выдай персональный токен, скопируй готовый config и проверь, что клешня видит Bullgram tools.
                   </p>
                 </div>
               </div>
@@ -310,7 +310,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
               <div>
                 <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Подключение клешни</CardTitle>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                  Включи ACPX, открой конфиг, вставь BullRun MCP и проверь подключение.
+                  Включи ACPX, открой конфиг, вставь Bullgram MCP и проверь подключение.
                 </p>
               </div>
             </div>
@@ -341,7 +341,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
               </div>
 
               <div>
-                <StepHeader number={3} title="Вставь BullRun MCP" />
+                <StepHeader number={3} title="Вставь Bullgram MCP" />
                 <p className="text-sm text-slate-500 mb-2 ml-9">Готовый фрагмент с токеном и endpoint.</p>
                 <div className="ml-9">
                   <CodeBlock label="Готовый config" value={openClawConfigSnippet} />

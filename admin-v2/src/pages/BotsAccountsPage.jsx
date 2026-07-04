@@ -157,7 +157,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     const placeId = String(place?.id || '').trim();
     if (!placeId) return;
     const placeTitle = String(place?.title || place?.tg_chat_id || 'Telegram-площадку');
-    if (!window.confirm(`Удалить ${placeTitle} из BullRun? В Telegram это ничего не удалит.`)) return;
+    if (!window.confirm(`Удалить ${placeTitle} из Bullgram? В Telegram это ничего не удалит.`)) return;
 
     try {
       await apiRequest(`/api/official-bot/channels/${placeId}`, {

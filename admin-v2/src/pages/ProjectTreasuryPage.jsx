@@ -174,7 +174,7 @@ export function ProjectTreasuryPage() {
           <div className="project-treasury__buckets">
             <div><span>Доход сайта</span><strong>{formatTon(buckets.platformRevenueTon)}</strong></div>
             <div><span>Продажи</span><strong>{formatTon(buckets.shopRevenueTon)}</strong></div>
-            <div><span>Комиссия BullRun</span><strong>{formatTon(buckets.referralFeeTon)}</strong></div>
+            <div><span>Комиссия Bullgram</span><strong>{formatTon(buckets.referralFeeTon)}</strong></div>
             <div><span>Партнерам</span><strong>{formatTon(buckets.partnerLiabilityTon)}</strong></div>
             <div><span>Возвраты</span><strong>{formatTon(buckets.adminReserveLiabilityTon)}</strong></div>
             <div><span>Комиссии сети</span><strong>{formatTon(buckets.networkFeeReserveTon)}</strong></div>

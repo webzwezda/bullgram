@@ -1,7 +1,7 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 
-const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
 
 function isUserbotInboxWatchEnabled() {
     return String(process.env.USERBOT_INBOX_WATCH_ENABLED || '').trim().toLowerCase() === 'true';

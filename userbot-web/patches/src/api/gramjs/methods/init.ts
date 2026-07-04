@@ -1,10 +1,10 @@
-// BullRun-patched init.ts (runs inside GramJS Worker).
+// Bullgram-patched init.ts (runs inside GramJS Worker).
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): initializes update emitter, merges
 // localDb, then calls initClient(initialArgs). No awareness of multi-thread
 // context.
 //
-// BullRun patch: before initClient, hydrate the Worker-side bridge config
+// Bullgram patch: before initClient, hydrate the Worker-side bridge config
 // from initialArgs. Main thread fetches the bridge token + sessionData +
 // fingerprint (see patches/src/index.tsx), passes them through the initApi
 // postMessage payload (see patches/src/global/actions/api/initial.ts and
@@ -30,7 +30,7 @@ import { setBridgeConfig } from '../../../util/bullrunBridge';
 export function initApi(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs, initialLocalDb?: LocalDb) {
   initUpdateEmitter(_onUpdate);
 
-  // BullRun: hydrate Worker-side bridge config BEFORE initClient runs,
+  // Bullgram: hydrate Worker-side bridge config BEFORE initClient runs,
   // otherwise TelegramClient constructor throws when reading fingerprint.
   if (initialArgs?.bullrunBridgeConfig) {
     setBridgeConfig(initialArgs.bullrunBridgeConfig);

@@ -400,7 +400,7 @@ function openBroadcastManualSelection(rows = [], title = 'Клиенты: руч
       label: sanitizeDemoLabel(row.label || row.title || row.channel_title || `TG ${row.tg_user_id}`)
     })),
     suggested_title: title,
-    suggested_message: 'Привет. Пишу по доступу в BullRun. Если вопрос еще актуален, ответь одним сообщением.'
+    suggested_message: 'Привет. Пишу по доступу в Bullgram. Если вопрос еще актуален, ответь одним сообщением.'
   }));
 
   window.location.href = '/app/broadcast';
@@ -1787,7 +1787,7 @@ export function CustomersPage() {
     const rowId = row.id ? String(row.id) : null;
     const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
     const promptText = resolutionType === 'linked_accounted'
-      ? `Пометить ${clientLabel} как уже учтенного в BullRun и убрать из нижней таблицы?`
+      ? `Пометить ${clientLabel} как уже учтенного в Bullgram и убрать из нижней таблицы?`
       : `Убрать ${clientLabel} из нижней таблицы как неактуального кандидата?`;
 
     if (!window.confirm(promptText)) return;

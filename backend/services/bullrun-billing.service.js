@@ -2,7 +2,7 @@
 
 export const NORMAL_PLAN = {
     code: 'normal_365d',
-    title: 'BullRun Normal',
+    title: 'Bullgram Normal',
     amountRub: Number(process.env.BILLING_NORMAL_PRICE_RUB || 900),
     durationDays: Number(process.env.BILLING_NORMAL_DURATION_DAYS || 365)
 };

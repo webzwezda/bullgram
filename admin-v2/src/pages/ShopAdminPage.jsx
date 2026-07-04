@@ -34,9 +34,9 @@ const TEXT_OFFER_TEMPLATES = [
     offerCode: 'trial',
     title: 'Trial вход',
     priceTon: '5',
-    preview: 'Быстрый вход в BullRun Trial: первый checkout, hidden message и стартовый Telegram-контур.',
-    description: 'Покупатель получает входной оффер под Trial: базовый TON/P2P checkout, скрытое сообщение после оплаты и понятный следующий шаг внутри BullRun.',
-    postPurchaseMessage: 'Спасибо за покупку Trial. Открой /app, забери бесплатный прокси, подключи первый юзербот и закрой свой первый checkout внутри BullRun.'
+    preview: 'Быстрый вход в Bullgram Trial: первый checkout, hidden message и стартовый Telegram-контур.',
+    description: 'Покупатель получает входной оффер под Trial: базовый TON/P2P checkout, скрытое сообщение после оплаты и понятный следующий шаг внутри Bullgram.',
+    postPurchaseMessage: 'Спасибо за покупку Trial. Открой /app, забери бесплатный прокси, подключи первый юзербот и закрой свой первый checkout внутри Bullgram.'
   },
   {
     id: 'p2p',
@@ -53,7 +53,7 @@ const TEXT_OFFER_TEMPLATES = [
     title: 'Normal апгрейд',
     priceTon: '29',
     preview: 'Апгрейд с Trial на рабочий money ops stack: больше юзерботов, больше прокси, CRM и дожим без trial-стопоров.',
-    description: 'Покупатель получает следующий продуктовый слой BullRun: рабочий контур для денег, доступа, CRM, рассылок и seller-операционки.',
+    description: 'Покупатель получает следующий продуктовый слой Bullgram: рабочий контур для денег, доступа, CRM, рассылок и seller-операционки.',
     postPurchaseMessage: 'Normal открыт. Теперь переходи в /app, подключай боевой контур и запускай CRM, рассылки и seller-flow без trial-лимитов.'
   }
 ];
@@ -225,7 +225,7 @@ function packageSignalGuide(signal, profilePlan) {
     if (signal.status === 'failed') {
       return 'Оплата по Trial уже была, но handoff сломан. Сначала восстанови передачу, иначе новый трафик только усилит бардак.';
     }
-    return 'Trial нужен как входной оффер: первый checkout, скрытый результат и первый контур внутри BullRun.';
+    return 'Trial нужен как входной оффер: первый checkout, скрытый результат и первый контур внутри Bullgram.';
   }
 
   if (signal.id === 'normal') {
@@ -878,7 +878,7 @@ export function ShopAdminPage() {
     if (!canUseAssetSeller) {
       return planRules.canUseShopAdmin
         ? 'В этом режиме доступны только P2P-офферы с текстом после оплаты.'
-        : 'На Trial уже можно собирать P2P-офферы с текстом после оплаты. Витрина активов BullRun откроется после перехода на Normal.';
+        : 'На Trial уже можно собирать P2P-офферы с текстом после оплаты. Витрина активов Bullgram откроется после перехода на Normal.';
     }
 
     if (formState.item_type === 'bundle') {
@@ -1329,7 +1329,7 @@ export function ShopAdminPage() {
     <section className="page">
       <div className="page__header shop-admin-head">
         <div>
-          <div className="shop-admin-head__eyebrow">BullRun Shop</div>
+          <div className="shop-admin-head__eyebrow">Bullgram Shop</div>
           <h1>Shop admin</h1>
           <p>Один экран для лотов, оплат и handoff.</p>
         </div>
@@ -1380,15 +1380,15 @@ export function ShopAdminPage() {
             tone={planRules.canUseShopAdmin ? 'info' : 'warning'}
             title={planRules.canUseShopAdmin ? 'P2P seller mode активен' : 'На Trial уже открыт P2P seller mode'}
             text={planRules.canUseShopAdmin
-              ? 'В этом режиме доступны P2P-офферы с текстом после оплаты. Для маркетплейса активов BullRun нужен seller-контур admin.'
+              ? 'В этом режиме доступны P2P-офферы с текстом после оплаты. Для маркетплейса активов Bullgram нужен seller-контур admin.'
               : 'Trial уже позволяет собирать P2P-офферы и принимать оплату. Витрина активов и handoff ownership_transfer откроются на Normal.'}
           />
           {!planRules.canUseShopAdmin ? (
             <UpgradeCallout
               title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
               text={trialUpgradeUrgent
-                ? 'P2P-офферы уже доступны, но если тебе нужен маркетплейс активов BullRun, не жди дедлайна trial. Переходи на Normal прямо сейчас.'
-                : 'P2P-офферы уже можно продавать. Для витрины активов BullRun следующий шаг — Normal.'}
+                ? 'P2P-офферы уже доступны, но если тебе нужен маркетплейс активов Bullgram, не жди дедлайна trial. Переходи на Normal прямо сейчас.'
+                : 'P2P-офферы уже можно продавать. Для витрины активов Bullgram следующий шаг — Normal.'}
             />
           ) : null}
         </>

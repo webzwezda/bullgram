@@ -1,4 +1,4 @@
-// BullRun runtime safety patches.
+// Bullgram runtime safety patches.
 //
 // Single import that installs guards against four classes of leaks that
 // would let Telegram (or an observer on the network) see the admin's real
@@ -8,7 +8,7 @@
 //      through our WS→TCP bridge, so any successful RTCPeerConnection
 //      construction leaks the admin's public IP directly to Telegram's
 //      call servers. We replace the constructor with one that throws.
-//      Call UI fails safely with "Звонки отключены в BullRun Web".
+//      Call UI fails safely with "Звонки отключены в Bullgram Web".
 //
 //   2. WebSocket — already neutered at the GramJS layer (PromisedWebSockets
 //      patch), but upstream also opens raw WebSockets for uploads/downloads
@@ -23,7 +23,7 @@
 //      push server the admin's FCM/APNS token, which Telegram correlates
 //      with the device. Stub both to fail.
 //
-// All guards log to console.warn with `[BullRun Safety]` prefix so they're
+// All guards log to console.warn with `[Bullgram Safety]` prefix so they're
 // easy to grep. Guards run on first import (idempotent — module is cached).
 
 const BULLRUN_SAFETY_INSTALLED = '__BULLRUN_SAFETY_INSTALLED__';
@@ -44,7 +44,7 @@ function disableWebRTC() {
   const blocked = class BlockedRTCPeerConnection {
     constructor() {
       const err = new Error(
-        '[BullRun Safety] RTCPeerConnection is disabled — calls cannot route UDP through the SOCKS5 bridge.',
+        '[Bullgram Safety] RTCPeerConnection is disabled — calls cannot route UDP through the SOCKS5 bridge.',
       );
       // eslint-disable-next-line no-console
       console.warn(err.message);
@@ -63,7 +63,7 @@ function disableMediaDevices() {
   const originalGetUserMedia = md.getUserMedia?.bind(md);
   if (originalGetUserMedia) {
     md.getUserMedia = () => Promise.reject(
-      new Error('[BullRun Safety] getUserMedia disabled — mic/camera access blocked.'),
+      new Error('[Bullgram Safety] getUserMedia disabled — mic/camera access blocked.'),
     );
   }
   if (md.enumerateDevices) {
@@ -94,7 +94,7 @@ function disablePushNotifications() {
     const proto = (globalThis as any).PushManager?.prototype;
     if (proto?.subscribe) {
       proto.subscribe = () => Promise.reject(
-        new Error('[BullRun Safety] Push subscription disabled.'),
+        new Error('[Bullgram Safety] Push subscription disabled.'),
       );
     }
   } catch {

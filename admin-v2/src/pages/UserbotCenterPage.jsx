@@ -1216,7 +1216,7 @@ export function UserbotCenterPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-bold text-slate-900">Активные сессии</h3>
                 <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  Залогиненные устройства. Можно выкинуть все, кроме серверной сессии BullRun.
+                  Залогиненные устройства. Можно выкинуть все, кроме серверной сессии Bullgram.
                 </p>
               </div>
             </div>
@@ -1282,7 +1282,7 @@ export function UserbotCenterPage() {
                             {item.current ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                                BullRun
+                                Bullgram
                               </span>
                             ) : null}
                           </div>

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-BullRun is a v2-only product for managing paid Telegram access with CRM, access control, orders, shop, referrals, userbot operations, managed proxies, and agent integrations.
+Bullgram is a v2-only product for managing paid Telegram access with CRM, access control, orders, shop, referrals, userbot operations, managed proxies, and agent integrations.
 
 **Three Active Runtimes:**
 - `backend/` — Express API for Telegram subscription management, shop, billing, and userbot operations
@@ -85,7 +85,7 @@ All backend requests enforce `owner_id` for data isolation. Each admin sees only
 - If manual DM flow exists, warn that Telegram may only allow delivery when userbot knows target or shares a group/chat, and that userbot admin rights in that group improve odds
 
 **Agent Access:**
-- BullRun MCP is primary path for product data (`POST /api/mcp`, `/app/claw`)
+- Bullgram MCP is primary path for product data (`POST /api/mcp`, `/app/claw`)
 - Supabase MCP is primary path for database operations (via SSH tunnel: `npm run mcp:supabase:tunnel`)
 - Prefer explicit tool names like `summary`, `preview`, `import`, `status` over vague "agent actions"
 
@@ -96,7 +96,7 @@ When working with userbot operations:
 2. New userbots start in `safe-mode` (`runtime_status=pending_activation`) after QR/file import
 3. Background jobs should not touch accounts in `safe-mode` until manual activation
 4. If Telegram `@SpamBot` confirms restriction, account gets `restricted` status and is removed from shop
-5. Dedicated managed proxy of restricted userbot should be cleaned up from BullRun when no longer shared
+5. Dedicated managed proxy of restricted userbot should be cleaned up from Bullgram when no longer shared
 
 ## Supabase MCP
 
@@ -160,7 +160,7 @@ No automated test suite exists yet. Verify changes manually:
 **Backend Endpoints:** See `backend/README.md` for full API documentation. Key areas:
 - `/api/userbot/*` — Userbot operations, health checks, manual actions
 - `/api/official-bot/*` — Official bot management
-- `/api/mcp` — BullRun MCP endpoint
+- `/api/mcp` — Bullgram MCP endpoint
 
 ## Telegram Client Lifecycle (GramJS Userbot)
 

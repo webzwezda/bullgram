@@ -1,7 +1,7 @@
 # GEMINI.md
 
 ## Project Overview
-**BullRun** is a "v2-only" product ecosystem designed to manage paid access to Telegram groups and channels. It provides a comprehensive suite of tools including a CRM, order management, automated subscription handling, userbot operations, and managed proxy services.
+**Bullgram** is a "v2-only" product ecosystem designed to manage paid access to Telegram groups and channels. It provides a comprehensive suite of tools including a CRM, order management, automated subscription handling, userbot operations, and managed proxy services.
 
 The project is structured into three active runtimes:
 - **`backend/`**: Express.js API, background jobs, and Telegram services (Official Bots & Userbots).
@@ -59,7 +59,7 @@ npm run deploy:v2     # Frontend only deploy
 - **Safety**: Check `@SpamBot` status; restricted accounts must be removed from the shop.
 
 ### Agent Integration
-- **BullRun MCP**: Primary path for product data (`POST /api/mcp`).
+- **Bullgram MCP**: Primary path for product data (`POST /api/mcp`).
 - **Supabase MCP**: Primary path for database inspection/operations. Use the SSH tunnel: `npm run mcp:supabase:tunnel`.
 - **Orchestration**: The main agent session acts as an orchestrator, delegating scoped tasks to sub-agents (backend, frontend, reviewer, etc.) as defined in `AGENTS.md`.
 

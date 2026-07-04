@@ -34,7 +34,7 @@ export function UserProfileCard() {
 
   if (!user) return null;
 
-  const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор BullRun';
+  const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор Bullgram';
   const profileEmail = user?.email || '';
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();

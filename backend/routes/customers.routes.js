@@ -418,7 +418,7 @@ async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selected
                 if (paymentStatus === 'unpaid_lead') {
                     matchingOptions.push(buildCandidateMatchingOption({
                         state: 'invoice_pending',
-                        label: 'Уже создавал счет в BullRun',
+                        label: 'Уже создавал счет в Bullgram',
                         tab: 'abandoned',
                         targetLabel: sourceChannelTitle,
                         targetId: source.already_bound_channel_id || null
@@ -436,7 +436,7 @@ async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selected
                 } else if (latestFunnel?.event_type) {
                     matchingOptions.push(buildCandidateMatchingOption({
                         state: 'funnel_known',
-                        label: 'Уже светился в воронке BullRun',
+                        label: 'Уже светился в воронке Bullgram',
                         tab: 'viewed',
                         targetLabel: sourceBotTargetLabel,
                         targetId: source.bot_id || source.already_bound_channel_id || null
@@ -1316,7 +1316,7 @@ export default function customersRoutes(supabase) {
             try {
                 const durationText = durationRaw === 'forever' ? 'Навсегда' : `${durationDays} дней`;
                 const lines = [
-                    'Тебе выдали доступ в BullRun.',
+                    'Тебе выдали доступ в Bullgram.',
                     '',
                     `Канал: ${channel.title || 'закрытый канал'}`,
                     `Срок: ${durationText}`

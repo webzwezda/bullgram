@@ -62,8 +62,8 @@ export function ForWhoPage() {
     <section className="marketing-page">
       <SectionIntro
         eyebrow="Сегменты"
-        title="BullRun не для всех. Он для тех, у кого Telegram уже стал основным рабочим каналом."
-        text="Если у тебя продажи, доступ, общение с клиентами и координация админов живут в Telegram, BullRun собирает это в один нормальный контур."
+        title="Bullgram не для всех. Он для тех, у кого Telegram уже стал основным рабочим каналом."
+        text="Если у тебя продажи, доступ, общение с клиентами и координация админов живут в Telegram, Bullgram собирает это в один нормальный контур."
       />
 
       <FeatureGrid items={SEGMENTS} />

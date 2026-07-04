@@ -8,7 +8,7 @@ import type { ApiPremiumSection } from './payments';
 import type { ApiStarsSubscriptionPricing } from './stars';
 import type { ApiUser } from './users';
 
-// BullRun: bridge config forwarded from main thread to GramJS Worker so that
+// Bullgram: bridge config forwarded from main thread to GramJS Worker so that
 // patched PromisedWebSockets / client.ts / sessions.ts can read wsUrl,
 // bridgeToken, fingerprint and sessionData inside the Worker scope.
 // See patches/src/util/bullrunBridge.ts.
@@ -30,7 +30,7 @@ export interface ApiInitialArgs {
   langCode: string;
   isTestServerRequested?: boolean;
   accountIds?: string[];
-  // BullRun-only field. Set by the main-thread initApi action handler
+  // Bullgram-only field. Set by the main-thread initApi action handler
   // (patches/src/global/actions/api/initial.ts) and consumed by the Worker
   // init (patches/src/api/gramjs/methods/init.ts).
   bullrunBridgeConfig?: BullrunBridgeConfig;

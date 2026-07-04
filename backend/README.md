@@ -119,7 +119,7 @@ RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72
 `USERBOT_DM_ENABLED` включает только ручные действия из интерфейса.  
 Он не должен автоматически включать retention, auto-kick fallback, inbox watch или broadcast.
 
-### BullRun platform billing
+### Bullgram platform billing
 
 Normal продается отдельным контуром `/api/billing`, а не через Shop/P2P клиентов.  
 Robokassa-секреты хранятся только в `.env` backend и не редактируются через `payment_settings`.

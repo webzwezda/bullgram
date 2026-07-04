@@ -1,8 +1,8 @@
 {
-  "name": "bullrun-paywall",
+  "name": "bullgram-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Управление подписками BullRun (Backend)",
+  "description": "Управление подписками Bullgram (Backend)",
   "scripts": {
     "deploy": "DEPLOY_HOST=${DEPLOY_HOST:?required} rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='.env.backup-*' --exclude='logs' --exclude='uploads' ./ \"${DEPLOY_USER:-root}@${DEPLOY_HOST}\":/var/www/backend/",
     "pull": "DEPLOY_HOST=${DEPLOY_HOST:?required} rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='.env.backup-*' --exclude='logs' --exclude='uploads' \"${DEPLOY_USER:-root}@${DEPLOY_HOST}\":/var/www/backend/ ./",

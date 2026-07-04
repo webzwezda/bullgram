@@ -1,8 +1,8 @@
 {
-  "name": "bullrun-userbot-web-builder",
+  "name": "bullgram-userbot-web-builder",
   "private": true,
   "version": "0.1.0",
-  "description": "Build orchestrator for the vendored Ajaxy/telegram-tt fork with BullRun MTProto bridge patches",
+  "description": "Build orchestrator for the vendored Ajaxy/telegram-tt fork with Bullgram MTProto bridge patches",
   "scripts": {
     "fetch": "bash scripts/fetch-upstream.sh",
     "patch": "bash scripts/apply-patches.sh",

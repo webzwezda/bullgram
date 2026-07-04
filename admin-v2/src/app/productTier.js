@@ -27,7 +27,7 @@ export function getProductTierRules(plan = 'trial') {
       canCreateMultipleOwnedProxies: true,
       canUseTrialProxy: false,
       canBuyAssets: true,
-      summary: 'Рабочий тариф BullRun.'
+      summary: 'Рабочий тариф Bullgram.'
     };
   }
 

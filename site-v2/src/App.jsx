@@ -13,7 +13,7 @@ import { LoginCard } from './ui/LoginCard.jsx';
 
 const navSections = [
   {
-    title: 'BullRun',
+    title: 'Bullgram',
     items: [
       { to: '/', label: 'Главная', icon: LayoutDashboard }
     ]
@@ -58,7 +58,7 @@ export function App() {
     if (location.pathname.startsWith('/purchases')) return 'Мои покупки';
     if (location.pathname === '/plan') return 'Мой тариф';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
-    return current?.label || 'BullRun';
+    return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
 
   useEffect(() => {
@@ -81,7 +81,7 @@ export function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">
       <div className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
         <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">BullRun</div>
+          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Bullgram</div>
           <div className="truncate text-sm font-black text-slate-900">{currentNavLabel}</div>
         </div>
         <button

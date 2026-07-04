@@ -32,7 +32,7 @@ export function TestPage() {
           <div className="max-w-5xl pt-10 sm:pt-16 lg:pt-24">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-slate-500 shadow-sm">
               <Newspaper className="h-4 w-4 text-blue-600" />
-              BullRun
+              Bullgram
             </div>
 
             <h1 className="max-w-4xl text-5xl font-black leading-[0.95] tracking-tight text-slate-950 sm:text-7xl lg:text-[6.5rem]">

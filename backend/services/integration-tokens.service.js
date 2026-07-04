@@ -3,7 +3,7 @@ import { decrypt, encrypt } from '../utils/crypto.js';
 
 const PURPOSE_CONFIG = {
     mcp: {
-        label: 'BullRun MCP',
+        label: 'Bullgram MCP',
         defaultScopes: ['mcp:use'],
         tokenPrefix: 'brmcp'
     },

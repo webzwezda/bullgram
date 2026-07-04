@@ -1,6 +1,6 @@
-# BullRun Design System & UI Guidelines
+# Bullgram Design System & UI Guidelines
 
-This document outlines the core UI/UX principles and design system conventions for the BullRun `admin-v2` application. 
+This document outlines the core UI/UX principles and design system conventions for the Bullgram `admin-v2` application. 
 
 Our goal is to maintain a premium, modern, and highly tactile interface (similar to Linear or Vercel) while keeping the application highly functional and fast.
 

@@ -1,6 +1,6 @@
-// BullRun-patched initial.ts (action handlers, runs in main thread).
+// Bullgram-patched initial.ts (action handlers, runs in main thread).
 //
-// Diff scope: only the `initApi` action handler. We attach the BullRun
+// Diff scope: only the `initApi` action handler. We attach the Bullgram
 // bridge config to the initApi payload so the GramJS Worker can hydrate
 // its own globalThis.__BULLRUN_BRIDGE__ before TelegramClient construction.
 // Without this, patched client.ts / PromisedWebSockets.ts / sessions.ts
@@ -70,7 +70,7 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
     .map(({ userId }) => userId)
     .filter(Boolean);
 
-  // BullRun: read bridge config from main-thread window.__BULLRUN_BRIDGE__
+  // Bullgram: read bridge config from main-thread window.__BULLRUN_BRIDGE__
   // (set by app entry bootstrap before init() runs). The Worker can't see
   // window globals, so we forward the config via the initApi payload.
   let bullrunBridgeConfig: ReturnType<typeof getBridgeConfig> | undefined;

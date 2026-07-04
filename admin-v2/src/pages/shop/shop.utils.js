@@ -26,7 +26,7 @@ export const TEXT_OFFER_TEMPLATES = [
     offerCode: 'trial',
     title: 'Trial вход',
     priceTon: '5',
-    preview: 'Быстрый вход в BullRun Trial: первый заказ и стартовый Telegram-контур.',
+    preview: 'Быстрый вход в Bullgram Trial: первый заказ и стартовый Telegram-контур.',
     description: 'Покупатель получает входной оффер: базовый TON/P2P заказ, скрытое сообщение после оплаты и понятный следующий шаг.',
     postPurchaseMessage: 'Спасибо за покупку Trial. Открой /app, забери бесплатный прокси, подключи первый юзербот и начни работу.'
   },

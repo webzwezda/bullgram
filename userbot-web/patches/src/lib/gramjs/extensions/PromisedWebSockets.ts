@@ -1,9 +1,9 @@
-// BullRun-patched PromisedWebSockets.
+// Bullgram-patched PromisedWebSockets.
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): browser-side WebSocket transport.
 // Connects directly to wss://<dc-ip>:<port>/apiws — leaking admin IP to Telegram.
 //
-// BullRun patch: routes the same MTProto bytes through the BullRun backend
+// Bullgram patch: routes the same MTProto bytes through the Bullgram backend
 // MTProto bridge (WebSocket on /api/mtproto-bridge) which forwards them over
 // SOCKS5 to the userbot's proxy. Source IP seen by Telegram = same SOCKS5
 // proxy as backend's createAuthorizedClient — no account IP change risk.

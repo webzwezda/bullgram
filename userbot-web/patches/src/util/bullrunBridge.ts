@@ -1,4 +1,4 @@
-// BullRun bridge config accessor.
+// Bullgram bridge config accessor.
 //
 // Single source of truth for the data injected by app entry (src/index.tsx)
 // before GramJS initializes. Other patches (sessions.ts, client.ts) call
@@ -182,7 +182,7 @@ export async function fetchBridgeConfigFromNetwork(
   const accessToken = readAdminAccessToken();
   if (!accessToken) {
     throw new Error(
-      'Не найдена сессия администратора. Откройте Telegram Web из авторизованной админки BullRun в том же браузере.',
+      'Не найдена сессия администратора. Откройте Telegram Web из авторизованной админки Bullgram в том же браузере.',
     );
   }
 
@@ -200,7 +200,7 @@ export async function fetchBridgeConfigFromNetwork(
     let body: any = null;
     try { body = await resp.json(); } catch {}
     const reason = body?.error || body?.message || 'доступ запрещён';
-    throw new Error(`Админ-доступ отсутствует (${resp.status}): ${reason}. Перевойдите в админку BullRun.`);
+    throw new Error(`Админ-доступ отсутствует (${resp.status}): ${reason}. Перевойдите в админку Bullgram.`);
   }
   if (resp.status === 503) {
     throw new Error('Telegram Web отключён фича-флагом TELEGRAM_WEB_ENABLED на сервере.');

@@ -25,8 +25,8 @@ const DEFAULT_FINGERPRINT = Object.freeze({
 const QR_FINGERPRINT_PROFILES = Object.freeze({
     bullrun_android_a52: Object.freeze({
         id: 'bullrun_android_a52',
-        label: 'BullRun Android A52',
-        note: 'Рекомендуемый профиль BullRun для QR-логина.',
+        label: 'Bullgram Android A52',
+        note: 'Рекомендуемый профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
             api_id: 4,
             api_hash: '014b35b6184100b085b0d0572f9b5103',
@@ -39,8 +39,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
     }),
     bullrun_android_redmi_note_11: Object.freeze({
         id: 'bullrun_android_redmi_note_11',
-        label: 'BullRun Redmi Note 11',
-        note: 'Альтернативный Android-профиль BullRun с русской локалью.',
+        label: 'Bullgram Redmi Note 11',
+        note: 'Альтернативный Android-профиль Bullgram с русской локалью.',
         fingerprint: Object.freeze({
             api_id: 4,
             api_hash: '014b35b6184100b085b0d0572f9b5103',
@@ -53,8 +53,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
     }),
     bullrun_android_a34: Object.freeze({
         id: 'bullrun_android_a34',
-        label: 'BullRun Android A34',
-        note: 'Запасной Android-профиль BullRun для QR-логина.',
+        label: 'Bullgram Android A34',
+        note: 'Запасной Android-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
             api_id: 4,
             api_hash: '014b35b6184100b085b0d0572f9b5103',
@@ -67,8 +67,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
     }),
     bullrun_iphone_13: Object.freeze({
         id: 'bullrun_iphone_13',
-        label: 'BullRun iPhone 13',
-        note: 'Стабильный iPhone-профиль BullRun для QR-логина.',
+        label: 'Bullgram iPhone 13',
+        note: 'Стабильный iPhone-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
             api_id: 4,
             api_hash: '014b35b6184100b085b0d0572f9b5103',
@@ -81,8 +81,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
     }),
     bullrun_iphone_15_pro: Object.freeze({
         id: 'bullrun_iphone_15_pro',
-        label: 'BullRun iPhone 15 Pro',
-        note: 'Свежий iPhone-профиль BullRun для QR-логина.',
+        label: 'Bullgram iPhone 15 Pro',
+        note: 'Свежий iPhone-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
             api_id: 4,
             api_hash: '014b35b6184100b085b0d0572f9b5103',

@@ -850,7 +850,7 @@ export class SalesContourService {
         }
 
         const expireDate = Math.floor(Date.now() / 1000) + 30 * 60;
-        const inviteName = `BullRun_userbot_${new Date().toISOString().slice(0, 16)}`;
+        const inviteName = `Bullgram_userbot_${new Date().toISOString().slice(0, 16)}`;
 
         try {
             const invite = await botApi.createChatInviteLink(channel.tg_chat_id, {

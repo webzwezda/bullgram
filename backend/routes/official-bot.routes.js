@@ -76,7 +76,7 @@ function getOfficialBotWebhookOrigin() {
         process.env.OFFICIAL_BOT_WEBHOOK_ORIGIN
         || process.env.PUBLIC_API_ORIGIN
         || process.env.PUBLIC_APP_ORIGIN
-        || 'https://bullrun.ru'
+        || 'https://bullgram.xyz'
     ).trim().replace(/\/$/, '');
 }
 

@@ -27,7 +27,7 @@ function tokenHint(token) {
 }
 
 function publicOrigin() {
-    return String(process.env.PUBLIC_APP_ORIGIN || 'https://bullrun.ru').replace(/\/$/, '');
+    return String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
 }
 
 function publicWebhookUrl() {

@@ -7,7 +7,7 @@ export function SiteAuthGate({ children }) {
     return (
       <div className="site-auth-gate site-auth-gate--loading">
         <div className="site-auth-gate__container">
-          <div className="site-auth-gate__text">Загружаем BullRun...</div>
+          <div className="site-auth-gate__text">Загружаем Bullgram...</div>
         </div>
       </div>
     );
@@ -186,7 +186,7 @@ export function SiteAuthGate({ children }) {
               <section className="site-auth-gate__main">
                 <div className="site-auth-gate__gradient" />
                 <div className="site-auth-gate__content">
-                  <div className="site-auth-gate__badge">BullRun</div>
+                  <div className="site-auth-gate__badge">Bullgram</div>
 
                   <div>
                     <h1 className="site-auth-gate__title">

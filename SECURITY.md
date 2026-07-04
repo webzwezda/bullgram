@@ -19,7 +19,7 @@ Security-баги — то, что позволяет злоумышленник
 
 ## Куда слать
 
-Письмо на **webzwezda@gmail.com** с темой `[SEC] BullRun: <краткое описание>`.
+Письмо на **webzwezda@gmail.com** с темой `[SEC] Bullgram: <краткое описание>`.
 
 В письме укажи:
 - что уязвимо (файл/endpoint/экран)
@@ -42,6 +42,6 @@ Security-баги — то, что позволяет злоумышленник
 
 ## Out of scope
 
-- Userbot-аккаунты, заблокированные Telegram за спам — это не баг BullRun, это поведение Telegram.
+- Userbot-аккаунты, заблокированные Telegram за спам — это не баг Bullgram, это поведение Telegram.
 - Перебор публичных endpoint'ов через публичный интерфейс rate-limited на уровне nginx/supabase.
 - Отсутствие 2FA на твоём собственном admin-аккаунте — включи в Supabase Auth.

@@ -383,8 +383,8 @@ export function useLiveUserbotsController({
                 ? `Готовый seller userbot @${account.tg_username}.`
                 : `Готовый seller userbot ${account.tg_account_id}.`),
           preview_text: wantsBundle
-            ? 'Готовый Telegram-аккаунт BullRun вместе с его прокси.'
-            : 'Готовый Telegram-аккаунт BullRun для seller-операционки.',
+            ? 'Готовый Telegram-аккаунт Bullgram вместе с его прокси.'
+            : 'Готовый Telegram-аккаунт Bullgram для seller-операционки.',
           payment_methods: saleComposer.payment_methods,
           post_purchase_message: null,
           offer_code: null,

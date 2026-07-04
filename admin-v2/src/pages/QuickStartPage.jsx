@@ -263,7 +263,7 @@ export function QuickStartPage() {
     }
   }
 
-  // Отвязать канал от автопостера (только в BullRun, бот остаётся админом в Telegram)
+  // Отвязать канал от автопостера (только в Bullgram, бот остаётся админом в Telegram)
   async function handleUnlinkChannel(type) {
     const cfg = channelConfigs[type];
     if (!cfg.id || !createdBot?.id) return;

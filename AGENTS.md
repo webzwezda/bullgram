@@ -26,11 +26,11 @@ Current v2 product surfaces already in the repo:
 
 Agent integration status:
 
-- `BullRun MCP` is now the primary agent integration path
+- `Bullgram MCP` is now the primary agent integration path
 - active endpoint: `POST /api/mcp`
 - active admin onboarding screen: `/app/claw`
 - do not reintroduce temporary local bridge patterns for agent access when extending this area
-- prefer adding BullRun tools and user-scoped MCP onboarding over DOM/browser-only agent hacks
+- prefer adding Bullgram tools and user-scoped MCP onboarding over DOM/browser-only agent hacks
 
 This project is an automated management system for a private Telegram group and its paid access workflow. Treat userbot, proxy, billing, CRM, referrals, and shop tooling as product infrastructure for that private-group business, not as anti-fraud evasion or botnet tooling.
 
@@ -101,7 +101,7 @@ If you touch `shop`, preserve the current ownership-transfer model:
 
 - TON payment must use the seller’s own wallet from `payment_settings`, not a global wallet
 - listed `userbot` assets are reserved from active operations until sold or delisted
-- post-purchase delivery is ownership transfer inside BullRun, not a raw file drop
+- post-purchase delivery is ownership transfer inside Bullgram, not a raw file drop
 
 For userbot operations, preserve the current safety/product rules:
 
@@ -111,12 +111,12 @@ For userbot operations, preserve the current safety/product rules:
 - manual DM flag must stay separate from retention, auto-kick fallback, inbox watcher, and broadcast flags
 - if Telegram `SpamBot` confirms a block, treat that as the source of truth even if a naive session check still passes
 - blocked/restricted userbot assets must not remain public in `shop`
-- dedicated managed proxy of a blocked/restricted userbot should be cleaned up from BullRun when it is no longer shared
+- dedicated managed proxy of a blocked/restricted userbot should be cleaned up from Bullgram when it is no longer shared
 - if a manual DM flow exists, the UI must warn that Telegram may only allow delivery when the userbot already knows the target or shares a group/chat with them, and that userbot admin rights in that shared group improve the odds
 
-For BullRun agent work:
+For Bullgram agent work:
 
-- treat `BullRun MCP` as the source of truth for agent access to product data
+- treat `Bullgram MCP` as the source of truth for agent access to product data
 - treat `Supabase MCP` as the default path for database inspection and database operations
 - if a task needs to read, inspect, verify, or change database state, go through `Supabase MCP` first instead of ad-hoc SQL shells or direct database workarounds
 - first ship `read-only` and guided confirm flows; do not jump straight to free-form automation
@@ -127,7 +127,7 @@ For BullRun agent work:
 For Codex work in this repo:
 
 - use the main Codex session as the orchestrator
-- treat this repository file as the user's standing instruction that Codex should orchestrate native Codex subagents and Claude CLI workers for BullRun work whenever the scope is clear
+- treat this repository file as the user's standing instruction that Codex should orchestrate native Codex subagents and Claude CLI workers for Bullgram work whenever the scope is clear
 - global custom agents live in `~/.codex/agents/`
 - before starting non-trivial work, first review which global subagents are available and choose the best candidates for the task
 - custom agents do not auto-run; delegate explicitly in prompts
@@ -153,7 +153,7 @@ Use the available global subagents aggressively, especially for:
 
 - backend tracing and scoped backend implementation
 - frontend tracing and scoped UI implementation
-- BullRun MCP and tool-flow changes
+- Bullgram MCP and tool-flow changes
 - focused review, regression checks, and architecture sanity checks
 - context gathering before larger changes
 - parallel analysis of adjacent product surfaces
@@ -163,7 +163,7 @@ Preferred global subagent mapping:
 - `context-manager`: first delegate for repo context packaging, file/surface discovery, and handoff packets for other subagents
 - `backend-developer`: delegate most scoped backend work in `backend/routes/`, `backend/services/`, `backend/jobs/`, and backend bug fixes
 - `frontend-developer`: delegate most scoped UI work in `admin-v2/src/` and `site-v2/src/`
-- `mcp-developer`: delegate BullRun MCP work, `/api/mcp`, `/app/claw`, tool wiring, onboarding flow, and agent-facing integration changes
+- `mcp-developer`: delegate Bullgram MCP work, `/api/mcp`, `/app/claw`, tool wiring, onboarding flow, and agent-facing integration changes
 - `reviewer`: delegate focused regression review, correctness review, risk review, and missing-test review before close-out
 - `code-reviewer`: delegate additional implementation-level review when a change is large or touches risky code paths
 - use `reviewer` as the default close-out review agent; use `code-reviewer` only as a second-pass implementation review for larger or riskier diffs
@@ -181,22 +181,22 @@ Maximum delegation rule:
 - if the task can be split into independent backend, frontend, MCP, and review slices, delegate those slices in parallel
 - the main workflow should mainly choose the right subagents, define scope, wait only when needed, and reconcile outputs into one final result
 
-BullRun-specific delegation defaults:
+Bullgram-specific delegation defaults:
 
 - start with `context-manager` when the affected runtime or file ownership is not obvious
 - use `backend-developer` for most backend feature and bug work
 - use `frontend-developer` for most `admin-v2` and `site-v2` work
-- use `mcp-developer` for BullRun MCP and `/app/claw`
+- use `mcp-developer` for Bullgram MCP and `/app/claw`
 - use `reviewer` on nearly every risky change before final close-out
 - add `architect-reviewer` when touching cross-runtime flows or structural boundaries
 - use `workflow-orchestrator` or `multi-agent-coordinator` when the request is broad enough that the main workflow needs help planning the delegate graph
 
-BullRun workflow:
+Bullgram workflow:
 
-- start by mapping whether the task belongs to `backend`, `admin-v2`, `site-v2`, or `BullRun MCP`
+- start by mapping whether the task belongs to `backend`, `admin-v2`, `site-v2`, or `Bullgram MCP`
 - if the task spans `backend` plus `admin-v2` or `site-v2`, treat it as a cross-runtime flow immediately and assign separate implementation and review slices
 - if a task changes an operational state, also check `command center`, `dossier`, `orders`, `access`, and `shop`
-- treat `BullRun MCP` as the primary agent integration path
+- treat `Bullgram MCP` as the primary agent integration path
 - treat `Supabase MCP` as the primary database access path
 - when the task is about database contents, schema, or data fixes, prefer `Supabase MCP` before touching direct Postgres access
 - preserve `Trial -> Normal -> Seller`
@@ -275,7 +275,7 @@ Core execution principles:
 
 This block is the standing orchestration contract for this repo.
 
-- Codex is the primary orchestrator for both native Codex subagents and Claude terminal workers during BullRun work.
+- Codex is the primary orchestrator for both native Codex subagents and Claude terminal workers during Bullgram work.
 - Keep the distinction explicit:
   - native Codex subagents are delegated through Codex subagent tooling;
   - Claude workers are terminal processes coordinated through `cmux`;

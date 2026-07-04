@@ -1,4 +1,4 @@
-// BullRun single-tab lock via BroadcastChannel.
+// Bullgram single-tab lock via BroadcastChannel.
 //
 // Why: opening two Telegram Web tabs for the same userbot under the same
 // bridge token creates race conditions on the SOCKS5 bridge — both tabs

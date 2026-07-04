@@ -34,7 +34,7 @@ export function AuthGate({ children }) {
 
                 <div className="space-y-3">
                   <h1 className="max-w-2xl text-3xl font-black tracking-tight text-slate-900 sm:text-4xl leading-tight">
-                    Вход в кабинет <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-sky-600 to-indigo-600 font-black">BullRun</span>
+                    Вход в кабинет <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-sky-600 to-indigo-600 font-black">Bullgram</span>
                   </h1>
                   <p className="max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
                     Авторизуйтесь, чтобы управлять платным доступом к вашим Telegram-каналам,

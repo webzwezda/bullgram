@@ -1,10 +1,10 @@
-// BullRun-patched sessions.ts.
+// Bullgram-patched sessions.ts.
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): persists GramJS sessionData to
 // localStorage under `prod:session` keys. Persists across tabs, survives
 // browser restarts, leaks account credentials to disk.
 //
-// BullRun patch: zero persistence. Session bytes live only in JS memory for
+// Bullgram patch: zero persistence. Session bytes live only in JS memory for
 // the lifetime of the tab. Source of truth is window.__BULLRUN_BRIDGE__
 // injected by app entry (src/index.tsx) from the bridge token response.
 // Tab close = full session wipe. No leakage to localStorage or IndexedDB.
@@ -17,7 +17,7 @@
 //   - loadSlotSession()   → returns bridge's sessionData for ACCOUNT_SLOT=1
 //   - updateSessionUserId → no-op
 //   - importTestSession   → no-op
-//   - checkSessionLocked  → always false (no passcode in BullRun Web)
+//   - checkSessionLocked  → always false (no passcode in Bullgram Web)
 //
 // Bridge accessor: see bullrunBridge.ts.
 
@@ -36,7 +36,7 @@ export function hasStoredSession() {
 }
 
 export function storeSession(_sessionData: ApiSessionData) {
-  // No-op: BullRun Web never persists session bytes.
+  // No-op: Bullgram Web never persists session bytes.
   // The in-memory CallbackSession already holds the live key material.
 }
 
@@ -59,7 +59,7 @@ export function loadStoredSession(): ApiSessionData | undefined {
 }
 
 export function loadSlotSession(slot: number | undefined): SharedSessionData | undefined {
-  // BullRun always uses slot 1 (single-account). Bridge sessionData maps 1:1.
+  // Bullgram always uses slot 1 (single-account). Bridge sessionData maps 1:1.
   if (slot && slot !== 1) return undefined;
   try {
     const bridge = getBridgeConfig();
@@ -74,15 +74,15 @@ export function loadSlotSession(slot: number | undefined): SharedSessionData | u
 }
 
 export function updateSessionUserId(_currentUserId: string) {
-  // No-op: BullRun Web does not track per-slot userId.
+  // No-op: Bullgram Web does not track per-slot userId.
 }
 
 export function importTestSession() {
-  // No-op: BullRun Web never imports test sessions.
+  // No-op: Bullgram Web never imports test sessions.
 }
 
 export function checkSessionLocked() {
-  // BullRun Web has no passcode/lock screen — always returns false.
+  // Bullgram Web has no passcode/lock screen — always returns false.
   return false;
 }
 

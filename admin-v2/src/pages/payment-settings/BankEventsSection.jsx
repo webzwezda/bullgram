@@ -85,7 +85,7 @@ export function BankEventsSection({ accessToken, plain = false }) {
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold text-slate-900">Уведомления банка</h3>
           <p className="text-sm text-slate-500 mt-0.5">
-            SMS/Push Forward от банка. BullRun мэтчит автоматически, спорные — на тебе.
+            SMS/Push Forward от банка. Bullgram мэтчит автоматически, спорные — на тебе.
           </p>
         </div>
         {unresolvedCount > 0 ? (

@@ -187,7 +187,7 @@ export default function integrationsRoutes(supabase) {
                 const purpose = req.params.id.startsWith('legacy:mcp:') ? 'mcp' : 'p2p_webhook';
                 const result = await createIntegrationToken(supabase, {
                     ownerId: req.user.id,
-                    label: req.body?.label || (purpose === 'mcp' ? 'BullRun MCP' : 'P2P касса / SMS Forward'),
+                    label: req.body?.label || (purpose === 'mcp' ? 'Bullgram MCP' : 'P2P касса / SMS Forward'),
                     purpose,
                     metadata: { reissued_from_legacy: req.params.id }
                 });

@@ -74,8 +74,8 @@ function buildToolDefinitions() {
     return [
         {
             name: 'bullrun_infra_summary',
-            title: 'BullRun infra summary',
-            description: 'Возвращает summary по proxy, userbot и лимитам текущего BullRun аккаунта.',
+            title: 'Bullgram infra summary',
+            description: 'Возвращает summary по proxy, userbot и лимитам текущего Bullgram аккаунта.',
             inputSchema: {
                 type: 'object',
                 additionalProperties: false,
@@ -84,7 +84,7 @@ function buildToolDefinitions() {
         },
         {
             name: 'bullrun_proxy_preview',
-            title: 'BullRun proxy preview',
+            title: 'Bullgram proxy preview',
             description: 'Разбирает сырой текст proxy и возвращает preview перед сохранением.',
             inputSchema: {
                 type: 'object',
@@ -100,8 +100,8 @@ function buildToolDefinitions() {
         },
         {
             name: 'bullrun_proxy_import',
-            title: 'BullRun proxy import',
-            description: 'Сохраняет proxy в BullRun после подтверждения пользователя.',
+            title: 'Bullgram proxy import',
+            description: 'Сохраняет proxy в Bullgram после подтверждения пользователя.',
             inputSchema: {
                 type: 'object',
                 additionalProperties: false,

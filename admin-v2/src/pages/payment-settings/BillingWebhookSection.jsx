@@ -123,7 +123,7 @@ export function BillingWebhookSection({ accessToken, plain = false }) {
         <div>
           <h3 className="text-lg font-bold text-slate-900">Банковские уведомления</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Подключи SMS/Push Forward. BullRun сам закроет очевидное совпадение, а спорные оплат отправит в «Сверку оплат».
+            Подключи SMS/Push Forward. Bullgram сам закроет очевидное совпадение, а спорные оплат отправит в «Сверку оплат».
           </p>
         </div>
       </div>

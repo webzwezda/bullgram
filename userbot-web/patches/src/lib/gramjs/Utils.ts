@@ -185,14 +185,14 @@ export function getDisplayName(entity: Entity) {
  * @return {{port: number, ipAddress: string, id: number}}
  */
 export function getDC(dcId: number, downloadDC = false) {
-    // BullRun patch: upstream returns `zws<dc>.web.telegram.org` — these are
+    // Bullgram patch: upstream returns `zws<dc>.web.telegram.org` — these are
     // WebSocket-proxy hostnames that expect WSS upgrade to `/apiws`. Our
     // backend bridge opens raw TCP to whatever IP we hand it (via SOCKS5),
     // then pipes MTProto bytes verbatim. Raw TCP to zws*.web.telegram.org:443
     // hits an HTTPS edge that returns TLS ServerHello, which GramJS
     // misreads as "Server replied with an invalid auth key".
     //
-    // We return direct DC IPs instead. IPv6 chosen because BullRun's
+    // We return direct DC IPs instead. IPv6 chosen because Bullgram's
     // managed proxies pair with userbots over IPv6 (matches
     // TELEGRAM_DC_IPV6 in backend/services/userbot.service.js). Phase 0
     // spike verified this exact routing works through the SOCKS5 bridge.

@@ -1,6 +1,6 @@
-# BullRun
+# Bullgram
 
-**BullRun** — платформа для управления платным доступом в Telegram: CRM, контроль подписок, shop, рефералки, биллинг, userbot-операционка, автопостинг, managed proxies и агентские интеграции.
+**Bullgram** — платформа для управления платным доступом в Telegram: CRM, контроль подписок, shop, рефералки, биллинг, userbot-операционка, автопостинг, managed proxies и агентские интеграции.
 
 **Status:** work in progress. Публичная разработка под AGPL-3.0.
 
@@ -93,7 +93,7 @@ cd /srv/bullrun && git checkout <tag> && ./scripts/deploy-pull.sh
 - **Billing** — crypto-only (TON). Самозанятость/ИНН/Robokassa не используем.
 - **Userbot automation:** `manual-by-default`. Каждое risky-действие за фича-флагом.
 - **1 proxy record = 1 userbot** — сохраняется везде.
-- **MCP:** BullRun MCP (`POST /api/mcp`) — agent path для продукта; Supabase MCP — для базы.
+- **MCP:** Bullgram MCP (`POST /api/mcp`) — agent path для продукта; Supabase MCP — для базы.
 
 ---
 
@@ -156,7 +156,7 @@ bullrun/
 
 ## Security
 
-Баги безопасности — на `webzwezda@gmail.com` с темой `[SEC] BullRun`. SLA ответа — 72 часа. См. `SECURITY.md`.
+Баги безопасности — на `webzwezda@gmail.com` с темой `[SEC] Bullgram`. SLA ответа — 72 часа. См. `SECURITY.md`.
 
 ## License
 

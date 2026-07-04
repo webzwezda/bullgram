@@ -917,7 +917,7 @@ function ContourCard({
               </button>
               <button
                 type="button"
-                title="Удалить площадку из BullRun"
+                title="Удалить площадку из Bullgram"
                 onClick={() => deleteTelegramPlace?.(selectedTarget)}
                 className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm transition-colors shrink-0"
               >

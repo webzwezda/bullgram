@@ -357,7 +357,7 @@ export function SalesContourSection({
 
       <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3 text-sm text-indigo-800">
         <ShieldCheck className="w-5 h-5 text-indigo-500 shrink-0" />
-        <span className="font-medium text-indigo-900">Права хранятся в BullRun. Telegram дергаем только по кнопке "Обновить права".</span>
+        <span className="font-medium text-indigo-900">Права хранятся в Bullgram. Telegram дергаем только по кнопке "Обновить права".</span>
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
-// BullRun-patched client.ts.
+// Bullgram-patched client.ts.
 //
 // Upstream (Ajaxy/telegram-tt v10.9.51): inits GramJS TelegramClient with
 // `process.env.TELEGRAM_API_ID/HASH` (2040 / placeholder, baked at webpack
 // build time) and `navigator.userAgent` as deviceModel. Sends these via
 // `initConnection` to Telegram.
 //
-// BullRun patch: use the device fingerprint that was paired with the auth_key
+// Bullgram patch: use the device fingerprint that was paired with the auth_key
 // at userbot-creation time (QR import). The bridge token response carries
 // `fingerprint: {api_id, api_hash, deviceModel, systemVersion, appVersion,
 // systemLangCode, langCode}` from `tg_accounts.fingerprint` (server-stored,
@@ -106,7 +106,7 @@ export async function init(initialArgs: ApiInitialArgs) {
   // eslint-disable-next-line no-restricted-globals
   (self as any).maxBufferSize = maxBufferSize;
 
-  // BullRun: pull api_id/api_hash + device fingerprint from the bridge
+  // Bullgram: pull api_id/api_hash + device fingerprint from the bridge
   // config so Telegram sees the same identity that the auth_key was
   // created with (see comment at top of file).
   const bullrunFingerprint = getBridgeConfig().fingerprint;
@@ -120,7 +120,7 @@ export async function init(initialArgs: ApiInitialArgs) {
       systemVersion: bullrunFingerprint.systemVersion || platform || DEFAULT_PLATFORM,
       appVersion: bullrunFingerprint.appVersion || `${APP_VERSION} ${APP_CODE_NAME}`,
       useWSS: true,
-      // BullRun: our patched getDC returns IPv6 literals. TelegramClient's
+      // Bullgram: our patched getDC returns IPv6 literals. TelegramClient's
       // _initSession compares `serverAddress.includes(':') !== _useIPV6`
       // and if they mismatch, calls setDC again — which unconditionally
       // deletes the auth_key we just loaded. useIPV6=true keeps the

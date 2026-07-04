@@ -131,7 +131,7 @@ export function CasesPage() {
     <section className="marketing-page">
       <SectionIntro
         eyebrow="Кейсы"
-        title="Типовые переломы, где BullRun превращает ручной хаос в систему."
+        title="Типовые переломы, где Bullgram превращает ручной хаос в систему."
         text="Здесь не “успешный успех”, а реальные переломы вокруг трех офферов: TON/P2P, платных групп и Telegram CRM."
       />
 
@@ -145,7 +145,7 @@ export function CasesPage() {
           <span>общая причина</span>
         </div>
         <div className="case-summary__text">
-          Telegram давно стал рабочим стеком, а управление им у большинства все еще на ручниках. BullRun зарабатывает
+          Telegram давно стал рабочим стеком, а управление им у большинства все еще на ручниках. Bullgram зарабатывает
           там, где кто-то уже устал сшивать деньги, лички, доступы и админов руками.
         </div>
       </section>
