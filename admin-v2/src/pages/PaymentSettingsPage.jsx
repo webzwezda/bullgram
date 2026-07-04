@@ -9,7 +9,6 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
-import { BillingWebhookSection } from './payment-settings/BillingWebhookSection.jsx';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
 import { ReceiptVerificationSection } from './payment-settings/ReceiptVerificationSection.jsx';
@@ -729,12 +728,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                     validatePaymentFields={validatePaymentFields}
                     plain={true}
                   />
-                  <div className="border-t border-slate-100 pt-8">
-                    <BillingWebhookSection
-                      accessToken={accessToken}
-                      plain={true}
-                    />
-                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col">
