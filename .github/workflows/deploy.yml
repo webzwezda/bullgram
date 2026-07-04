@@ -1,0 +1,42 @@
+name: Deploy to production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Do not allow two deploys to race. Queue them — never cancel mid-deploy.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: ${{ secrets.PROD_PORT }}
+          script_stop: true
+          # `set -euo pipefail` is already inside deploy-pull.sh,
+          # but `script_stop: true` makes the Action fail on any
+          # non-zero exit on the remote side.
+          script: |
+            cd /srv/bullgram
+            ./scripts/deploy-pull.sh
+
+      - name: External smoke check
+        run: |
+          sleep 3
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://bullgram.xyz/ || echo "000")
+          echo "https://bullgram.xyz/ → HTTP $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "ERROR: site not responding"
+            exit 1
+          fi
