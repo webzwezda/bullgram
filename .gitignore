@@ -52,6 +52,7 @@ fl_orders_rows.csv
 
 # Claude Code internal (agent instructions, local skills/symlinks)
 .claude/
+.agents/
 
 # Vendored reference repos (kept locally, not part of BullRun source)
 archive/
