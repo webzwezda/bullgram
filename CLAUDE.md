@@ -35,16 +35,22 @@ npm run build:admin   # Build admin-v2 only
 npm run analyze       # Bundle analysis (admin-v2)
 ```
 
-### Deployment (Production Only)
-```bash
-npm run deploy        # Deploy backend + site-v2 + admin-v2
-npm run deploy:v2     # Deploy only site-v2 and admin-v2
-npm run rollback -- all <timestamp>        # Rollback all runtimes
-npm run rollback:v2 -- <timestamp>         # Rollback v2 frontends
-npm run rollback:backend -- <timestamp>    # Rollback backend only
+### Deployment
+
+**Primary flow** — push to main, GitHub Actions SSH's into prod and runs `scripts/deploy-pull.sh`:
+```
+git push origin main
 ```
 
-Deploy scripts use `rsync` to production server and require PM2 restart after backend deploy.
+The deploy script on prod does: `git fetch + reset --hard origin/main` → conditional `npm install` (only when `package.json` changed) → `npm run build:v2` → `pm2 reload ecosystem.config.cjs --env production` → smoke HTTP check. `set -euo pipefail` aborts before pm2 reload if the build fails.
+
+**Rollback** — `git revert` + push (CI redeploys previous state), or SSH to prod and `cd /srv/bullgram && git checkout HEAD~1 && ./scripts/deploy-pull.sh`.
+
+**Emergency fallback** (use only if CI is broken): the legacy rsync scripts in `ops/scripts/` still work:
+```bash
+DEPLOY_HOST=64.188.70.180 npm run deploy        # backend + site-v2 + admin-v2
+DEPLOY_HOST=64.188.70.180 npm run deploy:v2     # site-v2 + admin-v2 only
+```
 
 ## Architecture & Structure
 
@@ -151,7 +157,8 @@ RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
 No automated test suite exists yet. Verify changes manually:
 - Frontend: Run `npm run build` and test affected route
 - Backend: Run `node server.js` and exercise endpoint via app or `curl`
-- After deploy: Restart PM2 (`pm2 restart bullrun-tg-backend`)
+- Backend autopost: `cd backend && npm run test:autopost`
+- After push: watch GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; only restart PM2 by hand if you used the emergency rsync fallback
 
 ## Product Surfaces
 
