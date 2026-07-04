@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, FileText, RefreshCcw, XCircle, Sliders, Search, AlertCircle, Calendar, Bell, Info } from 'lucide-react';
+import { CheckCircle2, FileText, XCircle, Sliders, Search, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { APP_CONFIG } from '../config.js';
@@ -9,12 +9,10 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
-import { BillingHeader } from './payment-settings/BillingHeader.jsx';
 import { BillingWebhookSection } from './payment-settings/BillingWebhookSection.jsx';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
 import { ReceiptVerificationSection } from './payment-settings/ReceiptVerificationSection.jsx';
-import { BankEventsSection } from './payment-settings/BankEventsSection.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
 import { TariffsSection } from './payment-settings/TariffsSection.jsx';
 import { usePaymentSettingsController } from './payment-settings/usePaymentSettingsController.js';
@@ -52,12 +50,6 @@ function statusBadge(status) {
   };
   const entry = map[status] || { label: status || '—', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
   return <Badge variant="outline" className={entry.cls}>{entry.label}</Badge>;
-}
-
-function bankEventBadge(status) {
-  if (status === 'confirmed') return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Подтверждено</Badge>;
-  if (status === 'ignored') return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Скрыто</Badge>;
-  return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{status}</Badge>;
 }
 
 function normalizeReceiptGroup(rows = []) {
@@ -159,8 +151,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     members: [],
     selectedBotId: null,
     updatedAt: null,
-    purchases: [],
-    bankEvents: []
+    purchases: []
   });
   const {
     fieldErrors,
@@ -219,11 +210,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       setState((prev) => ({ ...prev, error: error.message }));
       toast.error(error.message);
     }
-  }
-
-  async function runBankEventAction(event, action) {
-    void event; void action;
-    toast.info('Очередь банковских уведомлений убрана — оплата теперь только TON.');
   }
 
   async function handleConfirmBotInvoice(invoiceId) {
@@ -593,17 +579,10 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
   }, [filteredPaymentEvents, invoiceMap]);
 
   const reconciliationStats = useMemo(() => {
-    const unresolvedBankEvents = state.bankEvents.filter((event) =>
-      ['matched', 'ambiguous', 'unmatched', 'auto_confirm_failed'].includes(event.status)
-    ).length;
-    const confirmedBankEvents = state.bankEvents.filter((event) => event.status === 'confirmed').length;
     return {
-      awaiting: (profileRole === 'admin' ? awaitingReceipts.length : 0) + awaitingBotEventsCount,
-      bankEvents: state.bankEvents.length,
-      unresolvedBankEvents,
-      confirmedBankEvents
+      awaiting: (profileRole === 'admin' ? awaitingReceipts.length : 0) + awaitingBotEventsCount
     };
-  }, [awaitingReceipts.length, awaitingBotEventsCount, state.bankEvents, profileRole]);
+  }, [awaitingReceipts.length, awaitingBotEventsCount, profileRole]);
 
   const filteredAwaitingReceipts = useMemo(() => {
     let list = awaitingReceipts;
@@ -661,49 +640,15 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             <section className="p-6 md:p-8 border-b border-slate-100">
               {/* Stats Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {[
-                  {
-                    label: 'Ждут решения',
-                    value: reconciliationStats.awaiting,
-                    icon: FileText,
-                    color: reconciliationStats.awaiting > 0 ? 'text-amber-500 bg-amber-500/10' : 'text-slate-400 bg-slate-100',
-                    textColor: reconciliationStats.awaiting > 0 ? 'text-amber-700' : 'text-slate-900'
-                  },
-                  {
-                    label: 'Уведомления банка',
-                    value: reconciliationStats.bankEvents,
-                    icon: Bell,
-                    color: 'text-indigo-500 bg-indigo-500/10',
-                    textColor: 'text-indigo-700 font-black'
-                  },
-                  {
-                    label: 'Спорные события',
-                    value: reconciliationStats.unresolvedBankEvents,
-                    icon: AlertCircle,
-                    color: reconciliationStats.unresolvedBankEvents > 0 ? 'text-rose-500 bg-rose-500/10' : 'text-slate-400 bg-slate-100',
-                    textColor: reconciliationStats.unresolvedBankEvents > 0 ? 'text-rose-700' : 'text-slate-900'
-                  },
-                  {
-                    label: 'Закрыто автоматически',
-                    value: reconciliationStats.confirmedBankEvents,
-                    icon: CheckCircle2,
-                    color: 'text-emerald-500 bg-emerald-500/10',
-                    textColor: 'text-emerald-700'
-                  }
-                ].map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-                      <div className={`p-1.5 rounded-lg ${item.color}`}>
-                        <item.icon className="w-4 h-4" />
-                      </div>
+                <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">Ждут решения</span>
+                    <div className={`p-1.5 rounded-lg ${reconciliationStats.awaiting > 0 ? 'text-amber-500 bg-amber-500/10' : 'text-slate-400 bg-slate-100'}`}>
+                      <FileText className="w-4 h-4" />
                     </div>
-                    <div className={`text-3xl font-black tracking-tighter ${item.textColor}`}>{item.value}</div>
                   </div>
-                ))}
+                  <div className={`text-3xl font-black tracking-tighter ${reconciliationStats.awaiting > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{reconciliationStats.awaiting}</div>
+                </div>
               </div>
             </section>
 
@@ -797,8 +742,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                   <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto mx-8 mt-6">
                     {[
                       ...(profileRole === 'admin' ? [{ id: 'shop', label: 'Робокасса', count: filteredAwaitingReceipts.length }] : []),
-                      { id: 'bots', label: 'Счета ботов', count: awaitingBotEventsCount },
-                      { id: 'bank', label: 'Уведомления банка', count: reconciliationStats.unresolvedBankEvents }
+                      { id: 'bots', label: 'Счета ботов', count: awaitingBotEventsCount }
                     ].map((sub) => (
                       <button
                         key={sub.id}
@@ -1019,15 +963,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                           plain={true}
                         />
                       </div>
-                    </div>
-                  )}
-
-                  {activeSubtab === 'bank' && (
-                    <div className="p-6 md:p-8">
-                      <BankEventsSection
-                        accessToken={accessToken}
-                        plain={true}
-                      />
                     </div>
                   )}
                 </div>
