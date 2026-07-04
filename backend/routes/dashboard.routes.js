@@ -121,7 +121,7 @@ export default function dashboardRoutes(supabase) {
                     .eq('owner_id', ownerId),
                 supabase
                     .from('payment_settings')
-                    .select('id, sbp_phone, ton_wallet, billing_provider, billing_mode, admin_tg_id')
+                    .select('id, ton_wallet, billing_provider, billing_mode, admin_tg_id')
                     .eq('owner_id', ownerId)
                     .maybeSingle()
             ]);
@@ -537,7 +537,6 @@ export default function dashboardRoutes(supabase) {
                 },
                 paymentReadiness: {
                     hasSettings: !!paymentSettings?.id,
-                    hasSbp: !!paymentSettings?.sbp_phone,
                     hasTon: !!paymentSettings?.ton_wallet,
                     adminTgId: paymentSettings?.admin_tg_id ? String(paymentSettings.admin_tg_id) : '',
                     billingProvider: paymentSettings?.billing_provider || null,

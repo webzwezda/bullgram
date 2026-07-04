@@ -27,12 +27,8 @@ export function UserbotStorefrontSection({
   setUserbotBuyQuantity,
   checkoutState,
   setCheckoutState,
-  receiptNote,
-  setReceiptNote,
-  setReceiptFile,
   checkUserbotCheckout,
   cancelUserbotCheckout,
-  markUserbotCheckoutPaid,
   createUserbotBatchCheckout,
   openUserbotCheckout,
   formatWhen,
@@ -188,99 +184,7 @@ export function UserbotStorefrontSection({
             </div>
           </div>
 
-        ) : (
-          <div className="space-y-6">
-            <div className="flex items-start gap-3 rounded-xl bg-amber-50 px-4 py-3 border border-amber-200/60 shadow-sm">
-              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-sm font-medium leading-relaxed text-amber-800">
-                Переведите средства по реквизитам ниже и нажмите “Я оплатил”. Чек можно приложить, но он не обязателен, если у продавца включена автосверка.
-              </p>
-            </div>
-            
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4 p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {checkoutState.purchase.sbp_fio ? (
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Получатель</div>
-                    <div className="text-base font-bold text-slate-900">{checkoutState.purchase.sbp_fio}</div>
-                  </div>
-                ) : null}
-                {checkoutState.purchase.sbp_bank ? (
-                  <div className="pt-3 border-t border-slate-100">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Банк</div>
-                    <div className="text-base font-bold text-slate-900">{checkoutState.purchase.sbp_bank}</div>
-                  </div>
-                ) : null}
-                {checkoutState.purchase.sbp_phone ? (
-                  <div className="pt-3 border-t border-slate-100">
-                    <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Телефон</div>
-                    <div className="font-mono text-lg font-black tracking-tight text-indigo-600">{checkoutState.purchase.sbp_phone}</div>
-                  </div>
-                ) : null}
-              </div>
-              
-              <div className="flex flex-col justify-end">
-                {checkoutState.purchase.status === 'awaiting_receipt' ? (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 h-full flex flex-col items-center justify-center text-center gap-3 shadow-sm">
-                    <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-                    </div>
-                    <div>
-                      <div className="text-base font-bold text-emerald-900">Оплата отмечена</div>
-                      <div className="text-sm font-medium text-emerald-700 mt-1">Ждем подтверждение продавца или банковское уведомление</div>
-                    </div>
-                    {checkoutState.purchase.receipt_file_url ? (
-                      <a 
-                        className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-800 transition bg-white px-3 py-1.5 rounded-lg shadow-sm border border-emerald-100"
-                        href={resolveBackendAssetUrl(checkoutState.purchase.receipt_file_url)} 
-                        target="_blank" 
-                        rel="noreferrer"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> Посмотреть чек
-                      </a>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <span className="text-sm font-semibold text-slate-700">Чек или скриншот (опционально)</span>
-                      <label className="flex flex-col items-center justify-center h-24 w-full rounded-xl border-2 border-dashed border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 transition cursor-pointer relative overflow-hidden group shadow-sm">
-                        <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-indigo-600 transition">
-                          <FileText className="w-6 h-6" />
-                          <span className="text-sm font-bold">Выбрать файл</span>
-                        </div>
-                        <input
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
-                        />
-                      </label>
-                    </div>
-                    <div className="space-y-2">
-                      <span className="text-sm font-semibold text-slate-700">Комментарий (опционально)</span>
-                      <Input
-                        className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm"
-                        value={receiptNote}
-                        onChange={(event) => setReceiptNote(event.target.value)}
-                        placeholder="Например: Сбербанк, последние 4 цифры 1234"
-                      />
-                    </div>
-                    <Button
-                      className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-500/20"
-                      onClick={markUserbotCheckoutPaid}
-                      disabled={checkoutState.checking}
-                    >
-                      {checkoutState.checking ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Отправка...</> : (
-                        <><Check className="w-4 h-4 mr-2" /> Я оплатил</>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null}
 
         {checkoutState.notice ? (
           <div

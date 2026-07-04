@@ -168,53 +168,30 @@ export function createMenuBuilders({ service, botId }) {
                 }
             });
 
-            if (tariff.currency === 'RUB') {
-                if (!settings.sbp_phone) return ctx.reply('❌ Реквизиты СБП не указаны.');
-                const discountLine = activeDiscountPercent > 0
-                    ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} RUB)\nЦена до скидки: **${originalAmount} RUB**`
-                    : '';
-                const caption = `💳 **СЧЕТ НА ОПЛАТУ (СБП)**\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                    `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
-                    `⏳ Срок доступа: **${durationText}**\n` +
-                    `💰 Сумма к оплате: **${invoiceAmount} RUB**${discountLine}\n\n` +
-                    `**Реквизиты для перевода:**\n` +
-                    `🏦 Банк: \`${settings.sbp_bank || 'Не указан'}\`\n` +
-                    (settings.sbp_fio ? `👤 Получатель: \`${settings.sbp_fio}\`\n` : '') +
-                    `📞 Номер/Телефон: \`${settings.sbp_phone}\` (нажмите, чтобы скопировать)\n\n` +
-                    `⚠️ **ВАЖНО:** Переведите точную сумму (**${invoiceAmount} RUB**). После оплаты нажмите кнопку ниже и отправьте скриншот чека в чат для проверки.`;
+            if (!settings.ton_wallet) return ctx.reply('❌ TON-кошелек не указан.');
+            const { default: QRCode } = await import('qrcode');
+            const nanoTon = Math.round(invoiceAmount * 1000000000);
+            const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
+            const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
-                await ctx.deleteMessage().catch(() => {});
-                await ctx.reply(caption, {
-                    parse_mode: 'Markdown',
-                    reply_markup: { inline_keyboard: [[{ text: '✅ Я оплатил!', callback_data: `fiat_paid_${memo}` }], [{ text: '🔙 Назад', callback_data: 'back_to_main' }]]}
-                });
-            } else {
-                if (!settings.ton_wallet) return ctx.reply('❌ TON-кошелек не указан.');
-                const { default: QRCode } = await import('qrcode');
-                const nanoTon = Math.round(invoiceAmount * 1000000000);
-                const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
-                const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
+            const discountLine = activeDiscountPercent > 0
+                ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
+                : '';
+            const caption = `💎 **СЧЕТ НА ОПЛАТУ (TON)**\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
+                `⏳ Срок доступа: **${durationText}**\n` +
+                `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
+                `**Реквизиты для перевода:**\n` +
+                `👛 Адрес: \`${settings.ton_wallet}\` (нажмите, чтобы скопировать)\n` +
+                `💬 Комментарий (MEMO): \`${memo}\` (нажмите, чтобы скопировать)\n\n` +
+                `⚠️ **ВАЖНО:** Вы должны обязательно указать комментарий \`${memo}\` при отправке TON, иначе система не сможет зачислить платеж автоматически.`;
 
-                const discountLine = activeDiscountPercent > 0
-                    ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
-                    : '';
-                const caption = `💎 **СЧЕТ НА ОПЛАТУ (TON)**\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                    `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
-                    `⏳ Срок доступа: **${durationText}**\n` +
-                    `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
-                    `**Реквизиты для перевода:**\n` +
-                    `👛 Адрес: \`${settings.ton_wallet}\` (нажмите, чтобы скопировать)\n` +
-                    `💬 Комментарий (MEMO): \`${memo}\` (нажмите, чтобы скопировать)\n\n` +
-                    `⚠️ **ВАЖНО:** Вы должны обязательно указать комментарий \`${memo}\` при отправке TON, иначе система не сможет зачислить платеж автоматически.`;
-
-                await ctx.deleteMessage().catch(() => {});
-                await ctx.replyWithPhoto({ source: qrBuffer }, {
-                    caption: caption, parse_mode: 'Markdown',
-                    reply_markup: { inline_keyboard: [[{ text: '💸 Оплатить в 1 клик', url: tonUri }], [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }], [{ text: '🔙 Назад', callback_data: 'back_to_main' }]]}
-                });
-            }
+            await ctx.deleteMessage().catch(() => {});
+            await ctx.replyWithPhoto({ source: qrBuffer }, {
+                caption: caption, parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: [[{ text: '💸 Оплатить в 1 клик', url: tonUri }], [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }], [{ text: '🔙 Назад', callback_data: 'back_to_main' }]]}
+            });
         } catch (err) { console.error('Ошибка счета:', err); }
     };
 

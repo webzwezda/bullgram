@@ -7,14 +7,9 @@ const PURPOSE_CONFIG = {
         defaultScopes: ['mcp:use'],
         tokenPrefix: 'brmcp'
     },
-    p2p_webhook: {
-        label: 'P2P касса / SMS Forward',
-        defaultScopes: ['p2p:webhook'],
-        tokenPrefix: 'br_p2p'
-    },
-    n8n: {
-        label: 'n8n',
-        defaultScopes: ['n8n:automation'],
+    api: {
+        label: 'API ключ',
+        defaultScopes: ['api:use'],
         tokenPrefix: 'brapi'
     },
     custom: {
@@ -26,13 +21,12 @@ const PURPOSE_CONFIG = {
 
 const ALLOWED_SCOPES = new Set([
     'mcp:use',
-    'p2p:webhook',
+    'api:use',
     'integrations:read',
     'orders:read',
     'shop:read',
     'payments:read',
-    'cashdesk:read',
-    'n8n:automation'
+    'cashdesk:read'
 ]);
 
 export function hashIntegrationToken(token) {
@@ -70,9 +64,7 @@ export function generateIntegrationToken({ purpose: purposeValue } = {}) {
     const config = PURPOSE_CONFIG[purpose];
     const secret = generateSecret();
     const prefix = secret.slice(0, 8);
-    const token = purpose === 'p2p_webhook'
-        ? `${config.tokenPrefix}_${secret}`
-        : `${config.tokenPrefix}_${prefix}_${secret}`;
+    const token = `${config.tokenPrefix}_${prefix}_${secret}`;
 
     return {
         token,

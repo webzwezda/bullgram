@@ -6,7 +6,6 @@ import path from 'path';
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
-import { normalizeSbpBankSelection } from './utils/payment-settings.js';
 
 // Импортируем роуты
 import userbotRoutes from './routes/userbot.routes.js';
@@ -26,7 +25,6 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import clientDossierRoutes from './routes/client-dossier.routes.js';
 import referralRoutes from './routes/referral.routes.js';
 import shopRoutes from './routes/shop.routes.js';
-import p2pBankEventsRoutes from './routes/p2p-bank-events.routes.js';
 import observerRoutes from './routes/observer.routes.js';
 import agentMcpRoutes from './routes/agent-mcp.routes.js';
 import projectAdminRoutes from './routes/project-admin.routes.js';
@@ -165,8 +163,6 @@ app.use('/api/dashboard', dashboardRoutes(supabase));
 app.use('/api/client-dossier', clientDossierRoutes(supabase));
 app.use('/api/referrals', referralRoutes(supabase));
 app.use('/api/shop', shopRoutes(supabase));
-app.use('/api/p2p', p2pBankEventsRoutes(supabase));
-app.use('/api/p2p-bank-events', p2pBankEventsRoutes(supabase));
 app.use('/api/observer', observerRoutes(supabase, getBotById));
 app.use('/api/mcp', agentMcpRoutes(supabase));
 app.use('/api/integrations', integrationsRoutes(supabase));
@@ -178,9 +174,6 @@ app.use('/api/userbot-web', userbotWebRoutes(supabase, mtprotoBridgeService));
 // ==========================================
 app.post('/api/payment-settings', authenticateUser, async (req, res) => {
         const {
-            sbp_phone,
-            sbp_bank,
-            sbp_fio,
             ton_wallet,
             admin_tg_id,
             reminder_text,
@@ -197,9 +190,6 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
     try {
         const legacyPayload = {
             owner_id: req.user.id,
-            sbp_phone,
-            sbp_bank: normalizeSbpBankSelection(sbp_bank),
-            sbp_fio,
             ton_wallet,
             admin_tg_id,
             reminder_text
@@ -242,7 +232,7 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
         res.json({ success: true, settings: data || legacyPayload });
     } catch (err) {
         console.error('Ошибка сохранения настроек:', err.message);
-        res.status(500).json({ error: 'Ошибка базы данных при сохранении' }); 
+        res.status(500).json({ error: 'Ошибка базы данных при сохранении' });
     }
 });
 

@@ -7,8 +7,6 @@ import crypto from 'crypto';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
-import { parsePdfReceipt } from '../services/receipt-parser.service.js';
-import { normalizeSbpBankSelection } from '../utils/payment-settings.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -125,16 +123,15 @@ function normalizePaymentMethods(value) {
 
     const methods = Array.from(new Set(source
         .map((item) => String(item || '').trim().toLowerCase())
-        .filter((item) => item === 'ton' || item === 'p2p')));
+        .filter((item) => item === 'ton')));
 
-    return methods.length ? methods : ['ton', 'p2p'];
+    return methods.length ? methods : ['ton'];
 }
 
 function buildAvailablePaymentMethods(item, settings) {
     const allowed = normalizePaymentMethods(item?.payment_methods);
     const methods = allowed.filter((method) => {
         if (method === 'ton') return !!settings?.ton_wallet;
-        if (method === 'p2p') return !!settings?.sbp_phone;
         return false;
     });
 
@@ -182,7 +179,7 @@ function buildTrustWalletTonUri(wallet, amountTon, memo) {
 }
 
 function normalizePaymentMethod(value) {
-    return value === 'p2p' ? 'p2p' : 'ton';
+    return 'ton';
 }
 
 function isVisibleInSalesChannel(item, channel = 'site') {
@@ -366,14 +363,13 @@ async function createOrRefreshBuyerPurchase({
 
     const { data: settingsData, error: settingsError } = await supabase
         .from('payment_settings')
-        .select('ton_wallet, sbp_phone, sbp_bank, sbp_fio')
+        .select('ton_wallet')
         .eq('owner_id', item.owner_id)
         .maybeSingle();
     if (settingsError) throw settingsError;
     const settings = settingsData
         ? {
-            ...settingsData,
-            sbp_bank: normalizeSbpBankSelection(settingsData.sbp_bank, { fallbackToDefault: false })
+            ...settingsData
         }
         : null;
 
@@ -390,12 +386,6 @@ async function createOrRefreshBuyerPurchase({
         throw walletError;
     }
 
-    if (paymentMethod === 'p2p' && !settings?.sbp_phone) {
-        const p2pError = new Error('У продавца не настроены реквизиты P2P / СБП');
-        p2pError.statusCode = 400;
-        throw p2pError;
-    }
-
     const memo = String(memoOverride || buildShopMemo()).trim();
     const amountTon = Number(item.price_ton || 0);
     const amountRub = Number(item.price_rub || 0);
@@ -403,11 +393,7 @@ async function createOrRefreshBuyerPurchase({
     const payloadPatch = {
         payment_method: paymentMethod,
         memo,
-        amount_rub: paymentMethod === 'p2p' ? amountRub : null,
         seller_wallet: settings?.ton_wallet || null,
-        sbp_phone: settings?.sbp_phone || null,
-        sbp_bank: settings?.sbp_bank || null,
-        sbp_fio: settings?.sbp_fio || null,
         post_purchase_message: item.post_purchase_message || null,
         batch_token: batchToken || null
     };
@@ -578,471 +564,6 @@ async function assertBuyerOwnershipLimits({ supabase, profile, buyerOwnerId, ite
             throw limitError;
         }
     }
-}
-
-async function approveSellerPurchaseRecord(supabase, purchase) {
-    if (normalizePaymentMethod(purchase.payload?.payment_method) !== 'p2p') {
-        const error = new Error('Это действие только для P2P-счетов');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    if (!['awaiting_receipt', 'pending'].includes(purchase.status)) {
-        const error = new Error('Этот счет уже обработан');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    const { data: item, error: itemError } = await supabase
-        .from('shop_items')
-        .select('*')
-        .eq('id', purchase.shop_item_id)
-        .single();
-    if (itemError) throw itemError;
-
-    const textServiceItem = isTextServiceItem(item);
-    const { data: assets, error: assetsError } = await supabase
-        .from('shop_item_assets')
-        .select('*')
-        .eq('shop_item_id', purchase.shop_item_id)
-        .order('sort_order', { ascending: true });
-    if (assetsError) throw assetsError;
-
-    await supabase
-        .from('shop_purchases')
-        .update({
-            status: 'paid',
-            ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
-            ownership_transfer_error: null,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', purchase.id);
-
-    if (!textServiceItem) {
-        try {
-            await transferShopAssets(supabase, purchase, item, assets || []);
-            await supabase
-                .from('shop_purchases')
-                .update({
-                    ownership_transfer_status: 'completed',
-                    ownership_transfer_error: null,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', purchase.id);
-        } catch (transferError) {
-            console.error('Ошибка P2P handoff shop purchase:', transferError);
-            await supabase
-                .from('shop_purchases')
-                .update({
-                    ownership_transfer_status: 'failed',
-                    ownership_transfer_error: transferError.message || 'Неизвестная ошибка',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', purchase.id);
-            const error = new Error('Оплата подтверждена, но передача прав сломалась');
-            error.statusCode = 500;
-            throw error;
-        }
-    }
-
-    await applyShopOfferUnlock(supabase, purchase, item);
-}
-
-export async function confirmShopP2pPayment(supabase, {
-    sellerOwnerId,
-    purchaseIds = [],
-    batchToken = null,
-    confirmSource = 'manual',
-    bankEventId = null,
-    allowPending = false
-} = {}) {
-    const sellerId = String(sellerOwnerId || '').trim();
-    const ids = parsePurchaseIdsInput(purchaseIds);
-    const token = String(batchToken || '').trim();
-
-    if (!sellerId) {
-        const error = new Error('Не найден продавец для подтверждения P2P');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    let query = supabase
-        .from('shop_purchases')
-        .select('*')
-        .eq('seller_owner_id', sellerId);
-
-    if (ids.length) {
-        query = query.in('id', ids);
-    } else if (token) {
-        query = query.contains('payload', { batch_token: token });
-    } else {
-        const error = new Error('Нужно передать purchase_ids или batch_token');
-        error.statusCode = 400;
-        throw error;
-    }
-
-    const { data: purchases, error: purchasesError } = await query;
-    if (purchasesError) throw purchasesError;
-
-    if (ids.length && (purchases || []).length !== ids.length) {
-        const error = new Error('Часть продаж уже недоступна');
-        error.statusCode = 404;
-        throw error;
-    }
-
-    if (!(purchases || []).length) {
-        const error = new Error('Покупки для подтверждения не найдены');
-        error.statusCode = 404;
-        throw error;
-    }
-
-    ensureSingleBatchContext(purchases || []);
-
-    const allowedStatuses = allowPending ? ['awaiting_receipt', 'pending'] : ['awaiting_receipt'];
-    for (const purchase of purchases || []) {
-        if (normalizePaymentMethod(purchase.payload?.payment_method) !== 'p2p') {
-            const error = new Error('Это действие только для P2P-счетов');
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (purchase.status === 'paid') {
-            continue;
-        }
-
-        if (!allowedStatuses.includes(purchase.status)) {
-            const error = new Error(allowPending ? 'Этот счет уже обработан' : 'Автосверка подтверждает только счета после “Я оплатил”');
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (purchase.status === 'pending' && isPendingPurchaseExpired(purchase)) {
-            await supabase
-                .from('shop_purchases')
-                .update({ status: 'expired', updated_at: new Date().toISOString() })
-                .eq('id', purchase.id);
-            const error = new Error('Время на оплату истекло. Создай покупку заново.');
-            error.statusCode = 400;
-            throw error;
-        }
-    }
-
-    const buyerOwnerId = purchases?.[0]?.buyer_owner_id;
-    const { data: buyerProfile, error: buyerProfileError } = await supabase
-        .from('profiles')
-        .select('product_tier')
-        .eq('id', buyerOwnerId)
-        .maybeSingle();
-    if (buyerProfileError) throw buyerProfileError;
-
-    const itemIds = Array.from(new Set((purchases || []).map((purchase) => purchase.shop_item_id).filter(Boolean)));
-    const { data: itemsForLimit, error: itemsForLimitError } = await supabase
-        .from('shop_items')
-        .select('id, item_type')
-        .in('id', itemIds);
-    if (itemsForLimitError) throw itemsForLimitError;
-
-    await assertBuyerOwnershipLimits({
-        supabase,
-        profile: buyerProfile || {},
-        buyerOwnerId,
-        items: itemsForLimit || []
-    });
-
-    const confirmedAt = new Date().toISOString();
-    const completedPurchaseIds = [];
-    let transferFailed = false;
-    let transferErrorMessage = '';
-
-    for (const purchase of purchases || []) {
-        if (purchase.status === 'paid' && purchase.ownership_transfer_status === 'completed') {
-            completedPurchaseIds.push(purchase.id);
-            continue;
-        }
-
-        const { data: item, error: itemError } = await supabase
-            .from('shop_items')
-            .select('*')
-            .eq('id', purchase.shop_item_id)
-            .single();
-        if (itemError) throw itemError;
-
-        const textServiceItem = isTextServiceItem(item);
-        if (!textServiceItem && item.status === 'sold' && purchase.ownership_transfer_status !== 'completed') {
-            const error = new Error('Лот уже ушел другому покупателю. Этот заказ больше нельзя завершить.');
-            error.statusCode = 409;
-            throw error;
-        }
-
-        const claimPayload = {
-            ...(purchase.payload || {}),
-            confirmed_at: confirmedAt,
-            confirm_source: confirmSource,
-            bank_event_id: bankEventId || purchase.payload?.bank_event_id || null
-        };
-
-        const { data: claimedRows, error: claimError } = await supabase
-            .from('shop_purchases')
-            .update({
-                status: 'paid',
-                ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
-                ownership_transfer_error: null,
-                payload: claimPayload,
-                updated_at: confirmedAt
-            })
-            .eq('id', purchase.id)
-            .in('status', purchase.status === 'paid' ? ['paid'] : allowedStatuses)
-            .select('*');
-
-        if (claimError) throw claimError;
-        const claimed = (claimedRows || [])[0];
-        if (!claimed) {
-            const error = new Error('Счет уже обработан параллельно');
-            error.statusCode = 409;
-            throw error;
-        }
-
-        if (textServiceItem) {
-            await applyShopOfferUnlock(supabase, claimed, item);
-            completedPurchaseIds.push(claimed.id);
-            continue;
-        }
-
-        const { data: assets, error: assetsError } = await supabase
-            .from('shop_item_assets')
-            .select('*')
-            .eq('shop_item_id', purchase.shop_item_id)
-            .order('sort_order', { ascending: true });
-        if (assetsError) throw assetsError;
-
-        try {
-            await transferShopAssets(supabase, claimed, item, assets || []);
-            await supabase
-                .from('shop_purchases')
-                .update({
-                    ownership_transfer_status: 'completed',
-                    ownership_transfer_error: null,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', claimed.id);
-            completedPurchaseIds.push(claimed.id);
-        } catch (transferError) {
-            console.error('Ошибка P2P confirm handoff shop purchase:', transferError);
-            transferFailed = true;
-            transferErrorMessage = transferError.message || 'Неизвестная ошибка';
-            await supabase
-                .from('shop_purchases')
-                .update({
-                    ownership_transfer_status: 'failed',
-                    ownership_transfer_error: transferErrorMessage,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', claimed.id);
-        }
-    }
-
-    if (transferFailed) {
-        const error = new Error('Оплата подтверждена, но передача прав сломалась');
-        error.statusCode = 500;
-        error.completedPurchaseIds = completedPurchaseIds;
-        error.transferErrorMessage = transferErrorMessage;
-        throw error;
-    }
-
-    return {
-        success: true,
-        status: 'paid',
-        ownership_transfer_status: 'completed',
-        purchase_ids: completedPurchaseIds,
-        batch_token: token || purchases?.[0]?.payload?.batch_token || null
-    };
-}
-
-async function processPdfAutoConfirmation(supabase, { purchases, file, sellerOwnerId, currentPayload }) {
-    if (!file || !file.path || !file.originalname?.toLowerCase().endsWith('.pdf')) {
-        return { autoConfirmed: false, payload: currentPayload };
-    }
-
-    try {
-        // 1. Check if PDF auto-confirm is enabled
-        const { data: settings } = await supabase
-            .from('p2p_webhook_settings')
-            .select('pdf_auto_confirm_enabled, match_clock_skew_minutes')
-            .eq('owner_id', sellerOwnerId)
-            .maybeSingle();
-
-        if (settings?.pdf_auto_confirm_enabled === false) {
-            return { autoConfirmed: false, payload: currentPayload };
-        }
-
-        // 2. Parse PDF
-        const parsed = await parsePdfReceipt(file.path);
-        if (!parsed.success) {
-            const nextPayload = {
-                ...currentPayload,
-                parsed_receipt_metadata: {
-                    success: false,
-                    reason: parsed.reason,
-                    parsed_at: new Date().toISOString()
-                }
-            };
-            return { autoConfirmed: false, payload: nextPayload };
-        }
-
-        const parsedMetadata = {
-            success: true,
-            amount_rub: parsed.amountRub,
-            event_time: parsed.eventTime,
-            transaction_id: parsed.transactionId || null,
-            bank_name: parsed.bankName || 'Unknown',
-            parsed_at: new Date().toISOString(),
-            is_pdf: true
-        };
-
-        // 3. Ensure the amount in the PDF matches the total purchase amount expected
-        const expectedTotalRub = purchases.reduce((sum, p) => sum + Number(p.payload?.amount_rub || p.amount_rub || 0), 0);
-        if (Math.abs(parsed.amountRub - expectedTotalRub) >= 0.01) {
-            const nextPayload = {
-                ...currentPayload,
-                parsed_receipt_metadata: {
-                    ...parsedMetadata,
-                    match_failed_reason: `Сумма в чеке (${parsed.amountRub}) не совпадает с суммой заказа (${expectedTotalRub})`
-                }
-            };
-            return { autoConfirmed: false, payload: nextPayload };
-        }
-
-        const nextPayload = {
-            ...currentPayload,
-            parsed_receipt_metadata: parsedMetadata
-        };
-
-        // 4. Try to find a matching bank event
-        // Look for received/unmatched events with the exact amount and within skew
-        const skewMinutes = settings?.match_clock_skew_minutes || 10;
-        const skewMs = skewMinutes * 60 * 1000;
-        const parsedTimeMs = parsed.eventTime ? new Date(parsed.eventTime).getTime() : new Date().getTime();
-
-        const { data: bankEvents, error: eventsError } = await supabase
-            .from('p2p_bank_events')
-            .select('*')
-            .eq('owner_id', sellerOwnerId)
-            .eq('amount_rub', parsed.amountRub)
-            .in('status', ['received', 'unmatched', 'ambiguous', 'auto_confirm_failed']);
-
-        if (eventsError) throw eventsError;
-
-        let bestMatch = null;
-        if (bankEvents && bankEvents.length > 0) {
-            // Filter by time window
-            const timedEvents = bankEvents.filter(event => {
-                if (!event.event_time && !event.received_at) return false;
-                const eventMs = new Date(event.event_time || event.received_at).getTime();
-                return Math.abs(eventMs - parsedTimeMs) <= skewMs;
-            });
-
-            // If we have a transaction ID in the PDF, try to match it directly
-            if (parsed.transactionId) {
-                const idMatch = timedEvents.find(event => {
-                    const cleanText = String(event.raw_text || event.redacted_text || '').toLowerCase();
-                    return cleanText.includes(parsed.transactionId.toLowerCase());
-                });
-                if (idMatch) {
-                    bestMatch = idMatch;
-                }
-            }
-
-            // Fallback to time matching if there's exactly one timed event and no transaction ID mismatch
-            if (!bestMatch && timedEvents.length === 1) {
-                bestMatch = timedEvents[0];
-            }
-        }
-
-        if (bestMatch) {
-            const now = new Date().toISOString();
-            const finalPayload = {
-                ...nextPayload,
-                parsed_receipt_metadata: {
-                    ...parsedMetadata,
-                    matched_event_id: bestMatch.id,
-                    matched_at: now
-                }
-            };
-
-            // Update the purchases in database with finalPayload first, so confirmShopP2pPayment gets it
-            const purchaseIds = purchases.map(p => p.id);
-            for (const p of purchases) {
-                await supabase
-                    .from('shop_purchases')
-                    .update({
-                        payload: {
-                            ...(p.payload || {}),
-                            ...finalPayload
-                        },
-                        updated_at: now
-                    })
-                    .eq('id', p.id);
-            }
-
-            // Confirm payment!
-            await confirmShopP2pPayment(supabase, {
-                sellerOwnerId,
-                purchaseIds,
-                batchToken: purchases[0]?.payload?.batch_token || null,
-                confirmSource: 'receipt_pdf_matched',
-                bankEventId: bestMatch.id,
-                allowPending: true
-            });
-
-            // Update bank event
-            await supabase
-                .from('p2p_bank_events')
-                .update({
-                    status: 'confirmed',
-                    matched_purchase_ids: purchaseIds,
-                    matched_batch_token: purchases[0]?.payload?.batch_token || null,
-                    resolution_type: 'auto_confirmed',
-                    resolved_at: now,
-                    confirm_source: 'receipt_pdf_matched',
-                    updated_at: now
-                })
-                .eq('id', bestMatch.id);
-
-            return { autoConfirmed: true, payload: finalPayload };
-        }
-
-        return { autoConfirmed: false, payload: nextPayload };
-    } catch (err) {
-        console.error('Error in processPdfAutoConfirmation:', err);
-        return {
-            autoConfirmed: false,
-            payload: {
-                ...currentPayload,
-                parsed_receipt_metadata: {
-                    success: false,
-                    reason: `Auto-reconciliation error: ${err.message}`,
-                    parsed_at: new Date().toISOString()
-                }
-            }
-        };
-    }
-}
-
-async function rejectSellerPurchaseRecord(supabase, purchase, reason) {
-    const payload = {
-        ...(purchase.payload || {}),
-        rejection_reason: reason
-    };
-
-    const { error: updateError } = await supabase
-        .from('shop_purchases')
-        .update({
-            status: 'rejected',
-            payload,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', purchase.id);
-    if (updateError) throw updateError;
 }
 
 async function transferShopAssets(supabase, purchase, item, assets) {
@@ -1258,37 +779,9 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
 
     const paymentMethod = normalizePaymentMethod(purchase.payload?.payment_method);
 
-    if (paymentMethod === 'p2p') {
-        if (purchase.status === 'awaiting_receipt') {
-            return {
-                ok: true,
-                statusCode: 200,
-                body: {
-                    success: true,
-                    status: 'awaiting_receipt',
-                    ownership_transfer_status: purchase.ownership_transfer_status || 'pending'
-                }
-            };
-        }
-
-        if (purchase.status === 'rejected') {
-            return {
-                ok: true,
-                statusCode: 200,
-                body: {
-                    success: true,
-                    status: 'rejected',
-                    ownership_transfer_status: purchase.ownership_transfer_status || 'pending'
-                }
-            };
-        }
-    }
-
     const memo = purchase.payload?.memo;
     const wallet = purchase.payload?.seller_wallet;
-    const isPaid = paymentMethod === 'p2p'
-        ? false
-        : await checkTonPayment(memo, purchase.amount_ton, wallet);
+    const isPaid = await checkTonPayment(memo, purchase.amount_ton, wallet);
 
     if (!isPaid) {
         return {
@@ -2484,7 +1977,7 @@ export default function shopRoutes(supabase) {
                         .in('id', sellerOwnerIds),
                     supabase
                         .from('payment_settings')
-                        .select('owner_id, ton_wallet, sbp_phone')
+                        .select('owner_id, ton_wallet')
                         .in('owner_id', sellerOwnerIds)
                 ]);
 
@@ -2834,14 +2327,10 @@ export default function shopRoutes(supabase) {
                 success: true,
                 purchase_id: purchase.id,
                 amount_ton: amountTon,
-                amount_rub: paymentMethod === 'p2p' ? amountRub : null,
                 payment_url: null,
                 provider_invoice_id: null,
                 payment_method: paymentMethod,
                 seller_wallet: settings?.ton_wallet || null,
-                sbp_phone: settings?.sbp_phone || null,
-                sbp_bank: settings?.sbp_bank || null,
-                sbp_fio: settings?.sbp_fio || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,
@@ -2926,14 +2415,10 @@ export default function shopRoutes(supabase) {
                 batch_token: batchToken,
                 purchase_ids: created.map((row) => row.purchase.id),
                 amount_ton: totalTon,
-                amount_rub: paymentMethod === 'p2p' ? totalRub : null,
                 payment_url: null,
                 provider_invoice_id: null,
                 payment_method: paymentMethod,
                 seller_wallet: first.settings?.ton_wallet || null,
-                sbp_phone: first.settings?.sbp_phone || null,
-                sbp_bank: first.settings?.sbp_bank || null,
-                sbp_fio: first.settings?.sbp_fio || null,
                 memo,
                 ton_uri: tonData.tonUri,
                 trust_wallet_uri: trustWalletData.trustWalletUri,
@@ -3040,298 +2525,6 @@ export default function shopRoutes(supabase) {
         }
     });
 
-    router.post('/public/purchase/mark-paid', authenticateUser, receiptUpload.single('receipt_file'), async (req, res) => {
-        const buyerOwnerId = req.user.id;
-        const { purchase_id, receipt_note } = req.body;
-
-        if (!purchase_id) {
-            if (req.file?.path && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
-            return res.status(400).json({ error: 'Не передан purchase_id' });
-        }
-
-        try {
-            const { data: purchase, error: purchaseError } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('id', purchase_id)
-                .eq('buyer_owner_id', buyerOwnerId)
-                .single();
-            if (purchaseError) throw purchaseError;
-
-            if (normalizePaymentMethod(purchase.payload?.payment_method) !== 'p2p') {
-                return res.status(400).json({ error: 'Этот счет не относится к P2P-оплате' });
-            }
-
-            if (purchase.status !== 'pending') {
-                return res.status(400).json({ error: 'Этот счет уже переведен в другой статус' });
-            }
-
-            if (isPendingPurchaseExpired(purchase)) {
-                await supabase
-                    .from('shop_purchases')
-                    .update({ status: 'expired', updated_at: new Date().toISOString() })
-                    .eq('id', purchase.id);
-                return res.status(400).json({ error: 'Время на оплату истекло. Создай покупку заново.' });
-            }
-
-            const initialPayload = {
-                ...(purchase.payload || {}),
-                receipt_note: String(receipt_note || '').trim() || null,
-                receipt_marked_at: new Date().toISOString(),
-                receipt_file_name: req.file?.originalname || null,
-                receipt_file_url: req.file ? `/uploads/shop-receipts/${path.basename(req.file.path)}` : (purchase.payload?.receipt_file_url || null)
-            };
-
-            // Call processPdfAutoConfirmation to parse PDF and try to match with bank webhook events
-            const autoConfirmResult = await processPdfAutoConfirmation(supabase, {
-                purchases: [purchase],
-                file: req.file,
-                sellerOwnerId: purchase.seller_owner_id,
-                currentPayload: initialPayload
-            });
-
-            // If auto-confirmed, tryAutoConfirm already marked status as paid and handled handoff
-            if (autoConfirmResult.autoConfirmed) {
-                return res.json({ success: true, status: 'paid', auto_confirmed: true });
-            }
-
-            // Otherwise, update purchase to awaiting_receipt with the parsed/initial payload
-            const { error: updateError } = await supabase
-                .from('shop_purchases')
-                .update({
-                    status: 'awaiting_receipt',
-                    payload: autoConfirmResult.payload,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', purchase.id);
-            if (updateError) throw updateError;
-
-            res.json({ success: true, status: 'awaiting_receipt', auto_confirmed: false });
-        } catch (error) {
-            if (req.file?.path && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
-            console.error('Ошибка перевода P2P shop purchase в awaiting_receipt:', error);
-            res.status(500).json({ error: 'Ошибка подтверждения P2P-оплаты' });
-        }
-    });
-
-    router.post('/public/purchase/mark-paid-batch', authenticateUser, receiptUpload.single('receipt_file'), async (req, res) => {
-        const buyerOwnerId = req.user.id;
-        const purchaseIds = Array.isArray(req.body?.purchase_ids)
-            ? req.body.purchase_ids.map((value) => String(value || '').trim()).filter(Boolean)
-            : String(req.body?.purchase_ids || '')
-                .split(',')
-                .map((value) => String(value || '').trim())
-                .filter(Boolean);
-        const receiptNote = req.body?.receipt_note;
-
-        if (!purchaseIds.length) {
-            if (req.file?.path && fs.existsSync(req.file.path)) {
-                fs.unlinkSync(req.file.path);
-            }
-            return res.status(400).json({ error: 'Не передан список purchase_ids' });
-        }
-
-        try {
-            const { data: purchases, error } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('buyer_owner_id', buyerOwnerId)
-                .in('id', purchaseIds);
-
-            if (error) throw error;
-            if ((purchases || []).length !== purchaseIds.length) {
-                return res.status(404).json({ error: 'Часть покупок уже недоступна.' });
-            }
-
-            for (const purchase of purchases) {
-                if (normalizePaymentMethod(purchase.payload?.payment_method) !== 'p2p') {
-                    return res.status(400).json({ error: 'Этот счет не относится к P2P-оплате' });
-                }
-                if (purchase.status !== 'pending') {
-                    return res.status(400).json({ error: 'Одна из покупок уже переведена в другой статус' });
-                }
-                if (isPendingPurchaseExpired(purchase)) {
-                    await supabase
-                        .from('shop_purchases')
-                        .update({
-                            status: 'expired',
-                            updated_at: new Date().toISOString()
-                        })
-                        .eq('id', purchase.id);
-                    return res.status(400).json({ error: 'Одна из броней уже истекла. Создай ее заново.' });
-                }
-            }
-
-            const receiptPayload = {
-                ...(req.file ? {
-                    receipt_file_name: req.file.originalname,
-                    receipt_file_url: `/uploads/shop-receipts/${path.basename(req.file.path)}`
-                } : {}),
-                receipt_note: String(receiptNote || '').trim() || null,
-                receipt_marked_at: new Date().toISOString()
-            };
-
-            // Call processPdfAutoConfirmation to parse PDF and try to match with bank webhook events
-            const autoConfirmResult = await processPdfAutoConfirmation(supabase, {
-                purchases,
-                file: req.file,
-                sellerOwnerId: purchases[0].seller_owner_id,
-                currentPayload: receiptPayload
-            });
-
-            // If auto-confirmed, tryAutoConfirm already marked status as paid and handled handoff
-            if (autoConfirmResult.autoConfirmed) {
-                return res.json({ success: true, status: 'paid', auto_confirmed: true });
-            }
-
-            // Otherwise, update purchases to awaiting_receipt with the parsed/initial payload
-            for (const purchase of purchases) {
-                const { error: updateError } = await supabase
-                    .from('shop_purchases')
-                    .update({
-                        status: 'awaiting_receipt',
-                        payload: {
-                            ...(purchase.payload || {}),
-                            ...autoConfirmResult.payload
-                        },
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', purchase.id)
-                    .eq('buyer_owner_id', buyerOwnerId);
-
-                if (updateError) throw updateError;
-            }
-
-            return res.json({ success: true, status: 'awaiting_receipt', auto_confirmed: false });
-        } catch (error) {
-            console.error('Ошибка отправки batch P2P receipt:', error);
-            res.status(500).json({ error: 'Ошибка отправки общего чека' });
-        }
-    });
-
-    router.post(['/admin/purchases/:id/approve', '/seller/purchases/:id/approve'], authenticateUser, async (req, res) => {
-        const sellerOwnerId = req.user.id;
-        const purchaseId = req.params.id;
-
-        try {
-            const { data: purchase, error: purchaseError } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('id', purchaseId)
-                .eq('seller_owner_id', sellerOwnerId)
-                .single();
-            if (purchaseError) throw purchaseError;
-
-            const result = await confirmShopP2pPayment(supabase, {
-                sellerOwnerId,
-                purchaseIds: [purchase.id],
-                confirmSource: 'manual',
-                allowPending: true
-            });
-
-            res.json(result);
-        } catch (error) {
-            console.error('Ошибка approve P2P shop purchase:', error);
-            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка подтверждения P2P-платежа' });
-        }
-    });
-
-    router.post(['/admin/purchases/approve-batch', '/seller/purchases/approve-batch'], authenticateUser, async (req, res) => {
-        const sellerOwnerId = req.user.id;
-        const purchaseIds = parsePurchaseIdsInput(req.body?.purchase_ids);
-
-        if (!purchaseIds.length) {
-            return res.status(400).json({ error: 'Не передан список purchase_ids' });
-        }
-
-        try {
-            const { data: purchases, error } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('seller_owner_id', sellerOwnerId)
-                .in('id', purchaseIds);
-
-            if (error) throw error;
-            if ((purchases || []).length !== purchaseIds.length) {
-                return res.status(404).json({ error: 'Часть продаж уже недоступна' });
-            }
-
-            ensureSingleBatchContext(purchases || []);
-
-            const result = await confirmShopP2pPayment(supabase, {
-                sellerOwnerId,
-                purchaseIds,
-                confirmSource: 'manual_batch',
-                allowPending: true
-            });
-
-            res.json(result);
-        } catch (error) {
-            console.error('Ошибка batch approve P2P shop purchase:', error);
-            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка batch-подтверждения P2P-платежа' });
-        }
-    });
-
-    router.post(['/admin/purchases/:id/reject', '/seller/purchases/:id/reject'], authenticateUser, async (req, res) => {
-        const sellerOwnerId = req.user.id;
-        const purchaseId = req.params.id;
-        const reason = String(req.body?.reason || '').trim() || null;
-
-        try {
-            const { data: purchase, error: purchaseError } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('id', purchaseId)
-                .eq('seller_owner_id', sellerOwnerId)
-                .single();
-            if (purchaseError) throw purchaseError;
-
-            await rejectSellerPurchaseRecord(supabase, purchase, reason);
-
-            res.json({ success: true, status: 'rejected' });
-        } catch (error) {
-            console.error('Ошибка reject P2P shop purchase:', error);
-            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка отклонения P2P-платежа' });
-        }
-    });
-
-    router.post(['/admin/purchases/reject-batch', '/seller/purchases/reject-batch'], authenticateUser, async (req, res) => {
-        const sellerOwnerId = req.user.id;
-        const purchaseIds = parsePurchaseIdsInput(req.body?.purchase_ids);
-        const reason = String(req.body?.reason || '').trim() || null;
-
-        if (!purchaseIds.length) {
-            return res.status(400).json({ error: 'Не передан список purchase_ids' });
-        }
-
-        try {
-            const { data: purchases, error } = await supabase
-                .from('shop_purchases')
-                .select('*')
-                .eq('seller_owner_id', sellerOwnerId)
-                .in('id', purchaseIds);
-
-            if (error) throw error;
-            if ((purchases || []).length !== purchaseIds.length) {
-                return res.status(404).json({ error: 'Часть продаж уже недоступна' });
-            }
-
-            ensureSingleBatchContext(purchases || []);
-
-            for (const purchase of purchases || []) {
-                await rejectSellerPurchaseRecord(supabase, purchase, reason);
-            }
-
-            res.json({ success: true, status: 'rejected' });
-        } catch (error) {
-            console.error('Ошибка batch reject P2P shop purchase:', error);
-            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка batch-отклонения P2P-платежа' });
-        }
-    });
 
     return router;
 }

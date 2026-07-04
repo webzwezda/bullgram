@@ -1,8 +1,5 @@
 export const DEFAULT_SETTINGS = {
   ton_wallet: '',
-  sbp_phone: '',
-  sbp_bank: '',
-  sbp_fio: '',
   admin_tg_id: '',
   billing_provider: 'generic',
   billing_mode: 'manual',
@@ -45,11 +42,6 @@ export const DEFAULT_NEW_TARIFF = {
   duration_days: '',
   is_lifetime: false
 };
-
-export const SBP_BANK_OPTIONS = [
-  { value: 'Сбербанк', label: 'Сбербанк' },
-  { value: 'Т-Банк', label: 'Т-Банк' }
-];
 
 export const AUTOFILL_BLOCK_PROPS = {
   autoComplete: 'off',

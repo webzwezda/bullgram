@@ -64,10 +64,6 @@ export function formatTon(value) {
   return Number(value || 0).toFixed(4);
 }
 
-export function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 // --- Status Mappers (return { label, tone }) ---
 
 export function itemStatusMeta(item) {
@@ -110,14 +106,13 @@ export function salesChannelLabel(value) {
 }
 
 export function paymentMethodLabel(method) {
-  if (method === 'p2p') return 'СБП';
+  void method;
   return 'TON';
 }
 
 export function paymentMethodsLabel(value) {
-  const methods = Array.isArray(value) ? value : [];
-  if (!methods.length) return 'TON + СБП';
-  return methods.map(paymentMethodLabel).join(' + ');
+  void value;
+  return 'TON';
 }
 
 // --- Price / Amount ---
@@ -128,17 +123,10 @@ export function itemPriceSummary(item) {
   if ((!methods.length || methods.includes('ton')) && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
-  }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
 
 export function purchaseAmountSummary(purchase) {
-  if (purchase?.payload?.payment_method === 'p2p') {
-    const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payload?.payment_method);
-  }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
@@ -173,7 +161,6 @@ export function normalizeSellerPurchaseGroup(rows = []) {
             ? 'expired'
             : 'paid';
   const amountTon = rows.reduce((sum, p) => sum + Number(p.amount_ton || 0), 0);
-  const amountRub = rows.reduce((sum, p) => sum + Number(p.amount_rub || p.payload?.amount_rub || p.item?.price_rub || 0), 0);
   const createdAt = rows
     .map((p) => p.created_at ? new Date(p.created_at).getTime() : null)
     .filter((v) => Number.isFinite(v))
@@ -195,7 +182,6 @@ export function normalizeSellerPurchaseGroup(rows = []) {
     buyer_owner_id: uniqueBuyers.length === 1 ? uniqueBuyers[0] : uniqueBuyers.join(', '),
     status,
     amount_ton: amountTon,
-    amount_rub: amountRub,
     created_at: createdAt ? new Date(createdAt).toISOString() : first.created_at,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
     ownership_transfer_status: rows.some((p) => p.ownership_transfer_status === 'failed')
@@ -208,7 +194,6 @@ export function normalizeSellerPurchaseGroup(rows = []) {
     ownership_transfer_error: rows.find((p) => p.ownership_transfer_error)?.ownership_transfer_error || null,
     payload: {
       ...(first.payload || {}),
-      amount_rub: amountRub,
       receipt_file_url: rows.find((p) => p.payload?.receipt_file_url)?.payload?.receipt_file_url || first.payload?.receipt_file_url || null,
       receipt_note: rows.find((p) => p.payload?.receipt_note)?.payload?.receipt_note || first.payload?.receipt_note || null
     },
@@ -231,9 +216,8 @@ export const INITIAL_FORM_STATE = {
   offer_code: '',
   item_type: 'text_offer',
   sales_channel: 'site',
-  payment_methods: ['ton', 'p2p'],
+  payment_methods: ['ton'],
   price_ton: '',
-  price_rub: '',
   status: 'draft',
   visibility: 'public',
   selectedProxyId: '',
@@ -256,9 +240,8 @@ export const INITIAL_PROXY_COMPOSER = {
   preview_text: '',
   description: '',
   sales_channel: 'admin_only',
-  payment_methods: ['ton', 'p2p'],
+  payment_methods: ['ton'],
   price_ton: '',
-  price_rub: '',
   status: 'published',
   visibility: 'public',
   saving: false,

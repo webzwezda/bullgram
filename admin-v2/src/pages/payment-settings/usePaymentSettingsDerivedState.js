@@ -28,8 +28,7 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
 
   const billingStatsCards = useMemo(() => ([
     { title: 'Банковских событий', value: billingStats.total, hint: `Дошли: ${billingStats.webhook}, закрылись: ${billingStats.completed}.` },
-    { title: 'СБП реквизиты', value: state.settings.sbp_phone ? 'Да' : 'Нет', hint: 'Телефон, банк и получатель для рублевых переводов.', tone: state.settings.sbp_phone ? 'ok' : 'warning' },
-    { title: 'TON кошелек', value: state.settings.ton_wallet ? 'Да' : 'Нет', hint: 'Нужен только для TON оплат.', tone: state.settings.ton_wallet ? 'ok' : 'default' }
+    { title: 'TON кошелек', value: state.settings.ton_wallet ? 'Да' : 'Нет', hint: 'Адрес для приема TON-платежей.', tone: state.settings.ton_wallet ? 'ok' : 'warning' }
   ]), [billingStats, state.settings]);
 
   const prioritySignals = useMemo(() => {
@@ -62,13 +61,13 @@ export function usePaymentSettingsDerivedState({ mode, paymentEventFilter, state
     if (isBillingMode) {
       return {
         title: 'Касса',
-        description: 'Реквизиты, банковские уведомления и автосверка P2P оплат в одном рабочем контуре.',
+        description: 'TON-оплаты и история транзакций в одном рабочем контуре.',
         refreshHint: 'Спорные оплаты и ручные решения смотри в “Сверке оплат”.'
       };
     }
     return {
       title: 'Реквизиты',
-      description: 'Эти реквизиты показываются покупателям в магазине, прокси, юзерботах и других P2P checkout.',
+      description: 'Этот TON-кошелек показывается покупателям в магазине, прокси и юзерботах.',
       refreshHint: 'Автосверка подключается в “Кассе”.'
     };
   }, [isBillingMode]);

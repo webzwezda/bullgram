@@ -22,8 +22,7 @@ function initialSaleComposer() {
     title: '',
     sale_type: 'userbot',
     price_ton: '',
-    price_rub: '',
-    payment_methods: ['ton', 'p2p'],
+    payment_methods: ['ton'],
     saving: false,
     error: ''
   };
@@ -80,8 +79,7 @@ export function useLiveUserbotsController({
       title: saleTitleForAccount(account),
       sale_type: account.proxy_id ? 'bundle' : 'userbot',
       price_ton: '15',
-      price_rub: '',
-      payment_methods: ['ton', 'p2p'],
+      payment_methods: ['ton'],
       saving: false,
       error: ''
     });
@@ -98,12 +96,7 @@ export function useLiveUserbotsController({
         : (prev.payment_methods || []).filter((item) => item !== method);
       return {
         ...prev,
-        payment_methods: nextMethods,
-        price_rub: method === 'p2p'
-          && !enabled
-          && !nextMethods.includes('p2p')
-          ? ''
-          : prev.price_rub
+        payment_methods: nextMethods
       };
     });
   }
@@ -350,10 +343,6 @@ export function useLiveUserbotsController({
       setSaleComposer((prev) => ({ ...prev, error: 'Выбери хотя бы один способ оплаты.' }));
       return;
     }
-    if ((saleComposer.payment_methods || []).some((method) => method === 'p2p') && Number(saleComposer.price_rub || 0) <= 0) {
-      setSaleComposer((prev) => ({ ...prev, error: 'Для СБП нужна цена в рублях.' }));
-      return;
-    }
     if ((saleComposer.payment_methods || []).includes('ton') && Number(saleComposer.price_ton || 0) <= 0) {
       setSaleComposer((prev) => ({ ...prev, error: 'Для TON нужна цена в TON.' }));
       return;
@@ -391,7 +380,6 @@ export function useLiveUserbotsController({
           item_type: wantsBundle ? 'bundle' : 'userbot',
           sales_channel: 'admin_only',
           price_ton: Number(saleComposer.price_ton || 0),
-          price_rub: Number(saleComposer.price_rub || 0),
           status: 'published',
           visibility: 'public',
           transfer_mode: 'ownership_transfer',

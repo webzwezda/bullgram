@@ -30,9 +30,6 @@ function formatWhen(value) {
 }
 
 function formatAmount(purchase) {
-  if ((purchase.payload?.payment_method || '') === 'p2p') {
-    return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(purchase.payload?.amount_rub || purchase.amount_rub || 0))} RUB`;
-  }
   return `${Number(purchase.amount_ton || 0).toFixed(4)} TON`;
 }
 
@@ -92,10 +89,8 @@ function normalizeReceiptGroup(rows = []) {
     purchase_ids: rows.map((purchase) => purchase.id),
     status,
     amount_ton: rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0),
-    amount_rub: rows.reduce((sum, purchase) => sum + Number(purchase.payload?.amount_rub || purchase.amount_rub || 0), 0),
     payload: {
       ...(first.payload || {}),
-      amount_rub: rows.reduce((sum, purchase) => sum + Number(purchase.payload?.amount_rub || purchase.amount_rub || 0), 0),
       receipt_marked_at: rows.find((purchase) => purchase.payload?.receipt_marked_at)?.payload?.receipt_marked_at || first.payload?.receipt_marked_at || null,
       receipt_note: rows.find((purchase) => purchase.payload?.receipt_note)?.payload?.receipt_note || first.payload?.receipt_note || null,
       receipt_file_url: rows.find((purchase) => purchase.payload?.receipt_file_url)?.payload?.receipt_file_url || first.payload?.receipt_file_url || null,
@@ -171,7 +166,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     fieldErrors,
     patchSettings,
     saveSettings,
-    toggleSbpBank,
     validatePaymentFields
   } = usePaymentSettingsController({
     accessToken,
@@ -215,15 +209,11 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
         });
       }
       toast.success(action === 'approve' ? 'Оплата подтверждена.' : 'Оплата отклонена.');
-      const [purchasesData, bankEventsData] = await Promise.all([
-        apiRequest('/api/shop/seller/purchases', { accessToken }),
-        apiRequest('/api/p2p-bank-events', { accessToken })
-      ]);
+      const purchasesData = await apiRequest('/api/shop/seller/purchases', { accessToken });
       setState((prev) => ({
         ...prev,
         error: '',
-        purchases: purchasesData.purchases || [],
-        bankEvents: bankEventsData.events || []
+        purchases: purchasesData.purchases || []
       }));
     } catch (error) {
       setState((prev) => ({ ...prev, error: error.message }));
@@ -232,38 +222,8 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
   }
 
   async function runBankEventAction(event, action) {
-    try {
-      if (action === 'ignore') {
-        await apiRequest(`/api/p2p-bank-events/${event.id}/ignore`, {
-          accessToken,
-          method: 'POST'
-        });
-      }
-      if (action === 'confirm') {
-        await apiRequest(`/api/p2p-bank-events/${event.id}/confirm`, {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_ids: event.candidate_purchase_ids || event.matched_purchase_ids || [],
-            batch_token: event.candidate_batch_tokens?.[0] || event.matched_batch_token || null
-          }
-        });
-      }
-      const [purchasesData, bankEventsData] = await Promise.all([
-        apiRequest('/api/shop/seller/purchases', { accessToken }),
-        apiRequest('/api/p2p-bank-events', { accessToken })
-      ]);
-      setState((prev) => ({
-        ...prev,
-        error: '',
-        purchases: purchasesData.purchases || [],
-        bankEvents: bankEventsData.events || []
-      }));
-      toast.success(action === 'confirm' ? 'Банковское уведомление подтверждено.' : 'Банковское уведомление скрыто.');
-    } catch (error) {
-      setState((prev) => ({ ...prev, error: error.message }));
-      toast.error(error.message);
-    }
+    void event; void action;
+    toast.info('Очередь банковских уведомлений убрана — оплата теперь только TON.');
   }
 
   async function handleConfirmBotInvoice(invoiceId) {
@@ -399,8 +359,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           { data: officialBots, error: officialBotsError },
           health,
           { data: paymentEvents, error: paymentEventsError },
-          purchasesData,
-          bankEventsData
+          purchasesData
         ] = await Promise.all([
           supabase.from('payment_settings').select('*').eq('owner_id', user.id).maybeSingle(),
           supabase
@@ -427,8 +386,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             .eq('owner_id', user.id)
             .order('created_at', { ascending: false })
             .limit(30),
-          apiRequest('/api/shop/seller/purchases', { accessToken }).catch(() => ({ purchases: [] })),
-          apiRequest('/api/p2p-bank-events', { accessToken }).catch(() => ({ events: [] }))
+          apiRequest('/api/shop/seller/purchases', { accessToken }).catch(() => ({ purchases: [] }))
         ]);
 
         if (userbotsError) throw userbotsError;
@@ -520,8 +478,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             invoices: invoicesData,
             members: membersData,
             updatedAt: new Date().toISOString(),
-            purchases: purchasesData?.purchases || [],
-            bankEvents: bankEventsData?.events || []
+            purchases: purchasesData?.purchases || []
           });
 
           setBundleDrafts((prev) => {
@@ -655,8 +612,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       list = list.filter(p =>
         (p.item?.title || '').toLowerCase().includes(q) ||
         String(p.buyer_owner_id).includes(q) ||
-        String(p.payload?.amount_rub || p.amount_rub || '').includes(q) ||
-        (p.payload?.sbp_bank || '').toLowerCase().includes(q) ||
         (p.payload?.parsed_receipt_metadata?.transactionId || '').toLowerCase().includes(q)
       );
     }
@@ -670,8 +625,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       list = list.filter(p =>
         (p.item?.title || '').toLowerCase().includes(q) ||
         String(p.buyer_owner_id).includes(q) ||
-        String(p.payload?.amount_rub || p.amount_rub || '').includes(q) ||
-        (p.payload?.sbp_bank || '').toLowerCase().includes(q) ||
         (p.payload?.parsed_receipt_metadata?.transactionId || '').toLowerCase().includes(q)
       );
     }
@@ -697,7 +650,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           saveSettings={saveSettings}
           saving={state.saving}
           settings={state.settings}
-          toggleSbpBank={toggleSbpBank}
           validatePaymentFields={validatePaymentFields}
         />
       ) : null}
@@ -829,7 +781,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                     saveSettings={saveSettings}
                     saving={state.saving}
                     settings={state.settings}
-                    toggleSbpBank={toggleSbpBank}
                     validatePaymentFields={validatePaymentFields}
                     plain={true}
                   />
@@ -874,7 +825,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                     <div className="p-6 md:p-8 space-y-8">
                       <div>
                         <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                          <h3 className="text-lg font-black text-slate-900">Очередь P2P / СБП транзакций</h3>
+                          <h3 className="text-lg font-black text-slate-900">Очередь ручных чеков</h3>
                           <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                             {filteredAwaitingReceipts.length} оплат ждет
                           </span>
@@ -898,9 +849,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                                       <div className="mt-1.5 text-xs text-slate-600 flex flex-wrap items-center gap-2">
                                         <span className="font-semibold text-slate-400">Покупатель:</span>
                                         <span className="font-mono text-slate-800">owner {purchase.buyer_owner_id}</span>
-                                        <span className="text-slate-300">•</span>
-                                        <span className="font-semibold text-slate-400">Банк:</span>
-                                        <span className="text-slate-800">{purchase.payload?.sbp_bank || 'СБП'}</span>
                                         <span className="text-slate-300">•</span>
                                         <span className="font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md text-[11px]">{formatAmount(purchase)}</span>
                                         {purchase.purchase_ids?.length > 1 && (

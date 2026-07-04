@@ -2,11 +2,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
 import {
-  isValidSbpPhone,
   isValidTonWallet,
-  normalizeTonWallet,
-  parseSbpBanks,
-  serializeSbpBanks
+  normalizeTonWallet
 } from './payment-settings.utils.js';
 
 export function usePaymentSettingsController({ accessToken, setState, settings }) {
@@ -22,32 +19,12 @@ export function usePaymentSettingsController({ accessToken, setState, settings }
     }));
   }
 
-  function toggleSbpBank(bank) {
-    const selectedBanks = parseSbpBanks(settings.sbp_bank);
-    const isEnabled = selectedBanks.includes(bank);
-
-    if (isEnabled && selectedBanks.length === 1) {
-      return;
-    }
-
-    const nextBanks = isEnabled
-      ? selectedBanks.filter((item) => item !== bank)
-      : [...selectedBanks, bank];
-
-    patchSettings({ sbp_bank: serializeSbpBanks(nextBanks) });
-  }
-
   function validatePaymentFields(partialSettings = settings) {
     const nextErrors = {};
     const tonWallet = normalizeTonWallet(partialSettings.ton_wallet);
-    const sbpPhone = String(partialSettings.sbp_phone || '').trim();
 
     if (tonWallet && !isValidTonWallet(tonWallet)) {
       nextErrors.ton_wallet = 'Укажи корректный TON-кошелек без пробелов.';
-    }
-
-    if (sbpPhone && !isValidSbpPhone(sbpPhone)) {
-      nextErrors.sbp_phone = 'Укажи телефон в формате +7 999 123-45-67.';
     }
 
     setFieldErrors(nextErrors);
@@ -91,7 +68,6 @@ export function usePaymentSettingsController({ accessToken, setState, settings }
           detail: {
             paymentReadiness: {
               hasTon: !!savedSettings.ton_wallet,
-              hasSbp: !!savedSettings.sbp_phone,
               adminTgId: savedSettings.admin_tg_id ? String(savedSettings.admin_tg_id) : ''
             }
           }
@@ -107,7 +83,6 @@ export function usePaymentSettingsController({ accessToken, setState, settings }
     fieldErrors,
     patchSettings,
     saveSettings,
-    toggleSbpBank,
     validatePaymentFields
   };
 }

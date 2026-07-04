@@ -15,7 +15,6 @@ export function CreateItemDialog({ open, onOpenChange, formState, setFormState, 
       item_type: 'text_offer',
       title: template.title,
       price_ton: template.priceTon,
-      price_rub: prev.price_rub || '',
       preview_text: template.preview,
       description: template.description,
       post_purchase_message: template.postPurchaseMessage,
@@ -50,31 +49,17 @@ export function CreateItemDialog({ open, onOpenChange, formState, setFormState, 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена TON</label>
-              <Input
-                className={inputCls}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0"
-                value={formState.price_ton}
-                onChange={(e) => setFormState((p) => ({ ...p, price_ton: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена RUB</label>
-              <Input
-                className={inputCls}
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Для СБП"
-                value={formState.price_rub}
-                onChange={(e) => setFormState((p) => ({ ...p, price_rub: e.target.value }))}
-              />
-            </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена TON</label>
+            <Input
+              className={inputCls}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+              value={formState.price_ton}
+              onChange={(e) => setFormState((p) => ({ ...p, price_ton: e.target.value }))}
+            />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -122,8 +107,7 @@ export function CreateItemDialog({ open, onOpenChange, formState, setFormState, 
             <label className="text-sm font-medium text-slate-700 mb-1.5 block">Способы оплаты</label>
             <div className="flex gap-2">
               {[
-                ['ton', 'TON'],
-                ['p2p', 'СБП']
+                ['ton', 'TON']
               ].map(([method, label]) => (
                 <button
                   key={method}

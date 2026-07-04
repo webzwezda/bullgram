@@ -171,10 +171,6 @@ function formatTon(value) {
   return Number(value || 0).toFixed(4);
 }
 
-function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 function itemBadgeClass(item) {
   if (item.status === 'sold') return 'pill pill--ok';
   if (item.status === 'published') return 'pill pill--warning';
@@ -344,14 +340,13 @@ function purchaseHasAssetType(row, type) {
 }
 
 function paymentMethodLabel(method) {
-  if (method === 'p2p') return 'СБП';
+  void method;
   return 'TON';
 }
 
 function paymentMethodsLabel(value) {
-  const methods = Array.isArray(value) ? value : [];
-  if (!methods.length) return 'TON + СБП';
-  return methods.map(paymentMethodLabel).join(' + ');
+  void value;
+  return 'TON';
 }
 
 function salesChannelLabel(value) {
@@ -366,17 +361,10 @@ function itemPriceSummary(item) {
   if ((!methods.length || methods.includes('ton')) && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
-  }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
 
 function purchaseAmountSummary(purchase) {
-  if (purchase?.payload?.payment_method === 'p2p') {
-    const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payload?.payment_method);
-  }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
@@ -395,7 +383,6 @@ function normalizeSellerPurchaseGroup(rows = []) {
             ? 'expired'
             : 'paid';
   const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
-  const amountRub = rows.reduce((sum, purchase) => sum + Number(purchase.amount_rub || purchase.payload?.amount_rub || purchase.item?.price_rub || 0), 0);
   const createdAt = rows
     .map((purchase) => purchase.created_at ? new Date(purchase.created_at).getTime() : null)
     .filter((value) => Number.isFinite(value))
@@ -417,7 +404,6 @@ function normalizeSellerPurchaseGroup(rows = []) {
     buyer_owner_id: uniqueBuyers.length === 1 ? uniqueBuyers[0] : uniqueBuyers.join(', '),
     status,
     amount_ton: amountTon,
-    amount_rub: amountRub,
     created_at: createdAt ? new Date(createdAt).toISOString() : first.created_at,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
     ownership_transfer_status: rows.some((purchase) => purchase.ownership_transfer_status === 'failed')
@@ -430,7 +416,6 @@ function normalizeSellerPurchaseGroup(rows = []) {
     ownership_transfer_error: rows.find((purchase) => purchase.ownership_transfer_error)?.ownership_transfer_error || null,
     payload: {
       ...(first.payload || {}),
-      amount_rub: amountRub,
       receipt_file_url: rows.find((purchase) => purchase.payload?.receipt_file_url)?.payload?.receipt_file_url || first.payload?.receipt_file_url || null,
       receipt_note: rows.find((purchase) => purchase.payload?.receipt_note)?.payload?.receipt_note || first.payload?.receipt_note || null
     },
@@ -457,9 +442,8 @@ export function ShopAdminPage() {
     offer_code: '',
     item_type: 'text_offer',
     sales_channel: 'site',
-    payment_methods: ['ton', 'p2p'],
+    payment_methods: ['ton'],
     price_ton: '',
-    price_rub: '',
     status: 'draft',
     visibility: 'public',
     selectedProxyId: '',
@@ -483,9 +467,8 @@ export function ShopAdminPage() {
     preview_text: '',
     description: '',
     sales_channel: 'admin_only',
-    payment_methods: ['ton', 'p2p'],
+    payment_methods: ['ton'],
     price_ton: '',
-    price_rub: '',
     status: 'published',
     visibility: 'public',
     saving: false,
@@ -952,7 +935,6 @@ export function ShopAdminPage() {
       item_type: 'text_offer',
       title: template.title,
       price_ton: template.priceTon,
-      price_rub: prev.price_rub || '',
       preview_text: template.preview,
       description: template.description,
       post_purchase_message: template.postPurchaseMessage,
@@ -971,9 +953,8 @@ export function ShopAdminPage() {
       preview_text: 'Готовый серверный SOCKS5-прокси для одного Telegram-аккаунта.',
       description: `Прокси ${proxy.host}:${proxy.port}${proxy.last_check_country ? ` • ${proxy.last_check_country}` : ''}. Один прокси = один юзербот.`,
       sales_channel: 'admin_only',
-      payment_methods: ['ton', 'p2p'],
+      payment_methods: ['ton'],
       price_ton: '5',
-      price_rub: '',
       status: 'published',
       visibility: 'public',
       saving: false,
@@ -988,9 +969,8 @@ export function ShopAdminPage() {
       preview_text: '',
       description: '',
       sales_channel: 'admin_only',
-      payment_methods: ['ton', 'p2p'],
+      payment_methods: ['ton'],
       price_ton: '',
-      price_rub: '',
       status: 'published',
       visibility: 'public',
       saving: false,
@@ -1020,7 +1000,6 @@ export function ShopAdminPage() {
           item_type: 'proxy',
           sales_channel: proxyComposer.sales_channel,
           price_ton: Number(proxyComposer.price_ton || 0),
-          price_rub: Number(proxyComposer.price_rub || 0),
           status: proxyComposer.status,
           visibility: 'public',
           transfer_mode: 'ownership_transfer',
@@ -1147,7 +1126,6 @@ export function ShopAdminPage() {
           sales_channel: formState.sales_channel,
           payment_methods: formState.payment_methods,
           price_ton: Number(formState.price_ton || 0),
-          price_rub: Number(formState.price_rub || 0),
           status: formState.status,
           visibility: formState.visibility,
           transfer_mode: effectiveItemType !== 'text_offer' ? 'ownership_transfer' : 'post_purchase_message',
@@ -1163,9 +1141,8 @@ export function ShopAdminPage() {
         offer_code: '',
         item_type: 'text_offer',
         sales_channel: 'site',
-        payment_methods: ['ton', 'p2p'],
+        payment_methods: ['ton'],
         price_ton: '',
-        price_rub: '',
         status: 'draft',
         visibility: 'public',
         selectedProxyId: '',
@@ -1449,15 +1426,6 @@ export function ShopAdminPage() {
                     onChange={(event) => setProxyComposer((prev) => ({ ...prev, price_ton: event.target.value }))}
                     placeholder="Цена в TON"
                   />
-                  <input
-                    className="field"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={proxyComposer.price_rub}
-                    onChange={(event) => setProxyComposer((prev) => ({ ...prev, price_rub: event.target.value }))}
-                    placeholder="Цена в RUB для СБП"
-                  />
                   <select
                     className="field"
                     value={proxyComposer.status}
@@ -1479,8 +1447,7 @@ export function ShopAdminPage() {
                 <div className="payment-method-row">
                   <div className="payment-method-row__options">
                     {[
-                      ['ton', 'TON'],
-                      ['p2p', 'СБП']
+                      ['ton', 'TON']
                     ].map(([method, label]) => (
                       <label key={method} className="checkbox-pill">
                         <input
@@ -1545,7 +1512,7 @@ export function ShopAdminPage() {
         <div className="shop-admin-section-head">
           <div>
             <div className="section__title">P2P оффер</div>
-            <div className="shop-admin-section-head__text">Простой лот с оплатой через TON или СБП и выдачей текста после подтверждения оплаты.</div>
+            <div className="shop-admin-section-head__text">Простой лот с оплатой через TON и выдачей текста после подтверждения оплаты.</div>
           </div>
         </div>
         <div className="toolbar-card">
@@ -1566,15 +1533,6 @@ export function ShopAdminPage() {
                 value={formState.price_ton}
                 onChange={(event) => setFormState((prev) => ({ ...prev, price_ton: event.target.value }))}
                 placeholder="Цена в TON"
-              />
-              <input
-                className="field"
-                type="number"
-                min="0"
-                step="1"
-                value={formState.price_rub}
-                onChange={(event) => setFormState((prev) => ({ ...prev, price_rub: event.target.value }))}
-                placeholder="Цена в RUB для СБП"
               />
             <select
               className="field"
@@ -1606,8 +1564,7 @@ export function ShopAdminPage() {
           <div className="payment-method-row">
             <div className="payment-method-row__options">
               {[
-                ['ton', 'TON'],
-                ['p2p', 'СБП']
+                ['ton', 'TON']
               ].map(([method, label]) => (
                 <label key={method} className="checkbox-pill">
                   <input
@@ -1855,7 +1812,7 @@ export function ShopAdminPage() {
                     <div>
                       <div className="list-item__title">{purchase.item?.title || 'Лот'}</div>
                       <div className="list-item__meta">
-                        owner {purchase.buyer_owner_id} • {purchase.payload?.sbp_bank || 'СБП'} • {purchaseAmountSummary(purchase)}{purchase.purchase_ids?.length > 1 ? ` • ${purchase.purchase_ids.length} счета` : ''}
+                        owner {purchase.buyer_owner_id} • {purchaseAmountSummary(purchase)}{purchase.purchase_ids?.length > 1 ? ` • ${purchase.purchase_ids.length} счета` : ''}
                       </div>
                     </div>
                     <span className="pill pill--warning">{purchase.purchase_ids?.length > 1 ? 'Чеки отправлены' : 'Чек отправлен'}</span>
@@ -1907,20 +1864,7 @@ export function ShopAdminPage() {
                       <div className="table-subtext">
                         {purchase.status === 'pending' ? `До ${formatWhen(purchase.expires_at)}` : formatWhen(purchase.created_at)}
                       </div>
-                      {purchase.payload?.payment_method === 'p2p' ? (
-                        <>
-                          <div className="table-subtext">
-                            P2P • {purchase.payload?.sbp_bank || 'СБП'}{purchase.payload?.sbp_fio ? ` • ${purchase.payload.sbp_fio}` : ''}
-                          </div>
-                          {purchase.payload?.receipt_file_url ? (
-                            <div className="table-subtext">
-                              <a href={purchase.payload.receipt_file_url} target="_blank" rel="noreferrer">Чек</a>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : (
-                        <div className="table-subtext">TON • {purchase.payload?.seller_wallet || 'кошелек не указан'}</div>
-                      )}
+                      <div className="table-subtext">TON • {purchase.payload?.seller_wallet || 'кошелек не указан'}</div>
                     </td>
                     <td>
                       <span className={purchaseStatusBadge(purchase)}>{purchaseStatusText(purchase)}</span>

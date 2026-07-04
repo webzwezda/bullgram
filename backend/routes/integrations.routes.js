@@ -14,10 +14,6 @@ function legacyMcpId(id) {
     return `legacy:mcp:${id}`;
 }
 
-function legacyP2pId(ownerId) {
-    return `legacy:p2p:${ownerId}`;
-}
-
 function legacyRecord(base) {
     return {
         scopes: [],
@@ -61,44 +57,13 @@ async function listLegacyMcpTokens(supabase, ownerId) {
     }));
 }
 
-async function listLegacyP2pTokens(supabase, ownerId) {
-    const { data, error } = await supabase
-        .from('p2p_webhook_settings')
-        .select('owner_id, token_prefix, token_hint, last_used_at, last_used_ip, updated_at')
-        .eq('owner_id', ownerId)
-        .maybeSingle();
-
-    if (error) {
-        if (String(error.message || '').includes('p2p_webhook_settings')) return [];
-        throw error;
-    }
-    if (!data?.token_hint && !data?.token_prefix) return [];
-
-    return [legacyRecord({
-        id: legacyP2pId(ownerId),
-        legacy_id: ownerId,
-        owner_id: ownerId,
-        label: 'P2P касса / SMS Forward',
-        purpose: 'p2p_webhook',
-        scopes: ['p2p:webhook'],
-        token_prefix: data.token_prefix || null,
-        token_hint: data.token_hint || null,
-        last_used_at: data.last_used_at || null,
-        last_used_ip: data.last_used_ip || null,
-        created_at: data.updated_at || null,
-        updated_at: data.updated_at || null,
-        legacy_source: 'p2p_webhook_settings'
-    })];
-}
-
 async function listAllTokens(supabase, ownerId) {
-    const [modern, legacyMcp, legacyP2p] = await Promise.all([
+    const [modern, legacyMcp] = await Promise.all([
         listIntegrationTokens(supabase, { ownerId }),
-        listLegacyMcpTokens(supabase, ownerId),
-        listLegacyP2pTokens(supabase, ownerId)
+        listLegacyMcpTokens(supabase, ownerId)
     ]);
 
-    return [...modern, ...legacyMcp, ...legacyP2p]
+    return [...modern, ...legacyMcp]
         .sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime());
 }
 
@@ -114,20 +79,6 @@ async function revokeLegacyToken(supabase, ownerId, tokenId, reason) {
             .eq('id', legacyId)
             .eq('owner_id', ownerId)
             .is('revoked_at', null);
-        if (error) throw error;
-        return;
-    }
-
-    if (String(tokenId || '').startsWith('legacy:p2p:')) {
-        const { error } = await supabase
-            .from('p2p_webhook_settings')
-            .update({
-                token_hash: null,
-                token_prefix: null,
-                token_hint: null,
-                updated_at: new Date().toISOString()
-            })
-            .eq('owner_id', ownerId);
         if (error) throw error;
     }
 }
@@ -184,11 +135,10 @@ export default function integrationsRoutes(supabase) {
         try {
             if (String(req.params.id || '').startsWith('legacy:')) {
                 await revokeLegacyToken(supabase, req.user.id, req.params.id, 'reissued_to_integration_tokens');
-                const purpose = req.params.id.startsWith('legacy:mcp:') ? 'mcp' : 'p2p_webhook';
                 const result = await createIntegrationToken(supabase, {
                     ownerId: req.user.id,
-                    label: req.body?.label || (purpose === 'mcp' ? 'Bullgram MCP' : 'P2P касса / SMS Forward'),
-                    purpose,
+                    label: req.body?.label || 'Bullgram MCP',
+                    purpose: 'mcp',
                     metadata: { reissued_from_legacy: req.params.id }
                 });
                 return res.json({ success: true, ...result });

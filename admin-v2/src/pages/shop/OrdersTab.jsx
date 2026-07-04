@@ -107,9 +107,7 @@ export function OrdersTab({
                         <div className="text-xs text-slate-500 mt-1.5 space-x-1.5">
                           <span className="font-medium text-slate-700">{purchaseAmountSummary(purchase)}</span>
                           <span>•</span>
-                          <span>{paymentMethodLabel(purchase.payload?.payment_method)}</span>
-                          <span>•</span>
-                          <span>{purchase.payload?.payment_method === 'p2p' ? (purchase.payload?.sbp_bank || 'СБП') : 'TON'}</span>
+                          <span>TON</span>
                         </div>
 
                         <div className="text-xs text-slate-400 mt-1">
@@ -130,14 +128,6 @@ export function OrdersTab({
                           </div>
                         )}
 
-                        {purchase.payload?.payment_method === 'p2p' && purchase.payload?.receipt_file_url && (
-                          <div className="mt-1.5">
-                            <a href={purchase.payload.receipt_file_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline inline-flex items-center gap-1">
-                              <FileCheck className="w-3 h-3" />
-                              Открыть чек
-                            </a>
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
@@ -211,7 +201,6 @@ export function OrdersTab({
                     <div className="font-semibold text-sm text-slate-900">{purchase.item?.title || 'Лот'}</div>
                     <div className="text-xs text-slate-500 mt-0.5">
                       {purchaseAmountSummary(purchase)} • {paymentMethodLabel(purchase.payload?.payment_method)}
-                      {purchase.payload?.sbp_bank && ` • ${purchase.payload.sbp_bank}`}
                       {purchase.purchase_ids?.length > 1 && ` • ${purchase.purchase_ids.length} счёта`}
                     </div>
                     {purchase.payload?.receipt_note && (

@@ -88,10 +88,6 @@ function formatTon(value) {
   return Number(value || 0).toFixed(2);
 }
 
-function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 function CopyRow({ label, value }) {
   if (!value) return null;
 
@@ -147,7 +143,6 @@ function normalizeOpenProxyPurchaseGroup(rows = []) {
       ? 'paid'
       : 'pending';
   const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
-  const amountRub = rows.reduce((sum, purchase) => sum + Number(purchase.amount_rub || 0), 0);
   const assets = rows.flatMap((purchase) => purchase.assets || []);
   const uniqueLabels = Array.from(new Set(assets.map((asset) => asset.label || 'Proxy')));
   const sellerWallet = first.payload?.seller_wallet || '';
@@ -162,7 +157,6 @@ function normalizeOpenProxyPurchaseGroup(rows = []) {
     purchase_ids: rows.map((purchase) => purchase.id),
     status,
     amount_ton: amountTon,
-    amount_rub: amountRub,
     ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
     created_at: first.created_at,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
@@ -192,12 +186,13 @@ function itemPaymentMethods(item) {
     ? item.available_payment_methods
     : Array.isArray(item?.payment_methods) && item.payment_methods.length
       ? item.payment_methods
-      : ['ton', 'p2p'];
-  return source.filter((method) => method === 'ton' || method === 'p2p');
+      : ['ton'];
+  return source.filter((method) => method === 'ton');
 }
 
 function paymentMethodLabel(value) {
-  return value === 'p2p' ? 'СБП' : 'TON';
+  void value;
+  return 'TON';
 }
 
 function purchaseStatusMeta(status) {
@@ -216,17 +211,10 @@ function itemPriceSummary(item) {
   if (methods.includes('ton') && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
-  }
-  return parts.join(' / ') || 'Нужна цена в RUB';
+  return parts.join(' / ') || 'Нужна цена в TON';
 }
 
 function purchaseAmountSummary(purchase) {
-  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p') {
-    const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payment_method || purchase?.payload?.payment_method);
-  }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
@@ -294,8 +282,6 @@ export function ProxyManagerPage() {
     checking: false,
     error: ''
   });
-  const [receiptNote, setReceiptNote] = useState('');
-  const [receiptFile, setReceiptFile] = useState(null);
   const [tonCheckoutView, setTonCheckoutView] = useState('trust');
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
@@ -493,20 +479,12 @@ export function ProxyManagerPage() {
     const paymentSignature = JSON.stringify(itemPaymentMethods(first));
     const samePrice = visibleProxyItems.every((item) =>
       Number(item.price_ton || 0) === Number(first.price_ton || 0)
-      && Number(item.price_rub || 0) === Number(first.price_rub || 0)
       && JSON.stringify(itemPaymentMethods(item)) === paymentSignature
     );
 
     const tonValues = visibleProxyItems
       .filter((item) => itemPaymentMethods(item).includes('ton'))
       .map((item) => Number(item.price_ton || 0))
-      .filter((value) => value > 0);
-    const rubValues = visibleProxyItems
-      .filter((item) => {
-        const methods = itemPaymentMethods(item);
-        return methods.includes('p2p');
-      })
-      .map((item) => Number(item.price_rub || 0))
       .filter((value) => value > 0);
 
     return {
@@ -515,7 +493,7 @@ export function ProxyManagerPage() {
       items: visibleProxyItems,
       unitPriceText: samePrice
         ? itemPriceSummary(first)
-        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}${tonValues.length && rubValues.length ? ' / ' : ''}${rubValues.length ? `от ${formatRub(Math.min(...rubValues))} RUB` : ''}` || 'Нужна цена в RUB',
+        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}` || 'Нужна цена в TON',
       paymentMethods: itemPaymentMethods(first),
       samePrice
     };
@@ -590,7 +568,7 @@ export function ProxyManagerPage() {
       {
         label: 'Нужно оплатить',
         value: openProxyPurchases.length,
-        hint: 'Открытые покупки, которые еще ждут TON или СБП чек.',
+        hint: 'Открытые покупки, которые еще ждут TON-оплату.',
         tone: summaryTone(openProxyPurchases.length, { warning: openProxyPurchases.length > 0 })
       },
       {
@@ -941,7 +919,6 @@ export function ProxyManagerPage() {
         purchase: {
           id: data.purchase_id,
           amount_ton: data.amount_ton,
-          amount_rub: data.amount_rub || item.price_rub || 0,
           payment_method: data.payment_method || selectedPaymentMethod,
           seller_wallet: data.seller_wallet,
           memo: data.memo,
@@ -950,9 +927,6 @@ export function ProxyManagerPage() {
           trust_wallet_qr: data.trust_wallet_qr || '',
           ton_qr: data.ton_qr,
           expires_at: data.expires_at,
-          sbp_phone: data.sbp_phone || '',
-          sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || '',
           payment_url: data.payment_url || ''
         }
       });
@@ -976,7 +950,6 @@ export function ProxyManagerPage() {
         purchase: existingPurchase ? {
           id: existingPurchase.id,
           amount_ton: existingPurchase.amount_ton,
-          amount_rub: existingPurchase.amount_rub || 0,
           payment_method: existingPurchase.payload?.payment_method || selectedPaymentMethod,
           seller_wallet: existingPurchase.payload?.seller_wallet || '',
           memo: existingPurchase.payload?.memo || '',
@@ -986,9 +959,6 @@ export function ProxyManagerPage() {
           ton_qr: existingPurchase.payload?.ton_qr || '',
           expires_at: existingPurchase.expires_at || null,
           status: existingPurchase.status,
-          sbp_phone: existingPurchase.payload?.sbp_phone || '',
-          sbp_bank: existingPurchase.payload?.sbp_bank || '',
-          sbp_fio: existingPurchase.payload?.sbp_fio || '',
           receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
           payment_url: ''
         } : null,
@@ -1052,7 +1022,6 @@ export function ProxyManagerPage() {
           id: data.batch_token || data.purchase_ids?.[0] || '',
           purchase_ids: data.purchase_ids || [],
           amount_ton: data.amount_ton,
-          amount_rub: data.amount_rub || 0,
           payment_method: data.payment_method || selectedPaymentMethod,
           seller_wallet: data.seller_wallet || '',
           memo: data.memo || '',
@@ -1061,9 +1030,6 @@ export function ProxyManagerPage() {
           trust_wallet_qr: data.trust_wallet_qr || '',
           ton_qr: data.ton_qr || '',
           expires_at: data.expires_at || null,
-          sbp_phone: data.sbp_phone || '',
-          sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || '',
           payment_url: '',
           status: 'pending',
           batch: true
@@ -1142,8 +1108,6 @@ export function ProxyManagerPage() {
         paymentMethod: 'ton',
         error: ''
       }));
-      setReceiptNote('');
-      setReceiptFile(null);
     } catch (error) {
       setCheckoutState((prev) => ({
         ...prev,
@@ -1160,7 +1124,6 @@ export function ProxyManagerPage() {
         id: purchase.id,
         purchase_ids: purchase.purchase_ids || [purchase.id],
         amount_ton: purchase.amount_ton,
-        amount_rub: purchase.amount_rub || 0,
         payment_method: purchase.payload?.payment_method || 'ton',
         seller_wallet: purchase.payload?.seller_wallet || '',
         memo: purchase.payload?.memo || '',
@@ -1170,9 +1133,6 @@ export function ProxyManagerPage() {
         ton_qr: purchase.payload?.ton_qr || '',
         expires_at: purchase.expires_at || null,
         status: purchase.status,
-        sbp_phone: purchase.payload?.sbp_phone || '',
-        sbp_bank: purchase.payload?.sbp_bank || '',
-        sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
         payment_url: '',
         batch: !!purchase.batch
@@ -1182,64 +1142,6 @@ export function ProxyManagerPage() {
       checking: false,
       error: ''
     });
-  }
-
-  async function markCheckoutPaid() {
-    if (!checkoutState.purchase?.id) return;
-
-    setCheckoutState((prev) => ({
-      ...prev,
-      checking: true,
-      error: ''
-    }));
-
-    try {
-      const formData = new FormData();
-      formData.append('receipt_note', receiptNote);
-      if (receiptFile) {
-        formData.append('receipt_file', receiptFile);
-      }
-      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
-        formData.append('purchase_ids', checkoutState.purchase.purchase_ids.join(','));
-        await apiRequest('/api/shop/public/purchase/mark-paid-batch', {
-          accessToken,
-          method: 'POST',
-          body: formData
-        });
-      } else {
-        formData.append('purchase_id', checkoutState.purchase.id);
-        await apiRequest('/api/shop/public/purchase/mark-paid', {
-          accessToken,
-          method: 'POST',
-          body: formData
-        });
-      }
-      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
-      const refreshed = (purchasesData.purchases || []).filter((purchase) =>
-        (checkoutState.purchase.purchase_ids || [checkoutState.purchase.id]).includes(purchase.id)
-      );
-      setShopState((prev) => ({
-        ...prev,
-        purchases: purchasesData.purchases || prev.purchases
-      }));
-      setReceiptNote('');
-      setReceiptFile(null);
-      if (refreshed.length === 1) {
-        showPurchaseInline(refreshed[0]);
-      } else if (refreshed.length > 1) {
-        showPurchaseInline(normalizeOpenProxyPurchaseGroup(refreshed));
-      }
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false
-      }));
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false,
-        error: error.message
-      }));
-    }
   }
 
   async function cancelCheckoutPurchase(target = checkoutState.purchase) {
@@ -1296,8 +1198,6 @@ export function ProxyManagerPage() {
             }
           : prev
       ));
-      setReceiptNote('');
-      setReceiptFile(null);
     } catch (error) {
       setCheckoutState((prev) => ({
         ...prev,
@@ -1916,63 +1816,7 @@ function renderOpenProxyPurchases(rows) {
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-4">
-                      <div className="space-y-3 text-sm">
-                        <div>
-                          <div className="text-slate-500">Телефон для СБП</div>
-                          <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_phone || '—'}</div>
-                        </div>
-                        {checkoutState.purchase.sbp_fio ? (
-                          <div>
-                            <div className="text-slate-500">Получатель</div>
-                            <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_fio}</div>
-                          </div>
-                        ) : null}
-                        <div>
-                          <div className="text-slate-500">Банки</div>
-                          <div className="font-semibold text-slate-900">{checkoutState.purchase.sbp_bank || 'СБП'}</div>
-                        </div>
-                        {checkoutState.purchase.receipt_file_url ? (
-                          <div>
-                            <div className="text-slate-500">Чек</div>
-                            <a
-                              className="text-blue-600 hover:text-blue-700 font-semibold underline"
-                              href={resolveBackendAssetUrl(checkoutState.purchase.receipt_file_url)}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Открыть файл
-                            </a>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {checkoutState.purchase.status === 'pending' ? (
-                        <div className="space-y-3">
-                          <div className="font-semibold text-slate-900">Отметь оплату</div>
-                          <div className="text-sm text-slate-600">После перевода нажми “Я оплатил”. Чек можно приложить, но он не обязателен, если у продавца включена автосверка.</div>
-                          <textarea
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            rows="3"
-                            placeholder="Банк, сумма, время перевода"
-                            value={receiptNote}
-                            onChange={(event) => setReceiptNote(event.target.value)}
-                          />
-                          <input
-                            className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            type="file"
-                            accept="image/*,.pdf"
-                            onChange={(event) => setReceiptFile(event.target.files?.[0] || null)}
-                          />
-                        </div>
-                      ) : checkoutState.purchase.status === 'awaiting_receipt' ? (
-                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-                          Ждем подтверждение продавца или банковское уведомление. Чек не обязателен, если оплата найдется через автосверку.
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
+                  ) : null}
 
                   <div className="flex items-center justify-between pt-6 border-t border-slate-100">
                     <button
@@ -2012,15 +1856,6 @@ function renderOpenProxyPurchases(rows) {
                           onClick={checkCheckout}
                         >
                           {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
-                        </button>
-                      ) : checkoutState.purchase.status === 'pending' ? (
-                        <button
-                          className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                          type="button"
-                          disabled={checkoutState.checking}
-                          onClick={markCheckoutPaid}
-                        >
-                          {checkoutState.checking ? 'Отправляем...' : 'Я оплатил'}
                         </button>
                       ) : null}
                     </div>

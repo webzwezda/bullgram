@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Smartphone, Trash2, Workflow } from 'lucide-react';
+import { AlertCircle, Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -19,24 +19,13 @@ const PURPOSES = {
     label: 'Bullgram MCP',
     cta: { href: '/app/api/mcp', label: 'Открыть MCP' }
   },
-  p2p_webhook: {
-    title: 'P2P касса / SMS Forward',
-    description: 'Bearer token для SMS/Push Forward, чтобы Bullgram принимал банковские уведомления.',
-    icon: Smartphone,
-    gradient: 'from-blue-500 to-blue-600',
-    shadow: 'shadow-blue-500/20',
-    label: 'P2P касса / SMS Forward',
-    cta: { href: '/app/billing', label: 'Открыть кассу' }
-  },
-  n8n: {
-    title: 'n8n сценарии',
-    description: 'Скоро здесь будут ключи для автоматизаций и внешних сценариев.',
-    icon: Workflow,
+  api: {
+    title: 'API ключ',
+    description: 'Общий Bearer token для внешних запросов к Bullgram API: автоматизации, скрипты, интеграции.',
+    icon: Braces,
     gradient: 'from-amber-500 to-amber-600',
     shadow: 'shadow-amber-500/20',
-    label: 'n8n',
-    cta: { href: '/app/api/n8n', label: 'Открыть n8n' },
-    soon: true
+    label: 'API ключ'
   }
 };
 
@@ -132,7 +121,7 @@ function IntegrationCard({
       </CardHeader>
       <CardContent className="space-y-4 px-6 pb-6">
         {meta.soon ? (
-          <p className="text-sm text-slate-500">Пока ключи n8n не выдаем. Сначала закрепляем общий API-контур.</p>
+          <p className="text-sm text-slate-500">Ключи пока не выдаются. Сначала закрепляем общий контур.</p>
         ) : hasToken ? (
           <div className="space-y-3">
             <label className="flex flex-col gap-1.5">
@@ -284,7 +273,7 @@ export function IntegrationsPage() {
   }
 
   async function reissueToken(token) {
-    if (!window.confirm('Старый ключ сразу перестанет работать. В SMS Forward, MCP или n8n нужно будет вставить новый.')) return;
+    if (!window.confirm('Старый ключ сразу перестанет работать. В MCP или внешних скриптах нужно будет вставить новый.')) return;
     setBusyId(token.id);
     try {
       const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/reissue`, {
@@ -426,7 +415,7 @@ export function IntegrationsPage() {
                           <ShieldCheck className="w-6 h-6 text-slate-400" />
                         </div>
                         <p className="text-sm text-slate-500 font-semibold">Пока нет ключей</p>
-                        <p className="mt-1 text-xs text-slate-400">Выпусти ключ для MCP или P2P кассы выше.</p>
+                        <p className="mt-1 text-xs text-slate-400">Выпусти ключ для MCP или внешнего API выше.</p>
                       </div>
                     </td>
                   </tr>

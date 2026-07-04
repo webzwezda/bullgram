@@ -162,8 +162,7 @@ export function OpsChecklistRail() {
         const paymentReadiness = settings
           ? {
               ...(data.paymentReadiness || {}),
-              hasTon: !!settings.ton_wallet,
-              hasSbp: !!settings.sbp_phone,
+              hasTon: !!settings.ton_wallet
             }
           : (data.paymentReadiness || {});
 
@@ -197,7 +196,7 @@ export function OpsChecklistRail() {
     const botSteps = [
       {
         id: 'payments',
-        done: !!payment.hasTon || !!payment.hasSbp,
+        done: !!payment.hasTon,
         title: 'Способы оплаты',
         hint: 'Укажите реквизиты для приема платежей',
         href: '/app/payments',

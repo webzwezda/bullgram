@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, UserPlus, FileText, ShoppingBag, Database,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send, Target,
-  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, Workflow, KeyRound,
+  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
   Zap
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -34,7 +34,6 @@ const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((modul
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
-const ApiN8nPage = lazy(() => import('./pages/ApiN8nPage.jsx').then((module) => ({ default: module.ApiN8nPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 export function App() {
   const { user, profileRole } = useAuth();
@@ -99,7 +98,6 @@ export function App() {
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
           { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
           { to: '/api/mcp', label: 'MCP', icon: Settings },
-          { to: '/api/n8n', label: 'n8n', icon: Workflow },
         ]
       }]
       : [])
@@ -219,7 +217,6 @@ export function App() {
                 <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
                 <Route path="/api/mcp" element={<McpSettingsPage />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
-                <Route path="/api/n8n" element={<ApiN8nPage />} />
                 <Route path="/plans" element={<PaymentSettingsPage mode="plans" />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />
                 <Route path="/treasury" element={<ProjectTreasuryPage />} />

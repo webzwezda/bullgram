@@ -15,18 +15,11 @@ function formatTon(value) {
   return Number(value || 0).toFixed(2);
 }
 
-function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 function itemPriceSummary(item) {
-  const methods = item?.payment_methods?.length ? item.payment_methods : ['ton', 'p2p'];
+  const methods = item?.payment_methods?.length ? item.payment_methods : ['ton'];
   const parts = [];
   if (methods.includes('ton') && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
-  }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
   }
   return parts.join(' / ') || `${formatTon(item?.price_ton || 0)} TON`;
 }
@@ -143,9 +136,6 @@ export function ShopPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((item) => {
-            const methods = item?.payment_methods?.length ? item.payment_methods : ['ton'];
-            const hasP2p = methods.includes('p2p');
-            const hasTon = methods.includes('ton');
             const isHighlighted = highlightId && String(item.id) === String(highlightId);
 
             return (
@@ -170,26 +160,14 @@ export function ShopPage() {
                 <div className="text-lg font-bold text-slate-900">{itemPriceSummary(item)}</div>
 
                 <div className="flex gap-2 flex-wrap">
-                  {hasTon && (
-                    <button
-                      className="site-button site-button--primary text-xs"
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => handleBuy(item, 'ton')}
-                    >
-                      {busyId === item.id ? '...' : 'Купить TON'}
-                    </button>
-                  )}
-                  {hasP2p && (
-                    <button
-                      className="site-button text-xs"
-                      type="button"
-                      disabled={busyId === item.id}
-                      onClick={() => handleBuy(item, 'p2p')}
-                    >
-                      {busyId === item.id ? '...' : 'Купить СБП'}
-                    </button>
-                  )}
+                  <button
+                    className="site-button site-button--primary text-xs"
+                    type="button"
+                    disabled={busyId === item.id}
+                    onClick={() => handleBuy(item, 'ton')}
+                  >
+                    {busyId === item.id ? '...' : 'Купить TON'}
+                  </button>
                 </div>
               </div>
             );

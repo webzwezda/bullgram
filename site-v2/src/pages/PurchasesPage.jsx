@@ -11,20 +11,12 @@ function formatTon(value) {
   return Number(value || 0).toFixed(2);
 }
 
-function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 function purchaseAmountSummary(p) {
-  if (p?.payload?.payment_method === 'p2p') {
-    const rub = Number(p?.amount_rub || p?.payload?.amount_rub || p?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : 'СБП';
-  }
   return `${formatTon(p?.amount_ton || p?.item?.price_ton || 0)} TON`;
 }
 
 function paymentMethodLabel(v) {
-  if (v === 'p2p') return 'СБП';
+  void v;
   return 'TON';
 }
 
@@ -63,7 +55,6 @@ export function PurchasesPage() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [busyId, setBusyId] = useState('');
-  const [receiptDrafts, setReceiptDrafts] = useState({});
 
   async function loadPurchases() {
     if (!accessToken) return;
@@ -97,24 +88,6 @@ export function PurchasesPage() {
     setBusyId(purchaseId);
     try {
       await apiRequest('/api/shop/public/purchase/check', { accessToken, method: 'POST', body: { purchase_id: purchaseId } });
-      await loadPurchases();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusyId('');
-    }
-  }
-
-  async function markPaid(purchaseId) {
-    setBusyId(purchaseId);
-    try {
-      const draft = receiptDrafts[purchaseId] || {};
-      const formData = new FormData();
-      formData.append('purchase_id', purchaseId);
-      formData.append('receipt_note', draft.note || '');
-      if (draft.file) formData.append('receipt_file', draft.file);
-      await apiRequest('/api/shop/public/purchase/mark-paid', { accessToken, method: 'POST', body: formData });
-      setReceiptDrafts((prev) => ({ ...prev, [purchaseId]: { note: '', file: null } }));
       await loadPurchases();
     } catch (e) {
       setError(e.message);
@@ -169,7 +142,6 @@ export function PurchasesPage() {
             const isPaid = p.status === 'paid';
             const isExpired = p.status === 'expired';
             const isFailed = p.ownership_transfer_status === 'failed';
-            const draft = receiptDrafts[p.id] || { note: '', file: null };
 
             return (
               <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
@@ -211,46 +183,6 @@ export function PurchasesPage() {
                     </div>
                   </div>
                 )}
-
-                {/* P2P payment */}
-                {method === 'p2p' && isPending && (
-                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-3">
-                    <div className="text-sm"><span className="font-medium text-slate-700">Карта / СБП:</span> {p.payload?.sbp_phone || '—'}</div>
-                    {p.payload?.sbp_fio && <div className="text-sm"><span className="font-medium text-slate-700">Получатель:</span> {p.payload.sbp_fio}</div>}
-                    {p.payload?.sbp_bank && <div className="text-sm"><span className="font-medium text-slate-700">Банк:</span> {p.payload.sbp_bank}</div>}
-                    <div className="text-sm"><span className="font-medium text-slate-700">Комментарий:</span> <code className="text-xs">{p.payload?.memo || '—'}</code></div>
-                    <textarea
-                      className="w-full rounded-xl border border-slate-200 bg-white text-sm p-3 mt-2"
-                      rows={2}
-                      placeholder="Комментарий к оплате, если нужен: банк, сумма, время"
-                      value={draft.note || ''}
-                      onChange={(e) => setReceiptDrafts((prev) => ({
-                        ...prev,
-                        [p.id]: { ...(prev[p.id] || {}), note: e.target.value }
-                      }))}
-                    />
-                    <input
-                      className="text-sm"
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => setReceiptDrafts((prev) => ({
-                        ...prev,
-                        [p.id]: { ...(prev[p.id] || {}), file: e.target.files?.[0] || null }
-                      }))}
-                    />
-                    <button
-                      className="site-button site-button--primary text-xs"
-                      type="button"
-                      disabled={busyId === p.id}
-                      onClick={() => markPaid(p.id)}
-                    >
-                      {busyId === p.id ? 'Отправляем...' : 'Я оплатил'}
-                    </button>
-                    <div className="text-xs text-slate-500">Чек можно не прикладывать. Если у продавца включена автосверка, Bullgram подтвердит оплату по банковскому уведомлению.</div>
-                  </div>
-                )}
-
-
 
                 {/* Awaiting receipt — P2P already sent */}
                 {isAwaiting && (

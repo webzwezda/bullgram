@@ -135,7 +135,6 @@ export function useUserbotStorefront({
         purchase: {
           id: data.purchase_id,
           amount_ton: data.amount_ton,
-          amount_rub: data.amount_rub || item.price_rub || 0,
           payment_method: data.payment_method || selectedPaymentMethod,
           seller_wallet: data.seller_wallet || '',
           memo: data.memo || '',
@@ -145,9 +144,6 @@ export function useUserbotStorefront({
           ton_qr: data.ton_qr || '',
           expires_at: data.expires_at || null,
           status: 'pending',
-          sbp_phone: data.sbp_phone || '',
-          sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || '',
           receipt_file_url: '',
           payment_url: data.payment_url || ''
         }
@@ -180,9 +176,6 @@ export function useUserbotStorefront({
           ton_qr: existingPurchase.payload?.ton_qr || '',
           expires_at: existingPurchase.expires_at || null,
           status: existingPurchase.status,
-          sbp_phone: existingPurchase.payload?.sbp_phone || '',
-          sbp_bank: existingPurchase.payload?.sbp_bank || '',
-          sbp_fio: existingPurchase.payload?.sbp_fio || '',
           receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
           payment_url: ''
         } : null,
@@ -254,9 +247,6 @@ export function useUserbotStorefront({
           ton_qr: data.ton_qr || '',
           expires_at: data.expires_at || null,
           status: 'pending',
-          sbp_phone: data.sbp_phone || '',
-          sbp_bank: data.sbp_bank || '',
-          sbp_fio: data.sbp_fio || '',
           receipt_file_url: '',
           payment_url: data.payment_url || '',
           batch: true
@@ -385,9 +375,6 @@ export function useUserbotStorefront({
         ton_qr: purchase.payload?.ton_qr || '',
         expires_at: purchase.expires_at || null,
         status: purchase.status,
-        sbp_phone: purchase.payload?.sbp_phone || '',
-        sbp_bank: purchase.payload?.sbp_bank || '',
-        sbp_fio: purchase.payload?.sbp_fio || '',
         receipt_file_url: purchase.payload?.receipt_file_url || '',
         payment_url: '',
         batch: !!purchase.batch

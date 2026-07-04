@@ -143,17 +143,13 @@ export function formatTon(value) {
   return Number(value || 0).toFixed(2);
 }
 
-export function formatRub(value) {
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0));
-}
-
 export function userbotLotPaymentMethods(item) {
   const source = Array.isArray(item?.available_payment_methods)
     ? item.available_payment_methods
     : Array.isArray(item?.payment_methods) && item.payment_methods.length
       ? item.payment_methods
-      : ['ton', 'p2p'];
-  return source.filter((method) => method === 'ton' || method === 'p2p');
+      : ['ton'];
+  return source.filter((method) => method === 'ton');
 }
 
 export function batchUserbotLotPaymentMethods(items) {
@@ -170,7 +166,8 @@ export function batchUserbotLotPaymentMethods(items) {
 }
 
 export function paymentMethodLabel(value) {
-  return value === 'p2p' ? 'СБП' : 'TON';
+  void value;
+  return 'TON';
 }
 
 export function userbotItemPriceSummary(item) {
@@ -179,17 +176,10 @@ export function userbotItemPriceSummary(item) {
   if (methods.includes('ton') && Number(item?.price_ton || 0) > 0) {
     parts.push(`${formatTon(item.price_ton)} TON`);
   }
-  if (methods.includes('p2p') && Number(item?.price_rub || 0) > 0) {
-    parts.push(`${formatRub(item.price_rub)} RUB`);
-  }
-  return parts.join(' / ') || 'Нужна цена в RUB';
+  return parts.join(' / ') || 'Нужна цена в TON';
 }
 
 export function userbotPurchaseAmountSummary(purchase) {
-  if (purchase?.payment_method === 'p2p' || purchase?.payload?.payment_method === 'p2p') {
-    const rub = Number(purchase?.amount_rub || purchase?.payload?.amount_rub || purchase?.item?.price_rub || 0);
-    return rub > 0 ? `${formatRub(rub)} RUB` : paymentMethodLabel(purchase?.payment_method || purchase?.payload?.payment_method);
-  }
   return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
 }
 
@@ -260,10 +250,7 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
       ton_uri: first.payload?.ton_uri || '',
       trust_wallet_uri: first.payload?.trust_wallet_uri || '',
       trust_wallet_qr: first.payload?.trust_wallet_qr || '',
-      ton_qr: first.payload?.ton_qr || '',
-      sbp_phone: first.payload?.sbp_phone || '',
-      sbp_bank: first.payload?.sbp_bank || '',
-      sbp_fio: first.payload?.sbp_fio || ''
+      ton_qr: first.payload?.ton_qr || ''
     },
     item: {
       ...(first.item || {}),

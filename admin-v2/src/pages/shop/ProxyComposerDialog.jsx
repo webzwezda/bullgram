@@ -72,31 +72,17 @@ export function ProxyComposerDialog({ open, onOpenChange, composer, setComposer,
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена TON</label>
-              <Input
-                className={inputCls}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0"
-                value={composer.price_ton}
-                onChange={(e) => setComposer((p) => ({ ...p, price_ton: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена RUB</label>
-              <Input
-                className={inputCls}
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Для СБП"
-                value={composer.price_rub}
-                onChange={(e) => setComposer((p) => ({ ...p, price_rub: e.target.value }))}
-              />
-            </div>
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-1.5 block">Цена TON</label>
+            <Input
+              className={inputCls}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0"
+              value={composer.price_ton}
+              onChange={(e) => setComposer((p) => ({ ...p, price_ton: e.target.value }))}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -131,8 +117,7 @@ export function ProxyComposerDialog({ open, onOpenChange, composer, setComposer,
             <label className="text-sm font-medium text-slate-700 mb-1.5 block">Способы оплаты</label>
             <div className="flex gap-2">
               {[
-                ['ton', 'TON'],
-                ['p2p', 'СБП']
+                ['ton', 'TON']
               ].map(([method, label]) => (
                 <button
                   key={method}

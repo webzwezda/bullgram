@@ -3,48 +3,6 @@ export function registerPaymentExactHandlers(bot, { service }) {
 }
 
 export function registerPaymentRegexHandlers(bot, { service, botId }) {
-    bot.action(/fiat_paid_(.+)/, async (ctx) => {
-        const memo = ctx.match[1];
-        await ctx.answerCbQuery();
-
-        const { data: invoice } = await service.supabase
-            .from('invoices')
-            .select('id, tariff_id, tg_user_id, status')
-            .eq('memo', memo)
-            .eq('tg_user_id', ctx.from.id)
-            .maybeSingle();
-
-        if (!invoice) {
-            await ctx.editMessageText('❌ Не удалось найти этот счет в истории. Пожалуйста, откройте оплату заново.', { parse_mode: 'HTML' });
-            return;
-        }
-
-        await service.supabase
-            .from('invoices')
-            .update({ status: 'awaiting_receipt' })
-            .eq('id', invoice.id)
-            .eq('tg_user_id', ctx.from.id);
-
-        if (invoice) {
-            const { data: tariff } = await service.supabase.from('tariffs').select('owner_id').eq('id', invoice.tariff_id).single();
-            await service.logPaymentEvent({
-                ownerId: tariff?.owner_id,
-                invoiceId: invoice.id,
-                provider: 'manual_rub',
-                eventType: 'receipt_requested',
-                status: 'awaiting_receipt',
-                payload: { memo }
-            });
-        }
-
-        const uploadPromptText = `💳 <b>ОЖИДАНИЕ ПОДТВЕРЖДЕНИЯ</b>\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `Отлично! Пожалуйста, <b>отправьте прямо в этот чат скриншот чека или PDF-документ</b>, подтверждающий успешный перевод.\n\n` +
-            `<b>ID платежа:</b> <code>${memo}</code>`;
-
-        await ctx.editMessageText(uploadPromptText, { parse_mode: 'HTML' });
-    });
-
     bot.action(/check_payment_(.+)/, async (ctx) => {
         const memo = ctx.match[1];
         await ctx.answerCbQuery('Проверяем блокчейн...', { show_alert: true });

@@ -16,7 +16,7 @@ create table if not exists public.integration_tokens (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint integration_tokens_purpose_check
-    check (purpose in ('mcp', 'p2p_webhook', 'n8n', 'custom'))
+    check (purpose in ('mcp', 'api', 'custom'))
 );
 
 create index if not exists integration_tokens_owner_idx
