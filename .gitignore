@@ -52,3 +52,12 @@ fl_orders_rows.csv
 
 # Claude Code internal (agent instructions, local skills/symlinks)
 .claude/
+
+# Vendored reference repos (kept locally, not part of BullRun source)
+archive/
+
+# One-off refactoring scripts (kept locally; not product code)
+/fix-selects.js
+/redesign-onboarding.js
+/reformat.js
+/update-lists.js
