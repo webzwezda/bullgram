@@ -695,6 +695,227 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
     }
 }
 
+async function confirmShopP2pPayment(supabase, {
+    sellerOwnerId,
+    purchaseIds = [],
+    batchToken = null,
+    confirmSource = 'manual',
+    bankEventId = null,
+    allowPending = false
+} = {}) {
+    const sellerId = String(sellerOwnerId || '').trim();
+    const ids = parsePurchaseIdsInput(purchaseIds);
+    const token = String(batchToken || '').trim();
+
+    if (!sellerId) {
+        const error = new Error('Не найден продавец для подтверждения');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    let query = supabase
+        .from('shop_purchases')
+        .select('*')
+        .eq('seller_owner_id', sellerId);
+
+    if (ids.length) {
+        query = query.in('id', ids);
+    } else if (token) {
+        query = query.contains('payload', { batch_token: token });
+    } else {
+        const error = new Error('Нужно передать purchase_ids или batch_token');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const { data: purchases, error: purchasesError } = await query;
+    if (purchasesError) throw purchasesError;
+
+    if (ids.length && (purchases || []).length !== ids.length) {
+        const error = new Error('Часть продаж уже недоступна');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!(purchases || []).length) {
+        const error = new Error('Покупки для подтверждения не найдены');
+        error.statusCode = 404;
+        throw error;
+    }
+
+    ensureSingleBatchContext(purchases || []);
+
+    const allowedStatuses = allowPending ? ['awaiting_receipt', 'pending'] : ['awaiting_receipt'];
+    for (const purchase of purchases || []) {
+        if (purchase.status === 'paid') {
+            continue;
+        }
+
+        if (!allowedStatuses.includes(purchase.status)) {
+            const error = new Error(allowPending ? 'Этот счет уже обработан' : 'Автосверка подтверждает только счета после “Я оплатил”');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (purchase.status === 'pending' && isPendingPurchaseExpired(purchase)) {
+            await supabase
+                .from('shop_purchases')
+                .update({ status: 'expired', updated_at: new Date().toISOString() })
+                .eq('id', purchase.id);
+            const error = new Error('Время на оплату истекло. Создай покупку заново.');
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const buyerOwnerId = purchases?.[0]?.buyer_owner_id;
+    const { data: buyerProfile, error: buyerProfileError } = await supabase
+        .from('profiles')
+        .select('product_tier')
+        .eq('id', buyerOwnerId)
+        .maybeSingle();
+    if (buyerProfileError) throw buyerProfileError;
+
+    const itemIds = Array.from(new Set((purchases || []).map((purchase) => purchase.shop_item_id).filter(Boolean)));
+    const { data: itemsForLimit, error: itemsForLimitError } = await supabase
+        .from('shop_items')
+        .select('id, item_type')
+        .in('id', itemIds);
+    if (itemsForLimitError) throw itemsForLimitError;
+
+    await assertBuyerOwnershipLimits({
+        supabase,
+        profile: buyerProfile || {},
+        buyerOwnerId,
+        items: itemsForLimit || []
+    });
+
+    const confirmedAt = new Date().toISOString();
+    const completedPurchaseIds = [];
+    let transferFailed = false;
+    let transferErrorMessage = '';
+
+    for (const purchase of purchases || []) {
+        if (purchase.status === 'paid' && purchase.ownership_transfer_status === 'completed') {
+            completedPurchaseIds.push(purchase.id);
+            continue;
+        }
+
+        const { data: item, error: itemError } = await supabase
+            .from('shop_items')
+            .select('*')
+            .eq('id', purchase.shop_item_id)
+            .single();
+        if (itemError) throw itemError;
+
+        const textServiceItem = isTextServiceItem(item);
+        if (!textServiceItem && item.status === 'sold' && purchase.ownership_transfer_status !== 'completed') {
+            const error = new Error('Лот уже ушел другому покупателю. Этот заказ больше нельзя завершить.');
+            error.statusCode = 409;
+            throw error;
+        }
+
+        const claimPayload = {
+            ...(purchase.payload || {}),
+            confirmed_at: confirmedAt,
+            confirm_source: confirmSource,
+            bank_event_id: bankEventId || purchase.payload?.bank_event_id || null
+        };
+
+        const { data: claimedRows, error: claimError } = await supabase
+            .from('shop_purchases')
+            .update({
+                status: 'paid',
+                ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
+                ownership_transfer_error: null,
+                payload: claimPayload,
+                updated_at: confirmedAt
+            })
+            .eq('id', purchase.id)
+            .in('status', purchase.status === 'paid' ? ['paid'] : allowedStatuses)
+            .select('*');
+
+        if (claimError) throw claimError;
+        const claimed = (claimedRows || [])[0];
+        if (!claimed) {
+            const error = new Error('Счет уже обработан параллельно');
+            error.statusCode = 409;
+            throw error;
+        }
+
+        if (textServiceItem) {
+            await applyShopOfferUnlock(supabase, claimed, item);
+            completedPurchaseIds.push(claimed.id);
+            continue;
+        }
+
+        const { data: assets, error: assetsError } = await supabase
+            .from('shop_item_assets')
+            .select('*')
+            .eq('shop_item_id', purchase.shop_item_id)
+            .order('sort_order', { ascending: true });
+        if (assetsError) throw assetsError;
+
+        try {
+            await transferShopAssets(supabase, claimed, item, assets || []);
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    ownership_transfer_status: 'completed',
+                    ownership_transfer_error: null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', claimed.id);
+            completedPurchaseIds.push(claimed.id);
+        } catch (transferError) {
+            console.error('Ошибка confirm handoff shop purchase:', transferError);
+            transferFailed = true;
+            transferErrorMessage = transferError.message || 'Неизвестная ошибка';
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    ownership_transfer_status: 'failed',
+                    ownership_transfer_error: transferErrorMessage,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', claimed.id);
+        }
+    }
+
+    if (transferFailed) {
+        const error = new Error('Оплата подтверждена, но передача прав сломалась');
+        error.statusCode = 500;
+        error.completedPurchaseIds = completedPurchaseIds;
+        error.transferErrorMessage = transferErrorMessage;
+        throw error;
+    }
+
+    return {
+        success: true,
+        status: 'paid',
+        ownership_transfer_status: 'completed',
+        purchase_ids: completedPurchaseIds,
+        batch_token: token || purchases?.[0]?.payload?.batch_token || null
+    };
+}
+
+async function rejectSellerPurchaseRecord(supabase, purchase, reason) {
+    const payload = {
+        ...(purchase.payload || {}),
+        rejection_reason: reason
+    };
+
+    const { error: updateError } = await supabase
+        .from('shop_purchases')
+        .update({
+            status: 'rejected',
+            payload,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', purchase.id);
+    if (updateError) throw updateError;
+}
+
 async function loadOwnerUserbotProxyUsage(supabase, ownerId) {
     const { data, error } = await supabase
         .from('tg_accounts')
@@ -2522,6 +2743,126 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка проверки batch shop purchase:', error);
             res.status(500).json({ error: 'Ошибка проверки общей оплаты' });
+        }
+    });
+
+    router.post(['/admin/purchases/:id/approve', '/seller/purchases/:id/approve'], authenticateUser, async (req, res) => {
+        const sellerOwnerId = req.user.id;
+        const purchaseId = req.params.id;
+
+        try {
+            const { data: purchase, error: purchaseError } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('id', purchaseId)
+                .eq('seller_owner_id', sellerOwnerId)
+                .single();
+            if (purchaseError) throw purchaseError;
+
+            const result = await confirmShopP2pPayment(supabase, {
+                sellerOwnerId,
+                purchaseIds: [purchase.id],
+                confirmSource: 'manual',
+                allowPending: true
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка approve shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка подтверждения платежа' });
+        }
+    });
+
+    router.post(['/admin/purchases/approve-batch', '/seller/purchases/approve-batch'], authenticateUser, async (req, res) => {
+        const sellerOwnerId = req.user.id;
+        const purchaseIds = parsePurchaseIdsInput(req.body?.purchase_ids);
+
+        if (!purchaseIds.length) {
+            return res.status(400).json({ error: 'Не передан список purchase_ids' });
+        }
+
+        try {
+            const { data: purchases, error } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('seller_owner_id', sellerOwnerId)
+                .in('id', purchaseIds);
+
+            if (error) throw error;
+            if ((purchases || []).length !== purchaseIds.length) {
+                return res.status(404).json({ error: 'Часть продаж уже недоступна' });
+            }
+
+            ensureSingleBatchContext(purchases || []);
+
+            const result = await confirmShopP2pPayment(supabase, {
+                sellerOwnerId,
+                purchaseIds,
+                confirmSource: 'manual_batch',
+                allowPending: true
+            });
+
+            res.json(result);
+        } catch (error) {
+            console.error('Ошибка batch approve shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка batch-подтверждения платежа' });
+        }
+    });
+
+    router.post(['/admin/purchases/:id/reject', '/seller/purchases/:id/reject'], authenticateUser, async (req, res) => {
+        const sellerOwnerId = req.user.id;
+        const purchaseId = req.params.id;
+        const reason = String(req.body?.reason || '').trim() || null;
+
+        try {
+            const { data: purchase, error: purchaseError } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('id', purchaseId)
+                .eq('seller_owner_id', sellerOwnerId)
+                .single();
+            if (purchaseError) throw purchaseError;
+
+            await rejectSellerPurchaseRecord(supabase, purchase, reason);
+
+            res.json({ success: true, status: 'rejected' });
+        } catch (error) {
+            console.error('Ошибка reject shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка отклонения платежа' });
+        }
+    });
+
+    router.post(['/admin/purchases/reject-batch', '/seller/purchases/reject-batch'], authenticateUser, async (req, res) => {
+        const sellerOwnerId = req.user.id;
+        const purchaseIds = parsePurchaseIdsInput(req.body?.purchase_ids);
+        const reason = String(req.body?.reason || '').trim() || null;
+
+        if (!purchaseIds.length) {
+            return res.status(400).json({ error: 'Не передан список purchase_ids' });
+        }
+
+        try {
+            const { data: purchases, error } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('seller_owner_id', sellerOwnerId)
+                .in('id', purchaseIds);
+
+            if (error) throw error;
+            if ((purchases || []).length !== purchaseIds.length) {
+                return res.status(404).json({ error: 'Часть продаж уже недоступна' });
+            }
+
+            ensureSingleBatchContext(purchases || []);
+
+            for (const purchase of purchases || []) {
+                await rejectSellerPurchaseRecord(supabase, purchase, reason);
+            }
+
+            res.json({ success: true, status: 'rejected' });
+        } catch (error) {
+            console.error('Ошибка batch reject shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка batch-отклонения платежа' });
         }
     });
 
