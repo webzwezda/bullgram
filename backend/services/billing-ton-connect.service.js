@@ -75,8 +75,30 @@ export async function createTonConnectOrder(supabase, ownerId) {
         throw error;
     }
 
-    const memo = generateTierMemo();
     const { ton, nano, tonPriced } = computeTonAmount(NORMAL_PLAN.amountRub);
+
+    // Reuse existing valid pending order if we have one with same amount.
+    // Avoids pile-up of orphan pending rows when user reloads /app/billing.
+    const { data: existing } = await supabase
+        .from('billing_orders')
+        .select('*')
+        .eq('owner_id', ownerId)
+        .eq('plan_code', NORMAL_PLAN.code)
+        .eq('status', 'pending')
+        .eq('provider', 'ton_connect')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (existing) {
+        const existingPayload = existing.payload || {};
+        if (String(existingPayload.expected_nanoton || '') === String(nano.toString())) {
+            return shapeOrderResponse(existing, tonPriced);
+        }
+    }
+
+    const memo = generateTierMemo();
     const expiresAt = addMinutes(new Date(), ORDER_TTL_MINUTES);
 
     const { data: order, error: insertError } = await supabase
@@ -114,17 +136,22 @@ export async function createTonConnectOrder(supabase, ownerId) {
         payload: { memo, ton_amount: ton, ton_priced: tonPriced, merchant_wallet: merchantWallet }
     });
 
+    return shapeOrderResponse(order, tonPriced);
+}
+
+function shapeOrderResponse(order, tonPriced) {
+    const payload = order.payload || {};
     return {
         success: true,
         order_id: order.id,
-        memo,
-        merchant_wallet: merchantWallet,
-        amount_ton: ton,
-        amount_nanoton: nano.toString(),
-        amount_rub: tonPriced ? null : NORMAL_PLAN.amountRub,
+        memo: payload.memo || order.provider_invoice_id,
+        merchant_wallet: payload.merchant_wallet || process.env.PLATFORM_TON_WALLET,
+        amount_ton: payload.ton_amount,
+        amount_nanoton: payload.expected_nanoton,
+        amount_rub: tonPriced ? null : Number(order.amount_rub || 0),
         ton_priced: tonPriced,
-        duration_days: NORMAL_PLAN.durationDays,
-        expires_at: expiresAt,
+        duration_days: order.duration_days,
+        expires_at: order.expires_at,
         network: detectNetwork()
     };
 }

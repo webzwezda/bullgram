@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTonAddress, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
 import { useTonCheckout } from './useTonCheckout.js';
 
@@ -45,13 +45,20 @@ export function TonConnectPayButton({
     [buildVerifyBody]
   );
 
-  const { pay, paying, verifying, status, error } = useTonCheckout({
+  const { pay, paying, verifying, status, error, verifyCurrent } = useTonCheckout({
     verifyEndpoint,
     buildVerifyBody: bodyBuilder,
     accessToken,
     onComplete: handleComplete,
     onError: handleError
   });
+
+  // Auto-verify on mount when wallet is connected: handles reload-after-pay flow.
+  useEffect(() => {
+    if (!connected || !memo) return;
+    verifyCurrent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, memo]);
 
   if (!connected) {
     return (

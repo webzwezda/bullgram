@@ -4,7 +4,8 @@ import { buildTonPayload } from '../../lib/build-ton-payload.js';
 import { apiRequest } from '../../api/client.js';
 
 const VERIFY_POLL_DELAY_MS = 5000;
-const VERIFY_POLL_MAX_RETRIES = 4;
+// 13 × 5s = 65s, covers backend TonAPI window (20 × 3s = 60s)
+const VERIFY_POLL_MAX_RETRIES = 13;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +23,41 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
     setStatus('idle');
     setError(null);
   }, []);
+
+  const runVerifyLoop = useCallback(
+    async ({ senderWallet, onStillPending }) => {
+      const body = buildVerifyBody({ boc: null, senderWallet });
+
+      for (let attempt = 1; attempt <= VERIFY_POLL_MAX_RETRIES; attempt += 1) {
+        try {
+          const data = await apiRequest(verifyEndpoint, {
+            accessToken,
+            method: 'POST',
+            body
+          });
+
+          if (data?.status === 'paid' || (data?.success === true && data?.status === 'paid')) {
+            setStatus('paid');
+            onComplete?.(data);
+            return;
+          }
+          if (data?.status === 'pending' || data?.retry) {
+            if (attempt < VERIFY_POLL_MAX_RETRIES) {
+              await sleep(VERIFY_POLL_DELAY_MS);
+              continue;
+            }
+          }
+        } catch (verifyError) {
+          if (attempt >= VERIFY_POLL_MAX_RETRIES) {
+            throw verifyError;
+          }
+        }
+      }
+
+      onStillPending?.();
+    },
+    [verifyEndpoint, buildVerifyBody, accessToken, onComplete]
+  );
 
   const pay = useCallback(
     async ({ amountNano, merchantWallet, memo, network = 'mainnet' }) => {
@@ -64,43 +100,48 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
       setStatus('verifying');
 
       const senderWallet = tonConnectUI.account?.address || '';
-      const body = buildVerifyBody({ boc: null, senderWallet });
-
-      for (let attempt = 1; attempt <= VERIFY_POLL_MAX_RETRIES; attempt += 1) {
-        try {
-          const data = await apiRequest(verifyEndpoint, {
-            accessToken,
-            method: 'POST',
-            body
-          });
-
-          if (data?.status === 'paid' || (data?.success === true && data?.status === 'paid')) {
-            setStatus('paid');
-            onComplete?.(data);
-            return;
+      try {
+        await runVerifyLoop({
+          senderWallet,
+          onStillPending: () => {
+            setStatus('pending');
+            setError('Платёж отправлен, но ещё не подтверждён блокчейном. Попробуйте проверить позже или обновите страницу.');
           }
-          if (data?.status === 'pending' || data?.retry) {
-            if (attempt < VERIFY_POLL_MAX_RETRIES) {
-              await sleep(VERIFY_POLL_DELAY_MS);
-              continue;
-            }
-          }
-        } catch (verifyError) {
-          if (attempt >= VERIFY_POLL_MAX_RETRIES) {
-            setStatus('failed');
-            const message = verifyError?.message || 'Не удалось верифицировать платеж';
-            setError(message);
-            onError?.(new Error(message));
-            return;
-          }
-        }
+        });
+      } catch (verifyError) {
+        setStatus('failed');
+        const message = verifyError?.message || 'Не удалось верифицировать платеж';
+        setError(message);
+        onError?.(new Error(message));
       }
-
-      setStatus('pending');
-      setError('Платёж отправлен, но ещё не подтверждён блокчейном. Попробуйте проверить позже или обновите страницу.');
     },
-    [tonConnectUI, verifyEndpoint, buildVerifyBody, accessToken, onComplete, onError]
+    [tonConnectUI, runVerifyLoop, onError]
   );
 
-  return { pay, paying, verifying, status, error, reset };
+  // Verify the current connected wallet against an existing pending order
+  // without sending a new transaction. Useful after page reload.
+  const verifyCurrent = useCallback(
+    async () => {
+      if (!tonConnectUI) return;
+      const senderWallet = tonConnectUI.account?.address || '';
+      if (!senderWallet) return;
+
+      setStatus('verifying');
+      setError(null);
+      try {
+        await runVerifyLoop({
+          senderWallet,
+          onStillPending: () => {
+            setStatus('idle');
+          }
+        });
+      } catch (verifyError) {
+        // Silent: leave UI idle so user can click "Оплатить" to retry.
+        setStatus('idle');
+      }
+    },
+    [tonConnectUI, runVerifyLoop]
+  );
+
+  return { pay, paying, verifying, status, error, reset, verifyCurrent };
 }
