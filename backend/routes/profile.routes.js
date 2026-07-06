@@ -20,7 +20,7 @@ export default function profileRoutes(supabase) {
     });
 
     router.get('/tg-link/status', authenticateUser, async (req, res) => {
-        const [profileResp, settingsResp] = await Promise.all([
+        const [profileResp, settingsResp, autopostResp] = await Promise.all([
             supabase
                 .from('profiles')
                 .select('telegram_user_id, telegram_username')
@@ -30,7 +30,11 @@ export default function profileRoutes(supabase) {
                 .from('payment_settings')
                 .select('admin_tg_id')
                 .eq('owner_id', req.user.id)
-                .maybeSingle()
+                .maybeSingle(),
+            supabase
+                .from('autopost_bots')
+                .select('admin_tg_ids')
+                .eq('owner_id', req.user.id)
         ]);
         if (profileResp.error) return res.status(500).json({ error: profileResp.error.message });
 
@@ -38,12 +42,32 @@ export default function profileRoutes(supabase) {
         const fromSettings = settingsResp.data?.admin_tg_id
             ? String(settingsResp.data.admin_tg_id).trim() || null
             : null;
-        const telegramUserId = fromProfile || fromSettings;
-        if (telegramUserId) {
+
+        // Fallback: infer from autopost_bots.admin_tg_ids if there's a single unique ID
+        let fromAutopost = null;
+        let autopostSource = null;
+        if (autopostResp.data && autopostResp.data.length > 0) {
+            const uniqueIds = new Set();
+            for (const bot of autopostResp.data) {
+                for (const id of bot.admin_tg_ids || []) {
+                    if (id !== null && id !== undefined && String(id).trim()) {
+                        uniqueIds.add(String(id).trim());
+                    }
+                }
+            }
+            if (uniqueIds.size === 1) {
+                fromAutopost = [...uniqueIds][0];
+                autopostSource = 'autopost';
+            }
+        }
+
+        const primaryTgId = fromProfile || fromSettings || fromAutopost;
+        if (primaryTgId) {
             return res.json({
                 linked: true,
-                telegram_user_id: telegramUserId,
-                telegram_username: profileResp.data?.telegram_username || null
+                telegram_user_id: primaryTgId,
+                telegram_username: profileResp.data?.telegram_username || null,
+                source: fromProfile ? 'verified' : (fromSettings ? 'manual' : autopostSource)
             });
         }
         return res.json({ linked: false });

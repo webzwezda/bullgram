@@ -26,6 +26,7 @@ export function ProfileContactsCard() {
   const [tgIdSaved, setTgIdSaved] = useState('');
   const [tgIdSaving, setTgIdSaving] = useState(false);
   const [tgUsername, setTgUsername] = useState(null);
+  const [tgSource, setTgSource] = useState(null);
 
   const [tgLoading, setTgLoading] = useState(true);
   const [tgError, setTgError] = useState('');
@@ -54,8 +55,8 @@ export function ProfileContactsCard() {
     try {
       const data = await apiRequest('/api/profile/tg-link/status', { accessToken });
       if (data?.linked) {
-        // Don't overwrite what user is typing — only sync if value matches saved or is empty
         setTgUsername(data.telegram_username || null);
+        setTgSource(data.source || null);
         const incoming = String(data.telegram_user_id || '');
         if (incoming && incoming !== tgIdSaved) {
           setTgIdValue(incoming);
@@ -113,7 +114,9 @@ export function ProfileContactsCard() {
       });
       setTgIdSaved(normalized);
       setTgIdValue(normalized);
+      // Manual save clears verification flag (username), source becomes 'manual'
       setTgUsername(null);
+      setTgSource(normalized ? 'manual' : null);
     } catch (err) {
       setTgError(err?.message || 'Ошибка сохранения');
     } finally {
@@ -142,10 +145,14 @@ export function ProfileContactsCard() {
         const data = await apiRequest('/api/profile/tg-link/status', { accessToken });
         if (data?.linked) {
           const incoming = String(data.telegram_user_id || '');
-          if (incoming && incoming !== tgIdSaved) {
+          // Polling should fire when bot deep-link sets telegram_user_id (source flips to 'verified')
+          // OR when value itself changes
+          const becameVerified = data.source === 'verified' && tgSource !== 'verified';
+          if ((incoming && incoming !== tgIdSaved) || becameVerified) {
             setTgIdValue(incoming);
             setTgIdSaved(incoming);
             setTgUsername(data.telegram_username || null);
+            setTgSource(data.source || null);
             stopPolling();
             setLinking(false);
             setTgError('');
@@ -185,6 +192,7 @@ export function ProfileContactsCard() {
       setTgIdValue('');
       setTgIdSaved('');
       setTgUsername(null);
+      setTgSource(null);
     } catch (err) {
       setTgError(err?.message || 'Не удалось отвязать');
     } finally {
@@ -195,7 +203,14 @@ export function ProfileContactsCard() {
   const tonDirty = normalizeTonWallet(tonValue) !== normalizeTonWallet(tonSaved);
   const tgIdDirty = normalizeTgId(tgIdValue) !== normalizeTgId(tgIdSaved);
   const tgLinked = Boolean(tgIdSaved);
-  const showAsVerified = Boolean(tgUsername);
+  const showAsVerified = tgSource === 'verified' || Boolean(tgUsername);
+
+  const sourceLabel = (() => {
+    if (tgSource === 'verified') return 'подтверждён через Telegram';
+    if (tgSource === 'manual') return 'указан вручную';
+    if (tgSource === 'autopost') return 'подтянут из бота автопостинга';
+    return '';
+  })();
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-7">
@@ -278,7 +293,7 @@ export function ProfileContactsCard() {
                   </div>
                   <div className="text-xs text-emerald-700/80 font-mono mt-0.5">
                     ID: {tgIdSaved}
-                    {showAsVerified ? ' · подтверждён через Telegram' : ' · указан вручную'}
+                    {sourceLabel ? ` · ${sourceLabel}` : ''}
                   </div>
                 </div>
               </div>
@@ -306,6 +321,12 @@ export function ProfileContactsCard() {
               {linking ? 'Ждём подтверждения…' : 'Привязать через Telegram'}
             </button>
           </div>
+
+          {tgSource === 'autopost' ? (
+            <p className="text-[11px] text-slate-400 italic">
+              Подтянут из настроек бота автопостинга. Нажмите «Сохранить», чтобы закрепить как основной.
+            </p>
+          ) : null}
 
           {tgError ? <p className="text-xs text-rose-600">{tgError}</p> : null}
         </div>
