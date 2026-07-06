@@ -13,6 +13,7 @@ export function TonConnectPayButton({
   amountNano,
   merchantWallet,
   memo,
+  network = 'mainnet',
   verifyEndpoint,
   buildVerifyBody,
   accessToken,
@@ -76,7 +77,7 @@ export function TonConnectPayButton({
       <button
         type="button"
         disabled={disabled || busy || status === 'paid'}
-        onClick={() => pay({ amountNano, merchantWallet, memo })}
+        onClick={() => pay({ amountNano, merchantWallet, memo, network })}
         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
       >
         {busy ? (

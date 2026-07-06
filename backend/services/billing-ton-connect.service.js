@@ -35,6 +35,12 @@ function generateTierMemo() {
     return `tier_${suffix}`;
 }
 
+function detectNetwork() {
+    const base = String(process.env.TONCONNECT_TONAPI_BASE || '').toLowerCase();
+    if (base.includes('testnet')) return 'testnet';
+    return 'mainnet';
+}
+
 function addMinutes(date, minutes) {
     return new Date(date.getTime() + Number(minutes) * 60_000).toISOString();
 }
@@ -107,7 +113,8 @@ export async function createTonConnectOrder(supabase, ownerId) {
         amount_nanoton: nano.toString(),
         amount_rub: NORMAL_PLAN.amountRub,
         duration_days: NORMAL_PLAN.durationDays,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        network: detectNetwork()
     };
 }
 

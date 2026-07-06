@@ -24,7 +24,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
   }, []);
 
   const pay = useCallback(
-    async ({ amountNano, merchantWallet, memo }) => {
+    async ({ amountNano, merchantWallet, memo, network = 'mainnet' }) => {
       if (!tonConnectUI) {
         setError('TON Connect не инициализирован');
         return;
@@ -34,6 +34,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
         return;
       }
 
+      const chain = network === 'testnet' ? CHAIN.TESTNET : CHAIN.MAINNET;
       const payloadBase64 = buildTonPayload(memo);
       const validUntil = Math.floor(Date.now() / 1000) + 300;
 
@@ -43,7 +44,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
       try {
         await tonConnectUI.sendTransaction({
           validUntil,
-          network: CHAIN.MAINNET,
+          network: chain,
           messages: [
             {
               address: merchantWallet,

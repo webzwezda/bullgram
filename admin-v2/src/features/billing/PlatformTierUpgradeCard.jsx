@@ -120,6 +120,7 @@ export function PlatformTierUpgradeCard() {
                 amountNano={order.amount_nanoton}
                 merchantWallet={order.merchant_wallet}
                 memo={order.memo}
+                network={order.network}
                 verifyEndpoint={VERIFY_ENDPOINT}
                 buildVerifyBody={({ senderWallet }) => ({ order_id: order.order_id, sender_wallet: senderWallet })}
                 accessToken={accessToken}
