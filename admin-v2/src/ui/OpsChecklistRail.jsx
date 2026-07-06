@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
+import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users } from 'lucide-react';
 
 const ICONS = {
@@ -296,6 +297,8 @@ export function OpsChecklistRail() {
             <span className="text-[10px] text-slate-400 mt-1 font-medium">{currentPlan.hint}</span>
           </div>
         </div>
+
+        {user ? <TonWalletSidebarRow /> : null}
 
         {user ? (
           <button 
