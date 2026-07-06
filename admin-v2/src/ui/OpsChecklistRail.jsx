@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -279,10 +280,10 @@ export function OpsChecklistRail() {
               {profileInitial}
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-slate-900 truncate">{profileName}</div>
-            <div className="text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</div>
-          </div>
+          <Link to="/profile" className="flex-1 min-w-0 block hover:opacity-80 transition-opacity">
+            <div className="text-sm font-bold text-slate-900 truncate hover:underline">{profileName}</div>
+            <div className="text-xs text-slate-500 truncate hover:underline">{profileEmail || 'Без email'}</div>
+          </Link>
         </div>
 
         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">

@@ -31,8 +31,10 @@ import projectAdminRoutes from './routes/project-admin.routes.js';
 import integrationsRoutes from './routes/integrations.routes.js';
 import userbotWebRoutes from './routes/userbot-web.routes.js';
 import tonconnectRoutes from './routes/tonconnect.routes.js';
+import profileRoutes from './routes/profile.routes.js';
 import { UserbotService } from './services/userbot.service.js';
 import { MtprotoBridgeService } from './services/mtproto-bridge.service.js';
+import { getPlatformBot } from './services/platform-bot.service.js';
 
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
@@ -129,6 +131,11 @@ mtprotoBridgeWss.on('connection', (ws, req) => {
 mtprotoBridgeService.start();
 
 // ==========================================
+// PLATFORM BOT (TG-link deep-link verification)
+// ==========================================
+getPlatformBot(supabase);
+
+// ==========================================
 // МИДДЛВАР: ПРОВЕРКА АВТОРИЗАЦИИ
 // ==========================================
 const authenticateUser = async (req, res, next) => {
@@ -169,6 +176,7 @@ app.use('/api/mcp', agentMcpRoutes(supabase));
 app.use('/api/integrations', integrationsRoutes(supabase));
 app.use('/api/project-admin', projectAdminRoutes(supabase));
 app.use('/api/userbot-web', userbotWebRoutes(supabase, mtprotoBridgeService));
+app.use('/api/profile', profileRoutes(supabase));
 app.use(tonconnectRoutes());
 
 // ==========================================

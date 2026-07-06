@@ -35,6 +35,7 @@ const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((m
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 export function App() {
   const { user, profileRole } = useAuth();
   const location = useLocation();
@@ -225,6 +226,7 @@ export function App() {
                 <Route path="/observer" element={<ObserverPage />} />
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/shop" replace />} />
+                <Route path="/profile" element={<ProfilePage />} />
               </Routes>
             </Suspense>
           </AuthGate>
