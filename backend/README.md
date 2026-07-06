@@ -137,9 +137,9 @@ BILLING_PENDING_ORDER_TTL_MINUTES=30
 
 Callback URL для Robokassa:
 
-- Result URL: `https://bullrun.ru/api/billing/robokassa/result`
-- Success URL: `https://bullrun.ru/api/billing/robokassa/success`
-- Fail URL: `https://bullrun.ru/api/billing/robokassa/fail`
+- Result URL: `https://bullgram.xyz/api/billing/robokassa/result`
+- Success URL: `https://bullgram.xyz/api/billing/robokassa/success`
+- Fail URL: `https://bullgram.xyz/api/billing/robokassa/fail`
 
 ### QR onboarding и импорт сессий
 

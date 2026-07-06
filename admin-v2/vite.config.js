@@ -40,9 +40,9 @@ export default defineConfig(() => {
       proxy: {
         '/tonconnect-manifest.json': 'http://localhost:3000',
         '/api': 'http://localhost:3000',
-        '/auth': { target: 'https://bullrun.ru', changeOrigin: true, secure: false },
-        '/rest': { target: 'https://bullrun.ru', changeOrigin: true, secure: false },
-        '/realtime': { target: 'https://bullrun.ru', ws: true, changeOrigin: true, secure: false }
+        '/auth': { target: 'https://bullgram.xyz', changeOrigin: true, secure: false },
+        '/rest': { target: 'https://bullgram.xyz', changeOrigin: true, secure: false },
+        '/realtime': { target: 'https://bullgram.xyz', ws: true, changeOrigin: true, secure: false }
       }
     }
   };

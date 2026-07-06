@@ -14,7 +14,7 @@ const TCP_CONNECT_TIMEOUT_MS = 10_000;
 // hammering the bridge (each WS opens a SOCKS5 TCP to a Telegram DC).
 const MAX_CONNECTIONS_PER_MINUTE = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const ALLOWED_ORIGIN_SUFFIXES = ['bullgram.xyz', 'bullrun.ru', 'localhost'];
+const ALLOWED_ORIGIN_SUFFIXES = ['bullgram.xyz', 'localhost'];
 
 // Whitelist of Telegram DC IP literals the bridge is allowed to open TCP
 // to. Matches the IPv6 set in userbot-web/patches/src/lib/gramjs/Utils.ts.
