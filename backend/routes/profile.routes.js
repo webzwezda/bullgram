@@ -20,28 +20,46 @@ export default function profileRoutes(supabase) {
     });
 
     router.get('/tg-link/status', authenticateUser, async (req, res) => {
-        const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('telegram_user_id, telegram_username')
-            .eq('id', req.user.id)
-            .maybeSingle();
-        if (error) return res.status(500).json({ error: error.message });
-        if (profile?.telegram_user_id) {
+        const [profileResp, settingsResp] = await Promise.all([
+            supabase
+                .from('profiles')
+                .select('telegram_user_id, telegram_username')
+                .eq('id', req.user.id)
+                .maybeSingle(),
+            supabase
+                .from('payment_settings')
+                .select('admin_tg_id')
+                .eq('owner_id', req.user.id)
+                .maybeSingle()
+        ]);
+        if (profileResp.error) return res.status(500).json({ error: profileResp.error.message });
+
+        const fromProfile = profileResp.data?.telegram_user_id || null;
+        const fromSettings = settingsResp.data?.admin_tg_id
+            ? String(settingsResp.data.admin_tg_id).trim() || null
+            : null;
+        const telegramUserId = fromProfile || fromSettings;
+        if (telegramUserId) {
             return res.json({
                 linked: true,
-                telegram_user_id: profile.telegram_user_id,
-                telegram_username: profile.telegram_username
+                telegram_user_id: telegramUserId,
+                telegram_username: profileResp.data?.telegram_username || null
             });
         }
         return res.json({ linked: false });
     });
 
     router.delete('/tg-link', authenticateUser, async (req, res) => {
-        const { error } = await supabase
-            .from('profiles')
-            .update({ telegram_user_id: null, telegram_username: null })
-            .eq('id', req.user.id);
-        if (error) return res.status(500).json({ error: error.message });
+        await Promise.all([
+            supabase
+                .from('profiles')
+                .update({ telegram_user_id: null, telegram_username: null })
+                .eq('id', req.user.id),
+            supabase
+                .from('payment_settings')
+                .update({ admin_tg_id: null })
+                .eq('owner_id', req.user.id)
+        ]);
         return res.json({ success: true });
     });
 

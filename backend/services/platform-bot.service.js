@@ -50,6 +50,12 @@ export async function getPlatformBot(supabase) {
             return ctx.reply('❌ Ошибка сохранения: ' + (error.message || 'неизвестная'));
         }
 
+        // Sync admin_tg_id in payment_settings so autopost/botfather/referral all see the same ID
+        await supabase
+            .from('payment_settings')
+            .update({ admin_tg_id: String(telegramUserId) })
+            .eq('owner_id', ownerId);
+
         return ctx.reply(
             `✅ Telegram привязан к аккаунту Bullgram.\n` +
             `ID: ${telegramUserId}` +
