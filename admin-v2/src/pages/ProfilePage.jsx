@@ -5,12 +5,19 @@ import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgrade
 
 export function ProfilePage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-      <ProfileIdentityCard />
-      <ProfileContactsCard />
-      <PlatformTierUpgradeCard />
-      <ProfilePurchasesCard />
-    </div>
+    <section className="page">
+      <div className="page__header">
+        <h1>Профиль</h1>
+        <p>Кошельки, подписка и история покупок — всё в одном месте.</p>
+      </div>
+
+      <div className="space-y-6">
+        <ProfileIdentityCard />
+        <ProfileContactsCard />
+        <PlatformTierUpgradeCard />
+        <ProfilePurchasesCard />
+      </div>
+    </section>
   );
 }
 
