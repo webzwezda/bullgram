@@ -22,11 +22,20 @@ function tonToNano(tonAmount) {
 }
 
 function computeTonAmount(rubAmount) {
+    const fixedTon = envNumber('TON_TIER_PRICE_TON', null);
+    if (fixedTon !== null) {
+        return {
+            ton: fixedTon.toFixed(Number(TON_SCALE) === 9 ? 2 : 2),
+            nano: tonToNano(fixedTon.toFixed(Number(TON_SCALE))),
+            tonPriced: true
+        };
+    }
     const rate = envNumber('TON_TON_RUB_RATE', TON_RUB_RATE_DEFAULT);
     const ton = Number(rubAmount) / rate;
     return {
         ton: ton.toFixed(2),
-        nano: tonToNano(ton.toFixed(Number(TON_SCALE)))
+        nano: tonToNano(ton.toFixed(Number(TON_SCALE))),
+        tonPriced: false
     };
 }
 
@@ -67,7 +76,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
     }
 
     const memo = generateTierMemo();
-    const { ton, nano } = computeTonAmount(NORMAL_PLAN.amountRub);
+    const { ton, nano, tonPriced } = computeTonAmount(NORMAL_PLAN.amountRub);
     const expiresAt = addMinutes(new Date(), ORDER_TTL_MINUTES);
 
     const { data: order, error: insertError } = await supabase
@@ -87,6 +96,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
                 memo,
                 expected_nanoton: nano.toString(),
                 ton_amount: ton,
+                ton_priced: tonPriced,
                 sender_wallet: null
             }
         })
@@ -101,7 +111,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
         event_type: 'ton_connect_order_created',
         provider: 'ton_connect',
         amount_rub: NORMAL_PLAN.amountRub,
-        payload: { memo, ton_amount: ton, merchant_wallet: merchantWallet }
+        payload: { memo, ton_amount: ton, ton_priced: tonPriced, merchant_wallet: merchantWallet }
     });
 
     return {
@@ -111,7 +121,8 @@ export async function createTonConnectOrder(supabase, ownerId) {
         merchant_wallet: merchantWallet,
         amount_ton: ton,
         amount_nanoton: nano.toString(),
-        amount_rub: NORMAL_PLAN.amountRub,
+        amount_rub: tonPriced ? null : NORMAL_PLAN.amountRub,
+        ton_priced: tonPriced,
         duration_days: NORMAL_PLAN.durationDays,
         expires_at: expiresAt,
         network: detectNetwork()

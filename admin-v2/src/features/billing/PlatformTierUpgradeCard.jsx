@@ -108,7 +108,9 @@ export function PlatformTierUpgradeCard() {
                 <div className="text-xl font-black text-slate-900">
                   {order?.amount_ton ? `${order.amount_ton} TON` : '—'}
                 </div>
-                <div className="text-xs text-slate-500">≈ {order?.amount_rub || 900} ₽</div>
+                {order?.ton_priced ? null : (
+                  <div className="text-xs text-slate-500">≈ {order?.amount_rub || 900} ₽</div>
+                )}
               </div>
             </div>
           </div>
