@@ -35,16 +35,20 @@ export function ProfileContactsCard() {
   const pollRef = useRef(null);
   const pollDeadlineRef = useRef(0);
 
+  // Refs let polling/async callbacks read current state without
+  // recreating the callback (which would retrigger effects → flicker).
+  const tgIdSavedRef = useRef('');
+  const tgSourceRef = useRef(null);
+  tgIdSavedRef.current = tgIdSaved;
+  tgSourceRef.current = tgSource;
+
   const loadSettings = useCallback(async () => {
     if (!accessToken) return;
     try {
       const data = await apiRequest('/api/payment-settings', { accessToken });
       const wallet = data?.settings?.ton_wallet || '';
-      const adminTgId = data?.settings?.admin_tg_id ? String(data.settings.admin_tg_id) : '';
       setTonValue(wallet);
       setTonSaved(wallet);
-      setTgIdValue(adminTgId);
-      setTgIdSaved(adminTgId);
     } catch (err) {
       setTonToast({ kind: 'error', text: err?.message || 'Не удалось загрузить реквизиты' });
     }
@@ -58,7 +62,7 @@ export function ProfileContactsCard() {
         setTgUsername(data.telegram_username || null);
         setTgSource(data.source || null);
         const incoming = String(data.telegram_user_id || '');
-        if (incoming && incoming !== tgIdSaved) {
+        if (incoming && incoming !== tgIdSavedRef.current) {
           setTgIdValue(incoming);
           setTgIdSaved(incoming);
         }
@@ -67,7 +71,7 @@ export function ProfileContactsCard() {
     } catch (err) {
       setTgError(err?.message || 'Не удалось проверить Telegram');
     }
-  }, [accessToken, tgIdSaved]);
+  }, [accessToken]);
 
   useEffect(() => {
     loadSettings();
@@ -147,8 +151,8 @@ export function ProfileContactsCard() {
           const incoming = String(data.telegram_user_id || '');
           // Polling should fire when bot deep-link sets telegram_user_id (source flips to 'verified')
           // OR when value itself changes
-          const becameVerified = data.source === 'verified' && tgSource !== 'verified';
-          if ((incoming && incoming !== tgIdSaved) || becameVerified) {
+          const becameVerified = data.source === 'verified' && tgSourceRef.current !== 'verified';
+          if ((incoming && incoming !== tgIdSavedRef.current) || becameVerified) {
             setTgIdValue(incoming);
             setTgIdSaved(incoming);
             setTgUsername(data.telegram_username || null);
@@ -162,7 +166,7 @@ export function ProfileContactsCard() {
         // silent — retry on next tick
       }
     }, POLL_INTERVAL_MS);
-  }, [accessToken, stopPolling, tgIdSaved]);
+  }, [accessToken, stopPolling]);
 
   const handleTgLink = useCallback(async () => {
     setTgError('');
