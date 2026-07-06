@@ -30,6 +30,7 @@ import agentMcpRoutes from './routes/agent-mcp.routes.js';
 import projectAdminRoutes from './routes/project-admin.routes.js';
 import integrationsRoutes from './routes/integrations.routes.js';
 import userbotWebRoutes from './routes/userbot-web.routes.js';
+import tonconnectRoutes from './routes/tonconnect.routes.js';
 import { UserbotService } from './services/userbot.service.js';
 import { MtprotoBridgeService } from './services/mtproto-bridge.service.js';
 
@@ -168,6 +169,7 @@ app.use('/api/mcp', agentMcpRoutes(supabase));
 app.use('/api/integrations', integrationsRoutes(supabase));
 app.use('/api/project-admin', projectAdminRoutes(supabase));
 app.use('/api/userbot-web', userbotWebRoutes(supabase, mtprotoBridgeService));
+app.use(tonconnectRoutes());
 
 // ==========================================
 // РОУТЫ НАСТРОЕК КАССЫ (Остались локально)

@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileText, Sliders } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiRequest } from '../api/client.js';
+import { Sliders, Sparkles } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
-import { ReceiptVerificationSection } from './payment-settings/ReceiptVerificationSection.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
 import { TariffsSection } from './payment-settings/TariffsSection.jsx';
+import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
 import { usePaymentSettingsController } from './payment-settings/usePaymentSettingsController.js';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
 import { useTariffsController } from './payment-settings/useTariffsController.js';
@@ -18,7 +17,7 @@ import { useTariffsController } from './payment-settings/useTariffsController.js
 
 export function PaymentSettingsPage({ mode = 'requisites' }) {
   const { user, accessToken } = useAuth();
-  const [activeTab, setActiveTab] = useState('reconciliation');
+  const [billingTab, setBillingTab] = useState('subscription');
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -34,7 +33,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     billingHealth: null,
     paymentEvents: [],
     invoices: [],
-    members: [],
     selectedBotId: null,
     updatedAt: null
   });
@@ -65,116 +63,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     tariffs: state.tariffs,
     userId: user?.id
   });
-
-  async function handleConfirmBotInvoice(invoiceId) {
-    try {
-      await apiRequest(`/api/payment/invoices/${invoiceId}/confirm`, {
-        accessToken,
-        method: 'POST'
-      });
-      toast.success('Оплата подтверждена, подписка активирована.');
-
-      const tariffIds = state.tariffs.map((t) => t.id);
-
-      const [paymentEventsRes, invoicesRes] = await Promise.all([
-        supabase
-          .from('payment_events')
-          .select('*')
-          .eq('owner_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(30),
-        tariffIds.length > 0
-          ? supabase
-              .from('invoices')
-              .select('*')
-              .in('tariff_id', tariffIds)
-              .order('created_at', { ascending: false })
-              .limit(200)
-          : Promise.resolve({ data: [], error: null })
-      ]);
-
-      if (paymentEventsRes.error) throw paymentEventsRes.error;
-      if (invoicesRes.error) throw invoicesRes.error;
-
-      const invoicesData = invoicesRes.data || [];
-      const tgUserIds = Array.from(new Set(invoicesData.map((inv) => String(inv.tg_user_id)).filter(Boolean)));
-      let membersData = [];
-      if (tgUserIds.length > 0) {
-        const membersResult = await supabase
-          .from('customer_base_members')
-          .select('tg_user_id, username, first_name, display_name')
-          .in('tg_user_id', tgUserIds);
-        if (!membersResult.error) {
-          membersData = membersResult.data || [];
-        }
-      }
-
-      setState((prev) => ({
-        ...prev,
-        error: '',
-        paymentEvents: paymentEventsRes.data || [],
-        invoices: invoicesData,
-        members: membersData
-      }));
-    } catch (error) {
-      toast.error(error.message || 'Ошибка подтверждения оплаты');
-    }
-  }
-
-  async function handleRejectBotInvoice(invoiceId) {
-    try {
-      await apiRequest(`/api/payment/invoices/${invoiceId}/reject`, {
-        accessToken,
-        method: 'POST'
-      });
-      toast.success('Оплата отклонена.');
-
-      const tariffIds = state.tariffs.map((t) => t.id);
-
-      const [paymentEventsRes, invoicesRes] = await Promise.all([
-        supabase
-          .from('payment_events')
-          .select('*')
-          .eq('owner_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(30),
-        tariffIds.length > 0
-          ? supabase
-              .from('invoices')
-              .select('*')
-              .in('tariff_id', tariffIds)
-              .order('created_at', { ascending: false })
-              .limit(200)
-          : Promise.resolve({ data: [], error: null })
-      ]);
-
-      if (paymentEventsRes.error) throw paymentEventsRes.error;
-      if (invoicesRes.error) throw invoicesRes.error;
-
-      const invoicesData = invoicesRes.data || [];
-      const tgUserIds = Array.from(new Set(invoicesData.map((inv) => String(inv.tg_user_id)).filter(Boolean)));
-      let membersData = [];
-      if (tgUserIds.length > 0) {
-        const membersResult = await supabase
-          .from('customer_base_members')
-          .select('tg_user_id, username, first_name, display_name')
-          .in('tg_user_id', tgUserIds);
-        if (!membersResult.error) {
-          membersData = membersResult.data || [];
-        }
-      }
-
-      setState((prev) => ({
-        ...prev,
-        error: '',
-        paymentEvents: paymentEventsRes.data || [],
-        invoices: invoicesData,
-        members: membersData
-      }));
-    } catch (error) {
-      toast.error(error.message || 'Ошибка отклонения оплаты');
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -263,18 +151,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
           invoicesData = invoicesResult.data || [];
         }
 
-        const tgUserIds = Array.from(new Set(invoicesData.map((inv) => String(inv.tg_user_id)).filter(Boolean)));
-        let membersData = [];
-        if (tgUserIds.length > 0) {
-          const membersResult = await supabase
-            .from('customer_base_members')
-            .select('tg_user_id, username, first_name, display_name')
-            .in('tg_user_id', tgUserIds);
-          if (!membersResult.error) {
-            membersData = membersResult.data || [];
-          }
-        }
-
         const bundleItemsResult = await supabase
           .from('tariff_bundle_items')
           .select('*, channels(id, title)')
@@ -314,7 +190,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             billingHealth: health || null,
             paymentEvents: paymentEvents || [],
             invoices: invoicesData,
-            members: membersData,
             updatedAt: new Date().toISOString()
           });
 
@@ -397,21 +272,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     });
   }, [state.paymentEvents, state.selectedBotId, invoiceMap, tariffBotMap]);
 
-  const awaitingBotEventsCount = useMemo(() => {
-    return filteredPaymentEvents.filter((ev) => {
-      const isAwaitingEvent = ['awaiting_receipt', 'wait_admin'].includes(ev.status) ||
-                              ['receipt_requested', 'receipt_uploaded'].includes(ev.event_type);
-      if (!isAwaitingEvent) return false;
-      const inv = invoiceMap.get(ev.invoice_id);
-      const invStatus = inv?.status;
-      return !invStatus || invStatus === 'awaiting_receipt' || invStatus === 'wait_admin' || invStatus === 'pending';
-    }).length;
-  }, [filteredPaymentEvents, invoiceMap]);
-
-  const reconciliationStats = useMemo(() => {
-    return { awaiting: awaitingBotEventsCount };
-  }, [awaitingBotEventsCount]);
-
   if (state.loading) {
     return <LoadingState text="Тянем реквизиты и кассу..." />;
   }
@@ -438,31 +298,16 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
       {isBillingMode ? (
         <section className="page page--flush space-y-6">
           <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
-            {/* Header & Stats Segment */}
-            <section className="p-6 md:p-8 border-b border-slate-100">
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">Ждут решения</span>
-                    <div className={`p-1.5 rounded-lg ${reconciliationStats.awaiting > 0 ? 'text-amber-500 bg-amber-500/10' : 'text-slate-400 bg-slate-100'}`}>
-                      <FileText className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <div className={`text-3xl font-black tracking-tighter ${reconciliationStats.awaiting > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{reconciliationStats.awaiting}</div>
-                </div>
-              </div>
-            </section>
-
-            {/* Filter & Primary Tabs Segment */}
-            <section className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-200/60">
+            {/* Tabs Segment */}
+            <section className="p-6 md:p-8 bg-slate-50/50">
               <div className="flex gap-1 overflow-x-auto border-b border-slate-100 mb-6">
                 {[
-                  { id: 'reconciliation', label: 'Сверка оплат', icon: FileText, count: reconciliationStats.awaiting },
+                  { id: 'subscription', label: 'Подписка', icon: Sparkles },
+                  { id: 'purchases', label: 'Покупки', icon: Sliders },
                   { id: 'settings', label: 'Настройки кассы', icon: Sliders }
                 ].map((tab) => {
                   const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
+                  const isActive = billingTab === tab.id;
                   return (
                     <button
                       key={tab.id}
@@ -472,21 +317,16 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                           ? 'border-indigo-600 text-indigo-600'
                           : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                       }`}
-                      onClick={() => setActiveTab(tab.id)}
+                      onClick={() => setBillingTab(tab.id)}
                     >
                       {Icon && <Icon className="w-4 h-4" />}
                       {tab.label}
-                      {tab.count !== undefined && tab.count > 0 && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                          {tab.count}
-                        </span>
-                      )}
                     </button>
                   );
                 })}
               </div>
 
-              {activeTab === 'reconciliation' && bots.length > 0 && (
+              {billingTab === 'purchases' && bots.length > 0 && (
                 <div className="flex flex-col md:flex-row items-center gap-4">
                   <div className="w-full md:w-[280px] shrink-0">
                     <select
@@ -508,7 +348,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
 
             {/* Bottom Content Segment */}
             <div className="border-t border-slate-200/60 bg-white">
-              {activeTab === 'settings' ? (
+              {billingTab === 'settings' ? (
                 <div className="p-6 md:p-8 space-y-8">
                   <RequisitesSection
                     fieldErrors={fieldErrors}
@@ -520,25 +360,18 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
                     plain={true}
                   />
                 </div>
-              ) : (
-                <div className="p-6 md:p-8 space-y-8">
-                  <ReceiptVerificationSection
+              ) : billingTab === 'purchases' ? (
+                <div className="p-6 md:p-8">
+                  <CryptoPurchasesSection
                     paymentEvents={filteredPaymentEvents}
                     invoiceMap={invoiceMap}
                     tariffs={state.tariffs}
-                    members={state.members}
                     plain={true}
-                    onConfirm={handleConfirmBotInvoice}
-                    onReject={handleRejectBotInvoice}
                   />
-                  <div className="border-t border-slate-100 pt-8">
-                    <CryptoPurchasesSection
-                      paymentEvents={filteredPaymentEvents}
-                      invoiceMap={invoiceMap}
-                      tariffs={state.tariffs}
-                      plain={true}
-                    />
-                  </div>
+                </div>
+              ) : (
+                <div className="p-6 md:p-8">
+                  <PlatformTierUpgradeCard />
                 </div>
               )}
             </div>

@@ -36,7 +36,14 @@ export default defineConfig(() => {
         }
       : undefined,
     server: {
-      port: 4174
+      port: 4174,
+      proxy: {
+        '/tonconnect-manifest.json': 'http://localhost:3000',
+        '/api': 'http://localhost:3000',
+        '/auth': { target: 'https://bullrun.ru', changeOrigin: true, secure: false },
+        '/rest': { target: 'https://bullrun.ru', changeOrigin: true, secure: false },
+        '/realtime': { target: 'https://bullrun.ru', ws: true, changeOrigin: true, secure: false }
+      }
     }
   };
 });

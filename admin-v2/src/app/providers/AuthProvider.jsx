@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabase.js';
 
 const AuthContext = createContext(null);
@@ -9,7 +9,54 @@ export function AuthProvider({ children }) {
   const [profilePlan, setProfilePlan] = useState('trial');
   const [trialStartedAt, setTrialStartedAt] = useState(null);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
+  const [normalEndsAt, setNormalEndsAt] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const loadProfile = useCallback(async (userId) => {
+    if (!userId) {
+      setProfileRole(null);
+      setProfilePlan('trial');
+      setTrialStartedAt(null);
+      setTrialEndsAt(null);
+      setNormalEndsAt(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role, product_tier, trial_started_at, trial_ends_at, normal_started_at, normal_ends_at')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error && ((error.message || '').includes('product_tier') || (error.message || '').includes('trial_started_at') || (error.message || '').includes('trial_ends_at') || (error.message || '').includes('normal_started_at') || (error.message || '').includes('normal_ends_at'))) {
+        const fallback = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+
+        setProfileRole(fallback.data?.role || null);
+        setProfilePlan('trial');
+        setTrialStartedAt(null);
+        setTrialEndsAt(null);
+        setNormalEndsAt(null);
+        return;
+      }
+
+      setProfileRole(data?.role || null);
+      setProfilePlan(data?.product_tier || 'trial');
+      setTrialStartedAt(data?.trial_started_at || null);
+      setTrialEndsAt(data?.trial_ends_at || null);
+      setNormalEndsAt(data?.normal_ends_at || null);
+    } catch {
+      setProfileRole(null);
+      setProfilePlan('trial');
+      setTrialStartedAt(null);
+      setTrialEndsAt(null);
+      setNormalEndsAt(null);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -40,59 +87,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadRole() {
-      if (!session?.user?.id) {
-        setProfileRole(null);
-        setProfilePlan('trial');
-        setTrialStartedAt(null);
-        setTrialEndsAt(null);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('role, product_tier, trial_started_at, trial_ends_at')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (error && ((error.message || '').includes('product_tier') || (error.message || '').includes('trial_started_at') || (error.message || '').includes('trial_ends_at'))) {
-          const fallback = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (!cancelled) {
-            setProfileRole(fallback.data?.role || null);
-            setProfilePlan('trial');
-            setTrialStartedAt(null);
-            setTrialEndsAt(null);
-          }
-          return;
-        }
-
-        if (!cancelled) {
-          setProfileRole(data?.role || null);
-          setProfilePlan(data?.product_tier || 'trial');
-          setTrialStartedAt(data?.trial_started_at || null);
-          setTrialEndsAt(data?.trial_ends_at || null);
-        }
-      } catch {
-        if (!cancelled) {
-          setProfileRole(null);
-          setProfilePlan('trial');
-          setTrialStartedAt(null);
-          setTrialEndsAt(null);
-        }
-      }
+    async function run() {
+      if (cancelled) return;
+      await loadProfile(session?.user?.id);
     }
 
-    loadRole();
+    run();
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [session?.user?.id, loadProfile]);
 
   const value = useMemo(() => ({
     loading,
@@ -102,7 +106,9 @@ export function AuthProvider({ children }) {
     profilePlan,
     trialStartedAt,
     trialEndsAt,
+    normalEndsAt,
     accessToken: session?.access_token || '',
+    refreshProfile: () => loadProfile(session?.user?.id),
     async login() {
       const redirectTo = `${window.location.origin}${window.location.pathname}`;
       await supabase.auth.signInWithOAuth({
@@ -115,7 +121,7 @@ export function AuthProvider({ children }) {
       window.localStorage.clear();
       window.location.reload();
     }
-  }), [loading, session, profileRole, profilePlan, trialStartedAt, trialEndsAt]);
+  }), [loading, session, profileRole, profilePlan, trialStartedAt, trialEndsAt, normalEndsAt, loadProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
