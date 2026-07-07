@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Link2, Loader2, LogOut, Send, Sparkles, Wallet } from 'lucide-react';
-import { useTonAddress } from '@tonconnect/ui-react';
+import { CheckCircle2, Link2, Loader2, LogOut, RefreshCw, Send, Sparkles, Wallet } from 'lucide-react';
+import { useTonAddress, useTonWallet, useTonConnectModal } from '@tonconnect/ui-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
 import {
@@ -18,6 +18,9 @@ function normalizeTgId(value) {
 export function ProfileContactsCard() {
   const { accessToken } = useAuth();
   const tonConnectAddress = useTonAddress();
+  const tonConnectWallet = useTonWallet();
+  const { open: openTonConnectModal } = useTonConnectModal();
+  const tonConnected = Boolean(tonConnectWallet);
 
   const [tonValue, setTonValue] = useState('');
   const [tonSaved, setTonSaved] = useState('');
@@ -279,6 +282,24 @@ export function ProfileContactsCard() {
             Подставлен из подключённого TON Connect. Нажмите «Сохранить», чтобы закрепить.
           </p>
         ) : null}
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>{tonConnected ? 'Хотите другой кошелёк?' : 'Нет своего кошелька?'}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (tonConnected && tonConnectAddress) {
+                setTonValue(tonConnectAddress);
+                if (tonToast) setTonToast(null);
+              } else {
+                openTonConnectModal();
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-xs font-bold hover:bg-sky-100 transition-all"
+          >
+            {tonConnected ? <RefreshCw className="w-3 h-3" /> : <Link2 className="w-3 h-3" />}
+            {tonConnected ? 'Взять из TON Connect' : 'Подключить TON Connect'}
+          </button>
+        </div>
       </div>
 
       <div className="border-t border-slate-100 pt-6 space-y-3">
