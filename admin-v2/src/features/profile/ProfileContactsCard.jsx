@@ -283,7 +283,6 @@ export function ProfileContactsCard() {
           </p>
         ) : null}
         <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span>{tonConnected ? 'Хотите другой кошелёк?' : 'Нет своего кошелька?'}</span>
           <button
             type="button"
             onClick={() => {
@@ -357,7 +356,6 @@ export function ProfileContactsCard() {
           ) : null}
 
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span>Не знаете свой ID?</span>
             <button
               type="button"
               disabled={linking || tgLoading}
@@ -368,12 +366,6 @@ export function ProfileContactsCard() {
               {linking ? 'Ждём подтверждения…' : 'Привязать через Telegram'}
             </button>
           </div>
-
-          {tgSource === 'autopost' ? (
-            <p className="text-[11px] text-slate-400 italic">
-              Подтянут из настроек бота автопостинга. Нажмите «Сохранить», чтобы закрепить как основной.
-            </p>
-          ) : null}
 
           {tgError ? <p className="text-xs text-rose-600">{tgError}</p> : null}
         </div>
