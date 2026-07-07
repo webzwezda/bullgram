@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Link2, Loader2, LogOut, Send, Wallet } from 'lucide-react';
+import { CheckCircle2, Link2, Loader2, LogOut, Send, Sparkles, Wallet } from 'lucide-react';
+import { useTonAddress } from '@tonconnect/ui-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
 import {
@@ -16,11 +17,13 @@ function normalizeTgId(value) {
 
 export function ProfileContactsCard() {
   const { accessToken } = useAuth();
+  const tonConnectAddress = useTonAddress();
 
   const [tonValue, setTonValue] = useState('');
   const [tonSaved, setTonSaved] = useState('');
   const [tonSaving, setTonSaving] = useState(false);
   const [tonToast, setTonToast] = useState(null);
+  const tonPrefilledRef = useRef(false);
 
   const [tgIdValue, setTgIdValue] = useState('');
   const [tgIdSaved, setTgIdSaved] = useState('');
@@ -47,8 +50,12 @@ export function ProfileContactsCard() {
     try {
       const data = await apiRequest('/api/payment-settings', { accessToken });
       const wallet = data?.settings?.ton_wallet || '';
-      setTonValue(wallet);
       setTonSaved(wallet);
+      // Only overwrite tonValue when DB actually has a wallet.
+      // Otherwise leave it alone — TON Connect pre-fill effect will populate it.
+      if (wallet) {
+        setTonValue(wallet);
+      }
     } catch (err) {
       setTonToast({ kind: 'error', text: err?.message || 'Не удалось загрузить реквизиты' });
     }
@@ -81,6 +88,15 @@ export function ProfileContactsCard() {
   useEffect(() => () => {
     if (pollRef.current) window.clearInterval(pollRef.current);
   }, []);
+
+  // Pre-fill TON wallet from TON Connect if DB has nothing saved yet.
+  // Fires once per mount/account — won't overwrite a value the user typed manually.
+  useEffect(() => {
+    if (!tonSaved && tonConnectAddress && !tonPrefilledRef.current) {
+      setTonValue(tonConnectAddress);
+      tonPrefilledRef.current = true;
+    }
+  }, [tonSaved, tonConnectAddress]);
 
   const handleTonSave = useCallback(async () => {
     const wallet = normalizeTonWallet(tonValue);
@@ -255,6 +271,12 @@ export function ProfileContactsCard() {
         {tonToast ? (
           <p className={`text-xs ${tonToast.kind === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
             {tonToast.text}
+          </p>
+        ) : null}
+        {!tonSaved && tonConnectAddress && normalizeTonWallet(tonValue) === normalizeTonWallet(tonConnectAddress) ? (
+          <p className="flex items-center gap-1.5 text-xs text-sky-700">
+            <Sparkles className="w-3 h-3 shrink-0" />
+            Подставлен из подключённого TON Connect. Нажмите «Сохранить», чтобы закрепить.
           </p>
         ) : null}
       </div>
