@@ -282,7 +282,7 @@ export function ProfileContactsCard() {
         </p>
       ) : null}
 
-      <div className="flex justify-end pt-2 border-t border-slate-100">
+      <div className="flex justify-end pt-2">
         <button
           type="button"
           disabled={!dirty || saving}
