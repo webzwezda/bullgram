@@ -732,43 +732,6 @@ export function TariffsSection({
 
   return (
     <section className="space-y-5">
-      {/* Page header */}
-      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-                <Package className="w-6 h-6" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-xl font-bold text-slate-900 truncate">Тарифы и доступ</h1>
-                <p className="text-sm text-slate-500 mt-0.5 truncate">Подписки, цены и пакеты доступа для твоих каналов</p>
-              </div>
-            </div>
-            {officialBots.length > 1 && (
-              <div className="w-full max-w-[260px] shrink-0">
-                <Select value={filterBotId || '__all__'} onValueChange={(v) => setFilterBotId(v === '__all__' ? '' : v)}>
-                  <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
-                    <span className="flex items-center gap-2">
-                      <BotIcon className="w-4 h-4 text-slate-400" />
-                      <SelectValue placeholder="Все боты" />
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    <SelectItem value="__all__">Все боты</SelectItem>
-                    {officialBots.map((bot) => (
-                      <SelectItem key={bot.id} value={bot.id}>
-                        {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
-
       {/* Create panel (inline, above the list) */}
       {createOpen && (
         <CreateTariffPanel
