@@ -8,11 +8,9 @@ import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
-import { TariffsSection } from './payment-settings/TariffsSection.jsx';
 import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
 import { usePaymentSettingsController } from './payment-settings/usePaymentSettingsController.js';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
-import { useTariffsController } from './payment-settings/useTariffsController.js';
 
 
 export function PaymentSettingsPage({ mode = 'requisites' }) {
@@ -45,23 +43,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     accessToken,
     setState,
     settings: state.settings
-  });
-  const {
-    addBundleItem,
-    bundleDrafts,
-    createTariff,
-    deleteBundleItem,
-    deleteTariff,
-    ensureBundleDraft,
-    getTariffBundleItems,
-    newTariff,
-    setBundleDrafts,
-    setNewTariff
-  } = useTariffsController({
-    bundleItems: state.bundleItems,
-    bundleSupport: state.bundleSupport,
-    tariffs: state.tariffs,
-    userId: user?.id
   });
 
   useEffect(() => {
@@ -192,21 +173,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
             invoices: invoicesData,
             updatedAt: new Date().toISOString()
           });
-
-          setBundleDrafts((prev) => {
-            const nextDrafts = { ...prev };
-            nextTariffs.forEach((tariff) => {
-              if (!nextDrafts[tariff.id]) {
-                nextDrafts[tariff.id] = {
-                  item_type: 'channel',
-                  channel_id: '',
-                  resource_title: '',
-                  resource_url: ''
-                };
-              }
-            });
-            return nextDrafts;
-          });
         }
       } catch (error) {
         if (!cancelled) {
@@ -237,7 +203,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
   const {
     prioritySignals,
     isRequisitesMode,
-    isPlansMode,
     isBillingMode,
     pageCopy
   } = usePaymentSettingsDerivedState({ mode, paymentEventFilter: 'all', state });
@@ -378,28 +343,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
 
           </div>
         </section>
-      ) : null}
-
-      {isPlansMode ? (
-        <>
-          <TariffsSection
-            addBundleItem={addBundleItem}
-            bundleDrafts={bundleDrafts}
-            bundleSupport={state.bundleSupport}
-            channels={state.channels}
-            createTariff={createTariff}
-            creating={state.saving}
-            deleteBundleItem={deleteBundleItem}
-            deleteTariff={deleteTariff}
-            ensureBundleDraft={ensureBundleDraft}
-            getTariffBundleItems={getTariffBundleItems}
-            newTariff={newTariff}
-            officialBots={state.officialBots}
-            setBundleDrafts={setBundleDrafts}
-            setNewTariff={setNewTariff}
-            tariffs={state.tariffs}
-          />
-        </>
       ) : null}
 
     </section>

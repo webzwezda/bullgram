@@ -313,7 +313,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     inviteLink,
     newAdminTgId,
     regeneratingInvite,
-    setNewAdminTgId
+    setNewAdminTgId,
+    ownerId: user?.id
   };
 
   const onboardingSectionCommonProps = {

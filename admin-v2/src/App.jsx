@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserPlus, FileText, ShoppingBag, Database,
+  LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send, Target,
   RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
   Zap
@@ -59,7 +59,6 @@ export function App() {
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
-        { to: '/plans', label: 'Тарифы и доступ', icon: FileText },
       ]
     },
     {
@@ -218,7 +217,7 @@ export function App() {
                 <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
                 <Route path="/api/mcp" element={<McpSettingsPage />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
-                <Route path="/plans" element={<PaymentSettingsPage mode="plans" />} />
+                <Route path="/plans" element={<Navigate to="/botfather" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />
                 <Route path="/treasury" element={<ProjectTreasuryPage />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />

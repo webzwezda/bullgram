@@ -414,22 +414,30 @@ function CreateTariffPanel({
               <div>
                 <FieldLabel>Официальный бот</FieldLabel>
                 {officialBots.length > 0 ? (
-                  <Select
-                    value={selectedBotId || '__all__'}
-                    onValueChange={(v) => setNewTariff((prev) => ({ ...prev, bot_id: v === '__all__' ? '' : v }))}
-                  >
-                    <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
-                      <SelectValue placeholder="Все боты" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl">
-                      <SelectItem value="__all__">Все боты</SelectItem>
-                      {officialBots.map((bot) => (
-                        <SelectItem key={bot.id} value={bot.id}>
-                          {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  officialBots.length === 1 ? (
+                    <Input
+                      value={officialBots[0].tg_username ? `@${officialBots[0].tg_username}` : `ID ${officialBots[0].tg_account_id}`}
+                      disabled
+                      className="bg-slate-50 text-slate-700 h-11 font-bold"
+                    />
+                  ) : (
+                    <Select
+                      value={selectedBotId || '__all__'}
+                      onValueChange={(v) => setNewTariff((prev) => ({ ...prev, bot_id: v === '__all__' ? '' : v }))}
+                    >
+                      <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
+                        <SelectValue placeholder="Все боты" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="__all__">Все боты</SelectItem>
+                        {officialBots.map((bot) => (
+                          <SelectItem key={bot.id} value={bot.id}>
+                            {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
                 ) : (
                   <Input value="Нет подключённых ботов" disabled className="bg-slate-50 text-slate-400 h-11" />
                 )}
@@ -471,7 +479,7 @@ function CreateTariffPanel({
                         <div className="flex items-start gap-2 text-[11px] font-medium text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
                           <span>
-                            Создай приватный канал в Telegram, добавь бота админом с правом приглашать, затем привяжи в <a href="/app/botfather" className="text-indigo-600 font-bold underline">/app/botfather</a> и обнови данные канала.
+                            Создай приватный канал в Telegram, добавь этого бота админом с правом приглашать, затем привяжи канал выше в секции «Контур продаж» и обнови данные.
                           </span>
                         </div>
                       </div>
@@ -737,7 +745,7 @@ export function TariffsSection({
                 <p className="text-sm text-slate-500 mt-0.5 truncate">Подписки, цены и пакеты доступа для твоих каналов</p>
               </div>
             </div>
-            {officialBots.length > 0 && (
+            {officialBots.length > 1 && (
               <div className="w-full max-w-[260px] shrink-0">
                 <Select value={filterBotId || '__all__'} onValueChange={(v) => setFilterBotId(v === '__all__' ? '' : v)}>
                   <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">

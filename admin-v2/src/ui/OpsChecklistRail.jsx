@@ -216,8 +216,8 @@ export function OpsChecklistRail() {
         id: 'plans',
         done: (summary.tariffCount || 0) > 0,
         title: 'Тарифы и доступ',
-        hint: 'Настройте стоимость и сроки подписки',
-        href: '/app/plans',
+        hint: 'Откройте бота и настройте тарифы внутри него',
+        href: '/app/botfather',
         icon: 'LayoutList'
       },
       {

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BotTariffsSection } from './BotTariffsSection.jsx';
 
 function normalizeBotKind(value) {
   return value === 'template' ? 'template' : 'sales';
@@ -1098,7 +1099,8 @@ export function OfficialBotsSection({
   inviteLink,
   newAdminTgId,
   regeneratingInvite,
-  setNewAdminTgId
+  setNewAdminTgId,
+  ownerId
 }) {
   const isNew = selectedOfficialBotId === 'new';
 
@@ -1165,6 +1167,14 @@ export function OfficialBotsSection({
           refreshTelegramPlaceInfo={refreshTelegramPlaceInfo}
           refreshingTelegramPlaceId={refreshingTelegramPlaceId}
           assignedIds={assignedIds}
+        />
+      ) : null}
+
+      {!isNew && selectedOfficialBot ? (
+        <BotTariffsSection
+          selectedBot={selectedOfficialBot}
+          ownerId={ownerId}
+          channels={channelsByBotId[String(selectedOfficialBot.id)] || []}
         />
       ) : null}
     </div>
