@@ -31,6 +31,7 @@ CHANGED_FILES="$(git diff --name-only "$PREV_HEAD" "$NEW_HEAD" 2>/dev/null || ec
 need_backend_install=0
 need_admin_install=0
 need_site_install=0
+need_payapp_install=0
 
 if echo "$CHANGED_FILES" | grep -q '^backend/package\.json$'; then
   need_backend_install=1
@@ -41,13 +42,17 @@ fi
 if echo "$CHANGED_FILES" | grep -q '^site-v2/package\.json$'; then
   need_site_install=1
 fi
+if echo "$CHANGED_FILES" | grep -q '^telegram-pay-app/package\.json$'; then
+  need_payapp_install=1
+fi
 
 # First-time setup: no node_modules → install everything
-if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ]; then
+if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ] || [ ! -d telegram-pay-app/node_modules ]; then
   echo "    first-time install (node_modules missing)"
   need_backend_install=1
   need_admin_install=1
   need_site_install=1
+  need_payapp_install=1
 fi
 
 if [ "$need_backend_install" = "1" ]; then
@@ -62,10 +67,27 @@ if [ "$need_site_install" = "1" ]; then
   echo "==> npm install site-v2"
   npm --prefix site-v2 install
 fi
+if [ "$need_payapp_install" = "1" ]; then
+  echo "==> npm install telegram-pay-app"
+  npm --prefix telegram-pay-app install
+fi
 
 # 3. Build frontends
 echo "==> npm run build:v2 (site-v2 + admin-v2)"
 npm run build:v2
+
+echo "==> npm run build:pay-app"
+npm --prefix telegram-pay-app run build
+
+echo "==> sync pay-app dist → /var/www/bullrun-pay-app"
+if [ -d /var/www/bullrun-pay-app ]; then
+  rsync -a --delete telegram-pay-app/dist/ /var/www/bullrun-pay-app/
+else
+  echo "    /var/www/bullrun-pay-app does not exist — creating"
+  mkdir -p /var/www/bullrun-pay-app
+  rsync -a --delete telegram-pay-app/dist/ /var/www/bullrun-pay-app/
+fi
+
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)
 echo "==> pm2 reload bullrun-tg-backend"

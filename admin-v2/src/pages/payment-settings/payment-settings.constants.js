@@ -33,10 +33,6 @@ export const DEFAULT_NEW_TARIFF = {
     ton: {
       enabled: false,
       price: ''
-    },
-    rub: {
-      enabled: false,
-      price: ''
     }
   },
   duration_days: '',

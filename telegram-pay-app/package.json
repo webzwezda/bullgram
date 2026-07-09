@@ -1,0 +1,24 @@
+{
+  "name": "bullgram-telegram-pay-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ton/core": "^0.63.1",
+    "@tonconnect/ui-react": "^3.0.0",
+    "buffer": "^6.0.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@vitejs/plugin-react": "^4.4.0",
+    "tailwindcss": "^4.2.2",
+    "vite": "^6.2.0"
+  }
+}

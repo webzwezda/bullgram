@@ -89,58 +89,8 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
         try {
             const { data: tariff } = await service.supabase.from('tariffs').select('*').eq('id', tariffId).single();
             if (!tariff) return ctx.reply('❌ Тариф не найден.');
-            const { data: siblingTariffs } = await service.supabase.from('tariffs')
-                .select('*')
-                .eq('owner_id', tariff.owner_id)
-                .eq('is_active', true)
-                .or(`bot_id.eq.${botId},bot_id.is.null`);
-            const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
+
             const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
-            const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
-            const browseDiscountPercent = await service.getBrowseFollowupDiscount(tariff.owner_id, ctx.from.id);
-            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
-
-            if (paymentGroup.variants.length > 1) {
-                await service.logCustomerFunnelEvent({
-                    ownerId: tariff.owner_id,
-                    botId,
-                    tgUserId: ctx.from.id,
-                    tariffId: tariff.id,
-                    eventType: 'tariff_card_opened',
-                    referralCode: referralAttribution?.referral_code || null,
-                    sessionKey: service.buildCustomerFunnelSessionKey({
-                        botId,
-                        tgUserId: ctx.from.id,
-                        eventType: 'tariff_card_opened',
-                        tariffId: tariff.id
-                    }),
-                    payload: {
-                        callback: 'buy',
-                        tariff_title: tariff.title,
-                        variants_count: paymentGroup.variants.length
-                    }
-                });
-                const keyboard = service.sortTariffPaymentVariants(paymentGroup.variants)
-                    .map((variant) => ([{
-                        text: `${service.getTariffCurrencyIcon(variant.currency)} ${service.formatTariffPaymentOptions([variant], activeDiscountPercent)}`,
-                        callback_data: `pay_tariff_${variant.id}`
-                    }]));
-                keyboard.push([{ text: '🔙 Назад', callback_data: 'buy_tariff' }]);
-
-                await ctx.deleteMessage().catch(() => {});
-                
-                const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
-
-                const text = `💳 <b>СПОСОБ ОПЛАТЫ</b>\n` +
-                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                    `📦 Тариф: <b>${service.getTariffDisplayTitle(paymentGroup.lead)}</b>\n` +
-                    `⏳ Срок доступа: <code>${durationText}</code>\n\n` +
-                    `Выберите удобный способ оплаты ниже:`;
-                
-                await ctx.reply(text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' });
-                return;
-            }
-
             await service.logCustomerFunnelEvent({
                 ownerId: tariff.owner_id,
                 botId,
@@ -161,38 +111,7 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
                 }
             });
             await createInvoiceForTariff(ctx, tariff);
-        } catch (err) { console.error('Ошибка выбора способа оплаты:', err); }
-    });
-
-    bot.action(/^pay_tariff_(.+)$/, async (ctx) => {
-        const tariffId = ctx.match[1];
-        await ctx.answerCbQuery();
-
-        try {
-            const { data: tariff } = await service.supabase.from('tariffs').select('*').eq('id', tariffId).single();
-            if (!tariff) return ctx.reply('❌ Тариф не найден.');
-            const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, ctx.from.id);
-            await service.logCustomerFunnelEvent({
-                ownerId: tariff.owner_id,
-                botId,
-                tgUserId: ctx.from.id,
-                tariffId: tariff.id,
-                eventType: 'payment_method_selected',
-                referralCode: referralAttribution?.referral_code || null,
-                sessionKey: service.buildCustomerFunnelSessionKey({
-                    botId,
-                    tgUserId: ctx.from.id,
-                    eventType: 'payment_method_selected',
-                    tariffId: tariff.id
-                }),
-                payload: {
-                    callback: 'pay_tariff',
-                    currency: tariff.currency,
-                    tariff_title: tariff.title
-                }
-            });
-            await createInvoiceForTariff(ctx, tariff);
-        } catch (err) { console.error('Ошибка выбранного способа оплаты:', err); }
+        } catch (err) { console.error('Ошибка выбора тарифа:', err); }
     });
 
     bot.action(/^tariffs_page_(\d+)$/, async (ctx) => {

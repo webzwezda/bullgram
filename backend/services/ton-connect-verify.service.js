@@ -23,8 +23,8 @@ function extractValueNano(tx) {
     return BigInt(tx?.in_msg?.value || 0);
 }
 
-async function fetchRecentTransactions({ merchantWallet, tonapiBase }) {
-    const url = `${tonapiBase}/v2/blockchain/accounts/${merchantWallet}/transactions?limit=30`;
+export async function fetchRecentTransactions({ merchantWallet, tonapiBase, limit = 30 }) {
+    const url = `${tonapiBase}/v2/blockchain/accounts/${merchantWallet}/transactions?limit=${limit}`;
     const headers = {};
     const apiKey = process.env.TONAPI_KEY || process.env.TONCONNECT_TONAPI_KEY;
     if (apiKey) {
@@ -36,6 +36,25 @@ async function fetchRecentTransactions({ merchantWallet, tonapiBase }) {
     }
     const data = await response.json();
     return Array.isArray(data?.transactions) ? data.transactions : [];
+}
+
+export function matchInvoice({ tx, expectedMemo, expectedNanoTon, expectedSender = null }) {
+    const txMemo = extractMemo(tx);
+    if (txMemo !== expectedMemo) return null;
+
+    const txValue = extractValueNano(tx);
+    if (txValue < expectedNanoTon) return null;
+
+    if (expectedSender) {
+        const txSender = extractSender(tx);
+        if (txSender && txSender !== expectedSender) return null;
+    }
+
+    return {
+        txHash: String(tx.hash || tx.transaction_id?.hash || ''),
+        matchedAmountNano: txValue.toString(),
+        matchedSender: extractSender(tx)
+    };
 }
 
 export async function verifyTonConnectPayment({
@@ -63,24 +82,10 @@ export async function verifyTonConnectPayment({
         try {
             const transactions = await fetchRecentTransactions({ merchantWallet: merchant, tonapiBase });
             for (const tx of transactions) {
-                const txMemo = extractMemo(tx);
-                if (txMemo !== expectedMemo) continue;
-
-                const txValue = extractValueNano(tx);
-                if (txValue < expectedNano) continue;
-
-                if (expectedSender) {
-                    const txSender = extractSender(tx);
-                    if (txSender && txSender !== expectedSender) continue;
+                const match = matchInvoice({ tx, expectedMemo, expectedNanoTon: expectedNano, expectedSender });
+                if (match) {
+                    return { ok: true, ...match, attempt };
                 }
-
-                return {
-                    ok: true,
-                    txHash: String(tx.hash || tx.transaction_id?.hash || ''),
-                    matchedAmountNano: txValue.toString(),
-                    matchedSender: extractSender(tx),
-                    attempt
-                };
             }
         } catch (error) {
             console.error(`[TonConnectVerify] attempt ${attempt}/${attemptsLimit} error:`, error.message);

@@ -94,57 +94,7 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
 
                     if (!error && tariff && tariff.is_active) {
                         const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
-                        const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
 
-                        const { data: siblingTariffs } = await service.supabase.from('tariffs')
-                            .select('*')
-                            .eq('owner_id', tariff.owner_id)
-                            .eq('is_active', true)
-                            .or(`bot_id.eq.${botId},bot_id.is.null`);
-
-                        const paymentGroup = service.findTariffPaymentGroup(siblingTariffs || [tariff], tariff);
-
-                        if (paymentGroup.variants.length > 1) {
-                            await service.logCustomerFunnelEvent({
-                                ownerId,
-                                botId,
-                                tgUserId: ctx.from.id,
-                                tariffId: tariff.id,
-                                eventType: 'tariff_card_opened',
-                                referralCode: referralAttribution?.referral_code || null,
-                                sessionKey: service.buildCustomerFunnelSessionKey({
-                                    botId,
-                                    tgUserId: ctx.from.id,
-                                    eventType: 'tariff_card_opened',
-                                    tariffId: tariff.id
-                                }),
-                                payload: {
-                                    start_payload: startPayload,
-                                    source: 'deep_link_group',
-                                    variants_count: paymentGroup.variants.length
-                                }
-                            });
-
-                            const keyboard = service.sortTariffPaymentVariants(paymentGroup.variants)
-                                .map((variant) => ([{
-                                    text: `${service.getTariffCurrencyIcon(variant.currency)} ${service.formatTariffPaymentOptions([variant], referralDiscountPercent)}`,
-                                    callback_data: `pay_tariff_${variant.id}`
-                                }]));
-                            keyboard.push([{ text: '🔙 Назад', callback_data: 'back_to_main' }]);
-
-                            const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
-
-                            const text = `💳 <b>СПОСОБ ОПЛАТЫ</b>\n` +
-                                `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                                `📦 Тариф: <b>${service.getTariffDisplayTitle(paymentGroup.lead)}</b>\n` +
-                                `⏳ Срок доступа: <code>${durationText}</code>\n\n` +
-                                `Выберите удобный способ оплаты ниже:`;
-
-                            await ctx.reply(text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'HTML' });
-                            return;
-                        }
-
-                        // Если вариант только один, сразу выставляем инвойс
                         await service.logCustomerFunnelEvent({
                             ownerId,
                             botId,

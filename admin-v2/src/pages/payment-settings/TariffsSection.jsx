@@ -219,7 +219,6 @@ function CreateTariffPanel({
   const chatAccess = newTariff.access_methods?.chat || { enabled: false, channel_id: '' };
   const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
   const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
-  const rubPayment = newTariff.payment_methods?.rub || { enabled: false, price: '' };
   const isLifetime = newTariff.is_lifetime || false;
   const selectedBotId = newTariff.bot_id || '';
 
@@ -292,13 +291,10 @@ function CreateTariffPanel({
     if (resourceAccess.enabled && !resourceAccess.text?.trim()) {
       nextErrors.resource_text = 'Заполни ссылку или текст';
     }
-    const hasAnyPayment = tonPayment.enabled || rubPayment.enabled;
-    if (!hasAnyPayment) nextErrors.payment = 'Включи хотя бы один способ оплаты';
+    const hasAnyPayment = tonPayment.enabled;
+    if (!hasAnyPayment) nextErrors.payment = 'Включи TON-оплату';
     if (tonPayment.enabled && (!tonPayment.price || Number(tonPayment.price) <= 0)) {
       nextErrors.ton_price = 'Укажи стоимость в TON';
-    }
-    if (rubPayment.enabled && (!rubPayment.price || Number(rubPayment.price) <= 0)) {
-      nextErrors.rub_price = 'Укажи стоимость в RUB';
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -314,7 +310,7 @@ function CreateTariffPanel({
   };
 
   const accessCount = [groupAccess.enabled, chatAccess.enabled, resourceAccess.enabled].filter(Boolean).length;
-  const paymentCount = [tonPayment.enabled, rubPayment.enabled].filter(Boolean).length;
+  const paymentCount = [tonPayment.enabled].filter(Boolean).length;
 
   return (
     <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
@@ -596,33 +592,6 @@ function CreateTariffPanel({
                       className={`h-10 ${errors.ton_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
                     />
                     <ErrorText>{errors.ton_price}</ErrorText>
-                  </div>
-                )}
-              </div>
-
-              <div className={`rounded-xl border transition-all ${rubPayment.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-center justify-between gap-3 p-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Badge className="bg-emerald-600 text-white border-0 text-xs font-black">₽</Badge>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">RUB / СБП</div>
-                      <div className="text-xs text-slate-500 font-medium">Перевод по номеру телефона</div>
-                    </div>
-                  </div>
-                  <Toggle checked={rubPayment.enabled} onChange={(v) => updatePaymentMethod('rub', { enabled: v })} label="RUB" />
-                </div>
-                {rubPayment.enabled && (
-                  <div className="px-3 pb-3">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={rubPayment.price}
-                      onChange={(e) => updatePaymentMethod('rub', { price: e.target.value })}
-                      placeholder="Стоимость в RUB"
-                      className={`h-10 ${errors.rub_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
-                    />
-                    <ErrorText>{errors.rub_price}</ErrorText>
                   </div>
                 )}
               </div>

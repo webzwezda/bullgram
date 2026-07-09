@@ -44,11 +44,6 @@ export function useTariffsController({
         currency: 'TON',
         enabled: !!newTariff.payment_methods?.ton?.enabled,
         price: newTariff.payment_methods?.ton?.price
-      },
-      {
-        currency: 'RUB',
-        enabled: !!newTariff.payment_methods?.rub?.enabled,
-        price: newTariff.payment_methods?.rub?.price
       }
     ].filter((method) => method.enabled);
 
@@ -83,7 +78,7 @@ export function useTariffsController({
     }
 
     if (paymentMethods.length === 0) {
-      toast.error('Включи хотя бы один способ оплаты: TON или RUB/СБП.');
+      toast.error('Включи TON-оплату для тарифа.');
       return;
     }
 
@@ -141,9 +136,7 @@ export function useTariffsController({
       }
 
       setNewTariff(DEFAULT_NEW_TARIFF);
-      toast.success(paymentMethods.length > 1
-        ? 'Тарифы под оба способа оплаты созданы.'
-        : 'Тариф создан.');
+      toast.success('Тариф создан.');
       window.location.reload();
     } catch (error) {
       toast.error(error.message);

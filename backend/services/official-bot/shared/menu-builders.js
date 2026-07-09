@@ -105,6 +105,9 @@ export function createMenuBuilders({ service, botId }) {
 
             const { data: settings } = await service.supabase.from('payment_settings').select('*').eq('owner_id', tariff.owner_id).single();
             if (!settings) return ctx.reply('❌ Администратор не настроил реквизиты.');
+            if (!settings.ton_wallet) {
+                return ctx.reply('❌ У этого продавца не настроен TON-кошелёк. Оплата через бота недоступна — попросите продавца указать кошелёк в личном кабинете.');
+            }
 
             const userId = ctx.from.id;
             const memo = 'sub_' + Math.random().toString(36).substr(2, 6);
@@ -168,11 +171,16 @@ export function createMenuBuilders({ service, botId }) {
                 }
             });
 
-            if (!settings.ton_wallet) return ctx.reply('❌ TON-кошелек не указан.');
             const { default: QRCode } = await import('qrcode');
             const nanoTon = Math.round(invoiceAmount * 1000000000);
             const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
             const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
+
+            const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
+            const invoiceId = createdInvoice?.id;
+            const payAppUrl = invoiceId
+                ? `${publicAppOrigin}/pay-app/?invoice=${invoiceId}`
+                : null;
 
             const discountLine = activeDiscountPercent > 0
                 ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
@@ -182,15 +190,25 @@ export function createMenuBuilders({ service, botId }) {
                 `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
                 `⏳ Срок доступа: **${durationText}**\n` +
                 `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
-                `**Реквизиты для перевода:**\n` +
-                `👛 Адрес: \`${settings.ton_wallet}\` (нажмите, чтобы скопировать)\n` +
-                `💬 Комментарий (MEMO): \`${memo}\` (нажмите, чтобы скопировать)\n\n` +
-                `⚠️ **ВАЖНО:** Вы должны обязательно указать комментарий \`${memo}\` при отправке TON, иначе система не сможет зачислить платеж автоматически.`;
+                `Нажмите **«💸 Оплатить»** — откроется окно TON Connect, оплата в один клик.\n\n` +
+                `Нет TON Connect? Используйте QR-код ниже или кнопку **«Перевести вручную»**:\n` +
+                `👛 Адрес: \`${settings.ton_wallet}\`\n` +
+                `💬 Комментарий (MEMO): \`${memo}\`\n\n` +
+                `⚠️ **Важно:** при ручном переводе обязательно укажите комментарий \`${memo}\`, иначе платёж не зачислится автоматически.`;
+
+            const primaryRow = payAppUrl
+                ? [{ text: '💸 Оплатить', web_app: { url: payAppUrl } }]
+                : [{ text: '💸 Оплатить', url: tonUri }];
 
             await ctx.deleteMessage().catch(() => {});
             await ctx.replyWithPhoto({ source: qrBuffer }, {
                 caption: caption, parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: [[{ text: '💸 Оплатить в 1 клик', url: tonUri }], [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }], [{ text: '🔙 Назад', callback_data: 'back_to_main' }]]}
+                reply_markup: { inline_keyboard: [
+                    primaryRow,
+                    [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }],
+                    [{ text: '👛 Перевести вручную (TON)', url: tonUri }],
+                    [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
+                ]}
             });
         } catch (err) { console.error('Ошибка счета:', err); }
     };

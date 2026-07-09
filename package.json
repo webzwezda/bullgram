@@ -6,9 +6,10 @@
     "npm": "10.x"
   },
   "scripts": {
-    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install && npm --prefix userbot-web install",
+    "install:active": "npm --prefix backend install && npm --prefix site-v2 install && npm --prefix admin-v2 install && npm --prefix userbot-web install && npm --prefix telegram-pay-app install",
     "build:site": "npm --prefix site-v2 run build",
     "build:admin": "npm --prefix admin-v2 run build",
+    "build:pay-app": "npm --prefix telegram-pay-app run build",
     "build:userbot-web": "npm --prefix userbot-web run build",
     "build:v2": "npm run build:site && npm run build:admin",
     "mcp:supabase:tunnel": "./ops/scripts/supabase-mcp-tunnel.sh",

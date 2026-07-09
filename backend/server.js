@@ -55,6 +55,7 @@ import { startReferralPayoutSender } from './jobs/referral-payout-sender.job.js'
 import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirmation.job.js';
 import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.job.js';
 import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.js';
+import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -309,4 +310,5 @@ httpServer.listen(PORT, async () => {
     startReferralPayoutConfirmation(supabase);
     startOfficialBotWebhookQueue(supabase);
     startManagedProxyReconcile(supabase);
+    startInvoiceAutoDetect(supabase, getBotById);
 });
