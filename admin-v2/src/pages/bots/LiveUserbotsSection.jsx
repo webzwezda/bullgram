@@ -193,7 +193,7 @@ export function LiveUserbotsSection({
                   <Button
                     variant="ghost"
                     className="shrink-0 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm rounded-xl"
-                    onClick={() => { window.location.href = `/app/userbot-center?userbot_id=${encodeURIComponent(account.id)}`; }}
+                    onClick={() => { window.location.href = `/app/userbots?userbot_id=${encodeURIComponent(account.id)}`; }}
                   >
                     Центр управления
                     <ChevronRight className="w-4 h-4 ml-1.5 text-slate-400" />

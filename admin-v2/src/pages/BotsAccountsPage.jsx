@@ -8,6 +8,7 @@ import { OfficialBotsSection } from './bots/OfficialBotsSection.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
+import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   batchUserbotLotPaymentMethods,
@@ -445,6 +446,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
           {canSellUserbotAssets ? (
             <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
           ) : null}
+
+          <UserbotCenterSection />
         </>
       )}
     </section>

@@ -431,7 +431,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Горячие лички у юзерботов',
                     value: recentInboxAlerts.length,
                     tone: recentInboxAlerts.length > 0 ? 'warning' : 'ok',
-                    href: '/app/userbot-center',
+                    href: '/app/userbots',
                     hint: recentInboxAlerts.length > 0
                         ? 'Ops-бот уже словил мутные входящие. Проверь, кому надо ответить, пока деньги не ушли.'
                         : 'За последние сутки ops-бот не пинговал новые горячие лички.'
@@ -441,7 +441,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Telegram ругался на аккаунты',
                     value: recentTelegramRestrictions.length,
                     tone: recentTelegramRestrictions.length > 0 ? 'danger' : (recentTelegramErrorEvents.length > 0 ? 'warning' : 'ok'),
-                    href: '/app/userbot-center',
+                    href: '/app/userbots',
                     hint: recentTelegramRestrictions.length > 0
                         ? 'Есть свежие flood/restricted/privacy/session ошибки. Сначала разбери их, потом снова лезь в лички.'
                         : recentTelegramErrorEvents.length > 0

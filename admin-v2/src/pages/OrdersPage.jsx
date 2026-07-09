@@ -51,7 +51,7 @@ function openUserbotCenterHandoff({ tgUserId, draftMessage = '' }) {
     draft_message: String(draftMessage || '').trim()
   }));
 
-  window.location.href = `/app/userbot-center${params.toString() ? `?${params.toString()}` : ''}`;
+  window.location.href = `/app/userbots${params.toString() ? `?${params.toString()}` : ''}`;
 }
 
 function openBroadcastManualSelection(rows = [], suggestedTitle = 'Ручной хвост', suggestedMessage = '') {

@@ -378,7 +378,7 @@ function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = ''
     draft_message: String(draftMessage || '').trim(),
     common_chat_id: String(commonChatId || '').trim()
   }));
-  const url = `/userbot-center?tg_user_id=${encodeURIComponent(tgUserId)}`;
+  const url = `/app/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`;
   if (navigate) {
     navigate(url);
   } else {

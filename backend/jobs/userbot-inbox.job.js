@@ -125,7 +125,7 @@ export const startUserbotInboxWatch = (supabase, getBotFunction) => {
                             const safeDisplayName = escapeHtml(displayName);
                             const safeUsername = entity.username ? escapeHtml(entity.username) : '';
                             const safePreview = escapeHtml(preview || 'Telegram не отдал текст сообщения.');
-                            const deepLink = `${publicAppOrigin}/app/userbot-center?userbot_id=${encodeURIComponent(userbot.id)}`;
+                            const deepLink = `${publicAppOrigin}/app/userbots?userbot_id=${encodeURIComponent(userbot.id)}`;
 
                             await bot.telegram.sendMessage(
                                 adminTgId,

@@ -480,7 +480,7 @@ export function CustomerBasesPage() {
               <a className="ghost-button ghost-button--primary" href="/app/userbots">
                 Открыть Боты и аккаунты
               </a>
-              <a className="ghost-button" href="/app/userbot-center">
+              <a className="ghost-button" href="/app/userbots">
                 Открыть Центр юзербота
               </a>
             </div>

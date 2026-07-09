@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
-  Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send, Target,
+  Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send,
   RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
   Zap
 } from 'lucide-react';
@@ -13,7 +13,6 @@ import { OpsChecklistRail } from './ui/OpsChecklistRail.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
-const UserbotCenterPage = lazy(() => import('./pages/UserbotCenterPage.jsx').then((module) => ({ default: module.UserbotCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const CrmPage = lazy(() => import('./pages/CrmPage.jsx').then((module) => ({ default: module.CrmPage })));
 const OrdersPage = lazy(() => import('./pages/OrdersPage.jsx').then((module) => ({ default: module.OrdersPage })));
@@ -65,7 +64,6 @@ export function App() {
       title: 'Инфраструктура',
       items: [
         { to: '/userbots', label: 'Юзерботы', icon: Rocket },
-        { to: '/userbot-center', label: 'Центр юзербота', icon: Target },
         { to: '/proxies', label: 'Прокси', icon: Globe },
         { to: '/integrations', label: 'Интеграции', icon: KeyRound },
       ]
@@ -194,7 +192,6 @@ export function App() {
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
                 <Route path="/autopost" element={<QuickStartPage />} />
-                <Route path="/userbot-center" element={<UserbotCenterPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<CrmPage />} />
                 <Route path="/orders" element={<OrdersPage />} />

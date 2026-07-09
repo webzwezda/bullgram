@@ -4,12 +4,12 @@ import { toast } from 'sonner';
 import {
   UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2
 } from 'lucide-react';
-import { apiRequest } from '../api/client.js';
-import { useAuth } from '../app/providers/AuthProvider.jsx';
-import { LoadingState } from '../ui/LoadingState.jsx';
-import { PlanBanner } from '../ui/PlanBanner.jsx';
-import { StatCard } from '../ui/StatCard.jsx';
-import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
+import { apiRequest } from '../../api/client.js';
+import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { LoadingState } from '../../ui/LoadingState.jsx';
+import { PlanBanner } from '../../ui/PlanBanner.jsx';
+import { StatCard } from '../../ui/StatCard.jsx';
+import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
 
 function formatDate(value) {
   if (!value) return 'Нет данных';
@@ -42,8 +42,20 @@ function needsBotsRecovery(message = '') {
     value.includes('auth_key_unregistered');
 }
 
-export function UserbotCenterPage() {
+export function UserbotCenterSection() {
   const location = useLocation();
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const hasDeep = params.get('userbot_id') || params.get('tg_user_id');
+    if (hasDeep && sectionRef.current) {
+      const timer = setTimeout(() => {
+        sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [location.search]);
   const { accessToken, profilePlan, trialEndsAt } = useAuth();
   const [initialHandoff] = useState(() => consumeUserbotCenterHandoff());
   const handoffLoadDoneRef = useRef(false);
@@ -853,27 +865,22 @@ export function UserbotCenterPage() {
 
   if (state.error) {
     return (
-      <section className="page">
-        <div className="page__header">
-          <h1>Центр юзербота</h1>
-          <p>Здесь уже должен быть живой triage по личкам и группам. Пока backend вернул ошибку.</p>
-        </div>
+      <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
+        <header className="mb-4 px-1">
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Центр юзербота</h2>
+          <p className="text-sm text-slate-500 mt-1">Здесь уже должен быть живой triage по личкам и группам. Пока backend вернул ошибку.</p>
+        </header>
         <div className="error-card">{state.error}</div>
         {needsBotsRecovery(state.error) ? (
           <div className="toolbar-card" style={{ marginTop: 16 }}>
             <div className="toolbar-card__title">Что делать дальше</div>
             <div className="list-stack">
               <div className="list-item">
-                <div className="list-item__title">Открой Боты и аккаунты</div>
+                <div className="list-item__title">Проверь onboarding выше на этой же странице</div>
                 <div className="list-item__meta">
-                  Там теперь есть живой onboarding: QR, импорт `.session/.json`, смена прокси и удаление мертвого аккаунта.
+                  Там живой onboarding: QR, импорт `.session/.json`, смена прокси и удаление мертвого аккаунта. Попробуй обновить страницу или заново выбрать юзербота.
                 </div>
               </div>
-            </div>
-            <div className="toolbar-card__body">
-              <a className="ghost-button ghost-button--primary" href="/app/userbots">
-                Открыть Юзерботы
-              </a>
             </div>
           </div>
         ) : null}
@@ -1109,7 +1116,12 @@ export function UserbotCenterPage() {
   }
 
   return (
-    <section className="page">
+    <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
+      <header className="mb-4 px-1">
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Центр юзербота</h2>
+        <p className="text-sm text-slate-500 mt-1">Профиль, аватарка, описание, активные сессии и вступление по ссылке.</p>
+      </header>
+
       {profilePlan === 'trial' ? (
         <>
           <PlanBanner
