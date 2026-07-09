@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import {
-  Package, Plus, Trash2, Clock, Bot as BotIcon, Tag, Key, CreditCard,
+  Package, Plus, Trash2, Clock, Bot as BotIcon,
   Users, MessageCircle, Link2, Loader2, Check, Infinity as InfinityIcon,
   AlertCircle, Search
 } from 'lucide-react';
@@ -13,7 +13,6 @@ import { Badge } from '../../components/ui/badge.jsx';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '../../components/ui/select.jsx';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs.jsx';
 
 /* ---------------- data helpers (unchanged) ---------------- */
 
@@ -213,7 +212,6 @@ function CreateTariffPanel({
   onClose, newTariff, setNewTariff, channels, officialBots, onCreate, creating, bundleSupport
 }) {
   const [errors, setErrors] = useState({});
-  const [tab, setTab] = useState('basic');
 
   const groupAccess = newTariff.access_methods?.group || { enabled: true };
   const chatAccess = newTariff.access_methods?.chat || { enabled: false, channel_id: '' };
@@ -299,18 +297,12 @@ function CreateTariffPanel({
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      const firstErrorTab = nextErrors.title || nextErrors.duration_days ? 'basic'
-        : (nextErrors.access || nextErrors.group_channel || nextErrors.chat_channel || nextErrors.resource_text) ? 'access'
-        : 'payment';
-      setTab(firstErrorTab);
+      toast.error('Заполни обязательные поля');
       return;
     }
     setErrors({});
     onCreate();
   };
-
-  const accessCount = [groupAccess.enabled, chatAccess.enabled, resourceAccess.enabled].filter(Boolean).length;
-  const paymentCount = [tonPayment.enabled].filter(Boolean).length;
 
   return (
     <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
@@ -321,7 +313,7 @@ function CreateTariffPanel({
           </div>
           <div className="min-w-0">
             <h2 className="text-base font-bold text-slate-900">Создать тариф</h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Заполни секции по очереди — состояние сохраняется при переключении табов</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Все поля на одном экране</p>
           </div>
         </div>
         <Button
@@ -334,41 +326,19 @@ function CreateTariffPanel({
         </Button>
       </div>
 
-      <div className="p-5 sm:p-6">
-        <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="grid w-full grid-cols-3 h-10">
-              <TabsTrigger value="basic">
-                <Tag className="w-3.5 h-3.5" />
-                Основное
-              </TabsTrigger>
-              <TabsTrigger value="access">
-                <Key className="w-3.5 h-3.5" />
-                Доступ
-                {accessCount > 0 && (
-                  <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 rounded px-1.5 font-black">{accessCount}</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="payment">
-                <CreditCard className="w-3.5 h-3.5" />
-                Оплата
-                {paymentCount > 0 && (
-                  <span className="ml-1 text-[10px] bg-emerald-100 text-emerald-700 rounded px-1.5 font-black">{paymentCount}</span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Tab: Basic */}
-            <TabsContent value="basic" className="mt-5 space-y-4">
-              <div>
-                <FieldLabel required>Название тарифа</FieldLabel>
-                <Input
-                  value={newTariff.title}
-                  onChange={(e) => setNewTariff((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="VIP месяц"
-                  className={`h-11 ${errors.title ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
-                />
-                <ErrorText>{errors.title}</ErrorText>
-              </div>
+      <div className="p-5 sm:p-6 space-y-6">
+        {/* Section: Basic */}
+        <div className="space-y-4">
+          <div>
+            <FieldLabel required>Название тарифа</FieldLabel>
+            <Input
+              value={newTariff.title}
+              onChange={(e) => setNewTariff((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="VIP месяц"
+              className={`h-11 ${errors.title ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
+            />
+            <ErrorText>{errors.title}</ErrorText>
+          </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {!isLifetime ? (
@@ -396,14 +366,26 @@ function CreateTariffPanel({
 
                 <div>
                   <FieldLabel>Тип срока</FieldLabel>
-                  <button
-                    type="button"
-                    onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: !prev.is_lifetime }))}
-                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white flex items-center justify-between text-sm font-bold text-slate-900 hover:bg-slate-50"
-                  >
-                    <span>{isLifetime ? 'Пожизненный' : 'Ограниченный'}</span>
-                    <Toggle checked={isLifetime} onChange={(v) => setNewTariff((prev) => ({ ...prev, is_lifetime: v }))} label="Пожизненный" />
-                  </button>
+                  <div className="flex rounded-xl border border-slate-200 overflow-hidden h-11">
+                    <button
+                      type="button"
+                      onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: false }))}
+                      className={`flex-1 text-sm font-bold transition-colors ${
+                        !isLifetime ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Ограниченный
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTariff((prev) => ({ ...prev, is_lifetime: true }))}
+                      className={`flex-1 text-sm font-bold transition-colors ${
+                        isLifetime ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Пожизненный
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -438,10 +420,12 @@ function CreateTariffPanel({
                   <Input value="Нет подключённых ботов" disabled className="bg-slate-50 text-slate-400 h-11" />
                 )}
               </div>
-            </TabsContent>
+        </div>
 
-            {/* Tab: Access */}
-            <TabsContent value="access" className="mt-5 space-y-3">
+        <div className="border-t border-slate-100" />
+
+        {/* Section: Access */}
+        <div className="space-y-3">
               <ErrorText>{errors.access}</ErrorText>
 
               {/* Closed channel (private) */}
@@ -563,10 +547,12 @@ function CreateTariffPanel({
                   <span>Bundle-пакеты в БД не активированы — доступны только закрытые группы.</span>
                 </div>
               )}
-            </TabsContent>
+        </div>
 
-            {/* Tab: Payment */}
-            <TabsContent value="payment" className="mt-5 space-y-3">
+        <div className="border-t border-slate-100" />
+
+        {/* Section: Payment */}
+        <div className="space-y-3">
               <ErrorText>{errors.payment}</ErrorText>
 
               <div className={`rounded-xl border transition-all ${tonPayment.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
@@ -595,21 +581,20 @@ function CreateTariffPanel({
                   </div>
                 )}
               </div>
-            </TabsContent>
-          </Tabs>
         </div>
 
-        <div className="bg-slate-50/50 border-t border-slate-100 px-5 sm:px-6 py-4 flex items-center justify-end gap-2">
+        <div className="flex justify-end pt-2">
           <Button
             type="button"
             onClick={handleCreate}
             disabled={creating}
-            className="h-10 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
+            className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
           >
             {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             {creating ? 'Создание...' : 'Создать тариф'}
           </Button>
         </div>
+      </div>
       </Card>
   );
 }
