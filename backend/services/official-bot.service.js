@@ -227,6 +227,7 @@ export class OfficialBotService {
             .map((variant) => {
                 const currency = variant.currency || 'TON';
                 const price = Number(variant.price || 0);
+                if (price === 0) return 'Бесплатно';
                 const discountedPrice = this.formatDiscountedAmount(price, currency, discountPercent);
                 if (Number(discountPercent || 0) > 0 && discountedPrice < price) {
                     return `${discountedPrice} ${currency} вместо ${price}`;

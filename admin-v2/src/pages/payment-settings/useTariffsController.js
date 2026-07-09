@@ -39,13 +39,14 @@ export function useTariffsController({
     const chatAccess = accessMethods.chat || { enabled: false, channel_id: '' };
     const resourceAccess = accessMethods.resource || { enabled: false, title: '', text: '' };
     const isLifetime = newTariff.is_lifetime || false;
+    const isFree = newTariff.is_free || false;
     const paymentMethods = [
       {
         currency: 'TON',
-        enabled: !!newTariff.payment_methods?.ton?.enabled,
-        price: newTariff.payment_methods?.ton?.price
+        enabled: true,
+        price: isFree ? 0 : newTariff.payment_methods?.ton?.price
       }
-    ].filter((method) => method.enabled);
+    ];
 
     if (!newTariff.title || (!isLifetime && !newTariff.duration_days)) {
       toast.error('Заполни название и срок.');
@@ -77,12 +78,7 @@ export function useTariffsController({
       return;
     }
 
-    if (paymentMethods.length === 0) {
-      toast.error('Включи TON-оплату для тарифа.');
-      return;
-    }
-
-    if (paymentMethods.some((method) => !method.price || Number(method.price) <= 0)) {
+    if (!isFree && paymentMethods.some((method) => !method.price || Number(method.price) <= 0)) {
       toast.error('Заполни стоимость для каждого включенного способа оплаты.');
       return;
     }

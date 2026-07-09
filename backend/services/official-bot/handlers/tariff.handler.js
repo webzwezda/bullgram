@@ -110,7 +110,14 @@ export function registerTariffRegexHandlers(bot, { service, botId, createInvoice
                     tariff_title: tariff.title
                 }
             });
-            await createInvoiceForTariff(ctx, tariff);
+            await createInvoiceForTariff(ctx, tariff).then((result) => {
+                // Free tariffs return { invoice } — activate immediately.
+                // Paid tariffs return undefined — cron auto-detect handles activation.
+                if (result?.invoice) {
+                    return service.activateSubscription(bot, result.invoice);
+                }
+                return null;
+            });
         } catch (err) { console.error('Ошибка выбора тарифа:', err); }
     });
 

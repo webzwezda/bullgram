@@ -15,6 +15,7 @@ export const DEFAULT_NEW_TARIFF = {
   bot_id: '',
   channel_id: '',
   title: '',
+  is_free: false,
   access_methods: {
     group: {
       enabled: true
@@ -31,7 +32,7 @@ export const DEFAULT_NEW_TARIFF = {
   },
   payment_methods: {
     ton: {
-      enabled: false,
+      enabled: true,
       price: ''
     }
   },

@@ -181,14 +181,19 @@ function TariffRow({ group, botsById, deleteTariff }) {
       {/* Right zone: prices + actions */}
       <div className="flex items-center justify-between md:justify-end gap-3 shrink-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          {group.variants.map((variant) => (
-            <span
-              key={variant.id}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black ${priceBadgeClass(variant.currency)}`}
-            >
-              {variant.price} {currencyGlyph(variant.currency)}
-            </span>
-          ))}
+          {group.variants.map((variant) => {
+            const isFreeVariant = Number(variant.price) === 0;
+            return (
+              <span
+                key={variant.id}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black ${
+                  isFreeVariant ? 'bg-emerald-600 text-white border-0' : priceBadgeClass(variant.currency)
+                }`}
+              >
+                {isFreeVariant ? 'Бесплатно' : `${variant.price} ${currencyGlyph(variant.currency)}`}
+              </span>
+            );
+          })}
         </div>
         <button
           type="button"
@@ -209,7 +214,7 @@ function TariffRow({ group, botsById, deleteTariff }) {
 /* ---------------- create dialog ---------------- */
 
 function CreateTariffPanel({
-  onClose, newTariff, setNewTariff, channels, officialBots, onCreate, creating, bundleSupport
+  onClose, newTariff, setNewTariff, channels, onCreate, creating, bundleSupport
 }) {
   const [errors, setErrors] = useState({});
 
@@ -218,6 +223,7 @@ function CreateTariffPanel({
   const resourceAccess = newTariff.access_methods?.resource || { enabled: false, title: '', text: '' };
   const tonPayment = newTariff.payment_methods?.ton || { enabled: false, price: '' };
   const isLifetime = newTariff.is_lifetime || false;
+  const isFree = newTariff.is_free || false;
   const selectedBotId = newTariff.bot_id || '';
 
   const botChannels = selectedBotId
@@ -289,10 +295,8 @@ function CreateTariffPanel({
     if (resourceAccess.enabled && !resourceAccess.text?.trim()) {
       nextErrors.resource_text = 'Заполни ссылку или текст';
     }
-    const hasAnyPayment = tonPayment.enabled;
-    if (!hasAnyPayment) nextErrors.payment = 'Включи TON-оплату';
-    if (tonPayment.enabled && (!tonPayment.price || Number(tonPayment.price) <= 0)) {
-      nextErrors.ton_price = 'Укажи стоимость в TON';
+    if (!isFree && (!tonPayment.price || Number(tonPayment.price) <= 0)) {
+      nextErrors.ton_price = 'Укажи цену в TON';
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -387,38 +391,6 @@ function CreateTariffPanel({
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div>
-                <FieldLabel>Официальный бот</FieldLabel>
-                {officialBots.length > 0 ? (
-                  officialBots.length === 1 ? (
-                    <Input
-                      value={officialBots[0].tg_username ? `@${officialBots[0].tg_username}` : `ID ${officialBots[0].tg_account_id}`}
-                      disabled
-                      className="bg-slate-50 text-slate-700 h-11 font-bold"
-                    />
-                  ) : (
-                    <Select
-                      value={selectedBotId || '__all__'}
-                      onValueChange={(v) => setNewTariff((prev) => ({ ...prev, bot_id: v === '__all__' ? '' : v }))}
-                    >
-                      <SelectTrigger className="h-11 w-full bg-white rounded-xl border-slate-200 shadow-sm focus:ring-indigo-500">
-                        <SelectValue placeholder="Все боты" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="__all__">Все боты</SelectItem>
-                        {officialBots.map((bot) => (
-                          <SelectItem key={bot.id} value={bot.id}>
-                            {bot.tg_username ? `@${bot.tg_username}` : `ID ${bot.tg_account_id}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )
-                ) : (
-                  <Input value="Нет подключённых ботов" disabled className="bg-slate-50 text-slate-400 h-11" />
-                )}
               </div>
         </div>
 
@@ -553,34 +525,50 @@ function CreateTariffPanel({
 
         {/* Section: Payment */}
         <div className="space-y-3">
-              <ErrorText>{errors.payment}</ErrorText>
+          <div>
+            <FieldLabel>Тип тарифа</FieldLabel>
+            <div className="flex rounded-xl border border-slate-200 overflow-hidden h-11">
+              <button
+                type="button"
+                onClick={() => setNewTariff((prev) => ({ ...prev, is_free: false }))}
+                className={`flex-1 text-sm font-bold transition-colors ${
+                  !isFree ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Платный
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewTariff((prev) => ({ ...prev, is_free: true }))}
+                className={`flex-1 text-sm font-bold transition-colors ${
+                  isFree ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                Бесплатный
+              </button>
+            </div>
+          </div>
 
-              <div className={`rounded-xl border transition-all ${tonPayment.enabled ? 'border-indigo-200 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
-                <div className="flex items-center justify-between gap-3 p-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Badge className="bg-slate-900 text-white border-0 text-xs font-black">TON</Badge>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900">TON</div>
-                      <div className="text-xs text-slate-500 font-medium">Криптоплатёж</div>
-                    </div>
-                  </div>
-                  <Toggle checked={tonPayment.enabled} onChange={(v) => updatePaymentMethod('ton', { enabled: v })} label="TON" />
-                </div>
-                {tonPayment.enabled && (
-                  <div className="px-3 pb-3">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={tonPayment.price}
-                      onChange={(e) => updatePaymentMethod('ton', { price: e.target.value })}
-                      placeholder="Стоимость в TON"
-                      className={`h-10 ${errors.ton_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
-                    />
-                    <ErrorText>{errors.ton_price}</ErrorText>
-                  </div>
-                )}
-              </div>
+          {isFree ? (
+            <div className="flex items-start gap-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>Бесплатный тариф — оплата не требуется, доступ выдаётся сразу.</span>
+            </div>
+          ) : (
+            <div>
+              <FieldLabel required>Цена товара в TON</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={tonPayment.price}
+                onChange={(e) => updatePaymentMethod('ton', { price: e.target.value })}
+                placeholder="0.5"
+                className={`h-11 ${errors.ton_price ? 'border-rose-300 focus-visible:ring-rose-500' : ''}`}
+              />
+              <ErrorText>{errors.ton_price}</ErrorText>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end pt-2">
@@ -649,12 +637,12 @@ export function TariffsSection({
     }
   }, [officialBots, filterBotId]);
 
-  // Default new tariff's bot to first bot when create panel opens
+  // Create tariff inherits bot from the top-level filter — no separate field in the form.
   useEffect(() => {
-    if (createOpen && officialBots && officialBots.length > 0 && !newTariff.bot_id) {
-      setNewTariff((prev) => ({ ...prev, bot_id: String(officialBots[0].id) }));
+    if (filterBotId) {
+      setNewTariff((prev) => ({ ...prev, bot_id: filterBotId }));
     }
-  }, [createOpen, officialBots, newTariff.bot_id, setNewTariff]);
+  }, [filterBotId, setNewTariff]);
 
   const tariffGroups = useMemo(() => {
     const groups = buildTariffGroups(tariffs).map((group) => ({
@@ -693,7 +681,6 @@ export function TariffsSection({
           newTariff={newTariff}
           setNewTariff={setNewTariff}
           channels={channels}
-          officialBots={officialBots}
           onCreate={createTariff}
           creating={creating}
           bundleSupport={bundleSupport}

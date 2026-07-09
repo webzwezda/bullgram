@@ -127,8 +127,70 @@ export function createMenuBuilders({ service, botId }) {
         return sendUserMainMenu(ctx);
     };
 
+    const activateFreeTariff = async (ctx, tariff) => {
+        const userId = ctx.from.id;
+        const nowIso = new Date().toISOString();
+        const memo = generateMemo();
+
+        const { data: invoice, error } = await service.supabase
+            .from('invoices')
+            .insert({
+                tg_user_id: userId,
+                tariff_id: tariff.id,
+                amount: 0,
+                currency: tariff.currency,
+                memo,
+                status: 'paid',
+                paid_at: nowIso,
+                verified_at: nowIso,
+                expires_at: nowIso
+            })
+            .select('*')
+            .single();
+
+        if (error) {
+            console.error('free invoice insert:', error.message);
+            await ctx.reply('❌ Не удалось открыть доступ. Попробуйте позже.').catch(() => {});
+            return null;
+        }
+
+        await service.logPaymentEvent({
+            ownerId: tariff.owner_id,
+            invoiceId: invoice.id,
+            provider: 'manual_ton',
+            eventType: 'free_activated',
+            status: 'paid',
+            payload: { tariff_id: tariff.id, amount: 0 }
+        });
+
+        await service.logCustomerFunnelEvent({
+            ownerId: tariff.owner_id,
+            botId,
+            tgUserId: userId,
+            tariffId: tariff.id,
+            eventType: 'free_activated',
+            sessionKey: service.buildCustomerFunnelSessionKey({
+                botId,
+                tgUserId: userId,
+                eventType: 'free_activated',
+                tariffId: tariff.id
+            }),
+            payload: { invoice_id: invoice.id }
+        });
+
+        await ctx.deleteMessage().catch(() => {});
+        // activateSubscription (called by the handler) sends its own message
+        // with invite links / resources — no separate "ДОСТУП ОТКРЫТ" message here.
+        return { invoice };
+    };
+
     const createInvoiceForTariff = async (ctx, tariff) => {
         try {
+            // Free tariff: skip QR/invoice, create a paid 0-amount invoice immediately.
+            if (Number(tariff.price || 0) === 0) {
+                return activateFreeTariff(ctx, tariff);
+            }
+
             const durationText = pluralizeDays(tariff.duration_days);
 
             const { data: settings, error: settingsErr } = await service.supabase
