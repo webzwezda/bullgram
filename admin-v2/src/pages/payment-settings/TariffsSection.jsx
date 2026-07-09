@@ -250,10 +250,16 @@ function CreateTariffPanel({
     }
   }, [chatAccess.enabled, chatChannels.length]);
 
+  // On bot change: reset channel selection AND auto-enable "closed channel"
+  // toggle only when the bot actually has closed channels. Empty bot → toggle off.
   useEffect(() => {
     setNewTariff((prev) => ({
       ...prev,
-      channel_id: groupChannels.length > 0 ? groupChannels[0].id : ''
+      channel_id: groupChannels.length > 0 ? groupChannels[0].id : '',
+      access_methods: {
+        ...prev.access_methods,
+        group: { enabled: groupChannels.length > 0 }
+      }
     }));
     updateAccessMethod('chat', { channel_id: chatChannels.length > 0 ? chatChannels[0].id : '' });
   }, [selectedBotId]);

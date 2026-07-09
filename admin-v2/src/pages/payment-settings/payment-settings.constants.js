@@ -18,7 +18,7 @@ export const DEFAULT_NEW_TARIFF = {
   is_free: false,
   access_methods: {
     group: {
-      enabled: true
+      enabled: false
     },
     chat: {
       enabled: false,
