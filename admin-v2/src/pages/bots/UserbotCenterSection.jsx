@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2,
-  Network, Activity, KeyRound, AlertCircle, Settings2
+  Network, Activity, KeyRound, AlertCircle, Settings2, Trash2, Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +13,7 @@ import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
 import { StatCard } from '../../ui/StatCard.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
+import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
 
 function formatDate(value) {
   if (!value) return 'Нет данных';
@@ -106,7 +107,19 @@ export function UserbotCenterSection({
   availableFailoverProxiesForAccount,
   canRestoreFromFiles,
   defaultCheckLines,
-  formatWhen
+  formatWhen,
+  liveUserbots,
+  setSelectedLiveUserbotId,
+  deleteAccount,
+  deletingAccountId,
+  restrictedMarker,
+  recoveryStatusBadge,
+  canSellUserbotAssets,
+  saleComposer,
+  setSaleComposer,
+  saveUserbotSaleLot,
+  toggleSalePaymentMethod,
+  openSaleComposer
 }) {
   const location = useLocation();
   const sectionRef = useRef(null);
@@ -578,6 +591,13 @@ export function UserbotCenterSection({
     selectedUserbot?.tg_about
   ]);
 
+  useEffect(() => {
+    if (activeTab !== 'sale') return;
+    if (!selectedLiveUserbot) return;
+    if (saleComposer.accountId === String(selectedLiveUserbot.id)) return;
+    openSaleComposer(selectedLiveUserbot);
+  }, [activeTab, selectedLiveUserbot, saleComposer.accountId, openSaleComposer]);
+
   const selectedDraftFirstName = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.firstName : '';
   const selectedDraftLastName = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.lastName : '';
   const selectedDraftAbout = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.about : '';
@@ -957,7 +977,14 @@ export function UserbotCenterSection({
       icon: UserPlus,
       title: 'Вступить в группу или чат',
       subtitle: 'По ссылке t.me/groupname, @username или +hash',
-    }
+    },
+    ...(canSellUserbotAssets ? [{
+      id: 'sale',
+      label: 'Продать',
+      icon: Tag,
+      title: 'Продать',
+      subtitle: 'Выставить лот в Shop за TON',
+    }] : [])
   ];
 
   function renderProfileTab() {
@@ -1384,6 +1411,21 @@ export function UserbotCenterSection({
     );
   }
 
+  function renderSaleTab() {
+    if (!selectedLiveUserbot) return null;
+    return (
+      <div className="p-5 sm:p-6 animate-fade-in">
+        <UserbotSaleComposer
+          account={selectedLiveUserbot}
+          saleComposer={saleComposer}
+          setSaleComposer={setSaleComposer}
+          toggleSalePaymentMethod={toggleSalePaymentMethod}
+          saveUserbotSaleLot={saveUserbotSaleLot}
+        />
+      </div>
+    );
+  }
+
   return (
     <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
       {profilePlan === 'trial' ? (
@@ -1412,8 +1454,108 @@ export function UserbotCenterSection({
 
       {selectedLiveUserbot ? (
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
-        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Select
+              value={String(selectedLiveUserbot.id)}
+              onValueChange={(value) => setSelectedLiveUserbotId(value)}
+            >
+              <SelectTrigger className="h-12 bg-white border-slate-200 shadow-sm rounded-xl gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-auto">
+                <div className="size-7 rounded-full overflow-hidden bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                  {selectedProfilePhotoSrc ? (
+                    <img src={selectedProfilePhotoSrc} alt="" className="size-7 object-cover" />
+                  ) : (
+                    selectedProfileInitial
+                  )}
+                </div>
+                <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
+                  {selectedLiveUserbot.tg_username
+                    ? `@${selectedLiveUserbot.tg_username}`
+                    : 'Без username'}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {liveUserbots.map((item) => (
+                  <SelectItem key={item.id} value={String(item.id)} className="rounded-lg">
+                    {item.tg_username ? `@${item.tg_username}` : `ID ${item.tg_account_id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {(() => {
+              const restrictedBadge = restrictedMarker(selectedLiveUserbot);
+              const recoveryBadge = recoveryStatusBadge(recovery);
+              const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
+              const isSafeMode = runtimeStatus === 'pending_activation';
+              if (!restrictedBadge && !recoveryBadge && !isSafeMode) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1 justify-center">
+                  {restrictedBadge && <StatusBadge tone="error">{restrictedBadge.text}</StatusBadge>}
+                  {recoveryBadge && <StatusBadge tone={recoveryBadge.tone || 'default'}>{recoveryBadge.text}</StatusBadge>}
+                  {isSafeMode && <StatusBadge tone="warning">Safe mode</StatusBadge>}
+                </div>
+              );
+            })()}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl"
+              onClick={() => deleteAccount(selectedLiveUserbot)}
+              disabled={deletingAccountId === String(selectedLiveUserbot.id)}
+              title="Удалить аккаунт"
+            >
+              {deletingAccountId === String(selectedLiveUserbot.id)
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Trash2 className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          {(() => {
+            const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
+            const isSafeMode = runtimeStatus === 'pending_activation';
+            const restrictedBadge = restrictedMarker(selectedLiveUserbot);
+            const hasRuntimeError = selectedLiveUserbot.runtime_error
+              && ['restricted', 'dead_proxy', 'expired', 'error'].includes(runtimeStatus);
+
+            if (isSafeMode) {
+              return (
+                <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-amber-900">Режим Safe Mode</h4>
+                    <p className="text-sm text-amber-800 mt-0.5">Аккаунт ожидает живой активации перед входом в боевой контур.</p>
+                  </div>
+                </div>
+              );
+            }
+            if (restrictedBadge?.detail) {
+              return (
+                <div className="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-rose-900">Ограничения</h4>
+                    <p className="text-sm text-rose-800 mt-0.5">{restrictedBadge.detail}</p>
+                  </div>
+                </div>
+              );
+            }
+            if (hasRuntimeError) {
+              return (
+                <div className="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-rose-900">Ошибка выполнения</h4>
+                    <p className="text-sm text-rose-800 mt-0.5">{selectedLiveUserbot.runtime_error}</p>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${TAB_OPTIONS.length > 2 ? 'lg:grid-cols-3' : ''} gap-3`}>
             {TAB_OPTIONS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1445,6 +1587,7 @@ export function UserbotCenterSection({
 
         {activeTab === 'profile' ? renderProfileTab() : null}
         {activeTab === 'groups' ? renderGroupsTab() : null}
+        {activeTab === 'sale' ? renderSaleTab() : null}
         </div>
       ) : (
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">

@@ -2,7 +2,6 @@ import { saleTitleForAccount } from './bots-accounts.utils.js';
 
 export function UserbotSaleComposer({
   account,
-  resetSaleComposer,
   saleComposer,
   saveUserbotSaleLot,
   setSaleComposer,
@@ -13,7 +12,6 @@ export function UserbotSaleComposer({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[18px] font-semibold tracking-[-0.02em] text-slate-900">Продажа юзербота</div>
-          <div className="mt-1 text-[14px] text-slate-500">После публикации аккаунт уходит в Shop и резервируется под продажу.</div>
         </div>
       </div>
       <div className="mt-5">
@@ -126,14 +124,6 @@ export function UserbotSaleComposer({
           disabled={saleComposer.saving}
         >
           {saleComposer.saving ? 'Сохраняем лот...' : 'Опубликовать лот'}
-        </button>
-        <button
-          className="inline-flex h-11 items-center justify-center rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-          type="button"
-          onClick={resetSaleComposer}
-          disabled={saleComposer.saving}
-        >
-          Отмена
         </button>
       </div>
     </div>

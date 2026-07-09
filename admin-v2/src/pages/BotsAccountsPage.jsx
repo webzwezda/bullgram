@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { LiveUserbotsSection } from './bots/LiveUserbotsSection.jsx';
 import { OfficialBotsSection } from './bots/OfficialBotsSection.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
@@ -378,24 +377,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     userbotItemPriceSummary
   };
 
-  const sellerLiveUserbotsSectionProps = {
-    accountDeleteFeedback,
-    canSellUserbotAssets,
-    deleteAccount,
-    liveUserbots,
-    openSaleComposer,
-    recoveryStatusBadge,
-    resetSaleComposer,
-    restrictedMarker,
-    saleComposer,
-    saveUserbotSaleLot,
-    selectedLiveUserbot,
-    setSaleComposer,
-    setSelectedLiveUserbotId,
-    state,
-    toggleSalePaymentMethod
-  };
-
   const listedShopUserbotsSectionProps = {
     deleteShopItem,
     formatWhen,
@@ -435,7 +416,19 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     availableFailoverProxiesForAccount,
     canRestoreFromFiles,
     defaultCheckLines,
-    formatWhen
+    formatWhen,
+    liveUserbots,
+    setSelectedLiveUserbotId,
+    deleteAccount,
+    deletingAccountId: state.deletingAccountId,
+    restrictedMarker,
+    recoveryStatusBadge,
+    canSellUserbotAssets,
+    saleComposer,
+    setSaleComposer,
+    saveUserbotSaleLot,
+    toggleSalePaymentMethod,
+    openSaleComposer
   };
 
   if (state.loading) {
@@ -468,8 +461,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
             {...onboardingSectionCommonProps}
             steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
           />
-
-          <LiveUserbotsSection {...sellerLiveUserbotsSectionProps} />
 
           {canSellUserbotAssets ? (
             <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
