@@ -552,7 +552,7 @@ function CreateTariffPanel({
           {isFree ? (
             <div className="flex items-start gap-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
               <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>Бесплатный тариф — оплата не требуется, доступ выдаётся сразу.</span>
+              <span>Бесплатный тариф или товар — оплата не требуется, доступ выдаётся сразу.</span>
             </div>
           ) : (
             <div>
