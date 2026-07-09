@@ -3,6 +3,7 @@ import escapeHtml from 'escape-html';
 import { tonToNano } from '../../../utils/ton.js';
 
 const INVOICE_REUSE_WINDOW_MS = 5 * 60 * 1000;
+const INVOICE_TTL_MS = 15 * 60 * 1000;
 
 function pluralizeDays(days) {
     const n = Math.abs(Number(days) || 0);
@@ -184,7 +185,8 @@ export function createMenuBuilders({ service, botId }) {
                             amount: invoiceAmount,
                             currency: tariff.currency,
                             memo,
-                            status: 'pending'
+                            status: 'pending',
+                            expires_at: new Date(Date.now() + INVOICE_TTL_MS).toISOString()
                         })
                         .select('id')
                         .single());
@@ -258,7 +260,7 @@ export function createMenuBuilders({ service, botId }) {
                 `Отсканируйте QR или жмите «💸 Оплатить» — откроется ваш TON-кошелёк с заполненным переводом.\n\n` +
                 `👛 Адрес: <code>${escapedWallet}</code>\n` +
                 `💬 MEMO: <code>${escapedMemo}</code>\n\n` +
-                `⏳ Счёт действителен 24 часа. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
+                `⏳ Счёт действителен 15 минут. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
 
             await ctx.deleteMessage().catch(() => {});
             await ctx.replyWithPhoto({ source: qrBuffer }, {
