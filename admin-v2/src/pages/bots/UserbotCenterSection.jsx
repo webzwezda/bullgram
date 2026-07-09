@@ -370,10 +370,6 @@ export function UserbotCenterSection({
       return;
     }
 
-    if (!window.confirm('Сохранить эти имя, фамилию и описание в реальный Telegram-профиль выбранного юзербота?')) {
-      return;
-    }
-
     setProfileSyncState({ pulling: false, saving: true, uploadingAvatar: false, tone: 'default', text: '' });
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/update`, {
@@ -407,6 +403,24 @@ export function UserbotCenterSection({
         text: error.message
       });
       toast.error(`Не получилось сохранить: ${error.message}`);
+    }
+  }
+
+  async function saveAllChanges() {
+    if (!accessToken || !selectedLiveUserbotId || !selectedLiveUserbot) return;
+    if (!hasUnsavedChanges) return;
+
+    const parts = [];
+    if (profileDirty) parts.push('профиль');
+    if (bindingDirty) parts.push('настройки прокси');
+
+    if (!window.confirm(`Сохранить ${parts.join(' и ')} в Telegram?`)) return;
+
+    if (profileDirty) {
+      await saveSelectedUserbotProfile();
+    }
+    if (bindingDirty) {
+      await saveBinding(selectedLiveUserbotId);
     }
   }
 
@@ -592,6 +606,13 @@ export function UserbotCenterSection({
     selectedDraftLastName !== (selectedUserbot.tg_last_name || '') ||
     selectedDraftAbout !== (selectedUserbot.tg_about || '')
   );
+  const bindingDirty = !!selectedUserbot && !!binding && (
+    String(binding.proxy_id || '') !== String(selectedUserbot.proxy_id || '') ||
+    !!binding.allow_proxy_failover !== !!selectedUserbot.allow_proxy_failover ||
+    (binding.failover_proxy_ids || []).slice().sort().join('|') !==
+      (Array.isArray(selectedUserbot.failover_proxy_ids) ? selectedUserbot.failover_proxy_ids.map(String) : []).slice().sort().join('|')
+  );
+  const hasUnsavedChanges = profileDirty || bindingDirty;
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => String(item.tg_user_id) === String(threadUserId)) || null,
@@ -1057,14 +1078,6 @@ export function UserbotCenterSection({
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="h-11 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-indigo-200/50"
-                onClick={saveSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !profileDirty}
-              >
-                {profileSyncState.saving ? 'Сохраняем...' : 'Сохранить в Telegram'}
-              </button>
-              <button
-                type="button"
                 className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
@@ -1108,152 +1121,130 @@ export function UserbotCenterSection({
                 Ошибка профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
               </div>
             ) : null}
-
-            {profileSyncState.text ? (
-              <div className="mt-3 text-[13px] font-medium text-slate-600">
-                {profileSyncState.text}
-              </div>
-            ) : null}
           </div>
 
-          <div className="p-6 md:p-8 border-t border-slate-100">
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <Network className="w-4 h-4 text-indigo-500" />
-              <h3 className="text-sm font-bold text-slate-900">Соединение</h3>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
-                <Select
-                  value={binding?.proxy_id || ''}
-                  onValueChange={(value) => updateBinding(selectedLiveUserbot.id, { proxy_id: value })}
-                >
-                  <SelectTrigger className={`w-full rounded-xl shadow-sm ${binding?.proxy_id ? 'bg-white border-slate-200' : 'border-rose-300 bg-rose-50/40'}`}>
-                    {binding?.proxy_id ? (
-                      <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                    )}
-                    <SelectValue placeholder="Не назначен — выбрать..." />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
-                    {availableBindingProxiesForAccount(selectedLiveUserbot).map((item) => (
-                      <SelectItem key={item.id} value={item.id} className="rounded-lg">
-                        {proxyLabel(item)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <div className="p-6 md:p-8 border-t border-slate-100 grid gap-6 lg:grid-cols-2">
+            <div>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <Network className="w-4 h-4 text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-900">Соединение</h3>
               </div>
 
-              <div className="h-px w-full bg-slate-200/60 my-2"></div>
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
+                  <Select
+                    value={binding?.proxy_id || ''}
+                    onValueChange={(value) => updateBinding(selectedLiveUserbot.id, { proxy_id: value })}
+                  >
+                    <SelectTrigger className={`w-full rounded-xl shadow-sm ${binding?.proxy_id ? 'bg-white border-slate-200' : 'border-rose-300 bg-rose-50/40'}`}>
+                      {binding?.proxy_id ? (
+                        <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                      )}
+                      <SelectValue placeholder="Не назначен — выбрать..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      {availableBindingProxiesForAccount(selectedLiveUserbot).map((item) => (
+                        <SelectItem key={item.id} value={item.id} className="rounded-lg">
+                          {proxyLabel(item)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="h-px w-full bg-slate-200/60 my-2"></div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Автозамена прокси</label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Переезд при падении основного</p>
+                    </div>
+                    <ModernSwitch
+                      checked={!!binding?.allow_proxy_failover}
+                      onChange={() => updateBinding(selectedLiveUserbot.id, { allow_proxy_failover: !binding?.allow_proxy_failover })}
+                      activeColor="bg-emerald-500"
+                    />
+                  </div>
+
+                  {binding?.allow_proxy_failover && (
+                    <div className="pt-2 animate-in fade-in slide-in-from-top-1">
+                      {(() => {
+                        const failoverOptions = availableFailoverProxiesForAccount(selectedLiveUserbot);
+                        return failoverOptions.length ? (
+                          <select
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow min-h-[100px]"
+                            multiple
+                            value={(binding?.failover_proxy_ids || []).filter((id) =>
+                              failoverOptions.some((item) => String(item.id) === String(id))
+                            )}
+                            onChange={(event) => updateBinding(selectedLiveUserbot.id, {
+                              failover_proxy_ids: Array.from(event.target.selectedOptions).map((option) => option.value)
+                            })}
+                          >
+                            {failoverOptions.map((item) => (
+                              <option key={item.id} value={item.id} className="py-1">{proxyLabel(item)}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="text-sm text-slate-500 bg-slate-100/50 rounded-xl p-3 border border-dashed border-slate-200 text-center">
+                            Нет доступных прокси
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <Activity className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-sm font-bold text-slate-900">Состояние сессии</h3>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Автозамена прокси</label>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Переезд при падении основного</p>
+                    <p className="text-sm font-semibold text-slate-800">Боевой режим</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Выключите для перевода в Safe Mode</p>
                   </div>
                   <ModernSwitch
-                    checked={!!binding?.allow_proxy_failover}
-                    onChange={() => updateBinding(selectedLiveUserbot.id, { allow_proxy_failover: !binding?.allow_proxy_failover })}
+                    checked={isCombatMode}
+                    onChange={() => toggleSafeMode(selectedLiveUserbot)}
+                    disabled={checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id)}
                     activeColor="bg-emerald-500"
                   />
                 </div>
 
-                {binding?.allow_proxy_failover && (
-                  <div className="pt-2 animate-in fade-in slide-in-from-top-1">
-                    {(() => {
-                      const failoverOptions = availableFailoverProxiesForAccount(selectedLiveUserbot);
-                      return failoverOptions.length ? (
-                        <select
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow min-h-[100px]"
-                          multiple
-                          value={(binding?.failover_proxy_ids || []).filter((id) =>
-                            failoverOptions.some((item) => String(item.id) === String(id))
-                          )}
-                          onChange={(event) => updateBinding(selectedLiveUserbot.id, {
-                            failover_proxy_ids: Array.from(event.target.selectedOptions).map((option) => option.value)
-                          })}
-                        >
-                          {failoverOptions.map((item) => (
-                            <option key={item.id} value={item.id} className="py-1">{proxyLabel(item)}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div className="text-sm text-slate-500 bg-slate-100/50 rounded-xl p-3 border border-dashed border-slate-200 text-center">
-                          Нет доступных прокси
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2">
                 <Button
-                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
+                  className="w-full rounded-xl shadow-sm"
                   size="lg"
-                  onClick={() => saveBinding(selectedLiveUserbot.id)}
-                  disabled={bindingAccountId === String(selectedLiveUserbot.id)}
-                >
-                  {bindingAccountId === String(selectedLiveUserbot.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" />}
-                  {bindingAccountId === String(selectedLiveUserbot.id) ? 'Сохранение...' : 'Сохранить настройки'}
-                </Button>
-              </div>
-
-              {accountBindingFeedback.accountId === String(selectedLiveUserbot.id) && accountBindingFeedback.text && (
-                <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-100 text-sm font-medium animate-in slide-in-from-bottom-2">
-                  {accountBindingFeedback.text}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="p-6 md:p-8 border-t border-slate-100">
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <Activity className="w-4 h-4 text-emerald-500" />
-              <h3 className="text-sm font-bold text-slate-900">Состояние сессии</h3>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Боевой режим</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Выключите для перевода в Safe Mode</p>
-                </div>
-                <ModernSwitch
-                  checked={isCombatMode}
-                  onChange={() => toggleSafeMode(selectedLiveUserbot)}
+                  onClick={() => checkAccount(selectedLiveUserbot)}
                   disabled={checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id)}
-                  activeColor="bg-emerald-500"
-                />
-              </div>
+                  variant={isSafeMode ? "default" : "secondary"}
+                >
+                  {checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id) ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {isSafeMode ? 'Активация...' : 'Проверка...'}</>
+                  ) : (
+                    isSafeMode ? 'Выполнить активацию' : 'Проверить Telegram'
+                  )}
+                </Button>
 
-              <Button
-                className="w-full rounded-xl shadow-sm"
-                size="lg"
-                onClick={() => checkAccount(selectedLiveUserbot)}
-                disabled={checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id)}
-                variant={isSafeMode ? "default" : "secondary"}
-              >
-                {checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id) ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {isSafeMode ? 'Активация...' : 'Проверка...'}</>
-                ) : (
-                  isSafeMode ? 'Выполнить активацию' : 'Проверить Telegram'
-                )}
-              </Button>
-
-              <div className="flex flex-wrap gap-2 pt-1">
-                {(accountCheckReport.accountId === String(selectedLiveUserbot.id) && accountCheckReport.lines.length
-                  ? accountCheckReport.lines
-                  : defaultCheckLines()
-                ).map((line, index) => (
-                  <StatusBadge key={`${line.label}-${index}`} tone={line.tone}>
-                    {line.label}
-                  </StatusBadge>
-                ))}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {(accountCheckReport.accountId === String(selectedLiveUserbot.id) && accountCheckReport.lines.length
+                    ? accountCheckReport.lines
+                    : defaultCheckLines()
+                  ).map((line, index) => (
+                    <StatusBadge key={`${line.label}-${index}`} tone={line.tone}>
+                      {line.label}
+                    </StatusBadge>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1301,6 +1292,44 @@ export function UserbotCenterSection({
               </div>
             </div>
           )}
+
+          <div className="p-6 md:p-8 border-t border-slate-100 sticky bottom-0 bg-white/95 backdrop-blur-sm z-10">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
+              {(profileSyncState.text || (accountBindingFeedback.accountId === String(selectedLiveUserbot.id) && accountBindingFeedback.text)) ? (
+                <div className={`flex-1 p-3 rounded-xl border text-sm font-medium animate-in slide-in-from-bottom-2 ${
+                  profileSyncState.tone === 'error' || accountBindingFeedback.tone === 'error'
+                    ? 'bg-rose-50 border-rose-100 text-rose-800'
+                    : profileSyncState.tone === 'success' || accountBindingFeedback.tone === 'success'
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-800'
+                      : 'bg-slate-50 border-slate-100 text-slate-700'
+                }`}>
+                  {profileSyncState.text || accountBindingFeedback.text}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className={`h-11 px-6 rounded-xl text-[14px] font-bold transition-all shadow-sm inline-flex items-center justify-center gap-2 whitespace-nowrap ${
+                  hasUnsavedChanges
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200/50'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
+                }`}
+                onClick={saveAllChanges}
+                disabled={!hasUnsavedChanges || profileSyncState.saving || bindingAccountId === String(selectedLiveUserbot.id)}
+              >
+                {profileSyncState.saving || bindingAccountId === String(selectedLiveUserbot.id) ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Сохраняем...
+                  </>
+                ) : (
+                  <>
+                    <Settings2 className="w-4 h-4" />
+                    Сохранить
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </>
     );
   }
