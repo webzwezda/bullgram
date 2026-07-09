@@ -7,7 +7,7 @@ import {
   userbotLotPaymentMethods
 } from './bots-accounts.utils.js';
 
-const DEFAULT_NETWORK = 'testnet';
+const DEFAULT_NETWORK = 'mainnet';
 
 function purchaseShapeFromApiResponse(data, fallbackPaymentMethod, isBatch = false) {
   return {

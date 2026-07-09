@@ -333,7 +333,7 @@ export function UserbotStorefrontSection({
                         amountNano={activePurchase.amount_nanoton}
                         merchantWallet={activePurchase.seller_wallet}
                         memo={activePurchase.memo}
-                        network={activePurchase.network || 'testnet'}
+                        network={activePurchase.network || 'mainnet'}
                         verifyEndpoint={VERIFY_ENDPOINT}
                         buildVerifyBody={buildVerifyBody}
                         accessToken={accessToken}

@@ -252,7 +252,7 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
     amount_ton: amountTon,
     amount_nanoton: amountNanoTon,
     amount_rub: amountRub,
-    network: first.network || 'testnet',
+    network: first.network || 'mainnet',
     ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
     created_at: first.created_at,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
