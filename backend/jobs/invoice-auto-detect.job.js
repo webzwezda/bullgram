@@ -3,10 +3,10 @@ import {
     fetchRecentTransactions,
     matchInvoice
 } from '../services/ton-connect-verify.service.js';
+import { tonToNano } from '../utils/ton.js';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const MIN_INTERVAL_MS = 10_000;
-const TON_NANO = 1_000_000_000n;
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -18,12 +18,6 @@ function envNumber(name, fallback, options = {}) {
     if (options.min && parsed < options.min) return fallback;
     if (options.max && parsed > options.max) return options.max;
     return parsed;
-}
-
-function tonToNano(value) {
-    const numeric = Number(value || 0);
-    if (!Number.isFinite(numeric) || numeric <= 0) return 0n;
-    return BigInt(Math.round(numeric * Number(TON_NANO)));
 }
 
 function groupBy(list, keyFn) {

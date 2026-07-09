@@ -1,3 +1,30 @@
+import QRCode from 'qrcode';
+import escapeHtml from 'escape-html';
+import { tonToNano } from '../../../utils/ton.js';
+
+const INVOICE_REUSE_WINDOW_MS = 5 * 60 * 1000;
+
+function pluralizeDays(days) {
+    const n = Math.abs(Number(days) || 0);
+    if (n === 0) return 'Навсегда';
+    const lastTwo = n % 100;
+    const last = n % 10;
+    if (lastTwo >= 11 && lastTwo <= 14) return `${n} дней`;
+    if (last === 1) return `${n} день`;
+    if (last >= 2 && last <= 4) return `${n} дня`;
+    return `${n} дней`;
+}
+
+function generateMemo() {
+    return 'sub_' + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+}
+
+function isUniqueViolation(err) {
+    const code = String(err?.code || '');
+    const message = String(err?.message || '');
+    return code === '23505' || message.includes('duplicate key') || message.includes('unique');
+}
+
 export function createMenuBuilders({ service, botId }) {
     const sendAdminMenu = async (ctx) => {
         const adminContext = await service.getBotAdminContext(botId);
@@ -101,104 +128,152 @@ export function createMenuBuilders({ service, botId }) {
 
     const createInvoiceForTariff = async (ctx, tariff) => {
         try {
-            const durationText = Number(tariff.duration_days) > 0 ? `${tariff.duration_days} дней` : 'Навсегда';
+            const durationText = pluralizeDays(tariff.duration_days);
 
-            const { data: settings } = await service.supabase.from('payment_settings').select('*').eq('owner_id', tariff.owner_id).single();
-            if (!settings) return ctx.reply('❌ Администратор не настроил реквизиты.');
-            if (!settings.ton_wallet) {
-                return ctx.reply('❌ У этого продавца не настроен TON-кошелёк. Оплата через бота недоступна — попросите продавца указать кошелёк в личном кабинете.');
+            const { data: settings, error: settingsErr } = await service.supabase
+                .from('payment_settings')
+                .select('ton_wallet')
+                .eq('owner_id', tariff.owner_id)
+                .maybeSingle();
+            if (settingsErr) console.error('payment_settings load:', settingsErr.message);
+            if (!settings?.ton_wallet) {
+                return ctx.reply('❌ У продавца не настроен TON-кошелёк. Оплата через бота недоступна.');
             }
 
             const userId = ctx.from.id;
-            const memo = 'sub_' + Math.random().toString(36).substr(2, 6);
             const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, userId);
             const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
             const browseDiscountPercent = await service.getBrowseFollowupDiscount(tariff.owner_id, userId);
             const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
             const originalAmount = Number(tariff.price || 0);
             const invoiceAmount = service.formatDiscountedAmount(originalAmount, tariff.currency, activeDiscountPercent);
-            const referralDiscountAmount = Number((originalAmount - invoiceAmount).toFixed(tariff.currency === 'RUB' ? 2 : 4));
 
-            const { error: insertErr } = await service.supabase.from('invoices').insert({
-                tg_user_id: userId, tariff_id: tariff.id, amount: invoiceAmount, currency: tariff.currency, memo: memo, status: 'pending'
-            });
-
-            if (insertErr) return ctx.reply(`❌ Ошибка БД при создании счета:\n${insertErr.message}`);
-
-            const { data: createdInvoice } = await service.supabase
+            // Идемпотентность: если у юзера уже есть свежий pending-счёт на этот тариф с той же суммой — переиспользуем.
+            const { data: recentPending } = await service.supabase
                 .from('invoices')
-                .select('id')
-                .eq('memo', memo)
-                .single();
+                .select('id, memo, amount, created_at')
+                .eq('tg_user_id', userId)
+                .eq('tariff_id', tariff.id)
+                .eq('status', 'pending')
+                .gt('expires_at', new Date().toISOString())
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-            await service.logCustomerFunnelEvent({
-                ownerId: tariff.owner_id,
-                botId,
-                tgUserId: userId,
-                tariffId: tariff.id,
-                eventType: 'invoice_created',
-                referralCode: referralAttribution?.referral_code || null,
-                sessionKey: service.buildCustomerFunnelSessionKey({
+            const canReuse = recentPending
+                && Date.now() - new Date(recentPending.created_at).getTime() < INVOICE_REUSE_WINDOW_MS
+                && Math.abs(Number(recentPending.amount) - invoiceAmount) < 1e-6;
+
+            let memo;
+            let invoiceId = null;
+
+            if (canReuse) {
+                memo = recentPending.memo;
+                invoiceId = recentPending.id;
+            } else {
+                // Atomic INSERT + SELECT с retry на unique violation (23505) — крайне редкий, но возможный.
+                let createdInvoice = null;
+                let insertErr = null;
+                for (let attempt = 0; attempt < 3 && !createdInvoice; attempt++) {
+                    memo = generateMemo();
+                    ({ data: createdInvoice, error: insertErr } = await service.supabase
+                        .from('invoices')
+                        .insert({
+                            tg_user_id: userId,
+                            tariff_id: tariff.id,
+                            amount: invoiceAmount,
+                            currency: tariff.currency,
+                            memo,
+                            status: 'pending'
+                        })
+                        .select('id')
+                        .single());
+                    if (insertErr && !isUniqueViolation(insertErr)) break;
+                }
+                if (insertErr || !createdInvoice) {
+                    console.error('INSERT invoice failed:', insertErr?.message || 'no rows');
+                    return ctx.reply('❌ Не удалось создать счёт. Попробуйте позже.');
+                }
+                invoiceId = createdInvoice.id;
+
+                const referralDiscountAmount = Number((originalAmount - invoiceAmount).toFixed(4));
+
+                await service.logCustomerFunnelEvent({
+                    ownerId: tariff.owner_id,
                     botId,
                     tgUserId: userId,
+                    tariffId: tariff.id,
                     eventType: 'invoice_created',
-                    tariffId: tariff.id
-                }),
-                payload: {
-                    invoice_id: createdInvoice?.id || null,
-                    amount: invoiceAmount,
-                    currency: tariff.currency,
-                    original_amount: originalAmount,
-                    referral_discount_percent: activeDiscountPercent
-                }
-            });
+                    referralCode: referralAttribution?.referral_code || null,
+                    sessionKey: service.buildCustomerFunnelSessionKey({
+                        botId,
+                        tgUserId: userId,
+                        eventType: 'invoice_created',
+                        tariffId: tariff.id
+                    }),
+                    payload: {
+                        invoice_id: invoiceId,
+                        amount: invoiceAmount,
+                        currency: tariff.currency,
+                        original_amount: originalAmount,
+                        referral_discount_percent: activeDiscountPercent
+                    }
+                });
 
-            await service.logPaymentEvent({
-                ownerId: tariff.owner_id,
-                invoiceId: createdInvoice?.id,
-                provider: tariff.currency === 'RUB' ? 'manual_rub' : 'manual_ton',
-                eventType: 'invoice_created',
-                status: 'pending',
-                payload: {
-                    tariff_id: tariff.id,
-                    amount: invoiceAmount,
-                    currency: tariff.currency,
-                    memo,
-                    referral_discount_percent: activeDiscountPercent,
-                    referral_discount_amount: referralDiscountAmount,
-                    original_amount: originalAmount,
-                    referral_code: referralAttribution?.referral_code || null
-                }
-            });
+                await service.logPaymentEvent({
+                    ownerId: tariff.owner_id,
+                    invoiceId,
+                    provider: 'manual_ton',
+                    eventType: 'invoice_created',
+                    status: 'pending',
+                    payload: {
+                        tariff_id: tariff.id,
+                        amount: invoiceAmount,
+                        currency: tariff.currency,
+                        memo,
+                        referral_discount_percent: activeDiscountPercent,
+                        referral_discount_amount: referralDiscountAmount,
+                        original_amount: originalAmount,
+                        referral_code: referralAttribution?.referral_code || null
+                    }
+                });
+            }
 
-            const { default: QRCode } = await import('qrcode');
-            const nanoTon = Math.round(invoiceAmount * 1000000000);
+            const nanoTon = tonToNano(invoiceAmount);
             const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
             const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
+            const escapedTitle = escapeHtml(service.getTariffDisplayTitle(tariff));
+            const escapedWallet = escapeHtml(settings.ton_wallet);
+            const escapedMemo = escapeHtml(memo);
             const discountLine = activeDiscountPercent > 0
-                ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
+                ? `\n🎉 Скидка: <b>-${activeDiscountPercent}%</b> (до скидки: ${originalAmount} TON)`
                 : '';
-            const caption = `💎 **СЧЕТ НА ОПЛАТУ (TON)**\n` +
+
+            const caption = `💎 <b>СЧЕТ НА ОПЛАТУ (TON)</b>\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
-                `⏳ Срок доступа: **${durationText}**\n` +
-                `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
-                `Отсканируйте QR-код или нажмите **«💸 Оплатить»** для автозаполнения перевода.\n\n` +
-                `👛 Адрес: \`${settings.ton_wallet}\`\n` +
-                `💬 Комментарий (MEMO): \`${memo}\`\n\n` +
-                `⚠️ **Важно:** обязательно укажите комментарий \`${memo}\` — по нему платёж зачислится автоматически в течение ~30 секунд после перевода.`;
+                `📦 Тариф: <b>${escapedTitle}</b>\n` +
+                `⏳ Срок доступа: <b>${durationText}</b>\n` +
+                `💰 Сумма: <b>${invoiceAmount} TON</b>${discountLine}\n\n` +
+                `Отсканируйте QR или жмите «💸 Оплатить» — откроется ваш TON-кошелёк с заполненным переводом.\n\n` +
+                `👛 Адрес: <code>${escapedWallet}</code>\n` +
+                `💬 MEMO: <code>${escapedMemo}</code>\n\n` +
+                `⏳ Счёт действителен 24 часа. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
 
             await ctx.deleteMessage().catch(() => {});
             await ctx.replyWithPhoto({ source: qrBuffer }, {
-                caption: caption, parse_mode: 'Markdown',
+                caption,
+                parse_mode: 'HTML',
                 reply_markup: { inline_keyboard: [
                     [{ text: '💸 Оплатить', url: tonUri }],
                     [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }],
-                    [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
+                    [{ text: '🔙 К тарифам', callback_data: 'buy_tariff' }]
                 ]}
             });
-        } catch (err) { console.error('Ошибка счета:', err); }
+        } catch (err) {
+            console.error('Ошибка создания счёта:', err);
+            await ctx.reply('❌ Не удалось создать счёт. Попробуйте позже или свяжитесь с продавцом.').catch(() => {});
+        }
     };
 
     return { sendAdminMenu, sendUserMainMenu, sendMainMenu, createInvoiceForTariff };

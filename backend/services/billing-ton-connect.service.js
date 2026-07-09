@@ -5,6 +5,7 @@ import {
     recordBillingEvent
 } from './bullrun-billing.service.js';
 import { verifyTonConnectPayment } from './ton-connect-verify.service.js';
+import { tonToNano } from '../utils/ton.js';
 
 const TON_SCALE = 9n;
 const TON_RUB_RATE_DEFAULT = 200;
@@ -13,12 +14,6 @@ const ORDER_TTL_MINUTES = 60 * 24;
 function envNumber(name, fallback) {
     const parsed = Number(process.env[name]);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function tonToNano(tonAmount) {
-    const [whole, frac = ''] = String(tonAmount).split('.');
-    const fracPadded = (frac + '0'.repeat(Number(TON_SCALE))).slice(0, Number(TON_SCALE));
-    return BigInt(whole || '0') * (10n ** TON_SCALE) + BigInt(fracPadded || '0');
 }
 
 function computeTonAmount(rubAmount) {

@@ -219,9 +219,7 @@ export class OfficialBotService {
         if (!Number.isFinite(numericAmount) || numericAmount <= 0 || !Number.isFinite(percent) || percent <= 0) {
             return numericAmount;
         }
-
-        const precision = String(currency || '').toUpperCase() === 'RUB' ? 2 : 4;
-        return Number((numericAmount * (100 - percent) / 100).toFixed(precision));
+        return Number((numericAmount * (100 - percent) / 100).toFixed(4));
     }
 
     formatTariffPaymentOptions(variants = [], discountPercent = 0) {

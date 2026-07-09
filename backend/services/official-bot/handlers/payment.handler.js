@@ -1,12 +1,5 @@
 import { verifyTonConnectPayment } from '../../ton-connect-verify.service.js';
-
-const TON_NANO = 1_000_000_000n;
-
-function tonToNano(value) {
-    const numeric = Number(value || 0);
-    if (!Number.isFinite(numeric) || numeric <= 0) return 0n;
-    return BigInt(Math.round(numeric * Number(TON_NANO)));
-}
+import { tonToNano } from '../../../utils/ton.js';
 
 export function registerPaymentExactHandlers(bot, { service }) {
     // no exact-match payment handlers currently
