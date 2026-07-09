@@ -176,12 +176,6 @@ export function createMenuBuilders({ service, botId }) {
             const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
             const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
-            const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
-            const invoiceId = createdInvoice?.id;
-            const payAppUrl = invoiceId
-                ? `${publicAppOrigin}/pay-app/?invoice=${invoiceId}`
-                : null;
-
             const discountLine = activeDiscountPercent > 0
                 ? `\n🎉 Скидка: **-${activeDiscountPercent}%** (-${referralDiscountAmount} TON)\nЦена до скидки: **${originalAmount} TON**`
                 : '';
@@ -190,23 +184,17 @@ export function createMenuBuilders({ service, botId }) {
                 `📦 Тариф: **${service.getTariffDisplayTitle(tariff)}**\n` +
                 `⏳ Срок доступа: **${durationText}**\n` +
                 `💰 Сумма к оплате: **${invoiceAmount} TON**${discountLine}\n\n` +
-                `Нажмите **«💸 Оплатить»** — откроется окно TON Connect, оплата в один клик.\n\n` +
-                `Нет TON Connect? Используйте QR-код ниже или кнопку **«Перевести вручную»**:\n` +
+                `Отсканируйте QR-код или нажмите **«💸 Оплатить»** для автозаполнения перевода.\n\n` +
                 `👛 Адрес: \`${settings.ton_wallet}\`\n` +
                 `💬 Комментарий (MEMO): \`${memo}\`\n\n` +
-                `⚠️ **Важно:** при ручном переводе обязательно укажите комментарий \`${memo}\`, иначе платёж не зачислится автоматически.`;
-
-            const primaryRow = payAppUrl
-                ? [{ text: '💸 Оплатить', web_app: { url: payAppUrl } }]
-                : [{ text: '💸 Оплатить', url: tonUri }];
+                `⚠️ **Важно:** обязательно укажите комментарий \`${memo}\` — по нему платёж зачислится автоматически в течение ~30 секунд после перевода.`;
 
             await ctx.deleteMessage().catch(() => {});
             await ctx.replyWithPhoto({ source: qrBuffer }, {
                 caption: caption, parse_mode: 'Markdown',
                 reply_markup: { inline_keyboard: [
-                    primaryRow,
+                    [{ text: '💸 Оплатить', url: tonUri }],
                     [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }],
-                    [{ text: '👛 Перевести вручную (TON)', url: tonUri }],
                     [{ text: '🔙 Назад', callback_data: 'back_to_main' }]
                 ]}
             });
