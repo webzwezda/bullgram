@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
+import { tonToNanoString } from '../utils/ton.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -155,6 +156,12 @@ function isMissingSalesChannelColumn(error) {
 
 function buildShopMemo() {
     return 'shop_' + Math.random().toString(36).slice(2, 10);
+}
+
+function detectNetwork() {
+    const base = String(process.env.TONCONNECT_TONAPI_BASE || '').toLowerCase();
+    if (base.includes('testnet')) return 'testnet';
+    return 'mainnet';
 }
 
 function buildTonUri(wallet, amountTon, memo) {
@@ -2140,7 +2147,9 @@ export default function shopRoutes(supabase) {
                     id: row.id,
                     status: row.status === 'pending' && isPendingPurchaseExpired(row) ? 'expired' : row.status,
                     amount_ton: Number(row.amount_ton || 0),
+                    amount_nanoton: tonToNanoString(Number(row.amount_ton || 0)),
                     amount_rub: Number(row.payload?.amount_rub || row.shop_items?.price_rub || 0),
+                    network: detectNetwork(),
                     ownership_transfer_status: row.ownership_transfer_status || 'pending',
                     ownership_transfer_error: row.ownership_transfer_error || null,
                     created_at: row.created_at,
@@ -2171,6 +2180,7 @@ export default function shopRoutes(supabase) {
 
             res.json({
                 purchases: normalizedPurchases,
+                network: detectNetwork(),
                 support: {
                     shop: true
                 }
@@ -2316,28 +2326,17 @@ export default function shopRoutes(supabase) {
                 paymentMethod
             });
 
-            const tonData = paymentMethod === 'ton'
-                ? await buildTonQrDataUrl(settings.ton_wallet, amountTon, memo)
-                : { tonUri: null, qrCode: null };
-            const trustWalletData = paymentMethod === 'ton' && settings?.ton_wallet
-                ? await buildTrustWalletQrDataUrl(settings.ton_wallet, amountTon, memo)
-                : { trustWalletUri: null, qrCode: null };
-
             res.json({
                 success: true,
                 purchase_id: purchase.id,
                 amount_ton: amountTon,
-                payment_url: null,
-                provider_invoice_id: null,
+                amount_nanoton: tonToNanoString(amountTon),
                 payment_method: paymentMethod,
                 seller_wallet: settings?.ton_wallet || null,
                 memo,
-                ton_uri: tonData.tonUri,
-                trust_wallet_uri: trustWalletData.trustWalletUri,
-                trust_wallet_qr: trustWalletData.qrCode,
-                ton_qr: tonData.qrCode,
                 item_type: item.item_type,
-                expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString()
+                expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString(),
+                network: detectNetwork()
             });
         } catch (error) {
             console.error('Ошибка создания shop purchase:', error);
@@ -2398,12 +2397,6 @@ export default function shopRoutes(supabase) {
             const totalTon = created.reduce((sum, row) => sum + Number(row.amountTon || 0), 0);
             const totalRub = created.reduce((sum, row) => sum + Number(row.amountRub || 0), 0);
 
-            const tonData = paymentMethod === 'ton'
-                ? await buildTonQrDataUrl(first.settings.ton_wallet, totalTon, memo)
-                : { tonUri: null, qrCode: null };
-            const trustWalletData = paymentMethod === 'ton' && first.settings?.ton_wallet
-                ? await buildTrustWalletQrDataUrl(first.settings.ton_wallet, totalTon, memo)
-                : { trustWalletUri: null, qrCode: null };
             const expiresAt = created
                 .map((row) => getPendingPurchaseExpiry(row.purchase.created_at).getTime())
                 .filter(Number.isFinite)
@@ -2415,17 +2408,13 @@ export default function shopRoutes(supabase) {
                 batch_token: batchToken,
                 purchase_ids: created.map((row) => row.purchase.id),
                 amount_ton: totalTon,
-                payment_url: null,
-                provider_invoice_id: null,
+                amount_nanoton: tonToNanoString(totalTon),
                 payment_method: paymentMethod,
                 seller_wallet: first.settings?.ton_wallet || null,
                 memo,
-                ton_uri: tonData.tonUri,
-                trust_wallet_uri: trustWalletData.trustWalletUri,
-                trust_wallet_qr: trustWalletData.qrCode,
-                ton_qr: tonData.qrCode,
                 item_type: 'proxy_batch',
-                expires_at: expiresAt ? new Date(expiresAt).toISOString() : null
+                expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+                network: detectNetwork()
             });
         } catch (error) {
             console.error('Ошибка создания batch shop purchase:', error);
@@ -2457,6 +2446,76 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка проверки shop purchase:', error);
             res.status(500).json({ error: 'Ошибка проверки оплаты shop-покупки' });
+        }
+    });
+
+    // TON Connect 2.0 verification entrypoint for shop purchases.
+    // Same matching logic as /public/purchase/check (memo + amount on merchant wallet),
+    // but exposed as a semantically distinct endpoint for the TON Connect UI flow.
+    // Accepts either a single purchase_id or a batch of purchase_ids.
+    router.post('/public/purchase/verify-ton-connect', authenticateUser, async (req, res) => {
+        const buyerOwnerId = req.user.id;
+        const { purchase_id, purchase_ids } = req.body || {};
+
+        const isBatch = Array.isArray(purchase_ids) && purchase_ids.length > 0;
+        if (!isBatch && !purchase_id) {
+            return res.status(400).json({ error: 'purchase_id или purchase_ids обязательны' });
+        }
+
+        try {
+            if (isBatch) {
+                const ids = purchase_ids.map((value) => String(value || '').trim()).filter(Boolean);
+                const { data: purchases, error } = await supabase
+                    .from('shop_purchases')
+                    .select('*')
+                    .eq('buyer_owner_id', buyerOwnerId)
+                    .in('id', ids);
+                if (error) throw error;
+                if ((purchases || []).length !== ids.length) {
+                    return res.status(404).json({ error: 'Часть покупок уже недоступна.' });
+                }
+
+                const results = [];
+                for (const purchase of purchases) {
+                    const result = await runShopPurchaseCheck(supabase, purchase, {
+                        enforceBuyerOwnerId: buyerOwnerId
+                    });
+                    results.push(result);
+                }
+
+                const failures = results.filter((item) => !item.ok);
+                if (failures.length) {
+                    const first = failures[0];
+                    return res.status(first.statusCode || 400).json(first.body);
+                }
+
+                const bodies = results.map((item) => item.body || {});
+                const allPaid = bodies.every((item) => item.status === 'paid');
+                return res.status(allPaid ? 200 : 202).json({
+                    success: true,
+                    status: allPaid ? 'paid' : 'pending',
+                    ownership_transfer_status: bodies.every((item) => item.ownership_transfer_status === 'completed')
+                        ? 'completed'
+                        : 'pending'
+                });
+            }
+
+            const { data: purchase, error: purchaseError } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('id', purchase_id)
+                .eq('buyer_owner_id', buyerOwnerId)
+                .single();
+            if (purchaseError) throw purchaseError;
+
+            const result = await runShopPurchaseCheck(supabase, purchase, {
+                enforceBuyerOwnerId: buyerOwnerId
+            });
+
+            return res.status(result.statusCode).json(result.body);
+        } catch (error) {
+            console.error('Ошибка TON Connect проверки shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка проверки оплаты' });
         }
     });
 

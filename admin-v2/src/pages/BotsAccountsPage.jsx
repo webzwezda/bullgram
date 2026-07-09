@@ -61,16 +61,12 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   const {
     cancelUserbotCheckout,
-    checkUserbotCheckout,
     checkoutState,
     createUserbotBatchCheckout,
-    markUserbotCheckoutPaid,
     openUserbotCheckout,
-    receiptNote,
+    refreshPurchases,
     selectedOpenPurchaseId,
     setCheckoutState,
-    setReceiptFile,
-    setReceiptNote,
     setSelectedOpenPurchaseId,
     setUserbotBuyQuantity,
     showUserbotPurchaseInline,
@@ -83,8 +79,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   });
 
   const {
-    accountOnlyUserbotLot,
-    accountOnlyUserbotLots,
     availableOnboardingProxies,
     bundledUserbotLot,
     bundledUserbotLots,
@@ -95,7 +89,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     openUserbotPurchases,
     planRules,
     selectedLiveUserbot,
-    selectedOpenPurchase,
     selectedShopUserbot,
     usedUserbotProxyIds,
     userbots
@@ -345,36 +338,20 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
   const buyerStorefrontSectionProps = {
     openUserbotPurchases,
-    selectedOpenPurchase,
-    selectedOpenPurchaseId,
     setSelectedOpenPurchaseId,
     showUserbotPurchaseInline,
     storefrontState,
-    accountOnlyUserbotLot,
-    accountOnlyUserbotLots,
     bundledUserbotLot,
     bundledUserbotLots,
     userbotBuyQuantity,
     setUserbotBuyQuantity,
     checkoutState,
     setCheckoutState,
-    receiptNote,
-    setReceiptNote,
-    setReceiptFile,
-    checkUserbotCheckout,
     cancelUserbotCheckout,
-    markUserbotCheckoutPaid,
     createUserbotBatchCheckout,
     openUserbotCheckout,
-    formatWhen,
-    resolveBackendAssetUrl,
-    userbotPurchaseAmountSummary,
-    paymentMethodLabel,
-    purchaseStatusMeta,
-    userbotLotKindLabel,
-    userbotLotPaymentMethods,
-    batchUserbotLotPaymentMethods,
-    userbotItemPriceSummary
+    refreshPurchases,
+    reloadAccounts
   };
 
   const listedShopUserbotsSectionProps = {

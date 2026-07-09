@@ -4,9 +4,58 @@ import {
   batchUserbotLotPaymentMethods,
   isUserbotPurchase,
   isUserbotShopItem,
-  normalizeOpenUserbotPurchaseGroup,
   userbotLotPaymentMethods
 } from './bots-accounts.utils.js';
+
+const DEFAULT_NETWORK = 'testnet';
+
+function purchaseShapeFromApiResponse(data, fallbackPaymentMethod, isBatch = false) {
+  return {
+    id: isBatch ? (data.batch_token || data.purchase_ids?.[0] || '') : data.purchase_id,
+    purchase_ids: isBatch ? (data.purchase_ids || []) : null,
+    amount_ton: data.amount_ton,
+    amount_nanoton: data.amount_nanoton || '',
+    amount_rub: data.amount_rub || 0,
+    payment_method: data.payment_method || fallbackPaymentMethod,
+    seller_wallet: data.seller_wallet || '',
+    memo: data.memo || '',
+    expires_at: data.expires_at || null,
+    network: data.network || DEFAULT_NETWORK,
+    status: 'pending',
+    batch: !!isBatch
+  };
+}
+
+function purchaseShapeFromRow(row, fallbackPaymentMethod) {
+  const isBatch = !!row.batch;
+  return {
+    id: row.id,
+    purchase_ids: isBatch ? (row.purchase_ids || [row.id]) : null,
+    amount_ton: Number(row.amount_ton || 0),
+    amount_nanoton: row.amount_nanoton || '',
+    amount_rub: Number(row.amount_rub || 0),
+    payment_method: row.payload?.payment_method || fallbackPaymentMethod,
+    seller_wallet: row.payload?.seller_wallet || '',
+    memo: row.payload?.memo || '',
+    expires_at: row.expires_at || null,
+    network: row.network || DEFAULT_NETWORK,
+    status: row.status,
+    batch: isBatch
+  };
+}
+
+function emptyCheckoutState(prevPaymentMethod = 'ton') {
+  return {
+    item: null,
+    purchase: null,
+    paymentMethod: prevPaymentMethod,
+    loading: false,
+    checking: false,
+    error: '',
+    notice: '',
+    noticeTone: 'default'
+  };
+}
 
 export function useUserbotStorefront({
   accessToken,
@@ -17,7 +66,8 @@ export function useUserbotStorefront({
     loading: true,
     error: '',
     items: [],
-    purchases: []
+    purchases: [],
+    network: DEFAULT_NETWORK
   });
   const [checkoutState, setCheckoutState] = useState({
     item: null,
@@ -29,8 +79,6 @@ export function useUserbotStorefront({
     notice: '',
     noticeTone: 'default'
   });
-  const [receiptNote, setReceiptNote] = useState('');
-  const [receiptFile, setReceiptFile] = useState(null);
   const [selectedOpenPurchaseId, setSelectedOpenPurchaseId] = useState('');
   const [userbotBuyQuantity, setUserbotBuyQuantity] = useState({
     userbot: 1,
@@ -46,7 +94,8 @@ export function useUserbotStorefront({
           loading: false,
           error: '',
           items: [],
-          purchases: []
+          purchases: [],
+          network: DEFAULT_NETWORK
         });
         return;
       }
@@ -63,7 +112,8 @@ export function useUserbotStorefront({
           loading: false,
           error: '',
           items: (itemsData.items || []).filter(isUserbotShopItem),
-          purchases: (purchasesData.purchases || []).filter(isUserbotPurchase)
+          purchases: (purchasesData.purchases || []).filter(isUserbotPurchase),
+          network: purchasesData.network || DEFAULT_NETWORK
         });
       } catch (error) {
         if (cancelled) return;
@@ -72,7 +122,8 @@ export function useUserbotStorefront({
           loading: false,
           error: error.message,
           items: [],
-          purchases: []
+          purchases: [],
+          network: DEFAULT_NETWORK
         });
       }
     }
@@ -89,7 +140,8 @@ export function useUserbotStorefront({
     const purchases = (purchasesData.purchases || []).filter(isUserbotPurchase);
     setStorefrontState((prev) => ({
       ...prev,
-      purchases
+      purchases,
+      network: purchasesData.network || prev.network || DEFAULT_NETWORK
     }));
     return purchases;
   }
@@ -132,21 +184,7 @@ export function useUserbotStorefront({
         error: '',
         notice: '',
         noticeTone: 'default',
-        purchase: {
-          id: data.purchase_id,
-          amount_ton: data.amount_ton,
-          payment_method: data.payment_method || selectedPaymentMethod,
-          seller_wallet: data.seller_wallet || '',
-          memo: data.memo || '',
-          ton_uri: data.ton_uri || '',
-          trust_wallet_uri: data.trust_wallet_uri || '',
-          trust_wallet_qr: data.trust_wallet_qr || '',
-          ton_qr: data.ton_qr || '',
-          expires_at: data.expires_at || null,
-          status: 'pending',
-          receipt_file_url: '',
-          payment_url: data.payment_url || ''
-        }
+        purchase: purchaseShapeFromApiResponse(data, selectedPaymentMethod, false)
       });
     } catch (error) {
       let existingPurchase = null;
@@ -163,22 +201,7 @@ export function useUserbotStorefront({
       setCheckoutState({
         item,
         paymentMethod: selectedPaymentMethod,
-        purchase: existingPurchase ? {
-          id: existingPurchase.id,
-          amount_ton: existingPurchase.amount_ton,
-          amount_rub: existingPurchase.amount_rub || 0,
-          payment_method: existingPurchase.payload?.payment_method || selectedPaymentMethod,
-          seller_wallet: existingPurchase.payload?.seller_wallet || '',
-          memo: existingPurchase.payload?.memo || '',
-          ton_uri: existingPurchase.payload?.ton_uri || '',
-          trust_wallet_uri: existingPurchase.payload?.trust_wallet_uri || '',
-          trust_wallet_qr: existingPurchase.payload?.trust_wallet_qr || '',
-          ton_qr: existingPurchase.payload?.ton_qr || '',
-          expires_at: existingPurchase.expires_at || null,
-          status: existingPurchase.status,
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
-          payment_url: ''
-        } : null,
+        purchase: existingPurchase ? purchaseShapeFromRow(existingPurchase, selectedPaymentMethod) : null,
         loading: false,
         checking: false,
         error: error.message,
@@ -202,11 +225,13 @@ export function useUserbotStorefront({
       return;
     }
 
+    const syntheticItem = {
+      item_type: batchItems[0]?.item_type || 'userbot',
+      title: batchItems[0]?.item_type === 'bundle' ? `Аккаунты + прокси x${batchItems.length}` : `Аккаунты x${batchItems.length}`
+    };
+
     setCheckoutState({
-      item: {
-        item_type: batchItems[0]?.item_type || 'userbot',
-        title: batchItems[0]?.item_type === 'bundle' ? `Аккаунты + прокси x${batchItems.length}` : `Аккаунты x${batchItems.length}`
-      },
+      item: syntheticItem,
       purchase: null,
       paymentMethod: selectedPaymentMethod,
       loading: true,
@@ -229,28 +254,8 @@ export function useUserbotStorefront({
       await refreshPurchases();
 
       setCheckoutState({
-        item: {
-          item_type: batchItems[0]?.item_type || 'userbot',
-          title: batchItems[0]?.item_type === 'bundle' ? `Аккаунты + прокси x${batchItems.length}` : `Аккаунты x${batchItems.length}`
-        },
-        purchase: {
-          id: data.batch_token || data.purchase_ids?.[0] || '',
-          purchase_ids: data.purchase_ids || [],
-          amount_ton: data.amount_ton,
-          amount_rub: data.amount_rub || 0,
-          payment_method: data.payment_method || selectedPaymentMethod,
-          seller_wallet: data.seller_wallet || '',
-          memo: data.memo || '',
-          ton_uri: data.ton_uri || '',
-          trust_wallet_uri: data.trust_wallet_uri || '',
-          trust_wallet_qr: data.trust_wallet_qr || '',
-          ton_qr: data.ton_qr || '',
-          expires_at: data.expires_at || null,
-          status: 'pending',
-          receipt_file_url: '',
-          payment_url: data.payment_url || '',
-          batch: true
-        },
+        item: syntheticItem,
+        purchase: purchaseShapeFromApiResponse(data, selectedPaymentMethod, true),
         paymentMethod: selectedPaymentMethod,
         loading: false,
         checking: false,
@@ -273,112 +278,10 @@ export function useUserbotStorefront({
     }
   }
 
-  async function checkUserbotCheckout() {
-    if (!checkoutState.purchase?.id) return;
-
-    setCheckoutState((prev) => ({
-      ...prev,
-      checking: true,
-      error: '',
-      notice: '',
-      noticeTone: 'default'
-    }));
-
-    try {
-      let result;
-      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
-        result = await apiRequest('/api/shop/public/purchase/check-batch', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_ids: checkoutState.purchase.purchase_ids
-          }
-        });
-      } else {
-        result = await apiRequest('/api/shop/public/purchase/check', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_id: checkoutState.purchase.id
-          }
-        });
-      }
-
-      const purchases = await refreshPurchases();
-      const targetIds = Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length
-        ? checkoutState.purchase.purchase_ids.map((value) => String(value))
-        : [String(checkoutState.purchase.id)];
-      const refreshed = purchases.filter((purchase) => targetIds.includes(String(purchase.id)));
-
-      const noticeTone = result?.status === 'paid' ? 'success' : result?.status === 'awaiting_receipt' ? 'warning' : 'default';
-      const notice = result?.status === 'paid'
-        ? 'Оплата найдена. Дальше ждём передачу актива.'
-        : result?.status === 'awaiting_receipt'
-          ? 'Оплата отмечена. Ждем подтверждение продавца или банковское уведомление.'
-          : result?.status === 'rejected'
-            ? 'Продавец отклонил этот платёж. Проверь детали и создай покупку заново.'
-            : 'Оплата пока не найдена. Проверь сумму, memo и попробуй ещё раз через минуту.';
-
-      if (refreshed.length === 1) {
-        showUserbotPurchaseInline(refreshed[0]);
-        setCheckoutState((prev) => ({
-          ...prev,
-          checking: false,
-          notice,
-          noticeTone
-        }));
-      } else if (refreshed.length > 1) {
-        showUserbotPurchaseInline(normalizeOpenUserbotPurchaseGroup(refreshed));
-        setCheckoutState((prev) => ({
-          ...prev,
-          checking: false,
-          notice,
-          noticeTone
-        }));
-      } else {
-        setCheckoutState((prev) => ({
-          ...prev,
-          checking: false,
-          purchase: prev.purchase ? {
-            ...prev.purchase,
-            status: result?.status || prev.purchase.status
-          } : prev.purchase,
-          notice,
-          noticeTone
-        }));
-      }
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false,
-        error: error.message,
-        notice: '',
-        noticeTone: 'default'
-      }));
-    }
-  }
-
   function showUserbotPurchaseInline(purchase) {
     setCheckoutState({
       item: purchase.item || null,
-      purchase: {
-        id: purchase.id,
-        purchase_ids: purchase.purchase_ids || [purchase.id],
-        amount_ton: purchase.amount_ton,
-        amount_rub: purchase.amount_rub || 0,
-        payment_method: purchase.payload?.payment_method || 'ton',
-        seller_wallet: purchase.payload?.seller_wallet || '',
-        memo: purchase.payload?.memo || '',
-        ton_uri: purchase.payload?.ton_uri || '',
-        trust_wallet_uri: purchase.payload?.trust_wallet_uri || '',
-        trust_wallet_qr: purchase.payload?.trust_wallet_qr || '',
-        ton_qr: purchase.payload?.ton_qr || '',
-        expires_at: purchase.expires_at || null,
-        status: purchase.status,
-        receipt_file_url: purchase.payload?.receipt_file_url || '',
-        payment_url: '',
-        batch: !!purchase.batch
-      },
+      purchase: purchaseShapeFromRow(purchase, 'ton'),
       paymentMethod: purchase.payload?.payment_method || 'ton',
       loading: false,
       checking: false,
@@ -386,65 +289,6 @@ export function useUserbotStorefront({
       notice: '',
       noticeTone: 'default'
     });
-  }
-
-  async function markUserbotCheckoutPaid() {
-    if (!checkoutState.purchase?.id) return;
-
-    setCheckoutState((prev) => ({
-      ...prev,
-      checking: true,
-      error: '',
-      notice: '',
-      noticeTone: 'default'
-    }));
-
-    try {
-      const formData = new FormData();
-      formData.append('receipt_note', receiptNote);
-      if (receiptFile) {
-        formData.append('receipt_file', receiptFile);
-      }
-      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
-        formData.append('purchase_ids', checkoutState.purchase.purchase_ids.join(','));
-        await apiRequest('/api/shop/public/purchase/mark-paid-batch', {
-          accessToken,
-          method: 'POST',
-          body: formData
-        });
-      } else {
-        formData.append('purchase_id', checkoutState.purchase.id);
-        await apiRequest('/api/shop/public/purchase/mark-paid', {
-          accessToken,
-          method: 'POST',
-          body: formData
-        });
-      }
-
-      const purchases = await refreshPurchases();
-      const refreshed = purchases.filter((purchase) =>
-        (checkoutState.purchase.purchase_ids || [checkoutState.purchase.id]).includes(purchase.id)
-      );
-      setReceiptNote('');
-      setReceiptFile(null);
-      if (refreshed.length === 1) {
-        showUserbotPurchaseInline(refreshed[0]);
-      } else if (refreshed.length > 1) {
-        showUserbotPurchaseInline(normalizeOpenUserbotPurchaseGroup(refreshed));
-      }
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false
-      }));
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false,
-        error: error.message,
-        notice: '',
-        noticeTone: 'default'
-      }));
-    }
   }
 
   async function cancelUserbotCheckout(purchaseOverride = null) {
@@ -483,18 +327,7 @@ export function useUserbotStorefront({
       }
 
       await refreshPurchases();
-      setCheckoutState({
-        item: null,
-        purchase: null,
-        paymentMethod: 'ton',
-        loading: false,
-        checking: false,
-        error: '',
-        notice: '',
-        noticeTone: 'default'
-      });
-      setReceiptNote('');
-      setReceiptFile(null);
+      setCheckoutState(emptyCheckoutState(checkoutState.paymentMethod));
       showUiMessage('Покупка отменена, бронь снята.', 'success');
     } catch (error) {
       setCheckoutState((prev) => ({
@@ -509,17 +342,12 @@ export function useUserbotStorefront({
 
   return {
     cancelUserbotCheckout,
-    checkUserbotCheckout,
     checkoutState,
     createUserbotBatchCheckout,
-    markUserbotCheckoutPaid,
     openUserbotCheckout,
-    receiptFile,
-    receiptNote,
+    refreshPurchases,
     selectedOpenPurchaseId,
     setCheckoutState,
-    setReceiptFile,
-    setReceiptNote,
     setSelectedOpenPurchaseId,
     setUserbotBuyQuantity,
     showUserbotPurchaseInline,

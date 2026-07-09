@@ -223,6 +223,17 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
       : 'pending';
   const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
   const amountRub = rows.reduce((sum, purchase) => sum + Number(purchase.amount_rub || 0), 0);
+  const amountNanoParts = rows
+    .map((purchase) => String(purchase.amount_nanoton || '').trim())
+    .filter(Boolean);
+  let amountNanoTon = '';
+  if (amountNanoParts.length === rows.length) {
+    try {
+      amountNanoTon = amountNanoParts.reduce((sum, value) => sum + BigInt(value), 0n).toString();
+    } catch {
+      amountNanoTon = '';
+    }
+  }
   const assets = rows.flatMap((purchase) => purchase.assets || []);
   const expiresAt = rows
     .map((purchase) => purchase.expires_at ? new Date(purchase.expires_at).getTime() : null)
@@ -239,7 +250,9 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
     purchase_ids: rows.map((purchase) => purchase.id),
     status,
     amount_ton: amountTon,
+    amount_nanoton: amountNanoTon,
     amount_rub: amountRub,
+    network: first.network || 'testnet',
     ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
     created_at: first.created_at,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
