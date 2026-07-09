@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link2, Loader2, RefreshCw, Send, Sparkles, Wallet } from 'lucide-react';
+import { Link2, Loader2, RefreshCw, Send, Wallet } from 'lucide-react';
 import { useTonAddress, useTonWallet, useTonConnectModal } from '@tonconnect/ui-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
@@ -37,8 +37,6 @@ export function ProfileContactsCard() {
   const pollRef = useRef(null);
   const pollDeadlineRef = useRef(0);
 
-  const tonPrefilledRef = useRef(false);
-
   // Refs let polling/async callbacks read current state without
   // recreating the callback (which would retrigger effects → flicker).
   const tgIdSavedRef = useRef('');
@@ -53,7 +51,8 @@ export function ProfileContactsCard() {
       const wallet = data?.settings?.ton_wallet || '';
       setTonSaved(wallet);
       // Only overwrite tonValue when DB actually has a wallet.
-      // Otherwise leave it alone — TON Connect pre-fill effect will populate it.
+      // Otherwise leave the input empty — user decides what to put there
+      // (manual paste or click «Взять из TON Connect»).
       if (wallet) {
         setTonValue(wallet);
       }
@@ -89,15 +88,6 @@ export function ProfileContactsCard() {
   useEffect(() => () => {
     if (pollRef.current) window.clearInterval(pollRef.current);
   }, []);
-
-  // Pre-fill TON wallet from TON Connect if DB has nothing saved yet.
-  // Fires once per mount/account — won't overwrite a value the user typed manually.
-  useEffect(() => {
-    if (!tonSaved && tonConnectAddress && !tonPrefilledRef.current) {
-      setTonValue(tonConnectAddress);
-      tonPrefilledRef.current = true;
-    }
-  }, [tonSaved, tonConnectAddress]);
 
   const handleContactsSave = useCallback(async () => {
     const wallet = normalizeTonWallet(tonValue);
@@ -193,10 +183,6 @@ export function ProfileContactsCard() {
   const tonDirty = normalizeTonWallet(tonValue) !== normalizeTonWallet(tonSaved);
   const tgIdDirty = normalizeTgId(tgIdValue) !== normalizeTgId(tgIdSaved);
   const dirty = tonDirty || tgIdDirty;
-  const showPrefillHint =
-    !tonSaved &&
-    tonConnectAddress &&
-    normalizeTonWallet(tonValue) === normalizeTonWallet(tonConnectAddress);
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-7">
@@ -223,12 +209,6 @@ export function ProfileContactsCard() {
           spellCheck={false}
           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-mono text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
         />
-        {showPrefillHint ? (
-          <p className="flex items-center gap-1.5 text-xs text-sky-700">
-            <Sparkles className="w-3 h-3 shrink-0" />
-            Подставлен из подключённого TON Connect. Нажмите «Сохранить», чтобы закрепить.
-          </p>
-        ) : null}
         <div>
           <button
             type="button"
