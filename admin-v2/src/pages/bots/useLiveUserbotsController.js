@@ -30,6 +30,7 @@ function initialSaleComposer() {
 
 export function useLiveUserbotsController({
   accessToken,
+  patchLiveUserbot,
   reloadAccounts,
   setState,
   state,
@@ -48,28 +49,21 @@ export function useLiveUserbotsController({
   useEffect(() => {
     setBindings((prev) => {
       const next = { ...prev };
+      let changed = false;
       userbots.forEach((account) => {
+        if (next[account.id]) return;
         const primaryProxyId = account.proxy_id ? String(account.proxy_id) : '';
         const safeFailoverIds = Array.isArray(account.failover_proxy_ids)
           ? account.failover_proxy_ids.map(String).filter((id) => id && id !== primaryProxyId)
           : [];
-        if (!next[account.id]) {
-          next[account.id] = {
-            proxy_id: primaryProxyId,
-            allow_proxy_failover: !!account.allow_proxy_failover,
-            failover_proxy_ids: safeFailoverIds
-          };
-          return;
-        }
-
         next[account.id] = {
-          ...next[account.id],
           proxy_id: primaryProxyId,
           allow_proxy_failover: !!account.allow_proxy_failover,
           failover_proxy_ids: safeFailoverIds
         };
+        changed = true;
       });
-      return next;
+      return changed ? next : prev;
     });
   }, [userbots]);
 
@@ -448,6 +442,7 @@ export function useLiveUserbotsController({
     checkAccount,
     deleteAccount,
     openSaleComposer,
+    patchLiveUserbot,
     resetSaleComposer,
     restoreAccount,
     saleComposer,

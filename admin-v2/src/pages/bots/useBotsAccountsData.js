@@ -92,6 +92,16 @@ export function useBotsAccountsData({ accessToken, ownerId }) {
     return payload;
   }, [accessToken, ownerId]);
 
+  const patchLiveUserbot = useCallback((accountId, patch) => {
+    if (!accountId || !patch) return;
+    setState((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((account) =>
+        String(account.id) === String(accountId) ? { ...account, ...patch } : account
+      )
+    }));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -159,6 +169,7 @@ export function useBotsAccountsData({ accessToken, ownerId }) {
 
   return {
     reloadAccounts,
+    patchLiveUserbot,
     setState,
     state
   };

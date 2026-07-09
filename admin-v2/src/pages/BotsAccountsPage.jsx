@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -50,10 +51,11 @@ const CONTOUR_ROLE_LABELS = {
 // Shared inventory data lives in hooks; page still owns userbot mutations and selection sync outside official-bot slice.
 function BotsAccountsPageContent({ mode = 'userbots' }) {
   const { accessToken, user, profilePlan, profileRole } = useAuth();
+  const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
   const [refreshingTelegramPlaceId, setRefreshingTelegramPlaceId] = useState('');
-  const { state, setState, reloadAccounts } = useBotsAccountsData({
+  const { state, setState, reloadAccounts, patchLiveUserbot } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
   });
@@ -241,6 +243,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     updateBinding
   } = useLiveUserbotsController({
     accessToken,
+    patchLiveUserbot,
     reloadAccounts,
     setState,
     state,
@@ -271,6 +274,14 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       return String(liveUserbots[0].id);
     });
   }, [liveUserbots]);
+
+  useEffect(() => {
+    const ubId = searchParams.get('userbot_id');
+    if (!ubId) return;
+    if (ubId !== selectedLiveUserbotId && liveUserbots.some((account) => String(account.id) === String(ubId))) {
+      setSelectedLiveUserbotId(ubId);
+    }
+  }, [searchParams, liveUserbots, selectedLiveUserbotId]);
 
   useEffect(() => {
     if (!openUserbotPurchases.length) {
@@ -368,36 +379,21 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   };
 
   const sellerLiveUserbotsSectionProps = {
-    accountBindingFeedback,
-    accountCheckReport,
     accountDeleteFeedback,
-    accountRestoreFeedback,
-    availableBindingProxiesForAccount,
-    availableFailoverProxiesForAccount,
-    bindings,
-    canRestoreFromFiles,
     canSellUserbotAssets,
-    checkAccount,
-    defaultCheckLines,
     deleteAccount,
-    formatWhen,
     liveUserbots,
     openSaleComposer,
-    proxyLabel,
     recoveryStatusBadge,
     resetSaleComposer,
-    restoreAccount,
     restrictedMarker,
     saleComposer,
-    saveBinding,
     saveUserbotSaleLot,
     selectedLiveUserbot,
     setSaleComposer,
     setSelectedLiveUserbotId,
     state,
-    toggleSafeMode,
-    toggleSalePaymentMethod,
-    updateBinding
+    toggleSalePaymentMethod
   };
 
   const listedShopUserbotsSectionProps = {
@@ -408,6 +404,38 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     selectedShopUserbot,
     setSelectedShopUserbotId,
     state
+  };
+
+  const userbotCenterSectionProps = {
+    selectedLiveUserbot,
+    selectedLiveUserbotId,
+    binding: bindings[selectedLiveUserbotId] || (selectedLiveUserbot ? {
+      proxy_id: selectedLiveUserbot.proxy_id ? String(selectedLiveUserbot.proxy_id) : '',
+      allow_proxy_failover: !!selectedLiveUserbot.allow_proxy_failover,
+      failover_proxy_ids: Array.isArray(selectedLiveUserbot.failover_proxy_ids)
+        ? selectedLiveUserbot.failover_proxy_ids.map(String)
+        : []
+    } : null),
+    recovery: state.recoveryMap[String(selectedLiveUserbotId)] || null,
+    accountCheckReport,
+    accountBindingFeedback,
+    accountRestoreFeedback,
+    bindingAccountId: state.bindingAccountId,
+    checkingAccountId: state.checkingAccountId,
+    togglingSafeModeId: state.togglingSafeModeId,
+    restoringAccountId: state.restoringAccountId,
+    saveBinding,
+    updateBinding,
+    checkAccount,
+    toggleSafeMode,
+    restoreAccount,
+    patchLiveUserbot,
+    proxyLabel,
+    availableBindingProxiesForAccount,
+    availableFailoverProxiesForAccount,
+    canRestoreFromFiles,
+    defaultCheckLines,
+    formatWhen
   };
 
   if (state.loading) {
@@ -447,7 +475,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
             <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
           ) : null}
 
-          <UserbotCenterSection />
+          <UserbotCenterSection {...userbotCenterSectionProps} />
         </>
       )}
     </section>

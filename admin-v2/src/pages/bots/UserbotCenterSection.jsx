@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2
+  UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2,
+  Network, Activity, KeyRound, AlertCircle, Settings2
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiRequest } from '../../api/client.js';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
@@ -42,7 +45,69 @@ function needsBotsRecovery(message = '') {
     value.includes('auth_key_unregistered');
 }
 
-export function UserbotCenterSection() {
+function StatusBadge({ tone, children, className = '' }) {
+  const colorMap = {
+    success: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    warning: 'bg-amber-100 text-amber-800 border-amber-200',
+    error: 'bg-rose-100 text-rose-800 border-rose-200',
+    danger: 'bg-rose-100 text-rose-800 border-rose-200',
+    ok: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    default: 'bg-slate-100 text-slate-700 border-slate-200'
+  };
+  return (
+    <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold tracking-wide transition-colors ${colorMap[tone] || colorMap.default} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function ModernSwitch({ checked, onChange, disabled, activeColor = 'bg-indigo-600' }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? activeColor : 'bg-slate-200'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
+export function UserbotCenterSection({
+  selectedLiveUserbot,
+  selectedLiveUserbotId,
+  binding,
+  recovery,
+  accountCheckReport,
+  accountBindingFeedback,
+  accountRestoreFeedback,
+  bindingAccountId,
+  checkingAccountId,
+  togglingSafeModeId,
+  restoringAccountId,
+  saveBinding,
+  updateBinding,
+  checkAccount,
+  toggleSafeMode,
+  restoreAccount,
+  patchLiveUserbot,
+  proxyLabel,
+  availableBindingProxiesForAccount,
+  availableFailoverProxiesForAccount,
+  canRestoreFromFiles,
+  defaultCheckLines,
+  formatWhen
+}) {
   const location = useLocation();
   const sectionRef = useRef(null);
 
@@ -64,7 +129,6 @@ export function UserbotCenterSection() {
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
   const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
   const avatarInputRef = useRef(null);
-  const [selectedUserbotId, setSelectedUserbotId] = useState('');
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
 
   const draftStorageKey = 'bullrun_userbot_drafts';
@@ -177,14 +241,12 @@ export function UserbotCenterSection() {
   }, [trialEndsAt]);
   const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
-  function applyCenterData(nextData, preferredUserbotId = selectedUserbotId, preferredThreadUserId = threadUserId) {
-    const nextUserbotId = String(nextData.selected_userbot_id || preferredUserbotId || '');
+  function applyCenterData(nextData, preferredUserbotId = selectedLiveUserbotId, preferredThreadUserId = threadUserId) {
     const nextConversations = nextData.conversations || [];
     const nextThreadUserId = nextConversations.some((item) => String(item.tg_user_id) === String(preferredThreadUserId))
       ? String(preferredThreadUserId)
       : '';
 
-    setSelectedUserbotId(nextUserbotId);
     setThreadUserId(nextThreadUserId);
     syncIncomingToHistory(nextConversations);
     if (nextThreadUserId) setChatHistory(loadHistory(nextThreadUserId));
@@ -218,12 +280,12 @@ export function UserbotCenterSection() {
     }
 
     const params = new URLSearchParams();
-    if (selectedUserbotId) params.set('userbot_id', selectedUserbotId);
+    if (selectedLiveUserbotId) params.set('userbot_id', selectedLiveUserbotId);
     if (scan) params.set('scan', 'true');
     const query = params.toString() ? `?${params.toString()}` : '';
     try {
       const nextData = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
-      applyCenterData(nextData, selectedUserbotId, preferredThreadUserId);
+      applyCenterData(nextData, selectedLiveUserbotId, preferredThreadUserId);
       return nextData;
     } catch (error) {
       setState((prev) => ({
@@ -241,14 +303,14 @@ export function UserbotCenterSection() {
   }
 
   async function loadAuthorizations() {
-    if (!accessToken || !selectedUserbotId) {
+    if (!accessToken || !selectedLiveUserbotId) {
       setAuthorizationsState({ loading: false, error: '', rows: [] });
       return;
     }
 
     setAuthorizationsState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const query = new URLSearchParams({ userbot_id: selectedUserbotId });
+      const query = new URLSearchParams({ userbot_id: selectedLiveUserbotId });
       const data = await apiRequest(`/api/userbot/ops-center/authorizations?${query.toString()}`, { accessToken });
       setAuthorizationsState({
         loading: false,
@@ -264,39 +326,18 @@ export function UserbotCenterSection() {
     }
   }
 
-  function applyProfileAccount(account) {
-    if (!account?.id) return;
-    setState((prev) => ({
-      ...prev,
-      data: prev.data ? {
-        ...prev.data,
-        userbots: (prev.data.userbots || []).map((userbot) => (
-          String(userbot.id) === String(account.id)
-            ? { ...userbot, ...account }
-            : userbot
-        ))
-      } : prev.data
-    }));
-    setProfileDraft({
-      accountId: String(account.id),
-      firstName: account.tg_first_name || '',
-      lastName: account.tg_last_name || '',
-      about: account.tg_about || ''
-    });
-  }
-
   async function syncSelectedUserbotProfile() {
-    if (!accessToken || !selectedUserbotId) return;
+    if (!accessToken || !selectedLiveUserbotId) return;
 
     setProfileSyncState({ pulling: true, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
     try {
-      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/sync`, {
+      const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/sync`, {
         accessToken,
         method: 'POST'
       });
 
       if (result.account) {
-        applyProfileAccount(result.account);
+        patchLiveUserbot(result.account.id, result.account);
       }
 
       const message = result.message || (result.cached ? 'Показываем сохраненный профиль.' : 'Профиль стянут из Telegram.');
@@ -313,7 +354,7 @@ export function UserbotCenterSection() {
   }
 
   async function saveSelectedUserbotProfile() {
-    if (!accessToken || !selectedUserbotId) return;
+    if (!accessToken || !selectedLiveUserbotId) return;
     const firstName = String(profileDraft.firstName || '').trim();
     const lastName = String(profileDraft.lastName || '').trim();
     const about = String(profileDraft.about || '').trim();
@@ -335,7 +376,7 @@ export function UserbotCenterSection() {
 
     setProfileSyncState({ pulling: false, saving: true, uploadingAvatar: false, tone: 'default', text: '' });
     try {
-      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/update`, {
+      const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/update`, {
         accessToken,
         method: 'POST',
         body: {
@@ -346,7 +387,7 @@ export function UserbotCenterSection() {
       });
 
       if (result.account) {
-        applyProfileAccount(result.account);
+        patchLiveUserbot(result.account.id, result.account);
       }
 
       setProfileSyncState({
@@ -370,7 +411,7 @@ export function UserbotCenterSection() {
   }
 
   async function uploadSelectedUserbotAvatar(file) {
-    if (!accessToken || !selectedUserbotId || !file) return;
+    if (!accessToken || !selectedLiveUserbotId || !file) return;
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -403,14 +444,14 @@ export function UserbotCenterSection() {
 
     setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: true, tone: 'default', text: '' });
     try {
-      const result = await apiRequest(`/api/userbot/profile/${selectedUserbotId}/avatar`, {
+      const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/avatar`, {
         accessToken,
         method: 'POST',
         body: formData
       });
 
       if (result.account) {
-        applyProfileAccount(result.account);
+        patchLiveUserbot(result.account.id, result.account);
       }
 
       setProfileSyncState({
@@ -448,12 +489,12 @@ export function UserbotCenterSection() {
 
       try {
         const params = new URLSearchParams();
-        if (selectedUserbotId) params.set('userbot_id', selectedUserbotId);
+        if (selectedLiveUserbotId) params.set('userbot_id', selectedLiveUserbotId);
         if (initialThreadUserId && !initialHandoff) params.set('scan', 'true');
         const query = params.toString() ? `?${params.toString()}` : '';
         const data = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
         if (cancelled) return;
-        applyCenterData(data, selectedUserbotId, threadUserId || initialThreadUserId);
+        applyCenterData(data, selectedLiveUserbotId, threadUserId || initialThreadUserId);
         if (initialHandoff) handoffLoadDoneRef.current = true;
       } catch (error) {
         if (cancelled) return;
@@ -474,7 +515,7 @@ export function UserbotCenterSection() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, selectedUserbotId]);
+  }, [accessToken, selectedLiveUserbotId]);
 
   useEffect(() => {
     if (!initialThreadUserId) return;
@@ -484,7 +525,7 @@ export function UserbotCenterSection() {
   useEffect(() => {
     setAuthorizationsState({ loading: false, error: '', rows: [] });
     setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
-  }, [accessToken, selectedUserbotId]);
+  }, [accessToken, selectedLiveUserbotId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -504,10 +545,7 @@ export function UserbotCenterSection() {
   const conversations = data.conversations || [];
   const summary = data.summary || {};
   const signalConfig = data.signal_config || {};
-  const selectedUserbot = useMemo(
-    () => userbots.find((item) => String(item.id) === String(selectedUserbotId)) || null,
-    [selectedUserbotId, userbots]
-  );
+  const selectedUserbot = selectedLiveUserbot;
   useEffect(() => {
     if (!selectedUserbot?.id) {
       setProfileDraft({ accountId: '', firstName: '', lastName: '', about: '' });
@@ -577,14 +615,14 @@ export function UserbotCenterSection() {
   const [threadUnavailable, setThreadUnavailable] = useState('');
 
   async function loadThreadMessages(tgUserId) {
-    if (!accessToken || !selectedUserbotId) {
+    if (!accessToken || !selectedLiveUserbotId) {
       setThreadUnavailable('Выберите юзербота');
       return;
     }
     setLoadingThread(true);
     setThreadUnavailable('');
     try {
-      const params = new URLSearchParams({ tg_user_id: tgUserId, userbot_id: selectedUserbotId });
+      const params = new URLSearchParams({ tg_user_id: tgUserId, userbot_id: selectedLiveUserbotId });
       const result = await apiRequest(`/api/userbot/ops-center/thread?${params.toString()}`, { accessToken });
       const apiMessages = result.messages || [];
 
@@ -614,7 +652,7 @@ export function UserbotCenterSection() {
   }
 
   async function markConversationRead(tgUserId) {
-    if (!tgUserId || !selectedUserbotId) return;
+    if (!tgUserId || !selectedLiveUserbotId) return;
 
     setActionState((prev) => ({ ...prev, markingRead: true }));
     try {
@@ -625,7 +663,7 @@ export function UserbotCenterSection() {
         method: 'POST',
         body: {
           tg_user_id: String(tgUserId),
-          userbot_id: selectedUserbotId
+          userbot_id: selectedLiveUserbotId
         },
         signal: controller.signal
       });
@@ -680,7 +718,7 @@ export function UserbotCenterSection() {
         body: {
           tg_user_id: selectedConversation.tg_user_id,
           message,
-          userbot_id: selectedUserbotId || null,
+          userbot_id: selectedLiveUserbotId || null,
           known_dialog: true,
           manual_confirmed: true
         }
@@ -717,7 +755,7 @@ export function UserbotCenterSection() {
   }
 
   async function joinInviteLink() {
-    if (!selectedUserbotId) {
+    if (!selectedLiveUserbotId) {
       toast.error('Сначала выбери юзербота, который будет заходить по ссылке.');
       return;
     }
@@ -732,7 +770,7 @@ export function UserbotCenterSection() {
         accessToken,
         method: 'POST',
         body: {
-          userbot_id: selectedUserbotId,
+          userbot_id: selectedLiveUserbotId,
           invite_link: manualInviteLink.trim()
         }
       });
@@ -750,7 +788,7 @@ export function UserbotCenterSection() {
     const tgUserId = String(manualTgUserId || '').trim();
     const message = String(manualDirectMessage || '').trim();
 
-    if (!selectedUserbotId) {
+    if (!selectedLiveUserbotId) {
       toast.error('Сначала выбери юзербота, который будет писать.');
       return;
     }
@@ -778,7 +816,7 @@ export function UserbotCenterSection() {
         body: {
           tg_user_id: tgUserId,
           message,
-          userbot_id: selectedUserbotId,
+          userbot_id: selectedLiveUserbotId,
           common_chat_id: manualCommonChatId,
           manual_confirmed: true
         }
@@ -829,7 +867,7 @@ export function UserbotCenterSection() {
   }
 
   async function resetOtherSessions() {
-    if (!selectedUserbotId) {
+    if (!selectedLiveUserbotId) {
       toast.error('Сначала выбери юзербота.');
       return;
     }
@@ -843,7 +881,7 @@ export function UserbotCenterSection() {
         accessToken,
         method: 'POST',
         body: {
-          userbot_id: selectedUserbotId
+          userbot_id: selectedLiveUserbotId
         }
       });
       setAuthorizationsState({
@@ -866,10 +904,6 @@ export function UserbotCenterSection() {
   if (state.error) {
     return (
       <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
-        <header className="mb-4 px-1">
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Центр юзербота</h2>
-          <p className="text-sm text-slate-500 mt-1">Здесь уже должен быть живой triage по личкам и группам. Пока backend вернул ошибку.</p>
-        </header>
         <div className="error-card">{state.error}</div>
         {needsBotsRecovery(state.error) ? (
           <div className="toolbar-card" style={{ marginTop: 16 }}>
@@ -906,10 +940,16 @@ export function UserbotCenterSection() {
   ];
 
   function renderProfileTab() {
+    if (!selectedLiveUserbot) return null;
+    const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
+    const isSafeMode = runtimeStatus === 'pending_activation';
+    const isCombatMode = !isSafeMode;
+    const hasRecoveryInfo = !!(recovery?.last_restored_at || recovery?.last_restore_error);
+    const showRecoveryNextStep = !recovery && ['expired', 'error'].includes(runtimeStatus);
+
     return (
       <>
-        {selectedUserbot ? (
-          <div className="p-6 md:p-8">
+        <div className="p-6 md:p-8">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-2 h-2 rounded-full bg-indigo-400" />
               <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
@@ -972,7 +1012,7 @@ export function UserbotCenterSection() {
                 type="button"
                 className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 onClick={syncSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedUserbotId}
+                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedLiveUserbotId}
               >
                 {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
               </button>
@@ -1046,6 +1086,21 @@ export function UserbotCenterSection() {
                   Отменить
                 </button>
               ) : null}
+              {telegramWebEnabled ? (
+                <button
+                  type="button"
+                  className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm"
+                  onClick={() => {
+                    if (!selectedLiveUserbotId) return;
+                    window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
+                  }}
+                  disabled={!selectedLiveUserbotId}
+                  title={selectedLiveUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Telegram Web
+                </button>
+              ) : null}
             </div>
 
             {selectedUserbot.tg_profile_sync_error ? (
@@ -1060,8 +1115,193 @@ export function UserbotCenterSection() {
               </div>
             ) : null}
           </div>
-        ) : null}
-      </>
+
+          <div className="p-6 md:p-8 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Network className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-900">Соединение</h3>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
+                <Select
+                  value={binding?.proxy_id || ''}
+                  onValueChange={(value) => updateBinding(selectedLiveUserbot.id, { proxy_id: value })}
+                >
+                  <SelectTrigger className={`w-full rounded-xl shadow-sm ${binding?.proxy_id ? 'bg-white border-slate-200' : 'border-rose-300 bg-rose-50/40'}`}>
+                    {binding?.proxy_id ? (
+                      <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    )}
+                    <SelectValue placeholder="Не назначен — выбрать..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {availableBindingProxiesForAccount(selectedLiveUserbot).map((item) => (
+                      <SelectItem key={item.id} value={item.id} className="rounded-lg">
+                        {proxyLabel(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="h-px w-full bg-slate-200/60 my-2"></div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Автозамена прокси</label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Переезд при падении основного</p>
+                  </div>
+                  <ModernSwitch
+                    checked={!!binding?.allow_proxy_failover}
+                    onChange={() => updateBinding(selectedLiveUserbot.id, { allow_proxy_failover: !binding?.allow_proxy_failover })}
+                    activeColor="bg-emerald-500"
+                  />
+                </div>
+
+                {binding?.allow_proxy_failover && (
+                  <div className="pt-2 animate-in fade-in slide-in-from-top-1">
+                    {(() => {
+                      const failoverOptions = availableFailoverProxiesForAccount(selectedLiveUserbot);
+                      return failoverOptions.length ? (
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-shadow min-h-[100px]"
+                          multiple
+                          value={(binding?.failover_proxy_ids || []).filter((id) =>
+                            failoverOptions.some((item) => String(item.id) === String(id))
+                          )}
+                          onChange={(event) => updateBinding(selectedLiveUserbot.id, {
+                            failover_proxy_ids: Array.from(event.target.selectedOptions).map((option) => option.value)
+                          })}
+                        >
+                          {failoverOptions.map((item) => (
+                            <option key={item.id} value={item.id} className="py-1">{proxyLabel(item)}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="text-sm text-slate-500 bg-slate-100/50 rounded-xl p-3 border border-dashed border-slate-200 text-center">
+                          Нет доступных прокси
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
+                  size="lg"
+                  onClick={() => saveBinding(selectedLiveUserbot.id)}
+                  disabled={bindingAccountId === String(selectedLiveUserbot.id)}
+                >
+                  {bindingAccountId === String(selectedLiveUserbot.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Settings2 className="w-4 h-4 mr-2" />}
+                  {bindingAccountId === String(selectedLiveUserbot.id) ? 'Сохранение...' : 'Сохранить настройки'}
+                </Button>
+              </div>
+
+              {accountBindingFeedback.accountId === String(selectedLiveUserbot.id) && accountBindingFeedback.text && (
+                <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-100 text-sm font-medium animate-in slide-in-from-bottom-2">
+                  {accountBindingFeedback.text}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 md:p-8 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Activity className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-sm font-bold text-slate-900">Состояние сессии</h3>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Боевой режим</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Выключите для перевода в Safe Mode</p>
+                </div>
+                <ModernSwitch
+                  checked={isCombatMode}
+                  onChange={() => toggleSafeMode(selectedLiveUserbot)}
+                  disabled={checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id)}
+                  activeColor="bg-emerald-500"
+                />
+              </div>
+
+              <Button
+                className="w-full rounded-xl shadow-sm"
+                size="lg"
+                onClick={() => checkAccount(selectedLiveUserbot)}
+                disabled={checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id)}
+                variant={isSafeMode ? "default" : "secondary"}
+              >
+                {checkingAccountId === String(selectedLiveUserbot.id) || togglingSafeModeId === String(selectedLiveUserbot.id) ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {isSafeMode ? 'Активация...' : 'Проверка...'}</>
+                ) : (
+                  isSafeMode ? 'Выполнить активацию' : 'Проверить Telegram'
+                )}
+              </Button>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {(accountCheckReport.accountId === String(selectedLiveUserbot.id) && accountCheckReport.lines.length
+                  ? accountCheckReport.lines
+                  : defaultCheckLines()
+                ).map((line, index) => (
+                  <StatusBadge key={`${line.label}-${index}`} tone={line.tone}>
+                    {line.label}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {(hasRecoveryInfo || showRecoveryNextStep) && (
+            <div className="p-6 md:p-8 border-t border-slate-100">
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <KeyRound className="w-4 h-4 text-slate-500" />
+                <h3 className="text-sm font-bold text-slate-900">Восстановление</h3>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 shadow-sm space-y-3">
+                {recovery?.last_restored_at && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500">Последний подъем:</span>
+                    <span className="font-medium text-slate-900">{formatWhen(recovery.last_restored_at)}</span>
+                  </div>
+                )}
+                {recovery?.last_restore_error && (
+                  <p className="text-sm text-rose-600 bg-rose-50 p-2 rounded-lg">
+                    Ошибка: {recovery.last_restore_error}
+                  </p>
+                )}
+                {showRecoveryNextStep && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Для подъема нужен импорт <code className="font-mono bg-white px-1 py-0.5 rounded text-xs">.session</code> и <code className="font-mono bg-white px-1 py-0.5 rounded text-xs">.json</code>.
+                  </div>
+                )}
+                {canRestoreFromFiles(selectedLiveUserbot, recovery) && (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="w-full rounded-xl border-slate-200 hover:bg-slate-50"
+                    onClick={() => restoreAccount(selectedLiveUserbot)}
+                    disabled={restoringAccountId === String(selectedLiveUserbot.id)}
+                  >
+                    {restoringAccountId === String(selectedLiveUserbot.id) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    {restoringAccountId === String(selectedLiveUserbot.id) ? 'Поднимаем...' : 'Восстановить'}
+                  </Button>
+                )}
+                {accountRestoreFeedback.accountId === String(selectedLiveUserbot.id) && accountRestoreFeedback.text && (
+                  <div className="p-3 rounded-xl bg-indigo-50 text-indigo-800 border border-indigo-100 text-sm font-medium animate-in slide-in-from-bottom-2">
+                    {accountRestoreFeedback.text}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
     );
   }
 
@@ -1117,11 +1357,6 @@ export function UserbotCenterSection() {
 
   return (
     <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
-      <header className="mb-4 px-1">
-        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Центр юзербота</h2>
-        <p className="text-sm text-slate-500 mt-1">Профиль, аватарка, описание, активные сессии и вступление по ссылке.</p>
-      </header>
-
       {profilePlan === 'trial' ? (
         <>
           <PlanBanner
@@ -1146,44 +1381,9 @@ export function UserbotCenterSection() {
         </div>
       ) : null}
 
-      <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
+      {selectedLiveUserbot ? (
+        <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <select
-                className="h-11 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
-                value={selectedUserbotId}
-                onChange={(event) => setSelectedUserbotId(event.target.value)}
-              >
-                <option value="">Выбери юзербота</option>
-                {userbots.map((userbot) => (
-                  <option key={userbot.id} value={userbot.id}>
-                    {userbot.tg_username ? `@${userbot.tg_username}` : `ID ${userbot.tg_account_id}`}
-                    {userbot.proxy_name ? ` • ${userbot.proxy_name}` : ''}
-                    {userbot.proxy_country ? ` • ${userbot.proxy_country}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-2">
-              {telegramWebEnabled ? (
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    if (!selectedUserbotId) return;
-                    window.open(`/app/telegram-web/${selectedUserbotId}`, '_blank', 'noopener');
-                  }}
-                  disabled={!selectedUserbotId}
-                  title={selectedUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Telegram Web
-                </button>
-              ) : null}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {TAB_OPTIONS.map((tab) => {
               const Icon = tab.icon;
@@ -1216,9 +1416,22 @@ export function UserbotCenterSection() {
 
         {activeTab === 'profile' ? renderProfileTab() : null}
         {activeTab === 'groups' ? renderGroupsTab() : null}
-      </div>
+        </div>
+      ) : (
+        <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-1 ring-slate-100">
+              <User className="w-8 h-8 text-slate-300" />
+            </div>
+            <h3 className="text-base font-semibold text-slate-900">Боевых аккаунтов пока нет</h3>
+            <p className="mt-1 text-sm text-slate-500 max-w-sm">
+              Подключи аккаунт выше в onboarding, и его профиль, прокси и проверка сессии появятся здесь.
+            </p>
+          </div>
+        </div>
+      )}
 
-      {selectedUserbotId ? (
+      {selectedLiveUserbotId ? (
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden mt-6">
           <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
             <div className="flex items-center gap-3">
@@ -1239,7 +1452,7 @@ export function UserbotCenterSection() {
               <button
                 className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                 onClick={loadAuthorizations}
-                disabled={authorizationsState.loading || !selectedUserbotId}
+                disabled={authorizationsState.loading || !selectedLiveUserbotId}
               >
                 {authorizationsState.loading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1251,7 +1464,7 @@ export function UserbotCenterSection() {
               <button
                 className="h-10 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 text-[13px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                 onClick={resetOtherSessions}
-                disabled={actionState.resettingAuthorizations || !selectedUserbotId}
+                disabled={actionState.resettingAuthorizations || !selectedLiveUserbotId}
               >
                 {actionState.resettingAuthorizations ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
