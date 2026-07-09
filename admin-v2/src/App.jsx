@@ -45,7 +45,7 @@ export function App() {
       title: 'Quick Start',
       items: [
         { to: '/autopost', label: 'Автопостер', icon: Zap },
-        { to: '/botfather', label: 'Бот продаж', icon: Bot },
+        { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
       ]
     },
     {
@@ -202,7 +202,7 @@ export function App() {
                 <Route path="/bases" element={<CustomerBasesPage />} />
                 <Route path="/dossier" element={<ClientDossierPage />} />
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
-                <Route path="/botfather" element={<OfficialBotsPage />} />
+                <Route path="/sales-bot" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />
                 <Route path="/shop" element={profileRole === 'admin' ? <ShopAdminPage /> : <Navigate to="/" replace />} />
                 <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
@@ -217,7 +217,7 @@ export function App() {
                 <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
                 <Route path="/api/mcp" element={<McpSettingsPage />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
-                <Route path="/plans" element={<Navigate to="/botfather" replace />} />
+                <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />
                 <Route path="/treasury" element={<ProjectTreasuryPage />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />

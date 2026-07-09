@@ -19,7 +19,7 @@ Do not reintroduce legacy `/admin` assumptions into active UI or product copy. T
 Current v2 product surfaces already in the repo:
 
 - paid-access ops: `command center` (`/app`), `crm` (`/app/crm`), `orders` (`/app/orders`), `access` (`/app/access`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`), `analytics` (`/app/analytics`)
-- Telegram infra: `proxies` (`/app/proxies`), `userbots` (`/app/userbots`), `botfather / official bot` (`/app/botfather`), `admin-groups` (`/app/admin-groups`)
+- Telegram infra: `proxies` (`/app/proxies`), `userbots` (`/app/userbots`), `sales-bot / official bot` (`/app/sales-bot`), `admin-groups` (`/app/admin-groups`)
 - ecosystem tooling: `bases` (`/app/bases`, legacy label `customer-bases`), `dossier` (`/app/dossier`, legacy label `client-dossier`), `observer` (`/app/observer`)
 - commerce: `shop` (`/app/shop`), `shop receipts` (`/app/shop-receipts`), `referrals` (`/app/referrals`), `payments` (`/app/payments`), `billing` (`/app/billing`), `plans` (`/app/plans`)
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders

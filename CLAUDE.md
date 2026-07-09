@@ -162,7 +162,7 @@ No automated test suite exists yet. Verify changes manually:
 
 ## Product Surfaces
 
-**Admin-v2 Routes:** `/app` (command center), `/app/crm`, `/app/orders`, `/app/access`, `/app/broadcast`, `/app/abandoned`, `/app/retention`, `/app/analytics`, `/app/proxies`, `/app/userbots`, `/app/botfather`, `/app/admin-groups`, `/app/bases`, `/app/dossier`, `/app/observer`, `/app/shop`, `/app/shop-receipts`, `/app/referrals`, `/app/payments`, `/app/billing`, `/app/plans`, `/app/claw`
+**Admin-v2 Routes:** `/app` (command center), `/app/crm`, `/app/orders`, `/app/access`, `/app/broadcast`, `/app/abandoned`, `/app/retention`, `/app/analytics`, `/app/proxies`, `/app/userbots`, `/app/sales-bot`, `/app/admin-groups`, `/app/bases`, `/app/dossier`, `/app/observer`, `/app/shop`, `/app/shop-receipts`, `/app/referrals`, `/app/payments`, `/app/billing`, `/app/plans`, `/app/claw`
 
 **Backend Endpoints:** See `backend/README.md` for full API documentation. Key areas:
 - `/api/userbot/*` — Userbot operations, health checks, manual actions

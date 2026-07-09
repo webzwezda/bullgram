@@ -209,7 +209,7 @@ export function OpsChecklistRail() {
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
         title: 'Telegram бот',
         hint: 'Создайте бота для автоматизации продаж',
-        href: '/app/botfather',
+        href: '/app/sales-bot',
         icon: 'Bot'
       },
       {
@@ -217,7 +217,7 @@ export function OpsChecklistRail() {
         done: (summary.tariffCount || 0) > 0,
         title: 'Тарифы и доступ',
         hint: 'Откройте бота и настройте тарифы внутри него',
-        href: '/app/botfather',
+        href: '/app/sales-bot',
         icon: 'LayoutList'
       },
       {

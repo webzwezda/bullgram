@@ -82,7 +82,7 @@ export function ScenariosPage() {
     return {
       title: 'Начни с оплаты и доступа, а не с хаоса в личке.',
       text: 'Сначала подключи бота, запусти закрытый канал и собери первый рабочий поток. Все остальное уже докрутится внутри.',
-      primary: { label: 'Вставить токен', href: '/app/botfather', target: '_blank', rel: 'noreferrer' },
+      primary: { label: 'Вставить токен', href: '/app/sales-bot', target: '_blank', rel: 'noreferrer' },
       secondary: { label: 'Начать Trial', href: SALES_LINKS.trial }
     };
   }, [profilePlan, sellerPulse, user]);
@@ -204,7 +204,7 @@ export function ScenariosPage() {
           закрытый канал, потом продлевает подписку, а вы видите, что происходит с деньгами и людьми на каждом этапе.
         </p>
         <div className="scenarios-v2__hero-actions">
-          <a className="site-button site-button--primary" href="/app/botfather" target="_blank" rel="noreferrer">
+          <a className="site-button site-button--primary" href="/app/sales-bot" target="_blank" rel="noreferrer">
             Вставить токен
           </a>
           <a className="site-button" href="/pricing">

@@ -318,7 +318,7 @@ export function registerAdminHandlers(bot, { service, botId }) {
         const text = `⚙️ <b>УПРАВЛЕНИЕ ТАРИФАМИ</b>\n` +
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `Для управления тарифами используйте веб-панель:\n\n` +
-            `📱 Откройте <b>/app/botfather</b> в админке и выберите бота\n\n` +
+            `📱 Откройте <b>/app/sales-bot</b> в админке и выберите бота\n\n` +
             `Там вы можете:\n` +
             `• Создавать и удалять тарифы\n` +
             `• Изменять цены и сроки доступа\n` +
@@ -378,7 +378,7 @@ export function registerAdminHandlers(bot, { service, botId }) {
             `━━━━━━━━━━━━━━━━━━━━━━\n` +
             `${service.buildAdminOwnershipHint(adminContext, 'sales')}\n\n` +
             `Для детальной настройки и управления:\n` +
-            `📱 Откройте <b>/app/botfather</b> в веб-панели`;
+            `📱 Откройте <b>/app/sales-bot</b> в веб-панели`;
 
         const inlineKeyboard = [[{ text: '🔙 Назад', callback_data: 'admin_panel' }]];
 
