@@ -432,7 +432,9 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         <OfficialBotsSection {...officialBotsSectionProps} />
       ) : (
         <>
-          <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+          {state.proxySupport?.profile_role !== 'admin' ? (
+            <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+          ) : null}
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}
