@@ -4,7 +4,6 @@ import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
 import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
-import { CustomFile } from 'telegram/client/uploads.js';
 import multer from 'multer';
 import os from 'os';
 import fs from 'fs';
@@ -36,22 +35,6 @@ const upload = multer({
             return;
         }
 
-        callback(null, false);
-    }
-});
-
-const avatarUpload = multer({
-    dest: os.tmpdir(),
-    limits: {
-        files: 1,
-        fileSize: 5 * 1024 * 1024
-    },
-    fileFilter: (_req, file, callback) => {
-        const mime = String(file?.mimetype || '').toLowerCase();
-        if (['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
-            callback(null, true);
-            return;
-        }
         callback(null, false);
     }
 });
@@ -108,14 +91,6 @@ function safePhotoExtension(value) {
     return ['jpg', 'jpeg', 'png', 'webp'].includes(extension) ? extension.replace('jpeg', 'jpg') : 'jpg';
 }
 
-function profilePhotoExtensionFromFile(file) {
-    const mime = String(file?.mimetype || '').toLowerCase();
-    if (mime === 'image/png') return 'png';
-    if (mime === 'image/webp') return 'webp';
-    if (mime === 'image/jpeg') return 'jpg';
-    return safePhotoExtension(path.extname(file?.originalname || ''));
-}
-
 function storeUserbotProfilePhoto({ ownerId, accountId, photo, extension = 'jpg', maxBytes = 5 * 1024 * 1024 }) {
     if (!Buffer.isBuffer(photo) || photo.length === 0 || photo.length > maxBytes) {
         return null;
@@ -131,12 +106,6 @@ function storeUserbotProfilePhoto({ ownerId, accountId, photo, extension = 'jpg'
     fs.writeFileSync(fullPath, photo);
 
     return `/uploads/userbot-profiles/${ownerSegment}/${filename}`;
-}
-
-function storeUserbotProfilePhotoFromPath({ ownerId, accountId, filePath, extension }) {
-    if (!filePath || !fs.existsSync(filePath)) return null;
-    const photo = fs.readFileSync(filePath);
-    return storeUserbotProfilePhoto({ ownerId, accountId, photo, extension });
 }
 
 function buildTelegramProfilePatch(me, extra = {}) {
@@ -2716,141 +2685,6 @@ export default function (supabase) {
         }
     });
 
-    router.post('/profile/:id/avatar', authenticateUser, (req, res, next) => {
-        avatarUpload.single('avatar')(req, res, (error) => {
-            if (error) {
-                return res.status(400).json({ error: error.message || 'Не удалось принять файл аватарки.' });
-            }
-            return next();
-        });
-    }, async (req, res) => {
-        const accountId = req.params.id;
-        let client = null;
-
-        try {
-            if (!req.file) {
-                return res.status(400).json({ error: 'Загрузи JPG, PNG или WEBP до 5 МБ.' });
-            }
-
-            const { data: account, error } = await supabase
-                .from('tg_accounts')
-                .select('*, proxies(host, port, username, password, is_working, provision_source, inventory_group)')
-                .eq('id', accountId)
-                .eq('owner_id', req.user.id)
-                .single();
-
-            if (error || !account) {
-                return res.status(404).json({ error: 'Аккаунт не найден.' });
-            }
-            if (account.account_type !== 'userbot') {
-                return res.status(400).json({ error: 'Аватарку так меняем только у юзерботов.' });
-            }
-            if (isFreshImportedUserbot(account)) {
-                return res.status(409).json({ error: 'Аккаунт в safe-mode. Сначала сделай живую активацию через проверку Telegram.' });
-            }
-            if (isUserbotOnDeadProxy(account)) {
-                return res.status(409).json({ error: 'У юзербота мертвый прокси. Сначала почини или смени прокси.' });
-            }
-
-            const decryptedData = decrypt(account.session_data);
-            if (!decryptedData) {
-                throw new Error('Сессия не читается или уже недействительна.');
-            }
-
-            const { token, fingerprint } = userbotService.parseSessionData(decryptedData);
-            const proxyData = account.proxies
-                ? {
-                    proxy_host: account.proxies.host,
-                    proxy_port: account.proxies.port,
-                    proxy_username: account.proxies.username,
-                    proxy_password: account.proxies.password
-                }
-                : undefined;
-
-            const clientConfig = userbotService._getClientConfig(userbotService._buildProxy(proxyData), 1, fingerprint, proxyData);
-            client = new TelegramClient(new StringSession(token), fingerprint.api_id, fingerprint.api_hash, clientConfig);
-            userbotService.prepareServiceClient(client);
-            userbotService._forceManagedIpv6Dc(client, proxyData);
-            await userbotService.connectWithProxyFallback(client, proxyData);
-
-            const uploadName = path.basename(req.file.originalname || 'avatar.jpg').slice(0, 96) || 'avatar.jpg';
-            const telegramFile = await client.uploadFile({
-                file: new CustomFile(uploadName, req.file.size, req.file.path),
-                workers: 1
-            });
-
-            await client.invoke(new Api.photos.UploadProfilePhoto({
-                file: telegramFile
-            }));
-
-            const syncedAt = new Date().toISOString();
-            const photoUrl = storeUserbotProfilePhotoFromPath({
-                ownerId: req.user.id,
-                accountId: account.id,
-                filePath: req.file.path,
-                extension: profilePhotoExtensionFromFile(req.file)
-            });
-
-            if (!photoUrl) {
-                throw new Error('Аватарка изменилась в Telegram, но локальная копия не сохранилась.');
-            }
-
-            const { data: updatedAccount, error: updateError } = await supabase
-                .from('tg_accounts')
-                .update({
-                    tg_photo_url: photoUrl,
-                    tg_photo_synced_at: syncedAt,
-                    tg_photo_data_url: null,
-                    tg_profile_sync_attempted_at: syncedAt,
-                    tg_profile_sync_error: null
-                })
-                .eq('id', account.id)
-                .eq('owner_id', req.user.id)
-                .select('*')
-                .single();
-
-            if (updateError || !updatedAccount) {
-                throw new Error(updateError?.message || 'Аватарка изменилась в Telegram, но ссылка не сохранилась в БД.');
-            }
-
-            return res.json({
-                success: true,
-                account: updatedAccount,
-                message: 'Аватарка сохранена в Telegram и на сервере.'
-            });
-        } catch (error) {
-            console.error('[USERBOT_PROFILE_AVATAR] failed', {
-                accountId,
-                ownerId: req.user?.id || null,
-                error: error.message || String(error || '')
-            });
-            try {
-                await supabase
-                    .from('tg_accounts')
-                    .update({
-                        tg_profile_sync_error: error.message || 'Не удалось сохранить аватарку.',
-                        tg_profile_sync_attempted_at: new Date().toISOString()
-                    })
-                    .eq('id', accountId)
-                    .eq('owner_id', req.user.id);
-            } catch (updateError) {
-                console.error('[USERBOT_PROFILE_AVATAR] error marker failed:', updateError?.message || updateError);
-            }
-            return res.status(500).json({ error: error.message || 'Не удалось сохранить аватарку.' });
-        } finally {
-            if (client) {
-                try {
-                    await client.disconnect();
-                } catch {
-                    // no-op
-                }
-            }
-            if (req.file?.path) {
-                fs.promises.unlink(req.file.path).catch(() => {});
-            }
-        }
-    });
-
     router.delete('/:id', authenticateUser, async (req, res) => {
         try {
             try {
@@ -4028,6 +3862,35 @@ export default function (supabase) {
         } catch (error) {
             console.error('Ошибка сброса остальных сессий юзербота:', error);
             res.status(500).json({ error: error?.message || 'Не получилось разлогинить остальные устройства' });
+        }
+    });
+
+    router.post('/ops-center/authorizations/reset-one', authenticateUser, async (req, res) => {
+        try {
+            const userbotId = req.body?.userbot_id ? String(req.body.userbot_id) : null;
+            const hash = req.body?.hash !== undefined && req.body?.hash !== null
+                ? String(req.body.hash)
+                : '';
+            if (!hash) {
+                return res.status(400).json({ error: 'Не передан hash сессии' });
+            }
+
+            const { userbot, error: userbotError } = await loadOperationalUserbot(supabase, req.user.id, userbotId, {
+                allowFailover: true
+            });
+            if (!userbot) {
+                return res.status(409).json({ error: userbotError || 'Юзербот не подключен.' });
+            }
+
+            const authorizations = await userbotService.resetAuthorization(userbot, hash);
+            res.json({
+                success: true,
+                authorizations,
+                message: 'Сессия разлогинена.'
+            });
+        } catch (error) {
+            console.error('Ошибка сброса конкретной сессии юзербота:', error);
+            res.status(error?.statusCode || 500).json({ error: error?.message || 'Не получилось разлогинить устройство' });
         }
     });
 

@@ -1790,6 +1790,34 @@ export class UserbotService {
             await client.disconnect();
         }
     }
+
+    async resetAuthorization(userbot, hash) {
+        if (!hash && hash !== 0) {
+            const error = new Error('Hash сессии не передан');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        let hashLong;
+        try {
+            hashLong = BigInt(String(hash));
+        } catch {
+            const error = new Error('Некорректный hash сессии');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const client = await this.createAuthorizedClient(userbot, 1);
+        try {
+            await client.invoke(new Api.account.ResetAuthorization({ hash: hashLong }));
+            const result = await client.invoke(new Api.account.GetAuthorizations());
+            const rows = (result?.authorizations || []).map(item => this.normalizeAuthorizationRecord(item));
+            rows.sort((a, b) => Number(b.current) - Number(a.current) || String(b.date_active || '').localeCompare(String(a.date_active || '')));
+            return rows;
+        } finally {
+            await client.disconnect();
+        }
+    }
 }
 
 function normalizeTelegramDate(value) {

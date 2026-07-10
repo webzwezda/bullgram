@@ -141,7 +141,6 @@ export function UserbotCenterSection({
   const initialThreadUserId = String(initialParams.get('tg_user_id') || initialHandoff?.tg_user_id || '').trim();
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
   const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
-  const avatarInputRef = useRef(null);
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
 
   const draftStorageKey = 'bullrun_userbot_drafts';
@@ -225,7 +224,8 @@ export function UserbotCenterSection({
     sendingDirect: false,
     markingRead: false,
     loadingAuthorizations: false,
-    resettingAuthorizations: false
+    resettingAuthorizations: false,
+    resettingAuthorizationHash: ''
   });
   const [authorizationsState, setAuthorizationsState] = useState({
     loading: false,
@@ -235,7 +235,6 @@ export function UserbotCenterSection({
   const [profileSyncState, setProfileSyncState] = useState({
     pulling: false,
     saving: false,
-    uploadingAvatar: false,
     tone: 'default',
     text: ''
   });
@@ -342,7 +341,7 @@ export function UserbotCenterSection({
   async function syncSelectedUserbotProfile() {
     if (!accessToken || !selectedLiveUserbotId) return;
 
-    setProfileSyncState({ pulling: true, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: true, saving: false, tone: 'default', text: '' });
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/sync`, {
         accessToken,
@@ -359,10 +358,10 @@ export function UserbotCenterSection({
       } else {
         toast.success(message);
       }
-      setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
+      setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
     } catch (error) {
       toast.error(`Не получилось стянуть профиль: ${error.message}`);
-      setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'error', text: error.message });
+      setProfileSyncState({ pulling: false, saving: false, tone: 'error', text: error.message });
     }
   }
 
@@ -376,14 +375,13 @@ export function UserbotCenterSection({
       setProfileSyncState({
         pulling: false,
         saving: false,
-        uploadingAvatar: false,
         tone: 'error',
         text: 'Имя Telegram-аккаунта не может быть пустым.'
       });
       return;
     }
 
-    setProfileSyncState({ pulling: false, saving: true, uploadingAvatar: false, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: false, saving: true, tone: 'default', text: '' });
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/update`, {
         accessToken,
@@ -402,7 +400,6 @@ export function UserbotCenterSection({
       setProfileSyncState({
         pulling: false,
         saving: false,
-        uploadingAvatar: false,
         tone: 'success',
         text: result.message || 'Профиль сохранен в Telegram и Supabase.'
       });
@@ -411,7 +408,6 @@ export function UserbotCenterSection({
       setProfileSyncState({
         pulling: false,
         saving: false,
-        uploadingAvatar: false,
         tone: 'error',
         text: error.message
       });
@@ -434,70 +430,6 @@ export function UserbotCenterSection({
     }
     if (bindingDirty) {
       await saveBinding(selectedLiveUserbotId);
-    }
-  }
-
-  async function uploadSelectedUserbotAvatar(file) {
-    if (!accessToken || !selectedLiveUserbotId || !file) return;
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: 'error',
-        text: 'Загрузи JPG, PNG или WEBP до 5 МБ.'
-      });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: 'error',
-        text: 'Файл слишком тяжелый. Максимум 5 МБ.'
-      });
-      return;
-    }
-
-    if (!window.confirm('Поставить эту картинку аватаркой реального Telegram-аккаунта?')) {
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('avatar', file);
-
-    setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: true, tone: 'default', text: '' });
-    try {
-      const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/avatar`, {
-        accessToken,
-        method: 'POST',
-        body: formData
-      });
-
-      if (result.account) {
-        patchLiveUserbot(result.account.id, result.account);
-      }
-
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: 'success',
-        text: result.message || 'Аватарка сохранена в Telegram и на сервере.'
-      });
-      toast.success(result.message || 'Аватарка обновлена.');
-    } catch (error) {
-      setProfileSyncState({
-        pulling: false,
-        saving: false,
-        uploadingAvatar: false,
-        tone: 'error',
-        text: error.message
-      });
-      toast.error(`Не получилось загрузить аватарку: ${error.message}`);
     }
   }
 
@@ -551,7 +483,7 @@ export function UserbotCenterSection({
 
   useEffect(() => {
     setAuthorizationsState({ loading: false, error: '', rows: [] });
-    setProfileSyncState({ pulling: false, saving: false, uploadingAvatar: false, tone: 'default', text: '' });
+    setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
   }, [accessToken, selectedLiveUserbotId]);
 
   useEffect(() => {
@@ -938,6 +870,47 @@ export function UserbotCenterSection({
     }
   }
 
+  async function resetOneSession(row) {
+    if (!selectedLiveUserbotId) {
+      toast.error('Сначала выбери юзербота.');
+      return;
+    }
+    if (!row?.hash) {
+      toast.error('У этой сессии нет hash — её нельзя разлогинить точечно.');
+      return;
+    }
+    if (row.current) {
+      toast.error('Текущую серверную сессию нельзя разлогинить.');
+      return;
+    }
+    const label = row.device_model || row.app_name || row.platform || 'устройство';
+    if (!window.confirm(`Разлогинить «${label}»? На этом устройстве придётся заново входить в Telegram.`)) {
+      return;
+    }
+
+    setActionState((prev) => ({ ...prev, resettingAuthorizationHash: row.hash }));
+    try {
+      const data = await apiRequest('/api/userbot/ops-center/authorizations/reset-one', {
+        accessToken,
+        method: 'POST',
+        body: {
+          userbot_id: selectedLiveUserbotId,
+          hash: row.hash
+        }
+      });
+      setAuthorizationsState({
+        loading: false,
+        error: '',
+        rows: data.authorizations || []
+      });
+      toast.success(data.message || 'Устройство разлогинено.');
+    } catch (error) {
+      toast.error(`Не получилось разлогинить устройство: ${error.message}`);
+    } finally {
+      setActionState((prev) => ({ ...prev, resettingAuthorizationHash: '' }));
+    }
+  }
+
   if (state.loading && !initialHandoff) {
     return <LoadingState text="Тянем живой Центр юзербота..." />;
   }
@@ -1002,16 +975,10 @@ export function UserbotCenterSection({
               <div className="w-2 h-2 rounded-full bg-indigo-400" />
               <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
             </div>
-            <div className="text-sm text-slate-500 mb-6">Редактируй имя, описание и аватарку. Изменения улетают прямо в Telegram.</div>
+            <div className="text-sm text-slate-500 mb-6">Имя и описание редактируются здесь, аватарка тянется кнопкой «Стянуть из Telegram».</div>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
-                <button
-                  type="button"
-                  className="group relative size-16 shrink-0 overflow-hidden rounded-2xl text-left ring-1 ring-slate-200 transition hover:ring-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
-                  title="Загрузить аватарку"
-                >
+                <div className="size-16 shrink-0 overflow-hidden rounded-2xl ring-1 ring-slate-200">
                   {selectedProfilePhotoSrc ? (
                     <img src={selectedProfilePhotoSrc} alt="" className="size-16 object-cover" />
                   ) : (
@@ -1019,21 +986,7 @@ export function UserbotCenterSection({
                       {selectedProfileInitial}
                     </span>
                   )}
-                  <span className="absolute inset-x-0 bottom-0 bg-slate-950/75 px-1.5 py-1 text-center text-[10px] font-bold text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
-                    {profileSyncState.uploadingAvatar ? '...' : 'Сменить'}
-                  </span>
-                </button>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] || null;
-                    event.target.value = '';
-                    if (file) uploadSelectedUserbotAvatar(file);
-                  }}
-                />
+                </div>
                 <div className="min-w-0">
                   <div className="truncate text-[20px] font-black tracking-tight text-slate-950">
                     {selectedProfileName || 'Имя пока не подтянуто'}
@@ -1060,7 +1013,7 @@ export function UserbotCenterSection({
                 type="button"
                 className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 onClick={syncSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar || !selectedLiveUserbotId}
+                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
               >
                 {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
               </button>
@@ -1103,14 +1056,6 @@ export function UserbotCenterSection({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
-                onClick={() => avatarInputRef.current?.click()}
-                disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
-              >
-                {profileSyncState.uploadingAvatar ? 'Загружаем...' : 'Загрузить аватарку'}
-              </button>
               {profileDirty ? (
                 <button
                   type="button"
@@ -1121,7 +1066,7 @@ export function UserbotCenterSection({
                     lastName: selectedUserbot.tg_last_name || '',
                     about: selectedUserbot.tg_about || ''
                   })}
-                  disabled={profileSyncState.pulling || profileSyncState.saving || profileSyncState.uploadingAvatar}
+                  disabled={profileSyncState.pulling || profileSyncState.saving}
                 >
                   Отменить
                 </button>
@@ -1668,36 +1613,61 @@ export function UserbotCenterSection({
                       <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Приложение</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Где</th>
                       <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Последний движ</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Действие</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {authorizationsState.rows.map((item) => (
-                      <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                            {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
+                    {authorizationsState.rows.map((item) => {
+                      const isResetting = actionState.resettingAuthorizationHash === item.hash;
+                      const canReset = !item.current && !!item.hash;
+                      return (
+                        <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                              {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
+                              {item.current ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
+                                  Bullgram
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
+                            <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-slate-800">{item.country || '—'}</div>
+                            <div className="text-xs text-slate-500 font-mono">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
+                          <td className="px-4 py-3 text-right">
                             {item.current ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                                Bullgram
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
-                          <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{item.country || '—'}</div>
-                          <div className="text-xs text-slate-500 font-mono">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
-                      </tr>
-                    ))}
+                              <span className="text-xs text-slate-400 font-medium">нельзя</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="h-8 px-3 rounded-lg border border-rose-200 bg-white text-rose-600 text-[12px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                                onClick={() => resetOneSession(item)}
+                                disabled={!canReset || isResetting || actionState.resettingAuthorizationHash !== ''}
+                                title={!canReset ? 'Эту сессию нельзя разлогинить отсюда' : ''}
+                              >
+                                {isResetting ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <LogOut className="w-3.5 h-3.5" />
+                                )}
+                                {isResetting ? '...' : 'Разлогинить'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

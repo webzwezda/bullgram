@@ -49,7 +49,7 @@ const CONTOUR_ROLE_LABELS = {
 
 // Shared inventory data lives in hooks; page still owns userbot mutations and selection sync outside official-bot slice.
 function BotsAccountsPageContent({ mode = 'userbots' }) {
-  const { accessToken, user, profilePlan, profileRole } = useAuth();
+  const { accessToken, user, profilePlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
@@ -432,7 +432,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
         <OfficialBotsSection {...officialBotsSectionProps} />
       ) : (
         <>
-          {profileRole === 'admin' && <UserbotStorefrontSection {...buyerStorefrontSectionProps} />}
+          <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
 
           <UserbotOnboardingSection
             {...onboardingSectionCommonProps}

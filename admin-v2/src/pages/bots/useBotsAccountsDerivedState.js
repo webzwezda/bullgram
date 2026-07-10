@@ -33,8 +33,8 @@ export function useBotsAccountsDerivedState({
   }, [state.reservedUserbotIds, userbots]);
 
   const liveUserbots = useMemo(() => {
-    return userbots.filter((account) => !state.reservedUserbotIds.includes(String(account.id)));
-  }, [state.reservedUserbotIds, userbots]);
+    return userbots;
+  }, [userbots]);
 
   const selectedLiveUserbot = useMemo(() => {
     if (!liveUserbots.length) return null;
