@@ -1009,14 +1009,31 @@ export function UserbotCenterSection({
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
-                onClick={syncSelectedUserbotProfile}
-                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
-              >
-                {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
+                  onClick={syncSelectedUserbotProfile}
+                  disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
+                >
+                  {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
+                </button>
+                {telegramWebEnabled ? (
+                  <button
+                    type="button"
+                    className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm"
+                    onClick={() => {
+                      if (!selectedLiveUserbotId) return;
+                      window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
+                    }}
+                    disabled={!selectedLiveUserbotId}
+                    title={selectedLiveUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Telegram Web
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -1069,21 +1086,6 @@ export function UserbotCenterSection({
                   disabled={profileSyncState.pulling || profileSyncState.saving}
                 >
                   Отменить
-                </button>
-              ) : null}
-              {telegramWebEnabled ? (
-                <button
-                  type="button"
-                  className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm"
-                  onClick={() => {
-                    if (!selectedLiveUserbotId) return;
-                    window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
-                  }}
-                  disabled={!selectedLiveUserbotId}
-                  title={selectedLiveUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Telegram Web
                 </button>
               ) : null}
             </div>
