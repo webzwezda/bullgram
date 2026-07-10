@@ -79,7 +79,7 @@ export function UserbotCombobox({
                       account.tg_phone || '',
                       String(account.tg_account_id || '')
                     ].filter(Boolean)}
-                    className="rounded-lg"
+                    className="rounded-lg data-selected:bg-slate-100 data-selected:text-slate-950"
                   >
                     {account.custom_label ? (
                       <div className="flex flex-col min-w-0">
