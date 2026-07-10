@@ -5,7 +5,7 @@
   --surface-alt: #eef4ff;
   --border: #d9e2f2;
   --text: #0f172a;
-  --muted: #5b6780;
+  --muted-ink: #5b6780;
   --brand: #0f766e;
   --brand-ink: #ecfeff;
   --accent: #c2410c;
@@ -130,7 +130,7 @@ a {
 
 .upgrade-callout__text {
   margin-top: 8px;
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.7;
   font-size: 14px;
 }
@@ -258,7 +258,7 @@ a {
   display: grid;
   gap: 8px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-ink);
   min-width: 0;
 }
 
@@ -311,7 +311,7 @@ a {
 
 .page__header p {
   margin: 0;
-  color: var(--muted);
+  color: var(--muted-ink);
   max-width: 760px;
   line-height: 1.7;
 }
@@ -330,7 +330,7 @@ a {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
   border: 1px solid var(--border);
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 12px;
   font-weight: 700;
 }
@@ -432,7 +432,7 @@ a {
 }
 
 .shop-admin-section-head__text {
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 13px;
   line-height: 1.55;
   max-width: 680px;
@@ -545,7 +545,7 @@ a {
 
 .stat-card__title {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-ink);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -559,7 +559,7 @@ a {
 
 .stat-card__hint {
   margin-top: 12px;
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.55;
   font-size: 13px;
 }
@@ -587,7 +587,7 @@ a {
 
 
 .action-card__hint {
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.7;
   font-size: 13px;
   margin-top: 10px;
@@ -600,7 +600,7 @@ a {
 }
 
 .card__body {
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.7;
 }
 
@@ -1636,7 +1636,7 @@ a {
 
 .table th {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-ink);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   background: #f8fafc;
@@ -1656,7 +1656,7 @@ a {
 
 .empty-inline,
 .loading-state {
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.7;
 }
 
@@ -1717,7 +1717,7 @@ a {
 
 
 .inline-action--muted {
-  color: var(--muted);
+  color: var(--muted-ink);
   cursor: default;
 }
 
@@ -1809,7 +1809,7 @@ a {
 
 .list-item__meta,
 .table-subtext {
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 12px;
   margin-top: 5px;
   line-height: 1.5;
@@ -1883,7 +1883,7 @@ a {
 
 .mcp-step-card__text {
   margin-top: 8px;
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.6;
   font-size: 14px;
 }
@@ -1944,7 +1944,7 @@ a {
 }
 
 .mcp-inline-values__row span {
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 13px;
   font-weight: 700;
 }
@@ -1961,7 +1961,7 @@ a {
 
 .list-item__body {
   margin-top: 8px;
-  color: var(--muted);
+  color: var(--muted-ink);
   line-height: 1.55;
   font-size: 13px;
 }
@@ -1973,7 +1973,7 @@ a {
   gap: 12px;
   align-items: center;
   margin-top: 10px;
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 12px;
 }
 
@@ -2141,7 +2141,7 @@ a {
 }
 
 .thread-card__meta {
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -2201,7 +2201,7 @@ a {
 
 .observer-admin__meta {
   margin-top: 4px;
-  color: var(--muted);
+  color: var(--muted-ink);
   font-size: 13px;
 }
 

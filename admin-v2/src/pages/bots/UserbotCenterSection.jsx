@@ -1461,9 +1461,21 @@ export function UserbotCenterSection({
       ) : null}
 
       {selectedLiveUserbot ? (
-        <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
+        <div className="relative bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 shrink-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl bg-white/80 backdrop-blur-sm"
+          onClick={() => deleteAccount(selectedLiveUserbot)}
+          disabled={deletingAccountId === String(selectedLiveUserbot.id)}
+          title="Удалить аккаунт"
+        >
+          {deletingAccountId === String(selectedLiveUserbot.id)
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Trash2 className="w-4 h-4" />}
+        </Button>
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pr-10 sm:pr-12">
             <UserbotCombobox
               accounts={liveUserbots}
               value={String(selectedLiveUserbot.id)}
@@ -1488,19 +1500,6 @@ export function UserbotCenterSection({
                 </div>
               );
             })()}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl"
-              onClick={() => deleteAccount(selectedLiveUserbot)}
-              disabled={deletingAccountId === String(selectedLiveUserbot.id)}
-              title="Удалить аккаунт"
-            >
-              {deletingAccountId === String(selectedLiveUserbot.id)
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Trash2 className="w-4 h-4" />}
-            </Button>
           </div>
 
           {(() => {
