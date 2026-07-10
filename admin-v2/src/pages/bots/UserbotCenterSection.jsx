@@ -1009,7 +1009,6 @@ export function UserbotCenterSection({
               <div className="w-2 h-2 rounded-full bg-indigo-400" />
               <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
             </div>
-            <div className="text-sm text-slate-500 mb-6">Имя и описание редактируются здесь, аватарка тянется кнопкой «Стянуть из Telegram».</div>
             <div className="mb-6 rounded-2xl bg-indigo-50/40 border border-indigo-100 p-4">
               <label className="block text-[11px] font-bold uppercase tracking-[0.1em] text-indigo-500 mb-2">Название аккаунта</label>
               <div className="flex gap-2">
@@ -1034,7 +1033,6 @@ export function UserbotCenterSection({
                   </button>
                 ) : null}
               </div>
-              <div className="mt-2 text-[12px] text-slate-500">Видно только тебе — для поиска в селекторе. В Telegram не попадает.</div>
             </div>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
