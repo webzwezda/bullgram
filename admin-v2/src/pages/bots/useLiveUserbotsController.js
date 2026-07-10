@@ -20,7 +20,7 @@ function initialSaleComposer() {
   return {
     accountId: '',
     title: '',
-    sale_type: 'userbot',
+    sale_type: 'bundle',
     price_ton: '',
     payment_methods: ['ton'],
     saving: false,
@@ -71,7 +71,7 @@ export function useLiveUserbotsController({
     setSaleComposer({
       accountId: String(account.id),
       title: saleTitleForAccount(account),
-      sale_type: account.proxy_id ? 'bundle' : 'userbot',
+      sale_type: 'bundle',
       price_ton: '15',
       payment_methods: ['ton'],
       saving: false,
@@ -342,14 +342,11 @@ export function useLiveUserbotsController({
       return;
     }
 
-    const wantsBundle = saleComposer.sale_type === 'bundle';
-    if (wantsBundle && !account.proxy_id) {
-      setSaleComposer((prev) => ({ ...prev, error: 'У этого юзербота нет привязанного прокси для bundle-продажи.' }));
+    if (!account.proxy_id) {
+      setSaleComposer((prev) => ({ ...prev, error: 'У этого юзербота нет привязанного прокси. Сначала назначь прокси.' }));
       return;
     }
-    const linkedProxy = wantsBundle
-      ? state.proxies.find((proxy) => String(proxy.id) === String(account.proxy_id))
-      : null;
+    const linkedProxy = state.proxies.find((proxy) => String(proxy.id) === String(account.proxy_id));
 
     setSaleComposer((prev) => ({ ...prev, saving: true, error: '' }));
     try {
@@ -358,43 +355,31 @@ export function useLiveUserbotsController({
         method: 'POST',
         body: {
           title: saleComposer.title,
-          description: wantsBundle
-            ? (account.tg_username
-                ? `Готовый seller userbot @${account.tg_username} вместе с его прокси.`
-                : `Готовый seller userbot ${account.tg_account_id} вместе с его прокси.`)
-            : (account.tg_username
-                ? `Готовый seller userbot @${account.tg_username}.`
-                : `Готовый seller userbot ${account.tg_account_id}.`),
-          preview_text: wantsBundle
-            ? 'Готовый Telegram-аккаунт Bullgram вместе с его прокси.'
-            : 'Готовый Telegram-аккаунт Bullgram для seller-операционки.',
+          description: account.tg_username
+            ? `Готовый seller userbot @${account.tg_username} вместе с его прокси.`
+            : `Готовый seller userbot ${account.tg_account_id} вместе с его прокси.`,
+          preview_text: 'Готовый Telegram-аккаунт Bullgram вместе с его прокси.',
           payment_methods: saleComposer.payment_methods,
           post_purchase_message: null,
           offer_code: null,
-          item_type: wantsBundle ? 'bundle' : 'userbot',
+          item_type: 'bundle',
           sales_channel: 'admin_only',
           price_ton: Number(saleComposer.price_ton || 0),
           status: 'published',
           visibility: 'public',
           transfer_mode: 'ownership_transfer',
-          assets: wantsBundle
-            ? [
-                {
-                  asset_type: 'userbot',
-                  asset_id: account.id,
-                  label: account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`
-                },
-                {
-                  asset_type: 'proxy',
-                  asset_id: account.proxy_id,
-                  label: linkedProxy ? proxyLabel(linkedProxy) : String(account.proxy_id)
-                }
-              ]
-            : [{
-                asset_type: 'userbot',
-                asset_id: account.id,
-                label: account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`
-              }]
+          assets: [
+            {
+              asset_type: 'userbot',
+              asset_id: account.id,
+              label: account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`
+            },
+            {
+              asset_type: 'proxy',
+              asset_id: account.proxy_id,
+              label: linkedProxy ? proxyLabel(linkedProxy) : String(account.proxy_id)
+            }
+          ]
         }
       });
 

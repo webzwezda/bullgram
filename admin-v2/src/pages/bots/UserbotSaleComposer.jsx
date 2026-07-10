@@ -1,5 +1,3 @@
-import { saleTitleForAccount } from './bots-accounts.utils.js';
-
 export function UserbotSaleComposer({
   account,
   saleComposer,
@@ -12,53 +10,7 @@ export function UserbotSaleComposer({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[18px] font-semibold tracking-[-0.02em] text-slate-900">Продажа юзербота</div>
-        </div>
-      </div>
-      <div className="mt-5">
-        <div className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-400">Что продаем</div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            className={`rounded-[18px] border px-4 py-4 text-left transition ${
-              saleComposer.sale_type === 'userbot'
-                ? 'border-slate-900 bg-slate-900 text-white shadow-[0_12px_32px_rgba(15,23,42,0.18)]'
-                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
-            }`}
-            onClick={() => setSaleComposer((prev) => ({
-              ...prev,
-              sale_type: 'userbot',
-              title: saleTitleForAccount(account),
-              error: ''
-            }))}
-          >
-            <div className="text-[15px] font-semibold">Только аккаунт</div>
-            <div className={`mt-1 text-[13px] ${saleComposer.sale_type === 'userbot' ? 'text-slate-200' : 'text-slate-500'}`}>
-              В Shop уйдет только этот юзербот.
-            </div>
-          </button>
-          <button
-            type="button"
-            className={`rounded-[18px] border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
-              saleComposer.sale_type === 'bundle'
-                ? 'border-blue-600 bg-blue-600 text-white shadow-[0_12px_32px_rgba(37,99,235,0.22)]'
-                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
-            }`}
-            onClick={() => {
-              if (!account.proxy_id) return;
-              setSaleComposer((prev) => ({
-                ...prev,
-                sale_type: 'bundle',
-                title: saleTitleForAccount(account),
-                error: ''
-              }));
-            }}
-            disabled={!account.proxy_id}
-          >
-            <div className="text-[15px] font-semibold">Аккаунт + прокси</div>
-            <div className={`mt-1 text-[13px] ${saleComposer.sale_type === 'bundle' ? 'text-blue-100' : 'text-slate-500'}`}>
-              Вместе с аккаунтом уходит и его текущий прокси.
-            </div>
-          </button>
+          <div className="mt-1 text-[13px] text-slate-500">Аккаунт уйдёт в магазин вместе с его прокси.</div>
         </div>
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
