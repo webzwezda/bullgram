@@ -1419,7 +1419,7 @@ export function UserbotCenterSection({
                     : 'Без username'}
                 </span>
               </SelectTrigger>
-              <SelectContent className="rounded-xl">
+              <SelectContent className="rounded-xl" position="popper" sideOffset={4}>
                 {liveUserbots.map((item) => (
                   <SelectItem key={item.id} value={String(item.id)} className="rounded-lg">
                     {item.tg_username ? `@${item.tg_username}` : `ID ${item.tg_account_id}`}
