@@ -578,9 +578,6 @@ export function UserbotCenterSection({
     selectedUserbot?.tg_username ||
     String(selectedUserbot?.tg_account_id || '?')
   ).slice(0, 1).toUpperCase();
-  const selectedProfileSyncedAt = selectedUserbot?.tg_profile_synced_at
-    ? formatDate(selectedUserbot.tg_profile_synced_at)
-    : 'еще не обновляли';
   const selectedProfileAttemptedAt = selectedUserbot?.tg_profile_sync_attempted_at
     ? formatDate(selectedUserbot.tg_profile_sync_attempted_at)
     : '';
@@ -1004,102 +1001,129 @@ export function UserbotCenterSection({
 
     return (
       <>
-        <div className="p-6 md:p-8">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-2 h-2 rounded-full bg-indigo-400" />
-              <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
+        <div className="p-5 sm:p-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-5">
+            <div className="flex items-center gap-2 px-1">
+              <User className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-slate-900">Профиль аккаунта</h3>
             </div>
-            <div className="mb-6 rounded-2xl bg-indigo-50/40 border border-indigo-100 p-4">
-              <label className="block text-[11px] font-bold uppercase tracking-[0.1em] text-indigo-500 mb-2">Название аккаунта</label>
-              <div className="flex gap-2">
-                <input
-                  className="h-11 flex-1 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
-                  value={labelDraft}
-                  maxLength={100}
-                  onChange={(event) => setLabelDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && labelDirty && !labelSaving) saveCustomLabel();
-                  }}
-                  placeholder="Например: Вася, Админ группы, Основной аккаунт"
-                />
-                {labelDirty ? (
-                  <button
-                    type="button"
-                    className="h-11 px-5 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-sm whitespace-nowrap"
-                    onClick={saveCustomLabel}
-                    disabled={labelSaving}
-                  >
-                    {labelSaving ? '...' : 'Сохранить'}
-                  </button>
-                ) : null}
+
+            <div className="flex items-start gap-3">
+              <div className="size-12 shrink-0 overflow-hidden rounded-xl ring-1 ring-slate-200">
+                {selectedProfilePhotoSrc ? (
+                  <img src={selectedProfilePhotoSrc} alt="" className="size-12 object-cover" />
+                ) : (
+                  <span className="flex size-12 items-center justify-center bg-slate-900 text-base font-black text-white">
+                    {selectedProfileInitial}
+                  </span>
+                )}
               </div>
-            </div>
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="size-16 shrink-0 overflow-hidden rounded-2xl ring-1 ring-slate-200">
-                  {selectedProfilePhotoSrc ? (
-                    <img src={selectedProfilePhotoSrc} alt="" className="size-16 object-cover" />
-                  ) : (
-                    <span className="flex size-16 items-center justify-center bg-slate-900 text-[22px] font-black text-white">
-                      {selectedProfileInitial}
-                    </span>
-                  )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-base font-bold text-slate-900">
+                  {selectedProfileName || 'Имя пока не подтянуто'}
                 </div>
-                <div className="min-w-0">
-                  <div className="truncate text-[20px] font-black tracking-tight text-slate-950">
-                    {selectedProfileName || 'Имя пока не подтянуто'}
-                  </div>
-                  {(() => {
-                    const parts = [
-                      selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '',
-                      selectedUserbot.tg_phone || '',
-                      selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''
-                    ].filter(Boolean);
-                    if (!parts.length) return null;
-                    return (
-                      <div className="mt-1 text-[13px] font-medium text-slate-500 truncate">
-                        {parts.join(' • ')}
-                      </div>
-                    );
-                  })()}
-                  <div className="mt-1 text-[12px] font-medium text-slate-400">
-                    Последнее обновление: {selectedProfileSyncedAt}
-                  </div>
-                </div>
+                {(() => {
+                  const parts = [
+                    selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '',
+                    selectedUserbot.tg_phone || '',
+                    selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''
+                  ].filter(Boolean);
+                  if (!parts.length) return null;
+                  return (
+                    <div className="mt-0.5 truncate text-xs text-slate-500">
+                      {parts.join(' • ')}
+                    </div>
+                  );
+                })()}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="hidden sm:flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
+                  className="h-8 px-2.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
                   onClick={syncSelectedUserbotProfile}
                   disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
                 >
-                  {profileSyncState.pulling ? 'Тянем из Telegram...' : 'Стянуть из Telegram'}
+                  {profileSyncState.pulling ? 'Тянем...' : 'Стянуть из Telegram'}
                 </button>
                 {telegramWebEnabled ? (
                   <button
                     type="button"
-                    className="h-10 px-4 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-slate-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm"
+                    className="h-8 px-2.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
                     onClick={() => {
                       if (!selectedLiveUserbotId) return;
                       window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
                     }}
                     disabled={!selectedLiveUserbotId}
-                    title={selectedLiveUserbotId ? 'Открыть полноценный Telegram Web для этого юзербота' : 'Сначала выбери юзербота'}
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3 h-3" />
                     Telegram Web
                   </button>
                 ) : null}
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 md:items-start">
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Имя</label>
+            <div className="sm:hidden grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="h-10 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                onClick={syncSelectedUserbotProfile}
+                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
+              >
+                {profileSyncState.pulling ? 'Тянем...' : 'Стянуть'}
+              </button>
+              {telegramWebEnabled ? (
+                <button
+                  type="button"
+                  className="h-10 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+                  onClick={() => {
+                    if (!selectedLiveUserbotId) return;
+                    window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
+                  }}
+                  disabled={!selectedLiveUserbotId}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Telegram Web
+                </button>
+              ) : null}
+            </div>
+
+            <div className="h-px bg-slate-100" />
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-500">Название аккаунта</label>
+                  {labelDirty ? <span className="text-[11px] text-indigo-500">не сохранено</span> : null}
+                </div>
+                <div className="flex gap-2">
                   <input
-                    className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    className="h-10 flex-1 px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    value={labelDraft}
+                    maxLength={100}
+                    onChange={(event) => setLabelDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && labelDirty && !labelSaving) saveCustomLabel();
+                    }}
+                    placeholder="Например: Вася, Админ группы, Основной аккаунт"
+                  />
+                  <button
+                    type="button"
+                    className={`h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap ${
+                      labelDirty ? 'visible' : 'invisible'
+                    }`}
+                    onClick={saveCustomLabel}
+                    disabled={!labelDirty || labelSaving}
+                  >
+                    {labelSaving ? '...' : 'Сохранить'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Имя</label>
+                  <input
+                    className="h-10 w-full px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                     value={selectedDraftFirstName}
                     maxLength={64}
                     onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
@@ -1107,9 +1131,9 @@ export function UserbotCenterSection({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Фамилия</label>
+                  <label className="text-xs font-medium text-slate-500">Фамилия</label>
                   <input
-                    className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    className="h-10 w-full px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
                     value={selectedDraftLastName}
                     maxLength={64}
                     onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
@@ -1117,25 +1141,28 @@ export function UserbotCenterSection({
                   />
                 </div>
               </div>
+
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Описание</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-500">Описание</label>
+                  <span className="text-[11px] text-slate-400">{selectedDraftAbout.length}/70</span>
+                </div>
                 <textarea
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
-                  rows={4}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
+                  rows={3}
                   value={selectedDraftAbout}
                   maxLength={70}
                   onChange={(event) => setProfileDraft((prev) => ({ ...prev, about: event.target.value }))}
                   placeholder="Описание профиля"
                 />
-                <div className="text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
               </div>
             </div>
 
             {profileDirty ? (
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="flex justify-end pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
+                  className="h-9 px-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
                   onClick={() => setProfileDraft({
                     accountId: String(selectedUserbot.id),
                     firstName: selectedUserbot.tg_first_name || '',
@@ -1144,17 +1171,18 @@ export function UserbotCenterSection({
                   })}
                   disabled={profileSyncState.pulling || profileSyncState.saving}
                 >
-                  Отменить
+                  Отменить изменения
                 </button>
               </div>
             ) : null}
 
             {selectedUserbot.tg_profile_sync_error ? (
-              <div className="mt-4 p-3 rounded-[14px] bg-red-50 border border-red-200 text-[13px] font-medium text-red-700">
+              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-700">
                 Ошибка профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
               </div>
             ) : null}
           </div>
+        </div>
 
           <div className="p-6 md:p-8 border-t border-slate-100 grid gap-6 lg:grid-cols-2">
             <div>
