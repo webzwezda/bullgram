@@ -108,7 +108,7 @@ export function ListedShopUserbotsSection({
               : null;
             const restrictedBadge = restrictedMarker(account);
             const itemTypeLabel = item?.item_title || 'Лот не нашли';
-            const hasProxyInBundle = /прокси/i.test(itemTypeLabel) || false;
+            const hasProxyInBundle = (sellerItem?.assets || []).some((asset) => asset.asset_type === 'proxy');
             
             return (
               <div className="space-y-6">
