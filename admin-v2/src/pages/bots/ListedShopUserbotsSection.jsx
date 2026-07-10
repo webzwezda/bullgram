@@ -1,4 +1,4 @@
-import { Box, ShieldCheck, Link, Trash2, Clock, User, Store, Loader2 } from 'lucide-react';
+import { Box, ShieldCheck, Trash2, Clock, User, Store, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -132,16 +132,6 @@ export function ListedShopUserbotsSection({
                       ) : null}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    className="shrink-0 bg-white hover:bg-slate-50 border border-slate-200 shadow-sm rounded-xl"
-                    asChild
-                  >
-                    <a href="/app/shop">
-                      <Link className="w-4 h-4 mr-2 text-slate-400" />
-                      Перейти в Shop
-                    </a>
-                  </Button>
                 </div>
 
                 <div className="grid gap-6 md:grid-cols-2">
