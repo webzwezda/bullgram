@@ -4,7 +4,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
-const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 function labelFor(account) {
   return account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
@@ -39,11 +39,11 @@ export function UserbotCombobox({
           className={cn(BASE_BUTTON_CLASSES, className)}
         >
           {triggerVariant === 'avatar' && selectedAccount ? (
-            <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
+            <span className="min-w-0 font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
               {selectedAccount.custom_label || (selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username')}
             </span>
           ) : (
-            <span className={cn('truncate', selectedAccount ? 'text-slate-900 font-medium' : 'text-muted-foreground')}>
+            <span className={cn('min-w-0 truncate', selectedAccount ? 'text-slate-900 font-medium' : 'text-muted-foreground')}>
               {selectedAccount ? (selectedAccount.custom_label || labelFor(selectedAccount)) : placeholder}
             </span>
           )}
