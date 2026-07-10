@@ -2,7 +2,7 @@ import { Box, ShieldCheck, Link, Trash2, Clock, User, Store, Loader2 } from 'luc
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 
 function StatusBadge({ tone, children, className = '' }) {
   const colorMap = {
@@ -52,21 +52,14 @@ export function ListedShopUserbotsSection({
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {listedShopUserbots.length > 0 && (
-              <Select
+              <UserbotCombobox
+                accounts={listedShopUserbots}
                 value={selectedShopUserbot ? String(selectedShopUserbot.id) : ''}
                 onValueChange={(value) => setSelectedShopUserbotId(value)}
-              >
-                <SelectTrigger className="w-full sm:w-[240px] bg-white border-slate-200 shadow-sm rounded-xl">
-                  <SelectValue placeholder="Выбрать аккаунт" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  {listedShopUserbots.map((account) => (
-                    <SelectItem key={account.id} value={String(account.id)} className="rounded-lg">
-                      {account.tg_username ? `@${account.tg_username}` : `TG ID ${account.tg_account_id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                triggerVariant="plain"
+                placeholder="Выбрать аккаунт"
+                className="w-full sm:w-[240px] bg-white border-slate-200 shadow-sm rounded-xl"
+              />
             )}
             
             {selectedShopUserbot && state.reservedItemsByAsset[`userbot:${String(selectedShopUserbot.id)}`]?.item_id && (

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 import { apiRequest } from '../../api/client.js';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
@@ -1403,32 +1404,15 @@ export function UserbotCenterSection({
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Select
+            <UserbotCombobox
+              accounts={liveUserbots}
               value={String(selectedLiveUserbot.id)}
               onValueChange={(value) => setSelectedLiveUserbotId(value)}
-            >
-              <SelectTrigger className="h-12 bg-white border-slate-200 shadow-sm rounded-xl gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-auto">
-                <div className="size-7 rounded-full overflow-hidden bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                  {selectedProfilePhotoSrc ? (
-                    <img src={selectedProfilePhotoSrc} alt="" className="size-7 object-cover" />
-                  ) : (
-                    selectedProfileInitial
-                  )}
-                </div>
-                <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
-                  {selectedLiveUserbot.tg_username
-                    ? `@${selectedLiveUserbot.tg_username}`
-                    : 'Без username'}
-                </span>
-              </SelectTrigger>
-              <SelectContent className="rounded-xl" position="popper" sideOffset={4}>
-                {liveUserbots.map((item) => (
-                  <SelectItem key={item.id} value={String(item.id)} className="rounded-lg">
-                    {item.tg_username ? `@${item.tg_username}` : `ID ${item.tg_account_id}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              triggerVariant="avatar"
+              className="h-12 bg-white border-slate-200 shadow-sm rounded-xl gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-auto"
+              align="start"
+              sideOffset={4}
+            />
 
             {(() => {
               const restrictedBadge = restrictedMarker(selectedLiveUserbot);
