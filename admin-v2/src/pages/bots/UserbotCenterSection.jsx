@@ -1094,44 +1094,45 @@ export function UserbotCenterSection({
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Имя</label>
-                <input
-                  className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
-                  value={selectedDraftFirstName}
-                  maxLength={64}
-                  onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
-                  placeholder="Имя аккаунта"
-                />
+            <div className="mt-5 grid gap-4 md:grid-cols-2 md:items-start">
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Имя</label>
+                  <input
+                    className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    value={selectedDraftFirstName}
+                    maxLength={64}
+                    onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
+                    placeholder="Имя аккаунта"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Фамилия</label>
+                  <input
+                    className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    value={selectedDraftLastName}
+                    maxLength={64}
+                    onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
+                    placeholder="Фамилия аккаунта"
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Фамилия</label>
-                <input
-                  className="h-11 w-full px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
-                  value={selectedDraftLastName}
-                  maxLength={64}
-                  onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
-                  placeholder="Фамилия аккаунта"
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Описание</label>
+                <textarea
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
+                  rows={4}
+                  value={selectedDraftAbout}
+                  maxLength={70}
+                  onChange={(event) => setProfileDraft((prev) => ({ ...prev, about: event.target.value }))}
+                  placeholder="Описание профиля"
                 />
+                <div className="text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
               </div>
             </div>
 
-            <div className="mt-4 space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Описание</label>
-              <textarea
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
-                rows={3}
-                value={selectedDraftAbout}
-                maxLength={70}
-                onChange={(event) => setProfileDraft((prev) => ({ ...prev, about: event.target.value }))}
-                placeholder="Описание профиля"
-              />
-              <div className="text-[12px] font-medium text-slate-500">{selectedDraftAbout.length}/70</div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {profileDirty ? (
+            {profileDirty ? (
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
@@ -1145,8 +1146,8 @@ export function UserbotCenterSection({
                 >
                   Отменить
                 </button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             {selectedUserbot.tg_profile_sync_error ? (
               <div className="mt-4 p-3 rounded-[14px] bg-red-50 border border-red-200 text-[13px] font-medium text-red-700">

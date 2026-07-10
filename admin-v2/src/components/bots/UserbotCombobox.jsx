@@ -6,20 +6,6 @@ import { cn } from '@/lib/utils';
 
 const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
-function photoSrcFor(account) {
-  if (account?.tg_photo_url) {
-    const v = account.tg_photo_synced_at ? `?v=${encodeURIComponent(account.tg_photo_synced_at)}` : '';
-    return `${account.tg_photo_url}${v}`;
-  }
-  return account?.tg_photo_data_url || '';
-}
-
-function initialFor(account) {
-  const name = [account?.tg_first_name, account?.tg_last_name].filter(Boolean).join(' ').trim();
-  const base = name || account?.tg_username || String(account?.tg_account_id || '?');
-  return base.slice(0, 1).toUpperCase();
-}
-
 function labelFor(account) {
   return account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
 }
@@ -53,18 +39,9 @@ export function UserbotCombobox({
           className={cn(BASE_BUTTON_CLASSES, className)}
         >
           {triggerVariant === 'avatar' && selectedAccount ? (
-            <>
-              <div className="size-7 rounded-full overflow-hidden bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
-                {photoSrcFor(selectedAccount) ? (
-                  <img src={photoSrcFor(selectedAccount)} alt="" className="size-7 object-cover" />
-                ) : (
-                  initialFor(selectedAccount)
-                )}
-              </div>
-              <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
-                {selectedAccount.custom_label || (selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username')}
-              </span>
-            </>
+            <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
+              {selectedAccount.custom_label || (selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username')}
+            </span>
           ) : (
             <span className={cn('truncate', selectedAccount ? 'text-slate-900 font-medium' : 'text-muted-foreground')}>
               {selectedAccount ? (selectedAccount.custom_label || labelFor(selectedAccount)) : placeholder}
