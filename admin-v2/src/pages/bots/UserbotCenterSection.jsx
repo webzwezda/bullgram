@@ -246,6 +246,9 @@ export function UserbotCenterSection({
     about: ''
   });
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
+  const [labelDraft, setLabelDraft] = useState('');
+  const [labelAccountId, setLabelAccountId] = useState('');
+  const [labelSaving, setLabelSaving] = useState(false);
   const trialHoursLeft = useMemo(() => {
     if (!trialEndsAt) return null;
     const diffMs = new Date(trialEndsAt).getTime() - Date.now();
@@ -523,6 +526,36 @@ export function UserbotCenterSection({
     selectedUserbot?.tg_last_name,
     selectedUserbot?.tg_about
   ]);
+
+  useEffect(() => {
+    if (!selectedUserbot?.id) {
+      setLabelDraft('');
+      setLabelAccountId('');
+      return;
+    }
+    setLabelDraft(selectedUserbot.custom_label || '');
+    setLabelAccountId(String(selectedUserbot.id));
+  }, [selectedUserbot?.id, selectedUserbot?.custom_label]);
+
+  const labelDirty = labelAccountId === String(selectedUserbot?.id || '') && labelDraft.trim() !== (selectedUserbot?.custom_label || '').trim();
+
+  async function saveCustomLabel() {
+    if (!accessToken || !selectedUserbot?.id || !labelDirty) return;
+    const trimmed = labelDraft.trim().slice(0, 100);
+    setLabelSaving(true);
+    try {
+      const result = await apiRequest(`/api/userbot/custom-label/${selectedUserbot.id}`, {
+        accessToken,
+        method: 'PATCH',
+        body: { custom_label: trimmed }
+      });
+      patchLiveUserbot(selectedUserbot.id, { custom_label: result.custom_label || '' });
+    } catch (error) {
+      toast.error(`Не удалось сохранить метку: ${error.message}`);
+    } finally {
+      setLabelSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (activeTab !== 'sale') return;
@@ -977,6 +1010,32 @@ export function UserbotCenterSection({
               <div className="text-[15px] font-bold text-slate-900">Профиль аккаунта</div>
             </div>
             <div className="text-sm text-slate-500 mb-6">Имя и описание редактируются здесь, аватарка тянется кнопкой «Стянуть из Telegram».</div>
+            <div className="mb-6 rounded-2xl bg-indigo-50/40 border border-indigo-100 p-4">
+              <label className="block text-[11px] font-bold uppercase tracking-[0.1em] text-indigo-500 mb-2">Название аккаунта</label>
+              <div className="flex gap-2">
+                <input
+                  className="h-11 flex-1 px-4 rounded-xl border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                  value={labelDraft}
+                  maxLength={100}
+                  onChange={(event) => setLabelDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && labelDirty && !labelSaving) saveCustomLabel();
+                  }}
+                  placeholder="Например: Вася, Админ группы, Основной аккаунт"
+                />
+                {labelDirty ? (
+                  <button
+                    type="button"
+                    className="h-11 px-5 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-sm whitespace-nowrap"
+                    onClick={saveCustomLabel}
+                    disabled={labelSaving}
+                  >
+                    {labelSaving ? '...' : 'Сохранить'}
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-2 text-[12px] text-slate-500">Видно только тебе — для поиска в селекторе. В Telegram не попадает.</div>
+            </div>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex min-w-0 items-start gap-4">
                 <div className="size-16 shrink-0 overflow-hidden rounded-2xl ring-1 ring-slate-200">

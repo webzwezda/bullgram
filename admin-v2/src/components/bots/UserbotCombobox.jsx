@@ -62,12 +62,12 @@ export function UserbotCombobox({
                 )}
               </div>
               <span className="font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
-                {selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username'}
+                {selectedAccount.custom_label || (selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username')}
               </span>
             </>
           ) : (
             <span className={cn('truncate', selectedAccount ? 'text-slate-900 font-medium' : 'text-muted-foreground')}>
-              {selectedAccount ? labelFor(selectedAccount) : placeholder}
+              {selectedAccount ? (selectedAccount.custom_label || labelFor(selectedAccount)) : placeholder}
             </span>
           )}
           <ChevronDown className="ml-auto w-4 h-4 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -92,6 +92,7 @@ export function UserbotCombobox({
                     setOpen(false);
                   }}
                   keywords={[
+                    account.custom_label || '',
                     account.tg_username || '',
                     account.tg_first_name || '',
                     account.tg_last_name || '',
@@ -100,9 +101,18 @@ export function UserbotCombobox({
                   ].filter(Boolean)}
                   className="rounded-lg"
                 >
-                  <span className="font-medium text-slate-900 truncate">
-                    {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
-                  </span>
+                  {account.custom_label ? (
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium text-slate-900 truncate">{account.custom_label}</span>
+                      <span className="text-[12px] text-slate-500 truncate">
+                        {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-medium text-slate-900 truncate">
+                      {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
+                    </span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

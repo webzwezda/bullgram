@@ -2925,6 +2925,49 @@ export default function (supabase) {
         }
     });
 
+    router.patch('/custom-label/:id', authenticateUser, async (req, res) => {
+        try {
+            const raw = typeof req.body?.custom_label === 'string' ? req.body.custom_label.trim() : '';
+            const custom_label = raw.slice(0, 100) || null;
+
+            const { data: account, error: accountError } = await supabase
+                .from('tg_accounts')
+                .select('id, owner_id, account_type')
+                .eq('id', req.params.id)
+                .eq('owner_id', req.user.id)
+                .single();
+
+            if (accountError || !account) {
+                return res.status(404).json({ error: 'Аккаунт не найден' });
+            }
+
+            if (account.account_type !== 'userbot') {
+                return res.status(400).json({ error: 'Метку можно поставить только юзерботу.' });
+            }
+
+            const { data: updated, error: updateError } = await supabase
+                .from('tg_accounts')
+                .update({ custom_label })
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .select('id, custom_label')
+                .single();
+
+            if (updateError || !updated) {
+                throw new Error(updateError?.message || 'Метка не сохранилась.');
+            }
+
+            return res.json({ success: true, custom_label: updated.custom_label || '' });
+        } catch (error) {
+            console.error('[USERBOT_CUSTOM_LABEL] failed', {
+                accountId: req.params.id,
+                ownerId: req.user?.id || null,
+                error: error.message || String(error || '')
+            });
+            res.status(500).json({ error: error.message || 'Не удалось сохранить метку.' });
+        }
+    });
+
     router.get('/check/:id', authenticateUser, async (req, res) => {
         try {
             const { data: account } = await supabase.from('tg_accounts').select('*, proxies(host, port, username, password, is_working, provision_source, inventory_group)').eq('id', req.params.id).eq('owner_id', req.user.id).single();
