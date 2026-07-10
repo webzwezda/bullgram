@@ -39,11 +39,11 @@ export function UserbotCombobox({
           className={cn(BASE_BUTTON_CLASSES, className)}
         >
           {triggerVariant === 'avatar' && selectedAccount ? (
-            <span className="min-w-0 font-bold text-slate-900 truncate max-w-[160px] sm:max-w-[220px]">
+            <span className="min-w-0 font-bold text-slate-950 truncate max-w-[160px] sm:max-w-[220px]">
               {selectedAccount.custom_label || (selectedAccount.tg_username ? `@${selectedAccount.tg_username}` : 'Без username')}
             </span>
           ) : (
-            <span className={cn('min-w-0 truncate', selectedAccount ? 'text-slate-900 font-medium' : 'text-muted-foreground')}>
+            <span className={cn('min-w-0 truncate', selectedAccount ? 'text-slate-950 font-semibold' : 'text-slate-400')}>
               {selectedAccount ? (selectedAccount.custom_label || labelFor(selectedAccount)) : placeholder}
             </span>
           )}
@@ -60,38 +60,42 @@ export function UserbotCombobox({
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
-              {accounts.map((account) => (
-                <CommandItem
-                  key={account.id}
-                  value={String(account.id)}
-                  onSelect={() => {
-                    onValueChange(String(account.id));
-                    setOpen(false);
-                  }}
-                  keywords={[
-                    account.custom_label || '',
-                    account.tg_username || '',
-                    account.tg_first_name || '',
-                    account.tg_last_name || '',
-                    account.tg_phone || '',
-                    String(account.tg_account_id || '')
-                  ].filter(Boolean)}
-                  className="rounded-lg"
-                >
-                  {account.custom_label ? (
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-slate-900 truncate">{account.custom_label}</span>
-                      <span className="text-[12px] text-slate-500 truncate">
+              {accounts.map((account) => {
+                const isSelected = String(account.id) === String(value);
+                return (
+                  <CommandItem
+                    key={account.id}
+                    value={String(account.id)}
+                    data-checked={isSelected ? 'true' : undefined}
+                    onSelect={() => {
+                      onValueChange(String(account.id));
+                      setOpen(false);
+                    }}
+                    keywords={[
+                      account.custom_label || '',
+                      account.tg_username || '',
+                      account.tg_first_name || '',
+                      account.tg_last_name || '',
+                      account.tg_phone || '',
+                      String(account.tg_account_id || '')
+                    ].filter(Boolean)}
+                    className="rounded-lg"
+                  >
+                    {account.custom_label ? (
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-slate-950 truncate">{account.custom_label}</span>
+                        <span className="text-[12px] text-slate-600 truncate">
+                          {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-slate-950 truncate">
                         {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
                       </span>
-                    </div>
-                  ) : (
-                    <span className="font-medium text-slate-900 truncate">
-                      {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
-                    </span>
-                  )}
-                </CommandItem>
-              ))}
+                    )}
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
