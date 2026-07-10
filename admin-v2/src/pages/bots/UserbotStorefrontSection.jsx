@@ -125,23 +125,25 @@ export function UserbotStorefrontSection({
 
   return (
     <div className="mb-6">
-      <Card className="border border-slate-200/70 bg-white rounded-2xl shadow-[0_8px_30px_rgb(15,23,42,0.04)] overflow-hidden">
+      <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/40 px-5 sm:px-6 py-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="size-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-              <ShoppingCart className="size-5" />
+        <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+                <ShoppingCart className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Магазин аккаунтов</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Готовые юзерботы с прокси. Оплата через TON Connect.</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold text-slate-900 truncate">Магазин аккаунтов</h2>
-              <p className="text-[13px] text-slate-500 mt-0.5">Готовые юзерботы с прокси. Оплата через TON Connect.</p>
-            </div>
+            <TonWalletChip />
           </div>
-          <TonWalletChip />
         </div>
 
         {/* Body */}
-        <div className="p-5 sm:p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-4">
           {storefrontState.error ? (
             <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
               <AlertCircle className="size-5 text-rose-500 shrink-0 mt-0.5" />
@@ -229,67 +231,46 @@ export function UserbotStorefrontSection({
               <p className="text-sm text-slate-500 max-w-sm">{bundleSlot.emptyText}</p>
             </div>
           ) : (
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-              {/* Left: Product info */}
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-bold uppercase tracking-wider">
-                    <Star className="size-3.5 fill-indigo-600" /> Хит продаж
-                  </div>
-                  <h3 className="text-2xl font-black tracking-tight text-slate-900 leading-tight">
+            <div className="space-y-4">
+              {/* [1] HERO ROW — title + Хит + included chips */}
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight flex-1 min-w-0">
                     {bundleSlot.item.title}
                   </h3>
-                  <p className="text-[13px] text-slate-500 font-medium">Комплект для безопасной и долговечной работы</p>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                    <Star className="size-3 text-indigo-600 fill-indigo-600" /> Хит
+                  </span>
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1.5 px-3 text-[12px]">
-                    <Box className="size-4 mr-2 text-slate-400" /> Аккаунт
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
+                    <Box className="size-3.5 mr-1 text-slate-400" /> Аккаунт
                   </Badge>
-                  <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1.5 px-3 text-[12px]">
-                    <ShieldCheck className="size-4 mr-2 text-slate-400" /> Proxy
+                  <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
+                    <ShieldCheck className="size-3.5 mr-1 text-slate-400" /> Proxy
                   </Badge>
+                  <span className="text-[11px] text-slate-400 ml-1">Доступно: {bundleSlot.items.length} шт.</span>
                 </div>
-
-                <ul className="space-y-2 pt-1">
-                  {bundleSlot.features.map((feature, i) => (
-                    <li
-                      key={i}
-                      className="flex items-center gap-3 text-[13px] font-medium text-slate-700 bg-slate-50/50 px-3 py-2 rounded-xl border border-slate-100"
-                    >
-                      <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
 
-              {/* Right: Checkout card */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    {quantity > 1 ? `Итого за ${quantity} шт.` : 'Стоимость'}
-                  </div>
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-3xl font-black tracking-tight text-slate-900">
-                      {activePurchase
-                        ? Number(activePurchase.amount_ton || 0)
-                        : bundleTotalTon}{' '}
-                      <span className="text-base font-bold text-slate-500">TON</span>
-                    </span>
-                  </div>
-                </div>
+              {/* [2] FEATURES — inline trust-line ДО CTA */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
+                {bundleSlot.features.map((feature, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
+                    <span>{feature}</span>
+                  </span>
+                ))}
+              </div>
 
-                {/* Quantity selector — disabled if purchase already created */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Количество</span>
-                    <span className="text-[11px] text-slate-400">Доступно: {bundleSlot.items.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 p-1">
+              {/* [3] BUY PANEL — компактная зона конверсии */}
+              <div className="rounded-2xl bg-slate-50/70 p-4 space-y-3">
+                {/* Quantity + Price row */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1 rounded-xl bg-white ring-1 ring-slate-200 p-1">
                     <button
                       type="button"
-                      className="flex h-9 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                       onClick={() => setUserbotBuyQuantity((prev) => ({
                         ...prev,
                         [bundleSlot.slotKey]: Math.max(Number(prev[bundleSlot.slotKey] || 1) - 1, 1)
@@ -299,12 +280,10 @@ export function UserbotStorefrontSection({
                     >
                       <Minus className="size-4" />
                     </button>
-                    <div className="flex-1 text-center font-bold text-base text-slate-900">
-                      {quantity} <span className="text-xs text-slate-400 font-medium ml-1">шт.</span>
-                    </div>
+                    <span className="min-w-8 text-center font-bold text-sm text-slate-900 tabular-nums px-0.5">{quantity}</span>
                     <button
                       type="button"
-                      className="flex h-9 w-10 items-center justify-center rounded-lg bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                       onClick={() => setUserbotBuyQuantity((prev) => ({
                         ...prev,
                         [bundleSlot.slotKey]: Math.min(Number(prev[bundleSlot.slotKey] || 1) + 1, Math.max(bundleSlot.items.length, 1))
@@ -315,76 +294,88 @@ export function UserbotStorefrontSection({
                       <Plus className="size-4" />
                     </button>
                   </div>
-                </div>
 
-                {/* Pay area */}
-                <div className="pt-3 border-t border-slate-200/70 space-y-3">
-                  {checkoutState.error ? (
-                    <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
-                      <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
-                      <div>{checkoutState.error}</div>
+                  <div className="text-right">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      {quantity > 1 ? `Итого за ${quantity} шт.` : 'Стоимость'}
                     </div>
-                  ) : null}
-
-                  {activePurchase ? (
-                    <div className="space-y-2">
-                      <TonConnectPayButton
-                        amountTon={activePurchase.amount_ton}
-                        amountNano={activePurchase.amount_nanoton}
-                        merchantWallet={activePurchase.seller_wallet}
-                        memo={activePurchase.memo}
-                        network={activePurchase.network || 'mainnet'}
-                        verifyEndpoint={VERIFY_ENDPOINT}
-                        buildVerifyBody={buildVerifyBody}
-                        accessToken={accessToken}
-                        onPaid={handlePaid}
-                        onError={handlePayError}
-                      />
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-slate-500">
-                          {activePurchase.expires_at
-                            ? `Истекает ${new Date(activePurchase.expires_at).toLocaleString('ru-RU')}`
-                            : 'Лот зарезервирован'}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-[12px] font-medium text-slate-500 hover:text-rose-600 transition"
-                          onClick={() => setCheckoutState({
-                            item: null,
-                            purchase: null,
-                            paymentMethod: 'ton',
-                            loading: false,
-                            checking: false,
-                            error: '',
-                            notice: '',
-                            noticeTone: 'default'
-                          })}
-                        >
-                          Сбросить
-                        </button>
+                    <div className="text-xl font-black tracking-tight text-slate-900 leading-tight">
+                      {activePurchase ? Number(activePurchase.amount_ton || 0) : bundleTotalTon}
+                      <span className="text-sm font-bold text-slate-500 ml-1">TON</span>
+                    </div>
+                    {quantity > 1 && !activePurchase ? (
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        ≈ {(bundleTotalTon / quantity).toFixed(2)} TON/шт.
                       </div>
-                    </div>
-                  ) : isCreatingCheckout ? (
-                    <Button disabled className="w-full h-11 rounded-xl bg-slate-100 text-slate-500">
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                      Резервируем лот...
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20"
-                      onClick={() => {
-                        if (selectedItems.length > 1) {
-                          createUserbotBatchCheckout(selectedItems, 'ton');
-                        } else if (selectedItems.length === 1) {
-                          openUserbotCheckout(selectedItems[0], 'ton');
-                        }
-                      }}
-                    >
-                      <Sparkles className="size-4 mr-2" />
-                      Купить за {bundleTotalTon} TON
-                    </Button>
-                  )}
+                    ) : null}
+                  </div>
                 </div>
+
+                {checkoutState.error ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
+                    <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
+                    <div>{checkoutState.error}</div>
+                  </div>
+                ) : null}
+
+                {activePurchase ? (
+                  <div className="space-y-2">
+                    <TonConnectPayButton
+                      amountTon={activePurchase.amount_ton}
+                      amountNano={activePurchase.amount_nanoton}
+                      merchantWallet={activePurchase.seller_wallet}
+                      memo={activePurchase.memo}
+                      network={activePurchase.network || 'mainnet'}
+                      verifyEndpoint={VERIFY_ENDPOINT}
+                      buildVerifyBody={buildVerifyBody}
+                      accessToken={accessToken}
+                      onPaid={handlePaid}
+                      onError={handlePayError}
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-slate-500">
+                        {activePurchase.expires_at
+                          ? `Истекает ${new Date(activePurchase.expires_at).toLocaleString('ru-RU')}`
+                          : 'Лот зарезервирован'}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition"
+                        onClick={() => setCheckoutState({
+                          item: null,
+                          purchase: null,
+                          paymentMethod: 'ton',
+                          loading: false,
+                          checking: false,
+                          error: '',
+                          notice: '',
+                          noticeTone: 'default'
+                        })}
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                  </div>
+                ) : isCreatingCheckout ? (
+                  <Button disabled className="w-full h-11 rounded-xl bg-slate-100 text-slate-500">
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Резервируем лот...
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20"
+                    onClick={() => {
+                      if (selectedItems.length > 1) {
+                        createUserbotBatchCheckout(selectedItems, 'ton');
+                      } else if (selectedItems.length === 1) {
+                        openUserbotCheckout(selectedItems[0], 'ton');
+                      }
+                    }}
+                  >
+                    <Sparkles className="size-4 mr-2" />
+                    Купить за {bundleTotalTon} TON
+                  </Button>
+                )}
               </div>
             </div>
           )}
