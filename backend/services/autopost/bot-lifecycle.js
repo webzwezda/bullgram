@@ -15,6 +15,13 @@ export function startAutopostBot(botId, token, registerHandlers) {
     registerHandlers(bot, botId);
     // message_reaction — опциональный update, по дефолту Telegram его не шлёт.
     // Нужен для подсчёта реакций и best-of. chat_member уже использовался в chat-member.js.
+    //
+    // Раньше activeAutopostBots.set выполнялся синхронно после launch() — бот
+    // попадал в Map до того, как polling реально подключался. Если launch падал
+    // (5xx Telegram, битый токен, race при старте), бот оставался в Map
+    // «полумёртвым»: getAutopostBot возвращал инстанс, но connection не работал,
+    // и последующий startBot коротил по has(botId) — оживить было нельзя.
+    // Поэтому добавляем в Map только после успешного resolve launch().
     bot.launch({
         allowed_updates: [
             'message',
@@ -26,9 +33,11 @@ export function startAutopostBot(botId, token, registerHandlers) {
             'chat_member'
         ]
     })
-        .then(() => log.info('lifecycle', 'bot_started', { botId }))
+        .then(() => {
+            activeAutopostBots.set(botId, bot);
+            log.info('lifecycle', 'bot_started', { botId });
+        })
         .catch(err => log.error('lifecycle', 'bot_launch_failed', { botId, err }));
-    activeAutopostBots.set(botId, bot);
 }
 
 export function getAutopostBot(botId) {

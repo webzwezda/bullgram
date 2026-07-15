@@ -57,7 +57,33 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
 
         const bot = getAutopostBotFunction(botConfig.id);
         if (!bot) {
-            log.warn('scheduler', 'bot_not_running', { botId: botConfig.id, dueCount: dueItems.length });
+            // Бот пропал из памяти (рестарт backend, падение launch, race в bot-lifecycle).
+            // Раньше scheduler здесь молча логировал warning и return — items оставались
+            // в scheduled бесконечно без error_message, а стартануть заново через UI
+            // нельзя было из-за коротящего has(botId) в startAutopostBot. Пробуем поднять
+            // сами: на следующем тике (5 мин) бот уже должен быть в Map и items уйдут.
+            try {
+                const { data: botRow } = await supabase
+                    .from('autopost_bots')
+                    .select('bot_token, is_active')
+                    .eq('id', botConfig.id)
+                    .single();
+                if (botRow?.is_active && botRow?.bot_token) {
+                    autopostService.startBot(botConfig.id, botRow.bot_token);
+                    log.warn('scheduler', 'bot_auto_restart_attempt', {
+                        botId: botConfig.id,
+                        dueCount: dueItems.length
+                    });
+                } else {
+                    log.error('scheduler', 'bot_cannot_restart', {
+                        botId: botConfig.id,
+                        isActive: Boolean(botRow?.is_active),
+                        hasToken: Boolean(botRow?.bot_token)
+                    });
+                }
+            } catch (e) {
+                log.error('scheduler', 'bot_auto_restart_failed', { botId: botConfig.id, err: e.message });
+            }
             return;
         }
 

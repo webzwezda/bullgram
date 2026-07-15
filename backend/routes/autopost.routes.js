@@ -354,7 +354,15 @@ export default function autopostRoutes(supabase) {
                 .maybeSingle();
 
             res.json({
-                bot: { id: bot.id, username: bot.username, isActive: bot.is_active },
+                bot: {
+                    id: bot.id,
+                    username: bot.username,
+                    isActive: bot.is_active,
+                    // is_active в БД не означает, что бот реально опрашивает Telegram.
+                    // Этот флаг проверяет именно in-memory реестр bot-lifecycle — если он false,
+                    // публикации не идут, scheduler попытается авто-restart на следующем тике.
+                    isRunning: Boolean(service.getBot(bot.id))
+                },
                 totals: stats,
                 channels: (channels.data || []).map(ch => ({
                     id: ch.id,
@@ -378,6 +386,31 @@ export default function autopostRoutes(supabase) {
         try {
             const count = await service.scheduleNextBatch(req.params.botId);
             res.json({ scheduled: count });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Ручной restart polling'а. PATCH с is_active коротит по has(botId) в
+    // startAutopostBot, поэтому для зависшего в Map бота нужен явный stop+start.
+    router.post('/bots/:botId/restart', async (req, res) => {
+        try {
+            const { data: bot, error } = await supabase
+                .from('autopost_bots')
+                .select('id, bot_token, is_active')
+                .eq('id', req.params.botId)
+                .eq('owner_id', req.user.id)
+                .single();
+            if (error || !bot) return res.status(404).json({ error: 'Бот не найден' });
+
+            service.stopBot(bot.id);
+            if (bot.is_active) {
+                service.startBot(bot.id, bot.bot_token);
+            }
+            res.json({
+                ok: true,
+                isRunning: bot.is_active ? Boolean(service.getBot(bot.id)) : false
+            });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
