@@ -1910,17 +1910,20 @@ export class OfficialBotService {
 
         const bot = new Telegraf(token);
         this.registerHandlers(bot, botId, username, role);
-        // Раньше activeBots.set выполнялся синхронно — бот попадал в Map до
-        // успешного launch(). При падении launch оставался «полумёртвым» в Map,
-        // и последующий startBot коротил по has(botId) — оживить было нельзя.
-        // В prod это не критично (webhooks через startWebhookBot), но в dev
-        // polling-mode проявляется ровно так же, как у autopost.
+        // Telegraf launch() резолвится только на graceful shutdown и реджектится
+        // при падении polling. set в .then никогда бы не вызвался во время работы
+        // бота — поэтому добавляем синхронно, а .then/.catch удаляют из Map.
+        activeBots.set(botId, bot);
+        console.log(`🤖 Бот @${username} запускается (polling)`);
         bot.launch()
             .then(() => {
-                activeBots.set(botId, bot);
-                console.log(`🤖 Бот @${username} успешно запущен (polling)!`);
+                activeBots.delete(botId);
+                console.log(`🤖 Бот @${username} остановлен (polling)`);
             })
-            .catch(err => console.error(`🤖 Launch @${username} не удался:`, err.message));
+            .catch(err => {
+                activeBots.delete(botId);
+                console.error(`🤖 Launch @${username} не удался:`, err.message);
+            });
     }
 
     /**

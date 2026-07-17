@@ -13,15 +13,17 @@ export function startAutopostBot(botId, token, registerHandlers) {
 
     const bot = new Telegraf(token);
     registerHandlers(bot, botId);
-    // message_reaction — опциональный update, по дефолту Telegram его не шлёт.
-    // Нужен для подсчёта реакций и best-of. chat_member уже использовался в chat-member.js.
-    //
-    // Раньше activeAutopostBots.set выполнялся синхронно после launch() — бот
-    // попадал в Map до того, как polling реально подключался. Если launch падал
-    // (5xx Telegram, битый токен, race при старте), бот оставался в Map
-    // «полумёртвым»: getAutopostBot возвращал инстанс, но connection не работал,
-    // и последующий startBot коротил по has(botId) — оживить было нельзя.
-    // Поэтому добавляем в Map только после успешного resolve launch().
+
+    // Telegraf launch() возвращает Promise, который резолвится только при
+    // graceful shutdown (SIGTERM) и реджектится при падении polling loop.
+    // Пока бот живёт, Promise висит pending. Если бы мы добавляли в Map в .then,
+    // бот никогда бы не попал в Map во время работы — scheduler видел бы «бота нет»,
+    // вызывал launch повторно каждые 5 мин, и новая launch конфликтовала с уже
+    // живым polling («409 Conflict: terminated by other getUpdates request»).
+    // Поэтому добавляем в Map синхронно, а .then/.catch удаляют — тогда Map
+    // отражает реальное состояние: есть только пока бот реально работает.
+    activeAutopostBots.set(botId, bot);
+
     bot.launch({
         allowed_updates: [
             'message',
@@ -34,10 +36,13 @@ export function startAutopostBot(botId, token, registerHandlers) {
         ]
     })
         .then(() => {
-            activeAutopostBots.set(botId, bot);
-            log.info('lifecycle', 'bot_started', { botId });
+            activeAutopostBots.delete(botId);
+            log.info('lifecycle', 'bot_stopped_graceful', { botId });
         })
-        .catch(err => log.error('lifecycle', 'bot_launch_failed', { botId, err }));
+        .catch(err => {
+            activeAutopostBots.delete(botId);
+            log.error('lifecycle', 'bot_launch_failed', { botId, err });
+        });
 }
 
 export function getAutopostBot(botId) {
