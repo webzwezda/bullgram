@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send,
   RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
-  Zap
+  Zap, CheckSquare
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -35,8 +35,9 @@ const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx')
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
+const ChecklistPage = lazy(() => import('./pages/ChecklistPage.jsx').then((module) => ({ default: module.ChecklistPage })));
 export function App() {
-  const { user, profileRole } = useAuth();
+  const { user, profileRole, accessToken } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -45,6 +46,7 @@ export function App() {
       items: [
         { to: '/autopost', label: 'Автопостер', icon: Zap },
         { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
+        { to: '/checklist', label: 'Чеклисты', icon: CheckSquare },
       ]
     },
     {
@@ -223,6 +225,7 @@ export function App() {
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/shop" replace />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/checklist" element={<ChecklistPage accessToken={accessToken} />} />
               </Routes>
             </Suspense>
           </AuthGate>
