@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTonAddress, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
 import { useTonCheckout } from './useTonCheckout.js';
 
@@ -32,7 +32,7 @@ export function TonConnectPayButton({
 
   const bodyBuilder = useMemo(() => buildVerifyBody, [buildVerifyBody]);
 
-  const { pay, paying, verifying, status, error, verifyCurrent } = useTonCheckout({
+  const { pay, paying, verifying, status, error } = useTonCheckout({
     verifyEndpoint,
     buildVerifyBody: bodyBuilder,
     accessToken,
@@ -40,15 +40,9 @@ export function TonConnectPayButton({
     onError: handleError
   });
 
-  useEffect(() => {
-    if (!connected || !memo) return;
-    verifyCurrent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected, memo]);
-
   if (!connected) {
     return (
-      <div className={`flex flex-col items-start gap-2 ${className}`}>
+      <div className={`flex flex-col items-center gap-2 ${className}`}>
         <TonConnectButton />
         <span className="text-xs text-slate-500">Подключите TON-кошелёк для оплаты</span>
       </div>
@@ -71,7 +65,7 @@ export function TonConnectPayButton({
   };
 
   return (
-    <div className={`flex flex-col items-start gap-2 ${className}`}>
+    <div className={`flex flex-col items-center gap-2 ${className}`}>
       <button
         type="button"
         disabled={disabled || busy || status === 'paid'}
