@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Wallet,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { apiRequest } from '../api/client.js';
@@ -183,16 +184,38 @@ function Card({ children }) {
   );
 }
 
-function AmountBlock({ purchase }) {
+function AmountBlock({ purchase, remaining, verifying }) {
   const amount = Number(purchase.amount_ton || 0);
   return (
     <div className="rounded-2xl bg-slate-50/70 p-4 ring-1 ring-slate-100">
-      <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-        {purchase.item_title || 'Заказ'}
-      </div>
-      <div className="text-2xl font-black tracking-tight text-slate-900 leading-tight">
-        {amount}
-        <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            {purchase.item_title || 'Заказ'}
+          </div>
+          <div className="text-3xl font-black tracking-tight text-slate-900 leading-none">
+            {amount}
+            <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          {verifying ? (
+            <span className="inline-flex items-center gap-1.5 text-indigo-600 text-xs font-semibold">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Валидация…
+            </span>
+          ) : remaining ? (
+            <span className="inline-flex items-center gap-1.5 text-slate-500 text-xs font-medium">
+              <Clock className="w-3.5 h-3.5" />
+              <span className="font-mono tabular-nums">{remaining}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-slate-400 text-xs">
+              <Clock className="w-3.5 h-3.5" />
+              Ожидает оплаты
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -250,25 +273,53 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
     <div>
       <BrandingHeader />
       <Card>
-        <AmountBlock purchase={purchase} />
+        <AmountBlock purchase={purchase} remaining={remaining} verifying={verifying} />
 
-        <div className="space-y-2">
-          <CopyRow label="Кошелёк продавца" value={purchase.seller_wallet || ''} />
-          <CopyRow label="Memo (обязательно)" value={purchase.memo || ''} />
+        <div className="rounded-2xl bg-gradient-to-br from-sky-50 via-indigo-50/60 to-white ring-1 ring-sky-100 p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-sky-700 mb-3">
+            <Wallet className="w-4 h-4" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Оплата через TON Connect</span>
+          </div>
+          <div className="flex justify-center">
+            <TonConnectPayButton
+              amountTon={purchase.amount_ton}
+              amountNano={purchase.amount_nanoton}
+              merchantWallet={purchase.seller_wallet}
+              memo={purchase.memo}
+              network={purchase.network || 'mainnet'}
+              verifyEndpoint={verifyEndpoint}
+              buildVerifyBody={() => ({})}
+              onPaid={onPaid}
+              onError={onError}
+              onTransactionSent={onPaymentSent}
+              className="items-center"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 text-center mt-3 leading-relaxed">
+            Один клик из браузера — без переключения на другое приложение.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-center">
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-slate-200" />
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">или отсканируйте QR</span>
+          <div className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-start">
           {qrDataUrl ? (
             <div className="flex justify-center sm:justify-start">
               <img
                 src={qrDataUrl}
                 alt="QR для TON перевода"
-                className="w-44 h-44 sm:w-48 sm:h-48 rounded-xl bg-white border border-slate-200 p-2"
+                className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-white border border-slate-200 p-2"
               />
             </div>
-          ) : null}
+          ) : (
+            <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-slate-100 animate-pulse self-center" />
+          )}
 
-          <div className="space-y-2 sm:order-2 order-1">
+          <div className="space-y-2">
             {purchase.ton_uri ? (
               <a
                 href={purchase.ton_uri}
@@ -279,46 +330,18 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
               </a>
             ) : null}
 
-            <div className="flex justify-center sm:justify-start">
-              <TonConnectPayButton
-                amountTon={purchase.amount_ton}
-                amountNano={purchase.amount_nanoton}
-                merchantWallet={purchase.seller_wallet}
-                memo={purchase.memo}
-                network={purchase.network || 'mainnet'}
-                verifyEndpoint={verifyEndpoint}
-                buildVerifyBody={() => ({})}
-                onPaid={onPaid}
-                onError={onError}
-                onTransactionSent={onPaymentSent}
-              />
-            </div>
+            <CopyRow label="Кошелёк продавца" value={purchase.seller_wallet || ''} />
+            <CopyRow label="Memo (обязательно)" value={purchase.memo || ''} />
           </div>
         </div>
 
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
-          {verifying ? (
-            <span className="inline-flex items-center gap-1.5 text-indigo-600 font-medium">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Валидация транзакции…
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-slate-500">
-              <Clock className="w-3.5 h-3.5" />
-              {remaining ? `Истекает через ${remaining}` : 'Ожидает оплаты'}
-            </span>
-          )}
           <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
             <ShieldCheck className="w-3 h-3 text-emerald-500" />
-            Защищено TON Connect
+            Memo обязательно — без него платёж не зачтётся
           </span>
         </div>
       </Card>
-
-      <p className="mt-4 text-center text-[12px] text-slate-500 leading-relaxed">
-        Откройте ссылку из кошелька, наведите камеру на QR или оплатите через TON Connect.
-        Memo обязательно — без него платёж не зачтётся.
-      </p>
     </div>
   );
 }
@@ -329,15 +352,13 @@ function SkeletonView() {
       <BrandingHeader />
       <Card>
         <div className="rounded-2xl bg-slate-100 h-20 animate-pulse" />
-        <div className="space-y-2">
-          <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
-          <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
-        </div>
+        <div className="rounded-2xl bg-slate-100 h-32 animate-pulse" />
         <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4">
-          <div className="w-44 h-44 rounded-xl bg-slate-100 animate-pulse" />
+          <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-slate-100 animate-pulse" />
           <div className="space-y-2">
             <div className="h-11 rounded-xl bg-slate-100 animate-pulse" />
-            <div className="h-11 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-14 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-14 rounded-xl bg-slate-100 animate-pulse" />
           </div>
         </div>
       </Card>
