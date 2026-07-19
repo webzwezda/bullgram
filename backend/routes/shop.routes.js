@@ -2613,7 +2613,7 @@ export default function shopRoutes(supabase) {
         try {
             const { data: purchase, error } = await supabase
                 .from('shop_purchases')
-                .select('id, status, amount_ton, expires_at, created_at, payload, shop_item_id, seller_owner_id')
+                .select('id, status, amount_ton, created_at, payload, shop_item_id, seller_owner_id')
                 .eq('id', purchaseId)
                 .maybeSingle();
             if (error) throw error;
@@ -2623,12 +2623,11 @@ export default function shopRoutes(supabase) {
             await expireStalePendingPurchases(supabase, [purchase]);
             const { data: fresh } = await supabase
                 .from('shop_purchases')
-                .select('status, expires_at')
+                .select('status')
                 .eq('id', purchaseId)
                 .maybeSingle();
             if (fresh) {
                 purchase.status = fresh.status;
-                purchase.expires_at = fresh.expires_at;
             }
 
             const [settingsRes, itemRes] = await Promise.all([
@@ -2641,6 +2640,9 @@ export default function shopRoutes(supabase) {
             const wallet = settingsRes.data?.ton_wallet;
             const network = purchase.payload?.network || 'mainnet';
             const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
+            const expiresAt = purchase.created_at
+                ? getPendingPurchaseExpiry(purchase.created_at).toISOString()
+                : null;
 
             return res.json({
                 id: purchase.id,
@@ -2650,7 +2652,7 @@ export default function shopRoutes(supabase) {
                 memo,
                 seller_wallet: wallet,
                 network,
-                expires_at: purchase.expires_at,
+                expires_at: expiresAt,
                 item_title: itemRes.data?.title || 'Заказ',
                 ton_uri: tonUri,
                 ton_qr: purchase.payload?.ton_qr || null
