@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "@ton/core": "^0.63.1",
     "@tonconnect/ui-react": "^3.0.0",
+    "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.7.0",
