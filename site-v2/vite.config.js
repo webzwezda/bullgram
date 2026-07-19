@@ -11,6 +11,19 @@ export default defineConfig({
     }
   },
   base: '/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-tonconnect': ['@tonconnect/ui-react', '@tonconnect/sdk'],
+          'vendor-ton-core': ['@ton/core'],
+          'vendor-ui': ['lucide-react', 'clsx', 'class-variance-authority', 'tailwind-merge']
+        }
+      }
+    }
+  },
   server: {
     port: 5174,
     proxy: {
@@ -22,3 +35,4 @@ export default defineConfig({
     }
   }
 });
+
