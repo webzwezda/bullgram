@@ -24,6 +24,30 @@ const SHOP_VERIFY_ENDPOINT = (id) => `/api/shop/public/purchase/${id}/verify-pub
 const INVOICE_VERIFY_ENDPOINT = (id) => `/api/invoices/public/${id}/verify-public`;
 const PROCESSING_STATUSES = ['awaiting_receipt', 'wait_admin'];
 
+function buildWalletDeepLinks(purchase) {
+  const addr = purchase.seller_wallet;
+  const nano = purchase.amount_nanoton;
+  const memo = purchase.memo || '';
+  if (!addr) return [];
+  return [
+    {
+      key: 'tonkeeper',
+      label: 'Tonkeeper',
+      url: `https://tonkeeper.com/transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`,
+    },
+    {
+      key: 'mytonwallet',
+      label: 'MyTonWallet',
+      url: `https://app.mytonwallet.io/transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`,
+    },
+    {
+      key: 'generic',
+      label: 'Другой TON-кошелёк',
+      url: `ton://transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`,
+    },
+  ];
+}
+
 function isProcessingStatus(status) {
   return PROCESSING_STATUSES.includes(status);
 }
@@ -59,6 +83,8 @@ export function PayPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [manualVerifying, setManualVerifying] = useState(false);
+  const [manualMessage, setManualMessage] = useState('');
   const timerRef = useRef(null);
 
   const fetchPurchase = useCallback(async (isRetry = false) => {
@@ -131,6 +157,23 @@ export function PayPage() {
     setVerifying(false);
   }, []);
 
+  const verifyManually = useCallback(async () => {
+    if (!purchase) return;
+    const endpoint = purchaseKind === 'invoice'
+      ? INVOICE_VERIFY_ENDPOINT(purchase.id)
+      : SHOP_VERIFY_ENDPOINT(purchase.id);
+    setManualVerifying(true);
+    setManualMessage('');
+    try {
+      await apiRequest(endpoint, { method: 'POST', body: {} });
+      await fetchPurchase();
+    } catch (e) {
+      setManualMessage(e.message || 'Не удалось проверить оплату');
+    } finally {
+      setManualVerifying(false);
+    }
+  }, [purchase, purchaseKind, fetchPurchase]);
+
   if (loading) return <SkeletonView />;
   if (error) return <ErrorView message={error} onRetry={() => fetchPurchase(true)} />;
   if (purchase?.status === 'paid' || isProcessingStatus(purchase?.status)) {
@@ -151,6 +194,9 @@ export function PayPage() {
       onPaymentSent={() => setVerifying(true)}
       onPaid={handlePaid}
       onError={handlePayError}
+      onVerifyManually={verifyManually}
+      manualVerifying={manualVerifying}
+      manualMessage={manualMessage}
     />
   );
 }
@@ -260,7 +306,18 @@ function CopyRow({ label, value }) {
   );
 }
 
-function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPaymentSent, onPaid, onError }) {
+function PaymentView({
+  purchase,
+  qrDataUrl,
+  verifying,
+  verifyEndpoint,
+  onPaymentSent,
+  onPaid,
+  onError,
+  onVerifyManually,
+  manualVerifying,
+  manualMessage,
+}) {
   const [remaining, setRemaining] = useState(formatExpiry(purchase.expires_at));
 
   useEffect(() => {
@@ -268,6 +325,8 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
     const t = setInterval(() => setRemaining(formatExpiry(purchase.expires_at)), 1000);
     return () => clearInterval(t);
   }, [purchase.expires_at]);
+
+  const walletLinks = buildWalletDeepLinks(purchase);
 
   return (
     <div>
@@ -299,44 +358,76 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
 
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">или отсканируйте QR</span>
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">или другим способом</span>
           <div className="h-px flex-1 bg-slate-200" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-start">
           {qrDataUrl ? (
-            <div className="flex justify-center sm:justify-start">
+            <div className="flex flex-col items-center gap-2">
               <img
                 src={qrDataUrl}
                 alt="QR для TON перевода"
                 className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-white border border-slate-200 p-2"
               />
+              <span className="text-[10px] text-slate-400 text-center max-w-[10rem] leading-tight">
+                Камерой кошелька (Tonkeeper / MyTonWallet)
+              </span>
             </div>
           ) : (
             <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-slate-100 animate-pulse self-center" />
           )}
 
           <div className="space-y-2">
-            {purchase.ton_uri ? (
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1">
+              Открыть в кошельке
+            </div>
+            {walletLinks.map((w) => (
               <a
-                href={purchase.ton_uri}
-                className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
+                key={w.key}
+                href={w.url}
+                className="flex items-center justify-between gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
               >
-                <ExternalLink className="w-4 h-4" />
-                Открыть в кошельке
+                <span>{w.label}</span>
+                <ExternalLink className="w-4 h-4 text-slate-400" />
               </a>
-            ) : null}
+            ))}
 
-            <CopyRow label="Кошелёк продавца" value={purchase.seller_wallet || ''} />
-            <CopyRow label="Memo (обязательно)" value={purchase.memo || ''} />
+            <div className="pt-2 space-y-2">
+              <CopyRow label="Кошелёк продавца" value={purchase.seller_wallet || ''} />
+              <CopyRow label="Memo (обязательно)" value={purchase.memo || ''} />
+            </div>
           </div>
         </div>
 
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3 text-xs">
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-            <ShieldCheck className="w-3 h-3 text-emerald-500" />
-            Memo обязательно — без него платёж не зачтётся
-          </span>
+        <div className="pt-3 border-t border-slate-100 space-y-2">
+          {manualMessage ? (
+            <p className="text-xs text-rose-600 text-center">{manualMessage}</p>
+          ) : null}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              Memo обязательно — без него платёж не зачтётся
+            </span>
+            <button
+              type="button"
+              onClick={onVerifyManually}
+              disabled={manualVerifying}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {manualVerifying ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Проверяем…
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Проверить оплату
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </Card>
     </div>
