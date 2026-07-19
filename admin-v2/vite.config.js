@@ -15,26 +15,35 @@ export default defineConfig(() => {
       }
     },
     base: '/app/',
-    build: analyze
-      ? {
-          rollupOptions: {
-            plugins: [
-              visualizer({
-                filename: 'dist/bundle-stats.html',
-                template: 'treemap',
-                gzipSize: true,
-                brotliSize: true
-              }),
-              visualizer({
-                filename: 'dist/bundle-stats.json',
-                template: 'raw-data',
-                gzipSize: true,
-                brotliSize: true
-              })
-            ]
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router', 'react-router-dom', 'scheduler'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+            'vendor-tonconnect': ['@tonconnect/ui-react', '@tonconnect/sdk'],
+            'vendor-ton-core': ['@ton/core', '@ton/crypto'],
+            'vendor-ui': ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover', '@radix-ui/react-toast', '@radix-ui/react-tooltip', 'sonner', 'classnames', 'clsx', 'class-variance-authority', 'tailwind-merge']
           }
-        }
-      : undefined,
+        },
+        ...(analyze ? {
+          plugins: [
+            visualizer({
+              filename: 'dist/bundle-stats.html',
+              template: 'treemap',
+              gzipSize: true,
+              brotliSize: true
+            }),
+            visualizer({
+              filename: 'dist/bundle-stats.json',
+              template: 'raw-data',
+              gzipSize: true,
+              brotliSize: true
+            })
+          ]
+        } : {})
+      }
+    },
     server: {
       port: 4174,
       proxy: {
