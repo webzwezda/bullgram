@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
-import { PricingPage } from './pages/PricingPage.jsx';
-import { ShopPage } from './pages/ShopPage.jsx';
-import { PurchasesPage } from './pages/PurchasesPage.jsx';
-import { MyPlanPage } from './pages/MyPlanPage.jsx';
-import { PayPage } from './pages/PayPage.jsx';
-import { PayLayout } from './layouts/PayLayout.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
 import { LoginCard } from './ui/LoginCard.jsx';
+
+const PricingPage = lazy(() => import('./pages/PricingPage.jsx').then((m) => ({ default: m.PricingPage })));
+const ShopPage = lazy(() => import('./pages/ShopPage.jsx').then((m) => ({ default: m.ShopPage })));
+const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx').then((m) => ({ default: m.PurchasesPage })));
+const MyPlanPage = lazy(() => import('./pages/MyPlanPage.jsx').then((m) => ({ default: m.MyPlanPage })));
+const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
+const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 
 const navSections = [
   {
@@ -69,18 +70,20 @@ export function App() {
   }, [location.pathname]);
 
   const appRoutes = (
-    <Routes>
-      <Route path="/" element={<TelegramPaywallPage />} />
-      <Route path="/telegram" element={<TelegramPaywallPage />} />
-      <Route path="/pricing" element={<PricingPage />} />
-      <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
-      <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
-      <Route path="/plan" element={<MyPlanPage />} />
-      <Route path="/pay" element={<PayLayout />}>
-        <Route path=":purchaseId" element={<PayPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={null}>
+      <Routes>
+        <Route path="/" element={<TelegramPaywallPage />} />
+        <Route path="/telegram" element={<TelegramPaywallPage />} />
+        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
+        <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
+        <Route path="/plan" element={<MyPlanPage />} />
+        <Route path="/pay" element={<PayLayout />}>
+          <Route path=":purchaseId" element={<PayPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 
   if (isPayRoute) {

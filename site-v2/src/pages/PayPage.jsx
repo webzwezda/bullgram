@@ -96,13 +96,28 @@ export function PayPage() {
   const fetchPurchase = useCallback(async (isRetry = false) => {
     try {
       let data;
-      try {
+      if (purchaseKind === 'shop') {
         data = await apiRequest(SHOP_VIEW_ENDPOINT(purchaseId));
-        setPurchaseKind('shop');
-      } catch (shopErr) {
-        if (shopErr.status !== 404) throw shopErr;
+      } else if (purchaseKind === 'invoice') {
         data = await apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId));
-        setPurchaseKind('invoice');
+      } else {
+        const [shopRes, invoiceRes] = await Promise.allSettled([
+          apiRequest(SHOP_VIEW_ENDPOINT(purchaseId)),
+          apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId)),
+        ]);
+        if (shopRes.status === 'fulfilled') {
+          data = shopRes.value;
+          setPurchaseKind('shop');
+        } else if (invoiceRes.status === 'fulfilled') {
+          data = invoiceRes.value;
+          setPurchaseKind('invoice');
+        } else {
+          const shopErr = shopRes.reason;
+          const invoiceErr = invoiceRes.reason;
+          if (shopErr && shopErr.status !== 404) throw shopErr;
+          if (invoiceErr && invoiceErr.status !== 404) throw invoiceErr;
+          throw shopErr || invoiceErr || new Error('Счёт не найден');
+        }
       }
       setPurchase(data);
       setError('');
@@ -119,7 +134,7 @@ export function PayPage() {
     } finally {
       setLoading(false);
     }
-  }, [purchaseId, retryCount]);
+  }, [purchaseId, retryCount, purchaseKind]);
 
   useEffect(() => {
     fetchPurchase();
