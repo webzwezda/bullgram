@@ -10,5 +10,15 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
-  base: '/'
+  base: '/',
+  server: {
+    port: 5174,
+    proxy: {
+      '/tonconnect-manifest.json': 'http://localhost:3000',
+      '/api': 'http://localhost:3000',
+      '/auth': { target: 'https://bullgram.xyz', changeOrigin: true, secure: false },
+      '/rest': { target: 'https://bullgram.xyz', changeOrigin: true, secure: false },
+      '/realtime': { target: 'https://bullgram.xyz', ws: true, changeOrigin: true, secure: false }
+    }
+  }
 });

@@ -307,6 +307,9 @@ export function createMenuBuilders({ service, botId }) {
             const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
             const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
+            const publicAppOrigin = process.env.PUBLIC_APP_ORIGIN;
+            const payUrl = publicAppOrigin ? `${publicAppOrigin}/pay/${invoiceId}` : null;
+
             const escapedTitle = escapeHtml(service.getTariffDisplayTitle(tariff));
             const escapedWallet = escapeHtml(settings.ton_wallet);
             const escapedMemo = escapeHtml(memo);
@@ -314,25 +317,37 @@ export function createMenuBuilders({ service, botId }) {
                 ? `\n🎉 Скидка: <b>-${activeDiscountPercent}%</b> (до скидки: ${originalAmount} TON)`
                 : '';
 
+            const sitePayLine = payUrl
+                ? `\n💳 Или оплатите на сайте: ${payUrl}\n`
+                : '\n';
+
             const caption = `💎 <b>СЧЕТ НА ОПЛАТУ (TON)</b>\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━\n` +
                 `📦 Тариф: <b>${escapedTitle}</b>\n` +
                 `⏳ Срок доступа: <b>${durationText}</b>\n` +
                 `💰 Сумма: <b>${invoiceAmount} TON</b>${discountLine}\n\n` +
-                `Отсканируйте QR или жмите «💸 Оплатить» — откроется ваш TON-кошелёк с заполненным переводом.\n\n` +
+                `Отсканируйте QR или жмите «💸 Открыть кошелёк» — откроется ваш TON-кошелёк с заполненным переводом. Для оплаты с компьютера используйте «💳 Оплатить на сайте».\n\n` +
                 `👛 Адрес: <code>${escapedWallet}</code>\n` +
-                `💬 MEMO: <code>${escapedMemo}</code>\n\n` +
-                `⏳ Счёт действителен 15 минут. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
+                `💬 MEMO: <code>${escapedMemo}</code>\n` +
+                sitePayLine +
+                `\n⏳ Счёт действителен 15 минут. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
+
+            const inlineKeyboard = [
+                [{ text: '💸 Открыть кошелёк', url: tonUri }]
+            ];
+            if (payUrl) {
+                inlineKeyboard.push([{ text: '💳 Оплатить на сайте', url: payUrl }]);
+            }
+            inlineKeyboard.push(
+                [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }],
+                [{ text: '🔙 К тарифам', callback_data: 'buy_tariff' }]
+            );
 
             await ctx.deleteMessage().catch(() => {});
             await ctx.replyWithPhoto({ source: qrBuffer }, {
                 caption,
                 parse_mode: 'HTML',
-                reply_markup: { inline_keyboard: [
-                    [{ text: '💸 Оплатить', url: tonUri }],
-                    [{ text: '🔄 Проверить оплату', callback_data: `check_payment_${memo}` }],
-                    [{ text: '🔙 К тарифам', callback_data: 'buy_tariff' }]
-                ]}
+                reply_markup: { inline_keyboard: inlineKeyboard }
             });
         } catch (err) {
             console.error('Ошибка создания счёта:', err);

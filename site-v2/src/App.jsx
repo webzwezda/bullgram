@@ -6,6 +6,8 @@ import { PricingPage } from './pages/PricingPage.jsx';
 import { ShopPage } from './pages/ShopPage.jsx';
 import { PurchasesPage } from './pages/PurchasesPage.jsx';
 import { MyPlanPage } from './pages/MyPlanPage.jsx';
+import { PayPage } from './pages/PayPage.jsx';
+import { PayLayout } from './layouts/PayLayout.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
@@ -48,6 +50,7 @@ export function App() {
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
   const isTelegramRoute = location.pathname === '/telegram';
+  const isPayRoute = location.pathname.startsWith('/pay');
   const { user, profileRole } = useAuth();
   const navItems = navSections
     .filter((section) => !section.adminOnly || profileRole === 'admin')
@@ -73,9 +76,22 @@ export function App() {
       <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
       <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
       <Route path="/plan" element={<MyPlanPage />} />
+      <Route path="/pay" element={<PayLayout />}>
+        <Route path=":purchaseId" element={<PayPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
+
+  if (isPayRoute) {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
+          {appRoutes}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">

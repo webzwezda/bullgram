@@ -2584,6 +2584,116 @@ export default function shopRoutes(supabase) {
         }
     });
 
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const publicViewHitsByIp = new Map();
+    const publicVerifyHitsByIp = new Map();
+    const PUBLIC_RATE_LIMIT_RPM = 60;
+
+    function checkRateLimit(map, ip) {
+        const now = Date.now();
+        const windowStart = now - 60_000;
+        const hits = (map.get(ip) || []).filter((t) => t > windowStart);
+        if (hits.length >= PUBLIC_RATE_LIMIT_RPM) return false;
+        hits.push(now);
+        map.set(ip, hits);
+        return true;
+    }
+
+    router.get('/public/purchase/:purchaseId/public-view', async (req, res) => {
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+        if (!checkRateLimit(publicViewHitsByIp, ip)) {
+            return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+        }
+
+        const { purchaseId } = req.params;
+        if (!UUID_RE.test(String(purchaseId))) {
+            return res.status(400).json({ error: 'Некорректный ID счёта' });
+        }
+
+        try {
+            const { data: purchase, error } = await supabase
+                .from('shop_purchases')
+                .select('id, status, amount_ton, expires_at, created_at, payload, shop_item_id, seller_owner_id')
+                .eq('id', purchaseId)
+                .maybeSingle();
+            if (error) throw error;
+            if (!purchase) return res.status(404).json({ error: 'Счёт не найден' });
+
+            // Expire stale pending, then re-read fresh status
+            await expireStalePendingPurchases(supabase, [purchase]);
+            const { data: fresh } = await supabase
+                .from('shop_purchases')
+                .select('status, expires_at')
+                .eq('id', purchaseId)
+                .maybeSingle();
+            if (fresh) {
+                purchase.status = fresh.status;
+                purchase.expires_at = fresh.expires_at;
+            }
+
+            const [settingsRes, itemRes] = await Promise.all([
+                supabase.from('payment_settings').select('ton_wallet, ton_network').eq('owner_id', purchase.seller_owner_id).maybeSingle(),
+                supabase.from('shop_items').select('title').eq('id', purchase.shop_item_id).maybeSingle()
+            ]);
+
+            const memo = purchase.payload?.memo;
+            const amountNano = Math.round(Number(purchase.amount_ton || 0) * 1e9);
+            const wallet = settingsRes.data?.ton_wallet;
+            const network = settingsRes.data?.ton_network || purchase.payload?.network || 'mainnet';
+            const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
+
+            return res.json({
+                id: purchase.id,
+                status: purchase.status,
+                amount_ton: Number(purchase.amount_ton || 0),
+                amount_nanoton: amountNano,
+                memo,
+                seller_wallet: wallet,
+                network,
+                expires_at: purchase.expires_at,
+                item_title: itemRes.data?.title || 'Заказ',
+                ton_uri: tonUri,
+                ton_qr: purchase.payload?.ton_qr || null
+            });
+        } catch (error) {
+            console.error('Ошибка public-view shop purchase:', error);
+            res.status(500).json({ error: 'Ошибка загрузки счёта' });
+        }
+    });
+
+    router.post('/public/purchase/:purchaseId/verify-public', async (req, res) => {
+        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+        if (!checkRateLimit(publicVerifyHitsByIp, ip)) {
+            return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+        }
+
+        const { purchaseId } = req.params;
+        if (!UUID_RE.test(String(purchaseId))) {
+            return res.status(400).json({ error: 'Некорректный ID счёта' });
+        }
+
+        try {
+            const { data: purchase, error } = await supabase
+                .from('shop_purchases')
+                .select('*')
+                .eq('id', purchaseId)
+                .maybeSingle();
+            if (error) throw error;
+            if (!purchase) return res.status(404).json({ error: 'Счёт не найден' });
+
+            const result = await runShopPurchaseCheck(supabase, purchase);
+            const body = result?.body || {};
+            return res.status(result?.statusCode || 200).json({
+                status: body.status || purchase.status,
+                success: body.status === 'paid',
+                ownership_transfer_status: body.ownership_transfer_status
+            });
+        } catch (error) {
+            console.error('Ошибка verify-public shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка проверки оплаты' });
+        }
+    });
+
 
     return router;
 }
