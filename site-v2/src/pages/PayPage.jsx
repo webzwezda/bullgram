@@ -320,7 +320,7 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
             {purchase.ton_uri ? (
               <a
                 href={purchase.ton_uri}
-                className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition-colors"
+                className="flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
                 Открыть в кошельке
