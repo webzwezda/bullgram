@@ -41,8 +41,13 @@ function buildWalletDeepLinks(purchase) {
       url: `https://app.mytonwallet.io/transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`,
     },
     {
+      key: 'trust',
+      label: 'Trust Wallet',
+      url: `https://link.trustwallet.com/send?asset=TON&address=${addr}&amount=${Number(purchase.amount_ton || 0)}&memo=${encodeURIComponent(memo)}`,
+    },
+    {
       key: 'generic',
-      label: 'Другой TON-кошелёк',
+      label: 'Другой',
       url: `ton://transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`,
     },
   ];
@@ -83,6 +88,7 @@ export function PayPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [activeWallet, setActiveWallet] = useState('tonkeeper');
   const [manualVerifying, setManualVerifying] = useState(false);
   const [manualMessage, setManualMessage] = useState('');
   const timerRef = useRef(null);
@@ -138,15 +144,17 @@ export function PayPage() {
   }, [purchase?.status, purchase?.id, error, fetchPurchase]);
 
   useEffect(() => {
-    if (!purchase?.ton_uri) return;
-    if (purchase.ton_qr) {
-      setQrDataUrl(purchase.ton_qr);
+    if (!purchase?.seller_wallet) return;
+    const links = buildWalletDeepLinks(purchase);
+    const active = links.find((l) => l.key === activeWallet) || links[0];
+    if (!active?.url) {
+      setQrDataUrl(null);
       return;
     }
-    QRCode.toDataURL(purchase.ton_uri, { margin: 1, width: 240 })
+    QRCode.toDataURL(active.url, { margin: 1, width: 240 })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null));
-  }, [purchase?.ton_uri, purchase?.ton_qr]);
+  }, [purchase?.seller_wallet, purchase?.amount_nanoton, purchase?.amount_ton, purchase?.memo, activeWallet]);
 
   const handlePaid = useCallback(() => {
     setVerifying(false);
@@ -197,6 +205,8 @@ export function PayPage() {
       onVerifyManually={verifyManually}
       manualVerifying={manualVerifying}
       manualMessage={manualMessage}
+      activeWallet={activeWallet}
+      onWalletChange={setActiveWallet}
     />
   );
 }
@@ -317,6 +327,8 @@ function PaymentView({
   onVerifyManually,
   manualVerifying,
   manualMessage,
+  activeWallet,
+  onWalletChange,
 }) {
   const [remaining, setRemaining] = useState(formatExpiry(purchase.expires_at));
 
@@ -327,6 +339,7 @@ function PaymentView({
   }, [purchase.expires_at]);
 
   const walletLinks = buildWalletDeepLinks(purchase);
+  const activeLink = walletLinks.find((l) => l.key === activeWallet) || walletLinks[0];
 
   return (
     <div>
@@ -358,8 +371,28 @@ function PaymentView({
 
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-slate-200" />
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">или другим способом</span>
+          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">или через другой кошелёк</span>
           <div className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {walletLinks.map((w) => {
+            const isActive = w.key === activeLink?.key;
+            return (
+              <button
+                key={w.key}
+                type="button"
+                onClick={() => onWalletChange(w.key)}
+                className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                  isActive
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {w.label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-start">
@@ -367,11 +400,11 @@ function PaymentView({
             <div className="flex flex-col items-center gap-2">
               <img
                 src={qrDataUrl}
-                alt="QR для TON перевода"
+                alt={`QR для ${activeLink?.label || 'перевода'}`}
                 className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-white border border-slate-200 p-2"
               />
               <span className="text-[10px] text-slate-400 text-center max-w-[10rem] leading-tight">
-                Камерой кошелька (Tonkeeper / MyTonWallet)
+                Откройте {activeLink?.label} и наведите камеру
               </span>
             </div>
           ) : (
@@ -379,19 +412,15 @@ function PaymentView({
           )}
 
           <div className="space-y-2">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-1">
-              Открыть в кошельке
-            </div>
-            {walletLinks.map((w) => (
+            {activeLink ? (
               <a
-                key={w.key}
-                href={w.url}
-                className="flex items-center justify-between gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors"
+                href={activeLink.url}
+                className="flex items-center justify-center gap-2 h-12 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold transition-colors"
               >
-                <span>{w.label}</span>
-                <ExternalLink className="w-4 h-4 text-slate-400" />
+                <ExternalLink className="w-4 h-4" />
+                Открыть в {activeLink.label}
               </a>
-            ))}
+            ) : null}
 
             <div className="pt-2 space-y-2">
               <CopyRow label="Кошелёк продавца" value={purchase.seller_wallet || ''} />
