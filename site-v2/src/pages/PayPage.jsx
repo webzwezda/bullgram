@@ -295,9 +295,6 @@ function PaymentView({ purchase, qrDataUrl, verifying, verifyEndpoint, onPayment
               className="items-center"
             />
           </div>
-          <p className="text-[11px] text-slate-500 text-center mt-3 leading-relaxed">
-            Один клик из браузера — без переключения на другое приложение.
-          </p>
         </div>
 
         <div className="flex items-center gap-3">
