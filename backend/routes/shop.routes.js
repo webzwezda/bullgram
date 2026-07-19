@@ -2632,14 +2632,14 @@ export default function shopRoutes(supabase) {
             }
 
             const [settingsRes, itemRes] = await Promise.all([
-                supabase.from('payment_settings').select('ton_wallet, ton_network').eq('owner_id', purchase.seller_owner_id).maybeSingle(),
+                supabase.from('payment_settings').select('ton_wallet').eq('owner_id', purchase.seller_owner_id).maybeSingle(),
                 supabase.from('shop_items').select('title').eq('id', purchase.shop_item_id).maybeSingle()
             ]);
 
             const memo = purchase.payload?.memo;
             const amountNano = Math.round(Number(purchase.amount_ton || 0) * 1e9);
             const wallet = settingsRes.data?.ton_wallet;
-            const network = settingsRes.data?.ton_network || purchase.payload?.network || 'mainnet';
+            const network = purchase.payload?.network || 'mainnet';
             const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
 
             return res.json({

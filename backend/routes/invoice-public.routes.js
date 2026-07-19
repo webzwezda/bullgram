@@ -70,15 +70,14 @@ export function invoicePublicRoutes(supabase, getBotById) {
       if (tariffErr) throw tariffErr;
 
       let wallet = null;
-      let network = 'mainnet';
+      const network = 'mainnet';
       if (tariff?.owner_id) {
         const { data: settings } = await supabase
           .from('payment_settings')
-          .select('ton_wallet, ton_network')
+          .select('ton_wallet')
           .eq('owner_id', tariff.owner_id)
           .maybeSingle();
         wallet = settings?.ton_wallet || null;
-        network = settings?.ton_network || 'mainnet';
       }
 
       const memo = invoice.memo;
