@@ -50,7 +50,6 @@ export function CreateInvoicePage() {
     secret_payload: '',
     seller_wallet: '',
     seller_email: '',
-    network: 'mainnet',
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -119,7 +118,7 @@ export function CreateInvoicePage() {
           secret_payload: form.secret_payload,
           seller_wallet: form.seller_wallet.trim(),
           seller_email: form.seller_email.trim(),
-          network: form.network,
+          network: 'mainnet',
         },
       });
       navigate(`/created/${data.id}`);
@@ -264,34 +263,6 @@ export function CreateInvoicePage() {
                 className={`${inputClass('seller_email')} mt-2`}
               />
               <FieldError message={errors.seller_email} />
-
-              <div className="mt-3">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Сеть</div>
-                <div className="flex gap-1.5">
-                  {[
-                    { value: 'mainnet', label: 'Mainnet' },
-                    { value: 'testnet', label: 'Testnet' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => update('network', opt.value)}
-                      className={`flex-1 h-11 rounded-xl text-sm font-bold transition-colors ${
-                        form.network === opt.value
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                {form.network === 'testnet' ? (
-                  <p className="mt-1.5 text-[11px] text-orange-700 leading-relaxed">
-                    Testnet — для тестирования. Реальная ценность = 0.
-                  </p>
-                ) : null}
-              </div>
             </section>
 
             {submitError ? (
