@@ -28,6 +28,7 @@ import clientDossierRoutes from './routes/client-dossier.routes.js';
 import referralRoutes from './routes/referral.routes.js';
 import shopRoutes from './routes/shop.routes.js';
 import { invoicePublicRoutes } from './routes/invoice-public.routes.js';
+import { publicInvoiceRoutes } from './routes/public-invoices.routes.js';
 import observerRoutes from './routes/observer.routes.js';
 import agentMcpRoutes from './routes/agent-mcp.routes.js';
 import projectAdminRoutes from './routes/project-admin.routes.js';
@@ -59,6 +60,7 @@ import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirma
 import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.job.js';
 import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.js';
 import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
+import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -184,6 +186,7 @@ app.use('/api/client-dossier', clientDossierRoutes(supabase));
 app.use('/api/referrals', referralRoutes(supabase));
 app.use('/api/shop', shopRoutes(supabase));
 app.use('/api/invoices', invoicePublicRoutes(supabase, getBotById));
+app.use('/api/public-invoices', publicInvoiceRoutes(supabase));
 app.use('/api/observer', observerRoutes(supabase, getBotById));
 app.use('/api/mcp', agentMcpRoutes(supabase));
 app.use('/api/integrations', integrationsRoutes(supabase));
@@ -323,6 +326,7 @@ httpServer.listen(PORT, async () => {
     startOfficialBotWebhookQueue(supabase);
     startManagedProxyReconcile(supabase);
     startInvoiceAutoDetect(supabase, getBotById);
+    startPublicInvoicesCleanup(supabase);
 
     // Запускаем все активные checklist-боты
     try {

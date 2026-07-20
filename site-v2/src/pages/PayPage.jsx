@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   Copy,
@@ -15,13 +16,16 @@ import {
 import QRCode from 'qrcode';
 import { apiRequest } from '../api/client.js';
 import { TonConnectPayButton } from '../features/ton-checkout/TonConnectPayButton.jsx';
+import { SecretRevealBlock } from '../components/SecretRevealBlock.jsx';
 
 const POLL_INTERVAL_MS = 10000;
 const MAX_RETRIES = 3;
 const SHOP_VIEW_ENDPOINT = (id) => `/api/shop/public/purchase/${id}/public-view`;
 const INVOICE_VIEW_ENDPOINT = (id) => `/api/invoices/public/${id}/public-view`;
+const PUBLIC_INVOICE_VIEW_ENDPOINT = (id) => `/api/public-invoices/public/${id}/public-view`;
 const SHOP_VERIFY_ENDPOINT = (id) => `/api/shop/public/purchase/${id}/verify-public`;
 const INVOICE_VERIFY_ENDPOINT = (id) => `/api/invoices/public/${id}/verify-public`;
+const PUBLIC_INVOICE_VERIFY_ENDPOINT = (id) => `/api/public-invoices/public/${id}/verify-public`;
 const PROCESSING_STATUSES = ['awaiting_receipt', 'wait_admin'];
 
 function buildWalletDeepLinks(purchase) {
@@ -100,10 +104,13 @@ export function PayPage() {
         data = await apiRequest(SHOP_VIEW_ENDPOINT(purchaseId));
       } else if (purchaseKind === 'invoice') {
         data = await apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId));
+      } else if (purchaseKind === 'public_invoice') {
+        data = await apiRequest(PUBLIC_INVOICE_VIEW_ENDPOINT(purchaseId));
       } else {
-        const [shopRes, invoiceRes] = await Promise.allSettled([
+        const [shopRes, invoiceRes, publicRes] = await Promise.allSettled([
           apiRequest(SHOP_VIEW_ENDPOINT(purchaseId)),
           apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId)),
+          apiRequest(PUBLIC_INVOICE_VIEW_ENDPOINT(purchaseId)),
         ]);
         if (shopRes.status === 'fulfilled') {
           data = shopRes.value;
@@ -111,12 +118,17 @@ export function PayPage() {
         } else if (invoiceRes.status === 'fulfilled') {
           data = invoiceRes.value;
           setPurchaseKind('invoice');
+        } else if (publicRes.status === 'fulfilled') {
+          data = publicRes.value;
+          setPurchaseKind('public_invoice');
         } else {
           const shopErr = shopRes.reason;
           const invoiceErr = invoiceRes.reason;
+          const publicErr = publicRes.reason;
           if (shopErr && shopErr.status !== 404) throw shopErr;
           if (invoiceErr && invoiceErr.status !== 404) throw invoiceErr;
-          throw shopErr || invoiceErr || new Error('Счёт не найден');
+          if (publicErr && publicErr.status !== 404) throw publicErr;
+          throw shopErr || invoiceErr || publicErr || new Error('Счёт не найден');
         }
       }
       setPurchase(data);
@@ -184,7 +196,9 @@ export function PayPage() {
     if (!purchase) return;
     const endpoint = purchaseKind === 'invoice'
       ? INVOICE_VERIFY_ENDPOINT(purchase.id)
-      : SHOP_VERIFY_ENDPOINT(purchase.id);
+      : purchaseKind === 'public_invoice'
+        ? PUBLIC_INVOICE_VERIFY_ENDPOINT(purchase.id)
+        : SHOP_VERIFY_ENDPOINT(purchase.id);
     setManualVerifying(true);
     setManualMessage('');
     try {
@@ -200,13 +214,16 @@ export function PayPage() {
   if (loading) return <SkeletonView />;
   if (error) return <ErrorView message={error} onRetry={() => fetchPurchase(true)} />;
   if (purchase?.status === 'paid' || isProcessingStatus(purchase?.status)) {
-    return <PaidView purchase={purchase} processing={isProcessingStatus(purchase?.status)} />;
+    return <PaidView purchase={purchase} processing={isProcessingStatus(purchase?.status)} purchaseKind={purchaseKind} />;
   }
-  if (purchase && isExpired(purchase)) return <ExpiredView />;
+  if (purchase && purchaseKind !== 'public_invoice' && isExpired(purchase)) return <ExpiredView />;
+  if (purchase && purchaseKind === 'public_invoice' && purchase.status === 'expired') return <ExpiredView />;
 
   const verifyEndpoint = purchaseKind === 'invoice'
     ? INVOICE_VERIFY_ENDPOINT(purchase.id)
-    : SHOP_VERIFY_ENDPOINT(purchase.id);
+    : purchaseKind === 'public_invoice'
+      ? PUBLIC_INVOICE_VERIFY_ENDPOINT(purchase.id)
+      : SHOP_VERIFY_ENDPOINT(purchase.id);
 
   return (
     <PaymentView
@@ -222,6 +239,7 @@ export function PayPage() {
       manualMessage={manualMessage}
       activeWallet={activeWallet}
       onWalletChange={setActiveWallet}
+      purchaseKind={purchaseKind}
     />
   );
 }
@@ -344,6 +362,7 @@ function PaymentView({
   manualMessage,
   activeWallet,
   onWalletChange,
+  purchaseKind,
 }) {
   const [remaining, setRemaining] = useState(formatExpiry(purchase.expires_at));
 
@@ -355,12 +374,38 @@ function PaymentView({
 
   const walletLinks = buildWalletDeepLinks(purchase);
   const activeLink = walletLinks.find((l) => l.key === activeWallet) || walletLinks[0];
+  const isPublicInvoice = purchaseKind === 'public_invoice';
+  const isTestnet = isPublicInvoice && purchase.network === 'testnet';
 
   return (
     <div>
       <BrandingHeader />
       <Card>
         <AmountBlock purchase={purchase} remaining={remaining} verifying={verifying} />
+
+        {isPublicInvoice ? (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 leading-relaxed">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <p>
+                Bullgram не гарантирует доставку товара — платформа только обеспечивает оплату.
+                Проверяйте продавца перед оплатой.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {isTestnet ? (
+          <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 text-xs text-orange-900 leading-relaxed">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-orange-600" />
+              <div>
+                <div className="font-bold mb-0.5">Testnet — для тестирования</div>
+                <p>Платёж тестовый, реальная ценность = 0. Убедитесь что ваш TonConnect подключён к testnet.</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="rounded-2xl bg-gradient-to-br from-sky-50 via-indigo-50/60 to-white ring-1 ring-sky-100 p-4 sm:p-5">
           <div className="flex items-center gap-2 text-sky-700 mb-3">
@@ -523,7 +568,7 @@ function ErrorView({ message, onRetry }) {
   );
 }
 
-function PaidView({ purchase, processing }) {
+function PaidView({ purchase, processing, purchaseKind }) {
   return (
     <div>
       <BrandingHeader />
@@ -541,6 +586,9 @@ function PaidView({ purchase, processing }) {
               : `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Доступ активирован в течение нескольких минут.`}
           </p>
         </div>
+        {purchaseKind === 'public_invoice' && purchase.secret_payload ? (
+          <SecretRevealBlock secret={purchase.secret_payload} />
+        ) : null}
       </Card>
     </div>
   );

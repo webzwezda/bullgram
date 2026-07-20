@@ -92,11 +92,26 @@ async function markExpiredInvoices(supabase) {
             .select('id');
         if (error) {
             console.error('[InvoiceAutoDetect] expired cleanup error:', error.message);
-            return;
+        } else {
+            const count = Array.isArray(data) ? data.length : 0;
+            if (count > 0) {
+                console.log(`[InvoiceAutoDetect] marked ${count} invoice(s) as expired`);
+            }
         }
-        const count = Array.isArray(data) ? data.length : 0;
-        if (count > 0) {
-            console.log(`[InvoiceAutoDetect] marked ${count} invoice(s) as expired`);
+
+        const { data: publicData, error: publicErr } = await supabase
+            .from('public_invoices')
+            .update({ status: 'expired' })
+            .eq('status', 'pending')
+            .lt('grace_until', new Date().toISOString())
+            .select('id');
+        if (publicErr) {
+            console.error('[InvoiceAutoDetect] public_invoices expired cleanup error:', publicErr.message);
+        } else {
+            const pubCount = Array.isArray(publicData) ? publicData.length : 0;
+            if (pubCount > 0) {
+                console.log(`[InvoiceAutoDetect] marked ${pubCount} public_invoices(s) as expired`);
+            }
         }
     } catch (err) {
         console.error('[InvoiceAutoDetect] expired cleanup failed:', err.message || err);

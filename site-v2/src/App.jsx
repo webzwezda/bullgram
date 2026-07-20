@@ -13,6 +13,8 @@ const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx').then((m) =>
 const MyPlanPage = lazy(() => import('./pages/MyPlanPage.jsx').then((m) => ({ default: m.MyPlanPage })));
 const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
+const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
+const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
 
 const navSections = [
   {
@@ -52,6 +54,7 @@ export function App() {
   const isPricingRoute = location.pathname === '/pricing';
   const isTelegramRoute = location.pathname === '/telegram';
   const isPayRoute = location.pathname.startsWith('/pay');
+  const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const { user, profileRole } = useAuth();
   const navItems = navSections
     .filter((section) => !section.adminOnly || profileRole === 'admin')
@@ -81,12 +84,14 @@ export function App() {
         <Route path="/pay" element={<PayLayout />}>
           <Route path=":purchaseId" element={<PayPage />} />
         </Route>
+        <Route path="/create" element={<CreateInvoicePage />} />
+        <Route path="/created/:id" element={<CreatedInvoicePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
 
-  if (isPayRoute) {
+  if (isPayRoute || isCreateRoute) {
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
         <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
