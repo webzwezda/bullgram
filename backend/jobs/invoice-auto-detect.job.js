@@ -7,6 +7,7 @@ import { tonToNano } from '../utils/ton.js';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const MIN_INTERVAL_MS = 10_000;
+const SHOP_PENDING_PURCHASE_TTL_MINUTES = Number(process.env.SHOP_PENDING_PURCHASE_TTL_MINUTES || 30);
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -111,6 +112,37 @@ async function markExpiredInvoices(supabase) {
             const pubCount = Array.isArray(publicData) ? publicData.length : 0;
             if (pubCount > 0) {
                 console.log(`[InvoiceAutoDetect] marked ${pubCount} public_invoices(s) as expired`);
+            }
+        }
+
+        const { data: billingData, error: billingErr } = await supabase
+            .from('billing_orders')
+            .update({ status: 'expired', updated_at: new Date().toISOString() })
+            .eq('status', 'pending')
+            .lt('expires_at', new Date().toISOString())
+            .select('id');
+        if (billingErr) {
+            console.error('[InvoiceAutoDetect] billing_orders expired cleanup error:', billingErr.message);
+        } else {
+            const billingCount = Array.isArray(billingData) ? billingData.length : 0;
+            if (billingCount > 0) {
+                console.log(`[InvoiceAutoDetect] marked ${billingCount} billing_orders(s) as expired`);
+            }
+        }
+
+        const shopCutoff = new Date(Date.now() - SHOP_PENDING_PURCHASE_TTL_MINUTES * 60_000).toISOString();
+        const { data: shopData, error: shopErr } = await supabase
+            .from('shop_purchases')
+            .update({ status: 'expired', updated_at: new Date().toISOString() })
+            .eq('status', 'pending')
+            .lt('created_at', shopCutoff)
+            .select('id');
+        if (shopErr) {
+            console.error('[InvoiceAutoDetect] shop_purchases expired cleanup error:', shopErr.message);
+        } else {
+            const shopCount = Array.isArray(shopData) ? shopData.length : 0;
+            if (shopCount > 0) {
+                console.log(`[InvoiceAutoDetect] marked ${shopCount} shop_purchases(s) as expired`);
             }
         }
     } catch (err) {

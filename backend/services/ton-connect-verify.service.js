@@ -98,3 +98,14 @@ export async function verifyTonConnectPayment({
 
     return { ok: false, attempt: attemptsLimit };
 }
+
+export async function verifyPaymentOnce({ merchantWallet, memo, expectedNanoTon, senderWallet = null }) {
+    return verifyTonConnectPayment({
+        merchantWallet,
+        memo,
+        expectedNanoTon,
+        senderWallet,
+        maxAttempts: 1,
+        intervalMs: 0
+    });
+}

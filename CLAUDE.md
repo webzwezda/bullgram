@@ -160,6 +160,34 @@ No automated test suite exists yet. Verify changes manually:
 - Backend autopost: `cd backend && npm run test:autopost`
 - After push: watch GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; only restart PM2 by hand if you used the emergency rsync fallback
 
+### cmux browser — тестируй UI сам
+
+По возможности тестируй UI сам через `cmux browser` на проде (`https://bullgram.xyz` и `https://bullgram.xyz/app`), не перекладывай ручную проверку на пользователя. Команды изучать через `cmux --help` и `cmux browser --help`.
+
+Типичный workflow:
+```bash
+cmux browser open <url>                    # открывает surface в текущем workspace
+cmux browser snapshot --compact            # accessibility-дерево с ref'ами
+cmux browser eval '<js>'                   # произвольный JS на странице
+cmux browser click '<selector>'            # клик
+cmux browser screenshot --path /tmp/x.png  # скриншот
+```
+
+**Гоча для React-форм:** `cmux browser fill` и `type` НЕ подхватываются React. Используй `eval` с нативным setter:
+```js
+const set = (el, v) => {
+  const s = Object.getOwnPropertyDescriptor(
+    el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+    "value"
+  ).set;
+  s.call(el, v);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+};
+set(document.querySelector("input[placeholder*=\"...\"]"), "значение");
+```
+
+Не покрывает: реальные TON-транзакции, подтверждение TonConnect modal, доставку email. Для проверки side-effect'ов в БД используй Supabase MCP.
+
 ## Product Surfaces
 
 **Admin-v2 Routes:** `/app` (command center), `/app/crm`, `/app/orders`, `/app/access`, `/app/broadcast`, `/app/abandoned`, `/app/retention`, `/app/analytics`, `/app/proxies`, `/app/userbots`, `/app/sales-bot`, `/app/admin-groups`, `/app/bases`, `/app/dossier`, `/app/observer`, `/app/shop`, `/app/shop-receipts`, `/app/referrals`, `/app/payments`, `/app/billing`, `/app/plans`, `/app/claw`

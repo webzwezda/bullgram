@@ -1,15 +1,21 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Loader2,
   Mail,
   ReceiptText,
   RotateCcw,
   ShieldCheck,
-  Truck
+  Truck,
 } from 'lucide-react';
 import { SALES_LINKS } from '../components/MarketingPrimitives.jsx';
 import { SUPPORT_EMAIL, SUPPORT_TELEGRAM } from '../contacts.js';
+import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { apiRequest } from '../api/client.js';
 
 const plans = [
   {
@@ -35,8 +41,6 @@ const plans = [
     price: '900 ₽',
     period: 'за 365 дней доступа',
     description: 'Основной платный тариф для доступа к Bullgram: P2P/TON-касса, доступ, CRM, продления и Shop.',
-    href: SALES_LINKS.ops,
-    action: 'Оформить Normal',
     highlighted: true,
     features: [
       'доступ к кабинету Bullgram на 365 дней',
@@ -64,10 +68,10 @@ const plans = [
 ];
 
 const normalDelivery = [
-  'Покупатель связывается с поддержкой в Telegram для оформления тарифа Normal.',
-  'Согласовывает детали оплаты и получает реквизиты.',
-  'После оплаты и ручного подтверждения получает доступ к рабочему кабинету Bullgram.',
-  'Услуга оказывается дистанционно в течение оплаченного периода 365 дней.'
+  'Нажмите «Оплатить TON», подключите TonConnect-кошелёк и подтвердите платёж.',
+  'Деньги уходят напрямую на кошелёк сервиса, платёж отслеживается автоматически.',
+  'Сразу после подтверждения тариф активируется — кабинет открывается на 365 дней.',
+  'Услуга оказывается дистанционно в течение оплаченного периода.'
 ];
 
 const complianceBlocks = [
@@ -88,7 +92,138 @@ const complianceBlocks = [
   }
 ];
 
-function PlanCard({ plan }) {
+function formatEndDate(value) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(value));
+}
+
+function formatCountdown(value) {
+  if (!value) return null;
+  const ms = new Date(value).getTime() - Date.now();
+  if (ms <= 0) return '00:00';
+  const totalSec = Math.floor(ms / 1000);
+  const hh = Math.floor(totalSec / 3600);
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function NormalCheckoutButton({ profilePlan, normalEndsAt, pendingOrder, user, accessToken }) {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const [countdown, setCountdown] = useState(() => formatCountdown(pendingOrder?.expires_at));
+
+  useEffect(() => {
+    if (!pendingOrder?.expires_at) return;
+    const t = setInterval(() => setCountdown(formatCountdown(pendingOrder.expires_at)), 1000);
+    return () => clearInterval(t);
+  }, [pendingOrder?.expires_at]);
+
+  if (profilePlan === 'normal') {
+    return (
+      <a
+        href="/plan"
+        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-5 py-4 text-base font-black text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
+      >
+        <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
+        Активирован до {formatEndDate(normalEndsAt) || '—'}
+      </a>
+    );
+  }
+
+  if (pendingOrder) {
+    return (
+      <div className="mt-auto space-y-2">
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-700 ring-1 ring-inset ring-amber-200">
+          Ожидает оплаты · {countdown || '00:00'}
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate(`/pay/${pendingOrder.id}`)}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-amber-600/20 transition hover:bg-amber-700"
+        >
+          Завершить оплату
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </button>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <a
+        href="/?login=1"
+        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+      >
+        Войдите, чтобы оплатить
+        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+      </a>
+    );
+  }
+
+  const onCreate = async () => {
+    setCreating(true);
+    setError('');
+    try {
+      const data = await apiRequest('/api/billing/checkout/ton-connect', {
+        accessToken,
+        method: 'POST',
+        body: {}
+      });
+      if (!data?.order_id) throw new Error('Не получили order_id от сервера');
+      navigate(`/pay/${data.order_id}`);
+    } catch (e) {
+      const status = e?.status || e?.statusCode;
+      if (status >= 500) {
+        setError('Сервис оплаты недоступен. Напишите в поддержку.');
+      } else {
+        setError(e.message || 'Не удалось создать счёт');
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="mt-auto space-y-2">
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={creating}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {creating ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Создаём счёт…
+          </>
+        ) : (
+          <>
+            Оплатить TON
+            <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+          </>
+        )}
+      </button>
+      {error ? (
+        <div className="flex items-start gap-1.5 text-xs text-rose-600">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      <a
+        href={SUPPORT_TELEGRAM}
+        target="_blank"
+        rel="noreferrer"
+        className="block text-center text-xs text-slate-500 underline hover:text-slate-700"
+      >
+        или через поддержку
+      </a>
+    </div>
+  );
+}
+
+function PlanCard({ plan, children }) {
   const cardClass = plan.highlighted
     ? 'relative flex flex-col rounded-lg border-2 border-blue-600 bg-white p-6 shadow-xl shadow-blue-600/10'
     : plan.disabled
@@ -131,38 +266,47 @@ function PlanCard({ plan }) {
         ))}
       </ul>
 
-      {plan.disabled ? (
-        <button
-          type="button"
-          disabled
-          className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center rounded-lg bg-slate-200 px-5 py-4 text-base font-black text-slate-500"
-        >
-          {plan.action}
-        </button>
-      ) : (
-        <a
-          href={plan.href}
-          className={`mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-4 text-base font-black transition ${
-            plan.highlighted
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700'
-              : 'bg-white text-slate-800 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:ring-slate-300'
-          }`}
-        >
-          {plan.action}
-          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-        </a>
-      )}
+      {children}
     </article>
   );
 }
 
 export function PricingPage() {
+  const { user, accessToken, profilePlan, normalEndsAt, billingOrder } = useAuth();
+  const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-12 sm:px-6 md:py-16 lg:px-8">
       <section className="border-b border-slate-200 pb-12">
         <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
           {plans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan} />
+            <PlanCard key={plan.id} plan={plan}>
+              {plan.id === 'normal' ? (
+                <NormalCheckoutButton
+                  profilePlan={profilePlan}
+                  normalEndsAt={normalEndsAt}
+                  pendingOrder={pendingOrder}
+                  user={user}
+                  accessToken={accessToken}
+                />
+              ) : plan.disabled ? (
+                <button
+                  type="button"
+                  disabled
+                  className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center rounded-lg bg-slate-200 px-5 py-4 text-base font-black text-slate-500"
+                >
+                  {plan.action}
+                </button>
+              ) : (
+                <a
+                  href={plan.href}
+                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                >
+                  {plan.action}
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </a>
+              )}
+            </PlanCard>
           ))}
         </div>
       </section>
@@ -200,7 +344,7 @@ export function PricingPage() {
           <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Информация об оплате и правилах покупки</h2>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {complianceBlocks.map(({ icon: Icon, title, text, href, linkLabel }) => (
+          {complianceBlocks.map(({ icon: Icon, title, text }) => (
             <article key={title} className="rounded-lg border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-3">
                 <Icon className="h-5 w-5 text-blue-600" strokeWidth={2.5} />

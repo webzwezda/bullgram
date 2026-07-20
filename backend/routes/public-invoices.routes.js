@@ -2,9 +2,9 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { Address, toNano } from '@ton/core';
 import {
-  fetchRecentTransactions,
-  matchInvoice
+  verifyPaymentOnce
 } from '../services/ton-connect-verify.service.js';
+import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { sendPaymentReceivedEmail } from '../services/email.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -16,8 +16,6 @@ const CREATE_WINDOW_MS = 60 * 60_000;
 const TTL_MS = 90 * 60_000;
 const GRACE_MS = 5 * 60_000;
 const VERIFY_MAX_ATTEMPTS = 1;
-const TONAPI_MAINNET = 'https://tonapi.io';
-const TONAPI_TESTNET = 'https://testnet.tonapi.io';
 
 export function publicInvoiceRoutes(supabase) {
   const router = Router();
@@ -90,11 +88,6 @@ export function publicInvoiceRoutes(supabase) {
 
   function amountToNano(amount) {
     return toNano(String(amount)).toString(10);
-  }
-
-  function tonapiBaseFor(network) {
-    if (network === 'testnet') return TONAPI_TESTNET;
-    return String(process.env.TONCONNECT_TONAPI_BASE || TONAPI_MAINNET).replace(/\/$/, '');
   }
 
   router.post('/public/create', async (req, res) => {
@@ -175,13 +168,7 @@ export function publicInvoiceRoutes(supabase) {
       const graceMs = inv.grace_until ? new Date(inv.grace_until).getTime() : 0;
 
       if (inv.status === 'pending' && graceMs && now > graceMs) {
-        const { data: fresh } = await supabase
-          .from('public_invoices')
-          .update({ status: 'expired' })
-          .eq('id', id)
-          .eq('status', 'pending')
-          .select('status')
-          .maybeSingle();
+        const fresh = await markExpired({ supabase, table: 'public_invoices', id });
         if (fresh) inv.status = 'expired';
       }
 
@@ -249,26 +236,20 @@ export function publicInvoiceRoutes(supabase) {
       const now = Date.now();
       const graceMs = inv.grace_until ? new Date(inv.grace_until).getTime() : 0;
       if (now > graceMs) {
-        const { data: fresh } = await supabase
-          .from('public_invoices')
-          .update({ status: 'expired' })
-          .eq('id', id)
-          .eq('status', 'pending')
-          .select('status')
-          .maybeSingle();
+        const fresh = await markExpired({ supabase, table: 'public_invoices', id });
         if (fresh) return res.json({ status: 'expired', success: false });
       }
 
       const expectedNano = amountToNano(inv.amount_ton);
-      const tonapiBase = tonapiBaseFor(inv.network);
 
       let matched = null;
       try {
-        const transactions = await fetchRecentTransactions({ merchantWallet: inv.seller_wallet, tonapiBase });
-        for (const tx of transactions) {
-          const m = matchInvoice({ tx, expectedMemo: inv.memo, expectedNanoTon: expectedNano });
-          if (m) { matched = m; break; }
-        }
+        const result = await verifyPaymentOnce({
+          merchantWallet: inv.seller_wallet,
+          memo: inv.memo,
+          expectedNanoTon: expectedNano
+        });
+        if (result.ok) matched = result;
       } catch (err) {
         console.error('[public-invoices] tonapi fetch failed:', err.message || err);
       }
@@ -277,19 +258,18 @@ export function publicInvoiceRoutes(supabase) {
         return res.json({ status: 'pending', success: false, retry: true });
       }
 
-      const { data: claimed, error: claimErr } = await supabase
-        .from('public_invoices')
-        .update({
+      const nowIso = new Date().toISOString();
+      const claimed = await claimPaid({
+        supabase,
+        table: 'public_invoices',
+        id: inv.id,
+        patch: {
           status: 'paid',
-          paid_at: new Date().toISOString(),
-          verified_at: new Date().toISOString(),
+          paid_at: nowIso,
+          verified_at: nowIso,
           tx_hash: matched.txHash || null
-        })
-        .eq('id', inv.id)
-        .eq('status', 'pending')
-        .select()
-        .maybeSingle();
-      if (claimErr) throw claimErr;
+        }
+      });
 
       if (!claimed) {
         return res.json({ status: 'paid', success: true, secret_payload: inv.secret_payload });

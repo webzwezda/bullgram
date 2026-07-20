@@ -23,9 +23,11 @@ const MAX_RETRIES = 3;
 const SHOP_VIEW_ENDPOINT = (id) => `/api/shop/public/purchase/${id}/public-view`;
 const INVOICE_VIEW_ENDPOINT = (id) => `/api/invoices/public/${id}/public-view`;
 const PUBLIC_INVOICE_VIEW_ENDPOINT = (id) => `/api/public-invoices/public/${id}/public-view`;
+const BILLING_VIEW_ENDPOINT = (id) => `/api/billing/public/${id}/public-view`;
 const SHOP_VERIFY_ENDPOINT = (id) => `/api/shop/public/purchase/${id}/verify-public`;
 const INVOICE_VERIFY_ENDPOINT = (id) => `/api/invoices/public/${id}/verify-public`;
 const PUBLIC_INVOICE_VERIFY_ENDPOINT = (id) => `/api/public-invoices/public/${id}/verify-public`;
+const BILLING_VERIFY_ENDPOINT = (id) => `/api/billing/public/${id}/verify-public`;
 const PROCESSING_STATUSES = ['awaiting_receipt', 'wait_admin'];
 
 function buildWalletDeepLinks(purchase) {
@@ -106,15 +108,21 @@ export function PayPage() {
         data = await apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId));
       } else if (purchaseKind === 'public_invoice') {
         data = await apiRequest(PUBLIC_INVOICE_VIEW_ENDPOINT(purchaseId));
+      } else if (purchaseKind === 'billing') {
+        data = await apiRequest(BILLING_VIEW_ENDPOINT(purchaseId));
       } else {
-        const [shopRes, invoiceRes, publicRes] = await Promise.allSettled([
+        const [shopRes, invoiceRes, publicRes, billingRes] = await Promise.allSettled([
           apiRequest(SHOP_VIEW_ENDPOINT(purchaseId)),
           apiRequest(INVOICE_VIEW_ENDPOINT(purchaseId)),
           apiRequest(PUBLIC_INVOICE_VIEW_ENDPOINT(purchaseId)),
+          apiRequest(BILLING_VIEW_ENDPOINT(purchaseId)),
         ]);
         if (shopRes.status === 'fulfilled') {
           data = shopRes.value;
           setPurchaseKind('shop');
+        } else if (billingRes.status === 'fulfilled') {
+          data = billingRes.value;
+          setPurchaseKind('billing');
         } else if (invoiceRes.status === 'fulfilled') {
           data = invoiceRes.value;
           setPurchaseKind('invoice');
@@ -125,10 +133,12 @@ export function PayPage() {
           const shopErr = shopRes.reason;
           const invoiceErr = invoiceRes.reason;
           const publicErr = publicRes.reason;
+          const billingErr = billingRes.reason;
           if (shopErr && shopErr.status !== 404) throw shopErr;
+          if (billingErr && billingErr.status !== 404) throw billingErr;
           if (invoiceErr && invoiceErr.status !== 404) throw invoiceErr;
           if (publicErr && publicErr.status !== 404) throw publicErr;
-          throw shopErr || invoiceErr || publicErr || new Error('Счёт не найден');
+          throw shopErr || billingErr || invoiceErr || publicErr || new Error('Счёт не найден');
         }
       }
       setPurchase(data);
@@ -198,7 +208,9 @@ export function PayPage() {
       ? INVOICE_VERIFY_ENDPOINT(purchase.id)
       : purchaseKind === 'public_invoice'
         ? PUBLIC_INVOICE_VERIFY_ENDPOINT(purchase.id)
-        : SHOP_VERIFY_ENDPOINT(purchase.id);
+        : purchaseKind === 'billing'
+          ? BILLING_VERIFY_ENDPOINT(purchase.id)
+          : SHOP_VERIFY_ENDPOINT(purchase.id);
     setManualVerifying(true);
     setManualMessage('');
     try {
@@ -223,7 +235,9 @@ export function PayPage() {
     ? INVOICE_VERIFY_ENDPOINT(purchase.id)
     : purchaseKind === 'public_invoice'
       ? PUBLIC_INVOICE_VERIFY_ENDPOINT(purchase.id)
-      : SHOP_VERIFY_ENDPOINT(purchase.id);
+      : purchaseKind === 'billing'
+        ? BILLING_VERIFY_ENDPOINT(purchase.id)
+        : SHOP_VERIFY_ENDPOINT(purchase.id);
 
   return (
     <PaymentView
@@ -420,7 +434,9 @@ function PaymentView({
               memo={purchase.memo}
               network={purchase.network || 'mainnet'}
               verifyEndpoint={verifyEndpoint}
-              buildVerifyBody={() => ({})}
+              buildVerifyBody={isPublicInvoice
+                ? () => ({})
+                : ({ senderWallet }) => ({ sender_wallet: senderWallet })}
               onPaid={onPaid}
               onError={onError}
               onTransactionSent={onPaymentSent}
@@ -568,7 +584,23 @@ function ErrorView({ message, onRetry }) {
   );
 }
 
+function formatBillingEndDate(durationDays) {
+  if (!durationDays) return null;
+  const date = new Date(Date.now() + Number(durationDays) * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(date);
+}
+
 function PaidView({ purchase, processing, purchaseKind }) {
+  const isBilling = purchaseKind === 'billing';
+
+  useEffect(() => {
+    if (!isBilling) return;
+    const timer = setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [isBilling]);
+
   return (
     <div>
       <BrandingHeader />
@@ -578,13 +610,29 @@ function PaidView({ purchase, processing, purchaseKind }) {
             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-1">
-            {processing ? 'Платёж получен' : 'Счёт оплачен'}
+            {isBilling ? 'Тариф Normal активирован' : processing ? 'Платёж получен' : 'Счёт оплачен'}
           </h3>
           <p className="text-sm text-slate-500 max-w-sm">
-            {processing
-              ? `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
-              : `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Доступ активирован в течение нескольких минут.`}
+            {isBilling ? (
+              <>
+                Доступ открыт до {formatBillingEndDate(purchase.duration_days) || '—'}
+                {purchase.duration_days ? ` (${purchase.duration_days} дн.)` : null}.
+              </>
+            ) : processing ? (
+              `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
+            ) : (
+              `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Доступ активирован в течение нескольких минут.`
+            )}
           </p>
+          {isBilling ? (
+            <a
+              href="/app"
+              className="mt-5 inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition-colors"
+            >
+              Перейти в кабинет
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          ) : null}
         </div>
         {purchaseKind === 'public_invoice' && purchase.secret_payload ? (
           <SecretRevealBlock secret={purchase.secret_payload} />

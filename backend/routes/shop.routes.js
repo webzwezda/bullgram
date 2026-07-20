@@ -4,10 +4,13 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { toNano } from '@ton/core';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
 import { tonToNanoString } from '../utils/ton.js';
+import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
+import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -256,23 +259,16 @@ async function expireStalePendingPurchases(supabase, purchases) {
     return staleIds;
 }
 
-async function checkTonPayment(memo, expectedAmount, wallet) {
-    if (!wallet) return false;
-
+async function checkShopTonPayment({ memo, expectedAmountTon, wallet }) {
+    if (!wallet || !memo) return false;
     try {
-        const response = await fetch(`https://tonapi.io/v2/blockchain/accounts/${wallet}/transactions?limit=30`);
-        const data = await response.json();
-        const transactions = data.transactions || [];
-
-        for (const tx of transactions) {
-            const bodyText = tx?.in_msg?.decoded_body?.text;
-            const amountTon = Number(tx?.in_msg?.value || 0) / 1000000000;
-            if (bodyText === memo && amountTon >= Number(expectedAmount || 0)) {
-                return true;
-            }
-        }
-
-        return false;
+        const expectedNano = toNano(String(expectedAmountTon)).toString();
+        const result = await verifyPaymentOnce({
+            merchantWallet: wallet,
+            memo,
+            expectedNanoTon: expectedNano
+        });
+        return Boolean(result.ok);
     } catch (error) {
         console.error('Ошибка проверки TON shop-платежа:', error.message);
         return false;
@@ -753,13 +749,7 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     }
 
     if (purchase.status === 'expired' || isPendingPurchaseExpired(purchase)) {
-        await supabase
-            .from('shop_purchases')
-            .update({
-                status: 'expired',
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', purchase.id);
+        await markExpired({ supabase, table: 'shop_purchases', id: purchase.id });
 
         return {
             ok: false,
@@ -788,7 +778,7 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
 
     const memo = purchase.payload?.memo;
     const wallet = purchase.payload?.seller_wallet;
-    const isPaid = await checkTonPayment(memo, purchase.amount_ton, wallet);
+    const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet });
 
     if (!isPaid) {
         return {
@@ -829,15 +819,37 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
         .order('sort_order', { ascending: true });
     if (assetsError) throw assetsError;
 
-    await supabase
-        .from('shop_purchases')
-        .update({
+    const nowIso = new Date().toISOString();
+    const claimed = await claimPaid({
+        supabase,
+        table: 'shop_purchases',
+        id: purchase.id,
+        patch: {
             status: 'paid',
             ownership_transfer_status: textServiceItem ? 'completed' : (purchase.ownership_transfer_status || 'pending'),
             ownership_transfer_error: null,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', purchase.id);
+            updated_at: nowIso
+        }
+    });
+
+    if (!claimed) {
+        // Race: другой worker уже обработал платёж. Не запускать asset transfer повторно.
+        const { data: fresh } = await supabase
+            .from('shop_purchases')
+            .select('status, ownership_transfer_status')
+            .eq('id', purchase.id)
+            .maybeSingle();
+        return {
+            ok: true,
+            statusCode: 200,
+            body: {
+                success: true,
+                status: 'paid',
+                ownership_transfer_status: fresh?.ownership_transfer_status || 'completed',
+                already: true
+            }
+        };
+    }
 
     if (textServiceItem) {
         await applyShopOfferUnlock(supabase, purchase, item);
