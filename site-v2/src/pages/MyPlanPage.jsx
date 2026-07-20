@@ -167,7 +167,7 @@ export function MyPlanPage() {
                 </Link>
                 <Link
                   to="/pricing"
-                  className="inline-block rounded-xl bg-white px-4 py-2 text-sm font-semibold text-amber-800 ring-1 ring-inset ring-amber-300 hover:bg-amber-100 transition-colors"
+                  className="inline-block rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:ring-slate-300 transition-colors"
                 >
                   К тарифам
                 </Link>
