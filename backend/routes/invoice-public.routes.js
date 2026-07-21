@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { verifyTonConnectPayment } from '../services/ton-connect-verify.service.js';
+import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
+import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -134,6 +135,12 @@ export function invoicePublicRoutes(supabase, getBotById) {
         return res.json({ status: invoice.status, success: false });
       }
 
+      if (invoice.expires_at && new Date(invoice.expires_at).getTime() <= Date.now()) {
+        const fresh = await markExpired({ supabase, table: 'invoices', id: invoice.id });
+        if (fresh) return res.json({ status: 'expired', success: false });
+        return res.json({ status: 'paid', success: true });
+      }
+
       const { data: tariff } = await supabase
         .from('tariffs')
         .select('owner_id, bot_id')
@@ -155,31 +162,34 @@ export function invoicePublicRoutes(supabase, getBotById) {
         return res.status(500).json({ error: 'У продавца не настроен TON-кошелёк' });
       }
 
+      const senderWallet = req.body && typeof req.body.sender_wallet === 'string'
+        ? req.body.sender_wallet
+        : null;
+
       const expectedNano = String(Math.round(Number(invoice.amount || 0) * 1e9));
-      const result = await verifyTonConnectPayment({
+      const result = await verifyPaymentOnce({
         merchantWallet,
         memo: invoice.memo,
         expectedNanoTon: expectedNano,
-        maxAttempts: 1
+        senderWallet
       });
 
       if (!result?.ok) {
         return res.json({ status: 'pending', success: false, retry: true });
       }
 
-      const { data: claimed, error: claimErr } = await supabase
-        .from('invoices')
-        .update({
+      const nowIso = new Date().toISOString();
+      const claimed = await claimPaid({
+        supabase,
+        table: 'invoices',
+        id: invoice.id,
+        patch: {
           status: 'paid',
-          paid_at: new Date().toISOString(),
-          verified_at: new Date().toISOString(),
+          paid_at: nowIso,
+          verified_at: nowIso,
           tx_hash: result.txHash || null
-        })
-        .eq('id', invoice.id)
-        .eq('status', 'pending')
-        .select()
-        .maybeSingle();
-      if (claimErr) throw claimErr;
+        }
+      });
 
       if (!claimed) {
         return res.json({ status: 'paid', success: true });

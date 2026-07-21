@@ -259,14 +259,15 @@ async function expireStalePendingPurchases(supabase, purchases) {
     return staleIds;
 }
 
-async function checkShopTonPayment({ memo, expectedAmountTon, wallet }) {
+async function checkShopTonPayment({ memo, expectedAmountTon, wallet, senderWallet = null }) {
     if (!wallet || !memo) return false;
     try {
         const expectedNano = toNano(String(expectedAmountTon)).toString();
         const result = await verifyPaymentOnce({
             merchantWallet: wallet,
             memo,
-            expectedNanoTon: expectedNano
+            expectedNanoTon: expectedNano,
+            senderWallet
         });
         return Boolean(result.ok);
     } catch (error) {
@@ -723,7 +724,7 @@ function proxyHasMultipleUserbots(usageMap, proxyId) {
     return (usageMap.get(String(proxyId)) || []).length > 1;
 }
 
-async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = null, enforceSellerOwnerId = null } = {}) {
+async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = null, enforceSellerOwnerId = null, senderWallet = null } = {}) {
     if (!purchase) {
         return {
             ok: false,
@@ -778,7 +779,7 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
 
     const memo = purchase.payload?.memo;
     const wallet = purchase.payload?.seller_wallet;
-    const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet });
+    const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet, senderWallet });
 
     if (!isPaid) {
         return {
@@ -2695,7 +2696,9 @@ export default function shopRoutes(supabase) {
             if (error) throw error;
             if (!purchase) return res.status(404).json({ error: 'Счёт не найден' });
 
-            const result = await runShopPurchaseCheck(supabase, purchase);
+            const result = await runShopPurchaseCheck(supabase, purchase, {
+                senderWallet: typeof req.body?.sender_wallet === 'string' ? req.body.sender_wallet : null
+            });
             const body = result?.body || {};
             return res.status(result?.statusCode || 200).json({
                 status: body.status || purchase.status,
