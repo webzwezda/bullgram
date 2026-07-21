@@ -62,6 +62,7 @@ import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.
 import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.js';
 import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
 import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.js';
+import { startBillingActivationRecovery } from './jobs/billing-activation-recovery.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -294,7 +295,8 @@ httpServer.listen(PORT, async () => {
         referral_settlement_retry_enabled: String(process.env.REFERRAL_SETTLEMENT_RETRY_ENABLED || 'true').trim().toLowerCase() !== 'false',
         referral_payout_sender_enabled: envFlag('REFERRAL_PAYOUT_SENDER_ENABLED'),
         referral_payout_confirmation_enabled: String(process.env.REFERRAL_PAYOUT_CONFIRMATION_ENABLED || 'true').trim().toLowerCase() !== 'false',
-        managed_proxy_reconcile_enabled: String(process.env.MANAGED_PROXY_RECONCILE_ENABLED || 'true').trim().toLowerCase() !== 'false'
+        managed_proxy_reconcile_enabled: String(process.env.MANAGED_PROXY_RECONCILE_ENABLED || 'true').trim().toLowerCase() !== 'false',
+        billing_activation_recovery_enabled: String(process.env.BILLING_ACTIVATION_RECOVERY_ENABLED || 'true').trim().toLowerCase() !== 'false'
     });
 
     // Запускаем всех ботов из БД
@@ -329,6 +331,7 @@ httpServer.listen(PORT, async () => {
     startManagedProxyReconcile(supabase);
     startInvoiceAutoDetect(supabase, getBotById);
     startPublicInvoicesCleanup(supabase);
+    startBillingActivationRecovery(supabase);
 
     // Запускаем все активные checklist-боты
     try {
