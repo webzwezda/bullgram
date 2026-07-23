@@ -166,14 +166,30 @@ No automated test suite exists yet. Verify changes manually:
 
 Типичный workflow:
 ```bash
-cmux browser open <url>                    # открывает surface в текущем workspace
-cmux browser snapshot --compact            # accessibility-дерево с ref'ами
-cmux browser eval '<js>'                   # произвольный JS на странице
-cmux browser click '<selector>'            # клик
-cmux browser screenshot --path /tmp/x.png  # скриншот
+cmux browser open <url>                         # открывает surface в текущем workspace
+cmux browser surface:3 snapshot                 # accessibility-дерево с ref'ами
+cmux browser surface:3 eval '<js>'              # произвольный JS на странице
+cmux browser surface:3 click '<css-selector>'   # клик (только CSS, без :has-text)
+cmux browser surface:3 screenshot --out /tmp/x.png
 ```
 
-**Гоча для React-форм:** `cmux browser fill` и `type` НЕ подхватываются React. Используй `eval` с нативным setter:
+**Surface handle обязателен** для всех сабкоманд после `open`. Форма — `cmux browser surface:N <subcommand>` (или `--surface surface:N`). Без него `snapshot` падает с `browser requires a subcommand`. Номер surface даёт `cmux browser open` в ответе (`surface=surface:N`).
+
+**Refs перенумеруются после каждого snapshot/reload.** Держать `ref=e53` между вызовами бесполезно — после следующего snapshot та же кнопка может быть `e197`. Либо ре-снап перед кликом, либо используй CSS-селектор через `eval`.
+
+**Только CSS-селекторы.** Playwright-псевдо-классы типа `button:has-text("...")` падают с `A JavaScript exception occurred`. Для поиска по тексту — `eval`:
+```js
+const btn = Array.from(document.querySelectorAll("button")).find(b => b.textContent.includes("Проверить Telegram"));
+```
+
+**`eval` должен возвращать примитив** (string/number/boolean). Возврат объекта/array/undefined даёт `JavaScript execution returned a result of an unsupported type`. Оборачивай в `JSON.stringify((() => {...})())`.
+
+**Async side-effect в `eval` таймаутит.** Если в eval дёрнуть кнопку, чей onClick триггерит fetch, cmux ждёт результат JS ~30с и падает с `Timed out waiting for JavaScript result`. Сам click срабатывает (видно в логах бэка), но тулза репортит ошибку. Workaround — отложенный клик:
+```js
+setTimeout(() => btn.click(), 0); return "scheduled";
+```
+
+**React-формы:** `cmux browser fill` и `type` НЕ подхватываются React. Используй `eval` с нативным setter:
 ```js
 const set = (el, v) => {
   const s = Object.getOwnPropertyDescriptor(
