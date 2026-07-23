@@ -10,7 +10,6 @@ import {
   Loader2,
   RefreshCw,
   Send,
-  Sparkles,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { apiRequest } from '../api/client.js';
@@ -108,20 +107,27 @@ export function CreatedInvoicePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="py-16 flex justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
       </div>
     );
   }
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+      <div className="py-12 flex justify-center">
         <div className="rounded-2xl bg-white border border-slate-200 p-6 max-w-md w-full text-center">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-3 mx-auto">
             <AlertCircle className="w-6 h-6 text-rose-500" />
           </div>
           <h3 className="text-base font-bold text-slate-900 mb-1">Счёт не найден</h3>
           <p className="text-sm text-slate-500 mb-4">{error}</p>
+          <button
+            type="button"
+            onClick={() => navigate('/create')}
+            className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold transition-colors"
+          >
+            Создать новый счёт
+          </button>
         </div>
       </div>
     );
@@ -132,27 +138,8 @@ export function CreatedInvoicePage() {
   const isExpired = invoice.status === 'expired';
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-        <header className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div className="leading-tight">
-              <div className="font-black text-slate-900 text-sm">Bullgram</div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider">Счёт создан</div>
-            </div>
-          </div>
-          {!isPaid && !isExpired ? (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600">
-              <Clock className="w-3.5 h-3.5" />
-              {remaining || '00:00'}
-            </div>
-          ) : null}
-        </header>
-
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm space-y-6">
           {isPaid ? (
             <div className="text-center">
               <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-4 mx-auto">
@@ -189,7 +176,15 @@ export function CreatedInvoicePage() {
               </div>
 
               <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма</div>
+                  {!isPaid && !isExpired ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-600">
+                      <Clock className="w-3.5 h-3.5" />
+                      {remaining || '00:00'}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="text-2xl font-black tracking-tight text-slate-900">
                   {Number(invoice.amount_ton || 0)}
                   <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
@@ -292,6 +287,5 @@ export function CreatedInvoicePage() {
           </div>
         ) : null}
       </div>
-    </div>
   );
 }

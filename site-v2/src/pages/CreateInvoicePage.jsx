@@ -8,7 +8,6 @@ import {
   Lock,
   Send,
   ShieldCheck,
-  Sparkles,
   Tag,
   Wallet,
 } from 'lucide-react';
@@ -135,32 +134,21 @@ export function CreateInvoicePage() {
     : `${inputBase} border-slate-200 focus:border-slate-400`;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-        <header className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div className="leading-tight">
-              <div className="font-black text-slate-900 text-sm">Bullgram</div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider">Новый счёт</div>
-            </div>
-          </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-500">
-            <Clock className="w-3.5 h-3.5" />
-            1.5 часа
-          </div>
-        </header>
-
-        <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
-          <div className="mb-7">
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
+        <div className="mb-7">
+          <div className="flex items-center gap-3 mb-1.5 flex-wrap">
             <h1 className="text-2xl font-black tracking-tight text-slate-900">Счёт на оплату в TON</h1>
-            <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
-              Заполните условия — мы сгенерируем ссылку для покупателя.
-              Оплата придёт на ваш кошелёк, покупатель увидит секрет.
-            </p>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-[11px] font-mono text-slate-600 shrink-0">
+              <Clock className="w-3.5 h-3.5" />
+              Действует 1.5 часа
+            </span>
           </div>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Заполните условия — мы сгенерируем ссылку для покупателя.
+            Оплата придёт на ваш кошелёк, покупатель увидит секрет.
+          </p>
+        </div>
 
           <form onSubmit={onSubmit} className="space-y-7">
             <section>
@@ -315,6 +303,5 @@ export function CreateInvoicePage() {
           ))}
         </div>
       </div>
-    </div>
   );
 }

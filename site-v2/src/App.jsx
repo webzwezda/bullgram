@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet, FilePlus } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -21,6 +21,12 @@ const navSections = [
     title: 'Bullgram',
     items: [
       { to: '/', label: 'Главная', icon: LayoutDashboard }
+    ]
+  },
+  {
+    title: 'Счета',
+    items: [
+      { to: '/create', label: 'Создать счёт', icon: FilePlus }
     ]
   },
   {
@@ -64,6 +70,8 @@ export function App() {
     if (location.pathname === '/') return 'Главная';
     if (location.pathname.startsWith('/purchases')) return 'Мои покупки';
     if (location.pathname === '/plan') return 'Мой тариф';
+    if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
+    if (location.pathname.startsWith('/created')) return 'Счёт создан';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
@@ -90,16 +98,6 @@ export function App() {
       </Routes>
     </Suspense>
   );
-
-  if (isPayRoute || isCreateRoute) {
-    return (
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
-          {appRoutes}
-        </main>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">
@@ -189,6 +187,8 @@ export function App() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
         {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
           appRoutes
+        ) : (isPayRoute || isCreateRoute) ? (
+          <div className="mx-auto w-full max-w-3xl py-2">{appRoutes}</div>
         ) : (
           <SiteAuthGate>
             <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm flex-1">

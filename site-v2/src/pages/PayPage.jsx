@@ -10,7 +10,6 @@ import {
   Loader2,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   Wallet,
 } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -258,27 +257,6 @@ export function PayPage() {
   );
 }
 
-function BrandingHeader() {
-  const host = typeof window !== 'undefined' ? window.location.host : 'bullgram.xyz';
-  return (
-    <header className="flex items-center justify-between mb-5">
-      <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm">
-          <Sparkles className="w-5 h-5" />
-        </div>
-        <div className="leading-tight">
-          <div className="font-bold text-slate-900 text-sm">BullRun</div>
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Оплата счёта</div>
-        </div>
-      </div>
-      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200">
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-        <span className="text-[11px] font-mono text-slate-500">{host}</span>
-      </div>
-    </header>
-  );
-}
-
 function Card({ children }) {
   return (
     <div className="rounded-2xl border-0 bg-white shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 overflow-hidden">
@@ -393,7 +371,6 @@ function PaymentView({
 
   return (
     <div>
-      <BrandingHeader />
       <Card>
         <AmountBlock purchase={purchase} remaining={remaining} verifying={verifying} />
 
@@ -534,6 +511,11 @@ function PaymentView({
             </button>
           </div>
         </div>
+
+        <div className="flex items-center justify-center gap-1.5 pt-3 border-t border-slate-100 text-[11px] text-slate-400">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Платёж проходит напрямую через TON-блокчейн. Bullgram не хранит ваши средства.</span>
+        </div>
       </Card>
     </div>
   );
@@ -542,7 +524,6 @@ function PaymentView({
 function SkeletonView() {
   return (
     <div>
-      <BrandingHeader />
       <Card>
         <div className="rounded-2xl bg-slate-100 h-20 animate-pulse" />
         <div className="rounded-2xl bg-slate-100 h-32 animate-pulse" />
@@ -562,7 +543,6 @@ function SkeletonView() {
 function ErrorView({ message, onRetry }) {
   return (
     <div>
-      <BrandingHeader />
       <Card>
         <div className="flex flex-col items-center justify-center text-center py-8">
           <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-4">
@@ -603,7 +583,6 @@ function PaidView({ purchase, processing, purchaseKind }) {
 
   return (
     <div>
-      <BrandingHeader />
       <Card>
         <div className="flex flex-col items-center justify-center text-center py-8">
           <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-4">
@@ -645,7 +624,6 @@ function PaidView({ purchase, processing, purchaseKind }) {
 function ExpiredView() {
   return (
     <div>
-      <BrandingHeader />
       <Card>
         <div className="flex flex-col items-center justify-center text-center py-8">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mb-4">
