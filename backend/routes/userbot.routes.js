@@ -3189,7 +3189,9 @@ export default function (supabase) {
             catch (authErr) {
                 const rawCheckError = String(authErr?.message || authErr || '').trim();
                 const normalizedCheckError = rawCheckError.toUpperCase();
-                const isInspectTimeout = rawCheckError.includes('health-check') || rawCheckError.includes('SpamBot');
+                const isInspectTimeout = rawCheckError.includes('health-check')
+                    || rawCheckError.includes('SpamBot')
+                    || rawCheckError.includes('профиль аккаунта');
                 const isSessionInvalid = isExpiredUserbotSessionError(authErr)
                     || normalizedCheckError.includes('USER_DEACTIVATED')
                     || normalizedCheckError.includes('AUTH_KEY_INVALID');
@@ -3242,7 +3244,9 @@ export default function (supabase) {
                     nextStatus,
                     nextReason,
                     {
-                        session: isDegradedAfterAlive ? 'alive' : (nextStatus === 'expired' ? 'dead' : 'unknown'),
+                        session: (isDegradedAfterAlive || (connectOk && isInspectTimeout))
+                            ? 'alive'
+                            : (nextStatus === 'expired' ? 'dead' : 'unknown'),
                         restriction: 'unknown',
                         restriction_reason: '',
                         spambot: {

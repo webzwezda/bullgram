@@ -131,6 +131,13 @@ async function ensureIpv6Address(ipv6) {
   await run('ip', ['-6', 'addr', 'add', `${ipv6}/64`, 'dev', INTERFACE_NAME]);
 }
 
+async function listInterfaceIpv6Addresses() {
+  const { stdout } = await execFileAsync('bash', ['-lc',
+    `ip -6 addr show dev ${INTERFACE_NAME} 2>/dev/null | awk '{print $2}' | cut -d/ -f1 | grep -F ':' || true`
+  ]);
+  return new Set(String(stdout || '').split('\n').map((s) => s.trim()).filter(Boolean));
+}
+
 async function removeIpv6Address(ipv6) {
   try {
     await run('ip', ['-6', 'addr', 'del', `${ipv6}/64`, 'dev', INTERFACE_NAME]);
@@ -465,7 +472,13 @@ export class ManagedProxyService {
     const expectedPorts = nextState.proxies.map((proxy) => Number(proxy.port));
     const missingPorts = expectedPorts.filter((port) => !listeningPorts.has(port));
     const containerRunning = await isContainerRunning();
-    const shouldRestoreRuntime = stateChanged || missingPorts.length > 0 || !containerRunning;
+    const presentIpv6 = await listInterfaceIpv6Addresses();
+    const expectedIpv6 = nextState.proxies.map((proxy) => proxy?.ipv6).filter(Boolean);
+    const missingIpv6 = expectedIpv6.filter((ip) => !presentIpv6.has(ip));
+    const shouldRestoreRuntime = stateChanged || missingPorts.length > 0 || missingIpv6.length > 0 || !containerRunning;
+    // 3proxy bind'ит source-IPv6 при старте и кэширует доступность адреса на интерфейсе,
+    // поэтому при потере IPv6 контейнер нужно перезапустить, чтобы новые bind'ы подхватили адреса.
+    const needsContainerRestart = stateChanged || missingPorts.length > 0 || missingIpv6.length > 0 || !containerRunning;
 
     if (!dryRun && stateChanged) {
       saveStateWithBackup(nextState);
@@ -473,7 +486,9 @@ export class ManagedProxyService {
 
     if (!dryRun && shouldRestoreRuntime) {
       await ensureAllIpv6Addresses(nextState);
-      await ensureContainer(nextState);
+      if (needsContainerRestart) {
+        await ensureContainer(nextState);
+      }
     }
 
     return {
@@ -485,6 +500,7 @@ export class ManagedProxyService {
       stateCountAfter: nextState.proxies.length,
       stateChanged,
       missingPorts,
+      missingIpv6,
       extraStatePorts: (currentState.proxies || [])
         .map((proxy) => Number(proxy.port))
         .filter((port) => !expectedPorts.includes(port)),
