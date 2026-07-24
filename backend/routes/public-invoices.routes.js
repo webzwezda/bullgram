@@ -6,6 +6,7 @@ import {
 } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { sendPaymentReceivedEmail } from '../services/email.service.js';
+import { authenticateUser, optionalAuthenticateUser } from '../middlewares/auth.middleware.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -90,7 +91,23 @@ export function publicInvoiceRoutes(supabase) {
     return toNano(String(amount)).toString(10);
   }
 
-  router.post('/public/create', async (req, res) => {
+  router.get('/mine', authenticateUser, async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from('public_invoices')
+        .select('id, status, amount_ton, title, seller_wallet, created_at, expires_at, paid_at, network')
+        .eq('creator_user_id', req.user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return res.json({ items: data || [] });
+    } catch (err) {
+      console.error('[public-invoices] mine failed:', err.message || err);
+      return res.status(500).json({ error: 'Не удалось загрузить счета' });
+    }
+  });
+
+  router.post('/public/create', optionalAuthenticateUser, async (req, res) => {
     const rawIp = pickIp(req);
     const ip = rawIp || 'unknown';
     if (!checkRateLimit(createHitsByIp, ip, CREATE_RATE_LIMIT_PER_HOUR, CREATE_WINDOW_MS)) {
@@ -126,7 +143,8 @@ export function publicInvoiceRoutes(supabase) {
           expires_at: expiresAt,
           grace_until: graceUntil,
           creator_ip: rawIp,
-          creator_user_agent: userAgent
+          creator_user_agent: userAgent,
+          creator_user_id: req.user?.id || null
         })
         .select('id')
         .single();

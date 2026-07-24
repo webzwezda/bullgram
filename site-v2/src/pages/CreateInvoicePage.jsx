@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -7,6 +7,8 @@ import {
   FilePlus,
   Loader2,
   Lock,
+  Receipt,
+  RefreshCw,
   Send,
   ShieldCheck,
   Tag,
@@ -14,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { Card } from '../components/ui/card.jsx';
+import { useAuth } from '../app/providers/AuthProvider.jsx';
 
 const AMOUNT_CHIPS = [0.1, 0.5, 1, 5, 10];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -44,6 +47,7 @@ function SectionLabel({ icon: Icon, children, hint }) {
 
 export function CreateInvoicePage() {
   const navigate = useNavigate();
+  const { user, accessToken } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -55,6 +59,28 @@ export function CreateInvoicePage() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  const [myInvoices, setMyInvoices] = useState([]);
+  const [myLoading, setMyLoading] = useState(false);
+  const [myError, setMyError] = useState('');
+
+  const fetchMine = useCallback(async () => {
+    if (!user || !accessToken) return;
+    setMyLoading(true);
+    setMyError('');
+    try {
+      const data = await apiRequest('/api/public-invoices/mine', { accessToken });
+      setMyInvoices(data.items || []);
+    } catch (e) {
+      setMyError(e.message || 'Не удалось загрузить счета');
+    } finally {
+      setMyLoading(false);
+    }
+  }, [user, accessToken]);
+
+  useEffect(() => {
+    fetchMine();
+  }, [fetchMine]);
 
   const update = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -318,6 +344,109 @@ export function CreateInvoicePage() {
           </div>
         ))}
       </div>
+
+      {user ? (
+        <MyInvoicesCard
+          items={myInvoices}
+          loading={myLoading}
+          error={myError}
+          onRetry={fetchMine}
+          onOpen={(id) => navigate(`/created/${id}`)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+const INVOICE_STATUS = {
+  pending: { label: 'Ожидает оплаты', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  paid: { label: 'Оплачен', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  expired: { label: 'Срок истёк', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
+
+const DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
+  const count = items.length;
+  return (
+    <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
+      <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+        <div className="flex flex-row items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-slate-700 flex items-center justify-center text-white shadow-md shadow-slate-500/20 shrink-0">
+            <Receipt className="w-6 h-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xl font-bold text-slate-900">Мои счета</h2>
+            <p className="text-sm font-medium text-slate-500 mt-0.5">
+              {count > 0 ? `Последние ${count} счетов на этом аккаунте` : 'История ваших счетов'}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="p-5 sm:p-6 bg-white">
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-sm text-rose-700 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="flex-1">{error}</div>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Повторить
+            </button>
+          </div>
+        ) : count === 0 ? (
+          <div className="text-center py-8 px-4">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 mx-auto flex items-center justify-center mb-3">
+              <Receipt className="w-6 h-6 text-slate-400" />
+            </div>
+            <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+              Создайте первый — он появится здесь. Видны только счета, созданные под вашей учётной записью.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {items.map((inv) => {
+              const status = INVOICE_STATUS[inv.status] || INVOICE_STATUS.expired;
+              return (
+                <button
+                  key={inv.id}
+                  type="button"
+                  onClick={() => onOpen(inv.id)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-slate-900 truncate">{inv.title || 'Без названия'}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{DATE_FMT.format(new Date(inv.created_at))}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-bold text-slate-900 tabular-nums">
+                      {Number(inv.amount_ton)} <span className="text-slate-500 font-semibold">TON</span>
+                    </div>
+                    <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.cls}`}>
+                      {status.label}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

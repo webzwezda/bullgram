@@ -27,6 +27,27 @@ export const authenticateUser = async (req, res, next) => {
     }
 };
 
+/**
+ * Опциональная авторизация: если JWT есть и валиден — ставит req.user,
+ * если нет/просрочен/невалиден — req.user = null и пропускает дальше.
+ * Не загружает profile (не нужно для optional-flow).
+ */
+export const optionalAuthenticateUser = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+        req.user = null;
+        return next();
+    }
+    try {
+        const token = authHeader.split(' ')[1];
+        const { data: { user } } = await supabase.auth.getUser(token);
+        req.user = user || null;
+    } catch {
+        req.user = null;
+    }
+    next();
+};
+
 export const requireObserverRole = (req, res, next) => {
     if (req.profile?.role !== 'admin') {
         return res.status(403).json({ error: 'Этот экран доступен только наблюдателю.' });
