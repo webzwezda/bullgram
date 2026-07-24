@@ -50,7 +50,7 @@ function buildWalletDeepLinks(purchase) {
     {
       key: 'trust',
       label: 'Trust Wallet',
-      url: `https://link.trustwallet.com/send?asset=TON&address=${addr}&amount=${Number(purchase.amount_ton || 0)}&memo=${encodeURIComponent(memo)}`,
+      url: `https://link.trustwallet.com/send?asset=c607&address=${addr}&amount=${Number(purchase.amount_ton || 0)}&memo=${encodeURIComponent(memo)}`,
     },
     {
       key: 'generic',
