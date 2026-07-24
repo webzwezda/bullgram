@@ -188,7 +188,7 @@ export function App() {
         {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
           appRoutes
         ) : (isPayRoute || isCreateRoute) ? (
-          <div className="mx-auto w-full max-w-3xl py-2">{appRoutes}</div>
+          appRoutes
         ) : (
           <SiteAuthGate>
             <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm flex-1">
