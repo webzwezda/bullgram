@@ -305,6 +305,7 @@ export function createMenuBuilders({ service, botId }) {
 
             const nanoTon = tonToNano(invoiceAmount);
             const tonUri = `ton://transfer/${settings.ton_wallet}?amount=${nanoTon}&text=${encodeURIComponent(memo)}`;
+            const trustWalletUri = `https://link.trustwallet.com/send?asset=c607&address=${settings.ton_wallet}&amount=${invoiceAmount}&memo=${encodeURIComponent(memo)}`;
             const qrBuffer = await QRCode.toBuffer(tonUri, { errorCorrectionLevel: 'H', margin: 2, width: 400 });
 
             const publicAppOrigin = process.env.PUBLIC_APP_ORIGIN;
@@ -333,7 +334,8 @@ export function createMenuBuilders({ service, botId }) {
                 `\n⏳ Счёт действителен 15 минут. После перевода подписка активируется автоматически в течение ~1 минуты — кнопку «Проверить оплату» можно не нажимать.`;
 
             const inlineKeyboard = [
-                [{ text: '💸 Открыть кошелёк', url: tonUri }]
+                [{ text: '💸 Открыть кошелёк', url: tonUri }],
+                [{ text: '🛡️ Открыть в Trust Wallet', url: trustWalletUri }]
             ];
             if (payUrl) {
                 inlineKeyboard.push([{ text: '💳 Оплатить на сайте', url: payUrl }]);
