@@ -210,8 +210,9 @@ console.log('--- GET /openapi.json (public) ---');
   const { status, body } = await fetchJSON(port, '/api/external/v1/openapi.json');
   assertEqual(status, 200, 'HTTP 200');
   assertEqual(body.openapi, '3.0.3', 'openapi version');
-  // 9 paths (10 operations, /messages path shared by GET + POST)
-  assertEqual(Object.keys(body.paths).length, 9, 'paths count');
+  // 12 paths: 9 from operation registry (10 operations, /messages shared by GET + POST)
+  // + 3 manual infra routes (/health, /me, /docs)
+  assertEqual(Object.keys(body.paths).length, 12, 'paths count');
   assertEqual(!!body.components.securitySchemes.BearerAuth, true, 'BearerAuth scheme present');
   assertEqual(Array.isArray(body.tags), true, 'tags array present');
   close();

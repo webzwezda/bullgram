@@ -27,6 +27,89 @@ function refForError(code) {
   return `#/components/responses/Err_${Math.abs(code)}`;
 }
 
+// Manual routes that share the /api/external/v1/* surface but aren't part of
+// the operation registry (no scope checks, no audit log, infrastructure only).
+function buildManualPathItems() {
+  return {
+    '/health': {
+      get: {
+        operationId: 'health',
+        summary: 'Service health + protocol version',
+        description: 'Public. No auth required. Returns service name, API version, and supported MCP protocol version.',
+        tags: ['infra'],
+        security: [],
+        responses: {
+          200: {
+            description: 'Service is alive',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['service', 'version', 'mcp_protocol', 'time'],
+                  properties: {
+                    service: { type: 'string', example: 'bullgram-external-api' },
+                    version: { type: 'string', example: 'v1' },
+                    mcp_protocol: { type: 'string', example: '2025-03-26' },
+                    time: { type: 'string', format: 'date-time' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/me': {
+      get: {
+        operationId: 'me',
+        summary: 'Token smoke check',
+        description: 'Returns the calling token\'s id, purpose, scopes, and the owner\'s product tier. Use this to verify a token works before hitting real operations.',
+        tags: ['infra'],
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Token is valid',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['auth_kind', 'owner_id', 'token', 'tier'],
+                  properties: {
+                    auth_kind: { type: 'string', example: 'integration_token' },
+                    owner_id: { type: 'string', format: 'uuid' },
+                    token: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        purpose: { type: 'string', enum: ['api', 'custom'] },
+                        scopes: { type: 'array', items: { type: 'string' } }
+                      }
+                    },
+                    tier: { type: 'string', nullable: true }
+                  }
+                }
+              }
+            }
+          },
+          401: { $ref: '#/components/responses/Err_32001' }
+        }
+      }
+    },
+    '/docs': {
+      get: {
+        operationId: 'docs',
+        summary: 'Interactive API explorer (Scalar)',
+        description: 'HTML page rendering the OpenAPI spec via Scalar. No auth required.',
+        tags: ['infra'],
+        security: [],
+        responses: {
+          200: { description: 'HTML explorer page' }
+        }
+      }
+    }
+  };
+}
+
 function buildErrorResponses() {
   const responses = {};
   for (const code of STANDARD_ERROR_CODES) {
@@ -182,6 +265,10 @@ export function buildOpenApiSpec({ baseURL = '', serverUrl = '' } = {}) {
     }
     pathCounter.set(path, (pathCounter.get(path) || 0) + 1);
   }
+
+  // Mount manual routes — these exist on the same router but aren't in the
+  // operation registry (they're infrastructural: health, spec discovery, auth smoke).
+  Object.assign(paths, buildManualPathItems());
 
   const servers = [];
   if (serverUrl) {
