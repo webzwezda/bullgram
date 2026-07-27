@@ -29,39 +29,6 @@ import { listOperations } from '../shared/operations.js';
 
 const SERVER_INFO = { name: 'bullrun-mcp', version: '0.2.0' };
 
-function legacyMcpId(id) {
-  return `legacy:mcp:${id}`;
-}
-
-async function listLegacyMcpTokens(supabase, ownerId) {
-  const { data, error } = await supabase
-    .from('agent_mcp_tokens')
-    .select('id, label, token_prefix, created_at, last_used_at, last_used_ip, revoked_at, revoked_reason')
-    .eq('owner_id', ownerId)
-    .order('created_at', { ascending: false });
-  if (error) {
-    if (String(error.message || '').includes('agent_mcp_tokens')) return [];
-    throw error;
-  }
-  return (data || []).map((item) => ({
-    id: legacyMcpId(item.id),
-    legacy_id: item.id,
-    label: item.label || 'OpenClaw',
-    purpose: 'mcp',
-    scopes: ['mcp:proxy:read'],
-    token_prefix: item.token_prefix,
-    token_hint: item.token_prefix ? `brmcp_${item.token_prefix}_...` : null,
-    can_reveal: false,
-    legacy: true,
-    legacy_source: 'agent_mcp_tokens',
-    created_at: item.created_at || null,
-    last_used_at: item.last_used_at || null,
-    last_used_ip: item.last_used_ip || null,
-    revoked_at: item.revoked_at || null,
-    revoked_reason: item.revoked_reason || null
-  }));
-}
-
 function extractRequestIp(req) {
   return req?.ip || req?.headers?.['x-forwarded-for'] || '';
 }
@@ -78,14 +45,8 @@ export default function agentMcpRoutes(supabase, userbotService) {
 
   router.get('/tokens', authenticateUser, async (req, res) => {
     try {
-      const [modernTokens, legacyTokens] = await Promise.all([
-        listIntegrationTokens(supabase, { ownerId: req.user.id, purpose: 'mcp' }),
-        listLegacyMcpTokens(supabase, req.user.id)
-      ]);
-      res.json({
-        tokens: [...modernTokens, ...legacyTokens]
-          .sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime())
-      });
+      const tokens = await listIntegrationTokens(supabase, { ownerId: req.user.id, purpose: 'mcp' });
+      res.json({ tokens });
     } catch (error) {
       res.status(500).json({ error: error.message || 'Не удалось загрузить MCP токены.' });
     }
@@ -107,29 +68,11 @@ export default function agentMcpRoutes(supabase, userbotService) {
 
   router.post('/tokens/:id/revoke', authenticateUser, async (req, res) => {
     try {
-      if (String(req.params.id || '').startsWith('legacy:mcp:')) {
-        const legacyId = String(req.params.id).slice('legacy:mcp:'.length);
-        const revokePayload = {
-          revoked_at: new Date().toISOString(),
-          revoked_reason: String(req.body?.reason || '').trim() || 'revoked_by_user'
-        };
-        const { data, error } = await supabase
-          .from('agent_mcp_tokens')
-          .update(revokePayload)
-          .eq('id', legacyId)
-          .eq('owner_id', req.user.id)
-          .is('revoked_at', null)
-          .select('id')
-          .maybeSingle();
-        if (error) throw error;
-        if (!data?.id) return res.status(404).json({ error: 'Токен не найден или уже отозван.' });
-      } else {
-        await revokeIntegrationToken(supabase, {
-          ownerId: req.user.id,
-          tokenId: req.params.id,
-          reason: String(req.body?.reason || '').trim() || 'revoked_by_user'
-        });
-      }
+      await revokeIntegrationToken(supabase, {
+        ownerId: req.user.id,
+        tokenId: req.params.id,
+        reason: String(req.body?.reason || '').trim() || 'revoked_by_user'
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: error.message || 'Не удалось отозвать MCP токен.' });

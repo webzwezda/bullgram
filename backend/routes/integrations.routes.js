@@ -10,79 +10,6 @@ import {
     revokeIntegrationToken
 } from '../services/integration-tokens.service.js';
 
-function legacyMcpId(id) {
-    return `legacy:mcp:${id}`;
-}
-
-function legacyRecord(base) {
-    return {
-        scopes: [],
-        can_reveal: false,
-        legacy: true,
-        metadata: {},
-        revoked_at: null,
-        revoked_reason: null,
-        updated_at: null,
-        ...base
-    };
-}
-
-async function listLegacyMcpTokens(supabase, ownerId) {
-    const { data, error } = await supabase
-        .from('agent_mcp_tokens')
-        .select('id, label, token_prefix, created_at, last_used_at, last_used_ip, revoked_at, revoked_reason')
-        .eq('owner_id', ownerId)
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        if (String(error.message || '').includes('agent_mcp_tokens')) return [];
-        throw error;
-    }
-
-    return (data || []).map((item) => legacyRecord({
-        id: legacyMcpId(item.id),
-        legacy_id: item.id,
-        owner_id: ownerId,
-        label: item.label || 'OpenClaw',
-        purpose: 'mcp',
-        scopes: ['mcp:use'],
-        token_prefix: item.token_prefix,
-        token_hint: item.token_prefix ? `brmcp_${item.token_prefix}_...` : null,
-        last_used_at: item.last_used_at || null,
-        last_used_ip: item.last_used_ip || null,
-        revoked_at: item.revoked_at || null,
-        revoked_reason: item.revoked_reason || null,
-        created_at: item.created_at || null,
-        legacy_source: 'agent_mcp_tokens'
-    }));
-}
-
-async function listAllTokens(supabase, ownerId) {
-    const [modern, legacyMcp] = await Promise.all([
-        listIntegrationTokens(supabase, { ownerId }),
-        listLegacyMcpTokens(supabase, ownerId)
-    ]);
-
-    return [...modern, ...legacyMcp]
-        .sort((left, right) => new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime());
-}
-
-async function revokeLegacyToken(supabase, ownerId, tokenId, reason) {
-    if (String(tokenId || '').startsWith('legacy:mcp:')) {
-        const legacyId = String(tokenId).slice('legacy:mcp:'.length);
-        const { error } = await supabase
-            .from('agent_mcp_tokens')
-            .update({
-                revoked_at: new Date().toISOString(),
-                revoked_reason: reason || 'reissued_to_integration_tokens'
-            })
-            .eq('id', legacyId)
-            .eq('owner_id', ownerId)
-            .is('revoked_at', null);
-        if (error) throw error;
-    }
-}
-
 function httpError(res, error, fallback = 'Ошибка интеграций') {
     res.status(error.statusCode || 500).json({ error: error.message || fallback });
 }
@@ -92,7 +19,7 @@ export default function integrationsRoutes(supabase) {
 
     router.get('/tokens', authenticateUser, async (req, res) => {
         try {
-            const tokens = await listAllTokens(supabase, req.user.id);
+            const tokens = await listIntegrationTokens(supabase, { ownerId: req.user.id });
             res.json({ success: true, tokens });
         } catch (error) {
             httpError(res, error, 'Не удалось загрузить ключи интеграций.');
@@ -116,11 +43,6 @@ export default function integrationsRoutes(supabase) {
 
     router.get('/tokens/:id/secret', authenticateUser, async (req, res) => {
         try {
-            if (String(req.params.id || '').startsWith('legacy:')) {
-                return res.status(409).json({
-                    error: 'Старый ключ нельзя показать. Перевыпусти его, чтобы копировать с этой страницы.'
-                });
-            }
             const token = await revealIntegrationToken(supabase, {
                 ownerId: req.user.id,
                 tokenId: req.params.id
@@ -133,17 +55,6 @@ export default function integrationsRoutes(supabase) {
 
     router.post('/tokens/:id/reissue', authenticateUser, async (req, res) => {
         try {
-            if (String(req.params.id || '').startsWith('legacy:')) {
-                await revokeLegacyToken(supabase, req.user.id, req.params.id, 'reissued_to_integration_tokens');
-                const result = await createIntegrationToken(supabase, {
-                    ownerId: req.user.id,
-                    label: req.body?.label || 'Bullgram MCP',
-                    purpose: 'mcp',
-                    metadata: { reissued_from_legacy: req.params.id }
-                });
-                return res.json({ success: true, ...result });
-            }
-
             const result = await reissueIntegrationToken(supabase, {
                 ownerId: req.user.id,
                 tokenId: req.params.id,
@@ -157,11 +68,6 @@ export default function integrationsRoutes(supabase) {
 
     router.post('/tokens/:id/revoke', authenticateUser, async (req, res) => {
         try {
-            if (String(req.params.id || '').startsWith('legacy:')) {
-                await revokeLegacyToken(supabase, req.user.id, req.params.id, String(req.body?.reason || '').trim() || 'revoked_from_ui');
-                return res.json({ success: true });
-            }
-
             const result = await revokeIntegrationToken(supabase, {
                 ownerId: req.user.id,
                 tokenId: req.params.id,

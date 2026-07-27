@@ -32,9 +32,10 @@ The integration surface ships with:
 
 ### Operational notes
 
-- Old `agent_mcp_tokens` table is preserved as legacy. Tokens from it
-  still work but only for `mcp:proxy:read` (legacy scope). Reissue from
-  `/app/integrations` to get the new scope set.
+- The legacy `agent_mcp_tokens` table was removed on 2026-07-28. All
+  access now goes through the modern integration token system
+  (`integration_tokens` table with `brmcp_`/`brapi_` prefixes). Issue
+  and rotate tokens at `/app/integrations`.
 - The `mcp_tool_log_status_check` constraint includes `started` so the
   initial audit insert (before the handler runs) doesn't fail.
 - Rate limiter is in-memory (Map-based). Backend runs as PM2

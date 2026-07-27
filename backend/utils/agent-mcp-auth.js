@@ -1,20 +1,4 @@
-import crypto from 'crypto';
 import { authenticateIntegrationToken } from '../services/integration-tokens.service.js';
-
-function hashToken(token) {
-    return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex');
-}
-
-export function generateAgentMcpToken() {
-    const secret = crypto.randomBytes(24).toString('base64url');
-    const prefix = secret.slice(0, 8);
-    const token = `brmcp_${prefix}_${secret}`;
-    return {
-        token,
-        tokenPrefix: prefix,
-        tokenHash: hashToken(token)
-    };
-}
 
 function normalExpired(profile) {
     if (String(profile?.product_tier || '').trim().toLowerCase() !== 'normal') return false;
@@ -102,11 +86,7 @@ export async function authenticateAgentOrUserToken({ supabase, authorizationHead
     }
 
     const token = authHeader.split(' ')[1];
-    const tokenHash = hashToken(token);
 
-    // Plan 01 Phase 3: per-tool scope enforcement moved to shared/dispatch.js.
-    // Auth layer just verifies the token signature and loads scopes; the
-    // dispatcher does OR-matching against each operation's requiredScopes.
     const integrationToken = await authenticateIntegrationToken(supabase, {
         authorizationHeader: authHeader,
         requiredScopes: [],
@@ -129,43 +109,6 @@ export async function authenticateAgentOrUserToken({ supabase, authorizationHead
             profile,
             agentToken: integrationToken.token,
             integrationToken: integrationToken.token
-        };
-    }
-
-    const { data: agentToken, error: agentTokenError } = await supabase
-        .from('agent_mcp_tokens')
-        .select('id, owner_id, label, revoked_at')
-        .eq('token_hash', tokenHash)
-        .is('revoked_at', null)
-        .maybeSingle();
-
-    if (agentTokenError && !String(agentTokenError.message || '').includes('agent_mcp_tokens')) {
-        throw agentTokenError;
-    }
-
-    if (agentToken?.owner_id) {
-        const user = {
-            id: agentToken.owner_id,
-            email: null,
-            is_mcp_token: true
-        };
-        const profile = await loadProfileForUser(supabase, user);
-
-        void supabase
-            .from('agent_mcp_tokens')
-            .update({
-                last_used_at: new Date().toISOString(),
-                last_used_ip: String(requestIp || '').slice(0, 120) || null
-            })
-            .eq('id', agentToken.id)
-            .then(() => {})
-            .catch(() => {});
-
-        return {
-            kind: 'agent_token',
-            user,
-            profile,
-            agentToken
         };
     }
 

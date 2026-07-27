@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -75,7 +75,6 @@ function maskSecret(value) {
 function statusBadge(token) {
   if (!token) return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Нет ключа</Badge>;
   if (token.revoked_at) return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Отозван</Badge>;
-  if (token.legacy) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Legacy</Badge>;
   return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Активен</Badge>;
 }
 
@@ -151,7 +150,7 @@ function IntegrationCard({
           <div className="space-y-3">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-slate-500">Ключ</span>
-              <CopyInput value={secret || ''} monospace placeholder={secret === undefined ? 'Нажми «Показать», чтобы увидеть ключ' : 'старый ключ без показа'} />
+              <CopyInput value={secret || ''} monospace placeholder={secret === undefined ? 'Нажми «Показать», чтобы увидеть ключ' : '—'} />
             </label>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -171,13 +170,6 @@ function IntegrationCard({
         ) : (
           <p className="text-sm text-slate-500">Ключ еще не выпускался.</p>
         )}
-
-        {token?.legacy && !token.revoked_at ? (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            Это старый hash-only ключ. Его нельзя показать, но можно перевыпустить.
-          </div>
-        ) : null}
 
         <div className="flex flex-wrap gap-2">
           {meta.cta ? (
@@ -507,7 +499,6 @@ export function IntegrationsPage() {
                     </td>
                     <td className="py-3 pr-4">
                       <div className="font-medium text-slate-900">{token.label || purposeTitle(token.purpose)}</div>
-                      {token.legacy ? <div className="text-xs text-amber-600">Старый hash-only ключ</div> : null}
                     </td>
                     <td className="py-3 pr-4 text-slate-500">{scopesText(token.scopes)}</td>
                     <td className="py-3 pr-4">
