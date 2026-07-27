@@ -1,9 +1,11 @@
 name: CI
 
+# On PRs: full 6-gate suite against current prod.
+# On push to main: skip — the Deploy workflow does its own smoke check after
+# deploy, and CI here would race the deploy (CI hits prod before deploy completes).
+# Use workflow_dispatch to run ad-hoc after a deploy settles.
 on:
   pull_request:
-    branches: [main]
-  push:
     branches: [main]
   workflow_dispatch:
 
