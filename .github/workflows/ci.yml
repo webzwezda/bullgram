@@ -37,7 +37,11 @@ jobs:
         run: chmod +x ops/scripts/ci/*.sh
 
       # Gate 1 — backend unit + integration tests (no network).
+      # ENCRYPTION_KEY is required by backend/utils/crypto.js at import time.
+      # Tests mock supabase, so they never actually decrypt — dummy value is safe.
       - name: Gate 01 — backend tests
+        env:
+          ENCRYPTION_KEY: ci-dummy-key-not-used-tests-mock-everything
         run: ./ops/scripts/ci/gate-01-unit-tests.sh
 
       # Gate 2 — docs integrity (no network).
