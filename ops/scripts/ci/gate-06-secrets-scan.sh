@@ -57,6 +57,14 @@ placeholder_patterns=(
   'brmcp_\$\{'
   'brapi_\$\{\{'
   'brmcp_\$\{\{'
+  # Obvious fake patterns used in docs/tests as examples
+  'brapi_example_'
+  'brmcp_example_'
+  'brapi_testtest_'
+  'brmcp_testtest_'
+  # Repeated-char placeholder suffix used in docs (8+ x's after the hint)
+  '_xxxxxxxxx'
+  'xxxxxxxxxxxxxxxx'
 )
 placeholder_re=$(printf '|%s' "${placeholder_patterns[@]}")
 placeholder_re=${placeholder_re#|}  # strip leading |

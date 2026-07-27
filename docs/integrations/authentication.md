@@ -9,11 +9,11 @@ session cookies.
 A token looks like:
 
 ```
-brapi_qt46beEf_qt46beEfiB6WfTwAUMM-VbT6RRvFDtvw
+brapi_aBcDeFgH_aBcDeFgHxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 - **Prefix** — `brmcp_` (MCP) or `brapi_` (REST)
-- **Hint** — first 8 chars of the secret (`qt46beEf`); visible in the admin
+- **Hint** — first 8 chars of the secret (`aBcDeFgH`); visible in the admin
   UI for identification without revealing the secret
 - **Secret** — the actual credential; shown **once** at issue time
 

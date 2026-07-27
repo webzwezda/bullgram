@@ -145,5 +145,5 @@ placeholder with an env-var lookup:
 const token = process.env.BULLGRAM_TOKEN;
 
 // BAD
-const token = 'brapi_qt46beEf_qt46beEfiB6WfTwAUMM-VbT6RRvFDtvw';
+const token = 'brapi_aBcDeFgH_aBcDeFgHxxxxxxxxxxxxxxxxxxxxxxxx';
 ```
