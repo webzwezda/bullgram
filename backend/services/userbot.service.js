@@ -9,6 +9,14 @@ import fs from 'fs/promises';
 import os from 'os';
 import crypto from 'crypto';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
+import { MCPError, ERROR_CODES } from '../shared/errors.js';
+import { withTimeout } from '../shared/utils.js';
+import { encodeCursor, decodeCursor } from '../shared/pagination.js';
+import {
+  sanitizeMessage,
+  sanitizeDialog,
+  sanitizeParticipant
+} from '../shared/content-sanitizer.js';
 
 const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -1818,6 +1826,345 @@ export class UserbotService {
             await client.disconnect();
         }
     }
+
+    // ============================================================
+    // Plan 01 Phase 4 — Helpers for MCP/REST tools.
+    // Each helper enforces the lifecycle contract:
+    //   verify status → open client → run with 30s timeout → log Telegram errors → disconnect in finally
+    // ============================================================
+
+    /**
+     * Snapshot of account health for external consumers.
+     * Reads from DB runtime_status + cached SpamBot signal — does NOT connect to Telegram.
+     */
+    async getHealthSnapshot(userbot) {
+        assertUserbotOperatable(userbot);
+        const spamCached = this.spamBlockCache.get(String(userbot.id)) || null;
+        const recentEvent = await this._lastTelegramEventFor(userbot.id);
+        return {
+            userbot_id: userbot.id,
+            tg_username: userbot.tg_username || null,
+            runtime_status: userbot.runtime_status || 'unknown',
+            proxy_id: userbot.proxy_id || null,
+            spambot_signal: spamCached?.result || null,
+            spambot_checked_at: spamCached?.checkedAt ? new Date(spamCached.checkedAt).toISOString() : null,
+            last_telegram_event: recentEvent
+        };
+    }
+
+    /**
+     * Enumerate dialogs the userbot is a member of.
+     * Cursor payload: { offset_id: number } — opaque to clients.
+     */
+    async listDialogs(userbot, { limit = 50, cursor, type, search } = {}) {
+        assertUserbotOperatable(userbot);
+        const pageLimit = clampLimit(limit, 1, 100);
+        const decoded = decodeCursor(cursor);
+        const offsetId = decoded?.offset_id ? Number(decoded.offset_id) : undefined;
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const dialogs = await withTimeout(
+                client.getDialogs({
+                    limit: pageLimit + 1,           // fetch one extra to detect has_more
+                    offsetId,
+                    ...(search ? { search } : {})
+                }),
+                30_000,
+                'listDialogs'
+            );
+            const hasMore = dialogs.length > pageLimit;
+            const trimmed = dialogs.slice(0, pageLimit);
+            const items = trimmed
+                .map((d) => sanitizeDialog(d))
+                .filter((d) => matchesDialogType(d, type));
+
+            const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
+            return {
+                dialogs: items,
+                cursor: nextOffsetId ? encodeCursor({ offset_id: nextOffsetId }) : null,
+                has_more: hasMore && items.length > 0
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'listDialogs');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Fetch messages from a chat with optional time-window filter.
+     * Cursor payload: { offset_id } — GramJS standard pagination.
+     */
+    async fetchMessages(userbot, { chatId, since, until, limit = 50, cursor } = {}) {
+        assertUserbotOperatable(userbot);
+        const id = normalizeChatIdInput(chatId);
+        const pageLimit = clampLimit(limit, 1, 200);
+        const decoded = decodeCursor(cursor);
+        const offsetId = decoded?.offset_id ? Number(decoded.offset_id) : undefined;
+        const offsetDate = since ? Math.floor(new Date(since).getTime() / 1000) : undefined;
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const messages = await withTimeout(
+                client.getMessages(id, {
+                    limit: pageLimit + 1,
+                    offsetId,
+                    offsetDate,
+                    ...(until ? { maxId: 0, minId: undefined } : {})
+                }),
+                30_000,
+                'fetchMessages'
+            );
+            const filtered = until
+                ? messages.filter((m) => {
+                    if (!m?.date) return true;
+                    const ts = m.date instanceof Date ? m.date.getTime() : new Date(m.date).getTime();
+                    return ts <= new Date(until).getTime() + 1000;
+                })
+                : messages;
+            const hasMore = filtered.length > pageLimit;
+            const trimmed = filtered.slice(0, pageLimit);
+            const items = trimmed.map((m) => sanitizeMessage(m));
+
+            const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
+            return {
+                messages: items,
+                cursor: nextOffsetId ? encodeCursor({ offset_id: nextOffsetId }) : null,
+                has_more: hasMore && items.length > 0
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'fetchMessages');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Server-side text search within a chat.
+     */
+    async searchMessages(userbot, { chatId, query, limit = 50, cursor } = {}) {
+        assertUserbotOperatable(userbot);
+        const id = normalizeChatIdInput(chatId);
+        const pageLimit = clampLimit(limit, 1, 200);
+        const decoded = decodeCursor(cursor);
+        const offsetId = decoded?.offset_id ? Number(decoded.offset_id) : undefined;
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const messages = await withTimeout(
+                client.getMessages(id, {
+                    limit: pageLimit + 1,
+                    offsetId,
+                    search: String(query || '')
+                }),
+                30_000,
+                'searchMessages'
+            );
+            const hasMore = messages.length > pageLimit;
+            const trimmed = messages.slice(0, pageLimit);
+            const items = trimmed.map((m) => sanitizeMessage(m));
+            const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
+            return {
+                messages: items,
+                cursor: nextOffsetId ? encodeCursor({ offset_id: nextOffsetId }) : null,
+                has_more: hasMore && items.length > 0
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'searchMessages');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * List participants of a chat/group/channel.
+     * GramJS server-side filter only for some classes; client-side filter for others.
+     * Hard cap at 5000 to bound cost.
+     */
+    async listParticipants(userbot, { chatId, limit = 100, cursor } = {}) {
+        assertUserbotOperatable(userbot);
+        const id = normalizeChatIdInput(chatId);
+        const pageLimit = clampLimit(limit, 1, 200);
+        const decoded = decodeCursor(cursor);
+        const offset = decoded?.offset ? Number(decoded.offset) : 0;
+        const HARD_CAP = 5000;
+        const effectiveOffset = Math.min(offset, HARD_CAP);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const result = await withTimeout(
+                client.getParticipants(id, {
+                    limit: pageLimit + 1,
+                    offset: effectiveOffset,
+                    search: ''
+                }),
+                30_000,
+                'listParticipants'
+            );
+            const list = Array.isArray(result) ? result : (result?.users || result?.participants || []);
+            const hasMore = list.length > pageLimit && (effectiveOffset + pageLimit) < HARD_CAP;
+            const trimmed = list.slice(0, pageLimit);
+            const items = trimmed.map((p) => sanitizeParticipant(p));
+            const nextOffset = hasMore ? effectiveOffset + trimmed.length : null;
+            return {
+                participants: items,
+                cursor: nextOffset ? encodeCursor({ offset: nextOffset }) : null,
+                has_more: hasMore
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'listParticipants');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Send a text message. For DMs (chatId > 0), respects USERBOT_DM_ENABLED flag
+     * and uses resolveDirectMessageTarget for peer resolution.
+     */
+    async sendTextMessage(userbot, { chatId, text, replyToMessageId } = {}) {
+        assertUserbotOperatable(userbot);
+        const id = normalizeChatIdInput(chatId);
+        const body = String(text || '');
+        if (!body) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "text" is required and must be non-empty.', {});
+        }
+
+        const chatIdNum = Number(id);
+        const isDm = Number.isFinite(chatIdNum) && chatIdNum > 0;
+        if (isDm && String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() !== 'true') {
+            throw new MCPError(
+                ERROR_CODES.DM_DISABLED,
+                'Direct messages are disabled on this server. Set USERBOT_DM_ENABLED=true to enable.',
+                { auditStatus: 'error' }
+            );
+        }
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const target = isDm
+                ? await this.resolveDirectMessageTarget(client, userbot, chatIdNum, {})
+                : id;
+
+            const sent = await withTimeout(
+                client.sendMessage(target, {
+                    message: body,
+                    ...(replyToMessageId ? { replyTo: Number(replyToMessageId) } : {})
+                }),
+                30_000,
+                'sendTextMessage'
+            );
+            return {
+                message_id: String(sent?.id || ''),
+                date: sent?.date ? normalizeTelegramDate(sent.date) : null
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'sendTextMessage');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    async _lastTelegramEventFor(userbotId) {
+        if (!userbotId) return null;
+        const { data } = await this.supabase
+            .from('telegram_error_events')
+            .select('event_type, error_code, error_message, created_at')
+            .eq('userbot_id', userbotId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        return data || null;
+    }
+}
+
+// ============================================================
+// Local helpers — pure functions for Plan 01 Phase 4 userbot helpers
+// ============================================================
+
+function assertUserbotOperatable(userbot) {
+    if (!userbot?.id) {
+        throw new MCPError(ERROR_CODES.NOT_FOUND, 'Userbot not found.', {});
+    }
+    if (userbot.account_type && userbot.account_type !== 'userbot') {
+        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `Account ${userbot.id} is not a userbot.`, {});
+    }
+    if (userbot.runtime_status === 'pending_activation') {
+        throw new MCPError(
+            ERROR_CODES.SAFE_MODE_BLOCKED,
+            `Userbot ${userbot.id} is in safe-mode (pending_activation). Activate it at /app/userbots first.`,
+            {}
+        );
+    }
+    if (userbot.runtime_status === 'restricted') {
+        throw new MCPError(
+            ERROR_CODES.ACCOUNT_RESTRICTED,
+            `Userbot ${userbot.id} is restricted by Telegram.`,
+            {}
+        );
+    }
+}
+
+function clampLimit(value, min, max) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return min;
+    return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+function normalizeChatIdInput(value) {
+    if (value == null) {
+        throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "chat_id" is required.', {});
+    }
+    const str = String(value).trim();
+    if (!/^-?\d+$/.test(str)) {
+        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `chat_id "${str}" is not a valid Telegram chat ID.`, {});
+    }
+    return str;
+}
+
+async function safeDisconnect(client) {
+    if (!client) return;
+    try {
+        await withTimeout(client.disconnect(), 5_000, 'client.disconnect');
+    } catch (e) {
+        console.error('[UserbotService] disconnect failed:', e.message);
+    }
+}
+
+async function wrapTelegramError(supabase, userbot, error, operationName) {
+    if (error instanceof MCPError) return error;
+    let eventId = null;
+    try {
+        const recorded = await logTelegramErrorEvent(supabase, {
+            userbot_id: userbot?.id,
+            owner_id: userbot?.owner_id,
+            event_type: 'external_tool_error',
+            error_code: String(error?.errorMessage || error?.code || '').slice(0, 100) || null,
+            error_message: String(error?.message || error || '').slice(0, 1000),
+            source: operationName
+        });
+        eventId = recorded?.id || null;
+    } catch (logErr) {
+        console.error(`[UserbotService] ${operationName}: failed to log Telegram error:`, logErr.message);
+    }
+    const secondsMatch = String(error?.message || '').match(/(\d+)\s*(?:seconds|секунд)/i);
+    const retryAfterSec = secondsMatch ? Number(secondsMatch[1]) : null;
+    return new MCPError(
+        ERROR_CODES.TELEGRAM_ERROR,
+        `Telegram error in ${operationName}: ${error?.errorMessage || error?.message || 'unknown'}`,
+        {
+            auditStatus: 'telegram_error',
+            telegramErrorEventId: eventId,
+            retryAfterSec,
+            details: { operation: operationName, event_id: eventId }
+        }
+    );
+}
+
+function matchesDialogType(dialog, type) {
+    if (!type) return true;
+    return dialog.kind === type;
 }
 
 function normalizeTelegramDate(value) {

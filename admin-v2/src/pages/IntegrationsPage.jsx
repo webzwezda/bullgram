@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertCircle, Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -28,6 +28,31 @@ const PURPOSES = {
     label: 'API ключ'
   }
 };
+
+// All scopes the new dispatcher understands, grouped for the UI.
+// Mirrors backend/services/integration-tokens.service.js ALLOWED_SCOPES.
+const SCOPE_GROUPS = [
+  {
+    domain: 'userbot',
+    label: 'Userbot',
+    scopes: [
+      { name: 'mcp:userbot:read', desc: 'Список, health, диалоги, сообщения, поиск, участники' },
+      { name: 'mcp:userbot:write', desc: 'Отправка сообщений от имени userbot' },
+      { name: 'api:userbot:read', desc: 'Те же чтения через REST' },
+      { name: 'api:userbot:write', desc: 'Те же записи через REST' }
+    ]
+  },
+  {
+    domain: 'proxy',
+    label: 'Proxy',
+    scopes: [
+      { name: 'mcp:proxy:read', desc: 'Превью прокси перед импортом' },
+      { name: 'mcp:proxy:write', desc: 'Импорт прокси' },
+      { name: 'api:proxy:read', desc: 'Те же чтения через REST' },
+      { name: 'api:proxy:write', desc: 'Те же записи через REST' }
+    ]
+  }
+];
 
 function formatWhen(value) {
   if (!value) return 'Еще не использовался';
@@ -201,6 +226,11 @@ export function IntegrationsPage() {
   const [secrets, setSecrets] = useState({});
   const [busyId, setBusyId] = useState('');
 
+  // Custom-token creator state.
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customLabel, setCustomLabel] = useState('');
+  const [customScopes, setCustomScopes] = useState({ 'mcp:userbot:read': true, 'mcp:proxy:read': true });
+
   async function loadTokens({ silent = false } = {}) {
     if (!accessToken) return;
     if (!silent) setState((prev) => ({ ...prev, loading: true, error: '' }));
@@ -215,6 +245,41 @@ export function IntegrationsPage() {
   useEffect(() => {
     loadTokens();
   }, [accessToken]);
+
+  function toggleScope(name) {
+    setCustomScopes((prev) => ({ ...prev, [name]: !prev[name] }));
+  }
+
+  async function createCustomToken() {
+    const scopes = Object.keys(customScopes).filter((k) => customScopes[k]);
+    if (!scopes.length) {
+      toast.error('Выбери хотя бы один scope.');
+      return;
+    }
+    setBusyId('create:custom');
+    try {
+      const data = await apiRequest('/api/integrations/tokens', {
+        accessToken,
+        method: 'POST',
+        body: {
+          purpose: 'custom',
+          label: customLabel.trim() || `Custom · ${scopes.length} scope${scopes.length === 1 ? '' : 's'}`,
+          scopes
+        }
+      });
+      if (data.record?.id && data.token) {
+        setSecrets((prev) => ({ ...prev, [data.record.id]: data.token }));
+      }
+      toast.success(`Ключ выпущен с ${scopes.length} scope${scopes.length === 1 ? '' : 's'}.`);
+      setCustomOpen(false);
+      setCustomLabel('');
+      await loadTokens({ silent: true });
+    } catch (error) {
+      toast.error(error.message || 'Не удалось выпустить ключ.');
+    } finally {
+      setBusyId('');
+    }
+  }
 
   const activeByPurpose = useMemo(() => {
     const result = {};
@@ -338,6 +403,74 @@ export function IntegrationsPage() {
           />
         ))}
       </div>
+
+      <Card className="border-slate-200/70 bg-white shadow-sm">
+        <CardHeader className="px-6 pt-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-violet-500/20 shrink-0">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Кастомный токен</CardTitle>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Токен с точным набором скоупов. Для узких интеграций: только чтение, только userbot, только прокси.
+                </p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="h-9 rounded-xl" onClick={() => setCustomOpen((v) => !v)}>
+              {customOpen ? 'Скрыть' : 'Настроить'}
+            </Button>
+          </div>
+        </CardHeader>
+        {customOpen ? (
+          <CardContent className="px-6 pb-6 space-y-4">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-slate-500">Название</span>
+              <Input
+                className="h-9"
+                placeholder="Например: n8n-collector"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+              />
+            </label>
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2">Скоупы</div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {SCOPE_GROUPS.map((group) => (
+                  <div key={group.domain} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-bold uppercase tracking-wide text-slate-700 mb-2">{group.label}</div>
+                    <div className="space-y-2">
+                      {group.scopes.map((scope) => (
+                        <label key={scope.name} className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                            checked={Boolean(customScopes[scope.name])}
+                            onChange={() => toggleScope(scope.name)}
+                          />
+                          <div>
+                            <div className="font-mono text-xs text-slate-900">{scope.name}</div>
+                            <div className="text-xs text-slate-500 leading-snug">{scope.desc}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="h-9 rounded-xl" onClick={createCustomToken} disabled={Boolean(busyId)}>
+                <KeyRound className="h-4 w-4" /> Выпустить кастомный
+              </Button>
+              <span className="text-xs text-slate-500">
+                Выбрано: {Object.values(customScopes).filter(Boolean).length}
+              </span>
+            </div>
+          </CardContent>
+        ) : null}
+      </Card>
 
       <Card className="border-slate-200/70 bg-white shadow-sm mt-6">
         <CardHeader className="px-6 pt-6">

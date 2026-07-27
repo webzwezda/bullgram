@@ -38,6 +38,14 @@ backend/
 
 ## API Эндпоинты
 
+### External surfaces
+
+- `POST /api/mcp` — MCP server (JSON-RPC 2.0) — see [docs/integrations/transports/mcp.md](../docs/integrations/transports/mcp.md)
+- `/api/external/v1/*` — REST API — see [docs/integrations/transports/rest.md](../docs/integrations/transports/rest.md)
+- `/api/docs` — Scalar interactive explorer for REST API
+
+Internal `/api/*` routes below are for the web app only and are not documented externally.
+
 ### Юзербот (`/api/userbot`)
 
 - `POST /api/userbot/qr-start` - Генерация QR кода для авторизации через выбранный fingerprint-профиль

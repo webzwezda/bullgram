@@ -104,9 +104,12 @@ export async function authenticateAgentOrUserToken({ supabase, authorizationHead
     const token = authHeader.split(' ')[1];
     const tokenHash = hashToken(token);
 
+    // Plan 01 Phase 3: per-tool scope enforcement moved to shared/dispatch.js.
+    // Auth layer just verifies the token signature and loads scopes; the
+    // dispatcher does OR-matching against each operation's requiredScopes.
     const integrationToken = await authenticateIntegrationToken(supabase, {
         authorizationHeader: authHeader,
-        requiredScopes: ['mcp:use'],
+        requiredScopes: [],
         purpose: 'mcp',
         requestIp
     });

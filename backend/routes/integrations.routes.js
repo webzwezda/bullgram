@@ -211,5 +211,46 @@ export default function integrationsRoutes(supabase) {
         }
     });
 
+    // --- Audit log ----------------------------------------------------------
+    // Returns mcp_tool_log rows for the current owner, filtered by query params.
+    // Used by /app/claw/log to show every MCP+REST call made with their tokens.
+    router.get('/audit-log', authenticateUser, async (req, res) => {
+        try {
+            const q = req.query || {};
+            const limit = Math.min(Math.max(parseInt(q.limit, 10) || 100, 1), 500);
+            const offset = Math.min(Math.max(parseInt(q.offset, 10) || 0, 0), 100000);
+
+            let builder = supabase
+                .from('mcp_tool_log')
+                .select('id, token_id, auth_kind, owner_id, operation_name, source, userbot_id, chat_id, arguments_hash, latency_ms, status, error_code, error_message, telegram_error_event_id, request_ip, user_agent, request_id, started_at, finished_at')
+                .eq('owner_id', req.user.id);
+
+            if (q.operation) builder = builder.eq('operation_name', String(q.operation));
+            if (q.status)    builder = builder.eq('status', String(q.status));
+            if (q.source)    builder = builder.eq('source', String(q.source));
+            if (q.token_id)  builder = builder.eq('token_id', String(q.token_id));
+            if (q.userbot_id) builder = builder.eq('userbot_id', String(q.userbot_id));
+            if (q.since)     builder = builder.gte('started_at', String(q.since));
+            if (q.until)     builder = builder.lt('started_at', String(q.until));
+
+            builder = builder.order('started_at', { ascending: false }).limit(limit).range(offset, offset + limit - 1);
+
+            const { data, error } = await builder;
+            if (error) throw error;
+
+            // Aggregate counts by status for the dashboard header.
+            const aggregates = { success: 0, error: 0, rate_limited: 0, insufficient_scope: 0, forbidden_account: 0, safe_mode_blocked: 0, account_restricted: 0, started: 0 };
+            for (const row of data || []) {
+                if (Object.prototype.hasOwnProperty.call(aggregates, row.status)) {
+                    aggregates[row.status] += 1;
+                }
+            }
+
+            res.json({ success: true, entries: data || [], aggregates });
+        } catch (error) {
+            httpError(res, error, 'Не удалось загрузить audit log.');
+        }
+    });
+
     return router;
 }

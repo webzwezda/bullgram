@@ -20,13 +20,19 @@ const PURPOSE_CONFIG = {
 };
 
 const ALLOWED_SCOPES = new Set([
+    // Legacy / generic
     'mcp:use',
     'api:use',
     'integrations:read',
     'orders:read',
     'shop:read',
     'payments:read',
-    'cashdesk:read'
+    'cashdesk:read',
+    // Plan 01/02 — per-domain scopes consumed by the unified dispatcher.
+    'mcp:proxy:read', 'mcp:proxy:write',
+    'mcp:userbot:read', 'mcp:userbot:write',
+    'api:proxy:read', 'api:proxy:write',
+    'api:userbot:read', 'api:userbot:write'
 ]);
 
 export function hashIntegrationToken(token) {

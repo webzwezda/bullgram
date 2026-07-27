@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Don't cancel mid-run — partial signals are worse than slow signals.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Make CI scripts executable
+        run: chmod +x ops/scripts/ci/*.sh
+
+      # Gate 1 — backend unit + integration tests (no network).
+      - name: Gate 01 — backend tests
+        run: ./ops/scripts/ci/gate-01-unit-tests.sh
+
+      # Gate 2 — docs integrity (no network).
+      - name: Gate 02 — docs integrity
+        run: ./ops/scripts/ci/gate-02-docs-integrity.sh
+
+      # Gate 6 — secrets scan (no network). Run before any deployment-facing
+      # gate so a leaked token fails the build immediately.
+      - name: Gate 06 — secrets scan
+        run: ./ops/scripts/ci/gate-06-secrets-scan.sh
+
+      # Gates 3, 4, 5 — live surface checks against prod.
+      # On a PR, these validate the *currently deployed* API. The deploy
+      # workflow is what actually shifts the deployment forward; once it
+      # does, a subsequent PR run of CI will exercise the new code.
+      - name: Gate 03 — OpenAPI spec valid
+        env:
+          BASE_URL: https://bullgram.xyz
+        run: ./ops/scripts/ci/gate-03-openapi-valid.sh
+
+      - name: Gate 04 — MCP endpoint smoke
+        env:
+          BASE_URL: https://bullgram.xyz
+        run: ./ops/scripts/ci/gate-04-mcp-smoke.sh
+
+      - name: Gate 05 — REST API smoke
+        env:
+          BASE_URL: https://bullgram.xyz
+        run: ./ops/scripts/ci/gate-05-rest-smoke.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI gates result"
+          echo
+          echo "| Gate | Status |"
+          echo "|---|---|"
+          echo "| 01 backend tests | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"
+          echo "| 02 docs integrity | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"
+          echo "| 06 secrets scan | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"
+          echo "| 03 openapi valid | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"
+          echo "| 04 mcp smoke | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"
+          echo "| 05 rest smoke | ${{ job.status == 'success' && 'pass' || 'see logs above' }} |"

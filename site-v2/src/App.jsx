@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet, FilePlus } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet, FilePlus, Code2 } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -15,6 +15,7 @@ const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ de
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
 const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
+const DocsPage = lazy(() => import('./pages/DocsPage.jsx').then((m) => ({ default: m.DocsPage })));
 
 const navSections = [
   {
@@ -45,6 +46,12 @@ const navSections = [
     ]
   },
   {
+    title: 'Разработчикам',
+    items: [
+      { to: '/docs', label: 'API & MCP', icon: Code2 }
+    ]
+  },
+  {
     title: 'Для админа',
     adminOnly: true,
     items: [
@@ -61,6 +68,7 @@ export function App() {
   const isTelegramRoute = location.pathname === '/telegram';
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
+  const isDocsRoute = location.pathname.startsWith('/docs');
   const { user, profileRole } = useAuth();
   const navItems = navSections
     .filter((section) => !section.adminOnly || profileRole === 'admin')
@@ -72,6 +80,7 @@ export function App() {
     if (location.pathname === '/plan') return 'Мой тариф';
     if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
     if (location.pathname.startsWith('/created')) return 'Счёт создан';
+    if (location.pathname.startsWith('/docs')) return 'API & MCP';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
@@ -94,6 +103,7 @@ export function App() {
         </Route>
         <Route path="/create" element={<CreateInvoicePage />} />
         <Route path="/created/:id" element={<CreatedInvoicePage />} />
+        <Route path="/docs" element={<DocsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -187,7 +197,7 @@ export function App() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
         {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
           appRoutes
-        ) : (isPayRoute || isCreateRoute) ? (
+        ) : (isPayRoute || isCreateRoute || isDocsRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>

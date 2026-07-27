@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send,
   RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
-  Zap, CheckSquare
+  Zap, CheckSquare, ScrollText
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -33,6 +33,7 @@ const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((modul
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
+const AuditLogPage = lazy(() => import('./pages/AuditLogPage.jsx').then((module) => ({ default: module.AuditLogPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 const ChecklistPage = lazy(() => import('./pages/ChecklistPage.jsx').then((module) => ({ default: module.ChecklistPage })));
@@ -98,6 +99,7 @@ export function App() {
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
           { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
           { to: '/api/mcp', label: 'MCP', icon: Settings },
+          { to: '/claw/log', label: 'Audit log', icon: ScrollText },
         ]
       }]
       : [])
@@ -212,6 +214,7 @@ export function App() {
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
                 <Route path="/claw" element={<McpSettingsPage />} />
+                <Route path="/claw/log" element={<AuditLogPage />} />
                 <Route path="/integrations" element={<IntegrationsPage />} />
                 <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
                 <Route path="/api/mcp" element={<McpSettingsPage />} />

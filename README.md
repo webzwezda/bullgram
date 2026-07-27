@@ -62,6 +62,32 @@ npm run build:admin   # только admin-v2
 
 ---
 
+## Integrations
+
+Bullgram exposes two integration surfaces, both backed by the same
+10 operations:
+
+- **MCP** for AI agents (Claude Desktop, Cursor) — see [docs/integrations/transports/mcp.md](./docs/integrations/transports/mcp.md)
+- **REST API** for automation (n8n, scripts, SDKs) — see [docs/integrations/transports/rest.md](./docs/integrations/transports/rest.md)
+
+| Surface | Entry point |
+|---|---|
+| Public developer hub | [https://bullgram.xyz/docs](https://bullgram.xyz/docs) |
+| Interactive API explorer | [https://bullgram.xyz/api/external/v1/docs](https://bullgram.xyz/api/external/v1/docs) |
+| OpenAPI 3.0.3 spec | [https://bullgram.xyz/api/external/v1/openapi.json](https://bullgram.xyz/api/external/v1/openapi.json) |
+| Token management | [/app/integrations](https://bullgram.xyz/app/integrations) |
+| Audit log | [/app/claw/log](https://bullgram.xyz/app/claw/log) |
+| MCP setup guide | [/app/claw](https://bullgram.xyz/app/claw) |
+
+Issue tokens, pick scopes, monitor usage — all from the admin UI. See
+[docs/integrations/getting-started.md](./docs/integrations/getting-started.md)
+for the 5-minute walkthrough, or [docs/integrations/README.md](./docs/integrations/README.md)
+for the full doc index.
+
+Design plans: [docs/plans/README.md](./docs/plans/README.md)
+
+---
+
 ## Deploy
 
 Основной флоу — push в `main`:

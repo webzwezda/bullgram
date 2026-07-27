@@ -37,6 +37,7 @@ import integrationsRoutes from './routes/integrations.routes.js';
 import userbotWebRoutes from './routes/userbot-web.routes.js';
 import tonconnectRoutes from './routes/tonconnect.routes.js';
 import profileRoutes from './routes/profile.routes.js';
+import { buildExternalRouter } from './external/router.js';
 import { UserbotService } from './services/userbot.service.js';
 import { MtprotoBridgeService } from './services/mtproto-bridge.service.js';
 import { getPlatformBot } from './services/platform-bot.service.js';
@@ -77,8 +78,16 @@ const corsOrigins = Array.from(new Set([
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ СЕРВИСОВ ДЛЯ TELEGRAM WEB
 // ==========================================
-const userbotServiceForBridge = new UserbotService(supabase, 4, '014b35b6184100b085b0d0572f9b5103');
-const mtprotoBridgeService = new MtprotoBridgeService(supabase, userbotServiceForBridge);
+// Project-wide UserbotService singleton. One instance per process — multiple
+// instances would each maintain their own QR-session map, SpamBot cache, and
+// GramJS connection pool. The hardcoded api_id=4 was a bug; env vars are source of truth.
+const userbotService = new UserbotService(
+    supabase,
+    Number(process.env.TG_API_ID) || 4,
+    process.env.TG_API_HASH || '014b35b6184100b085b0d0572f9b5103'
+);
+export { userbotService };
+const mtprotoBridgeService = new MtprotoBridgeService(supabase, userbotService);
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';
@@ -191,7 +200,8 @@ app.use('/api/shop', shopRoutes(supabase));
 app.use('/api/invoices', invoicePublicRoutes(supabase, getBotById));
 app.use('/api/public-invoices', publicInvoiceRoutes(supabase));
 app.use('/api/observer', observerRoutes(supabase, getBotById));
-app.use('/api/mcp', agentMcpRoutes(supabase));
+app.use('/api/mcp', agentMcpRoutes(supabase, userbotService));
+app.use('/api/external/v1', buildExternalRouter({ supabase, userbotService }));
 app.use('/api/integrations', integrationsRoutes(supabase));
 app.use('/api/project-admin', projectAdminRoutes(supabase));
 app.use('/api/userbot-web', userbotWebRoutes(supabase, mtprotoBridgeService));
