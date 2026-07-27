@@ -47,22 +47,22 @@ const operationsByTag = [
     tag: 'proxy',
     accent: 'text-emerald-700',
     items: [
-      { name: 'infra_summary', scope: 'read' },
-      { name: 'proxy_preview', scope: 'read' },
-      { name: 'proxy_import', scope: 'write' }
+      { name: 'bullrun_infra_summary', slug: 'infra-summary', scope: 'read' },
+      { name: 'bullrun_proxy_preview', slug: 'proxy-preview', scope: 'read' },
+      { name: 'bullrun_proxy_import', slug: 'proxy-import', scope: 'write' }
     ]
   },
   {
     tag: 'userbot',
     accent: 'text-blue-700',
     items: [
-      { name: 'userbot_list', scope: 'read' },
-      { name: 'userbot_health', scope: 'read' },
-      { name: 'userbot_dialogs', scope: 'read' },
-      { name: 'userbot_messages', scope: 'read' },
-      { name: 'userbot_messages_search', scope: 'read' },
-      { name: 'userbot_participants', scope: 'read' },
-      { name: 'userbot_message_send', scope: 'write' }
+      { name: 'bullrun_userbot_list', slug: 'userbot-list', scope: 'read' },
+      { name: 'bullrun_userbot_health', slug: 'userbot-health', scope: 'read' },
+      { name: 'bullrun_userbot_dialogs', slug: 'userbot-dialogs', scope: 'read' },
+      { name: 'bullrun_userbot_messages', slug: 'userbot-messages', scope: 'read' },
+      { name: 'bullrun_userbot_messages_search', slug: 'userbot-messages-search', scope: 'read' },
+      { name: 'bullrun_userbot_participants', slug: 'userbot-participants', scope: 'read' },
+      { name: 'bullrun_userbot_message_send', slug: 'userbot-message-send', scope: 'write' }
     ]
   }
 ];
@@ -249,7 +249,7 @@ export function DocsPage() {
                   {group.items.map((op) => (
                     <li key={op.name}>
                       <a
-                        href={`${DOCS_BASE}/operations/${op.name.replace(/_/g, '-')}.md`}
+                        href={`${DOCS_BASE}/operations/${op.slug}.md`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center justify-between gap-2 px-2 py-2 rounded-lg hover:bg-white transition-colors group"
