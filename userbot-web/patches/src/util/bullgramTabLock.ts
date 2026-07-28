@@ -23,8 +23,8 @@ export interface TabLockResult {
   release: () => void;
 }
 
-export function acquireBullrunTabLock(userbotId: string): TabLockResult {
-  const channelName = `bullrun-telegram-web-${userbotId}`;
+export function acquireBullgramTabLock(userbotId: string): TabLockResult {
+  const channelName = `bullgram-telegram-web-${userbotId}`;
   let channel: BroadcastChannel | null = null;
   try {
     channel = new BroadcastChannel(channelName);

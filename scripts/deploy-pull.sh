@@ -69,7 +69,7 @@ npm run build:v2
 
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)
-echo "==> pm2 reload bullrun-tg-backend"
+echo "==> pm2 reload bullgram-tg-backend"
 cd backend
 if pm2 reload ecosystem.config.cjs --env production 2>&1; then
   echo "    pm2 reload OK"
@@ -86,7 +86,7 @@ sleep 2
 HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000/ || echo "000")"
 if [ "$HTTP_CODE" = "000" ]; then
   echo "    ERROR: backend not responding on localhost:3000"
-  pm2 logs bullrun-tg-backend --lines 20 --nostream || true
+  pm2 logs bullgram-tg-backend --lines 20 --nostream || true
   exit 1
 fi
 echo "    backend HTTP $HTTP_CODE (alive)"

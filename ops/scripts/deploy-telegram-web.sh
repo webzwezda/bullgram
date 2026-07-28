@@ -10,7 +10,7 @@ if [ -z "$DEPLOY_HOST" ]; then
   exit 1
 fi
 SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
-APP_DIR="/var/www/bullrun-telegram-web"
+APP_DIR="/var/www/bullgram-telegram-web"
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then

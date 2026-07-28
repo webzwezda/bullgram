@@ -1,4 +1,4 @@
-// bullrun_userbot_dialogs — list dialogs (chats/channels/DMs) for a userbot.
+// bullgram_userbot_dialogs — list dialogs (chats/channels/DMs) for a userbot.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -36,7 +36,7 @@ function validateDialogType(value) {
   return v;
 }
 
-registerOperation('bullrun_userbot_dialogs', {
+registerOperation('bullgram_userbot_dialogs', {
   handler: listDialogsHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

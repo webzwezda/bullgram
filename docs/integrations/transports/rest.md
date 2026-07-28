@@ -59,16 +59,16 @@ See [operations index](../operations/) for the full list. Path params use
 | GET | `/openapi.json` | OpenAPI 3.0.3 spec |
 | GET | `/docs` | Scalar interactive explorer |
 | GET | `/me` | auth smoke test |
-| GET | `/infra/summary` | [`bullrun_infra_summary`](../operations/infra-summary.md) |
-| POST | `/proxies/preview` | [`bullrun_proxy_preview`](../operations/proxy-preview.md) |
-| POST | `/proxies/import` | [`bullrun_proxy_import`](../operations/proxy-import.md) |
-| GET | `/userbots` | [`bullrun_userbot_list`](../operations/userbot-list.md) |
-| GET | `/userbots/{userbot_id}/health` | [`bullrun_userbot_health`](../operations/userbot-health.md) |
-| GET | `/userbots/{userbot_id}/dialogs` | [`bullrun_userbot_dialogs`](../operations/userbot-dialogs.md) |
-| GET | `/userbots/{userbot_id}/messages` | [`bullrun_userbot_messages`](../operations/userbot-messages.md) |
-| GET | `/userbots/{userbot_id}/messages/search` | [`bullrun_userbot_messages_search`](../operations/userbot-messages-search.md) |
-| GET | `/userbots/{userbot_id}/participants` | [`bullrun_userbot_participants`](../operations/userbot-participants.md) |
-| POST | `/userbots/{userbot_id}/messages` | [`bullrun_userbot_message_send`](../operations/userbot-message-send.md) |
+| GET | `/infra/summary` | [`bullgram_infra_summary`](../operations/infra-summary.md) |
+| POST | `/proxies/preview` | [`bullgram_proxy_preview`](../operations/proxy-preview.md) |
+| POST | `/proxies/import` | [`bullgram_proxy_import`](../operations/proxy-import.md) |
+| GET | `/userbots` | [`bullgram_userbot_list`](../operations/userbot-list.md) |
+| GET | `/userbots/{userbot_id}/health` | [`bullgram_userbot_health`](../operations/userbot-health.md) |
+| GET | `/userbots/{userbot_id}/dialogs` | [`bullgram_userbot_dialogs`](../operations/userbot-dialogs.md) |
+| GET | `/userbots/{userbot_id}/messages` | [`bullgram_userbot_messages`](../operations/userbot-messages.md) |
+| GET | `/userbots/{userbot_id}/messages/search` | [`bullgram_userbot_messages_search`](../operations/userbot-messages-search.md) |
+| GET | `/userbots/{userbot_id}/participants` | [`bullgram_userbot_participants`](../operations/userbot-participants.md) |
+| POST | `/userbots/{userbot_id}/messages` | [`bullgram_userbot_message_send`](../operations/userbot-message-send.md) |
 
 ## Argument passing
 

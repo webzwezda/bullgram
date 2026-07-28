@@ -1,5 +1,5 @@
 [Unit]
-Description=BullRun managed proxy runtime restore
+Description=Bullgram managed proxy runtime restore
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service

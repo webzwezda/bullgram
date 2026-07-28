@@ -1,4 +1,4 @@
-# `bullrun_userbot_health`
+# `bullgram_userbot_health`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots/{userbot_id}/health`
 
@@ -44,7 +44,7 @@ SpamBot check that returned a restriction. `null` means no signal cached.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_health",
+    "name": "bullgram_userbot_health",
     "arguments": { "userbot_id": "11111111-1111-1111-1111-111111111111" }
   }
 }

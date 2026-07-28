@@ -24,16 +24,16 @@ const STATUS_META = {
 const SOURCE_LABEL = { mcp: 'MCP', rest: 'REST' };
 
 const OPERATIONS = [
-  'bullrun_infra_summary',
-  'bullrun_proxy_preview',
-  'bullrun_proxy_import',
-  'bullrun_userbot_list',
-  'bullrun_userbot_health',
-  'bullrun_userbot_dialogs',
-  'bullrun_userbot_messages',
-  'bullrun_userbot_messages_search',
-  'bullrun_userbot_participants',
-  'bullrun_userbot_message_send'
+  'bullgram_infra_summary',
+  'bullgram_proxy_preview',
+  'bullgram_proxy_import',
+  'bullgram_userbot_list',
+  'bullgram_userbot_health',
+  'bullgram_userbot_dialogs',
+  'bullgram_userbot_messages',
+  'bullgram_userbot_messages_search',
+  'bullgram_userbot_participants',
+  'bullgram_userbot_message_send'
 ];
 
 function formatTime(value) {

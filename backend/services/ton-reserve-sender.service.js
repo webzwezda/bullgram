@@ -4,7 +4,7 @@ import { Address } from '@ton/core';
 import { internal, toNano, TonClient, WalletContractV4 } from '@ton/ton';
 
 const DEFAULT_ENDPOINT = 'https://toncenter.com/api/v2/jsonRPC';
-const DEFAULT_WALLET_SECRET_FILE = '/root/bullrun-ton-reserve/reserve-wallet.json';
+const DEFAULT_WALLET_SECRET_FILE = '/root/bullgram-ton-reserve/reserve-wallet.json';
 
 function envFlag(name) {
     return String(process.env[name] || '').trim().toLowerCase() === 'true';

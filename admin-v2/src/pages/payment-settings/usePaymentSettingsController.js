@@ -64,7 +64,7 @@ export function usePaymentSettingsController({ accessToken, setState, settings }
         updatedAt: new Date().toISOString()
       }));
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('bullrun:payment-settings-updated', {
+        window.dispatchEvent(new CustomEvent('bullgram:payment-settings-updated', {
           detail: {
             paymentReadiness: {
               hasTon: !!savedSettings.ton_wallet,

@@ -1,4 +1,4 @@
-# `bullrun_userbot_messages`
+# `bullgram_userbot_messages`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots/{userbot_id}/messages`
 
@@ -59,7 +59,7 @@ structurally — see [content safety](../safety.md) for the shapes.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_messages",
+    "name": "bullgram_userbot_messages",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111",
       "chat_id": "-1001234567890",

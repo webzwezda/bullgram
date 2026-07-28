@@ -6,10 +6,10 @@ import crypto from 'crypto';
 
 const execFileAsync = promisify(execFile);
 
-const STATE_DIR = '/var/lib/bullrun/managed-proxies';
+const STATE_DIR = '/var/lib/bullgram/managed-proxies';
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 const CONFIG_FILE = path.join(STATE_DIR, '3proxy.cfg');
-const CONTAINER_NAME = 'bullrun-managed-3proxy';
+const CONTAINER_NAME = 'bullgram-managed-3proxy';
 const IMAGE_NAME = 'ghcr.io/tarampampam/3proxy:latest';
 const INTERFACE_NAME = 'ens3';
 const PORT_START = 21080;

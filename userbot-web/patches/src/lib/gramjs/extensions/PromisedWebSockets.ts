@@ -10,7 +10,7 @@
 //
 // Handshake protocol (matches backend mtproto-bridge.service.js):
 //   1) Connect to `${BRIDGE_WS_URL}?bridge_token=${BRIDGE_TOKEN}`
-//      BRIDGE_WS_URL + BRIDGE_TOKEN read from window.__BULLRUN__ (set by
+//      BRIDGE_WS_URL + BRIDGE_TOKEN read from window.__BULLGRAM__ (set by
 //      app entry before initializing GramJS).
 //   2) On WS open, send text frame JSON.stringify({ ip, port, dcId,
 //      isTestServer, isPremium }). Backend opens TCP to ip:port via SOCKS5.
@@ -19,7 +19,7 @@
 //      codec as upstream — bytes are MTProto-encrypted already.
 
 import { Mutex } from 'async-mutex';
-import { ensureFreshBridgeConfig } from '../../../util/bullrunBridge';
+import { ensureFreshBridgeConfig } from '../../../util/bullgramBridge';
 
 const mutex = new Mutex();
 

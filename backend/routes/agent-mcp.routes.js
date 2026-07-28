@@ -27,7 +27,7 @@ import {
 } from '../shared/errors.js';
 import { listOperations, listMcpOperations } from '../shared/operations.js';
 
-const SERVER_INFO = { name: 'bullrun-mcp', version: '0.2.0' };
+const SERVER_INFO = { name: 'bullgram-mcp', version: '0.2.0' };
 
 function extractRequestIp(req) {
   return req?.ip || req?.headers?.['x-forwarded-for'] || '';

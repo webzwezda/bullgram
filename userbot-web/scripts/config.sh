@@ -16,4 +16,4 @@ DIST_DIR="$ROOT_DIR/dist"
 
 # Browser-side bridge config that the running admin must set before GramJS init.
 # Injected into upstream/src/config.ts via patch during `apply-patches.sh`.
-# These are read at runtime from `window.__BULLRUN__`.
+# These are read at runtime from `window.__BULLGRAM__`.

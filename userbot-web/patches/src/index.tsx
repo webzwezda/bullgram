@@ -9,7 +9,7 @@
 //   3) POST /api/userbot-web/web-session/:userbotId → bridge token +
 //      decoded sessionData + device fingerprint.
 //   4) setBridgeConfig() so other patches (sessions.ts, client.ts,
-//      PromisedWebSockets.ts) can read window.__BULLRUN_BRIDGE__.
+//      PromisedWebSockets.ts) can read window.__BULLGRAM_BRIDGE__.
 //   5) Nuke gramjs IndexedDB so no stale auth keys leak from prior builds.
 //   6) Continue with the upstream init sequence (multitab, render).
 //
@@ -51,10 +51,10 @@ import {
   setBridgeConfig,
   fetchBridgeConfigFromNetwork,
   extractUserbotIdFromUrl,
-  type BullrunBridgeConfig,
-} from './util/bullrunBridge';
-import { installBullrunSafety } from './util/bullrunSafety';
-import { acquireBullrunTabLock, renderTabLockBlocker } from './util/bullrunTabLock';
+  type BullgramBridgeConfig,
+} from './util/bullgramBridge';
+import { installBullgramSafety } from './util/bullgramSafety';
+import { acquireBullgramTabLock, renderTabLockBlocker } from './util/bullgramTabLock';
 
 import App from './components/App';
 
@@ -65,20 +65,20 @@ if (STRICTERDOM_ENABLED) {
   enableStrict();
 }
 
-// L2.1: phase timings. Exposed on window.__bullrunTimings for inspection
+// L2.1: phase timings. Exposed on window.__bullgramTimings for inspection
 // via DevTools console. Logged live when DEBUG.
 // NOTE: must be declared before `void bootstrap()` below — async functions
 // start executing synchronously until first await, so bootstrap() would
 // hit the temporal dead zone on `bootstrapT0`/`timings` otherwise.
 const bootstrapT0 = performance.now();
 const timings: Array<[string, number]> = [];
-(window as any).__bullrunTimings = timings;
+(window as any).__bullgramTimings = timings;
 function mark(name: string) {
   const ms = performance.now() - bootstrapT0;
   timings.push([name, ms]);
   if (DEBUG) {
     // eslint-disable-next-line no-console
-    console.log(`[bullrun-timing] +${ms.toFixed(0)}ms ${name}`);
+    console.log(`[bullgram-timing] +${ms.toFixed(0)}ms ${name}`);
   }
 }
 
@@ -90,7 +90,7 @@ async function bootstrap() {
   // Install runtime safety guards (WebRTC, push, media devices) BEFORE
   // any other module can construct an RTCPeerConnection or request
   // Notification permission.
-  installBullrunSafety();
+  installBullgramSafety();
   mark('safety-installed');
 
   // Run tab-lock probe and bridge token fetch in parallel. Lock probe
@@ -100,7 +100,7 @@ async function bootstrap() {
 
   const lockProbe: Promise<{ isLeader: boolean; release: () => void } | null> = userbotIdForLock
     ? (async () => {
-      const lock = acquireBullrunTabLock(userbotIdForLock);
+      const lock = acquireBullgramTabLock(userbotIdForLock);
       await new Promise((r) => setTimeout(r, 600));
       return lock;
     })()
@@ -109,7 +109,7 @@ async function bootstrap() {
   const bridgeConfigPromise = fetchBridgeConfig();
 
   let lockResult: { isLeader: boolean; release: () => void } | null;
-  let bridgeConfig: BullrunBridgeConfig;
+  let bridgeConfig: BullgramBridgeConfig;
   try {
     [lockResult, bridgeConfig] = await Promise.all([
       lockProbe,
@@ -192,20 +192,20 @@ async function nukeGramjsIdb(): Promise<void> {
     req.onerror = () => {
       if (DEBUG) {
         // eslint-disable-next-line no-console
-        console.warn('[bullrun-bridge] indexedDB.deleteDatabase("gramjs") errored', req.error);
+        console.warn('[bullgram-bridge] indexedDB.deleteDatabase("gramjs") errored', req.error);
       }
       finish();
     };
     req.onblocked = () => {
       if (DEBUG) {
         // eslint-disable-next-line no-console
-        console.warn('[bullrun-bridge] indexedDB.deleteDatabase("gramjs") blocked — waiting up to 2s');
+        console.warn('[bullgram-bridge] indexedDB.deleteDatabase("gramjs") blocked — waiting up to 2s');
       }
     };
   });
 }
 
-async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
+async function fetchBridgeConfig(): Promise<BullgramBridgeConfig> {
   const userbotId = extractUserbotIdFromUrl();
   if (!userbotId) {
     throw new Error('В URL не указан id юзербота. Откройте Telegram Web из админки Bullgram.');
@@ -228,7 +228,7 @@ async function fetchBridgeConfig(): Promise<BullrunBridgeConfig> {
 
 function renderBootstrapError(err: unknown) {
   // eslint-disable-next-line no-console
-  console.error('[bullrun-bridge] bootstrap failed', err);
+  console.error('[bullgram-bridge] bootstrap failed', err);
   const root = document.getElementById('root');
   if (!root) return;
   const message = err instanceof Error ? err.message : String(err);

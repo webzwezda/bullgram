@@ -11,8 +11,8 @@ import type { ApiUser } from './users';
 // Bullgram: bridge config forwarded from main thread to GramJS Worker so that
 // patched PromisedWebSockets / client.ts / sessions.ts can read wsUrl,
 // bridgeToken, fingerprint and sessionData inside the Worker scope.
-// See patches/src/util/bullrunBridge.ts.
-import type { BullrunBridgeConfig } from '../../util/bullrunBridge';
+// See patches/src/util/bullgramBridge.ts.
+import type { BullgramBridgeConfig } from '../../util/bullgramBridge';
 
 export interface ApiInitialArgs {
   userAgent: string;
@@ -33,7 +33,7 @@ export interface ApiInitialArgs {
   // Bullgram-only field. Set by the main-thread initApi action handler
   // (patches/src/global/actions/api/initial.ts) and consumed by the Worker
   // init (patches/src/api/gramjs/methods/init.ts).
-  bullrunBridgeConfig?: BullrunBridgeConfig;
+  bullgramBridgeConfig?: BullgramBridgeConfig;
 }
 
 export interface ApiOnProgress {

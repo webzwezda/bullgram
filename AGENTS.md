@@ -281,7 +281,7 @@ This block is the standing orchestration contract for this repo.
   - Claude workers are terminal processes coordinated through `cmux`;
   - a `cmux` pane, split, browser surface, or terminal surface is not itself a Codex subagent.
 - The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means Codex must not confuse terminal UI state with native subagent state.
-- For Claude work, prefer the project agent file `.claude/agents/bullrun-codex-worker.md` and launch Claude with `claude --agent bullrun-codex-worker` when a bounded worker is useful.
+- For Claude work, prefer the project agent file `.claude/agents/bullgram-codex-worker.md` and launch Claude with `claude --agent bullgram-codex-worker` when a bounded worker is useful.
 - For frontend/browser debugging, use `cmux` browser surfaces as the default browser. Keep browser state, screenshots, console output, and runtime errors inside `cmux` unless the user asks for another browser automation path.
 - Use `cmux help` whenever command syntax is uncertain. The main commands for orchestration are:
   - `cmux tree`

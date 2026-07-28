@@ -36,7 +36,7 @@
   <rect width="314" height="70" x="443" y="190" fill="#FFFFFF" rx="22"/>
   <circle cx="474" cy="225" r="12" fill="#E6EDF5"/>
   <path d="m477 225-7 4 2-4-2-4 7 4Z" fill="#64748B"/>
-  <text x="510" y="231" fill="#1E293B" font-family="Arial, sans-serif" font-size="20" font-weight="700">BullRun Channel</text>
+  <text x="510" y="231" fill="#1E293B" font-family="Arial, sans-serif" font-size="20" font-weight="700">Bullgram Channel</text>
   <text x="510" y="252" fill="#64748B" font-family="Arial, sans-serif" font-size="12">бот принимает оплату и продлевает доступ</text>
 
   <rect width="270" height="76" x="465" y="284" fill="#FFFFFF" rx="18"/>

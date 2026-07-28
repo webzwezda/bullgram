@@ -32,8 +32,8 @@ Legacy `/admin` отдёт `410 Gone`. Не реинтродьюсить.
 ### Install
 
 ```bash
-git clone https://github.com/webzwezda/bullrun.git
-cd bullrun
+git clone https://github.com/webzwezda/bullgram.git
+cd bullgram
 npm run install:active   # backend + site-v2 + admin-v2 + userbot-web
 ```
 
@@ -107,7 +107,7 @@ DEPLOY_HOST=<your-server-ip> npm run deploy
 Rollback — через `git revert` + push, либо вручную на проде:
 
 ```bash
-cd /srv/bullrun && git checkout <tag> && ./scripts/deploy-pull.sh
+cd /srv/bullgram && git checkout <tag> && ./scripts/deploy-pull.sh
 ```
 
 ---
@@ -160,7 +160,7 @@ cd /srv/bullrun && git checkout <tag> && ./scripts/deploy-pull.sh
 ## Структура репозитория
 
 ```
-bullrun/
+bullgram/
 ├── backend/         # API, jobs, services, scripts
 ├── admin-v2/        # админка (React/Vite)
 ├── site-v2/         # публичный сайт (React/Vite)

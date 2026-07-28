@@ -9,10 +9,10 @@ if [ -z "$DEPLOY_HOST" ]; then
   exit 1
 fi
 SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
-BACKUP_ROOT="/var/backups/bullrun-deploy"
+BACKUP_ROOT="/var/backups/bullgram-deploy"
 BACKEND_DIR="/var/www/backend"
-SITE_DIR="/var/www/bullrun-site-v2"
-APP_DIR="/var/www/bullrun-admin-v2"
+SITE_DIR="/var/www/bullgram-site-v2"
+APP_DIR="/var/www/bullgram-admin-v2"
 
 
 TARGET="${1:-all}"
@@ -65,9 +65,9 @@ restore_backend() {
     cd '$BACKEND_DIR'
     npm install --omit=dev
     node scripts/restore-managed-proxies.mjs
-    pm2 restart bullrun-tg-backend
-    pm2 flush bullrun-tg-backend
-    pm2 describe bullrun-tg-backend >/dev/null
+    pm2 restart bullgram-tg-backend
+    pm2 flush bullgram-tg-backend
+    pm2 describe bullgram-tg-backend >/dev/null
   "
 }
 

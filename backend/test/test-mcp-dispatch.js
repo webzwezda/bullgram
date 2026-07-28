@@ -148,11 +148,11 @@ console.log('--- registry has all 10 operations ---');
   const names = listOperationNames().sort();
   console.log(`  registered: ${names.length} operations`);
   const expected = [
-    'bullrun_infra_summary', 'bullrun_proxy_preview', 'bullrun_proxy_import',
-    'bullrun_userbot_list', 'bullrun_userbot_health',
-    'bullrun_userbot_dialogs', 'bullrun_userbot_messages',
-    'bullrun_userbot_messages_search', 'bullrun_userbot_participants',
-    'bullrun_userbot_message_send'
+    'bullgram_infra_summary', 'bullgram_proxy_preview', 'bullgram_proxy_import',
+    'bullgram_userbot_list', 'bullgram_userbot_health',
+    'bullgram_userbot_dialogs', 'bullgram_userbot_messages',
+    'bullgram_userbot_messages_search', 'bullgram_userbot_participants',
+    'bullgram_userbot_message_send'
   ].sort();
   assertEqual(names, expected, 'all 10 operations registered');
 }
@@ -166,7 +166,7 @@ console.log('--- happy path: result returned, audit finalized as success ---');
 
   const { result, rateLimit } = await dispatchOperation({
     supabase, req,
-    operationName: 'bullrun_userbot_health',
+    operationName: 'bullgram_userbot_health',
     args: { userbot_id: SAMPLE_USERBOT_ID },
     userbotService, source: 'mcp'
   });
@@ -206,7 +206,7 @@ console.log('--- JWT path rejected for requiresIntegrationToken:true ---');
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_health',
+      operationName: 'bullgram_userbot_health',
       args: { userbot_id: SAMPLE_USERBOT_ID },
       userbotService, source: 'mcp'
     }),
@@ -220,12 +220,12 @@ console.log('--- insufficient scope → INSUFFICIENT_SCOPE ---');
   resetRateLimiter();
   const supabase = makeMockSupabase();
   const userbotService = makeMockUserbotService();
-  // bullrun_userbot_message_send requires mcp:userbot:write
+  // bullgram_userbot_message_send requires mcp:userbot:write
   const req = makeReq({ tokenScopes: ['mcp:userbot:read'] });
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_message_send',
+      operationName: 'bullgram_userbot_message_send',
       args: { userbot_id: SAMPLE_USERBOT_ID, chat_id: '1', text: 'hi' },
       userbotService, source: 'mcp'
     }),
@@ -243,7 +243,7 @@ console.log('--- account allowlist: empty array → FORBIDDEN_ACCOUNT ---');
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_health',
+      operationName: 'bullgram_userbot_health',
       args: { userbot_id: SAMPLE_USERBOT_ID },
       userbotService, source: 'mcp'
     }),
@@ -264,7 +264,7 @@ console.log('--- account allowlist: id not in list → FORBIDDEN_ACCOUNT ---');
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_health',
+      operationName: 'bullgram_userbot_health',
       args: { userbot_id: SAMPLE_USERBOT_ID },
       userbotService, source: 'mcp'
     }),
@@ -290,7 +290,7 @@ console.log('--- rate limit exceeded → RATE_LIMITED ---');
     try {
       await dispatchOperation({
         supabase, req,
-        operationName: 'bullrun_userbot_health',
+        operationName: 'bullgram_userbot_health',
         args: { userbot_id: SAMPLE_USERBOT_ID },
         userbotService, source: 'mcp'
       });
@@ -317,7 +317,7 @@ console.log('--- handler-thrown MCPError preserves code + auditStatus ---');
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_health',
+      operationName: 'bullgram_userbot_health',
       args: { userbot_id: SAMPLE_USERBOT_ID },
       userbotService, source: 'mcp'
     }),
@@ -341,7 +341,7 @@ console.log('--- handler-thrown plain Error → audit "error" status, message pr
   await assertRejects(
     () => dispatchOperation({
       supabase, req,
-      operationName: 'bullrun_userbot_health',
+      operationName: 'bullgram_userbot_health',
       args: { userbot_id: SAMPLE_USERBOT_ID },
       userbotService, source: 'mcp'
     }),
@@ -367,7 +367,7 @@ console.log('--- audit insert happens BEFORE handler runs ---');
   const req = makeReq({ tokenScopes: ['mcp:userbot:read'] });
   await dispatchOperation({
     supabase, req,
-    operationName: 'bullrun_userbot_health',
+    operationName: 'bullgram_userbot_health',
     args: { userbot_id: SAMPLE_USERBOT_ID },
     userbotService, source: 'mcp'
   });

@@ -1,6 +1,6 @@
 const DEFAULT_MINIMUM_DEPOSIT_TON = 100;
 const DEFAULT_CLIENT_DISCOUNT_PERCENT = 10;
-const DEFAULT_BULLRUN_FEE_PERCENT = 1;
+const DEFAULT_BULLGRAM_FEE_PERCENT = 1;
 const DEFAULT_MIN_PAYOUT_TON = 5;
 const DEFAULT_DEPOSIT_LOCK_DAYS = 30;
 
@@ -94,7 +94,7 @@ function summarizeLedger(rows = []) {
     if (type === 'admin_refund_requested') acc.adminRefundRequestedTon += amount;
     if (type === 'admin_refund_cancelled') acc.adminRefundCancelledTon += amount;
     if (type === 'reward_obligation_created') acc.rewardObligationTon += amount;
-    if (type === 'bullrun_fee_created') acc.bullrunFeeTon += amount;
+    if (type === 'bullgram_fee_created') acc.bullgramFeeTon += amount;
     if (type === 'network_fee_reserved' && direction === 'credit') acc.networkFeeTon -= amount;
     if (type === 'network_fee_reserved' && direction !== 'credit') acc.networkFeeTon += amount;
 
@@ -106,7 +106,7 @@ function summarizeLedger(rows = []) {
     adminRefundRequestedTon: 0,
     adminRefundCancelledTon: 0,
     rewardObligationTon: 0,
-    bullrunFeeTon: 0,
+    bullgramFeeTon: 0,
     networkFeeTon: 0,
     firstDepositAt: null
   });
@@ -116,7 +116,7 @@ export function getReferralEconomics() {
   return {
     minimumDepositTon: DEFAULT_MINIMUM_DEPOSIT_TON,
     clientDiscountPercent: DEFAULT_CLIENT_DISCOUNT_PERCENT,
-    bullrunFeePercent: DEFAULT_BULLRUN_FEE_PERCENT,
+    bullgramFeePercent: DEFAULT_BULLGRAM_FEE_PERCENT,
     minPayoutTon: DEFAULT_MIN_PAYOUT_TON,
     depositLockDays: DEFAULT_DEPOSIT_LOCK_DAYS
   };
@@ -136,7 +136,7 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
   const ledgerSummary = summarizeLedger(ledgerRows || []);
   const minimumDepositTon = numberOrZero(reserveAccount.minimum_deposit_ton || DEFAULT_MINIMUM_DEPOSIT_TON);
   const totalDepositedTon = roundTon(Math.max(numberOrZero(reserveAccount.total_deposited_ton), ledgerSummary.depositTon));
-  const bullrunFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.bullrun_fee_accrued_ton), ledgerSummary.bullrunFeeTon));
+  const bullgramFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.bullgram_fee_accrued_ton), ledgerSummary.bullgramFeeTon));
   const networkFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.network_fee_accrued_ton), ledgerSummary.networkFeeTon));
   const fundedReserveTon = roundTon(Math.max(
     0,
@@ -147,7 +147,7 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
   ));
   const reservedObligationsTon = roundTon(Math.max(
     numberOrZero(reserveAccount.reserved_obligations_ton),
-    ledgerSummary.rewardObligationTon + bullrunFeeTon + networkFeeTon
+    ledgerSummary.rewardObligationTon + bullgramFeeTon + networkFeeTon
   ));
   const availableReserveTon = roundTon(
     totalDepositedTon
@@ -172,7 +172,7 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
       availableReserveTon,
       reservedObligationsTon,
       adminDebtTon,
-      bullrunFeeTon,
+      bullgramFeeTon,
       networkFeeTon
     }
   );
@@ -185,7 +185,7 @@ export async function reconcileReferralReserveAccount(supabase, reserveAccount, 
       available_reserve_ton: availableReserveTon,
       reserved_obligations_ton: reservedObligationsTon,
       admin_debt_ton: adminDebtTon,
-      bullrun_fee_accrued_ton: bullrunFeeTon,
+      bullgram_fee_accrued_ton: bullgramFeeTon,
       network_fee_accrued_ton: networkFeeTon,
       locked_until: lockedUntil,
       last_deposit_at: options.lastDepositAt || reserveAccount.last_deposit_at || now.toISOString(),
@@ -342,7 +342,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   const ledgerSummary = summarizeLedger(ledgerRows || []);
   const accountTotalDepositedTon = numberOrZero(account?.total_deposited_ton);
   const totalDepositedTon = roundTon(Math.max(accountTotalDepositedTon, ledgerSummary.depositTon));
-  const bullrunFeeTon = roundTon(Math.max(numberOrZero(account?.bullrun_fee_accrued_ton), ledgerSummary.bullrunFeeTon));
+  const bullgramFeeTon = roundTon(Math.max(numberOrZero(account?.bullgram_fee_accrued_ton), ledgerSummary.bullgramFeeTon));
   const networkFeeTon = roundTon(Math.max(numberOrZero(account?.network_fee_accrued_ton), ledgerSummary.networkFeeTon));
   const fundedReserveTon = roundTon(Math.max(
     0,
@@ -353,7 +353,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   ));
   const reservedObligationsTon = roundTon(Math.max(
     numberOrZero(account?.reserved_obligations_ton),
-    ledgerSummary.rewardObligationTon + bullrunFeeTon + networkFeeTon
+    ledgerSummary.rewardObligationTon + bullgramFeeTon + networkFeeTon
   ));
   const paidOutTon = roundTon(ledgerSummary.partnerPayoutTon);
   const refundedTon = roundTon(ledgerSummary.adminRefundTon);
@@ -401,7 +401,7 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
     availableReserveTon,
     reservedObligationsTon,
     adminDebtTon,
-    bullrunFeeTon,
+    bullgramFeeTon,
     networkFeeTon,
     paidOutTon,
     refundedTon,

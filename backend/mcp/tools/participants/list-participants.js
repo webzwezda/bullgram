@@ -1,4 +1,4 @@
-// bullrun_userbot_participants — list participants of a chat.
+// bullgram_userbot_participants — list participants of a chat.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -25,7 +25,7 @@ export async function listParticipantsHandler({ supabase, req, args, userbotServ
   });
 }
 
-registerOperation('bullrun_userbot_participants', {
+registerOperation('bullgram_userbot_participants', {
   handler: listParticipantsHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

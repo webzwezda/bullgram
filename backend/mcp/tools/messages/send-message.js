@@ -1,4 +1,4 @@
-// bullrun_userbot_message_send — send a text message.
+// bullgram_userbot_message_send — send a text message.
 // Plan 01 Phase 5.
 //
 // For DMs (chat_id > 0): respects USERBOT_DM_ENABLED flag.
@@ -35,7 +35,7 @@ export async function sendMessageHandler({ supabase, req, args, userbotService }
   });
 }
 
-registerOperation('bullrun_userbot_message_send', {
+registerOperation('bullgram_userbot_message_send', {
   handler: sendMessageHandler,
   requiredScopes: ['mcp:userbot:write', 'api:userbot:write'],
   requiresIntegrationToken: true,

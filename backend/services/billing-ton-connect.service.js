@@ -3,7 +3,7 @@ import {
     NORMAL_PLAN,
     activateNormalForOrder,
     recordBillingEvent
-} from './bullrun-billing.service.js';
+} from './bullgram-billing.service.js';
 import { verifyTonConnectPayment } from './ton-connect-verify.service.js';
 import { tonToNano } from '../utils/ton.js';
 

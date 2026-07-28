@@ -2,7 +2,7 @@
 //
 // Diff scope: only the `initApi` action handler. We attach the Bullgram
 // bridge config to the initApi payload so the GramJS Worker can hydrate
-// its own globalThis.__BULLRUN_BRIDGE__ before TelegramClient construction.
+// its own globalThis.__BULLGRAM_BRIDGE__ before TelegramClient construction.
 // Without this, patched client.ts / PromisedWebSockets.ts / sessions.ts
 // (which all run inside the Worker) would throw "getBridgeConfig() called
 // before setBridgeConfig()" because the Worker's globalThis is separate
@@ -49,7 +49,7 @@ import {
 } from '../../reducers';
 import { selectSharedSettings } from '../../selectors/sharedState';
 import { destroySharedStatePort } from '../../shared/sharedStateConnector';
-import { getBridgeConfig } from '../../../util/bullrunBridge';
+import { getBridgeConfig } from '../../../util/bullgramBridge';
 
 addActionHandler('initApi', (global, actions): ActionReturnType => {
   const initialLocationHash = parseInitialLocationHash();
@@ -70,12 +70,12 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
     .map(({ userId }) => userId)
     .filter(Boolean);
 
-  // Bullgram: read bridge config from main-thread window.__BULLRUN_BRIDGE__
+  // Bullgram: read bridge config from main-thread window.__BULLGRAM_BRIDGE__
   // (set by app entry bootstrap before init() runs). The Worker can't see
   // window globals, so we forward the config via the initApi payload.
-  let bullrunBridgeConfig: ReturnType<typeof getBridgeConfig> | undefined;
+  let bullgramBridgeConfig: ReturnType<typeof getBridgeConfig> | undefined;
   try {
-    bullrunBridgeConfig = getBridgeConfig();
+    bullgramBridgeConfig = getBridgeConfig();
   } catch {
     // Bootstrap failed (no token / no auth) — the error UI is already
     // rendered by index.tsx. Don't initApi, just bail.
@@ -97,7 +97,7 @@ addActionHandler('initApi', (global, actions): ActionReturnType => {
     langCode: language,
     isTestServerRequested: hasTestParam,
     accountIds,
-    bullrunBridgeConfig,
+    bullgramBridgeConfig,
   });
 
   void setShouldEnableDebugLog(Boolean(shouldCollectDebugLogs));

@@ -56,7 +56,7 @@ source of truth. New operations need:
 
 1. **A handler** in `backend/mcp/tools/<domain>/<name>.js` that:
    - Imports `OPERATIONS` from the registry
-   - Calls `OPERATIONS.set('bullrun_<domain>_<verb>', { ... })` with:
+   - Calls `OPERATIONS.set('bullgram_<domain>_<verb>', { ... })` with:
      - `description`, `inputSchema` (Zod), `handler`
      - `requiredScopes` — list BOTH prefixes (`mcp:domain:perm` AND
        `api:domain:perm`) so the same operation works over both transports
@@ -108,7 +108,7 @@ network or env — mock supabase and userbot service in-memory.
 Conventional Commits. Russian is fine for the short description.
 
 ```
-feat(integrations): add bullrun_userbot_messages_search operation
+feat(integrations): add bullgram_userbot_messages_search operation
 fix(external): preserve retry_after_sec in error envelope
 docs(integrations): expand curl cookbook with rate-limit recipe
 chore(ci): add gate-06 secrets scan

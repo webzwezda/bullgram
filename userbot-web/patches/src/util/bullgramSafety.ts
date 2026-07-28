@@ -26,11 +26,11 @@
 // All guards log to console.warn with `[Bullgram Safety]` prefix so they're
 // easy to grep. Guards run on first import (idempotent — module is cached).
 
-const BULLRUN_SAFETY_INSTALLED = '__BULLRUN_SAFETY_INSTALLED__';
+const BULLGRAM_SAFETY_INSTALLED = '__BULLGRAM_SAFETY_INSTALLED__';
 
-export function installBullrunSafety() {
-  if ((globalThis as any)[BULLRUN_SAFETY_INSTALLED]) return;
-  (globalThis as any)[BULLRUN_SAFETY_INSTALLED] = true;
+export function installBullgramSafety() {
+  if ((globalThis as any)[BULLGRAM_SAFETY_INSTALLED]) return;
+  (globalThis as any)[BULLGRAM_SAFETY_INSTALLED] = true;
 
   disableWebRTC();
   disableMediaDevices();

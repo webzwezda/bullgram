@@ -10,8 +10,8 @@ if [ -z "$DEPLOY_HOST" ]; then
   exit 1
 fi
 SERVER="${DEPLOY_USER}@${DEPLOY_HOST}"
-SITE_DIR="/var/www/bullrun-site-v2"
-APP_DIR="/var/www/bullrun-admin-v2"
+SITE_DIR="/var/www/bullgram-site-v2"
+APP_DIR="/var/www/bullgram-admin-v2"
 
 
 require_command() {

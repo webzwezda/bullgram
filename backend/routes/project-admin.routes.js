@@ -96,7 +96,7 @@ async function loadReferralTreasury(supabase) {
         const message = ledgerError.message || '';
         if (message.includes('referral_reserve_ledger')) {
             return {
-                bullrunFeeTon: 0,
+                bullgramFeeTon: 0,
                 networkFeeTon: 0,
                 partnerObligationTon: 0
             };
@@ -109,19 +109,19 @@ async function loadReferralTreasury(supabase) {
         const type = String(row.entry_type || '');
         const direction = String(row.direction || '');
 
-        if (type === 'bullrun_fee_created') acc.bullrunFeeTon += amount;
+        if (type === 'bullgram_fee_created') acc.bullgramFeeTon += amount;
         if (type === 'reward_obligation_created') acc.partnerObligationTon += amount;
         if (type === 'network_fee_reserved' && direction === 'credit') acc.networkFeeTon -= amount;
         if (type === 'network_fee_reserved' && direction !== 'credit') acc.networkFeeTon += amount;
         return acc;
     }, {
-        bullrunFeeTon: 0,
+        bullgramFeeTon: 0,
         networkFeeTon: 0,
         partnerObligationTon: 0
     });
 
     return {
-        bullrunFeeTon: roundTon(summary.bullrunFeeTon),
+        bullgramFeeTon: roundTon(summary.bullgramFeeTon),
         networkFeeTon: roundTon(summary.networkFeeTon),
         partnerObligationTon: roundTon(summary.partnerObligationTon)
     };
@@ -237,7 +237,7 @@ async function buildTreasurySummary(supabase) {
     ]);
 
     const withdrawalSummary = summarizeWithdrawals(withdrawals);
-    const grossRevenueTon = roundTon(shop.paidTon + referral.bullrunFeeTon);
+    const grossRevenueTon = roundTon(shop.paidTon + referral.bullgramFeeTon);
     const partnerLiabilityTon = roundTon(Math.max(
         partnerLiability.partnerBalanceTon,
         partnerLiability.activePayoutTon,
@@ -281,7 +281,7 @@ async function buildTreasurySummary(supabase) {
         buckets: {
             platformRevenueTon: grossRevenueTon,
             shopRevenueTon: shop.paidTon,
-            referralFeeTon: referral.bullrunFeeTon,
+            referralFeeTon: referral.bullgramFeeTon,
             partnerLiabilityTon,
             adminReserveLiabilityTon,
             networkFeeReserveTon,

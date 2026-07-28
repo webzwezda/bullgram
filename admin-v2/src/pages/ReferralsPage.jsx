@@ -1215,7 +1215,7 @@ export function ReferralsPage() {
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Bullgram Fee</label>
                   <div className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 font-bold opacity-60 cursor-not-allowed">
-                    {state.economics?.bullrunFeePercent || 1}%
+                    {state.economics?.bullgramFeePercent || 1}%
                   </div>
                 </div>
               </div>

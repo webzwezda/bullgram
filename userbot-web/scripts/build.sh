@@ -19,7 +19,7 @@ fi
 echo "==> Building upstream (npm run build:production)"
 # telegram-tt's webpack config requires these at build time via EnvironmentPlugin.
 # They are the api_id/api_hash of the BROWSER app declaration. We pass the
-# session's fingerprint at runtime via window.__BULLRUN_BRIDGE__, but webpack
+# session's fingerprint at runtime via window.__BULLGRAM_BRIDGE__, but webpack
 # needs values at build time. Use the upstream defaults — actual fingerprint
 # is applied at runtime by our patched GramJS init.
 (cd "$UPSTREAM_DIR" && \

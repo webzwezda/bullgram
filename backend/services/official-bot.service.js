@@ -1731,7 +1731,7 @@ export class OfficialBotService {
             }
 
             const rewardTonAmount = convertedReward.amountTon;
-            const bullrunFeeTonAmount = Number((rewardTonAmount * economics.bullrunFeePercent / 100).toFixed(6));
+            const bullgramFeeTonAmount = Number((rewardTonAmount * economics.bullgramFeePercent / 100).toFixed(6));
 
             const referrerProfile = await this.ensureReferralProfile(ownerId, attribution.referrer_tg_user_id);
             if (!referrerProfile) return null;
@@ -1766,7 +1766,7 @@ export class OfficialBotService {
                     reward_original_amount: rewardAmount,
                     reward_original_currency: currency,
                     reward_ton_amount: rewardTonAmount,
-                    bullrun_fee_ton_amount: bullrunFeeTonAmount,
+                    bullgram_fee_ton_amount: bullgramFeeTonAmount,
                     network_fee_ton_amount: 0,
                     exchange_rate_id: convertedReward.rate?.id || null,
                     reserve_account_id: reserve.id || null,
@@ -1776,8 +1776,8 @@ export class OfficialBotService {
                         reward_percent: rewardPercent,
                         client_discount_percent: clientDiscountPercent,
                         paid_amount: paidAmount,
-                        bullrun_fee_percent: economics.bullrunFeePercent,
-                        bullrun_fee_ton_amount: bullrunFeeTonAmount,
+                        bullgram_fee_percent: economics.bullgramFeePercent,
+                        bullgram_fee_ton_amount: bullgramFeeTonAmount,
                         reward_original_amount: rewardAmount,
                         reward_original_currency: currency,
                         reward_ton_amount: rewardTonAmount,
@@ -1820,11 +1820,11 @@ export class OfficialBotService {
                         {
                             owner_id: ownerId,
                             reserve_account_id: reserve.id,
-                            entry_type: 'bullrun_fee_created',
-                            amount_ton: bullrunFeeTonAmount,
+                            entry_type: 'bullgram_fee_created',
+                            amount_ton: bullgramFeeTonAmount,
                             direction: 'debit',
                             related_referral_event_id: rewardEvent.id,
-                            payload: { invoice_id: invoice.id, fee_percent: economics.bullrunFeePercent }
+                            payload: { invoice_id: invoice.id, fee_percent: economics.bullgramFeePercent }
                         }
                     ]);
 
@@ -1837,7 +1837,7 @@ export class OfficialBotService {
                     available_reserve_ton: reserve.availableReserveTon,
                     reserved_obligations_ton: reserve.reservedObligationsTon,
                     admin_debt_ton: reserve.adminDebtTon,
-                    bullrun_fee_accrued_ton: reserve.bullrunFeeTon,
+                    bullgram_fee_accrued_ton: reserve.bullgramFeeTon,
                     network_fee_accrued_ton: reserve.networkFeeTon,
                     locked_until: reserve.lockedUntil || null,
                     last_deposit_at: reserve.lastDepositAt || null,

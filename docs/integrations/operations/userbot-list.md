@@ -1,4 +1,4 @@
-# `bullrun_userbot_list`
+# `bullgram_userbot_list`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots`
 
@@ -50,7 +50,7 @@ Requires an integration token (`brmcp_` or `brapi_`).
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_list",
+    "name": "bullgram_userbot_list",
     "arguments": { "limit": 20 }
   }
 }

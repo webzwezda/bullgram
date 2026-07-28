@@ -9,7 +9,7 @@ Two prefixes are in active use:
 - **`mcp:*`** — for tokens with `purpose=mcp` (`brmcp_` prefix)
 - **`api:*`** — for tokens with `purpose=api` or `purpose=custom` (`brapi_` prefix)
 
-Most operations accept both prefixes (e.g. `bullrun_userbot_health` accepts
+Most operations accept both prefixes (e.g. `bullgram_userbot_health` accepts
 either `mcp:userbot:read` or `api:userbot:read`). This lets a single token
 work on both transports if you want that.
 
@@ -19,15 +19,15 @@ work on both transports if you want that.
 
 | Scope | Operations |
 |---|---|
-| `mcp:proxy:read` / `api:proxy:read` | [`bullrun_infra_summary`](./operations/infra-summary.md) |
-| `mcp:proxy:write` / `api:proxy:write` | [`bullrun_proxy_preview`](./operations/proxy-preview.md), [`bullrun_proxy_import`](./operations/proxy-import.md) |
+| `mcp:proxy:read` / `api:proxy:read` | [`bullgram_infra_summary`](./operations/infra-summary.md) |
+| `mcp:proxy:write` / `api:proxy:write` | [`bullgram_proxy_preview`](./operations/proxy-preview.md), [`bullgram_proxy_import`](./operations/proxy-import.md) |
 
 ### `userbot`
 
 | Scope | Operations |
 |---|---|
-| `mcp:userbot:read` / `api:userbot:read` | `bullrun_userbot_list`, `bullrun_userbot_health`, `bullrun_userbot_dialogs`, `bullrun_userbot_messages`, `bullrun_userbot_messages_search`, `bullrun_userbot_participants` |
-| `mcp:userbot:write` / `api:userbot:write` | [`bullrun_userbot_message_send`](./operations/userbot-message-send.md) |
+| `mcp:userbot:read` / `api:userbot:read` | `bullgram_userbot_list`, `bullgram_userbot_health`, `bullgram_userbot_dialogs`, `bullgram_userbot_messages`, `bullgram_userbot_messages_search`, `bullgram_userbot_participants` |
+| `mcp:userbot:write` / `api:userbot:write` | [`bullgram_userbot_message_send`](./operations/userbot-message-send.md) |
 
 ## Legacy scopes
 

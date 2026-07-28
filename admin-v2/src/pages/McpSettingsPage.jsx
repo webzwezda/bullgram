@@ -128,10 +128,10 @@ export function McpSettingsPage() {
   }, [accessToken]);
 
   const activeTokens = useMemo(() => tokens.filter((item) => !item.revoked_at), [tokens]);
-  const tokenForSetup = lastCreatedToken || '${BULLRUN_MCP_TOKEN}';
+  const tokenForSetup = lastCreatedToken || '${BULLGRAM_MCP_TOKEN}';
 
   const mcpServerSnippet = useMemo(() => `{
-  "bullrun": {
+  "bullgram": {
     "command": "npx",
     "args": [
       "-y",
@@ -164,7 +164,7 @@ export function McpSettingsPage() {
    openclaw plugins enable acpx
 2. Открой файл ~/.openclaw/openclaw.json
 3. Найди или создай секцию plugins.entries.acpx.config.mcpServers
-4. Добавь туда сервер bullrun в точности в таком виде:
+4. Добавь туда сервер bullgram в точности в таком виде:
 
 ${mcpServerSnippet}
 

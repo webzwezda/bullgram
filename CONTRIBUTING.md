@@ -12,8 +12,8 @@
 ## Подъём локально
 
 ```bash
-git clone https://github.com/webzwezda/bullrun.git
-cd bullrun
+git clone https://github.com/webzwezda/bullgram.git
+cd bullgram
 npm run install:active
 cp backend/.env.example backend/.env
 # заполнить SUPABASE_URL, SUPABASE_SERVICE_KEY, ENCRYPTION_KEY, TG_API_ID, TG_API_HASH

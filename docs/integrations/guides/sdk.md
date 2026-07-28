@@ -48,19 +48,19 @@ async function main() {
   console.log(`Authenticated as ${me.owner_id}, tier=${me.tier}`);
 
   // List userbots
-  const { userbots } = await api.bullrunUserbotList({ limit: 20 });
+  const { userbots } = await api.bullgramUserbotList({ limit: 20 });
   console.log(`Found ${userbots.length} userbots`);
 
   // Get health for the first one
   const [first] = userbots;
   if (first) {
-    const health = await api.bullrunUserbotHealth({ userbotId: first.id });
+    const health = await api.bullgramUserbotHealth({ userbotId: first.id });
     console.log(`${first.tg_username}: ${health.runtime_status}`);
   }
 
   // Fetch latest messages
   const chatId = '-1001234567890';
-  const { messages, cursor, hasMore } = await api.bullrunUserbotMessages({
+  const { messages, cursor, hasMore } = await api.bullgramUserbotMessages({
     userbotId: first.id,
     chatId,
     limit: 50,
@@ -68,9 +68,9 @@ async function main() {
   console.log(`Got ${messages.length} messages, has_more=${hasMore}`);
 
   // Send a digest
-  await api.bullrunUserbotMessageSend({
+  await api.bullgramUserbotMessageSend({
     userbotId: first.id,
-    bullrunUserbotMessageSendRequest: {
+    bullgramUserbotMessageSendRequest: {
       chat_id: chatId,
       text: `Daily digest: ${messages.length} new messages today.`,
     },

@@ -68,7 +68,7 @@ insert into public.userbot_fingerprint_presets (
 )
 values
     (
-        'bullrun_android_a52',
+        'bullgram_android_a52',
         null,
         'Samsung Galaxy A52',
         'Рекомендуемый Android-профиль для QR-логина. Быстрый безопасный старт без родного .json.',
@@ -82,7 +82,7 @@ values
         10
     ),
     (
-        'bullrun_android_redmi_note_11',
+        'bullgram_android_redmi_note_11',
         null,
         'Xiaomi Redmi Note 11',
         'Альтернативный Android-профиль с русской локалью.',
@@ -96,7 +96,7 @@ values
         20
     ),
     (
-        'bullrun_android_a34',
+        'bullgram_android_a34',
         null,
         'Samsung Galaxy A34',
         'Запасной Android-профиль для QR-логина.',
@@ -110,7 +110,7 @@ values
         30
     ),
     (
-        'bullrun_iphone_13',
+        'bullgram_iphone_13',
         null,
         'iPhone 13',
         'Стабильный iPhone-профиль для QR-логина.',
@@ -124,7 +124,7 @@ values
         40
     ),
     (
-        'bullrun_iphone_15_pro',
+        'bullgram_iphone_15_pro',
         null,
         'iPhone 15 Pro',
         'Свежий iPhone-профиль для QR-логина.',

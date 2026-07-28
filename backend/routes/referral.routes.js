@@ -362,7 +362,7 @@ export default function referralRoutes(supabase) {
             available_reserve_ton: reserve.availableReserveTon,
             reserved_obligations_ton: reserve.reservedObligationsTon,
             admin_debt_ton: reserve.adminDebtTon,
-            bullrun_fee_accrued_ton: reserve.bullrunFeeTon,
+            bullgram_fee_accrued_ton: reserve.bullgramFeeTon,
             network_fee_accrued_ton: reserve.networkFeeTon,
             locked_until: reserve.lockedUntil || null,
             last_deposit_at: reserve.lastDepositAt || null,

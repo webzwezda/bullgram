@@ -1,7 +1,7 @@
 import {
     activateNormalForOrder,
     recordBillingEvent
-} from '../services/bullrun-billing.service.js';
+} from '../services/bullgram-billing.service.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MIN_INTERVAL_MS = 60_000;

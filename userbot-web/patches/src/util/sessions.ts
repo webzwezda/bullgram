@@ -5,7 +5,7 @@
 // browser restarts, leaks account credentials to disk.
 //
 // Bullgram patch: zero persistence. Session bytes live only in JS memory for
-// the lifetime of the tab. Source of truth is window.__BULLRUN_BRIDGE__
+// the lifetime of the tab. Source of truth is window.__BULLGRAM_BRIDGE__
 // injected by app entry (src/index.tsx) from the bridge token response.
 // Tab close = full session wipe. No leakage to localStorage or IndexedDB.
 //
@@ -19,13 +19,13 @@
 //   - importTestSession   → no-op
 //   - checkSessionLocked  → always false (no passcode in Bullgram Web)
 //
-// Bridge accessor: see bullrunBridge.ts.
+// Bridge accessor: see bullgramBridge.ts.
 
 import type { ApiSessionData } from '../api/types';
 import type { DcId, SharedSessionData } from '../types';
 
 import { SESSION_LEGACY_USER_KEY } from '../config';
-import { getBridgeConfig } from './bullrunBridge';
+import { getBridgeConfig } from './bullgramBridge';
 
 export function hasStoredSession() {
   try {

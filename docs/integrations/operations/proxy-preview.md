@@ -1,10 +1,10 @@
-# `bullrun_proxy_preview`
+# `bullgram_proxy_preview`
 
 > Tag: **proxies** · Class: **read** · REST: `POST /proxies/preview`
 
 Parses raw proxy paste text and returns a structured preview. Vendor formats
 are messy — this call normalizes them. Always call this before
-[`bullrun_proxy_import`](./proxy-import.md) so the human (or agent) can confirm
+[`bullgram_proxy_import`](./proxy-import.md) so the human (or agent) can confirm
 the parsed result is what they intended.
 
 ## Scopes
@@ -48,7 +48,7 @@ this to the user and ask them to re-paste.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_proxy_preview",
+    "name": "bullgram_proxy_preview",
     "arguments": { "raw": "socks5://user:pass@1.2.3.4:1080" }
   }
 }

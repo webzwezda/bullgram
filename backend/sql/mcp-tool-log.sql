@@ -1,6 +1,6 @@
 -- MCP & REST audit log shared between transports.
 -- Plan 01 Migration 1 / Plan 02 uses the same table.
--- token_id is nullable: legacy tools (bullrun_proxy_*) still accept JWT,
+-- token_id is nullable: legacy tools (bullgram_proxy_*) still accept JWT,
 -- and audit rows must persist even when auth kind = 'user_token'.
 -- auth_kind is NOT NULL so we always know how the caller authenticated.
 

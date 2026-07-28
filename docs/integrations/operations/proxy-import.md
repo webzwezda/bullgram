@@ -1,9 +1,9 @@
-# `bullrun_proxy_import`
+# `bullgram_proxy_import`
 
 > Tag: **proxies** · Class: **write** · REST: `POST /proxies/import`
 
 Saves a proxy to Bullgram after an explicit confirmation in a previous
-[`bullrun_proxy_preview`](./proxy-preview.md) turn. Never call this blind —
+[`bullgram_proxy_preview`](./proxy-preview.md) turn. Never call this blind —
 always preview first.
 
 ## Scopes
@@ -44,7 +44,7 @@ message — surface it to the user.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_proxy_import",
+    "name": "bullgram_proxy_import",
     "arguments": {
       "raw": "socks5://user:pass@1.2.3.4:1080",
       "confirmed": true,

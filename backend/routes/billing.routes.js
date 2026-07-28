@@ -3,7 +3,7 @@ import { authenticateUser } from '../middlewares/auth.middleware.js';
 import {
     createNormalCheckoutOrder,
     getCurrentBillingState
-} from '../services/bullrun-billing.service.js';
+} from '../services/bullgram-billing.service.js';
 import {
     createTonConnectOrder,
     verifyAndActivateTonConnectOrder

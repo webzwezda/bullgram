@@ -47,22 +47,22 @@ const operationsByTag = [
     tag: 'proxy',
     accent: 'text-emerald-700',
     items: [
-      { name: 'bullrun_infra_summary', slug: 'infra-summary', scope: 'read' },
-      { name: 'bullrun_proxy_preview', slug: 'proxy-preview', scope: 'read' },
-      { name: 'bullrun_proxy_import', slug: 'proxy-import', scope: 'write' }
+      { name: 'bullgram_infra_summary', slug: 'infra-summary', scope: 'read' },
+      { name: 'bullgram_proxy_preview', slug: 'proxy-preview', scope: 'read' },
+      { name: 'bullgram_proxy_import', slug: 'proxy-import', scope: 'write' }
     ]
   },
   {
     tag: 'userbot',
     accent: 'text-blue-700',
     items: [
-      { name: 'bullrun_userbot_list', slug: 'userbot-list', scope: 'read' },
-      { name: 'bullrun_userbot_health', slug: 'userbot-health', scope: 'read' },
-      { name: 'bullrun_userbot_dialogs', slug: 'userbot-dialogs', scope: 'read' },
-      { name: 'bullrun_userbot_messages', slug: 'userbot-messages', scope: 'read' },
-      { name: 'bullrun_userbot_messages_search', slug: 'userbot-messages-search', scope: 'read' },
-      { name: 'bullrun_userbot_participants', slug: 'userbot-participants', scope: 'read' },
-      { name: 'bullrun_userbot_message_send', slug: 'userbot-message-send', scope: 'write' }
+      { name: 'bullgram_userbot_list', slug: 'userbot-list', scope: 'read' },
+      { name: 'bullgram_userbot_health', slug: 'userbot-health', scope: 'read' },
+      { name: 'bullgram_userbot_dialogs', slug: 'userbot-dialogs', scope: 'read' },
+      { name: 'bullgram_userbot_messages', slug: 'userbot-messages', scope: 'read' },
+      { name: 'bullgram_userbot_messages_search', slug: 'userbot-messages-search', scope: 'read' },
+      { name: 'bullgram_userbot_participants', slug: 'userbot-participants', scope: 'read' },
+      { name: 'bullgram_userbot_message_send', slug: 'userbot-message-send', scope: 'write' }
     ]
   }
 ];

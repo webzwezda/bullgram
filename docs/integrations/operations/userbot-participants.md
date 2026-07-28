@@ -1,4 +1,4 @@
-# `bullrun_userbot_participants`
+# `bullgram_userbot_participants`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots/{userbot_id}/participants`
 
@@ -46,7 +46,7 @@ bound cost — beyond that Telegram degrades and Bullgram refuses.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_participants",
+    "name": "bullgram_userbot_participants",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111",
       "chat_id": "-1001234567890",

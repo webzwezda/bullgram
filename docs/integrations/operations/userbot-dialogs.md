@@ -1,4 +1,4 @@
-# `bullrun_userbot_dialogs`
+# `bullgram_userbot_dialogs`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots/{userbot_id}/dialogs`
 
@@ -48,7 +48,7 @@ Telegram — costs one MTProto round-trip.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_dialogs",
+    "name": "bullgram_userbot_dialogs",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111",
       "type": "channel",

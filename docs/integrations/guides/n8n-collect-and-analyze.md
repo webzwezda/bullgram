@@ -170,7 +170,7 @@ matches against `{{$json.text}}`. Send a Slack message on the
 ### Daily digest
 
 Replace the 5-minute cron with a daily one. Aggregate counts in the code
-node. Send a single summary message via `bullrun_userbot_message_send`.
+node. Send a single summary message via `bullgram_userbot_message_send`.
 
 ### Multi-channel monitoring
 

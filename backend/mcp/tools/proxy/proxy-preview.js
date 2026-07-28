@@ -1,4 +1,4 @@
-// bullrun_proxy_preview — parse raw proxy paste text and return preview.
+// bullgram_proxy_preview — parse raw proxy paste text and return preview.
 // Plan 01 Phase 3: moved from agent-mcp.routes.js inline handler.
 
 import { parseProxyPasteInput } from '../../../utils/agent-tools.js';
@@ -22,7 +22,7 @@ export async function proxyPreviewHandler({ args }) {
   };
 }
 
-registerOperation('bullrun_proxy_preview', {
+registerOperation('bullgram_proxy_preview', {
   handler: proxyPreviewHandler,
   requiredScopes: ['mcp:proxy:write', 'api:proxy:write'],
   requiresIntegrationToken: false,

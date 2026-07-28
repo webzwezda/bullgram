@@ -46,7 +46,7 @@ does OR-match (any of the listed scopes satisfies the requirement). See
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_health",
+    "name": "bullgram_userbot_health",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111"
     }
@@ -110,8 +110,8 @@ server processes them in order and returns an array of responses. Useful for
 
 ```json
 [
-  { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "bullrun_userbot_list", "arguments": {} } },
-  { "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": "bullrun_infra_summary", "arguments": {} } }
+  { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "bullgram_userbot_list", "arguments": {} } },
+  { "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": "bullgram_infra_summary", "arguments": {} } }
 ]
 ```
 

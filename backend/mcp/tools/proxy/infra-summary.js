@@ -1,4 +1,4 @@
-// bullrun_infra_summary — summary of owner's proxies, userbots, and tier limits.
+// bullgram_infra_summary — summary of owner's proxies, userbots, and tier limits.
 // Plan 01 Phase 3: moved from agent-mcp.routes.js inline handler.
 
 import { buildAgentInfraPayload } from '../../../utils/agent-tools.js';
@@ -16,7 +16,7 @@ export async function infraSummaryHandler({ supabase, req }) {
   });
 }
 
-registerOperation('bullrun_infra_summary', {
+registerOperation('bullgram_infra_summary', {
   handler: infraSummaryHandler,
   requiredScopes: ['mcp:proxy:read', 'api:proxy:read'],
   requiresIntegrationToken: false,

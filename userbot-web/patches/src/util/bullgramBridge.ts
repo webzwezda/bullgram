@@ -7,7 +7,7 @@
 // POST /api/userbot-web/web-session/:userbotId.
 //
 // Shape (set by src/index.tsx):
-//   window.__BULLRUN_BRIDGE__ = {
+//   window.__BULLGRAM_BRIDGE__ = {
 //     wsUrl: '/api/mtproto-bridge',
 //     bridgeToken: '<hex>',
 //     sessionData: { mainDcId, keys: { dcId: hex }, isTest },
@@ -20,7 +20,7 @@
 //     userbotId: string,
 //   }
 
-export interface BullrunBridgeFingerprint {
+export interface BullgramBridgeFingerprint {
   api_id: number;
   api_hash: string;
   deviceModel?: string;
@@ -30,27 +30,27 @@ export interface BullrunBridgeFingerprint {
   langCode?: string;
 }
 
-export interface BullrunBridgeSessionData {
+export interface BullgramBridgeSessionData {
   mainDcId: number;
   keys: Record<number, string>;
   isTest?: boolean;
 }
 
-export interface BullrunBridgeConfig {
+export interface BullgramBridgeConfig {
   wsUrl: string;
   bridgeToken: string;
-  sessionData: BullrunBridgeSessionData;
-  fingerprint: BullrunBridgeFingerprint;
+  sessionData: BullgramBridgeSessionData;
+  fingerprint: BullgramBridgeFingerprint;
   expiresAt: number;
   userbotId: string;
 }
 
-let cachedConfig: BullrunBridgeConfig | null = null;
+let cachedConfig: BullgramBridgeConfig | null = null;
 
 // Module-level dedup. When multiple PromisedWebSockets instances try to
 // refresh the token in parallel (GramJS opens 1 main DC + 2-3 file DC WS
 // near-simultaneously on reconnect), they all share one fetch.
-let refreshInFlight: Promise<BullrunBridgeConfig> | null = null;
+let refreshInFlight: Promise<BullgramBridgeConfig> | null = null;
 
 // Refresh if token expires within next 60s. GramJS reconnects within
 // seconds, so a 60s buffer covers any in-flight operation. Backend TTL
@@ -58,20 +58,20 @@ let refreshInFlight: Promise<BullrunBridgeConfig> | null = null;
 // (cache is fresh from bootstrap).
 const REFRESH_BUFFER_MS = 60_000;
 
-export function setBridgeConfig(config: BullrunBridgeConfig) {
+export function setBridgeConfig(config: BullgramBridgeConfig) {
   cachedConfig = config;
-  (globalThis as any).__BULLRUN_BRIDGE__ = config;
+  (globalThis as any).__BULLGRAM_BRIDGE__ = config;
 }
 
-export function getBridgeConfig(): BullrunBridgeConfig {
+export function getBridgeConfig(): BullgramBridgeConfig {
   if (cachedConfig) return cachedConfig;
-  const fromWindow = (globalThis as any).__BULLRUN_BRIDGE__ as BullrunBridgeConfig | undefined;
+  const fromWindow = (globalThis as any).__BULLGRAM_BRIDGE__ as BullgramBridgeConfig | undefined;
   if (fromWindow && fromWindow.bridgeToken && fromWindow.sessionData && fromWindow.fingerprint) {
     cachedConfig = fromWindow;
     return cachedConfig;
   }
   throw new Error(
-    '[bullrun-bridge] getBridgeConfig() called before setBridgeConfig(). '
+    '[bullgram-bridge] getBridgeConfig() called before setBridgeConfig(). '
     + 'App entry (src/index.tsx) must bootstrap the bridge token before initializing GramJS.',
   );
 }
@@ -92,7 +92,7 @@ export function hasBridgeConfig(): boolean {
 // Without this, after the 5-minute TTL expires, every reconnect silently
 // fails with 4401 INVALID_OR_EXPIRED_TOKEN — the admin sees a frozen UI
 // with no indication of what went wrong.
-export async function ensureFreshBridgeConfig(): Promise<BullrunBridgeConfig> {
+export async function ensureFreshBridgeConfig(): Promise<BullgramBridgeConfig> {
   const current = cachedConfig;
   if (current && current.expiresAt - Date.now() > REFRESH_BUFFER_MS) {
     return current;
@@ -101,7 +101,7 @@ export async function ensureFreshBridgeConfig(): Promise<BullrunBridgeConfig> {
   // Stale or missing — refresh with dedup.
   const userbotId = current?.userbotId ?? extractUserbotIdFromUrl();
   if (!userbotId) {
-    throw new Error('[bullrun-bridge] cannot refresh: no userbotId in cached config or URL.');
+    throw new Error('[bullgram-bridge] cannot refresh: no userbotId in cached config or URL.');
   }
 
   if (!refreshInFlight) {
@@ -121,9 +121,9 @@ export async function ensureFreshBridgeConfig(): Promise<BullrunBridgeConfig> {
 // 100-300ms on the critical path. sessionStorage auto-clears on tab close,
 // so we never leak stale tokens across sessions.
 
-const SESSION_STORAGE_PREFIX = 'bullrun-bridge-';
+const SESSION_STORAGE_PREFIX = 'bullgram-bridge-';
 
-export function saveBridgeConfigToSession(config: BullrunBridgeConfig): void {
+export function saveBridgeConfigToSession(config: BullgramBridgeConfig): void {
   try {
     sessionStorage.setItem(
       SESSION_STORAGE_PREFIX + config.userbotId,
@@ -135,13 +135,13 @@ export function saveBridgeConfigToSession(config: BullrunBridgeConfig): void {
   }
 }
 
-export function loadBridgeConfigFromSession(userbotId: string): BullrunBridgeConfig | null {
+export function loadBridgeConfigFromSession(userbotId: string): BullgramBridgeConfig | null {
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_PREFIX + userbotId);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!isValidCachedConfig(parsed, userbotId)) return null;
-    return parsed as BullrunBridgeConfig;
+    return parsed as BullgramBridgeConfig;
   } catch {
     return null;
   }
@@ -158,9 +158,9 @@ export function clearBridgeConfigFromSession(userbotId: string): void {
 function isValidCachedConfig(
   cfg: unknown,
   expectedUserbotId: string,
-): cfg is BullrunBridgeConfig {
+): cfg is BullgramBridgeConfig {
   if (!cfg || typeof cfg !== 'object') return false;
-  const c = cfg as BullrunBridgeConfig;
+  const c = cfg as BullgramBridgeConfig;
   if (c.userbotId !== expectedUserbotId) return false;
   if (typeof c.bridgeToken !== 'string' || !c.bridgeToken) return false;
   if (typeof c.wsUrl !== 'string' || !c.wsUrl) return false;
@@ -178,7 +178,7 @@ function isValidCachedConfig(
 // (initial load) and ensureFreshBridgeConfig (reconnect-time refresh).
 export async function fetchBridgeConfigFromNetwork(
   userbotId: string,
-): Promise<BullrunBridgeConfig> {
+): Promise<BullgramBridgeConfig> {
   const accessToken = readAdminAccessToken();
   if (!accessToken) {
     throw new Error(
@@ -213,7 +213,7 @@ export async function fetchBridgeConfigFromNetwork(
   }
 
   const payload = await resp.json();
-  const cfg: BullrunBridgeConfig = {
+  const cfg: BullgramBridgeConfig = {
     wsUrl: payload.wsUrl || payload.ws_url || '/api/mtproto-bridge',
     bridgeToken: payload.bridgeToken || payload.bridge_token,
     sessionData: payload.sessionData || payload.session_data,

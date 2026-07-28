@@ -25,15 +25,15 @@ import { updateFullLocalDb } from '../localDb';
 import { init as initUpdateEmitter } from '../updates/apiUpdateEmitter';
 import { init as initClient } from './client';
 import * as methods from './index';
-import { setBridgeConfig } from '../../../util/bullrunBridge';
+import { setBridgeConfig } from '../../../util/bullgramBridge';
 
 export function initApi(_onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs, initialLocalDb?: LocalDb) {
   initUpdateEmitter(_onUpdate);
 
   // Bullgram: hydrate Worker-side bridge config BEFORE initClient runs,
   // otherwise TelegramClient constructor throws when reading fingerprint.
-  if (initialArgs?.bullrunBridgeConfig) {
-    setBridgeConfig(initialArgs.bullrunBridgeConfig);
+  if (initialArgs?.bullgramBridgeConfig) {
+    setBridgeConfig(initialArgs.bullgramBridgeConfig);
   }
 
   if (initialLocalDb) updateFullLocalDb(initialLocalDb);

@@ -12,26 +12,26 @@ backed by the same handler. Pick the surface that fits your consumer:
 
 | Operation | Scopes | REST | Description |
 |---|---|---|---|
-| [`bullrun_infra_summary`](./infra-summary.md) | `mcp:proxy:read` / `api:proxy:read` | `GET /infra/summary` | Owner-level summary: proxies, userbots, tier limits |
+| [`bullgram_infra_summary`](./infra-summary.md) | `mcp:proxy:read` / `api:proxy:read` | `GET /infra/summary` | Owner-level summary: proxies, userbots, tier limits |
 
 ### Proxies
 
 | Operation | Scopes | REST | Description |
 |---|---|---|---|
-| [`bullrun_proxy_preview`](./proxy-preview.md) | `mcp:proxy:write` / `api:proxy:write` | `POST /proxies/preview` | Parse raw proxy paste and return a structured preview |
-| [`bullrun_proxy_import`](./proxy-import.md) | `mcp:proxy:write` / `api:proxy:write` | `POST /proxies/import` | Save a previewed proxy to Bullgram |
+| [`bullgram_proxy_preview`](./proxy-preview.md) | `mcp:proxy:write` / `api:proxy:write` | `POST /proxies/preview` | Parse raw proxy paste and return a structured preview |
+| [`bullgram_proxy_import`](./proxy-import.md) | `mcp:proxy:write` / `api:proxy:write` | `POST /proxies/import` | Save a previewed proxy to Bullgram |
 
 ### Userbots
 
 | Operation | Scopes | REST | Description |
 |---|---|---|---|
-| [`bullrun_userbot_list`](./userbot-list.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots` | List userbot accounts owned by the token owner |
-| [`bullrun_userbot_health`](./userbot-health.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/health` | Runtime + SpamBot snapshot for one userbot |
-| [`bullrun_userbot_dialogs`](./userbot-dialogs.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/dialogs` | Enumerate chats/channels/DMs the userbot is in |
-| [`bullrun_userbot_messages`](./userbot-messages.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages` | Fetch messages from a chat (newest-first, paginated) |
-| [`bullrun_userbot_messages_search`](./userbot-messages-search.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages/search` | Server-side text search in a chat |
-| [`bullrun_userbot_participants`](./userbot-participants.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/participants` | List chat participants (hard-capped at 5000) |
-| [`bullrun_userbot_message_send`](./userbot-message-send.md) | `mcp:userbot:write` / `api:userbot:write` | `POST /userbots/{userbot_id}/messages` | Send a text message to a chat |
+| [`bullgram_userbot_list`](./userbot-list.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots` | List userbot accounts owned by the token owner |
+| [`bullgram_userbot_health`](./userbot-health.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/health` | Runtime + SpamBot snapshot for one userbot |
+| [`bullgram_userbot_dialogs`](./userbot-dialogs.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/dialogs` | Enumerate chats/channels/DMs the userbot is in |
+| [`bullgram_userbot_messages`](./userbot-messages.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages` | Fetch messages from a chat (newest-first, paginated) |
+| [`bullgram_userbot_messages_search`](./userbot-messages-search.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages/search` | Server-side text search in a chat |
+| [`bullgram_userbot_participants`](./userbot-participants.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/participants` | List chat participants (hard-capped at 5000) |
+| [`bullgram_userbot_message_send`](./userbot-message-send.md) | `mcp:userbot:write` / `api:userbot:write` | `POST /userbots/{userbot_id}/messages` | Send a text message to a chat |
 
 ## Conventions
 

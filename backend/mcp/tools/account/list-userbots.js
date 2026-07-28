@@ -1,4 +1,4 @@
-// bullrun_userbot_list — list userbots accessible to the caller.
+// bullgram_userbot_list — list userbots accessible to the caller.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -46,7 +46,7 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.floor(n)));
 }
 
-registerOperation('bullrun_userbot_list', {
+registerOperation('bullgram_userbot_list', {
   handler: listUserbotsHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

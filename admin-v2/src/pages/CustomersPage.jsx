@@ -26,7 +26,7 @@ const BOT_SUBTABS = [
   { id: 'access', label: 'Не смог войти' }
 ];
 
-const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
+const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
 const ABANDONED_STATUS_LABELS = {
   awaiting_receipt: 'Ждет чек',

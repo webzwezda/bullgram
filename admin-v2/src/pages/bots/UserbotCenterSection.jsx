@@ -24,7 +24,7 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
+const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
 function consumeUserbotCenterHandoff() {
   try {
@@ -144,8 +144,8 @@ export function UserbotCenterSection({
   const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
   const [threadUserId, setThreadUserId] = useState(initialThreadUserId);
 
-  const draftStorageKey = 'bullrun_userbot_drafts';
-  const historyStorageKey = 'bullrun_userbot_history';
+  const draftStorageKey = 'bullgram_userbot_drafts';
+  const historyStorageKey = 'bullgram_userbot_history';
   function loadDraft(key, fallback = '') {
     try {
       const raw = localStorage.getItem(draftStorageKey);

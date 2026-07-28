@@ -17,7 +17,7 @@
 // Diff scope: constructor block only (lines ~85-108). Everything else is
 // identical to upstream.
 
-import { getBridgeConfig } from '../../../util/bullrunBridge';
+import { getBridgeConfig } from '../../../util/bullgramBridge';
 import {
   Api as GramJs,
   sessions,
@@ -109,16 +109,16 @@ export async function init(initialArgs: ApiInitialArgs) {
   // Bullgram: pull api_id/api_hash + device fingerprint from the bridge
   // config so Telegram sees the same identity that the auth_key was
   // created with (see comment at top of file).
-  const bullrunFingerprint = getBridgeConfig().fingerprint;
+  const bullgramFingerprint = getBridgeConfig().fingerprint;
 
   client = new TelegramClient(
     session,
-    bullrunFingerprint.api_id,
-    bullrunFingerprint.api_hash,
+    bullgramFingerprint.api_id,
+    bullgramFingerprint.api_hash,
     {
-      deviceModel: bullrunFingerprint.deviceModel || navigator.userAgent || userAgent || DEFAULT_USER_AGENT,
-      systemVersion: bullrunFingerprint.systemVersion || platform || DEFAULT_PLATFORM,
-      appVersion: bullrunFingerprint.appVersion || `${APP_VERSION} ${APP_CODE_NAME}`,
+      deviceModel: bullgramFingerprint.deviceModel || navigator.userAgent || userAgent || DEFAULT_USER_AGENT,
+      systemVersion: bullgramFingerprint.systemVersion || platform || DEFAULT_PLATFORM,
+      appVersion: bullgramFingerprint.appVersion || `${APP_VERSION} ${APP_CODE_NAME}`,
       useWSS: true,
       // Bullgram: our patched getDC returns IPv6 literals. TelegramClient's
       // _initSession compares `serverAddress.includes(':') !== _useIPV6`
@@ -132,8 +132,8 @@ export async function init(initialArgs: ApiInitialArgs) {
       shouldAllowHttpTransport,
       dcId,
       langPack: LANG_PACK,
-      langCode: bullrunFingerprint.langCode || langCode,
-      systemLangCode: bullrunFingerprint.systemLangCode || navigator.language,
+      langCode: bullgramFingerprint.langCode || langCode,
+      systemLangCode: bullgramFingerprint.systemLangCode || navigator.language,
       isTestServerRequested,
     } as any,
   );

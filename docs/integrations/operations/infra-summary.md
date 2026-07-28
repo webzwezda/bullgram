@@ -1,4 +1,4 @@
-# `bullrun_infra_summary`
+# `bullgram_infra_summary`
 
 > Tag: **infra** · Class: **read** · REST: `GET /infra/summary`
 
@@ -44,7 +44,7 @@ unknown field as informational.
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "bullrun_infra_summary",
+    "name": "bullgram_infra_summary",
     "arguments": {}
   }
 }

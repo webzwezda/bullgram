@@ -1,4 +1,4 @@
-# Bullrun Backend
+# Bullgram Backend
 
 Модульный Node.js бэкенд для Telegram paid-access, shop и userbot-операционки.
 
@@ -169,9 +169,9 @@ node server.js
 
 **Production (с PM2):**
 ```bash
-pm2 start server.js --name bullrun-tg-backend
-pm2 restart bullrun-tg-backend
-pm2 logs bullrun-tg-backend
+pm2 start server.js --name bullgram-tg-backend
+pm2 restart bullgram-tg-backend
+pm2 logs bullgram-tg-backend
 ```
 
 ## Деплой
@@ -184,8 +184,8 @@ npm run deploy
 
 **После деплоя обязательно перезапустите PM2:**
 ```bash
-pm2 restart bullrun-tg-backend
-pm2 flush bullrun-tg-backend
+pm2 restart bullgram-tg-backend
+pm2 flush bullgram-tg-backend
 ```
 
 ## Userbot Safety Rules
@@ -246,7 +246,7 @@ pm2 flush bullrun-tg-backend
 **Проверка статуса PM2:**
 ```bash
 pm2 status
-pm2 logs bullrun-tg-backend --lines 100
+pm2 logs bullgram-tg-backend --lines 100
 ```
 
 **Проверка здоровья API:**

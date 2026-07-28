@@ -31,8 +31,8 @@ const DEFAULT_FINGERPRINT = Object.freeze({
 });
 
 const QR_FINGERPRINT_PROFILES = Object.freeze({
-    bullrun_android_a52: Object.freeze({
-        id: 'bullrun_android_a52',
+    bullgram_android_a52: Object.freeze({
+        id: 'bullgram_android_a52',
         label: 'Bullgram Android A52',
         note: 'Рекомендуемый профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
@@ -45,8 +45,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
             langCode: 'en'
         })
     }),
-    bullrun_android_redmi_note_11: Object.freeze({
-        id: 'bullrun_android_redmi_note_11',
+    bullgram_android_redmi_note_11: Object.freeze({
+        id: 'bullgram_android_redmi_note_11',
         label: 'Bullgram Redmi Note 11',
         note: 'Альтернативный Android-профиль Bullgram с русской локалью.',
         fingerprint: Object.freeze({
@@ -59,8 +59,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
             langCode: 'ru'
         })
     }),
-    bullrun_android_a34: Object.freeze({
-        id: 'bullrun_android_a34',
+    bullgram_android_a34: Object.freeze({
+        id: 'bullgram_android_a34',
         label: 'Bullgram Android A34',
         note: 'Запасной Android-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
@@ -73,8 +73,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
             langCode: 'en'
         })
     }),
-    bullrun_iphone_13: Object.freeze({
-        id: 'bullrun_iphone_13',
+    bullgram_iphone_13: Object.freeze({
+        id: 'bullgram_iphone_13',
         label: 'Bullgram iPhone 13',
         note: 'Стабильный iPhone-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
@@ -87,8 +87,8 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
             langCode: 'en'
         })
     }),
-    bullrun_iphone_15_pro: Object.freeze({
-        id: 'bullrun_iphone_15_pro',
+    bullgram_iphone_15_pro: Object.freeze({
+        id: 'bullgram_iphone_15_pro',
         label: 'Bullgram iPhone 15 Pro',
         note: 'Свежий iPhone-профиль Bullgram для QR-логина.',
         fingerprint: Object.freeze({
@@ -103,7 +103,7 @@ const QR_FINGERPRINT_PROFILES = Object.freeze({
     })
 });
 
-const DEFAULT_QR_FINGERPRINT_PROFILE_ID = 'bullrun_android_a52';
+const DEFAULT_QR_FINGERPRINT_PROFILE_ID = 'bullgram_android_a52';
 
 const TELEGRAM_DC_IPV6 = Object.freeze({
     1: '2001:b28:f23d:f001::a',
@@ -516,7 +516,7 @@ export class UserbotService {
     }
 
     async extractSessionFromSqliteBuffer(buffer) {
-        const tempPath = `${os.tmpdir()}/bullrun-restore-${Date.now()}-${Math.random().toString(16).slice(2)}.session`;
+        const tempPath = `${os.tmpdir()}/bullgram-restore-${Date.now()}-${Math.random().toString(16).slice(2)}.session`;
         await fs.writeFile(tempPath, buffer);
         try {
             return await this.extractSessionFromSqlite(tempPath);

@@ -1,4 +1,4 @@
-// bullrun_proxy_import — save a proxy to Bullgram after preview + user confirmation.
+// bullgram_proxy_import — save a proxy to Bullgram after preview + user confirmation.
 // Plan 01 Phase 3: moved from agent-mcp.routes.js inline handler.
 
 import {
@@ -78,7 +78,7 @@ export async function proxyImportHandler({ supabase, req, args }) {
   };
 }
 
-registerOperation('bullrun_proxy_import', {
+registerOperation('bullgram_proxy_import', {
   handler: proxyImportHandler,
   requiredScopes: ['mcp:proxy:write', 'api:proxy:write'],
   requiresIntegrationToken: false,
@@ -92,7 +92,7 @@ registerOperation('bullrun_proxy_import', {
     properties: {
       raw: {
         type: 'string',
-        description: 'Raw proxy text (same format as in bullrun_proxy_preview).'
+        description: 'Raw proxy text (same format as in bullgram_proxy_preview).'
       },
       confirmed: {
         type: 'boolean',

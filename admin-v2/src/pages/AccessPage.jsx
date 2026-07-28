@@ -33,7 +33,7 @@ function accessIssueText(row) {
   return row.status || 'Неизвестно';
 }
 
-const USERBOT_CENTER_HANDOFF_KEY = 'bullrun_userbot_center_handoff';
+const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
 function openUserbotCenterHandoff({ tgUserId, draftMessage = '' }) {
   const params = new URLSearchParams();

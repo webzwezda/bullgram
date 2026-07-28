@@ -1,4 +1,4 @@
-// bullrun_userbot_messages — fetch messages from a chat with optional time window.
+// bullgram_userbot_messages — fetch messages from a chat with optional time window.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -27,7 +27,7 @@ export async function fetchMessagesHandler({ supabase, req, args, userbotService
   });
 }
 
-registerOperation('bullrun_userbot_messages', {
+registerOperation('bullgram_userbot_messages', {
   handler: fetchMessagesHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

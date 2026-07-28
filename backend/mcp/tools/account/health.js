@@ -1,4 +1,4 @@
-// bullrun_userbot_health — runtime + SpamBot snapshot for one userbot.
+// bullgram_userbot_health — runtime + SpamBot snapshot for one userbot.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -30,7 +30,7 @@ export async function loadOwnedUserbot(supabase, ownerId, userbotId) {
   return data;
 }
 
-registerOperation('bullrun_userbot_health', {
+registerOperation('bullgram_userbot_health', {
   handler: userbotHealthHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

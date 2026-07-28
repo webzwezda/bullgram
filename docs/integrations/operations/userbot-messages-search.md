@@ -1,4 +1,4 @@
-# `bullrun_userbot_messages_search`
+# `bullgram_userbot_messages_search`
 
 > Tag: **userbots** · Class: **read** · REST: `GET /userbots/{userbot_id}/messages/search`
 
@@ -21,7 +21,7 @@ client-side — Telegram does the work.
 
 ## Result
 
-Same shape as [`bullrun_userbot_messages`](./userbot-messages.md).
+Same shape as [`bullgram_userbot_messages`](./userbot-messages.md).
 
 ## Examples
 
@@ -31,7 +31,7 @@ Same shape as [`bullrun_userbot_messages`](./userbot-messages.md).
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_messages_search",
+    "name": "bullgram_userbot_messages_search",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111",
       "chat_id": "-1001234567890",

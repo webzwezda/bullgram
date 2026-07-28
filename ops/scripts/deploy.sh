@@ -35,7 +35,7 @@ echo "==> Reconciling managed proxies on server"
 ssh "$SERVER" "cd '$BACKEND_DIR' && node scripts/restore-managed-proxies.mjs"
 
 echo "==> Restarting backend on server"
-ssh "$SERVER" "pm2 restart bullrun-tg-backend && pm2 flush bullrun-tg-backend && pm2 describe bullrun-tg-backend >/dev/null"
+ssh "$SERVER" "pm2 restart bullgram-tg-backend && pm2 flush bullgram-tg-backend && pm2 describe bullgram-tg-backend >/dev/null"
 
 echo "==> Deploying primary v2 frontends"
 "$ROOT_DIR/ops/scripts/deploy-v2.sh"

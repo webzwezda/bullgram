@@ -1,4 +1,4 @@
-// bullrun_userbot_messages_search — server-side text search within a chat.
+// bullgram_userbot_messages_search — server-side text search within a chat.
 // Plan 01 Phase 5.
 
 import { registerOperation } from '../../../shared/operations.js';
@@ -30,7 +30,7 @@ export async function searchMessagesHandler({ supabase, req, args, userbotServic
   });
 }
 
-registerOperation('bullrun_userbot_messages_search', {
+registerOperation('bullgram_userbot_messages_search', {
   handler: searchMessagesHandler,
   requiredScopes: ['mcp:userbot:read', 'api:userbot:read'],
   requiresIntegrationToken: true,

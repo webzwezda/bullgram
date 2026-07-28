@@ -131,7 +131,7 @@ export default function paymentRoutes(supabase, getBotById) {
                 .eq('owner_id', ownerId)
                 .single();
 
-            const providedSecret = req.headers['x-bullrun-webhook-secret'] || req.query.secret;
+            const providedSecret = req.headers['x-bullgram-webhook-secret'] || req.query.secret;
             const expectedSecret = paymentSettings?.billing_webhook_secret;
 
             if (expectedSecret && String(providedSecret || '') !== String(expectedSecret)) {

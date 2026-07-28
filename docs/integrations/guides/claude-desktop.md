@@ -75,8 +75,8 @@ Open a new chat and ask:
 > What userbots do I have, and which ones are healthy?
 
 Claude will:
-1. Call `bullrun_userbot_list` to enumerate your accounts
-2. For each, call `bullrun_userbot_health` to check status
+1. Call `bullgram_userbot_list` to enumerate your accounts
+2. For each, call `bullgram_userbot_health` to check status
 3. Summarize the result
 
 Other useful opening prompts:
@@ -88,7 +88,7 @@ Other useful opening prompts:
 ## Scopes and Claude's behavior
 
 Claude only sees operations your token has scopes for. `tools/list` is
-filtered server-side. If you don't see `bullrun_userbot_message_send`,
+filtered server-side. If you don't see `bullgram_userbot_message_send`,
 your token lacks `mcp:userbot:write`.
 
 For initial setup, use **read-only** scopes. Once you trust the workflow,
@@ -124,7 +124,7 @@ Claude will ask which server to use for each request.
   `untrusted_content: true` flag on every sanitized message is a reminder.
   Don't grant write scopes if you don't trust the channels being read.
 - **Confirm before writes.** Claude Desktop asks for approval on each
-  tool call by default. Keep this enabled for `bullrun_userbot_message_send`.
+  tool call by default. Keep this enabled for `bullgram_userbot_message_send`.
 - **Audit log.** Every Claude-initiated call lands in `/app/claw/log`
   with `source=mcp`. Review periodically.
 
@@ -150,9 +150,9 @@ Reissue the token with the missing scope. See [scopes](../scopes.md).
 
 ### Claude calls the wrong operation
 
-MCP operations are explicitly named (`bullrun_userbot_health`,
-`bullrun_userbot_messages`, etc.). If Claude picks the wrong one, name it
-explicitly in your prompt: "use `bullrun_userbot_messages` to fetch..."
+MCP operations are explicitly named (`bullgram_userbot_health`,
+`bullgram_userbot_messages`, etc.). If Claude picks the wrong one, name it
+explicitly in your prompt: "use `bullgram_userbot_messages` to fetch..."
 
 ## Cursor IDE
 

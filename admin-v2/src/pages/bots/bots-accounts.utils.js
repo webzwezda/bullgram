@@ -281,7 +281,7 @@ export function userbotLotKindLabel(item) {
 
 export const QR_FINGERPRINT_PROFILES = [
   {
-    id: 'bullrun_android_a52',
+    id: 'bullgram_android_a52',
     label: 'Samsung Galaxy A52',
     note: 'Рекомендуемый Android-профиль для QR-логина. Быстрый безопасный старт без родного .json.',
     fingerprint: {
@@ -295,7 +295,7 @@ export const QR_FINGERPRINT_PROFILES = [
     }
   },
   {
-    id: 'bullrun_android_redmi_note_11',
+    id: 'bullgram_android_redmi_note_11',
     label: 'Xiaomi Redmi Note 11',
     note: 'Альтернативный Android-профиль с русской локалью.',
     fingerprint: {
@@ -309,7 +309,7 @@ export const QR_FINGERPRINT_PROFILES = [
     }
   },
   {
-    id: 'bullrun_android_a34',
+    id: 'bullgram_android_a34',
     label: 'Samsung Galaxy A34',
     note: 'Запасной Android-профиль для QR-логина.',
     fingerprint: {
@@ -323,7 +323,7 @@ export const QR_FINGERPRINT_PROFILES = [
     }
   },
   {
-    id: 'bullrun_iphone_13',
+    id: 'bullgram_iphone_13',
     label: 'iPhone 13',
     note: 'Стабильный iPhone-профиль для QR-логина.',
     fingerprint: {
@@ -337,7 +337,7 @@ export const QR_FINGERPRINT_PROFILES = [
     }
   },
   {
-    id: 'bullrun_iphone_15_pro',
+    id: 'bullgram_iphone_15_pro',
     label: 'iPhone 15 Pro',
     note: 'Свежий iPhone-профиль для QR-логина.',
     fingerprint: {

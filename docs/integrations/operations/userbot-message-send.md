@@ -1,4 +1,4 @@
-# `bullrun_userbot_message_send`
+# `bullgram_userbot_message_send`
 
 > Tag: **userbots** · Class: **write** · REST: `POST /userbots/{userbot_id}/messages`
 
@@ -42,7 +42,7 @@ improve delivery odds.
 {
   "method": "tools/call",
   "params": {
-    "name": "bullrun_userbot_message_send",
+    "name": "bullgram_userbot_message_send",
     "arguments": {
       "userbot_id": "11111111-1111-1111-1111-111111111111",
       "chat_id": "-1001234567890",
