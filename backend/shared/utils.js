@@ -45,15 +45,17 @@ export { mapMcpErrorToHttp };
 
 export function getFilteredToolDefinitions(tokenScopes, operations) {
   const scopes = Array.isArray(tokenScopes) ? tokenScopes : [];
-  const registry = operations || {};
+  const list = Array.isArray(operations)
+    ? operations.map((op) => ({ ...op, name: op.name }))
+    : Object.entries(operations || {}).map(([name, op]) => ({ ...op, name: op.name || name }));
   const result = [];
-  for (const [name, op] of Object.entries(registry)) {
+  for (const op of list) {
     if (!op?.transports?.mcp) continue;
     const requiredScopes = op.requiredScopes || [];
     if (!requiredScopes.some((s) => scopes.includes(s))) continue;
     result.push({
-      name,
-      title: op.title || name,
+      name: op.name,
+      title: op.title || op.name,
       description: op.description || '',
       inputSchema: op.inputSchema || { type: 'object', additionalProperties: false, properties: {} }
     });

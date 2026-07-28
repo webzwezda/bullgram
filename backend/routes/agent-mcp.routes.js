@@ -25,7 +25,7 @@ import {
   makeJsonRpcResult,
   makeJsonRpcError
 } from '../shared/errors.js';
-import { listOperations } from '../shared/operations.js';
+import { listOperations, listMcpOperations } from '../shared/operations.js';
 
 const SERVER_INFO = { name: 'bullrun-mcp', version: '0.2.0' };
 
@@ -146,7 +146,7 @@ export default function agentMcpRoutes(supabase, userbotService) {
 
         case 'tools/list':
           return res.json(makeJsonRpcResult(id, {
-            tools: getFilteredToolDefinitions(req.token?.scopes)
+            tools: getFilteredToolDefinitions(req.token?.scopes, listMcpOperations())
           }));
 
         case 'tools/call': {
