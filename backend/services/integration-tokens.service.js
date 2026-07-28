@@ -99,7 +99,6 @@ export function serializeIntegrationToken(record, extra = {}) {
         revoked_reason: record.revoked_reason || null,
         created_at: record.created_at || null,
         updated_at: record.updated_at || null,
-        legacy: false,
         ...extra
     };
 }

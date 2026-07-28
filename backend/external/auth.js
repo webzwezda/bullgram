@@ -9,29 +9,17 @@
 // The dispatcher's scope-guard re-checks the integration-token kind before allowing
 // tools that require it, so this middleware is the first line, not the only one.
 
-import crypto from 'crypto';
-
 import { authenticateIntegrationToken } from '../services/integration-tokens.service.js';
 import { loadProfileForUser } from '../utils/agent-mcp-auth.js';
 import { MCPError, ERROR_CODES } from '../shared/errors.js';
 
-function hashToken(token) {
-  return crypto.createHash('sha256').update(String(token || ''), 'utf8').digest('hex');
-}
-
 async function tryPurpose(supabase, authHeader, purpose, requestIp) {
-  try {
-    return await authenticateIntegrationToken(supabase, {
-      authorizationHeader: authHeader,
-      requiredScopes: [],
-      purpose,
-      requestIp
-    });
-  } catch (e) {
-    // authenticateIntegrationToken throws when requiredScopes don't match — but we
-    // pass empty requiredScopes, so the only throw is a DB error. Surface those.
-    throw e;
-  }
+  return authenticateIntegrationToken(supabase, {
+    authorizationHeader: authHeader,
+    requiredScopes: [],
+    purpose,
+    requestIp
+  });
 }
 
 export async function authenticateRestToken(supabase, req) {
@@ -103,7 +91,6 @@ export function restAuthMiddleware(supabase) {
       req.auth = auth;
       req.user = auth.user;
       req.token = auth.integrationToken;
-      // Keep profile on req for downstream consumers that need tier info.
       req.profile = auth.profile;
       next();
     } catch (e) {
@@ -111,5 +98,3 @@ export function restAuthMiddleware(supabase) {
     }
   };
 }
-
-export { hashToken };
