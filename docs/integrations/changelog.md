@@ -6,6 +6,15 @@ added, never removed without a deprecation window.
 
 Format: `## YYYY-MM-DD — short title`, then bullet points.
 
+## 2026-07-28 — MCP/API tokens default to full per-domain scopes
+
+`purpose=mcp` and `purpose=api` tokens now ship with all per-domain
+read+write scopes by default. Previously they carried only the legacy
+`mcp:use` / `api:use` umbrellas, which left `tools/list` empty and
+made every `tools/call` fail with `insufficient_scope` — the token
+looked valid but couldn't do anything. Use `purpose=custom` for
+narrower scope sets.
+
 ## 2026-07-27 — v1 initial public release
 
 The integration surface ships with:

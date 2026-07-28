@@ -36,8 +36,8 @@ backward compatibility. New integrations should not rely on them.
 
 | Scope | Status |
 |---|---|
-| `mcp:use` | Legacy umbrella — superseded by per-domain scopes |
-| `api:use` | Legacy umbrella — superseded by per-domain scopes |
+| `mcp:use` | Legacy umbrella — kept on `purpose=mcp` tokens for backward compatibility; per-domain scopes do the real work |
+| `api:use` | Legacy umbrella — kept on `purpose=api` tokens for backward compatibility; per-domain scopes do the real work |
 | `integrations:read` | Default scope for `purpose=custom` tokens; no operation currently requires it |
 | `orders:read`, `shop:read`, `payments:read`, `cashdesk:read` | Reserved for future domain expansion |
 

@@ -24,8 +24,8 @@ the secret if you lose it — revoke and reissue.
 
 | Purpose | Prefix | Use case | Default scopes |
 |---|---|---|---|
-| `mcp` | `brmcp_` | AI agents (Claude Desktop, Cursor) | `mcp:proxy:read`, `mcp:userbot:read` |
-| `api` | `brapi_` | Automation (n8n, scripts, SDKs) | `api:userbot:read` |
+| `mcp` | `brmcp_` | AI agents (Claude Desktop, Cursor) | `mcp:proxy:read`, `mcp:proxy:write`, `mcp:userbot:read`, `mcp:userbot:write` |
+| `api` | `brapi_` | Automation (n8n, scripts, SDKs) | `api:proxy:read`, `api:proxy:write`, `api:userbot:read`, `api:userbot:write` |
 | `custom` | `brapi_` | Bespoke integrations | `integrations:read` |
 
 `api` and `custom` both work on REST endpoints. `mcp` works on the JSON-RPC

@@ -4,12 +4,20 @@ import { decrypt, encrypt } from '../utils/crypto.js';
 const PURPOSE_CONFIG = {
     mcp: {
         label: 'Bullgram MCP',
-        defaultScopes: ['mcp:use'],
+        defaultScopes: [
+            'mcp:use',
+            'mcp:proxy:read', 'mcp:proxy:write',
+            'mcp:userbot:read', 'mcp:userbot:write'
+        ],
         tokenPrefix: 'brmcp'
     },
     api: {
         label: 'API ключ',
-        defaultScopes: ['api:use'],
+        defaultScopes: [
+            'api:use',
+            'api:proxy:read', 'api:proxy:write',
+            'api:userbot:read', 'api:userbot:write'
+        ],
         tokenPrefix: 'brapi'
     },
     custom: {
