@@ -2,7 +2,7 @@
 
 Vendored [Ajaxy/telegram-tt](https://github.com/Ajaxy/telegram-tt) with Bullgram
 MTProto bridge patches. Built into `dist/` and deployed to
-`/var/www/bullrun-telegram-web/`, served at `/app/telegram-web/`.
+`/var/www/bullgram-telegram-web/`, served at `/app/telegram-web/`.
 
 ## Layout
 
@@ -47,7 +47,7 @@ Current patches:
   Routes MTProto bytes through Bullgram backend MTProto bridge via WebSocket.
   Handshake: text frame `JSON.stringify({ip, port, dcId, isTestServer,
   isPremium})` → wait for text `"ok"` → binary frames verbatim. Reads
-  `window.__BULLRUN_BRIDGE__ = { wsUrl, bridgeToken }` set by app entry.
+  `window.__BULLGRAM_BRIDGE__ = { wsUrl, bridgeToken }` set by app entry.
 
 - `src/lib/gramjs/network/connection/Connection.ts` — pass `dcId` to
   `socket.connect()` so the bridge can include it in audit logs.
@@ -68,7 +68,7 @@ patch's comment block to understand intent.
 
 - App entry: extract `userbotId` from URL `/app/telegram-web/:userbotId`,
   fetch bridge token from `POST /api/userbot-web/web-session/:id`, set
-  `window.__BULLRUN_BRIDGE__`, then init GramJS.
+  `window.__BULLGRAM_BRIDGE__`, then init GramJS.
 - Session storage: force GramJS to `MemorySession` (no IndexedDB persistence).
   Nuke `gramjs` IDB on boot.
 - Auth bypass: remove phone/login UI. Replace with loading screen while
