@@ -23,6 +23,7 @@ const BOT_SUBTABS = [
   { id: 'customers-active', label: 'Активный доступ' },
   { id: 'customers-expired', label: 'Доступ закончился' },
   { id: 'expired-in-group', label: 'Сгорели, но сидят' },
+  { id: 'paid-orders', label: 'Оплаченные' },
   { id: 'removed-admin', label: 'Удален админом' },
   { id: 'access', label: 'Не смог войти' }
 ];
@@ -1210,6 +1211,38 @@ export function CustomersPage() {
       expires_at: row.expires_at,
       href: '/app/customers?tab=expired-in-group'
     })),
+    'paid-orders': state.orders
+      .filter((row) => row.invoice_status === 'paid')
+      .map((row) => {
+        const isReferral = Number(row.referral_discount_percent || 0) > 0 || Number(row.referral_reward_ton || 0) > 0;
+        const isTrial = !!row.is_trial;
+        const isBroken = !row.joined && !row.access_invite_status && !row.last_access_event;
+
+        let status = row.joined ? 'Оплачен, вошёл' : (isBroken ? 'Доступ мутный' : 'Ждём вход');
+        if (isTrial) status = `Пробник · ${status}`;
+        else if (isReferral) status = `Рефка · ${status}`;
+
+        const reasonParts = [];
+        if (row.tariff_title) reasonParts.push(row.tariff_title);
+        if (isReferral && Number(row.referral_reward_ton || 0) > 0) {
+          reasonParts.push(`${row.referral_reward_ton} TON · ${row.referral_reward_status || 'ждёт'}`);
+        } else if (isReferral && row.referral_referrer_tg_user_id) {
+          reasonParts.push(`TG ${row.referral_referrer_tg_user_id}`);
+        }
+        if (row.problem_reason) reasonParts.push(row.problem_reason);
+
+        return {
+          id: row.subscription_id || (`inv-${row.id}`),
+          tg_user_id: row.tg_user_id,
+          channel_id: row.channel_id,
+          channel_title: row.channel_title,
+          title: row.tariff_title,
+          status,
+          reason: reasonParts.join(' · ') || 'Оплаченный заказ',
+          expires_at: row.expires_at,
+          href: '/app/customers?tab=paid-orders'
+        };
+      }),
     'removed-admin': state.removedAdmin.map((row) => ({
       id: row.id,
       tg_user_id: row.tg_user_id,
@@ -2212,6 +2245,14 @@ export function CustomersPage() {
               <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Никто лишний не сидит</h4>
               <p className="text-slate-500 font-medium text-sm">Все с истёкшей подпиской уже кикнуты.</p>
             </div>
+          ) : effectiveTab === 'paid-orders' && activeRows.length === 0 ? (
+            <div className="p-16 text-center flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Оплаченных заказов нет</h4>
+              <p className="text-slate-500 font-medium text-sm">Либо ничего не продано, либо фильтр слишком узкий.</p>
+            </div>
           ) : activeRows.length === 0 ? (
             <div className="p-16 text-center flex flex-col items-center">
               <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
@@ -2240,6 +2281,8 @@ export function CustomersPage() {
                         if (row.status === 'Доступ активен') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
                         if (row.status === 'Удален админом') return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', icon: AlertCircle };
                         if (row.status === 'Доступ закончился' || row.status === 'Доступ закончился, но человек внутри') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
+                        if (row.status === 'Доступ мутный' || row.status === 'Пробник · Доступ мутный' || row.status === 'Рефка · Доступ мутный') return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: AlertCircle };
+                        if (row.status === 'Оплачен, вошёл' || row.status === 'Пробник · Оплачен, вошёл' || row.status === 'Рефка · Оплачен, вошёл') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
                         return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', icon: null };
                       })();
                       const contextDisplay = getContextDisplay(row, activeTab);
