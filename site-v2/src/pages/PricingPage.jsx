@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Truck,
 } from 'lucide-react';
-import { SALES_LINKS } from '../components/MarketingPrimitives.jsx';
 import { SUPPORT_EMAIL, SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
@@ -25,7 +24,7 @@ const plans = [
     price: '0 ₽',
     period: 'на 14 дней',
     description: 'Пробный доступ к Bullgram, чтобы проверить сценарий платного Telegram-доступа без оплаты.',
-    href: SALES_LINKS.trial,
+    href: '/app/profile',
     action: 'Начать Trial',
     features: [
       'до 50 активных подписчиков',
