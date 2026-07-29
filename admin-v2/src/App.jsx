@@ -32,7 +32,6 @@ const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((modul
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
-const AuditLogPage = lazy(() => import('./pages/AuditLogPage.jsx').then((module) => ({ default: module.AuditLogPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 const ChecklistPage = lazy(() => import('./pages/ChecklistPage.jsx').then((module) => ({ default: module.ChecklistPage })));
@@ -229,7 +228,7 @@ export function App() {
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
                 <Route path="/claw" element={<Navigate to="/mcp" replace />} />
-                <Route path="/claw/log" element={<AuditLogPage />} />
+                <Route path="/claw/log" element={<Navigate to="/mcp" replace />} />
                 <Route path="/integrations" element={<Navigate to="/api" replace />} />
                 <Route path="/api" element={<ApiIntegrationsPage />} />
                 <Route path="/mcp" element={<McpSettingsPage />} />

@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
+import { RecentCallsTable } from '../ui/RecentCallsTable.jsx';
 
 const PURPOSES = {
   api: {
@@ -528,6 +529,10 @@ export function ApiIntegrationsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <RecentCallsTable source="rest" />
+      </div>
     </section>
   );
 }

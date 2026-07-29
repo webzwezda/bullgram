@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
+import { RecentCallsTable } from '../ui/RecentCallsTable.jsx';
 
 function formatWhen(value) {
   if (!value) return 'Еще не использовался';
@@ -412,14 +413,9 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                 <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Все MCP-токены</CardTitle>
                 <p className="mt-1 text-sm text-slate-500">Потерял устройство — отзови токен и выдай новый.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button asChild variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500">
-                  <a href="/app/claw/log">Аудит-лог вызовов</a>
-                </Button>
-                <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
-                  <RefreshCcw className="h-4 w-4" /> Обновить
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
+                <RefreshCcw className="h-4 w-4" /> Обновить
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="px-6 pb-6">
@@ -478,6 +474,8 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
             </div>
           </CardContent>
         </Card>
+
+        <RecentCallsTable source="mcp" />
       </div>
     </section>
   );
