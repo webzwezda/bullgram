@@ -14,7 +14,6 @@ import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
-const CrmPage = lazy(() => import('./pages/CrmPage.jsx').then((module) => ({ default: module.CrmPage })));
 const OrdersPage = lazy(() => import('./pages/OrdersPage.jsx').then((module) => ({ default: module.OrdersPage })));
 const AccessPage = lazy(() => import('./pages/AccessPage.jsx').then((module) => ({ default: module.AccessPage })));
 const CustomerBasesPage = lazy(() => import('./pages/CustomerBasesPage.jsx').then((module) => ({ default: module.CustomerBasesPage })));
@@ -74,7 +73,6 @@ export function App() {
       ? [{
         title: 'Для админа',
         items: [
-          { to: '/crm', label: 'CRM', icon: Users },
           { to: '/analytics', label: 'Аналитика', icon: Activity },
           { to: '/orders', label: 'Заказы', icon: ShoppingBag },
           { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
@@ -211,7 +209,7 @@ export function App() {
                 <Route path="/" element={<CommandCenterPage />} />
                 <Route path="/autopost" element={<QuickStartPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
-                <Route path="/crm" element={<CrmPage />} />
+                <Route path="/crm" element={<Navigate to="/customers?tab=expired-in-group" replace />} />
                 <Route path="/orders" element={<OrdersPage />} />
                 <Route path="/access" element={<AccessPage />} />
                 <Route path="/bases" element={<CustomerBasesPage />} />

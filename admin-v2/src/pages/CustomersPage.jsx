@@ -22,6 +22,7 @@ const BOT_SUBTABS = [
   { id: 'abandoned', label: 'Не смогли оплатить' },
   { id: 'customers-active', label: 'Активный доступ' },
   { id: 'customers-expired', label: 'Доступ закончился' },
+  { id: 'expired-in-group', label: 'Сгорели, но сидят' },
   { id: 'removed-admin', label: 'Удален админом' },
   { id: 'access', label: 'Не смог войти' }
 ];
@@ -824,6 +825,7 @@ export function CustomersPage() {
   const [limit, setLimit] = useState(80);
   const [openActionsRowId, setOpenActionsRowId] = useState(null);
   const [mutatingRowId, setMutatingRowId] = useState(null);
+  const [mutatingBulk, setMutatingBulk] = useState(false);
   const [handoff, setHandoff] = useState({
     abandonedFilter: '',
     orderTgUserIds: []
@@ -1190,6 +1192,23 @@ export function CustomersPage() {
       reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
       href: '/app/customers?tab=customers-expired'
+    })),
+    'expired-in-group': state.access.filter((row) => row.status === 'expired' && row.in_group === true).map((row) => ({
+      id: row.id,
+      tg_user_id: row.tg_user_id,
+      channel_id: row.channel_id,
+      tg_username: row.tg_username,
+      display_name: row.display_name,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      channel_title: row.channel_title,
+      title: row.channel_title,
+      in_group: row.in_group,
+      access_source_label: row.access_source_label,
+      status: 'Сгорел, но сидит',
+      reason: appendAccessSource('Подписка истекла, но человек всё ещё в группе', row.access_source_label),
+      expires_at: row.expires_at,
+      href: '/app/customers?tab=expired-in-group'
     })),
     'removed-admin': state.removedAdmin.map((row) => ({
       id: row.id,
@@ -1643,7 +1662,7 @@ export function CustomersPage() {
       if (action === 'extend-5' || action === 'extend-30' || action === 'extend-forever') {
         const days = action === 'extend-5' ? 5 : action === 'extend-30' ? 30 : 'forever';
 
-        const hasCrmSub = row.id && (['customers-active', 'customers-expired', 'removed-admin', 'access'].includes(activeTab) || row._crmSubscription);
+        const hasCrmSub = row.id && (['customers-active', 'customers-expired', 'expired-in-group', 'removed-admin', 'access'].includes(activeTab) || row._crmSubscription);
 
         if (hasCrmSub) {
           await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
@@ -1721,6 +1740,66 @@ export function CustomersPage() {
       window.alert(error.message);
     } finally {
       setMutatingRowId(null);
+    }
+  }
+
+  async function runBulkAction(rows, action) {
+    if (!rows || !rows.length) {
+      window.alert('В этом хвосте нет строк для действия.');
+      return;
+    }
+
+    const subscriptionIds = Array.from(new Set(rows.map((r) => r.id).filter(Boolean)));
+    if (!subscriptionIds.length) {
+      window.alert('В этом хвосте нет подписок для действия.');
+      return;
+    }
+
+    if (action === 'broadcast') {
+      openBroadcastManualSelection(rows, 'Customers: ручной хвост');
+      return;
+    }
+
+    const count = subscriptionIds.length;
+
+    if (action === 'extend-5' || action === 'extend-30') {
+      const days = action === 'extend-5' ? 5 : 30;
+      if (!window.confirm(`Продлить ${count} подписок на ${days} дней?`)) return;
+
+      setMutatingBulk(true);
+      try {
+        await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
+          accessToken,
+          method: 'POST',
+          body: { subscription_ids: subscriptionIds, days }
+        });
+        window.alert(`Продлили ${count} подписок на ${days} дней. Таблица обновится.`);
+        await loadCustomers();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        setMutatingBulk(false);
+      }
+      return;
+    }
+
+    if (action === 'kick') {
+      if (!window.confirm(`Кикнуть ${count} человек из группы?`)) return;
+
+      setMutatingBulk(true);
+      try {
+        const result = await apiRequest('/api/userbot/crm/subscribers/batch-kick', {
+          accessToken,
+          method: 'POST',
+          body: { subscription_ids: subscriptionIds, action_source: 'customers' }
+        });
+        window.alert(`Кик завершён. Кикнули: ${result.kicked || 0} из ${count}.`);
+        await loadCustomers();
+      } catch (error) {
+        window.alert(error.message);
+      } finally {
+        setMutatingBulk(false);
+      }
     }
   }
 
@@ -2074,9 +2153,47 @@ export function CustomersPage() {
             <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
               {TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}
             </h3>
-            <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
-              {activeRows.length} записей
-            </span>
+            <div className="flex items-center gap-3">
+              {['customers-active', 'customers-expired', 'expired-in-group'].includes(effectiveTab) && activeRows.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => runBulkAction(activeRows, 'extend-5')}
+                    disabled={mutatingBulk}
+                  >
+                    +5 дней
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => runBulkAction(activeRows, 'extend-30')}
+                    disabled={mutatingBulk}
+                  >
+                    +30 дней
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => runBulkAction(activeRows, 'kick')}
+                    disabled={mutatingBulk}
+                  >
+                    Кикнуть хвост
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => runBulkAction(activeRows, 'broadcast')}
+                    disabled={mutatingBulk}
+                  >
+                    → Рассылка
+                  </button>
+                </div>
+              ) : null}
+              <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
+                {activeRows.length} записей
+              </span>
+            </div>
           </div>
 
           {activeTab === 'viewed' && activeRows.length === 0 ? (
@@ -2086,6 +2203,14 @@ export function CustomersPage() {
               </div>
               <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Просмотров пока нет</h4>
               <p className="text-slate-500 font-medium text-sm max-w-sm mb-4">Включите параметр <code className="px-1.5 py-0.5 bg-slate-100 rounded text-amber-600">customer_funnel_events</code> в боте для отслеживания.</p>
+            </div>
+          ) : effectiveTab === 'expired-in-group' && activeRows.length === 0 ? (
+            <div className="p-16 text-center flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shadow-inner mb-4 border border-emerald-100">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Никто лишний не сидит</h4>
+              <p className="text-slate-500 font-medium text-sm">Все с истёкшей подпиской уже кикнуты.</p>
             </div>
           ) : activeRows.length === 0 ? (
             <div className="p-16 text-center flex flex-col items-center">
