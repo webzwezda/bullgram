@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
+  Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
   RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark,
   Zap, CheckSquare, ScrollText
@@ -51,15 +51,10 @@ export function App() {
       ]
     },
     {
-      title: 'Основное',
-      items: [
-        { to: '/', label: 'Командный центр', icon: LayoutDashboard },
-      ]
-    },
-    {
       title: 'Продажи и Клиенты',
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
+        { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
     },
@@ -75,12 +70,6 @@ export function App() {
       items: [
         { to: '/billing', label: 'Касса', icon: Wallet },
         ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
-      ]
-    },
-    {
-      title: 'Маркетинг',
-      items: [
-        { to: '/referrals', label: 'Партнерка', icon: Users },
       ]
     },
     ...(profileRole === 'admin'
@@ -146,12 +135,18 @@ export function App() {
         className={`sidebar bg-white border-r border-slate-200/60 flex flex-col gap-6 p-5 sticky top-0 h-screen overflow-y-auto${mobileNavOpen ? ' sidebar--mobile-open' : ''}`}
         style={{ background: '#ffffff', color: '#0f172a' }}
       >
-        <div className="mb-2 px-2 flex items-center gap-3">
+        <NavLink
+          to="/"
+          end
+          onClick={() => setMobileNavOpen(false)}
+          className="mb-2 px-2 flex items-center gap-3 rounded-xl transition-transform hover:scale-[1.02]"
+          aria-label="Bullgram — Командный центр"
+        >
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20">
             BR
           </div>
           <span className="font-black text-xl tracking-tight text-slate-900">Bullgram</span>
-        </div>
+        </NavLink>
         
         <nav className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1" style={{ scrollbarWidth: 'none' }}>
           {navSections.map((section) => (
@@ -187,6 +182,10 @@ export function App() {
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+            <a href="/" className="transition-colors hover:text-slate-700">
+              На сайт
+            </a>
+            <span className="text-slate-300">·</span>
             <NavLink
               to="/api"
               className={({ isActive }) =>
