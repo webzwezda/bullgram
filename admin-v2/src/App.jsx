@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
-  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark,
+  RefreshCcw, AlertTriangle, LockKeyhole, Landmark,
   Zap, CheckSquare, ScrollText
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -19,7 +19,6 @@ const OrdersPage = lazy(() => import('./pages/OrdersPage.jsx').then((module) => 
 const AccessPage = lazy(() => import('./pages/AccessPage.jsx').then((module) => ({ default: module.AccessPage })));
 const CustomerBasesPage = lazy(() => import('./pages/CustomerBasesPage.jsx').then((module) => ({ default: module.CustomerBasesPage })));
 const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').then((module) => ({ default: module.ClientDossierPage })));
-const ObserverPage = lazy(() => import('./pages/ObserverPage.jsx').then((module) => ({ default: module.ObserverPage })));
 const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
 const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
@@ -85,7 +84,6 @@ export function App() {
           { to: '/dossier', label: 'Досье', icon: UserPlus },
           { to: '/broadcast', label: 'Рассылки', icon: Send },
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
-          { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
           { to: '/claw/log', label: 'Audit log', icon: ScrollText },
         ]
       }]
@@ -243,7 +241,6 @@ export function App() {
                 <Route path="/treasury" element={<ProjectTreasuryPage />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
-                <Route path="/observer" element={<ObserverPage />} />
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/shop" replace />} />
                 <Route path="/profile" element={<ProfilePage />} />

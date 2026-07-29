@@ -47,11 +47,3 @@ export const optionalAuthenticateUser = async (req, res, next) => {
     }
     next();
 };
-
-export const requireObserverRole = (req, res, next) => {
-    if (req.profile?.role !== 'admin') {
-        return res.status(403).json({ error: 'Этот экран доступен только наблюдателю.' });
-    }
-
-    next();
-};
