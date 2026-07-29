@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, MessageCircle, Receipt, Wallet, FilePlus, Code2 } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, Receipt, Wallet, FilePlus, Code2 } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -50,13 +50,6 @@ const navSections = [
     items: [
       { to: '/docs', label: 'API & MCP', icon: Code2 }
     ]
-  },
-  {
-    title: 'Для админа',
-    adminOnly: true,
-    items: [
-      { to: '/telegram', label: 'Telegram', icon: MessageCircle }
-    ]
   }
 ];
 
@@ -65,7 +58,6 @@ export function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isHomeRoute = location.pathname === '/';
   const isPricingRoute = location.pathname === '/pricing';
-  const isTelegramRoute = location.pathname === '/telegram';
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const isDocsRoute = location.pathname.startsWith('/docs');
@@ -93,7 +85,6 @@ export function App() {
     <Suspense fallback={null}>
       <Routes>
         <Route path="/" element={<TelegramPaywallPage />} />
-        <Route path="/telegram" element={<TelegramPaywallPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
         <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
@@ -216,7 +207,7 @@ export function App() {
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
-        {(isHomeRoute || isPricingRoute || isTelegramRoute) ? (
+        {(isHomeRoute || isPricingRoute) ? (
           appRoutes
         ) : (isPayRoute || isCreateRoute || isDocsRoute) ? (
           appRoutes
