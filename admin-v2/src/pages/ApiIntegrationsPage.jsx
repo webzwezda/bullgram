@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -10,15 +10,6 @@ import { Input } from '../components/ui/input.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 const PURPOSES = {
-  mcp: {
-    title: 'Bullgram MCP',
-    description: 'Ключ для клешни и агентов. Агент видит только разрешенные Bullgram tools.',
-    icon: Bot,
-    gradient: 'from-indigo-500 to-indigo-600',
-    shadow: 'shadow-indigo-500/20',
-    label: 'Bullgram MCP',
-    cta: { href: '/app/api/mcp', label: 'Открыть MCP' }
-  },
   api: {
     title: 'API ключ',
     description: 'Общий Bearer token для внешних запросов к Bullgram API: автоматизации, скрипты, интеграции.',
@@ -29,8 +20,8 @@ const PURPOSES = {
   }
 };
 
-// All scopes the new dispatcher understands, grouped for the UI.
-// Mirrors backend/services/integration-tokens.service.js ALLOWED_SCOPES.
+const VISIBLE_PURPOSES = new Set(['api', 'custom']);
+
 const SCOPE_GROUPS = [
   {
     domain: 'userbot',
@@ -62,7 +53,7 @@ function formatWhen(value) {
 }
 
 function purposeTitle(value) {
-  return PURPOSES[value]?.title || 'API key';
+  return PURPOSES[value]?.title || (value === 'custom' ? 'Кастомный' : 'API key');
 }
 
 function maskSecret(value) {
@@ -140,13 +131,11 @@ function IntegrationCard({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{meta.description}</p>
             </div>
           </div>
-          {meta.soon ? <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Скоро</Badge> : statusBadge(token)}
+          {statusBadge(token)}
         </div>
       </CardHeader>
       <CardContent className="space-y-4 px-6 pb-6">
-        {meta.soon ? (
-          <p className="text-sm text-slate-500">Ключи пока не выдаются. Сначала закрепляем общий контур.</p>
-        ) : hasToken ? (
+        {hasToken ? (
           <div className="space-y-3">
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-slate-500">Ключ</span>
@@ -172,12 +161,7 @@ function IntegrationCard({
         )}
 
         <div className="flex flex-wrap gap-2">
-          {meta.cta ? (
-            <Button asChild variant="outline" size="sm" className="h-9 rounded-xl">
-              <a href={meta.cta.href}>{meta.cta.label}</a>
-            </Button>
-          ) : null}
-          {!meta.soon && !hasToken ? (
+          {!hasToken ? (
             <Button size="sm" className="h-9 rounded-xl" type="button" onClick={() => onCreate(purpose)} disabled={busy}>
               <KeyRound className="h-4 w-4" /> Выпустить
             </Button>
@@ -208,7 +192,7 @@ function IntegrationCard({
   );
 }
 
-export function IntegrationsPage() {
+export function ApiIntegrationsPage() {
   const { accessToken } = useAuth();
   const [state, setState] = useState({
     loading: true,
@@ -218,10 +202,9 @@ export function IntegrationsPage() {
   const [secrets, setSecrets] = useState({});
   const [busyId, setBusyId] = useState('');
 
-  // Custom-token creator state.
   const [customOpen, setCustomOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState('');
-  const [customScopes, setCustomScopes] = useState({ 'mcp:userbot:read': true, 'mcp:proxy:read': true });
+  const [customScopes, setCustomScopes] = useState({ 'api:userbot:read': true, 'api:proxy:read': true });
 
   async function loadTokens({ silent = false } = {}) {
     if (!accessToken) return;
@@ -273,13 +256,12 @@ export function IntegrationsPage() {
     }
   }
 
-  const activeByPurpose = useMemo(() => {
-    const result = {};
-    for (const token of state.tokens) {
-      if (token.revoked_at) continue;
-      if (!result[token.purpose]) result[token.purpose] = token;
-    }
-    return result;
+  const activeApiToken = useMemo(() => {
+    return state.tokens.find((t) => t.purpose === 'api' && !t.revoked_at) || null;
+  }, [state.tokens]);
+
+  const visibleTokens = useMemo(() => {
+    return state.tokens.filter((t) => VISIBLE_PURPOSES.has(t.purpose));
   }, [state.tokens]);
 
   async function revealToken(token) {
@@ -330,13 +312,13 @@ export function IntegrationsPage() {
   }
 
   async function reissueToken(token) {
-    if (!window.confirm('Старый ключ сразу перестанет работать. В MCP или внешних скриптах нужно будет вставить новый.')) return;
+    if (!window.confirm('Старый ключ сразу перестанет работать. Внешних скриптах нужно будет вставить новый.')) return;
     setBusyId(token.id);
     try {
       const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/reissue`, {
         accessToken,
         method: 'POST',
-        body: { reason: 'reissued_from_integrations_page' }
+        body: { reason: 'reissued_from_api_page' }
       });
       if (data.record?.id && data.token) {
         setSecrets((prev) => ({ ...prev, [data.record.id]: data.token }));
@@ -357,7 +339,7 @@ export function IntegrationsPage() {
       await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/revoke`, {
         accessToken,
         method: 'POST',
-        body: { reason: 'revoked_from_integrations_page' }
+        body: { reason: 'revoked_from_api_page' }
       });
       setSecrets((prev) => {
         const next = { ...prev };
@@ -373,27 +355,24 @@ export function IntegrationsPage() {
     }
   }
 
-  if (state.loading) return <LoadingState text="Грузим ключи интеграций..." />;
+  if (state.loading) return <LoadingState text="Грузим API ключи..." />;
 
   return (
     <section className="page">
       {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
 
       <div className="space-y-6">
-        {Object.keys(PURPOSES).map((purpose) => (
-          <IntegrationCard
-            key={purpose}
-            purpose={purpose}
-            token={activeByPurpose[purpose]}
-            secret={activeByPurpose[purpose] ? secrets[activeByPurpose[purpose].id] : ''}
-            busy={Boolean(busyId)}
-            onCreate={createToken}
-            onReveal={revealToken}
-            onCopy={copyToken}
-            onReissue={reissueToken}
-            onRevoke={revokeToken}
-          />
-        ))}
+        <IntegrationCard
+          purpose="api"
+          token={activeApiToken}
+          secret={activeApiToken ? secrets[activeApiToken.id] : ''}
+          busy={Boolean(busyId)}
+          onCreate={createToken}
+          onReveal={revealToken}
+          onCopy={copyToken}
+          onReissue={reissueToken}
+          onRevoke={revokeToken}
+        />
       </div>
 
       <Card className="border-slate-200/70 bg-white shadow-sm">
@@ -491,7 +470,7 @@ export function IntegrationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {state.tokens.length ? state.tokens.map((token) => (
+                {visibleTokens.length ? visibleTokens.map((token) => (
                   <tr key={token.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                     <td className="py-3 pr-4">
                       <div className="font-medium text-slate-900">{purposeTitle(token.purpose)}</div>
@@ -539,7 +518,7 @@ export function IntegrationsPage() {
                           <ShieldCheck className="w-6 h-6 text-slate-400" />
                         </div>
                         <p className="text-sm text-slate-500 font-semibold">Пока нет ключей</p>
-                        <p className="mt-1 text-xs text-slate-400">Выпусти ключ для MCP или внешнего API выше.</p>
+                        <p className="mt-1 text-xs text-slate-400">Выпусти API ключ выше.</p>
                       </div>
                     </td>
                   </tr>

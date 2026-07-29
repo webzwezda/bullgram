@@ -2,8 +2,8 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, UserPlus, ShoppingBag, Database,
-  Bot, Rocket, Globe, Settings, Wallet, Receipt, Activity, Send,
-  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark, KeyRound,
+  Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
+  RefreshCcw, AlertTriangle, Eye, LockKeyhole, Landmark,
   Zap, CheckSquare, ScrollText
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -32,7 +32,7 @@ const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then(
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
-const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage.jsx').then((module) => ({ default: module.IntegrationsPage })));
+const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage.jsx').then((module) => ({ default: module.AuditLogPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
@@ -68,7 +68,6 @@ export function App() {
       items: [
         { to: '/userbots', label: 'Юзерботы', icon: Rocket },
         { to: '/proxies', label: 'Прокси', icon: Globe },
-        { to: '/integrations', label: 'Интеграции', icon: KeyRound },
       ]
     },
     {
@@ -98,7 +97,6 @@ export function App() {
           { to: '/broadcast', label: 'Рассылки', icon: Send },
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
           { to: '/observer', label: 'Пульт наблюдения', icon: Eye },
-          { to: '/api/mcp', label: 'MCP', icon: Settings },
           { to: '/claw/log', label: 'Audit log', icon: ScrollText },
         ]
       }]
@@ -187,6 +185,27 @@ export function App() {
             </div>
           ))}
         </nav>
+        <div className="px-3 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+            <NavLink
+              to="/api"
+              className={({ isActive }) =>
+                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
+              }
+            >
+              API
+            </NavLink>
+            <span className="text-slate-300">·</span>
+            <NavLink
+              to="/mcp"
+              className={({ isActive }) =>
+                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
+              }
+            >
+              MCP
+            </NavLink>
+          </div>
+        </div>
       </aside>
 
       <div className="workspace-shell">
@@ -213,11 +232,12 @@ export function App() {
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
-                <Route path="/claw" element={<McpSettingsPage />} />
+                <Route path="/claw" element={<Navigate to="/mcp" replace />} />
                 <Route path="/claw/log" element={<AuditLogPage />} />
-                <Route path="/integrations" element={<IntegrationsPage />} />
-                <Route path="/api" element={<Navigate to="/api/mcp" replace />} />
-                <Route path="/api/mcp" element={<McpSettingsPage />} />
+                <Route path="/integrations" element={<Navigate to="/api" replace />} />
+                <Route path="/api" element={<ApiIntegrationsPage />} />
+                <Route path="/mcp" element={<McpSettingsPage />} />
+                <Route path="/api/mcp" element={<Navigate to="/mcp" replace />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage mode="billing" />} />

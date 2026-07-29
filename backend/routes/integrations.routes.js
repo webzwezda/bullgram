@@ -19,7 +19,11 @@ export default function integrationsRoutes(supabase) {
 
     router.get('/tokens', authenticateUser, async (req, res) => {
         try {
-            const tokens = await listIntegrationTokens(supabase, { ownerId: req.user.id });
+            const purpose = String(req.query?.purpose || '').trim();
+            const tokens = await listIntegrationTokens(supabase, {
+                ownerId: req.user.id,
+                ...(purpose ? { purpose } : {})
+            });
             res.json({ success: true, tokens });
         } catch (error) {
             httpError(res, error, 'Не удалось загрузить ключи интеграций.');
