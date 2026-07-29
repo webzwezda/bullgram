@@ -192,6 +192,27 @@ export function App() {
             </div>
           ))}
         </nav>
+        <div className="px-3 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+            <NavLink
+              to="/app/api"
+              className={({ isActive }) =>
+                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
+              }
+            >
+              API
+            </NavLink>
+            <span className="text-slate-300">·</span>
+            <NavLink
+              to="/app/mcp"
+              className={({ isActive }) =>
+                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
+              }
+            >
+              MCP
+            </NavLink>
+          </div>
+        </div>
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
