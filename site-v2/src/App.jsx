@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, FilePlus } from 'lucide-react';
+import { Home, LayoutDashboard, CreditCard, FilePlus } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -16,20 +16,16 @@ const DocsPage = lazy(() => import('./pages/DocsPage.jsx').then((m) => ({ defaul
 
 const navSections = [
   {
-    title: 'Bullgram',
+    title: 'Навигация',
     items: [
-      { to: '/', label: 'Главная', icon: LayoutDashboard }
+      { to: '/', label: 'Главная', icon: Home },
+      { href: '/app', label: 'Кабинет', icon: LayoutDashboard, external: true }
     ]
   },
   {
-    title: 'Счета',
+    title: 'Сервис',
     items: [
-      { to: '/create', label: 'Создать счёт', icon: FilePlus }
-    ]
-  },
-  {
-    title: 'Оплата',
-    items: [
+      { to: '/create', label: 'Создать счёт', icon: FilePlus },
       { to: '/pricing', label: 'Тарифы', icon: CreditCard }
     ]
   }
@@ -43,10 +39,8 @@ export function App() {
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const isDocsRoute = location.pathname.startsWith('/docs');
-  const { user, profileRole } = useAuth();
-  const navItems = navSections
-    .filter((section) => !section.adminOnly || profileRole === 'admin')
-    .flatMap((section) => section.items);
+  const { user } = useAuth();
+  const navItems = navSections.flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
@@ -83,10 +77,13 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans text-slate-900">
       <div className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
-        <div className="min-w-0">
-          <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Bullgram</div>
-          <div className="truncate text-sm font-black text-slate-900">{currentNavLabel}</div>
-        </div>
+        <a href="/" className="min-w-0 flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-500/20">B</div>
+          <div className="min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Bullgram</div>
+            <div className="truncate text-sm font-black text-slate-900">{currentNavLabel}</div>
+          </div>
+        </a>
         <button
           type="button"
           className="inline-flex h-11 w-11 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white shadow-sm"
@@ -110,7 +107,12 @@ export function App() {
       ) : null}
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-2xl shadow-slate-950/15 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-72 lg:translate-x-0 lg:border-b-0 lg:shadow-none ${mobileNavOpen ? 'translate-x-0' : ''}`}>
-        
+
+        <a href="/" className="flex items-center gap-2 mb-5 group">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-transform group-hover:scale-105">B</div>
+          <span className="font-black text-lg tracking-tight text-slate-900">Bullgram</span>
+        </a>
+
         {user ? (
           <UserProfileCard />
         ) : (
@@ -118,7 +120,7 @@ export function App() {
         )}
 
         <nav className="flex flex-col gap-6 flex-1 overflow-y-auto">
-          {navSections.filter((section) => !section.adminOnly || profileRole === 'admin').map((section) => (
+          {navSections.map((section) => (
             <div key={section.title} className="flex flex-col gap-2">
               <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-400 mb-1">
                 {section.title}
@@ -148,8 +150,8 @@ export function App() {
                       onClick={() => setMobileNavOpen(false)}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
-                        ${isActive 
-                          ? 'bg-blue-50 text-blue-700' 
+                        ${isActive
+                          ? 'bg-blue-50 text-blue-700'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         }
                       `}
@@ -174,23 +176,9 @@ export function App() {
               Docs
             </NavLink>
             <span className="text-slate-300">·</span>
-            <NavLink
-              to="/app/api"
-              className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
-              }
-            >
-              API
-            </NavLink>
+            <a href="/app/api" className="transition-colors hover:text-slate-700">API</a>
             <span className="text-slate-300">·</span>
-            <NavLink
-              to="/app/mcp"
-              className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
-              }
-            >
-              MCP
-            </NavLink>
+            <a href="/app/mcp" className="transition-colors hover:text-slate-700">MCP</a>
           </div>
         </div>
       </aside>
