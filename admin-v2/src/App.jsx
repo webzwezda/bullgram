@@ -4,7 +4,7 @@ import {
   Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
   RefreshCcw, AlertTriangle, LockKeyhole, Landmark,
-  Zap, CheckSquare, ScrollText
+  Zap, CheckSquare
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -84,7 +84,6 @@ export function App() {
           { to: '/dossier', label: 'Досье', icon: UserPlus },
           { to: '/broadcast', label: 'Рассылки', icon: Send },
           { to: '/retention', label: 'Удержание', icon: RefreshCcw },
-          { to: '/claw/log', label: 'Audit log', icon: ScrollText },
         ]
       }]
       : [])

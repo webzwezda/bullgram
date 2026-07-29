@@ -407,14 +407,19 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
         {/* Tokens table */}
         <Card className="border-slate-200/70 bg-white shadow-sm">
           <CardHeader className="px-6 pt-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Все MCP-токены</CardTitle>
                 <p className="mt-1 text-sm text-slate-500">Потерял устройство — отзови токен и выдай новый.</p>
               </div>
-              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
-                <RefreshCcw className="h-4 w-4" /> Обновить
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="ghost" size="sm" className="h-9 rounded-xl text-slate-500">
+                  <a href="/app/claw/log">Аудит-лог вызовов</a>
+                </Button>
+                <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
+                  <RefreshCcw className="h-4 w-4" /> Обновить
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="px-6 pb-6">
