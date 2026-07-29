@@ -123,7 +123,7 @@ function NormalCheckoutButton({ profilePlan, normalEndsAt, pendingOrder, user, a
   if (profilePlan === 'normal') {
     return (
       <a
-        href="/plan"
+        href="/app/profile"
         className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-5 py-4 text-base font-black text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
       >
         <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />

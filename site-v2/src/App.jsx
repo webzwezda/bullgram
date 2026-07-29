@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, Receipt, Wallet, FilePlus } from 'lucide-react';
+import { LayoutDashboard, CreditCard, FilePlus } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -8,9 +8,6 @@ import { UserProfileCard } from './ui/UserProfileCard.jsx';
 import { LoginCard } from './ui/LoginCard.jsx';
 
 const PricingPage = lazy(() => import('./pages/PricingPage.jsx').then((m) => ({ default: m.PricingPage })));
-const ShopPage = lazy(() => import('./pages/ShopPage.jsx').then((m) => ({ default: m.ShopPage })));
-const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx').then((m) => ({ default: m.PurchasesPage })));
-const MyPlanPage = lazy(() => import('./pages/MyPlanPage.jsx').then((m) => ({ default: m.MyPlanPage })));
 const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
@@ -33,16 +30,7 @@ const navSections = [
   {
     title: 'Оплата',
     items: [
-      { to: '/pricing', label: 'Тарифы', icon: CreditCard },
-      { to: '/plan', label: 'Мой тариф', icon: Wallet }
-    ]
-  },
-  {
-    title: 'Магазин',
-    adminOnly: true,
-    items: [
-      { to: '/shop', label: 'Магазин', icon: ShoppingBag },
-      { to: '/purchases', label: 'Покупки', icon: Receipt }
+      { to: '/pricing', label: 'Тарифы', icon: CreditCard }
     ]
   }
 ];
@@ -62,8 +50,6 @@ export function App() {
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Главная';
-    if (location.pathname.startsWith('/purchases')) return 'Мои покупки';
-    if (location.pathname === '/plan') return 'Мой тариф';
     if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
     if (location.pathname.startsWith('/created')) return 'Счёт создан';
     if (location.pathname.startsWith('/docs')) return 'API & MCP';
@@ -80,9 +66,9 @@ export function App() {
       <Routes>
         <Route path="/" element={<TelegramPaywallPage />} />
         <Route path="/pricing" element={<PricingPage />} />
-        <Route path="/shop" element={profileRole === 'admin' ? <ShopPage /> : <Navigate to="/" replace />} />
-        <Route path="/purchases" element={profileRole === 'admin' ? <PurchasesPage /> : <Navigate to="/" replace />} />
-        <Route path="/plan" element={<MyPlanPage />} />
+        <Route path="/shop" element={<Navigate to="/app/profile" replace />} />
+        <Route path="/purchases" element={<Navigate to="/app/profile" replace />} />
+        <Route path="/plan" element={<Navigate to="/app/profile" replace />} />
         <Route path="/pay" element={<PayLayout />}>
           <Route path=":purchaseId" element={<PayPage />} />
         </Route>
