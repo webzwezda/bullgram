@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, ShoppingBag, Receipt, Wallet, FilePlus, Code2 } from 'lucide-react';
+import { LayoutDashboard, CreditCard, ShoppingBag, Receipt, Wallet, FilePlus } from 'lucide-react';
 import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -43,12 +43,6 @@ const navSections = [
     items: [
       { to: '/shop', label: 'Магазин', icon: ShoppingBag },
       { to: '/purchases', label: 'Покупки', icon: Receipt }
-    ]
-  },
-  {
-    title: 'Разработчикам',
-    items: [
-      { to: '/docs', label: 'API & MCP', icon: Code2 }
     ]
   }
 ];
@@ -185,6 +179,15 @@ export function App() {
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+            <NavLink
+              to="/docs"
+              className={({ isActive }) =>
+                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
+              }
+            >
+              Docs
+            </NavLink>
+            <span className="text-slate-300">·</span>
             <NavLink
               to="/app/api"
               className={({ isActive }) =>
