@@ -1,9 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon, CircleCheckBig, CircleAlert, Hash, MessagesSquare } from 'lucide-react';
+import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon, CircleCheckBig, CircleAlert, Save, RotateCcw } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
-import { apiRequest } from '../api/client.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -65,8 +64,11 @@ export function RetentionPage() {
   const [expiring, setExpiring] = useState([]);
   const [helperBots, setHelperBots] = useState([]);
   const [contour, setContour] = useState(null);
-  const [audienceTargets, setAudienceTargets] = useState([]);
-  const [paidCountsByChannel, setPaidCountsByChannel] = useState({});
+  const [reminderDraft, setReminderDraft] = useState('');
+  const [reminderOriginal, setReminderOriginal] = useState('');
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderError, setReminderError] = useState('');
+  const [reminderSaved, setReminderSaved] = useState(false);
   const [activeSubsCount, setActiveSubsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -163,36 +165,6 @@ export function RetentionPage() {
         if (cancelled) return;
         setHelperBots(helpers);
 
-        const paidChannelIds = ['paid_channel_id', 'paid_chat_id']
-          .map((field) => contourValue?.[field])
-          .filter(Boolean);
-
-        let nextPaidCounts = {};
-        if (paidChannelIds.length > 0) {
-          const { data: paidSubs, error: paidSubsError } = await supabase
-            .from('subscriptions')
-            .select('id, channel_id')
-            .in('channel_id', paidChannelIds)
-            .eq('status', 'active');
-          if (paidSubsError) throw paidSubsError;
-          (paidSubs || []).forEach((s) => {
-            nextPaidCounts[s.channel_id] = (nextPaidCounts[s.channel_id] || 0) + 1;
-          });
-        }
-        if (cancelled) return;
-        setPaidCountsByChannel(nextPaidCounts);
-
-        if (accessToken) {
-          try {
-            const audienceData = await apiRequest(`/api/audience?contourId=${encodeURIComponent(selectedBotId)}`, { accessToken });
-            if (cancelled) return;
-            setAudienceTargets(audienceData?.targets || []);
-          } catch (audErr) {
-            if (cancelled) return;
-            setAudienceTargets([]);
-          }
-        }
-
         if (channelIds.length === 0) {
           if (reqId !== reqIdRef.current) return;
           setEvents([]);
@@ -252,7 +224,7 @@ export function RetentionPage() {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [user?.id, selectedBotId, bots.length, accessToken]);
+  }, [user?.id, selectedBotId, bots.length]);
 
   const stats = useMemo(() => {
     const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
@@ -294,39 +266,94 @@ export function RetentionPage() {
     return { text: normalized || 'неизвестно', cls: 'bg-slate-100 text-slate-600' };
   }
 
-  const audienceCards = useMemo(() => {
-    if (!contour) return [];
-    const audienceByType = new Map();
-    (audienceTargets || []).forEach((t) => {
-      audienceByType.set(t.targetType, t);
-    });
+  // Загрузка reminder_text (один раз — это owner-level настройка, не зависит от бота)
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
 
-    const cards = [
-      { field: 'public_channel_id', targetType: 'public_channel', label: 'Витрина', Icon: Hash, kind: 'public' },
-      { field: 'paid_channel_id', targetType: 'paid_channel', label: 'Платный канал', Icon: Hash, kind: 'paid' },
-      { field: 'public_chat_id', targetType: 'public_chat', label: 'Публичный чат', Icon: MessagesSquare, kind: 'public' },
-      { field: 'paid_chat_id', targetType: 'paid_chat', label: 'Приватный чат', Icon: MessagesSquare, kind: 'paid' }
-    ];
+    async function loadReminder() {
+      try {
+        const { data, error } = await supabase
+          .from('payment_settings')
+          .select('reminder_text')
+          .eq('owner_id', user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error && !(error.message || '').includes('No rows found')) {
+          setReminderError(error.message);
+          return;
+        }
+        const text = data?.reminder_text || '';
+        setReminderDraft(text);
+        setReminderOriginal(text);
+      } catch (err) {
+        if (!cancelled) setReminderError(err.message || 'Ошибка загрузки');
+      }
+    }
 
-    return cards.map((def) => {
-      const channelId = contour[def.field] || null;
-      if (!channelId) {
-        return { ...def, channelId: null, title: null, value: null, hint: 'не привязан' };
-      }
-      const audience = audienceByType.get(def.targetType);
-      const title = audience?.channelTitle || botChannels.find((c) => c.id === channelId)?.title || 'Без названия';
-      let value;
-      let hint;
-      if (def.kind === 'paid') {
-        value = paidCountsByChannel[channelId] ?? 0;
-        hint = 'активных';
-      } else {
-        value = audience?.totalMembers ?? null;
-        hint = typeof value === 'number' ? 'участников' : 'нет sync';
-      }
-      return { ...def, channelId, title, value, hint };
-    });
-  }, [contour, audienceTargets, botChannels, paidCountsByChannel]);
+    loadReminder();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const previewChannelName = useMemo(() => {
+    const paidChannelId = contour?.paid_channel_id;
+    if (paidChannelId) {
+      const ch = botChannels.find((c) => c.id === paidChannelId);
+      if (ch?.title) return ch.title;
+    }
+    if (botChannels.length > 0) return botChannels[0].title;
+    return 'название канала';
+  }, [contour, botChannels]);
+
+  const userbotWrappedPreview = useMemo(() => {
+    if (!reminderDraft.trim()) return '';
+    return `🔔 **Системное уведомление!**\nМой бот не смог до тебя достучаться, пишу лично.\n\n${reminderDraft}`;
+  }, [reminderDraft]);
+
+  const reminderDirty = reminderDraft !== reminderOriginal;
+
+  function insertStandardTemplate() {
+    setReminderDraft(`⏰ **Подписка в «{channel_name}» истекает через 24 часа**
+
+Не теряй доступ — продли в один клик прямо в боте.
+
+👉 *Если уже оплатил — просто проигнорируй это сообщение.*`);
+  }
+
+  function insertTrialUpsellTemplate() {
+    setReminderDraft(`🔥 **Пробник заканчивается завтра**
+
+Тебе зашёл «{channel_name}» — забери полный тариф «{upsell_tariff_name}» за **{upsell_price} {upsell_currency}** и оставайся на потоке.
+
+👉 *Жми кнопку ниже, чтобы перейти с пробника на полный доступ.*`);
+  }
+
+  function resetReminder() {
+    setReminderDraft(reminderOriginal);
+  }
+
+  async function saveReminder() {
+    if (!user?.id) return;
+    setReminderSaving(true);
+    setReminderError('');
+    setReminderSaved(false);
+    try {
+      const { error } = await supabase
+        .from('payment_settings')
+        .upsert({
+          owner_id: user.id,
+          reminder_text: reminderDraft
+        }, { onConflict: 'owner_id' });
+      if (error) throw error;
+      setReminderOriginal(reminderDraft);
+      setReminderSaving(false);
+      setReminderSaved(true);
+      window.setTimeout(() => setReminderSaved(false), 2500);
+    } catch (err) {
+      setReminderSaving(false);
+      setReminderError(err.message || 'Ошибка сохранения');
+    }
+  }
 
   const channelTitleById = useMemo(() => {
     const map = new Map();
@@ -485,49 +512,90 @@ export function RetentionPage() {
           )}
         </section>
 
-        {audienceCards.length > 0 ? (
-          <section className="p-6 md:p-8 border-b border-slate-100">
-            <div className="flex items-baseline justify-between mb-4">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
-                Аудитория
-              </h3>
-            </div>
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              Что отправляется подписчикам
+            </h3>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Превью для: <span className="font-bold text-slate-600">{previewChannelName}</span>
+            </span>
+          </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {audienceCards.map((card, idx) => {
-                const Icon = card.Icon;
-                const isUnbound = !card.channelId;
-                const isMissing = card.channelId && card.value === null;
-                return (
-                  <div
-                    key={idx}
-                    className={`p-5 rounded-2xl border ${isUnbound ? 'bg-slate-50/30 border-dashed border-slate-200' : 'bg-slate-50/50 border-slate-100'}`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.label}</span>
-                      <Icon className={`w-4 h-4 ${isUnbound ? 'text-slate-300' : card.kind === 'paid' ? 'text-emerald-600' : 'text-slate-500'}`} />
-                    </div>
-                    {isUnbound ? (
-                      <div className="text-2xl font-black tracking-tighter text-slate-300">—</div>
-                    ) : (
-                      <>
-                        <div className={`text-2xl font-black tracking-tighter ${card.kind === 'paid' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                          {isMissing ? '—' : card.value}
-                        </div>
-                        <div className="text-xs font-medium text-slate-500 mt-1 truncate" title={card.title}>
-                          {card.hint}
-                        </div>
-                      </>
-                    )}
-                    {card.title && !isUnbound ? (
-                      <div className="text-[11px] text-slate-400 mt-1 truncate" title={card.title}>{card.title}</div>
-                    ) : null}
-                  </div>
-                );
-              })}
+          <div className="flex items-center gap-2 mb-3">
+            <Bot className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span className="text-sm font-bold text-slate-700">Основное сообщение (от бота)</span>
+            <span className="text-xs text-slate-400 font-medium">— редактируемое</span>
+            <div className="ml-auto flex gap-1.5">
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                onClick={insertStandardTemplate}
+              >
+                Стандарт
+              </button>
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                onClick={insertTrialUpsellTemplate}
+              >
+                Пробник → апселл
+              </button>
             </div>
-          </section>
-        ) : null}
+          </div>
+
+          <textarea
+            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 font-mono leading-relaxed focus:outline-none focus:border-slate-400 min-h-[140px]"
+            value={reminderDraft}
+            onChange={(event) => setReminderDraft(event.target.value)}
+            placeholder="Текст, который бот отправит подписчику за 24ч до истечения подписки."
+          />
+
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={saveReminder}
+              disabled={!reminderDirty || reminderSaving}
+            >
+              <Save className="w-3.5 h-3.5" />
+              {reminderSaving ? 'Сохраняю...' : 'Сохранить'}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={resetReminder}
+              disabled={!reminderDirty || reminderSaving}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Отменить правки
+            </button>
+            {reminderSaved ? (
+              <span className="text-xs font-bold text-emerald-600 ml-1">✓ Сохранено</span>
+            ) : null}
+            {reminderDirty && !reminderSaved ? (
+              <span className="text-xs font-medium text-amber-600 ml-1">есть несохранённые правки</span>
+            ) : null}
+            {reminderError ? (
+              <span className="text-xs font-bold text-rose-600 ml-1">{reminderError}</span>
+            ) : null}
+          </div>
+
+          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
+          </div>
+
+          <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <Rocket className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm font-bold text-slate-700">Userbot fallback</span>
+              <span className="text-xs text-slate-400 font-medium">— если бот заблокирован у подписчика (только чтение)</span>
+            </div>
+            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+{userbotWrappedPreview || '— пусто — редактируй основное сообщение выше —'}
+            </pre>
+          </div>
+        </section>
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-baseline justify-between mb-4">
