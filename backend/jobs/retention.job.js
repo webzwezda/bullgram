@@ -69,6 +69,7 @@ export const startRetention = (supabase, getBotFunction) => {
 
                 let sourceTariff = null;
                 let upsellTariff = null;
+                let lastPaidTariff = null;
                 try {
                     const { data: recentInvoices } = await supabase
                         .from('invoices')
@@ -81,6 +82,10 @@ export const startRetention = (supabase, getBotFunction) => {
                     sourceTariff = (recentInvoices || []).find(invoice =>
                         invoice.tariffs &&
                         invoice.tariffs.is_trial
+                    )?.tariffs || null;
+
+                    lastPaidTariff = (recentInvoices || []).find(invoice =>
+                        invoice.tariffs && !invoice.tariffs.is_trial
                     )?.tariffs || null;
 
                     if (sourceTariff?.upsell_tariff_id) {
@@ -100,24 +105,59 @@ export const startRetention = (supabase, getBotFunction) => {
 
                 // Дефолтный текст, если админ ничего не написал
                 const defaultText = sourceTariff?.is_trial && upsellTariff
-                    ? `⏳ **Пробник почти закончился**\n\nТвой доступ в «**{channel_name}**» скоро сгорит.\n\nЕсли хочешь остаться дальше, переходи в основной тариф:\n**{upsell_tariff_name}** — **{upsell_price} {upsell_currency}**\n\nЗайди в меню бота и оформи полный доступ.`
-                    : `⏳ **Привет!**\n\nТвой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.\n\nЧтобы не потерять доступ, пожалуйста, зайди в меню и продли подписку!`;
+                    ? `⏳ **Пробник почти закончился**\n\nТвой доступ в «**{channel_name}**» скоро сгорит.\n\nЕсли хочешь остаться дальше, переходи в основной тариф:\n**{upsell_tariff_name}** — **{upsell_price} {upsell_currency}**\n\n👉 {renewal_link}`
+                    : `⏳ **Привет!**\n\nТвой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.\n\nЧтобы не потерять доступ, продли в один клик:\n👉 {renewal_link}\n\n_Если уже оплатил — просто проигнорируй это сообщение._`;
 
                 let rawText = (settings && settings.reminder_text) ? settings.reminder_text : defaultText;
 
-                // Меняем плейсхолдер на реальное название канала
+                // Определяем тариф для продления и строим deep-link
+                let renewalTariffId = null;
+                if (sourceTariff?.is_trial && upsellTariff) {
+                    renewalTariffId = upsellTariff.id;
+                } else if (lastPaidTariff?.id) {
+                    renewalTariffId = lastPaidTariff.id;
+                }
+
+                let botUsername = null;
+                try {
+                    if (bot?.botInfo?.username) {
+                        botUsername = bot.botInfo.username;
+                    } else if (bot) {
+                        const me = await bot.telegram.getMe();
+                        botUsername = me?.username || null;
+                    }
+                } catch (e) {
+                    // не критично
+                }
+
+                const renewalLink = botUsername
+                    ? (renewalTariffId
+                        ? `https://t.me/${botUsername}?start=buy_${renewalTariffId}`
+                        : `https://t.me/${botUsername}`)
+                    : '{renewal_link}';
+
+                // Меняем плейсхолдеры на реальные значения
                 const messageText = rawText
                     .replaceAll('{channel_name}', sub.channels.title)
                     .replaceAll('{upsell_tariff_name}', upsellTariff?.title || 'основной тариф')
                     .replaceAll('{upsell_price}', upsellTariff?.price || '')
-                    .replaceAll('{upsell_currency}', upsellTariff?.currency || '');
+                    .replaceAll('{upsell_currency}', upsellTariff?.currency || '')
+                    .replaceAll('{renewal_link}', renewalLink);
 
                 let sentByOfficialBot = false;
 
-                // 2. Пробуем отправить официальным ботом
+                // 2. Пробуем отправить официальным ботом (с inline-кнопкой)
                 if (bot) {
                     try {
-                        await bot.telegram.sendMessage(sub.tg_user_id, messageText, { parse_mode: 'Markdown' });
+                        const sendMessageOptions = { parse_mode: 'Markdown' };
+                        if (renewalTariffId && botUsername) {
+                            sendMessageOptions.reply_markup = {
+                                inline_keyboard: [[
+                                    { text: '💳 Продлить доступ', url: renewalLink }
+                                ]]
+                            };
+                        }
+                        await bot.telegram.sendMessage(sub.tg_user_id, messageText, sendMessageOptions);
                         sentByOfficialBot = true;
                         console.log(`[Напоминание] Успешно отправлено ботом юзеру ${sub.tg_user_id}`);
                         try {
@@ -131,7 +171,10 @@ export const startRetention = (supabase, getBotFunction) => {
                                 payload: {
                                     delivered_by: 'bot',
                                     bot_id: botId || null,
+                                    bot_username: botUsername,
                                     message_text: messageText,
+                                    renewal_tariff_id: renewalTariffId,
+                                    renewal_link: renewalLink,
                                     source_tariff_id: sourceTariff?.id || null,
                                     upsell_tariff_id: upsellTariff?.id || null
                                 }

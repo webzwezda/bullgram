@@ -315,17 +315,21 @@ export function RetentionPage() {
   function insertStandardTemplate() {
     setReminderDraft(`⏰ **Подписка в «{channel_name}» истекает через 24 часа**
 
-Не теряй доступ — продли в один клик прямо в боте.
+Чтобы остаться и не потерять место — продли в один клик:
 
-👉 *Если уже оплатил — просто проигнорируй это сообщение.*`);
+👉 {renewal_link}
+
+_Если уже оплатил — просто проигнорируй это сообщение._`);
   }
 
   function insertTrialUpsellTemplate() {
-    setReminderDraft(`🔥 **Пробник заканчивается завтра**
+    setReminderDraft(`🔥 **Пробник в «{channel_name}» заканчивается завтра**
 
-Тебе зашёл «{channel_name}» — забери полный тариф «{upsell_tariff_name}» за **{upsell_price} {upsell_currency}** и оставайся на потоке.
+Переходи на полный тариф и оставайся на потоке:
 
-👉 *Жми кнопку ниже, чтобы перейти с пробника на полный доступ.*`);
+«{upsell_tariff_name}» — **{upsell_price} {upsell_currency}**
+
+👉 {renewal_link}`);
   }
 
   function resetReminder() {
@@ -582,7 +586,10 @@ export function RetentionPage() {
           </div>
 
           <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
-            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
+            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{renewal_link}`}</code> → ссылка на оплату тарифа (https://t.me/бот?start=buy_…), <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+            К тексту от бота автоматически добавляется inline-кнопка «💳 Продлить доступ». Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
           </div>
 
           <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">
