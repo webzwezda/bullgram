@@ -119,17 +119,19 @@ export function RetentionPage() {
       }
 
       try {
-        const [{ data: channelsData, error: channelsError }, { data: contourData }] = await Promise.all([
+        const [{ data: channelsData, error: channelsError }, { data: contourData, error: contourError }] = await Promise.all([
           supabase
             .from('channels')
             .select('id, title')
             .eq('bot_id', selectedBotId),
           supabase
             .from('sales_bot_contours')
-            .select('id, userbot_mode, selected_userbot_id, selected_userbot_ids')
+            .select('bot_id, userbot_mode, selected_userbot_id, selected_userbot_ids')
             .eq('bot_id', selectedBotId)
             .maybeSingle()
         ]);
+
+        if (contourError && !(contourError.message || '').includes('No rows found')) throw contourError;
 
         if (channelsError) throw channelsError;
         const channelIds = (channelsData || []).map((c) => c.id);
