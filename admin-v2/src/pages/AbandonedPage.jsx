@@ -1,50 +1,66 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ShoppingCart, Send, Tag, Clock, AlertCircle, Ban, ChevronRight, Bot as BotIcon, Save, RotateCcw, Inbox } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { StatCard } from '../ui/StatCard.jsx';
 
-const FILTERS = [
-  { id: 'all', label: 'Весь хвост' },
-  { id: 'fresh', label: 'Свежие' },
-  { id: 'queued', label: 'В очереди' },
-  { id: 'awaiting_receipt', label: 'Ждут чек' },
-  { id: 'reminded', label: 'Уже дожаты' },
-  { id: 'stale', label: 'Протухшие' },
-  { id: 'trial', label: 'Пробники' },
-  { id: 'regular', label: 'Обычные тарифы' }
-];
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 
-function formatWhen(value) {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(value));
+const STANDARD_TEMPLATE = `🛒 **Привет!**
+
+Я заметил, что ты хотел купить «**{tariff_name}**», но остановился.
+
+🎁 Только сейчас я даю тебе **скидку {discount_percent}%**!
+Новая цена: **{discount_price} {currency}** (вместо {old_price} {currency}).
+
+👉 *Жми кнопку ниже, чтобы забрать доступ со скидкой.*`;
+
+const TRIAL_TEMPLATE = `🧪 **Ты почти забрал пробник**
+
+Ты нажал на «**{tariff_name}**», но не завершил оплату.
+
+Если хочешь быстро посмотреть, что внутри — просто вернись в бота и забери пробный доступ.
+
+👉 *Пробник нужен как быстрый вход. Не тяни, пока интерес горячий.*`;
+
+function formatRelativeTime(iso) {
+  if (!iso) return '—';
+  const ts = new Date(iso).getTime();
+  const now = Date.now();
+  const diff = now - ts;
+  if (diff < 60_000) return 'только что';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} мин назад`;
+  if (diff < 24 * 3600_000) {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  const hoursTotal = Math.floor(diff / 3600_000);
+  if (hoursTotal < 48) return `${hoursTotal} ч назад`;
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function getInvoiceStatus(inv) {
-  const createdAt = new Date(inv.created_at).getTime();
-  const ageHours = (Date.now() - createdAt) / (1000 * 60 * 60);
-
-  if (inv.status === 'awaiting_receipt') {
-    return { key: 'awaiting_receipt', text: 'Ждет чек', className: 'pill pill--warning' };
+function deliveryBadge(deliveredBy = '', payload = {}) {
+  switch (deliveredBy) {
+    case 'bot':
+      return { text: 'Бот', cls: 'bg-emerald-50 text-emerald-700', Icon: Send };
+    case 'skipped': {
+      const reason = payload?.reason;
+      const text = reason === 'already_subscribed'
+        ? 'Пропущено: активная подписка'
+        : reason === 'newer_invoice_exists'
+          ? 'Пропущено: создан новый счёт'
+          : 'Пропущено';
+      return { text, cls: 'bg-slate-100 text-slate-600', Icon: Ban };
+    }
+    case 'failed':
+      return { text: 'Не доставлено', cls: 'bg-rose-50 text-rose-700', Icon: AlertCircle };
+    default:
+      return { text: 'Неизвестно', cls: 'bg-slate-100 text-slate-600', Icon: AlertCircle };
   }
-  if (inv.reminded) {
-    return { key: 'reminded', text: 'Уже дожат', className: 'pill pill--ok' };
-  }
-  if (ageHours < 2) {
-    return { key: 'fresh', text: 'Свежий', className: 'pill' };
-  }
-  if (ageHours < 24) {
-    return { key: 'queued', text: 'В очереди', className: 'pill pill--warning' };
-  }
-  return { key: 'stale', text: 'Протух', className: 'pill pill--danger' };
-}
-
-function openApp(href) {
-  if (!href) return;
-  window.location.href = href;
 }
 
 function downloadCsv(filename, header, rows) {
@@ -61,546 +77,728 @@ function downloadCsv(filename, header, rows) {
   URL.revokeObjectURL(url);
 }
 
+function openApp(href) {
+  if (!href) return;
+  window.location.href = href;
+}
+
 export function AbandonedPage() {
   const { user } = useAuth();
-  const [filter, setFilter] = useState('all');
-  const [search, setSearch] = useState('');
-  const [settingsDraft, setSettingsDraft] = useState({
-    abandoned_text: '',
-    abandoned_discount_percent: 0,
-    reminder_text: ''
-  });
-  const [state, setState] = useState({
-    loading: true,
-    refreshing: false,
-    saving: false,
-    error: '',
-    settings: null,
-    invoices: [],
-    updatedAt: null
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedBotId = searchParams.get('bot') || '';
+
+  const [bots, setBots] = useState([]);
+  const [botChannels, setBotChannels] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [inWindow, setInWindow] = useState([]);
+  const [stale, setStale] = useState([]);
+  const [textDraft, setTextDraft] = useState('');
+  const [textOriginal, setTextOriginal] = useState('');
+  const [discountDraft, setDiscountDraft] = useState(0);
+  const [discountOriginal, setDiscountOriginal] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [expandedEventId, setExpandedEventId] = useState(null);
+  const reqIdRef = useRef(0);
 
   useEffect(() => {
-    try {
-      const rawPreset = window.localStorage.getItem('abandoned_filter_preset');
-      if (!rawPreset) return;
-      const preset = JSON.parse(rawPreset);
-      if (preset?.filter) {
-        setFilter(String(preset.filter));
-      }
-      window.localStorage.removeItem('abandoned_filter_preset');
-    } catch (error) {
-      console.warn('Не удалось применить preset abandoned_filter_preset:', error);
-      window.localStorage.removeItem('abandoned_filter_preset');
-    }
-  }, []);
-
-  useEffect(() => {
+    if (!user?.id) return;
     let cancelled = false;
 
-    async function loadAbandoned({ silent = false } = {}) {
-      if (!user?.id) return;
+    async function loadBots() {
+      const { data, error: botsError } = await supabase
+        .from('tg_accounts')
+        .select('id, tg_username, custom_label, bot_role')
+        .eq('owner_id', user.id)
+        .eq('account_type', 'bot')
+        .neq('bot_role', 'ops')
+        .order('created_at', { ascending: true });
 
+      if (botsError) {
+        setError(botsError.message);
+        setBots([]);
+        setLoading(false);
+        return;
+      }
+      const filtered = data || [];
+      if (cancelled) return;
+      setBots(filtered);
+      if (filtered.length > 0 && !selectedBotId) {
+        const next = new URLSearchParams(searchParams);
+        next.set('bot', filtered[0].id);
+        setSearchParams(next);
+      }
+      if (filtered.length === 0) {
+        setLoading(false);
+      }
+    }
+
+    loadBots();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !selectedBotId || bots.length === 0) return;
+    if (!bots.some((b) => b.id === selectedBotId)) return;
+
+    let cancelled = false;
+
+    async function loadBotData({ silent = false } = {}) {
+      const reqId = ++reqIdRef.current;
       if (!silent) {
-        setState((prev) => ({
-          ...prev,
-          loading: !prev.updatedAt,
-          refreshing: !!prev.updatedAt,
-          error: ''
-        }));
+        setLoading(true);
+        setError('');
       }
 
       try {
-        const { data: settings } = await supabase
-          .from('payment_settings')
-          .select('abandoned_text, abandoned_discount_percent, reminder_text')
-          .eq('owner_id', user.id)
-          .maybeSingle();
+        const { data: channelsData, error: channelsError } = await supabase
+          .from('channels')
+          .select('id, title')
+          .eq('bot_id', selectedBotId);
 
-        const { data: tariffs, error: tariffsError } = await supabase
-          .from('tariffs')
-          .select('id')
-          .eq('owner_id', user.id);
+        if (channelsError) throw channelsError;
+        const channelIds = (channelsData || []).map((c) => c.id);
+        if (cancelled) return;
+        setBotChannels(channelsData || []);
 
-        if (tariffsError) throw tariffsError;
+        if (channelIds.length === 0) {
+          if (reqId !== reqIdRef.current) return;
+          setEvents([]);
+          setInWindow([]);
+          setStale([]);
+          setLoading(false);
+          return;
+        }
 
-        const tariffIds = (tariffs || []).map((item) => item.id);
-        let invoices = [];
-
-        if (tariffIds.length > 0) {
-          const { data, error } = await supabase
+        const [{ data: invoicesData, error: invoicesError }, { data: eventsData, error: eventsError }] = await Promise.all([
+          supabase
             .from('invoices')
-            .select('*, tariffs(title, is_trial, trial_label, price)')
-            .in('tariff_id', tariffIds)
+            .select('id, tg_user_id, amount, currency, status, created_at, tariff_id, channel_id, tariffs(title, is_trial, trial_label, price)')
+            .in('channel_id', channelIds)
             .in('status', ['pending', 'awaiting_receipt'])
+            .eq('reminded', false)
             .order('created_at', { ascending: false })
-            .limit(100);
+            .limit(200),
+          supabase
+            .from('access_events')
+            .select('id, created_at, channel_id, invoice_id, tg_user_id, payload')
+            .eq('event_type', 'abandoned_reminder')
+            .in('channel_id', channelIds)
+            .order('created_at', { ascending: false })
+            .limit(50)
+        ]);
 
-          if (error) throw error;
-          invoices = data || [];
-        }
+        if (invoicesError) throw invoicesError;
+        if (eventsError) throw eventsError;
+        if (cancelled) return;
+        if (reqId !== reqIdRef.current) return;
 
-        if (!cancelled) {
-          setState({
-            loading: false,
-            refreshing: false,
-            saving: false,
-            error: '',
-            settings: settings || null,
-            invoices,
-            updatedAt: new Date().toISOString()
-          });
-          setSettingsDraft({
-            abandoned_text: settings?.abandoned_text || '',
-            abandoned_discount_percent: Number(settings?.abandoned_discount_percent || 0),
-            reminder_text: settings?.reminder_text || ''
-          });
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setState({
-            loading: false,
-            refreshing: false,
-            saving: false,
-            error: error.message,
-            settings: null,
-            invoices: [],
-            updatedAt: null
-          });
-        }
+        const now = Date.now();
+        const twoHoursAgoTs = now - TWO_HOURS_MS;
+        const threeHoursAgoTs = now - THREE_HOURS_MS;
+
+        const allInvoices = invoicesData || [];
+        const inWindowList = [];
+        const staleList = [];
+        allInvoices.forEach((inv) => {
+          const createdTs = new Date(inv.created_at).getTime();
+          if (createdTs <= twoHoursAgoTs && createdTs >= threeHoursAgoTs) {
+            inWindowList.push(inv);
+          } else if (createdTs < threeHoursAgoTs) {
+            staleList.push(inv);
+          }
+        });
+
+        setInWindow(inWindowList);
+        setStale(staleList);
+        setEvents(eventsData || []);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        if (reqId !== reqIdRef.current) return;
+        setError(err.message || 'Ошибка загрузки');
+        setLoading(false);
       }
     }
 
-    loadAbandoned();
-    const intervalId = user?.id
-      ? window.setInterval(() => {
-          loadAbandoned({ silent: true });
-        }, 60_000)
-      : null;
+    loadBotData();
+    const intervalId = window.setInterval(() => {
+      loadBotData({ silent: true });
+    }, 60_000);
 
     return () => {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
+  }, [user?.id, selectedBotId, bots.length]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    async function loadSettings() {
+      try {
+        const { data, error: settingsError } = await supabase
+          .from('payment_settings')
+          .select('abandoned_text, abandoned_discount_percent')
+          .eq('owner_id', user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (settingsError && !(settingsError.message || '').includes('No rows found')) {
+          setSaveError(settingsError.message);
+          return;
+        }
+        const text = data?.abandoned_text?.trim() || STANDARD_TEMPLATE;
+        const discount = Number(data?.abandoned_discount_percent || 0);
+        setTextDraft(text);
+        setTextOriginal(text);
+        setDiscountDraft(discount);
+        setDiscountOriginal(discount);
+      } catch (err) {
+        if (!cancelled) setSaveError(err.message || 'Ошибка загрузки настроек');
+      }
+    }
+
+    loadSettings();
+    return () => { cancelled = true; };
   }, [user?.id]);
 
-  const filteredInvoices = useMemo(() => {
-    const needle = search.trim();
-    return state.invoices.filter((inv) => {
-      const invoiceStatus = getInvoiceStatus(inv).key;
-      const isTrial = !!inv.tariffs?.is_trial;
+  const stats = useMemo(() => {
+    const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
+    const recent = events.filter((e) => new Date(e.created_at).getTime() >= sevenDaysAgo);
+    const withDiscount = recent.filter((e) => Number(e.payload?.discount_percent || 0) > 0).length;
+    const failed = recent.filter((e) => ['failed', 'skipped'].includes(e.payload?.delivered_by)).length;
+    return {
+      total: recent.length,
+      withDiscount,
+      failed
+    };
+  }, [events]);
 
-      if (needle && !String(inv.tg_user_id || '').includes(needle)) {
-        return false;
-      }
+  const channelTitleById = useMemo(() => {
+    const map = new Map();
+    botChannels.forEach((c) => map.set(c.id, c.title));
+    return map;
+  }, [botChannels]);
 
-      switch (filter) {
-        case 'fresh':
-          return invoiceStatus === 'fresh';
-        case 'queued':
-          return invoiceStatus === 'queued';
-        case 'awaiting_receipt':
-          return inv.status === 'awaiting_receipt';
-        case 'reminded':
-          return invoiceStatus === 'reminded';
-        case 'stale':
-          return invoiceStatus === 'stale';
-        case 'trial':
-          return isTrial;
-        case 'regular':
-          return !isTrial;
-        default:
-          return true;
-      }
-    });
-  }, [filter, search, state.invoices]);
+  const dirty = textDraft !== textOriginal || Number(discountDraft) !== Number(discountOriginal);
 
-  const radarStats = useMemo(() => {
-    return state.invoices.reduce((stats, inv) => {
-      const invoiceStatus = getInvoiceStatus(inv).key;
-      stats.total += 1;
-      if (invoiceStatus === 'fresh') stats.fresh += 1;
-      if (invoiceStatus === 'queued') stats.queued += 1;
-      if (inv.status === 'awaiting_receipt') stats.awaitingReceipt += 1;
-      if (invoiceStatus === 'reminded') stats.reminded += 1;
-      if (invoiceStatus === 'stale') stats.stale += 1;
-      if (inv.tariffs?.is_trial) stats.trial += 1;
-      return stats;
-    }, {
-      total: 0,
-      fresh: 0,
-      queued: 0,
-      awaitingReceipt: 0,
-      reminded: 0,
-      stale: 0,
-      trial: 0
-    });
-  }, [state.invoices]);
-
-  const currentTgUserIds = useMemo(
-    () => Array.from(new Set(filteredInvoices.map((inv) => String(inv.tg_user_id || '')).filter(Boolean))),
-    [filteredInvoices]
-  );
-
-  const segmentSummary = useMemo(() => {
-    if (!filteredInvoices.length) {
-      return 'Сейчас в фильтре пусто. Значит некого дожимать или фильтр слишком узкий.';
-    }
-    return `Сейчас в таблице ${filteredInvoices.length} счетов и ${currentTgUserIds.length} уникальных Telegram ID. Этот хвост можно быстро отправить в заказы или добивку.`;
-  }, [currentTgUserIds.length, filteredInvoices.length]);
-
-  const settingsSummary = state.settings?.abandoned_text
-    ? `Скидка ${state.settings.abandoned_discount_percent || 0}% • текст дожима уже настроен.`
-    : 'Текст дожима пока пустой. Настрой его здесь, чтобы бот не стрелял в пустоту.';
-
-  function insertDefaultTemplate() {
-    setSettingsDraft({
-      abandoned_discount_percent: 15,
-      abandoned_text: `🛒 **Привет!**
-
-Ты хотел купить тариф «**{tariff_name}**», но не завершил оплату.
-
-🎁 Только сейчас я даю тебе **скидку {discount_percent}%** на этот тариф!
-
-Новая цена: **{discount_price} {currency}** (вместо {old_price} {currency}).
-
-👉 *Жми кнопку ниже, чтобы забрать доступ со скидкой!*`
-    });
+  function insertStandardTemplate() {
+    setTextDraft(STANDARD_TEMPLATE);
   }
 
   function insertTrialTemplate() {
-    setSettingsDraft({
-      abandoned_discount_percent: 0,
-      abandoned_text: `🧪 **Ты почти залетел на пробник**
-
-Ты нажал на «**{tariff_name}**», но не добил оплату.
-
-Если хочешь быстро посмотреть, что внутри, просто вернись в бота и забери пробный доступ.
-
-👉 *Пробник нужен как быстрый вход. Не тяни, пока интерес горячий.*`
-    });
+    setTextDraft(TRIAL_TEMPLATE);
+    setDiscountDraft(0);
   }
 
-  function insertStandardReminderTemplate() {
-    setSettingsDraft((prev) => ({
-      ...prev,
-      reminder_text: `⏰ **Подписка в «{channel_name}» истекает через 24 часа**
-
-Не теряй доступ — продли в один клик прямо в боте.
-
-👉 *Если уже оплатил — просто проигнорируй это сообщение.*`
-    }));
-  }
-
-  function insertTrialUpsellTemplate() {
-    setSettingsDraft((prev) => ({
-      ...prev,
-      reminder_text: `🔥 **Пробник заканчивается завтра**
-
-Тебе зашёл «{channel_name}» — забери полный тариф «{upsell_tariff_name}» за **{upsell_price} {upsell_currency}** и оставайся на потоке.
-
-👉 *Жми кнопку ниже, чтобы перейти с пробника на полный доступ.*`
-    }));
+  function resetDraft() {
+    setTextDraft(textOriginal);
+    setDiscountDraft(discountOriginal);
   }
 
   async function saveSettings() {
-    setState((prev) => ({ ...prev, saving: true, error: '' }));
+    if (!user?.id) return;
+    setSaving(true);
+    setSaveError('');
+    setSavedAt(false);
     try {
-      const { error } = await supabase
+      const { error: upsertError } = await supabase
         .from('payment_settings')
         .upsert({
           owner_id: user.id,
-          abandoned_text: settingsDraft.abandoned_text,
-          abandoned_discount_percent: Number(settingsDraft.abandoned_discount_percent || 0),
-          reminder_text: settingsDraft.reminder_text
+          abandoned_text: textDraft,
+          abandoned_discount_percent: Number(discountDraft || 0)
         }, { onConflict: 'owner_id' });
-
-      if (error) throw error;
-
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        settings: { ...settingsDraft },
-        updatedAt: new Date().toISOString()
-      }));
-      window.alert('Настройки дожима сохранены.');
-    } catch (error) {
-      setState((prev) => ({ ...prev, saving: false, error: error.message }));
+      if (upsertError) throw upsertError;
+      setTextOriginal(textDraft);
+      setDiscountOriginal(Number(discountDraft || 0));
+      setSaving(false);
+      setSavedAt(true);
+      window.setTimeout(() => setSavedAt(false), 2500);
+    } catch (err) {
+      setSaving(false);
+      setSaveError(err.message || 'Ошибка сохранения');
     }
   }
 
-  if (state.loading) {
-    return <LoadingState text="Тянем радар неоплат..." />;
+  function changeBot(id) {
+    const next = new URLSearchParams(searchParams);
+    next.set('bot', id);
+    setSearchParams(next);
+    setExpandedEventId(null);
   }
 
-  if (state.error) {
+  function pushToBroadcast(tgUserIds, label) {
+    if (!tgUserIds || tgUserIds.length === 0) return;
+    window.localStorage.setItem('broadcast_manual_selection', JSON.stringify({
+      source: 'admin_v2_abandoned',
+      tg_user_ids: tgUserIds,
+      base_name: label || 'Брошенные корзины',
+      suggested_title: `Дожим: ${label || 'Брошенные корзины'}`,
+      suggested_message: 'Ты уже почти купил, но не завершил оплату. Если ещё актуально — вернись и закрой платёж сейчас.'
+    }));
+    openApp('/app/broadcast');
+  }
+
+  function pushToOrders(tgUserIds) {
+    if (!tgUserIds || tgUserIds.length === 0) return;
+    window.localStorage.setItem('orders_manual_selection', JSON.stringify({
+      source: 'admin_v2_abandoned',
+      tg_user_ids: tgUserIds
+    }));
+    openApp('/app/customers?tab=orders');
+  }
+
+  if (loading && bots.length === 0) {
+    return <LoadingState text="Грузим брошенные корзины..." />;
+  }
+
+  if (bots.length === 0) {
     return (
-      <section className="page">
-        <div className="page__header">
-          <h1>Брошенные корзины</h1>
-          <p>Экран должен сидеть на живых `invoices`, но загрузка вернула ошибку.</p>
+      <section className="page page--flush space-y-6">
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
+          <div className="p-16 text-center flex flex-col items-center">
+            <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+              <BotIcon className="w-8 h-8" />
+            </div>
+            <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Нет ботов продаж</h4>
+            <p className="text-slate-500 font-medium text-sm mb-6 max-w-md">
+              Создайте бота на странице «Бот продаж», чтобы система могла отслеживать брошенные корзины и отправлять напоминания.
+            </p>
+            <a
+              href="/sales-bot"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors"
+            >
+              Создать бота
+              <ChevronRight className="w-4 h-4" />
+            </a>
+          </div>
         </div>
-        <div className="error-card">{state.error}</div>
       </section>
     );
   }
 
+  const selectedBot = bots.find((b) => b.id === selectedBotId) || bots[0];
+  const selectedBotLabel = selectedBot?.custom_label || (selectedBot?.tg_username ? `@${selectedBot.tg_username}` : 'Без имени');
+
+  const allPending = [...inWindow, ...stale];
+  const allPendingTgIds = Array.from(new Set(allPending.map((inv) => String(inv.tg_user_id || '')).filter(Boolean)));
+  const staleTgIds = Array.from(new Set(stale.map((inv) => String(inv.tg_user_id || '')).filter(Boolean)));
+
+  const statCards = [
+    { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
+    { label: 'Со скидкой', value: stats.withDiscount, color: stats.withDiscount > 0 ? 'text-emerald-600' : 'text-slate-400', Icon: Tag },
+    { label: 'В очереди отправки', value: inWindow.length, color: inWindow.length > 0 ? 'text-amber-600' : 'text-slate-400', Icon: Clock },
+    { label: 'Не доставлено', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
+  ];
+
   return (
-    <section className="page">
-      <div className="page__header">
-        <h1>Брошенные корзины</h1>
-        <div className="page__meta">
-          <span>Последнее обновление: {formatWhen(state.updatedAt)}</span>
-          <span>{state.refreshing ? 'Обновляем фон...' : 'Автообновление раз в минуту'}</span>
-          <span>{settingsSummary}</span>
-        </div>
-      </div>
+    <section className="page page--flush space-y-6">
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
-      <div className="grid">
-        <StatCard title="Всего" value={radarStats.total} />
-        <StatCard title="Свежие" value={radarStats.fresh} tone={radarStats.fresh > 0 ? 'warning' : 'default'} />
-        <StatCard title="Ждут чек" value={radarStats.awaitingReceipt} tone={radarStats.awaitingReceipt > 0 ? 'warning' : 'default'} />
-        <StatCard title="Пробники" value={radarStats.trial} />
-      </div>
+        {error && (
+          <div className="m-6 mb-0 p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+            {error}
+          </div>
+        )}
 
-      <div className="toolbar-card">
-        <div className="toolbar-card__title">Радар неоплат</div>
-        <div className="toolbar-card__body">
-          <input
-            className="field"
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Ищи по Telegram ID"
-          />
-          <button
-            className="ghost-button"
-            onClick={() => downloadCsv(
-              `abandoned-${filter}-${new Date().toISOString().slice(0, 10)}.csv`,
-              ['invoice_id', 'created_at', 'tg_user_id', 'tariff_title', 'is_trial', 'status', 'radar_status', 'amount', 'currency'],
-              filteredInvoices.map((inv) => [
-                inv.id,
-                inv.created_at,
-                inv.tg_user_id,
-                inv.tariffs?.title || '',
-                inv.tariffs?.is_trial ? 'yes' : 'no',
-                inv.status || '',
-                getInvoiceStatus(inv).key,
-                inv.amount || 0,
-                inv.currency || ''
-              ])
-            )}
-          >
-            Выгрузить CSV
-          </button>
-        </div>
-        <div className="filter-strip">
-          {FILTERS.map((item) => (
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedBotId}
+                onChange={(event) => changeBot(event.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 max-w-[320px]"
+              >
+                {bots.map((bot) => (
+                  <option key={bot.id} value={bot.id}>
+                    {bot.custom_label || (bot.tg_username ? `@${bot.tg_username}` : 'Без имени')}
+                  </option>
+                ))}
+              </select>
+              <div className="text-xs font-bold text-slate-500">
+                {inWindow.length} в очереди · {stale.length} требуют разбора
+              </div>
+            </div>
             <button
-              key={item.id}
-              className={`filter-chip${filter === item.id ? ' filter-chip--active' : ''}`}
-              onClick={() => setFilter(item.id)}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              onClick={() => downloadCsv(
+                `abandoned-${selectedBotLabel}-${new Date().toISOString().slice(0, 10)}.csv`,
+                ['invoice_id', 'created_at', 'tg_user_id', 'tariff_title', 'is_trial', 'status', 'amount', 'currency', 'category'],
+                allPending.map((inv) => [
+                  inv.id,
+                  inv.created_at,
+                  inv.tg_user_id,
+                  inv.tariffs?.title || '',
+                  inv.tariffs?.is_trial ? 'yes' : 'no',
+                  inv.status || '',
+                  inv.amount,
+                  inv.currency,
+                  inWindow.includes(inv) ? 'in_window' : 'stale'
+                ])
+              )}
             >
-              {item.label}
+              Выгрузить CSV
             </button>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="toolbar-card section">
-        <div className="toolbar-card__title">Текст дожима и скидка</div>
-        <div className="toolbar-card__body">
-          <input
-            className="field"
-            type="number"
-            min="0"
-            max="99"
-            value={settingsDraft.abandoned_discount_percent}
-            onChange={(event) => setSettingsDraft((prev) => ({
-              ...prev,
-              abandoned_discount_percent: Number(event.target.value || 0)
-            }))}
-            placeholder="Скидка %"
-          />
-        </div>
-        <div className="filter-strip">
-          <button className="filter-chip" onClick={insertDefaultTemplate}>Обычный дожим</button>
-          <button className="filter-chip" onClick={insertTrialTemplate}>Пробник</button>
-        </div>
-        <div className="toolbar-card__body">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {statCards.map((card, idx) => {
+              const Icon = card.Icon;
+              return (
+                <div
+                  key={idx}
+                  className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.label}</span>
+                    <Icon className={`w-5 h-5 ${card.color} opacity-70`} />
+                  </div>
+                  <div className={`text-3xl font-black tracking-tighter ${card.color}`}>{card.value}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              В окне автоматического дожима
+            </h3>
+            <span className="text-xs font-bold text-slate-400">{inWindow.length}</span>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
+            Счета возрастом 2-3 часа без напоминания. Получат сообщение в ближайший запуск cron (каждые 15 минут).
+          </p>
+
+          {inWindow.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
+              Сейчас никто не попадает в окно автоматического дожима.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {inWindow.map((inv) => (
+                <InvoiceRow
+                  key={inv.id}
+                  inv={inv}
+                  channelTitle={channelTitleById.get(inv.channel_id) || 'Канал'}
+                  onPush={() => pushToBroadcast([String(inv.tg_user_id)], `В окне · ${inv.tg_user_id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              Требуют ручного разбора
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-400">{stale.length}</span>
+              {staleTgIds.length > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                    onClick={() => pushToOrders(staleTgIds)}
+                  >
+                    Открыть в Заказах
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                    onClick={() => pushToBroadcast(staleTgIds, 'Вне окна дожима')}
+                  >
+                    Передать список в рассылку
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
+            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков в рассылку или разберите индивидуально через Досье.
+          </p>
+
+          {stale.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
+              Счетов вне окна дожима нет.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {stale.slice(0, 50).map((inv) => (
+                <InvoiceRow
+                  key={inv.id}
+                  inv={inv}
+                  channelTitle={channelTitleById.get(inv.channel_id) || 'Канал'}
+                  onPush={() => pushToBroadcast([String(inv.tg_user_id)], `Вне окна · ${inv.tg_user_id}`)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              Что отправляется подписчикам
+            </h3>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Сценарий <span className="font-bold text-slate-600">abandoned-cart</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Tag className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-sm font-bold text-slate-700">Скидка</span>
+              <input
+                type="number"
+                min="0"
+                max="99"
+                value={discountDraft}
+                onChange={(event) => setDiscountDraft(Number(event.target.value || 0))}
+                className="w-20 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400"
+              />
+              <span className="text-sm font-bold text-slate-500">%</span>
+            </div>
+            <div className="ml-auto flex gap-1.5">
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                onClick={insertStandardTemplate}
+              >
+                Сбросить к стандарту
+              </button>
+              <button
+                type="button"
+                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                onClick={insertTrialTemplate}
+              >
+                Пробник (без скидки)
+              </button>
+            </div>
+          </div>
+
           <textarea
-            className="field"
-            rows="8"
-            value={settingsDraft.abandoned_text}
-            onChange={(event) => setSettingsDraft((prev) => ({ ...prev, abandoned_text: event.target.value }))}
-            placeholder="Текст дожима после брошенной оплаты"
+            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 font-mono leading-relaxed focus:outline-none focus:border-slate-400 min-h-[180px]"
+            value={textDraft}
+            onChange={(event) => setTextDraft(event.target.value)}
+            placeholder="Текст, который бот отправит подписчику с брошенной корзиной."
           />
-        </div>
-        <div className="toolbar-card__body">
-          <button className="ghost-button ghost-button--primary" onClick={saveSettings} disabled={state.saving}>
-            {state.saving ? 'Сохраняем...' : 'Сохранить дожим'}
-          </button>
-        </div>
-        <div className="toolbar-card__hint">
-          Поддерживаются теги <code>{'{tariff_name}'}</code>, <code>{'{discount_percent}'}</code>, <code>{'{discount_price}'}</code>, <code>{'{old_price}'}</code>, <code>{'{currency}'}</code>.
-        </div>
-      </div>
 
-      <div className="toolbar-card section">
-        <div className="toolbar-card__title">Текст напоминания за 24ч</div>
-        <div className="filter-strip">
-          <button className="filter-chip" onClick={insertStandardReminderTemplate}>Стандарт</button>
-          <button className="filter-chip" onClick={insertTrialUpsellTemplate}>Пробник → апселл</button>
-        </div>
-        <div className="toolbar-card__body">
-          <textarea
-            className="field"
-            rows="6"
-            value={settingsDraft.reminder_text}
-            onChange={(event) => setSettingsDraft((prev) => ({ ...prev, reminder_text: event.target.value }))}
-            placeholder="Текст напоминания за 24ч до истечения подписки"
-          />
-        </div>
-        <div className="toolbar-card__hint">
-          Теги: <code>{'{channel_name}'}</code>, <code>{'{upsell_tariff_name}'}</code>, <code>{'{upsell_price}'}</code>, <code>{'{upsell_currency}'}</code>.
-        </div>
-      </div>
+          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{tariff_name}`}</code> → название тарифа, <code className="px-1 bg-slate-100 rounded">{`{discount_percent}`}</code> → значение скидки, <code className="px-1 bg-slate-100 rounded">{`{discount_price}`}</code> → цена со скидкой, <code className="px-1 bg-slate-100 rounded">{`{old_price}`}</code> → исходная цена, <code className="px-1 bg-slate-100 rounded">{`{currency}`}</code> → валюта.
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+            Этот текст и скидка также применяются в сценарии <span className="font-medium">browse-followup</span> (напоминание после просмотра тарифа).
+          </div>
 
-      <div className="grid grid--double">
-        <div className="table-card">
-          <div className="table-card__title">Что сейчас в фильтре</div>
-          <div className="table-subtext" style={{ lineHeight: 1.8 }}>{segmentSummary}</div>
-        </div>
-        <div className="table-card">
-          <div className="table-card__title">Куда пинать дальше</div>
-          <div className="table-actions" style={{ marginTop: 10 }}>
+          <div className="flex flex-wrap items-center gap-2 mt-6">
             <button
-              className="inline-action"
-              onClick={() => {
-                window.localStorage.setItem('orders_manual_selection', JSON.stringify({
-                  source: 'admin_v2_abandoned',
-                  tg_user_ids: currentTgUserIds
-                }));
-                openApp('/app/customers?tab=orders');
-              }}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={saveSettings}
+              disabled={!dirty || saving}
             >
-              Разобрать в заказах
+              <Save className="w-3.5 h-3.5" />
+              {saving ? 'Сохраняю...' : 'Сохранить'}
             </button>
             <button
-              className="inline-action"
-              onClick={() => {
-                window.localStorage.setItem('broadcast_manual_selection', JSON.stringify({
-                  source: 'admin_v2_abandoned',
-                  tg_user_ids: currentTgUserIds,
-                  base_name: `Брошенные корзины • ${filter}`,
-                  suggested_title: `Дожим: ${filter}`,
-                  suggested_message: 'Ты уже почти купил, но не добил оплату. Если еще актуально, вернись и закрой оплату сейчас.'
-                }));
-                openApp('/app/broadcast');
-              }}
+              type="button"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={resetDraft}
+              disabled={!dirty || saving}
             >
-              Пнуть в добивку
+              <RotateCcw className="w-3.5 h-3.5" />
+              Отменить правки
             </button>
+            {savedAt ? (
+              <span className="text-xs font-bold text-emerald-600 ml-1">✓ Сохранено</span>
+            ) : null}
+            {dirty && !savedAt ? (
+              <span className="text-xs font-medium text-amber-600 ml-1">есть несохранённые правки</span>
+            ) : null}
+            {saveError ? (
+              <span className="text-xs font-bold text-rose-600 ml-1">{saveError}</span>
+            ) : null}
+          </div>
+        </section>
+
+        <div>
+          <div className="px-6 md:px-8 pt-6 pb-3 flex items-baseline justify-between">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              История отправок
+            </h3>
+            <span className="text-xs font-bold text-slate-400">за последние ~7 дней</span>
+          </div>
+
+          {events.length === 0 ? (
+            <div className="p-16 text-center flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+                <Inbox className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">История пуста</h4>
+              <p className="text-slate-500 font-medium text-sm max-w-md">
+                Отправленных напоминаний пока нет. Записи появятся здесь автоматически после первого срабатывания cron-задачи «Брошенные корзины» для бота {selectedBotLabel}.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Время</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Подписчик</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Канал</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Сумма</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Доставлено</th>
+                    <th className="px-6 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400">Текст</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.map((event) => {
+                    const payload = event.payload || {};
+                    const badge = deliveryBadge(payload.delivered_by, payload);
+                    const Icon = badge.Icon;
+                    const isExpanded = expandedEventId === event.id;
+                    const discount = Number(payload.discount_percent || 0);
+                    const amountCell = discount > 0
+                      ? `${payload.original_amount}→${payload.discounted_amount} ${payload.currency || ''} (-${discount}%)`
+                      : `${payload.original_amount || '—'} ${payload.currency || ''}`;
+                    return (
+                      <Fragment key={event.id}>
+                        <tr
+                          className={`border-b border-slate-50 last:border-0 hover:bg-slate-50/30 cursor-pointer transition-colors ${isExpanded ? 'bg-slate-50/50' : ''}`}
+                          onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap text-xs font-medium text-slate-500">
+                            {formatRelativeTime(event.created_at)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-slate-900 font-mono">
+                              {event.tg_user_id}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-slate-700">
+                            {channelTitleById.get(event.channel_id) || '—'}
+                          </td>
+                          <td className="px-6 py-4 text-xs font-medium text-slate-600">
+                            {amountCell}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-black ${badge.cls}`}>
+                              <Icon className="w-3 h-3" />
+                              {badge.text}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedEventId(isExpanded ? null : event.id);
+                              }}
+                            >
+                              {isExpanded ? 'Скрыть' : 'Показать'}
+                              <ChevronRight className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded ? (
+                          <tr className="bg-slate-50/30">
+                            <td colSpan={6} className="px-6 pb-5 pt-1">
+                              <div className="ml-2 p-4 bg-white border border-slate-200 rounded-xl">
+                                <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                                  Текст сообщения
+                                </div>
+                                <pre className="text-sm text-slate-800 whitespace-pre-wrap font-sans leading-relaxed max-h-[400px] overflow-y-auto">
+                                  {payload.message_text || '— нет текста —'}
+                                </pre>
+                                {payload.error ? (
+                                  <div className="mt-3 text-xs text-rose-600 font-medium">
+                                    Ошибка: {payload.error}
+                                  </div>
+                                ) : null}
+                                {payload.reason ? (
+                                  <div className="mt-3 text-xs text-slate-500 font-medium">
+                                    Причина: {payload.reason}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function InvoiceRow({ inv, channelTitle, onPush }) {
+  const originalPrice = Number(inv.tariffs?.price || 0);
+  const hasDiscount = originalPrice > 0 && Number(inv.amount) < originalPrice;
+  const discountPercent = hasDiscount ? Math.round(((originalPrice - inv.amount) / originalPrice) * 100) : 0;
+  const isTrial = !!inv.tariffs?.is_trial;
+  const tariffTitle = inv.tariffs?.trial_label || inv.tariffs?.title || 'Неизвестно';
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-50/50 border border-slate-100">
+      <div className="flex items-center gap-3 min-w-0">
+        <ShoppingCart className="w-4 h-4 text-slate-500 flex-shrink-0" />
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-slate-900 truncate font-mono">
+            {inv.tg_user_id}
+          </div>
+          <div className="text-xs text-slate-500 font-medium truncate">
+            {channelTitle} · {tariffTitle}{isTrial ? ' · пробник' : ''}
           </div>
         </div>
       </div>
-
-      <div className="table-card">
-        <div className="table-card__title">Хвост неоплат</div>
-        {filteredInvoices.length === 0 ? (
-          <div className="empty-inline">Под текущий фильтр ничего не попало.</div>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Telegram ID</th>
-                <th>Тариф</th>
-                <th>Тип</th>
-                <th>Сумма</th>
-                <th>Время</th>
-                <th>Статус</th>
-                <th>Дальше</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInvoices.slice(0, 80).map((inv) => {
-                const invoiceStatus = getInvoiceStatus(inv);
-                return (
-                  <tr key={inv.id}>
-                    <td>{inv.tg_user_id}</td>
-                    <td>
-                      <div>{inv.tariffs?.title || 'Неизвестно'}</div>
-                      <div className="table-subtext">{inv.id}</div>
-                    </td>
-                    <td>
-                      <span className={inv.tariffs?.is_trial ? 'pill pill--warning' : 'pill'}>
-                        {inv.tariffs?.is_trial ? (inv.tariffs?.trial_label || 'Пробник') : 'Обычный тариф'}
-                      </span>
-                    </td>
-                    <td>
-                      <div>{inv.amount} {inv.currency}</div>
-                      {(() => {
-                        const originalPrice = Number(inv.tariffs?.price || 0);
-                        const hasDiscount = originalPrice > 0 && Number(inv.amount) < originalPrice;
-                        const discountPercent = hasDiscount ? Math.round(((originalPrice - inv.amount) / originalPrice) * 100) : 0;
-                        return hasDiscount ? (
-                          <div className="table-subtext" style={{ color: '#059669', fontSize: '11px', fontWeight: 'bold', marginTop: '2px' }}>
-                            Скидка {discountPercent}% (было {originalPrice} {inv.currency})
-                          </div>
-                        ) : null;
-                      })()}
-                    </td>
-                    <td>{formatWhen(inv.created_at)}</td>
-                    <td>
-                      <span className={invoiceStatus.className}>{invoiceStatus.text}</span>
-                    </td>
-                    <td>
-                      <div className="table-actions">
-                        <a
-                          href={`/app/dossier?tg=${encodeURIComponent(inv.tg_user_id)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Досье
-                        </a>
-                        <button
-                          className="inline-action"
-                          onClick={() => {
-                            window.localStorage.setItem('orders_search_preset', JSON.stringify({
-                              search: String(inv.tg_user_id),
-                              source: 'admin_v2_abandoned_row'
-                            }));
-                            openApp('/app/customers?tab=orders');
-                          }}
-                        >
-                          Заказы
-                        </button>
-                        <button
-                          className="inline-action"
-                          onClick={() => {
-                            window.localStorage.setItem('broadcast_manual_selection', JSON.stringify({
-                              source: 'admin_v2_abandoned_row',
-                              tg_user_ids: [String(inv.tg_user_id)],
-                              base_name: `Неоплата ${inv.tg_user_id}`,
-                              suggested_title: `Дожим ${inv.tg_user_id}`,
-                              suggested_message: inv.tariffs?.is_trial
-                                ? 'Ты почти залетел на пробник. Если еще актуально, просто вернись в бота и закрой оплату.'
-                                : 'Ты почти купил тариф, но не добил оплату. Если еще актуально, вернись и закрой платеж.'
-                            }));
-                            openApp('/app/broadcast');
-                          }}
-                        >
-                          Пнуть
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="text-right">
+          <div className="text-sm font-bold text-slate-900">
+            {inv.amount} {inv.currency}
+          </div>
+          {hasDiscount ? (
+            <div className="text-[11px] text-emerald-600 font-bold">
+              −{discountPercent}% (было {originalPrice} {inv.currency})
+            </div>
+          ) : null}
+          <div className="text-[11px] text-slate-400 font-medium">
+            {formatRelativeTime(inv.created_at)}
+          </div>
+        </div>
+        <a
+          href={`/app/dossier?tg=${encodeURIComponent(inv.tg_user_id)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="px-2.5 py-1.5 rounded-md text-[11px] font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          Досье
+        </a>
+        <button
+          type="button"
+          className="px-2.5 py-1.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+          onClick={onPush}
+        >
+          В рассылку
+        </button>
       </div>
-    </section>
+    </div>
   );
 }
