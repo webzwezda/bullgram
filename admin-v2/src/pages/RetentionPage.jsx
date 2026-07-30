@@ -8,7 +8,7 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const DEFAULT_REMINDER_TEXT = `⏰ **Привет!**
+const STANDARD_TEMPLATE = `⏰ **Привет!**
 
 Твой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.
 
@@ -292,7 +292,7 @@ export function RetentionPage() {
           setReminderError(error.message);
           return;
         }
-        const text = data?.reminder_text || '';
+        const text = data?.reminder_text?.trim() || STANDARD_TEMPLATE;
         setReminderDraft(text);
         setReminderOriginal(text);
       } catch (err) {
@@ -322,23 +322,7 @@ export function RetentionPage() {
   const reminderDirty = reminderDraft !== reminderOriginal;
 
   function insertStandardTemplate() {
-    setReminderDraft(`⏰ **Подписка в «{channel_name}» истекает через 24 часа**
-
-Чтобы остаться и не потерять место — продли в один клик:
-
-👉 {renewal_link}
-
-_Если уже оплатил — просто проигнорируй это сообщение._`);
-  }
-
-  function insertTrialUpsellTemplate() {
-    setReminderDraft(`🔥 **Пробник в «{channel_name}» заканчивается завтра**
-
-Переходи на полный тариф и оставайся на потоке:
-
-«{upsell_tariff_name}» — **{upsell_price} {upsell_currency}**
-
-👉 {renewal_link}`);
+    setReminderDraft(STANDARD_TEMPLATE);
   }
 
   function resetReminder() {
@@ -545,47 +529,17 @@ _Если уже оплатил — просто проигнорируй это
                 className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
                 onClick={insertStandardTemplate}
               >
-                Стандарт
-              </button>
-              <button
-                type="button"
-                className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                onClick={insertTrialUpsellTemplate}
-              >
-                Пробник → апселл
+                Сбросить к стандарту
               </button>
             </div>
           </div>
 
           <textarea
-            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 font-mono leading-relaxed focus:outline-none focus:border-slate-400 min-h-[140px]"
+            className="w-full p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 font-mono leading-relaxed focus:outline-none focus:border-slate-400 min-h-[180px]"
             value={reminderDraft}
             onChange={(event) => setReminderDraft(event.target.value)}
             placeholder="Текст, который бот отправит подписчику за 24ч до истечения подписки."
           />
-
-          {!reminderDraft.trim() ? (
-            <div className="mt-3 p-4 rounded-xl bg-amber-50/40 border border-amber-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-[11px] font-black uppercase tracking-widest text-amber-700">
-                  Сейчас используется стандартный текст ↓
-                </div>
-                <button
-                  type="button"
-                  className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 transition-colors"
-                  onClick={insertStandardTemplate}
-                >
-                  Скопировать в редактор
-                </button>
-              </div>
-              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
-{DEFAULT_REMINDER_TEXT}
-              </pre>
-              <div className="text-[11px] text-amber-700 mt-2">
-                Используется по умолчанию. Нажми «Стандарт» или отредактируй, чтобы переопределить.
-              </div>
-            </div>
-          ) : null}
 
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <button
