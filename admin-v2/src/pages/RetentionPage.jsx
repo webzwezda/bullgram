@@ -8,6 +8,15 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const DEFAULT_REMINDER_TEXT = `⏰ **Привет!**
+
+Твой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.
+
+Чтобы не потерять доступ, продли в один клик:
+👉 {renewal_link}
+
+_Если уже оплатил — просто проигнорируй это сообщение._`;
+
 function formatRelativeTime(iso) {
   if (!iso) return '—';
   const ts = new Date(iso).getTime();
@@ -554,6 +563,29 @@ _Если уже оплатил — просто проигнорируй это
             onChange={(event) => setReminderDraft(event.target.value)}
             placeholder="Текст, который бот отправит подписчику за 24ч до истечения подписки."
           />
+
+          {!reminderDraft.trim() ? (
+            <div className="mt-3 p-4 rounded-xl bg-amber-50/40 border border-amber-100">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[11px] font-black uppercase tracking-widest text-amber-700">
+                  Сейчас используется стандартный текст ↓
+                </div>
+                <button
+                  type="button"
+                  className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-white text-amber-700 border border-amber-200 hover:bg-amber-50 transition-colors"
+                  onClick={insertStandardTemplate}
+                >
+                  Скопировать в редактор
+                </button>
+              </div>
+              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+{DEFAULT_REMINDER_TEXT}
+              </pre>
+              <div className="text-[11px] text-amber-700 mt-2">
+                Пока поле пустое — бот отправляет этот текст. Нажми «Стандарт» или отредактируй, чтобы переопределить.
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <button
