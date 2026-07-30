@@ -195,64 +195,73 @@ export function RetentionPage() {
   ];
 
   return (
-    <section className="page">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-1.5 bg-slate-100 rounded-2xl">
-        <div className="flex flex-wrap gap-1">
-          {SUBTABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveSubtab(tab.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSubtab === tab.id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <select
-          value={channelFilterId}
-          onChange={(event) => setChannelFilterId(event.target.value)}
-          className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:border-slate-400 max-w-[260px] truncate"
-        >
-          <option value="">Все каналы</option>
-          {state.overview.channelRows.map((row) => (
-            <option key={row.id} value={row.id}>{row.title}</option>
-          ))}
-        </select>
-      </div>
+    <section className="page page--flush space-y-6">
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-        {stats.map((item, idx) => {
-          const Icon = item.icon;
-          const isActive = activeSubtab === item.tab;
-          return (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setActiveSubtab(item.tab)}
-              className={`bg-slate-50/50 border p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50 ${isActive ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-100'}`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-                <Icon className={`w-5 h-5 ${item.color} opacity-70`} />
-              </div>
-              <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden">
-        {filteredRows.length === 0 ? (
-          <div className="p-16 text-center flex flex-col items-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Ничего не нашлось</h4>
-            <p className="text-slate-500 font-medium text-sm">Под текущий фильтр ничего не попало.</p>
+        {state.error && (
+          <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+            {state.error}
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+        )}
+
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-1.5 bg-slate-100 rounded-2xl">
+            <div className="flex flex-wrap gap-1">
+              {SUBTABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveSubtab(tab.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeSubtab === tab.id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <select
+              value={channelFilterId}
+              onChange={(event) => setChannelFilterId(event.target.value)}
+              className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:border-slate-400 max-w-[260px] truncate"
+            >
+              <option value="">Все каналы</option>
+              {state.overview.channelRows.map((row) => (
+                <option key={row.id} value={row.id}>{row.title}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+            {stats.map((item, idx) => {
+              const Icon = item.icon;
+              const isActive = activeSubtab === item.tab;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setActiveSubtab(item.tab)}
+                  className={`bg-slate-50/50 border p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50 ${isActive ? 'border-slate-900 ring-1 ring-slate-900' : 'border-slate-100'}`}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                    <Icon className={`w-5 h-5 ${item.color} opacity-70`} />
+                  </div>
+                  <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <div className="overflow-x-auto">
+          {filteredRows.length === 0 ? (
+            <div className="p-16 text-center flex flex-col items-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Ничего не нашлось</h4>
+              <p className="text-slate-500 font-medium text-sm">Под текущий фильтр ничего не попало.</p>
+            </div>
+          ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/50">
@@ -339,8 +348,8 @@ export function RetentionPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </section>
   );
