@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon } from 'lucide-react';
+import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon, CircleCheckBig, CircleAlert } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -62,6 +62,7 @@ export function RetentionPage() {
   const [botChannels, setBotChannels] = useState([]);
   const [events, setEvents] = useState([]);
   const [expiring, setExpiring] = useState([]);
+  const [helperBots, setHelperBots] = useState([]);
   const [activeSubsCount, setActiveSubsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -118,20 +119,46 @@ export function RetentionPage() {
       }
 
       try {
-        const { data: channelsData, error: channelsError } = await supabase
-          .from('channels')
-          .select('id, title')
-          .eq('bot_id', selectedBotId);
+        const [{ data: channelsData, error: channelsError }, { data: contourData }] = await Promise.all([
+          supabase
+            .from('channels')
+            .select('id, title')
+            .eq('bot_id', selectedBotId),
+          supabase
+            .from('sales_bot_contours')
+            .select('id, userbot_mode, selected_userbot_id, selected_userbot_ids')
+            .eq('bot_id', selectedBotId)
+            .maybeSingle()
+        ]);
 
         if (channelsError) throw channelsError;
         const channelIds = (channelsData || []).map((c) => c.id);
         if (cancelled) return;
         setBotChannels(channelsData || []);
 
+        const contour = contourData || null;
+        const helperIds = contour?.userbot_mode === 'single' && contour.selected_userbot_id
+          ? [contour.selected_userbot_id]
+          : Array.isArray(contour?.selected_userbot_ids) && contour.selected_userbot_ids.length > 0
+            ? contour.selected_userbot_ids
+            : [];
+
+        let helpers = [];
+        if (helperIds.length > 0) {
+          const { data: helpersData, error: helpersError } = await supabase
+            .from('tg_accounts')
+            .select('id, tg_username, custom_label, runtime_status, runtime_error')
+            .in('id', helperIds);
+          if (helpersError) throw helpersError;
+          helpers = helpersData || [];
+        }
+        if (cancelled) return;
+
         if (channelIds.length === 0) {
           if (reqId !== reqIdRef.current) return;
           setEvents([]);
           setExpiring([]);
+          setHelperBots(helpers);
           setActiveSubsCount(0);
           setLoading(false);
           return;
@@ -169,6 +196,7 @@ export function RetentionPage() {
         setExpiring(expiringNow);
         setActiveSubsCount(allSubs.length);
         setEvents(eventsData || []);
+        setHelperBots(helpers);
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -202,6 +230,32 @@ export function RetentionPage() {
       failed
     };
   }, [events]);
+
+  const helperStatsById = useMemo(() => {
+    const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
+    const map = new Map();
+    events.forEach((event) => {
+      const ts = new Date(event.created_at).getTime();
+      if (ts < sevenDaysAgo) return;
+      const by = event.payload?.delivered_by;
+      if (by !== 'userbot' && by !== 'failed') return;
+      const uid = event.payload?.userbot_id;
+      if (!uid) return;
+      const entry = map.get(uid) || { delivered: 0, failed: 0 };
+      if (by === 'userbot') entry.delivered += 1;
+      else entry.failed += 1;
+      map.set(uid, entry);
+    });
+    return map;
+  }, [events]);
+
+  function statusBadge(status) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'online') return { text: 'online', cls: 'bg-emerald-50 text-emerald-700' };
+    if (normalized === 'pending_activation') return { text: 'ожидает активации', cls: 'bg-amber-50 text-amber-700' };
+    if (normalized === 'offline' || normalized === 'restricted' || normalized === 'session_revoked') return { text: normalized, cls: 'bg-rose-50 text-rose-700' };
+    return { text: normalized || 'неизвестно', cls: 'bg-slate-100 text-slate-600' };
+  }
 
   const channelTitleById = useMemo(() => {
     const map = new Map();
@@ -302,6 +356,62 @@ export function RetentionPage() {
               );
             })}
           </div>
+        </section>
+
+        <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="flex items-baseline justify-between mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+              Помощник-юзербот
+            </h3>
+          </div>
+
+          {helperBots.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-100 text-sm text-amber-800">
+              <div className="font-bold mb-1">Не привязан</div>
+              <div className="text-xs text-amber-700">
+                Если бот заблокирован у подписчика, напоминание уйдёт в сбой. Привяжите userbot в настройках sales-бота.
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {helperBots.map((helper) => {
+                const status = statusBadge(helper.runtime_status);
+                const label = helper.custom_label || (helper.tg_username ? `@${helper.tg_username}` : 'Без имени');
+                const hs = helperStatsById.get(helper.id) || { delivered: 0, failed: 0 };
+                return (
+                  <div
+                    key={helper.id}
+                    className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50/50 border border-slate-100"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+                        <Rocket className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-black text-slate-900 truncate">{label}</div>
+                        {helper.tg_username && helper.custom_label ? (
+                          <div className="text-xs text-slate-500 font-mono truncate">@{helper.tg_username}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                      <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-black ${status.cls}`}>
+                        {status.text}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700">
+                        <CircleCheckBig className="w-3 h-3" />
+                        {hs.delivered} доставлено
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold ${hs.failed > 0 ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-500'}`}>
+                        <CircleAlert className="w-3 h-3" />
+                        {hs.failed} сбой
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="p-6 md:p-8 border-b border-slate-100">
