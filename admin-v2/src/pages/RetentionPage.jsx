@@ -541,7 +541,25 @@ export function RetentionPage() {
             placeholder="Текст, который бот отправит подписчику за 24ч до истечения подписки."
           />
 
-          <div className="flex flex-wrap items-center gap-2 mt-3">
+          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{renewal_link}`}</code> → ссылка на оплату тарифа (https://t.me/бот?start=buy_…), <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
+          </div>
+          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+            К тексту от бота автоматически добавляется inline-кнопка «💳 Продлить доступ». Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
+          </div>
+
+          <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">
+            <div className="flex items-center gap-2 mb-3">
+              <Rocket className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm font-bold text-slate-700">Userbot fallback</span>
+              <span className="text-xs text-slate-400 font-medium">— если бот заблокирован у подписчика (только чтение)</span>
+            </div>
+            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
+{userbotWrappedPreview || '— пусто — редактируй основное сообщение выше —'}
+            </pre>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mt-6">
             <button
               type="button"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -569,24 +587,6 @@ export function RetentionPage() {
             {reminderError ? (
               <span className="text-xs font-bold text-rose-600 ml-1">{reminderError}</span>
             ) : null}
-          </div>
-
-          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
-            Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{renewal_link}`}</code> → ссылка на оплату тарифа (https://t.me/бот?start=buy_…), <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
-          </div>
-          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
-            К тексту от бота автоматически добавляется inline-кнопка «💳 Продлить доступ». Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
-          </div>
-
-          <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">
-            <div className="flex items-center gap-2 mb-3">
-              <Rocket className="w-4 h-4 text-blue-600 flex-shrink-0" />
-              <span className="text-sm font-bold text-slate-700">Userbot fallback</span>
-              <span className="text-xs text-slate-400 font-medium">— если бот заблокирован у подписчика (только чтение)</span>
-            </div>
-            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">
-{userbotWrappedPreview || '— пусто — редактируй основное сообщение выше —'}
-            </pre>
           </div>
         </section>
 
