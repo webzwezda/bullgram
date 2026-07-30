@@ -48,6 +48,7 @@ export function App() {
       title: 'Продажи и Клиенты',
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
+        { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
@@ -74,7 +75,6 @@ export function App() {
           { to: '/bases', label: 'Базы', icon: Database },
           { to: '/dossier', label: 'Досье', icon: UserPlus },
           { to: '/broadcast', label: 'Рассылки', icon: Send },
-          { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         ]
       }]
       : [])

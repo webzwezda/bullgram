@@ -67,7 +67,8 @@ export function AbandonedPage() {
   const [search, setSearch] = useState('');
   const [settingsDraft, setSettingsDraft] = useState({
     abandoned_text: '',
-    abandoned_discount_percent: 0
+    abandoned_discount_percent: 0,
+    reminder_text: ''
   });
   const [state, setState] = useState({
     loading: true,
@@ -112,7 +113,7 @@ export function AbandonedPage() {
       try {
         const { data: settings } = await supabase
           .from('payment_settings')
-          .select('abandoned_text, abandoned_discount_percent')
+          .select('abandoned_text, abandoned_discount_percent, reminder_text')
           .eq('owner_id', user.id)
           .maybeSingle();
 
@@ -151,7 +152,8 @@ export function AbandonedPage() {
           });
           setSettingsDraft({
             abandoned_text: settings?.abandoned_text || '',
-            abandoned_discount_percent: Number(settings?.abandoned_discount_percent || 0)
+            abandoned_discount_percent: Number(settings?.abandoned_discount_percent || 0),
+            reminder_text: settings?.reminder_text || ''
           });
         }
       } catch (error) {
@@ -279,6 +281,28 @@ export function AbandonedPage() {
     });
   }
 
+  function insertStandardReminderTemplate() {
+    setSettingsDraft((prev) => ({
+      ...prev,
+      reminder_text: `⏰ **Подписка в «{channel_name}» истекает через 24 часа**
+
+Не теряй доступ — продли в один клик прямо в боте.
+
+👉 *Если уже оплатил — просто проигнорируй это сообщение.*`
+    }));
+  }
+
+  function insertTrialUpsellTemplate() {
+    setSettingsDraft((prev) => ({
+      ...prev,
+      reminder_text: `🔥 **Пробник заканчивается завтра**
+
+Тебе зашёл «{channel_name}» — забери полный тариф «{upsell_tariff_name}» за **{upsell_price} {upsell_currency}** и оставайся на потоке.
+
+👉 *Жми кнопку ниже, чтобы перейти с пробника на полный доступ.*`
+    }));
+  }
+
   async function saveSettings() {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
     try {
@@ -287,7 +311,8 @@ export function AbandonedPage() {
         .upsert({
           owner_id: user.id,
           abandoned_text: settingsDraft.abandoned_text,
-          abandoned_discount_percent: Number(settingsDraft.abandoned_discount_percent || 0)
+          abandoned_discount_percent: Number(settingsDraft.abandoned_discount_percent || 0),
+          reminder_text: settingsDraft.reminder_text
         }, { onConflict: 'owner_id' });
 
       if (error) throw error;
@@ -418,6 +443,26 @@ export function AbandonedPage() {
         </div>
         <div className="toolbar-card__hint">
           Поддерживаются теги <code>{'{tariff_name}'}</code>, <code>{'{discount_percent}'}</code>, <code>{'{discount_price}'}</code>, <code>{'{old_price}'}</code>, <code>{'{currency}'}</code>.
+        </div>
+      </div>
+
+      <div className="toolbar-card section">
+        <div className="toolbar-card__title">Текст напоминания за 24ч</div>
+        <div className="filter-strip">
+          <button className="filter-chip" onClick={insertStandardReminderTemplate}>Стандарт</button>
+          <button className="filter-chip" onClick={insertTrialUpsellTemplate}>Пробник → апселл</button>
+        </div>
+        <div className="toolbar-card__body">
+          <textarea
+            className="field"
+            rows="6"
+            value={settingsDraft.reminder_text}
+            onChange={(event) => setSettingsDraft((prev) => ({ ...prev, reminder_text: event.target.value }))}
+            placeholder="Текст напоминания за 24ч до истечения подписки"
+          />
+        </div>
+        <div className="toolbar-card__hint">
+          Теги: <code>{'{channel_name}'}</code>, <code>{'{upsell_tariff_name}'}</code>, <code>{'{upsell_price}'}</code>, <code>{'{upsell_currency}'}</code>.
         </div>
       </div>
 
