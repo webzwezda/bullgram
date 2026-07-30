@@ -120,6 +120,25 @@ export const startRetention = (supabase, getBotFunction) => {
                         await bot.telegram.sendMessage(sub.tg_user_id, messageText, { parse_mode: 'Markdown' });
                         sentByOfficialBot = true;
                         console.log(`[Напоминание] Успешно отправлено ботом юзеру ${sub.tg_user_id}`);
+                        try {
+                            await supabase.from('access_events').insert({
+                                owner_id: ownerId,
+                                channel_id: sub.channel_id || null,
+                                subscription_id: sub.id,
+                                tg_user_id: String(sub.tg_user_id),
+                                event_source: 'retention',
+                                event_type: 'retention_reminder',
+                                payload: {
+                                    delivered_by: 'bot',
+                                    bot_id: botId || null,
+                                    message_text: messageText,
+                                    source_tariff_id: sourceTariff?.id || null,
+                                    upsell_tariff_id: upsellTariff?.id || null
+                                }
+                            });
+                        } catch (logErr) {
+                            console.error('[Напоминание] Не записали access_event (bot):', logErr?.message || logErr);
+                        }
                     } catch (botErr) {
                         console.log(`[Напоминание] Бот заблокирован. Будим Юзербота для ${sub.tg_user_id}...`);
                     }
@@ -130,6 +149,23 @@ export const startRetention = (supabase, getBotFunction) => {
                     try {
                         if (!isUserbotRetentionDmEnabled()) {
                             console.log(`[Напоминание] USERBOT_RETENTION_DM_ENABLED=false, пропускаем ЛС через юзербота для ${sub.tg_user_id}`);
+                            try {
+                                await supabase.from('access_events').insert({
+                                    owner_id: ownerId,
+                                    channel_id: sub.channel_id || null,
+                                    subscription_id: sub.id,
+                                    tg_user_id: String(sub.tg_user_id),
+                                    event_source: 'retention',
+                                    event_type: 'retention_reminder',
+                                    payload: {
+                                        delivered_by: 'skipped',
+                                        bot_id: botId || null,
+                                        reason: 'userbot_dm_disabled'
+                                    }
+                                });
+                            } catch (logErr) {
+                                console.error('[Напоминание] Не записали access_event (skipped):', logErr?.message || logErr);
+                            }
                         } else {
                             const userbot = await loadLatestUserbot(ownerId);
                             if (userbot) {
@@ -145,10 +181,48 @@ export const startRetention = (supabase, getBotFunction) => {
                                     }
                                 );
                                 console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
+                                try {
+                                    await supabase.from('access_events').insert({
+                                        owner_id: ownerId,
+                                        channel_id: sub.channel_id || null,
+                                        subscription_id: sub.id,
+                                        tg_user_id: String(sub.tg_user_id),
+                                        event_source: 'retention',
+                                        event_type: 'retention_reminder',
+                                        payload: {
+                                            delivered_by: 'userbot',
+                                            bot_id: botId || null,
+                                            userbot_id: userbot?.id || null,
+                                            userbot_username: userbot?.tg_username || null,
+                                            message_text: messageText,
+                                            source_tariff_id: sourceTariff?.id || null,
+                                            upsell_tariff_id: upsellTariff?.id || null
+                                        }
+                                    });
+                                } catch (logErr) {
+                                    console.error('[Напоминание] Не записали access_event (userbot):', logErr?.message || logErr);
+                                }
                             }
                         }
                     } catch (ubErr) {
                         console.error(`[Напоминание] Ошибка Юзербота:`, ubErr.message);
+                        try {
+                            await supabase.from('access_events').insert({
+                                owner_id: ownerId,
+                                channel_id: sub.channel_id || null,
+                                subscription_id: sub.id,
+                                tg_user_id: String(sub.tg_user_id),
+                                event_source: 'retention',
+                                event_type: 'retention_reminder',
+                                payload: {
+                                    delivered_by: 'failed',
+                                    bot_id: botId || null,
+                                    error: ubErr?.message || 'unknown'
+                                }
+                            });
+                        } catch (logErr) {
+                            console.error('[Напоминание] Не записали access_event (failed):', logErr?.message || logErr);
+                        }
                     }
                 }
             }
