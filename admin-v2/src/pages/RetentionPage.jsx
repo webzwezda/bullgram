@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon, CircleCheckBig, CircleAlert } from 'lucide-react';
+import { Send, Bot, Rocket, AlertCircle, Ban, Clock, ChevronRight, Bot as BotIcon, CircleCheckBig, CircleAlert, Hash, MessagesSquare } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
+import { apiRequest } from '../api/client.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -54,7 +55,7 @@ function deliveryBadge(deliveredBy = '', payload = {}) {
 }
 
 export function RetentionPage() {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedBotId = searchParams.get('bot') || '';
 
@@ -63,6 +64,9 @@ export function RetentionPage() {
   const [events, setEvents] = useState([]);
   const [expiring, setExpiring] = useState([]);
   const [helperBots, setHelperBots] = useState([]);
+  const [contour, setContour] = useState(null);
+  const [audienceTargets, setAudienceTargets] = useState([]);
+  const [paidCountsByChannel, setPaidCountsByChannel] = useState({});
   const [activeSubsCount, setActiveSubsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -126,7 +130,7 @@ export function RetentionPage() {
             .eq('bot_id', selectedBotId),
           supabase
             .from('sales_bot_contours')
-            .select('bot_id, userbot_mode, selected_userbot_id, selected_userbot_ids')
+            .select('bot_id, userbot_mode, selected_userbot_id, selected_userbot_ids, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id')
             .eq('bot_id', selectedBotId)
             .maybeSingle()
         ]);
@@ -138,11 +142,13 @@ export function RetentionPage() {
         if (cancelled) return;
         setBotChannels(channelsData || []);
 
-        const contour = contourData || null;
-        const helperIds = contour?.userbot_mode === 'single' && contour.selected_userbot_id
-          ? [contour.selected_userbot_id]
-          : Array.isArray(contour?.selected_userbot_ids) && contour.selected_userbot_ids.length > 0
-            ? contour.selected_userbot_ids
+        const contourValue = contourData || null;
+        setContour(contourValue);
+
+        const helperIds = contourValue?.userbot_mode === 'single' && contourValue.selected_userbot_id
+          ? [contourValue.selected_userbot_id]
+          : Array.isArray(contourValue?.selected_userbot_ids) && contourValue.selected_userbot_ids.length > 0
+            ? contourValue.selected_userbot_ids
             : [];
 
         let helpers = [];
@@ -155,12 +161,42 @@ export function RetentionPage() {
           helpers = helpersData || [];
         }
         if (cancelled) return;
+        setHelperBots(helpers);
+
+        const paidChannelIds = ['paid_channel_id', 'paid_chat_id']
+          .map((field) => contourValue?.[field])
+          .filter(Boolean);
+
+        let nextPaidCounts = {};
+        if (paidChannelIds.length > 0) {
+          const { data: paidSubs, error: paidSubsError } = await supabase
+            .from('subscriptions')
+            .select('id, channel_id')
+            .in('channel_id', paidChannelIds)
+            .eq('status', 'active');
+          if (paidSubsError) throw paidSubsError;
+          (paidSubs || []).forEach((s) => {
+            nextPaidCounts[s.channel_id] = (nextPaidCounts[s.channel_id] || 0) + 1;
+          });
+        }
+        if (cancelled) return;
+        setPaidCountsByChannel(nextPaidCounts);
+
+        if (accessToken) {
+          try {
+            const audienceData = await apiRequest(`/api/audience?contourId=${encodeURIComponent(selectedBotId)}`, { accessToken });
+            if (cancelled) return;
+            setAudienceTargets(audienceData?.targets || []);
+          } catch (audErr) {
+            if (cancelled) return;
+            setAudienceTargets([]);
+          }
+        }
 
         if (channelIds.length === 0) {
           if (reqId !== reqIdRef.current) return;
           setEvents([]);
           setExpiring([]);
-          setHelperBots(helpers);
           setActiveSubsCount(0);
           setLoading(false);
           return;
@@ -198,7 +234,6 @@ export function RetentionPage() {
         setExpiring(expiringNow);
         setActiveSubsCount(allSubs.length);
         setEvents(eventsData || []);
-        setHelperBots(helpers);
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -217,7 +252,7 @@ export function RetentionPage() {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [user?.id, selectedBotId, bots.length]);
+  }, [user?.id, selectedBotId, bots.length, accessToken]);
 
   const stats = useMemo(() => {
     const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
@@ -258,6 +293,40 @@ export function RetentionPage() {
     if (normalized === 'offline' || normalized === 'restricted' || normalized === 'session_revoked') return { text: normalized, cls: 'bg-rose-50 text-rose-700' };
     return { text: normalized || 'неизвестно', cls: 'bg-slate-100 text-slate-600' };
   }
+
+  const audienceCards = useMemo(() => {
+    if (!contour) return [];
+    const audienceByType = new Map();
+    (audienceTargets || []).forEach((t) => {
+      audienceByType.set(t.targetType, t);
+    });
+
+    const cards = [
+      { field: 'public_channel_id', targetType: 'public_channel', label: 'Витрина', Icon: Hash, kind: 'public' },
+      { field: 'paid_channel_id', targetType: 'paid_channel', label: 'Платный канал', Icon: Hash, kind: 'paid' },
+      { field: 'public_chat_id', targetType: 'public_chat', label: 'Публичный чат', Icon: MessagesSquare, kind: 'public' },
+      { field: 'paid_chat_id', targetType: 'paid_chat', label: 'Приватный чат', Icon: MessagesSquare, kind: 'paid' }
+    ];
+
+    return cards.map((def) => {
+      const channelId = contour[def.field] || null;
+      if (!channelId) {
+        return { ...def, channelId: null, title: null, value: null, hint: 'не привязан' };
+      }
+      const audience = audienceByType.get(def.targetType);
+      const title = audience?.channelTitle || botChannels.find((c) => c.id === channelId)?.title || 'Без названия';
+      let value;
+      let hint;
+      if (def.kind === 'paid') {
+        value = paidCountsByChannel[channelId] ?? 0;
+        hint = 'активных';
+      } else {
+        value = audience?.totalMembers ?? null;
+        hint = typeof value === 'number' ? 'участников' : 'нет sync';
+      }
+      return { ...def, channelId, title, value, hint };
+    });
+  }, [contour, audienceTargets, botChannels, paidCountsByChannel]);
 
   const channelTitleById = useMemo(() => {
     const map = new Map();
@@ -415,6 +484,50 @@ export function RetentionPage() {
             </div>
           )}
         </section>
+
+        {audienceCards.length > 0 ? (
+          <section className="p-6 md:p-8 border-b border-slate-100">
+            <div className="flex items-baseline justify-between mb-4">
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+                Аудитория
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {audienceCards.map((card, idx) => {
+                const Icon = card.Icon;
+                const isUnbound = !card.channelId;
+                const isMissing = card.channelId && card.value === null;
+                return (
+                  <div
+                    key={idx}
+                    className={`p-5 rounded-2xl border ${isUnbound ? 'bg-slate-50/30 border-dashed border-slate-200' : 'bg-slate-50/50 border-slate-100'}`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.label}</span>
+                      <Icon className={`w-4 h-4 ${isUnbound ? 'text-slate-300' : card.kind === 'paid' ? 'text-emerald-600' : 'text-slate-500'}`} />
+                    </div>
+                    {isUnbound ? (
+                      <div className="text-2xl font-black tracking-tighter text-slate-300">—</div>
+                    ) : (
+                      <>
+                        <div className={`text-2xl font-black tracking-tighter ${card.kind === 'paid' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                          {isMissing ? '—' : card.value}
+                        </div>
+                        <div className="text-xs font-medium text-slate-500 mt-1 truncate" title={card.title}>
+                          {card.hint}
+                        </div>
+                      </>
+                    )}
+                    {card.title && !isUnbound ? (
+                      <div className="text-[11px] text-slate-400 mt-1 truncate" title={card.title}>{card.title}</div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-baseline justify-between mb-4">
