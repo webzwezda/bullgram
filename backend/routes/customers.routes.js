@@ -216,7 +216,7 @@ async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selected
             .in('channel_id', channelIds),
         supabase
             .from('subscriptions')
-            .select('id, tg_user_id, tg_username, channel_id, status, expires_at, created_at')
+            .select('id, tg_user_id, tg_username, channel_id, status, expires_at, created_at, kick_attempts, kick_failed_reason')
             .in('channel_id', channelIds)
     ]);
 

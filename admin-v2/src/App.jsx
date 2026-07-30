@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Users, UserPlus, ShoppingBag, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
-  RefreshCcw, AlertTriangle, LockKeyhole, Landmark,
+  RefreshCcw, AlertTriangle, Landmark,
   Zap, CheckSquare
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -14,7 +14,6 @@ import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
-const AccessPage = lazy(() => import('./pages/AccessPage.jsx').then((module) => ({ default: module.AccessPage })));
 const CustomerBasesPage = lazy(() => import('./pages/CustomerBasesPage.jsx').then((module) => ({ default: module.CustomerBasesPage })));
 const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').then((module) => ({ default: module.ClientDossierPage })));
 const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
@@ -74,7 +73,6 @@ export function App() {
         items: [
           { to: '/analytics', label: 'Аналитика', icon: Activity },
           { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
-          { to: '/access', label: 'Доступ', icon: LockKeyhole },
           { to: '/bases', label: 'Базы', icon: Database },
           { to: '/dossier', label: 'Досье', icon: UserPlus },
           { to: '/broadcast', label: 'Рассылки', icon: Send },
@@ -209,7 +207,7 @@ export function App() {
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<Navigate to="/customers?tab=expired-in-group" replace />} />
                 <Route path="/orders" element={<Navigate to="/customers?tab=paid-orders" replace />} />
-                <Route path="/access" element={<AccessPage />} />
+                <Route path="/access" element={<Navigate to="/customers?tab=access" replace />} />
                 <Route path="/bases" element={<CustomerBasesPage />} />
                 <Route path="/dossier" element={<ClientDossierPage />} />
                 <Route path="/userbots" element={<UserbotAccountsPage />} />

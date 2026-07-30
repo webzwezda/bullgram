@@ -1206,6 +1206,8 @@ export function CustomersPage() {
       title: row.channel_title,
       in_group: row.in_group,
       access_source_label: row.access_source_label,
+      kick_attempts: row.kick_attempts,
+      kick_failed_reason: row.kick_failed_reason,
       status: 'Сгорел, но сидит',
       reason: appendAccessSource('Подписка истекла, но человек всё ещё в группе', row.access_source_label),
       expires_at: row.expires_at,
@@ -1269,6 +1271,8 @@ export function CustomersPage() {
       channel_title: row.channel_title,
       in_group: row.in_group,
       access_source_label: row.access_source_label,
+      kick_attempts: row.kick_attempts,
+      kick_failed_reason: row.kick_failed_reason,
       status: row.status === 'expired' && row.in_group === true ? 'Доступ закончился, но человек внутри' : 'Вход не подтвержден',
       reason: getAccessReason(row),
       expires_at: row.expires_at,
@@ -2313,6 +2317,11 @@ export function CustomersPage() {
                                 {row.tg_username ? (
                                   <div className="text-xs font-semibold text-slate-500 truncate">
                                     @{row.tg_username}
+                                  </div>
+                                ) : null}
+                                {row.kick_attempts >= 5 ? (
+                                  <div className="mt-1 text-[11px] font-bold text-rose-600 leading-tight">
+                                    ⚠️ Превышен лимит попыток кика ({row.kick_attempts}/5){row.kick_failed_reason ? `. Ошибка: ${row.kick_failed_reason}` : ''}
                                   </div>
                                 ) : null}
                             </div>
