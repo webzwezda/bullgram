@@ -1,9 +1,9 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  Users, UserPlus, ShoppingBag, Database,
+  Users, UserPlus, ShoppingBag, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
-  RefreshCcw, AlertTriangle, Landmark,
+  RefreshCcw, Landmark,
   Zap, CheckSquare
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -49,6 +49,7 @@ export function App() {
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
+        { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
         { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
@@ -71,7 +72,6 @@ export function App() {
       ? [{
         title: 'Для админа',
         items: [
-          { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
           { to: '/bases', label: 'Базы', icon: Database },
           { to: '/dossier', label: 'Досье', icon: UserPlus },
           { to: '/broadcast', label: 'Рассылки', icon: Send },
