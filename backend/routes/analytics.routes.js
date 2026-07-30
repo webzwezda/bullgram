@@ -25,13 +25,16 @@ export default function (supabase) {
     router.get('/', authenticateUser, async (req, res) => {
         try {
             const userId = req.user.id;
+            const botId = req.query.bot_id;
 
             // 1. Получаем список каналов этого пользователя (чтобы считать только его данные)
-            const { data: channels, error: channelsError } = await supabase
+            let channelsQuery = supabase
                 .from('channels')
                 .select('id')
                 .eq('owner_id', userId);
-                
+            if (botId) channelsQuery = channelsQuery.eq('bot_id', botId);
+            const { data: channels, error: channelsError } = await channelsQuery;
+
             if (channelsError) throw channelsError;
             const channelIds = channels ? channels.map(c => c.id) : [];
 

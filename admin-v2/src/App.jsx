@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   Users, UserPlus, ShoppingBag, Database,
-  Bot, Rocket, Globe, Wallet, Receipt, Activity, Send,
+  Bot, Rocket, Globe, Wallet, Receipt, Send,
   RefreshCcw, AlertTriangle, Landmark,
   Zap, CheckSquare
 } from 'lucide-react';
@@ -22,7 +22,6 @@ const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then(
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage.jsx').then((module) => ({ default: module.ReferralsPage })));
 const RetentionPage = lazy(() => import('./pages/RetentionPage.jsx').then((module) => ({ default: module.RetentionPage })));
 const AbandonedPage = lazy(() => import('./pages/AbandonedPage.jsx').then((module) => ({ default: module.AbandonedPage })));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx').then((module) => ({ default: module.AnalyticsPage })));
 const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage.jsx').then((module) => ({ default: module.PaymentSettingsPage })));
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
@@ -71,7 +70,6 @@ export function App() {
       ? [{
         title: 'Для админа',
         items: [
-          { to: '/analytics', label: 'Аналитика', icon: Activity },
           { to: '/abandoned', label: 'Брошенные корзины', icon: AlertTriangle },
           { to: '/bases', label: 'Базы', icon: Database },
           { to: '/dossier', label: 'Досье', icon: UserPlus },
@@ -218,7 +216,7 @@ export function App() {
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />
                 <Route path="/abandoned" element={<AbandonedPage />} />
-                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/analytics" element={<Navigate to="/customers" replace />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
                 <Route path="/claw" element={<Navigate to="/mcp" replace />} />

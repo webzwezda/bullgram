@@ -8,6 +8,11 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import { StatCard } from '../ui/StatCard.jsx';
 import { toast } from 'sonner';
 
+function formatTon(amount) {
+  const n = Number(amount || 0);
+  return `${n.toFixed(2)} TON`;
+}
+
 const TABS = [
   { id: 'bot', label: 'Официальный бот', icon: Database },
   { id: 'audience-paid-channel', label: 'Платный канал', icon: Users },
@@ -827,6 +832,7 @@ export function CustomersPage() {
   const [openActionsRowId, setOpenActionsRowId] = useState(null);
   const [mutatingRowId, setMutatingRowId] = useState(null);
   const [mutatingBulk, setMutatingBulk] = useState(false);
+  const [botAnalytics, setBotAnalytics] = useState({ loading: false, error: '', data: null });
   const [handoff, setHandoff] = useState({
     abandonedFilter: '',
     orderTgUserIds: []
@@ -1078,19 +1084,41 @@ export function CustomersPage() {
     }
   }, [accessToken, selectedBotId, setSearchParams]);
 
+  const analyticsReqIdRef = useRef(0);
+  const loadBotAnalytics = useCallback(async () => {
+    if (!selectedBotId || !accessToken) {
+      setBotAnalytics({ loading: false, error: '', data: null });
+      return;
+    }
+    const reqId = ++analyticsReqIdRef.current;
+    if (!botAnalytics.data) setBotAnalytics((prev) => ({ ...prev, loading: true, error: '' }));
+    try {
+      const data = await apiRequest(`/api/analytics?bot_id=${encodeURIComponent(selectedBotId)}`, { accessToken });
+      if (reqId !== analyticsReqIdRef.current) return;
+      setBotAnalytics({ loading: false, error: '', data });
+    } catch (error) {
+      if (reqId !== analyticsReqIdRef.current) return;
+      setBotAnalytics((prev) => ({ ...prev, loading: false, error: error.message || 'Ошибка аналитики' }));
+    }
+  }, [accessToken, selectedBotId, botAnalytics.data]);
+
   useEffect(() => {
     let cancelled = false;
 
     loadCustomers({ shouldCancel: () => cancelled });
+    loadBotAnalytics();
     const intervalId = accessToken
-      ? window.setInterval(() => loadCustomers({ silent: true, shouldCancel: () => cancelled }), 60_000)
+      ? window.setInterval(() => {
+          loadCustomers({ silent: true, shouldCancel: () => cancelled });
+          loadBotAnalytics();
+        }, 60_000)
       : null;
 
     return () => {
       cancelled = true;
       if (intervalId) window.clearInterval(intervalId);
     };
-  }, [accessToken, loadCustomers]);
+  }, [accessToken, loadCustomers, loadBotAnalytics]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2059,6 +2087,25 @@ export function CustomersPage() {
               </button>
             ))}
           </div>
+
+          {selectedBotId ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              {[
+                { label: 'Выручка TON', value: botAnalytics.data ? formatTon(botAnalytics.data.revenueTON) : '—', hint: 'За всё время' },
+                { label: 'MRR TON', value: botAnalytics.data ? formatTon(botAnalytics.data.mrrTON) : '—', hint: 'За 30 дней' },
+                { label: 'Конверсия', value: botAnalytics.data ? `${botAnalytics.data.conversion}%` : '—', hint: 'В оплату' },
+                { label: 'Churn', value: botAnalytics.data ? `${botAnalytics.data.churnRate}%` : '—', hint: 'Отток за 30 дней' }
+              ].map((item, idx) => (
+                <div key={idx} className="bg-white border border-slate-100 p-6 rounded-3xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                  </div>
+                  <div className="text-3xl font-black tracking-tighter text-slate-900">{item.value}</div>
+                  {item.hint ? <div className="text-xs text-slate-400 font-medium mt-1">{item.hint}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         {/* Filter & Search Section */}
