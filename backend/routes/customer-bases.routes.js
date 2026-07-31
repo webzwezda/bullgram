@@ -133,6 +133,19 @@ export default function customerBasesRoutes(supabase) {
                 };
             });
 
+            const baseBySingleChannel = new Map();
+            for (const base of bases || []) {
+                const baseChannels = channelsByBase.get(base.id) || [];
+                if (baseChannels.length === 1) {
+                    baseBySingleChannel.set(baseChannels[0].id, base.id);
+                }
+            }
+
+            const hydratedChannels = (channels || []).map(channel => ({
+                ...channel,
+                linked_base_id: baseBySingleChannel.get(channel.id) || null
+            }));
+
             const hydratedUserbots = (userbots || [])
                 .filter((account) => !reservedUserbotIds.has(String(account.id)))
                 .map((account) => ({
@@ -148,7 +161,7 @@ export default function customerBasesRoutes(supabase) {
             res.json({
                 success: true,
                 bases: hydratedBases,
-                channels: channels || [],
+                channels: hydratedChannels,
                 userbots: hydratedUserbots,
                 bots: bots || []
             });
@@ -174,14 +187,14 @@ export default function customerBasesRoutes(supabase) {
 
             let query = supabase.from('customer_bases');
             if (id) {
-                const { error } = await query.update(payload).eq('id', id).eq('owner_id', req.user.id);
+                const { data, error } = await query.update(payload).eq('id', id).eq('owner_id', req.user.id).select('id').single();
                 if (error) throw error;
+                res.json({ success: true, id: data?.id || id });
             } else {
-                const { error } = await query.insert(payload);
+                const { data, error } = await query.insert(payload).select('id').single();
                 if (error) throw error;
+                res.json({ success: true, id: data?.id || null });
             }
-
-            res.json({ success: true });
         } catch (error) {
             console.error('Ошибка сохранения базы клиентов:', error);
             res.status(500).json({ error: 'Ошибка сохранения базы клиентов' });
@@ -631,6 +644,7 @@ export default function customerBasesRoutes(supabase) {
                 channels_count: 0,
                 present_now: false,
                 last_seen_at: null,
+                source: 'manual',
                 updated_at: new Date().toISOString()
             }));
 
