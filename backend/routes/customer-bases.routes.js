@@ -70,9 +70,9 @@ export default function customerBasesRoutes(supabase) {
         try {
             const ownerId = req.user.id;
             const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
-            const [{ data: bases, error: basesError }, { data: channels, error: channelsError }, { data: baseChannels, error: baseChannelsError }, { data: members, error: membersError }, { data: userbots, error: userbotsError }] = await Promise.all([
+            const [{ data: bases, error: basesError }, { data: channels, error: channelsError }, { data: baseChannels, error: baseChannelsError }, { data: members, error: membersError }, { data: userbots, error: userbotsError }, { data: bots, error: botsError }] = await Promise.all([
                 supabase.from('customer_bases').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
-                supabase.from('channels').select('id, title, tg_chat_id').eq('owner_id', ownerId).order('created_at', { ascending: false }),
+                supabase.from('channels').select('id, title, tg_chat_id, bot_id').eq('owner_id', ownerId).order('created_at', { ascending: false }),
                 supabase.from('customer_base_channels').select('base_id, channel_id'),
                 supabase.from('customer_base_members').select('base_id, present_now, is_bot')
                     .eq('owner_id', ownerId),
@@ -81,7 +81,14 @@ export default function customerBasesRoutes(supabase) {
                     .select('id, tg_account_id, tg_username, proxy_id, proxies(name, last_check_country, is_working)')
                     .eq('owner_id', ownerId)
                     .eq('account_type', 'userbot')
-                    .order('created_at', { ascending: false })
+                    .order('created_at', { ascending: false }),
+                supabase
+                    .from('tg_accounts')
+                    .select('id, tg_username, custom_label, bot_role')
+                    .eq('owner_id', ownerId)
+                    .eq('account_type', 'bot')
+                    .neq('bot_role', 'ops')
+                    .order('created_at', { ascending: true })
             ]);
 
             if (basesError) throw basesError;
@@ -89,6 +96,7 @@ export default function customerBasesRoutes(supabase) {
             if (baseChannelsError && !(baseChannelsError.message || '').includes('customer_base_channels')) throw baseChannelsError;
             if (membersError && !(membersError.message || '').includes('customer_base_members')) throw membersError;
             if (userbotsError) throw userbotsError;
+            if (botsError) throw botsError;
 
             const channelMap = new Map((channels || []).map(channel => [channel.id, channel]));
             const channelsByBase = new Map();
@@ -115,11 +123,15 @@ export default function customerBasesRoutes(supabase) {
                 if (member.present_now) stats.present += 1;
             }
 
-            const hydratedBases = (bases || []).map(base => ({
-                ...base,
-                channels: channelsByBase.get(base.id) || [],
-                stats: memberStatsByBase.get(base.id) || { total: 0, humans: 0, bots: 0, present: 0 }
-            }));
+            const hydratedBases = (bases || []).map(base => {
+                const baseChannels = channelsByBase.get(base.id) || [];
+                return {
+                    ...base,
+                    bot_id: baseChannels[0]?.bot_id || null,
+                    channels: baseChannels,
+                    stats: memberStatsByBase.get(base.id) || { total: 0, humans: 0, bots: 0, present: 0 }
+                };
+            });
 
             const hydratedUserbots = (userbots || [])
                 .filter((account) => !reservedUserbotIds.has(String(account.id)))
@@ -137,7 +149,8 @@ export default function customerBasesRoutes(supabase) {
                 success: true,
                 bases: hydratedBases,
                 channels: channels || [],
-                userbots: hydratedUserbots
+                userbots: hydratedUserbots,
+                bots: bots || []
             });
         } catch (error) {
             console.error('Ошибка загрузки баз клиентов:', error);

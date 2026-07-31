@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Database, Users, CircleCheckBig, CircleAlert, AlertCircle,
+  Users, CircleCheckBig, CircleAlert, AlertCircle,
   Send, ChevronRight, Rocket, RefreshCw, Plus
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
@@ -74,9 +74,11 @@ export function CustomerBasesPage() {
   const { accessToken, profilePlan, trialEndsAt } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const baseIdFromUrl = searchParams.get('base') || '';
+  const botIdFromUrl = searchParams.get('bot') || '';
 
   const [bases, setBases] = useState([]);
   const [channels, setChannels] = useState([]);
+  const [bots, setBots] = useState([]);
   const [userbots, setUserbots] = useState([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [metaError, setMetaError] = useState('');
@@ -126,10 +128,11 @@ export function CustomerBasesPage() {
         setBases(data.bases || []);
         setChannels(data.channels || []);
         setUserbots(data.userbots || []);
+        setBots(data.bots || []);
         setMetaError('');
-        if (!searchParams.get('base') && (data.bases || []).length > 0) {
+        if (!searchParams.get('bot') && (data.bots || []).length > 0) {
           const next = new URLSearchParams(searchParams);
-          next.set('base', data.bases[0].id);
+          next.set('bot', data.bots[0].id);
           setSearchParams(next, { replace: true });
         }
       } catch (err) {
@@ -185,6 +188,37 @@ export function CustomerBasesPage() {
     () => bases.find((b) => String(b.id) === String(baseIdFromUrl)) || null,
     [bases, baseIdFromUrl]
   );
+
+  const basesForBot = useMemo(
+    () => bases.filter((b) => !botIdFromUrl || !b.bot_id || b.bot_id === botIdFromUrl),
+    [bases, botIdFromUrl]
+  );
+
+  const channelsForBot = useMemo(
+    () => channels.filter((c) => !botIdFromUrl || c.bot_id === botIdFromUrl),
+    [channels, botIdFromUrl]
+  );
+
+  useEffect(() => {
+    if (!botIdFromUrl || bases.length === 0) return;
+    const current = bases.find((b) => String(b.id) === String(baseIdFromUrl));
+    if (current && current.bot_id === botIdFromUrl) return;
+    const firstOfBot = bases.find((b) => b.bot_id === botIdFromUrl);
+    const next = new URLSearchParams(searchParams);
+    if (firstOfBot) next.set('base', firstOfBot.id);
+    else next.delete('base');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [botIdFromUrl, bases]);
+
+  function changeBot(id) {
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set('bot', id); else next.delete('bot');
+    next.delete('base');
+    setSearchParams(next, { replace: true });
+    setFilter('humans');
+    setSearch('');
+  }
 
   useEffect(() => {
     if (!selectedBase) {
@@ -285,6 +319,7 @@ export function CustomerBasesPage() {
       setBases(data.bases || []);
       setChannels(data.channels || []);
       setUserbots(data.userbots || []);
+      setBots(data.bots || []);
     } catch (err) {
       if (reqId !== metaReqIdRef.current) return;
       setMetaError(err.message || 'Ошибка загрузки баз');
@@ -494,26 +529,24 @@ export function CustomerBasesPage() {
     );
   }
 
-  if (bases.length === 0) {
+  if (bots.length === 0) {
     return (
       <section className="page page--flush space-y-6">
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
           <div className="p-16 text-center flex flex-col items-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
-              <Database className="w-8 h-8" />
+              <Rocket className="w-8 h-8" />
             </div>
-            <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Баз пока нет</h4>
+            <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Нет ботов продаж</h4>
             <p className="text-slate-500 font-medium text-sm mb-6 max-w-md">
-              Создайте первую базу, чтобы собрать людей из ваших каналов и групп в один список и видеть покрытие аудитории.
+              Создайте бота, чтобы собирать аудиторию из его каналов и групп и работать с сегментами.
             </p>
-            <button
-              type="button"
-              onClick={startNewBase}
+            <a
+              href="/sales-bot"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              Создать базу
-            </button>
+              Создать бота <ChevronRight className="w-4 h-4" />
+            </a>
           </div>
         </div>
       </section>
@@ -559,31 +592,46 @@ export function CustomerBasesPage() {
         )}
 
         <section className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 mb-6">
+            <div className="flex flex-wrap items-center gap-3">
               <select
-                value={baseIdFromUrl}
-                onChange={(event) => changeBase(event.target.value)}
-                className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 max-w-[320px]"
+                value={botIdFromUrl}
+                onChange={(event) => changeBot(event.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 max-w-[280px]"
               >
-                {bases.map((base) => (
-                  <option key={base.id} value={base.id}>
-                    {base.name}
+                {bots.map((bot) => (
+                  <option key={bot.id} value={bot.id}>
+                    {bot.custom_label || (bot.tg_username ? `@${bot.tg_username}` : 'Без имени')}
                   </option>
                 ))}
               </select>
+              <div className="text-xs font-bold text-slate-500">
+                {memberSummary.total || 0} людей · {selectedBase?.channels?.length || 0} каналов
+              </div>
               <button
                 type="button"
                 onClick={startNewBase}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Новая база
               </button>
-              <div className="text-xs font-bold text-slate-500">
-                {memberSummary.total || 0} людей · {selectedBase?.channels?.length || 0} каналов
-              </div>
             </div>
+
+            {basesForBot.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">База:</span>
+                <select
+                  value={baseIdFromUrl}
+                  onChange={(event) => changeBase(event.target.value)}
+                  className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 max-w-[260px]"
+                >
+                  {basesForBot.map((base) => (
+                    <option key={base.id} value={base.id}>{base.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
           </div>
 
           {profilePlan === 'trial' ? (
@@ -690,7 +738,9 @@ export function CustomerBasesPage() {
             </div>
           ) : !baseIdFromUrl ? (
             <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
-              Выберите базу выше, чтобы увидеть участников.
+              {basesForBot.length === 0
+                ? 'У этого бота нет баз. Нажмите «Новая база» и привяжите каналы этого бота.'
+                : 'Выберите базу выше, чтобы увидеть участников.'}
             </div>
           ) : filteredMembers.length === 0 ? (
             <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
@@ -769,18 +819,18 @@ export function CustomerBasesPage() {
               Каналы и группы
             </h3>
             <span className="text-xs font-bold text-slate-400">
-              {channels.length} доступно · {selectedChannelIds.length} привязано
+              {channelsForBot.length} доступно · {selectedChannelIds.length} привязано
             </span>
           </div>
 
-          {channels.length === 0 ? (
+          {channelsForBot.length === 0 ? (
             <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
-              У вас пока нет каналов. Создайте канал на странице «Бот продаж», чтобы привязать его к базе.
+              У этого бота пока нет каналов. Создайте канал на странице «Бот продаж».
             </div>
           ) : (
             <Fragment>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
-                {channels.map((ch) => {
+                {channelsForBot.map((ch) => {
                   const checked = selectedChannelIds.includes(String(ch.id));
                   return (
                     <label
