@@ -973,21 +973,21 @@ export function CustomerBasesPage() {
       </div>
 
       {/* === БЛОК 2: КАСТОМНЫЕ БАЗЫ === */}
-      <div className="bg-slate-100/60 border-2 border-slate-200 rounded-3xl overflow-hidden">
+      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
 
-        <div className="p-6 md:p-8 border-b-2 border-slate-200 bg-slate-100">
+        <div className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-3">
-            <Database className="w-5 h-5 text-slate-700" />
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-600">Кастомные базы</h2>
+            <Database className="w-5 h-5 text-slate-500" />
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Кастомные базы</h2>
           </div>
-          <p className="text-sm text-slate-700 max-w-2xl">
+          <p className="text-sm text-slate-600 max-w-2xl">
             Ручные списки для точечных рассылок и дожима. Собирайте из аудитории бота кнопкой «В кастомную базу» или вбивайте руки.
           </p>
         </div>
 
         <div className="p-6 md:p-8">
           {customBases.length === 0 && !isCreatingCustom ? (
-            <div className="p-4 rounded-2xl bg-white/60 border border-slate-200 text-sm text-slate-600 font-medium flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm text-slate-600 font-medium flex flex-wrap items-center justify-between gap-3">
               <span>Пока нет кастомных баз. Создайте первую или перекиньте людей из аудитории бота.</span>
               <button
                 type="button"
