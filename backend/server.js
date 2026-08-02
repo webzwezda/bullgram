@@ -136,6 +136,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // НАСТРОЙКА EXPRESS
 // ==========================================
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cors({ origin: corsOrigins }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
