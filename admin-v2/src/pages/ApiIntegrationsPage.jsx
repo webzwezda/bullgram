@@ -376,7 +376,7 @@ export function ApiIntegrationsPage() {
         />
       </div>
 
-      <Card className="border-slate-200/70 bg-white shadow-sm">
+      <Card className="border-slate-200/70 bg-white shadow-sm mt-6">
         <CardHeader className="px-6 pt-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
