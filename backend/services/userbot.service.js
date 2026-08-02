@@ -1925,7 +1925,7 @@ export class UserbotService {
                 : messages;
             const hasMore = filtered.length > pageLimit;
             const trimmed = filtered.slice(0, pageLimit);
-            const items = trimmed.map((m) => sanitizeMessage(m));
+            const items = trimmed.map((m) => sanitizeMessage(m)).filter(Boolean);
 
             const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
             return {
@@ -1963,7 +1963,7 @@ export class UserbotService {
             );
             const hasMore = messages.length > pageLimit;
             const trimmed = messages.slice(0, pageLimit);
-            const items = trimmed.map((m) => sanitizeMessage(m));
+            const items = trimmed.map((m) => sanitizeMessage(m)).filter(Boolean);
             const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
             return {
                 messages: items,
