@@ -43,6 +43,20 @@ export function restErrorHandler(err, _req, res, _next) {
     // Delegate to Express default if we already started writing.
     return;
   }
+  // Always log — we previously swallowed errors silently in prod, which made
+  // debugging external API failures impossible. MCPError carries code/message,
+  // everything else is an unexpected throw we want a stack trace for.
+  if (err instanceof MCPError) {
+    console.error('[external-api]', {
+      code: err.code,
+      message: err.message,
+      data: err.data,
+      path: _req?.path,
+      method: _req?.method
+    });
+  } else {
+    console.error('[external-api] unexpected error', err);
+  }
   const envelope = buildErrorEnvelope(err);
   const code = envelope.error.code;
   const status = mapMcpErrorToHttp(code);
