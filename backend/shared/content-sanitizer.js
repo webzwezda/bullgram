@@ -42,7 +42,7 @@ export function summarizeMedia(media) {
   if (media.photo) {
     return {
       kind: 'photo',
-      size_bytes: largestPhotoSize(media.photo.sizes)?.size?.value || null,
+      size_bytes: safeNum(largestPhotoSize(media.photo.sizes)?.size?.value ?? largestPhotoSize(media.photo.sizes)?.size),
       id: String(media.photo.id || '')
     };
   }
@@ -50,7 +50,7 @@ export function summarizeMedia(media) {
     return {
       kind: 'document',
       mime: media.document.mimeType || null,
-      size_bytes: media.document.size?.value || null,
+      size_bytes: safeNum(media.document.size?.value ?? media.document.size),
       file_name: findDocumentFileName(media.document.attributes) || null
     };
   }
@@ -194,6 +194,26 @@ function normalizeDate(value) {
 function largestPhotoSize(sizes = []) {
   if (!Array.isArray(sizes) || !sizes.length) return null;
   return sizes.slice().sort((a, b) => (b.size?.value || 0) - (a.size?.value || 0))[0] || null;
+}
+
+// GramJS 2.26 returns int64 fields (photo/document size, ids) as native BigInt
+// in some messages. JSON.stringify can't serialize BigInt and throws
+// "Do not know how to serialize a BigInt" — which previously crashed the
+// entire fetchMessages response after sanitizeMessage had already returned.
+// Convert eagerly so the response envelope is always JSON-safe.
+function safeNum(value) {
+  if (value == null) return null;
+  if (typeof value === 'bigint') {
+    return value > Number.MAX_SAFE_INTEGER ? String(value) : Number(value);
+  }
+  if (typeof value === 'number') return value;
+  // Long from bn.js or other wrapped numeric — coerce via String
+  if (typeof value === 'object' && typeof value.toString === 'function') {
+    const s = String(value.toString());
+    const n = Number(s);
+    return Number.isFinite(n) ? n : s;
+  }
+  return null;
 }
 
 function findDocumentFileName(attributes = []) {
