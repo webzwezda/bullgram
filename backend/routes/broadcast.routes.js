@@ -136,11 +136,11 @@ export default function(supabase, getBotById) {
             }));
         }
 
-        if (audienceType === 'customer_base_members') {
+        if (audienceType === 'channel_audience_members') {
             if (!baseId) return [];
 
             const { data: base } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id, name')
                 .eq('id', baseId)
                 .eq('owner_id', ownerId)
@@ -149,7 +149,7 @@ export default function(supabase, getBotById) {
             if (!base) return [];
 
             const { data: members, error } = await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .select('id, tg_user_id, display_name, username, present_now, channels_count, is_bot')
                 .eq('owner_id', ownerId)
                 .eq('base_id', baseId)
@@ -172,7 +172,7 @@ export default function(supabase, getBotById) {
                 channel_id: null,
                 channel_title: base.name,
                 bot_id: null,
-                source_type: 'customer_base',
+                source_type: 'channel_audience',
                 source_id: member.id,
                 is_trial: false,
                 segment_label: !member.present_now
@@ -181,6 +181,40 @@ export default function(supabase, getBotById) {
                 tariff_title: member.display_name || null,
                 username: member.username || null,
                 channels_count: member.channels_count || 0
+            })));
+        }
+
+        if (audienceType === 'client_base_members') {
+            if (!baseId) return [];
+
+            const { data: base } = await supabase
+                .from('client_bases')
+                .select('id, name')
+                .eq('id', baseId)
+                .eq('owner_id', ownerId)
+                .single();
+
+            if (!base) return [];
+
+            const { data: members, error } = await supabase
+                .from('client_base_members')
+                .select('id, tg_user_id, display_name, username')
+                .eq('owner_id', ownerId)
+                .eq('base_id', baseId);
+
+            if (error) throw error;
+
+            return dedupeAudience((members || []).map(member => ({
+                tg_user_id: String(member.tg_user_id),
+                channel_id: null,
+                channel_title: base.name,
+                bot_id: null,
+                source_type: 'client_base',
+                source_id: member.id,
+                is_trial: false,
+                segment_label: 'Из базы клиентов',
+                tariff_title: member.display_name || null,
+                username: member.username || null
             })));
         }
 

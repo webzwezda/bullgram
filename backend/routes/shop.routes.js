@@ -624,20 +624,20 @@ async function transferShopAssets(supabase, purchase, item, assets) {
             continue;
         }
 
-        if (asset.asset_type === 'customer_base_asset') {
+        if (asset.asset_type === 'channel_audience_asset') {
             const { error: baseError } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .update({ owner_id: buyerOwnerId })
                 .eq('id', asset.asset_id)
                 .eq('owner_id', sellerOwnerId);
             if (baseError) throw baseError;
 
             const { error: membersError } = await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .update({ owner_id: buyerOwnerId })
                 .eq('base_id', asset.asset_id)
                 .eq('owner_id', sellerOwnerId);
-            if (membersError && !(membersError.message || '').includes('customer_base_members')) {
+            if (membersError && !(membersError.message || '').includes('channel_audience_members')) {
                 throw membersError;
             }
         }
@@ -928,12 +928,12 @@ export default function shopRoutes(supabase) {
                 return res.json({
                     proxies: [],
                     userbots: [],
-                    customer_bases: [],
+                    channel_audiences: [],
                     seller_wallet: settings?.ton_wallet || null,
                     seller_role: req.profile?.role || null,
                     seller_mode: 'text_service',
                     support: {
-                        customer_bases: false,
+                        channel_audiences: false,
                         asset_marketplace: false,
                         text_service: true
                     }
@@ -953,7 +953,7 @@ export default function shopRoutes(supabase) {
                     .eq('account_type', 'userbot')
                     .order('created_at', { ascending: false }),
                 supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id, title, description, channel_count, members_count, updated_at')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false }),
@@ -969,7 +969,7 @@ export default function shopRoutes(supabase) {
                 userbotsResp.error?.message || '',
                 basesResp.error?.message || ''
             ].join(' ');
-            const customerBasesUnavailable = joinedError.includes('customer_bases');
+            const customerBasesUnavailable = joinedError.includes('channel_audiences');
 
             if (proxiesResp.error) throw proxiesResp.error;
             if (userbotsResp.error) throw userbotsResp.error;
@@ -1005,7 +1005,7 @@ export default function shopRoutes(supabase) {
             res.json({
                 proxies,
                 userbots,
-                customer_bases: customerBasesUnavailable ? [] : (basesResp.data || []),
+                channel_audiences: customerBasesUnavailable ? [] : (basesResp.data || []),
                 seller_wallet: settingsResp.data?.ton_wallet || null,
                 seller_role: req.profile?.role || null,
                 seller_mode: 'asset_marketplace',
@@ -1013,7 +1013,7 @@ export default function shopRoutes(supabase) {
                     proxies: proxyStats
                 },
                 support: {
-                    customer_bases: !customerBasesUnavailable,
+                    channel_audiences: !customerBasesUnavailable,
                     asset_marketplace: true,
                     text_service: true
                 }
@@ -1342,7 +1342,7 @@ export default function shopRoutes(supabase) {
             return res.status(400).json({ error: 'Название лота обязательно' });
         }
 
-        if (!['proxy', 'userbot', 'bundle', 'customer_base_asset', 'text_offer'].includes(normalizedItemType)) {
+        if (!['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer'].includes(normalizedItemType)) {
             return res.status(400).json({ error: 'Неверный тип товара' });
         }
 
@@ -1462,7 +1462,7 @@ export default function shopRoutes(supabase) {
             const { usage: proxyUsageMap } = await loadOwnerUserbotProxyUsage(supabase, ownerId);
             const proxyIds = assets.filter(asset => asset.asset_type === 'proxy').map(asset => asset.asset_id);
             const userbotIds = assets.filter(asset => asset.asset_type === 'userbot').map(asset => asset.asset_id);
-            const baseIds = assets.filter(asset => asset.asset_type === 'customer_base_asset').map(asset => asset.asset_id);
+            const baseIds = assets.filter(asset => asset.asset_type === 'channel_audience_asset').map(asset => asset.asset_id);
             const assetKeys = assets.map(asset => `${asset.asset_type}:${asset.asset_id}`);
 
             if (proxyIds.length > 0) {
@@ -1502,13 +1502,13 @@ export default function shopRoutes(supabase) {
 
             if (baseIds.length > 0) {
                 const { data: rows, error } = await supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id')
                     .eq('owner_id', ownerId)
                     .in('id', baseIds);
-                if (error && !(error.message || '').includes('customer_bases')) throw error;
-                if (error && (error.message || '').includes('customer_bases')) {
-                    return res.status(400).json({ error: 'Таблица customer_bases недоступна. Базы пока нельзя продавать.' });
+                if (error && !(error.message || '').includes('channel_audiences')) throw error;
+                if (error && (error.message || '').includes('channel_audiences')) {
+                    return res.status(400).json({ error: 'Таблица channel_audiences недоступна. Базы пока нельзя продавать.' });
                 }
                 if ((rows || []).length !== baseIds.length) {
                     return res.status(400).json({ error: 'В лоте есть чужие или несуществующие базы' });
@@ -2059,7 +2059,7 @@ export default function shopRoutes(supabase) {
                     reserved: Array.from(reservationByItem.keys()).length,
                     proxies: visibleItems.filter(item => item.item_type === 'proxy').length,
                     userbots: visibleItems.filter(item => item.item_type === 'userbot').length,
-                    customer_bases: visibleItems.filter(item => item.item_type === 'customer_base_asset').length,
+                    channel_audiences: visibleItems.filter(item => item.item_type === 'channel_audience_asset').length,
                     text_offers: visibleItems.filter(item => item.item_type === 'text_offer').length
                 };
             }

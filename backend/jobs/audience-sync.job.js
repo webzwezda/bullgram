@@ -109,7 +109,7 @@ export const startAudienceSync = (supabase) => {
         if (!channel?.tg_chat_id) return;
 
         const { data: base } = await supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .select('id')
             .eq('contour_id', contour.bot_id)
             .eq('target_type', targetType)
@@ -119,7 +119,7 @@ export const startAudienceSync = (supabase) => {
         const client = await userbotService.createAuthorizedClient(userbot, 1);
         try {
             await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .update({ present_now: false, updated_at: new Date().toISOString() })
                 .eq('base_id', base.id)
                 .eq('owner_id', contour.owner_id);
@@ -153,12 +153,12 @@ export const startAudienceSync = (supabase) => {
 
             if (upsertPayload.length > 0) {
                 await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
             }
 
             await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .update({ updated_at: new Date().toISOString() })
                 .eq('id', base.id);
 

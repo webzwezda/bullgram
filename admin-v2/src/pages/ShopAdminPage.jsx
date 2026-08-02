@@ -876,7 +876,7 @@ export function ShopAdminPage() {
       return 'Прокси можно продавать только если на нем не сидит несколько юзерботов.';
     }
 
-    if (formState.item_type === 'customer_base_asset') {
+    if (formState.item_type === 'channel_audience_asset') {
       return 'После оплаты buyer получит базу в свой кабинет и сможет открыть ее в CRM, Orders, Access и Broadcast.';
     }
 
@@ -1097,17 +1097,17 @@ export function ShopAdminPage() {
       }] : [];
     }
 
-    if (formState.item_type === 'customer_base_asset') {
-      const base = (availableAssets.customer_bases || []).find((item) => String(item.id) === String(formState.selectedBaseId));
+    if (formState.item_type === 'channel_audience_asset') {
+      const base = (availableAssets.channel_audiences || []).find((item) => String(item.id) === String(formState.selectedBaseId));
       return base ? [{
-        asset_type: 'customer_base_asset',
+        asset_type: 'channel_audience_asset',
         asset_id: base.id,
         label: base.title
       }] : [];
     }
 
     return [];
-  }, [availableAssets.customer_bases, availableAssets.proxies, availableAssets.userbots, eligibleBundleUserbots, formState.item_type, formState.selectedBaseId, formState.selectedProxyId, formState.selectedUserbotId, selectedBundleProxy]);
+  }, [availableAssets.channel_audiences, availableAssets.proxies, availableAssets.userbots, eligibleBundleUserbots, formState.item_type, formState.selectedBaseId, formState.selectedProxyId, formState.selectedUserbotId, selectedBundleProxy]);
 
   async function saveItem() {
     const effectiveItemType = 'text_offer';
@@ -1894,7 +1894,7 @@ export function ShopAdminPage() {
                         {purchaseHasAssetType(purchase, 'userbot') ? (
                           <a href="/app/userbots" target="_blank" rel="noreferrer">Боты</a>
                         ) : null}
-                        {purchaseHasAssetType(purchase, 'customer_base_asset') ? (
+                        {purchaseHasAssetType(purchase, 'channel_audience_asset') ? (
                           <a href="/app/customers?tab=bases" target="_blank" rel="noreferrer">Базы</a>
                         ) : null}
                       </div>

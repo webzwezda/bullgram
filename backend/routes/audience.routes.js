@@ -120,7 +120,7 @@ export default function audienceRoutes(supabase) {
 
     async function findOrCreateBase(ownerId, contourId, targetType, channelId) {
         const { data: existing } = await supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .select('id')
             .eq('contour_id', contourId)
             .eq('target_type', targetType)
@@ -129,7 +129,7 @@ export default function audienceRoutes(supabase) {
         if (existing) return existing.id;
 
         const { data, error } = await supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .insert({
                 owner_id: ownerId,
                 contour_id: contourId,
@@ -141,7 +141,7 @@ export default function audienceRoutes(supabase) {
 
         if (error) {
             const { data: retry } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id')
                 .eq('contour_id', contourId)
                 .eq('target_type', targetType)
@@ -150,7 +150,7 @@ export default function audienceRoutes(supabase) {
         }
 
         await supabase
-            .from('customer_base_channels')
+            .from('channel_audience_channels')
             .upsert({ base_id: data.id, channel_id: channelId }, { onConflict: 'base_id,channel_id' });
 
         return data.id;
@@ -205,7 +205,7 @@ export default function audienceRoutes(supabase) {
                 target.tgChatId = channel?.tg_chat_id || null;
 
                 const { data: base } = await supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id, updated_at')
                     .eq('contour_id', contour.bot_id)
                     .eq('target_type', targetType)
@@ -220,7 +220,7 @@ export default function audienceRoutes(supabase) {
                 target.syncedAt = base.updated_at;
 
                 const { data: members, error } = await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .select('id, tg_user_id, username, display_name, first_name, last_name, is_bot, present_now, activity_score, comments_count, last_activity_at, updated_at')
                     .eq('base_id', base.id)
                     .eq('owner_id', req.user.id)
@@ -291,7 +291,7 @@ export default function audienceRoutes(supabase) {
 
             try {
                 await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .update({ present_now: false, updated_at: new Date().toISOString() })
                     .eq('base_id', baseId)
                     .eq('owner_id', req.user.id);
@@ -328,13 +328,13 @@ export default function audienceRoutes(supabase) {
             const upsertPayload = Array.from(aggregatedMembers.values());
             if (upsertPayload.length > 0) {
                 const { error: upsertError } = await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
                 if (upsertError) throw upsertError;
             }
 
             await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .update({ updated_at: new Date().toISOString() })
                 .eq('id', baseId);
 

@@ -116,7 +116,7 @@ export default function dashboardRoutes(supabase) {
                     .select('id, name, host, port, last_check_country, is_working, last_checked_at, last_check_error')
                     .eq('owner_id', ownerId),
                 supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id')
                     .eq('owner_id', ownerId),
                 supabase
@@ -129,7 +129,7 @@ export default function dashboardRoutes(supabase) {
             if (accountsError) throw accountsError;
             if (channelsError) throw channelsError;
             if (proxiesError) throw proxiesError;
-            if (customerBasesError && !(customerBasesError.message || '').includes('customer_bases')) throw customerBasesError;
+            if (customerBasesError && !(customerBasesError.message || '').includes('channel_audiences')) throw customerBasesError;
             if (paymentSettingsError && !(paymentSettingsError.message || '').includes('payment_settings')) throw paymentSettingsError;
 
             const channelIds = (channels || []).map(channel => channel.id);

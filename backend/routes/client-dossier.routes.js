@@ -130,11 +130,11 @@ export default function clientDossierRoutes(supabase) {
                     .order('created_at', { ascending: false })
                     .limit(150),
                 supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id, name')
                     .eq('owner_id', ownerId),
                 supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .select('id, base_id, tg_user_id, display_name, username, present_now, channels_count, coverage_status, payment_status, present_channel_titles, missing_channel_titles, updated_at')
                     .eq('owner_id', ownerId)
                     .eq('tg_user_id', tgUserId)
@@ -180,8 +180,8 @@ export default function clientDossierRoutes(supabase) {
             if (invoicesResp.error) throw invoicesResp.error;
             if (invitesResp.error && !(invitesResp.error.message || '').includes('access_invites')) throw invitesResp.error;
             if (eventsResp.error && !(eventsResp.error.message || '').includes('access_events')) throw eventsResp.error;
-            if (basesResp.error && !(basesResp.error.message || '').includes('customer_bases')) throw basesResp.error;
-            if (membersResp.error && !(membersResp.error.message || '').includes('customer_base_members')) throw membersResp.error;
+            if (basesResp.error && !(basesResp.error.message || '').includes('channel_audiences')) throw basesResp.error;
+            if (membersResp.error && !(membersResp.error.message || '').includes('channel_audience_members')) throw membersResp.error;
             if (referralProfileResp.error && !(referralProfileResp.error.message || '').includes('referral_profiles')) throw referralProfileResp.error;
             if (referralAttributionResp.error && !(referralAttributionResp.error.message || '').includes('referral_attributions')) throw referralAttributionResp.error;
             if (referralEventsAsReferrerResp.error && !(referralEventsAsReferrerResp.error.message || '').includes('referral_events')) throw referralEventsAsReferrerResp.error;

@@ -197,15 +197,15 @@ async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selected
         subscriptionsResp
     ] = await Promise.all([
         supabase
-            .from('customer_base_channels')
+            .from('channel_audience_channels')
             .select('base_id, channel_id')
             .in('channel_id', channelIds),
         supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .select('id, name, description')
             .eq('owner_id', ownerId),
         supabase
-            .from('customer_base_members')
+            .from('channel_audience_members')
             .select('base_id, tg_user_id, username, display_name, first_name, last_name, is_bot, present_now, last_seen_at, source_channel_ids, channels_count')
             .eq('owner_id', ownerId)
             .eq('present_now', true),
@@ -220,9 +220,9 @@ async function buildReconciliationCandidatesSnapshot(supabase, ownerId, selected
             .in('channel_id', channelIds)
     ]);
 
-    if (baseLinksResp.error && !(baseLinksResp.error.message || '').includes('customer_base_channels')) throw baseLinksResp.error;
-    if (basesResp.error && !(basesResp.error.message || '').includes('customer_bases')) throw basesResp.error;
-    if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('customer_base_members')) throw baseMembersResp.error;
+    if (baseLinksResp.error && !(baseLinksResp.error.message || '').includes('channel_audience_channels')) throw baseLinksResp.error;
+    if (basesResp.error && !(basesResp.error.message || '').includes('channel_audiences')) throw basesResp.error;
+    if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('channel_audience_members')) throw baseMembersResp.error;
     if (tariffsResp.error) throw tariffsResp.error;
     if (subscriptionsResp.error) throw subscriptionsResp.error;
 
@@ -576,11 +576,11 @@ async function cleanupCustomerDemoSeed(supabase, ownerId, seedId) {
     if (tariffsLookupError) throw tariffsLookupError;
 
     const { data: demoBases, error: basesLookupError } = await supabase
-        .from('customer_bases')
+        .from('channel_audiences')
         .select('id')
         .eq('owner_id', ownerId)
         .eq('description', `demo_seed_id=${seedId}`);
-    if (basesLookupError && !(basesLookupError.message || '').includes('customer_bases')) throw basesLookupError;
+    if (basesLookupError && !(basesLookupError.message || '').includes('channel_audiences')) throw basesLookupError;
 
     const channelIds = (demoChannels || []).map(row => row.id);
     const tariffIds = (demoTariffs || []).map(row => row.id);
@@ -614,7 +614,7 @@ async function cleanupCustomerDemoSeed(supabase, ownerId, seedId) {
 
     if (baseIds.length > 0) {
         const { error } = await supabase
-            .from('customer_base_members')
+            .from('channel_audience_members')
             .delete()
             .eq('owner_id', ownerId)
             .in('base_id', baseIds);
@@ -638,7 +638,7 @@ async function cleanupCustomerDemoSeed(supabase, ownerId, seedId) {
 
     if (baseIds.length > 0) {
         const { error } = await supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .delete()
             .eq('owner_id', ownerId)
             .in('id', baseIds);
@@ -788,10 +788,10 @@ export default function customersRoutes(supabase) {
             }
 
             const { data: baseLinks, error: baseLinksError } = await supabase
-                .from('customer_base_channels')
+                .from('channel_audience_channels')
                 .select('base_id')
                 .eq('channel_id', source.already_bound_channel_id);
-            if (baseLinksError && !(baseLinksError.message || '').includes('customer_base_channels')) throw baseLinksError;
+            if (baseLinksError && !(baseLinksError.message || '').includes('channel_audience_channels')) throw baseLinksError;
 
             const baseIds = Array.from(new Set((baseLinks || []).map((row) => row.base_id).filter(Boolean)));
             if (!baseIds.length) {
@@ -799,11 +799,11 @@ export default function customersRoutes(supabase) {
             }
 
             const { data: bases, error: basesError } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id, name')
                 .eq('owner_id', ownerId)
                 .in('id', baseIds);
-            if (basesError && !(basesError.message || '').includes('customer_bases')) throw basesError;
+            if (basesError && !(basesError.message || '').includes('channel_audiences')) throw basesError;
 
             const { data: channel, error: channelError } = await supabase
                 .from('channels')
@@ -855,11 +855,11 @@ export default function customersRoutes(supabase) {
 
                 for (const base of bases || []) {
                     const { data: existingMembers, error: existingError } = await supabase
-                        .from('customer_base_members')
+                        .from('channel_audience_members')
                         .select('id, owner_id, base_id, tg_user_id, username, first_name, last_name, display_name, is_bot, source_channel_ids, channels_count, present_now, last_seen_at')
                         .eq('owner_id', ownerId)
                         .eq('base_id', base.id);
-                    if (existingError && !(existingError.message || '').includes('customer_base_members')) throw existingError;
+                    if (existingError && !(existingError.message || '').includes('channel_audience_members')) throw existingError;
 
                     const existingByUserId = new Map((existingMembers || []).map((row) => [String(row.tg_user_id), row]));
                     const upsertRows = [];
@@ -906,14 +906,14 @@ export default function customersRoutes(supabase) {
 
                     if (upsertRows.length > 0) {
                         const { error } = await supabase
-                            .from('customer_base_members')
+                            .from('channel_audience_members')
                             .upsert(upsertRows, { onConflict: 'base_id,tg_user_id' });
                         if (error) throw error;
                     }
 
                     for (const stale of staleRows) {
                         const { error } = await supabase
-                            .from('customer_base_members')
+                            .from('channel_audience_members')
                             .update({
                                 source_channel_ids: stale.source_channel_ids,
                                 channels_count: stale.channels_count,
@@ -927,7 +927,7 @@ export default function customersRoutes(supabase) {
                     }
 
                     await supabase
-                        .from('customer_bases')
+                        .from('channel_audiences')
                         .update({ updated_at: scannedAt })
                         .eq('id', base.id)
                         .eq('owner_id', ownerId);
@@ -1396,7 +1396,7 @@ export default function customersRoutes(supabase) {
             if (channelError) throw channelError;
 
             const { data: base, error: baseError } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .insert({
                     owner_id: ownerId,
                     name: `[DEMO ${seedId}] База клиентов`,
@@ -1666,7 +1666,7 @@ export default function customersRoutes(supabase) {
                 present_now: presentNow,
                 last_seen_at: hoursAgo(1)
             }));
-            const { error: baseMembersError } = await supabase.from('customer_base_members').insert(baseMemberRows);
+            const { error: baseMembersError } = await supabase.from('channel_audience_members').insert(baseMemberRows);
             if (baseMembersError) throw baseMembersError;
 
             const { error: funnelError } = await supabase.from('customer_funnel_events').insert([
@@ -1812,12 +1812,12 @@ export default function customersRoutes(supabase) {
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false }),
                 supabase
-                    .from('customer_bases')
+                    .from('channel_audiences')
                     .select('id, name, description, contour_id, created_at, updated_at')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false }),
                 supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .select('base_id, tg_user_id, username, display_name, first_name, last_name, last_seen_at, present_now, is_bot, source_channel_ids')
                     .eq('owner_id', ownerId),
                 supabase
@@ -1831,8 +1831,8 @@ export default function customersRoutes(supabase) {
             if (botsResp.error) throw botsResp.error;
             if (channelsResp.error) throw channelsResp.error;
             if (tariffsResp.error) throw tariffsResp.error;
-            if (basesResp.error && !(basesResp.error.message || '').includes('customer_bases')) throw basesResp.error;
-            if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('customer_base_members')) throw baseMembersResp.error;
+            if (basesResp.error && !(basesResp.error.message || '').includes('channel_audiences')) throw basesResp.error;
+            if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('channel_audience_members')) throw baseMembersResp.error;
 
             const allBots = botsResp.data || [];
             const allChannels = channelsResp.data || [];

@@ -8,7 +8,7 @@ function buildDisplayName(user) {
     return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || `ID ${user.tg_user_id}`;
 }
 
-export default function customerBasesRoutes(supabase) {
+export default function channelAudiencesRoutes(supabase) {
     const router = express.Router();
     const userbotService = new UserbotService(
         supabase,
@@ -18,7 +18,7 @@ export default function customerBasesRoutes(supabase) {
 
     async function loadOwnedBase(ownerId, baseId) {
         const { data: base, error } = await supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .select('*')
             .eq('id', baseId)
             .eq('owner_id', ownerId)
@@ -71,10 +71,10 @@ export default function customerBasesRoutes(supabase) {
             const ownerId = req.user.id;
             const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
             const [{ data: bases, error: basesError }, { data: channels, error: channelsError }, { data: baseChannels, error: baseChannelsError }, { data: members, error: membersError }, { data: userbots, error: userbotsError }, { data: bots, error: botsError }] = await Promise.all([
-                supabase.from('customer_bases').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
+                supabase.from('channel_audiences').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
                 supabase.from('channels').select('id, title, tg_chat_id, bot_id').eq('owner_id', ownerId).order('created_at', { ascending: false }),
-                supabase.from('customer_base_channels').select('base_id, channel_id'),
-                supabase.from('customer_base_members').select('base_id, present_now, is_bot')
+                supabase.from('channel_audience_channels').select('base_id, channel_id'),
+                supabase.from('channel_audience_members').select('base_id, present_now, is_bot')
                     .eq('owner_id', ownerId),
                 supabase
                     .from('tg_accounts')
@@ -93,8 +93,8 @@ export default function customerBasesRoutes(supabase) {
 
             if (basesError) throw basesError;
             if (channelsError) throw channelsError;
-            if (baseChannelsError && !(baseChannelsError.message || '').includes('customer_base_channels')) throw baseChannelsError;
-            if (membersError && !(membersError.message || '').includes('customer_base_members')) throw membersError;
+            if (baseChannelsError && !(baseChannelsError.message || '').includes('channel_audience_channels')) throw baseChannelsError;
+            if (membersError && !(membersError.message || '').includes('channel_audience_members')) throw membersError;
             if (userbotsError) throw userbotsError;
             if (botsError) throw botsError;
 
@@ -185,7 +185,7 @@ export default function customerBasesRoutes(supabase) {
                 updated_at: new Date().toISOString()
             };
 
-            let query = supabase.from('customer_bases');
+            let query = supabase.from('channel_audiences');
             if (id) {
                 const { data, error } = await query.update(payload).eq('id', id).eq('owner_id', req.user.id).select('id').single();
                 if (error) throw error;
@@ -207,7 +207,7 @@ export default function customerBasesRoutes(supabase) {
             const channelIds = Array.isArray(req.body.channel_ids) ? req.body.channel_ids : [];
 
             const { data: base, error: baseError } = await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id')
                 .eq('id', baseId)
                 .eq('owner_id', req.user.id)
@@ -227,14 +227,14 @@ export default function customerBasesRoutes(supabase) {
             }
 
             const { error: deleteError } = await supabase
-                .from('customer_base_channels')
+                .from('channel_audience_channels')
                 .delete()
                 .eq('base_id', baseId);
             if (deleteError) throw deleteError;
 
             if (channelIds.length > 0) {
                 const { error: insertError } = await supabase
-                    .from('customer_base_channels')
+                    .from('channel_audience_channels')
                     .insert(channelIds.map(channelId => ({
                         base_id: baseId,
                         channel_id: channelId
@@ -256,7 +256,7 @@ export default function customerBasesRoutes(supabase) {
             if (!base) return res.status(404).json({ error: 'База не найдена' });
 
             const { data: members, error } = await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .select('*')
                 .eq('owner_id', req.user.id)
                 .eq('base_id', baseId)
@@ -267,7 +267,7 @@ export default function customerBasesRoutes(supabase) {
             if (error) throw error;
 
             const { data: links } = await supabase
-                .from('customer_base_channels')
+                .from('channel_audience_channels')
                 .select('channel_id, channels(id, title)')
                 .eq('base_id', baseId);
 
@@ -427,7 +427,7 @@ export default function customerBasesRoutes(supabase) {
 
             const [{ data: links, error: linksError }, { data: userbot, error: userbotError }] = await Promise.all([
                 supabase
-                    .from('customer_base_channels')
+                    .from('channel_audience_channels')
                     .select('channel_id, channels(id, title, tg_chat_id)')
                     .eq('base_id', baseId),
                 loadOwnedUserbot(req.user.id, userbotId).then(userbot => ({ data: userbot, error: null })).catch(error => ({ data: null, error }))
@@ -449,7 +449,7 @@ export default function customerBasesRoutes(supabase) {
 
             try {
                 await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .update({ present_now: false, updated_at: new Date().toISOString() })
                     .eq('base_id', baseId)
                     .eq('owner_id', req.user.id);
@@ -503,13 +503,13 @@ export default function customerBasesRoutes(supabase) {
             const upsertPayload = Array.from(aggregatedMembers.values());
             if (upsertPayload.length > 0) {
                 const { error: upsertError } = await supabase
-                    .from('customer_base_members')
+                    .from('channel_audience_members')
                     .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
                 if (upsertError) throw upsertError;
             }
 
             await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .update({ updated_at: new Date().toISOString() })
                 .eq('id', baseId)
                 .eq('owner_id', req.user.id);
@@ -616,7 +616,7 @@ export default function customerBasesRoutes(supabase) {
             const duplicate_count = cleanedEntries.length - dedupedIds.length;
 
             const { data: existingMembers, error: existingError } = await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .select('tg_user_id')
                 .eq('owner_id', req.user.id)
                 .eq('base_id', baseId)
@@ -649,13 +649,13 @@ export default function customerBasesRoutes(supabase) {
             }));
 
             const { error: upsertError } = await supabase
-                .from('customer_base_members')
+                .from('channel_audience_members')
                 .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
 
             if (upsertError) throw upsertError;
 
             await supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .update({ updated_at: new Date().toISOString() })
                 .eq('id', baseId)
                 .eq('owner_id', req.user.id);

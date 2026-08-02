@@ -347,10 +347,10 @@ async function loadContourContext(supabase, ownerId) {
             .eq('account_type', 'bot')
         ,
         supabase
-            .from('customer_base_channels')
+            .from('channel_audience_channels')
             .select('base_id, channel_id'),
         supabase
-            .from('customer_bases')
+            .from('channel_audiences')
             .select('id, name')
             .eq('owner_id', ownerId)
     ]);
@@ -358,8 +358,8 @@ async function loadContourContext(supabase, ownerId) {
     if (sourceError) throw sourceError;
     if (channelsError) throw channelsError;
     if (botsError) throw botsError;
-    if (baseLinksError && !(baseLinksError.message || '').includes('customer_base_channels')) throw baseLinksError;
-    if (basesError && !(basesError.message || '').includes('customer_bases')) throw basesError;
+    if (baseLinksError && !(baseLinksError.message || '').includes('channel_audience_channels')) throw baseLinksError;
+    if (basesError && !(basesError.message || '').includes('channel_audiences')) throw basesError;
 
     const channelByChatId = new Map(
         (channels || []).map((channel) => [String(channel.tg_chat_id), channel])

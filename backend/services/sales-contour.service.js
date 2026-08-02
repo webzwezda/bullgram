@@ -1416,7 +1416,7 @@ export class SalesContourService {
             if (!channelId) continue;
 
             const { data: existing } = await this.supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id')
                 .eq('contour_id', contourRow.bot_id)
                 .eq('target_type', targetType)
@@ -1425,7 +1425,7 @@ export class SalesContourService {
             if (existing) continue;
 
             const { error } = await this.supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .insert({
                     owner_id: ownerId,
                     contour_id: contourRow.bot_id,
@@ -1441,7 +1441,7 @@ export class SalesContourService {
             }
 
             const baseId = error ? null : (await this.supabase
-                .from('customer_bases')
+                .from('channel_audiences')
                 .select('id')
                 .eq('contour_id', contourRow.bot_id)
                 .eq('target_type', targetType)
@@ -1451,7 +1451,7 @@ export class SalesContourService {
             if (!baseId) continue;
 
             await this.supabase
-                .from('customer_base_channels')
+                .from('channel_audience_channels')
                 .upsert({
                     base_id: baseId,
                     channel_id: channelId

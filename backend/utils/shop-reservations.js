@@ -63,7 +63,7 @@ export async function loadReservedAssetMap(supabase, ownerId) {
 
             if (asset.asset_type === 'userbot') userbotIds.add(assetId);
             if (asset.asset_type === 'proxy') proxyIds.add(assetId);
-            if (asset.asset_type === 'customer_base_asset') baseIds.add(assetId);
+            if (asset.asset_type === 'channel_audience_asset') baseIds.add(assetId);
         }
 
         return {

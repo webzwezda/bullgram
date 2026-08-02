@@ -44,7 +44,7 @@ export function registerAdminHandlers(bot, { service, botId }) {
 
         let creatorDisplay = `TG ID <code>${invoice.tg_user_id}</code>`;
         const { data: member } = await service.supabase
-            .from('customer_base_members')
+            .from('channel_audience_members')
             .select('username, first_name, display_name')
             .eq('tg_user_id', invoice.tg_user_id)
             .maybeSingle();

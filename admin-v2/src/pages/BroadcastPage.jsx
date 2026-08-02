@@ -14,7 +14,8 @@ const AUDIENCES = [
   { id: 'viewed_no_invoice', label: 'Смотрели тариф, но не создали счет' },
   { id: 'unpaid_leads', label: 'Нажали тариф, но не оплатили' },
   { id: 'paid_not_joined', label: 'Вход не подтвержден' },
-  { id: 'customer_base_members', label: 'Вся база по нескольким группам' },
+  { id: 'channel_audience_members', label: 'Вся база по нескольким группам' },
+  { id: 'client_base_members', label: 'База клиентов (кураторский список)' },
   { id: 'manual_list', label: 'Ручная выборка' },
   { id: 'trial_active', label: 'Пробники внутри' },
   { id: 'trial_expiring', label: 'Пробник скоро сгорит' },
@@ -47,7 +48,8 @@ function audienceHint(type) {
     viewed_no_invoice: 'Открыли тарифы, но не дошли до счета. Это верх воронки для мягкого касания.',
     unpaid_leads: 'Нажали тариф, но слились до оплаты. Тут лежат быстрые деньги.',
     paid_not_joined: 'Оплата есть, а входа нет. Тут надо дотащить до доступа.',
-    customer_base_members: 'Общая база по нескольким местам. Особенно полезно для дырявого хвоста.',
+    channel_audience_members: 'Общая база по нескольким местам. Особенно полезно для дырявого хвоста.',
+    client_base_members: 'Кураторский список, собранный вручную из аудитории. Не зависит от синка каналов.',
     manual_list: 'Ручная выборка, которую ты собрал сам на другом экране.',
     trial_active: 'Сидят на пробнике прямо сейчас.',
     trial_expiring: 'Пробники скоро сгорят. Самый горячий момент на апселл.',
@@ -106,6 +108,7 @@ export function BroadcastPage() {
     error: '',
     channels: [],
     bases: [],
+    clientBases: [],
     userbots: [],
     campaigns: [],
     failures: [],
@@ -131,7 +134,8 @@ export function BroadcastPage() {
   const [showRiskySenderModes, setShowRiskySenderModes] = useState(false);
 
   const requiresChannel = form.audience_type === 'channel_active';
-  const requiresBase = form.audience_type === 'customer_base_members';
+  const requiresBase = form.audience_type === 'channel_audience_members';
+  const requiresClientBase = form.audience_type === 'client_base_members';
   const requiresManual = form.audience_type === 'manual_list';
   const usesPool = senderTypeUsesUserbotPool(form.sender_type);
   const usesUserbot = senderTypeUsesUserbot(form.sender_type);
@@ -160,7 +164,10 @@ export function BroadcastPage() {
 
       try {
         const manualSelection = consumeManualSelection();
-        const [{ data: channels }, { data: rawUserbots }, reserved, bases, campaigns] = await Promise.all([
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryBaseId = urlParams.get('base_id');
+        const queryAudienceType = urlParams.get('audience_type');
+        const [{ data: channels }, { data: rawUserbots }, reserved, bases, clientBases, campaigns] = await Promise.all([
           supabase.from('channels').select('id, title').eq('owner_id', user.id).order('created_at', { ascending: false }),
           supabase
             .from('tg_accounts')
@@ -169,7 +176,8 @@ export function BroadcastPage() {
             .eq('account_type', 'userbot')
             .order('created_at', { ascending: false }),
           apiRequest('/api/shop/seller/reserved-assets', { accessToken }),
-          apiRequest('/api/customer-bases', { accessToken }),
+          apiRequest('/api/channel-audiences', { accessToken }),
+          apiRequest('/api/client-bases', { accessToken }),
           apiRequest('/api/broadcast/campaigns', { accessToken })
         ]);
 
@@ -185,6 +193,7 @@ export function BroadcastPage() {
             error: '',
             channels: channels || [],
             bases: bases.bases || [],
+            clientBases: clientBases.bases || [],
             userbots,
             campaigns: campaigns.campaigns || [],
             failures: campaigns.failures || [],
@@ -207,6 +216,16 @@ export function BroadcastPage() {
               next.manual_members = manualSelection.members || [];
               next.title = prev.title || manualSelection.suggested_title || '';
               next.message_text = prev.message_text || manualSelection.suggested_message || '';
+            }
+
+            if (queryBaseId && queryAudienceType === 'client_base_members') {
+              next.audience_type = 'client_base_members';
+              next.base_id = queryBaseId;
+              const suggested = (clientBases.bases || []).find((b) => b.id === queryBaseId);
+              if (suggested && !prev.title) {
+                next.title = `Рассылка по базе «${suggested.name}»`;
+              }
+              window.history.replaceState({}, '', window.location.pathname);
             }
             return next;
           });
@@ -368,6 +387,10 @@ export function BroadcastPage() {
       window.alert('Выбери базу.');
       return;
     }
+    if (requiresClientBase && !form.base_id) {
+      window.alert('Выбери базу клиентов.');
+      return;
+    }
     if (requiresManual && !(form.manual_tg_user_ids || []).length) {
       window.alert('Ручная выборка пустая.');
       return;
@@ -522,6 +545,16 @@ export function BroadcastPage() {
                 <option value="multi_channel_only">Есть сразу в нескольких местах</option>
               </select>
             </>
+          ) : null}
+          {requiresClientBase ? (
+            <select className="field" value={form.base_id} onChange={(e) => setField('base_id', e.target.value)}>
+              <option value="">Выбери базу клиентов</option>
+              {state.clientBases.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.name}{row.stats?.total ? ` • ${row.stats.total} чел.` : ''}
+                </option>
+              ))}
+            </select>
           ) : null}
         </div>
         <div className="toolbar-card__hint">{audienceHint(form.audience_type)}</div>
