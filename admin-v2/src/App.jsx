@@ -14,7 +14,7 @@ import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
-const CustomerBasesPage = lazy(() => import('./pages/CustomerBasesPage.jsx').then((module) => ({ default: module.CustomerBasesPage })));
+const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
 const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').then((module) => ({ default: module.ClientDossierPage })));
 const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
@@ -50,7 +50,7 @@ export function App() {
         { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
-        { to: '/bases', label: 'Базы аудитории', icon: Database },
+        { to: '/bases', label: 'Аудитория и базы', icon: Database },
         { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
@@ -206,7 +206,7 @@ export function App() {
                 <Route path="/crm" element={<Navigate to="/customers?tab=expired-in-group" replace />} />
                 <Route path="/orders" element={<Navigate to="/customers?tab=paid-orders" replace />} />
                 <Route path="/access" element={<Navigate to="/customers?tab=access" replace />} />
-                <Route path="/bases" element={<CustomerBasesPage />} />
+                <Route path="/bases" element={<BasesPage />} />
                 <Route path="/dossier" element={<ClientDossierPage />} />
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
