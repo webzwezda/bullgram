@@ -68,7 +68,7 @@ export function registerOnboardingHandler(bot, service, botId) {
                     await service.setGuestSession(botId, tgUserId, {
                         targetChannelId: channel.tg_chat_id
                     });
-                    return ctx.reply(`Отлично! Пришлите фото (или альбом из нескольких фото) с текстом подписи, чтобы предложить пост в канал "${channel.title}".`);
+                    return ctx.reply(`Отлично! Пришлите фото, видео или текст с подписью, чтобы предложить пост в канал "${channel.title}". Альбомы из нескольких фото тоже поддерживаются.`);
                 } else {
                     return ctx.reply('Канал для предложения новостей не найден.');
                 }
@@ -82,7 +82,7 @@ export function registerOnboardingHandler(bot, service, botId) {
             await service.setGuestSession(botId, tgUserId, {
                 targetChannelType: startPayload === 'suggest_pub' ? 'public' : 'private'
             });
-            return ctx.reply('Отлично! Пришлите фото (или альбом из нескольких фото) с текстом подписи, чтобы предложить пост в канал.');
+            return ctx.reply('Отлично! Пришлите фото, видео или текст с подписью, чтобы предложить пост в канал.');
         }
 
         return ctx.reply('Привет! Вы можете предложить новость для публикации в наших каналах. Нажмите кнопку "Предложить новость" под постами в канале.');

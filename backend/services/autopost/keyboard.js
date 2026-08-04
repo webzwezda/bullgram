@@ -22,9 +22,9 @@ export async function getAdminKeyboard(botId, tgUserId, supabase) {
 
     return Markup.keyboard([
         [modeLabel],
-        ['➕ Добавить пост', '📋 Очередь'],
-        ['📥 Предложки', '🏆 Лучшее'],
-        ['❤️ Автореакция']
+        ['➕ Фото/Видео', '📝 Текст'],
+        ['📋 Очередь', '📥 Предложки'],
+        ['🏆 Лучшее', '❤️ Автореакция']
     ]).resize();
 }
 
@@ -107,9 +107,11 @@ export async function showQueueForChannel(ctx, botId, channel, supabase, offset 
 
     for (const item of items) {
         const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
+        const isText = !fileId;
         const statusText = item.status === 'scheduled'
             ? `📅 Запланирован на ${new Date(item.scheduled_at).toLocaleString('ru-RU')}`
             : '📦 В очереди';
+        const typeLabel = isText ? '📝 Текст\n\n' : '';
         const inlineKeyboard = queueItemInlineKeyboard(item, channel);
 
         if (fileId) {
@@ -125,7 +127,7 @@ export async function showQueueForChannel(ctx, botId, channel, supabase, offset 
                 await ctx.replyWithPhoto(fileId, { caption, ...inlineKeyboard });
             }
         } else {
-            await ctx.reply(`${statusText}\n\n${item.caption || ''}`, inlineKeyboard);
+            await ctx.reply(`${statusText}\n${typeLabel}${item.caption || ''}`, inlineKeyboard);
         }
     }
 

@@ -25,6 +25,15 @@ export function registerMediaHandler(bot, service, botId) {
             const tgUserId = ctx.from.id;
             const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
 
+            // BUG#2 fix: админ передумал — присылает медиа вместо текста. Чистим
+            // await_text_post state, иначе он висит до TTL (10 мин) и следующее
+            // сообщение молча станет постом.
+            const existingState = service.adminStates.get(tgUserId);
+            if (existingState?.action === 'await_text_post') {
+                if (existingState.timer) clearTimeout(existingState.timer);
+                service.adminStates.delete(tgUserId);
+            }
+
             let guestSession = null;
             if (!isAdmin) {
                 guestSession = await service.getGuestSession(botId, tgUserId);
@@ -250,6 +259,105 @@ export function registerMediaHandler(bot, service, botId) {
         } catch (error) {
             console.error('[Autopost] Ошибка добавления:', error);
             await ctx.reply('❌ Не удалось обработать отправленный контент.');
+        }
+    });
+
+    // Гостевые текстовые предложки + подсказка админу без state.
+    // Срабатывает только если ни один предыдущий text-handler не поглотил сообщение
+    // (то есть админ без await_text_post/edit_caption, либо гость).
+    bot.on('text', async (ctx) => {
+        try {
+            const tgUserId = ctx.from.id;
+            const text = ctx.message.text?.trim();
+            if (!text) return;
+
+            const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+
+            // BUG#5: админ без state — подсказка вместо тишины
+            if (isAdmin) {
+                return ctx.reply(
+                    'Я жду здесь фото, видео или альбом с подписью.\n\n' +
+                    '📝 Чтобы создать пост из одного текста — нажмите «📝 Текст» в клавиатуре ниже.'
+                );
+            }
+
+            // BUG#3: гость без сессии — help вместо тишины (зеркало media.js:30-34)
+            const guestSession = await service.getGuestSession(botId, tgUserId);
+            if (!guestSession) {
+                return ctx.reply('Вы можете предложить новость для публикации в наших каналах. Используйте специальные ссылки «Предложить новость» под постами в каналах.');
+            }
+
+            const { data: channels } = await supabase
+                .from('channels')
+                .select('*')
+                .eq('autopost_bot_id', botId);
+            if (!channels || channels.length === 0) {
+                return ctx.reply('Сначала добавьте меня в канал как администратора!');
+            }
+
+            // Определение targetChannel — copy-paste из media.js:67-87
+            let targetChannel = null;
+            if (guestSession.targetChannelId) {
+                targetChannel = channels.find(c => String(c.tg_chat_id) === String(guestSession.targetChannelId));
+                if (!targetChannel) {
+                    await service.deleteGuestSession(botId, tgUserId);
+                    return ctx.reply('Канал, в который вы предлагали новость, больше не доступен. Откройте свежую ссылку «Предложить новость».');
+                }
+            }
+            if (!targetChannel) {
+                const type = guestSession.targetChannelType;
+                if (type) {
+                    targetChannel = channels.find(c => c.visibility === type);
+                }
+                if (!targetChannel) {
+                    await service.deleteGuestSession(botId, tgUserId);
+                    return ctx.reply('Не удалось определить канал. Откройте ссылку «Предложить новость» под постом в нужном канале.');
+                }
+            }
+
+            // Лимит предложений — copy-paste из media.js:89-103
+            const maxLimit = targetChannel.max_suggestions_per_day ?? 5;
+            if (maxLimit > 0) {
+                const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                const { count, error } = await supabase
+                    .from('autopost_items')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('target_channel_id', targetChannel.tg_chat_id)
+                    .eq('suggested_by_tg_id', String(tgUserId))
+                    .gte('created_at', twentyFourHoursAgo);
+                if (!error && count >= maxLimit) {
+                    return ctx.reply(`⚠️ Вы превысили суточный лимит предложений для канала «${targetChannel.title}» (максимум ${maxLimit} в сутки).`);
+                }
+            }
+
+            if (text.length > 4096) {
+                return ctx.reply(`❌ Текст слишком длинный (${text.length} символов, максимум 4096).`);
+            }
+
+            const autoAccept = targetChannel.auto_accept_suggestions || false;
+            const status = autoAccept ? 'queued' : 'suggested';
+
+            await service.addPostItem({
+                botId,
+                targetChannelId: targetChannel.tg_chat_id,
+                fileIds: [],
+                caption: text,
+                status,
+                isSuggestion: true,
+                mediaType: 'text',
+                suggestedByTgId: tgUserId
+            });
+
+            if (autoAccept) {
+                await service.collapseQueue(botId, targetChannel.tg_chat_id);
+                await ctx.reply('🎉 Спасибо! Ваш текстовый пост принят и автоматически запланирован к публикации.');
+            } else {
+                await ctx.reply('🎉 Спасибо! Ваше предложение отправлено на модерацию администраторам.');
+                await service.notifyAdmins(botData, `📥 Получено новое текстовое предложение для канала «${targetChannel.title}»!`);
+            }
+        } catch (err) {
+            console.error('[Autopost] Ошибка обработки гостевого текста:', err);
+            await ctx.reply('❌ Не удалось обработать текст.');
         }
     });
 }

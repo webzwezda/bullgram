@@ -154,13 +154,50 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
         }
     });
 
-    // Редактирование текста подписи через текстовый ввод
+    // Редактирование текста подписи через текстовый ввод + создание текстового поста.
+    // Branching по state.action: 'edit_caption' (старая логика) или 'await_text_post' (новая).
     bot.on('text', async (ctx, next) => {
         const tgUserId = ctx.from.id;
         const state = service.adminStates.get(tgUserId);
-        if (!state || state.action !== 'edit_caption') {
-            return next();
+
+        if (!state) return next();
+
+        // Ветка создания текстового поста
+        if (state.action === 'await_text_post') {
+            const text = ctx.message.text?.trim();
+
+            // Валидация ДО delete state — иначе пустой/длинный текст заставляет
+            // админа заново кликать «📝 Текст».
+            if (!text) {
+                return ctx.reply('❌ Пустой текст. Пришлите текст поста следующим сообщением или /cancel для отмены.');
+            }
+            if (text.length > 4096) {
+                return ctx.reply(`❌ Текст слишком длинный (${text.length} символов, максимум 4096). Сократите и пришлите снова.`);
+            }
+
+            service.adminStates.delete(tgUserId);
+            if (state.timer) clearTimeout(state.timer);
+
+            try {
+                await service.addPostItem({
+                    botId,
+                    targetChannelId: state.targetChannelId,
+                    fileIds: [],
+                    caption: text,
+                    status: 'queued',
+                    mediaType: 'text'
+                });
+                await service.collapseQueue(botId, state.targetChannelId);
+                await ctx.reply(`✅ Текстовый пост добавлен в очередь для канала «${state.targetChannelTitle}».`);
+            } catch (err) {
+                console.error('[Autopost] Ошибка создания текстового поста:', err);
+                await ctx.reply('❌ Не удалось создать пост. Попробуйте позже.');
+            }
+            return;
         }
+
+        // Существующая ветка — редактирование подписи
+        if (state.action !== 'edit_caption') return next();
 
         service.adminStates.delete(tgUserId);
 

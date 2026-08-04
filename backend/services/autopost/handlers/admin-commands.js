@@ -47,11 +47,52 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         await ctx.reply(`Активный канал переключен на: ${nextChannel.title}`, keyboard);
     });
 
-    bot.hears('➕ Добавить пост', async (ctx) => {
+    bot.hears(['➕ Добавить пост', '➕ Фото/Видео'], async (ctx) => {
         const tgUserId = ctx.from.id;
         const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
         if (!isAdmin) return ctx.reply('Доступ запрещен.');
         ctx.reply('Просто отправьте мне фото или альбом с текстом подписи, и я подготовлю пост.');
+    });
+
+    bot.hears('📝 Текст', async (ctx) => {
+        const tgUserId = ctx.from.id;
+        const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.reply('Доступ запрещен.');
+
+        const { data: channels } = await supabase
+            .from('channels')
+            .select('*')
+            .eq('autopost_bot_id', botId);
+        if (!channels || channels.length === 0) {
+            return ctx.reply('Сначала добавьте меня в канал как администратора!');
+        }
+
+        // Активный канал из active_modes, fallback на первый (как в media.js:60-64)
+        const activeModes = botData.active_modes || {};
+        const activeId = activeModes[String(tgUserId)];
+        let targetChannel = channels.find(c => String(c.tg_chat_id) === String(activeId));
+        if (!targetChannel) targetChannel = channels[0];
+
+        service.setAwaitTextPost(tgUserId, {
+            targetChannelId: targetChannel.tg_chat_id,
+            targetChannelTitle: targetChannel.title
+        });
+
+        await ctx.reply(
+            `📝 Жду текст поста для канала «${targetChannel.title}».\n\n` +
+            `Пришлите его следующим сообщением. Действует 10 минут.\n` +
+            `Для отмены — /cancel.`
+        );
+    });
+
+    bot.command('cancel', async (ctx) => {
+        const tgUserId = ctx.from.id;
+        const state = service.adminStates.get(tgUserId);
+        if (state?.action === 'await_text_post') {
+            if (state.timer) clearTimeout(state.timer);
+            service.adminStates.delete(tgUserId);
+            return ctx.reply('❌ Создание текстового поста отменено.');
+        }
     });
 
     // Sticky-маршрут для следующего поста: "1" → public, "2" → private.
@@ -60,10 +101,12 @@ export function registerAdminCommandsHandler(bot, service, botId) {
     bot.hears(/^[12]$/, async (ctx, next) => {
         const tgUserId = ctx.from.id;
 
-        // Если админ сейчас редактирует подпись — "1"/"2" это текст новой подписи,
-        // не сигнал маршрутизации. Пропускаем к edit-caption хендлеру.
+        // Если админ сейчас редактирует подпись ИЛИ ждёт создания текстового поста —
+        // "1"/"2" это текст контента, не сигнал маршрутизации. Пропускаем дальше.
         const state = service.adminStates.get(tgUserId);
-        if (state && state.action === 'edit_caption') return next();
+        if (state && (state.action === 'edit_caption' || state.action === 'await_text_post')) {
+            return next();
+        }
 
         const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
         if (!isAdmin) return next();

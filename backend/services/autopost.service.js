@@ -61,6 +61,25 @@ export class AutopostService {
         return entry.visibility;
     }
 
+    // --- Await text post state ---
+    // Админ кликнул «📝 Текст» — бот ждёт следующее сообщение как текст поста.
+    // TTL 10 минут — симметрично с STUCK_THRESHOLD_MINUTES для edit_caption.
+    // Живёт в памяти (как edit_caption), при рестарте сбрасывается.
+    setAwaitTextPost(tgUserId, { targetChannelId, targetChannelTitle }) {
+        const prev = this.adminStates.get(tgUserId);
+        if (prev?.timer) clearTimeout(prev.timer);
+        const entry = {
+            action: 'await_text_post',
+            targetChannelId,
+            targetChannelTitle,
+            createdAt: Date.now()
+        };
+        entry.timer = setTimeout(() => {
+            this.adminStates.delete(tgUserId);
+        }, 10 * 60 * 1000);
+        this.adminStates.set(tgUserId, entry);
+    }
+
     // --- Guest sessions (БД-backed, переживают рестарт) ---
     setGuestSession(botId, tgUserId, data) {
         return setGuestSession(this.supabase, { botId, tgUserId, ...data });
@@ -155,7 +174,7 @@ export class AutopostService {
         });
     }
 
-    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false, mediaType = 'photo', suggestedByTgId = null }) {
+    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, suggestedByTgId = null }) {
         // Bug 7 fix: atomic sort_order. Было count+1, два одновременных добавления
         // получали одинаковый sort_order и порядок очереди становился недетерминированным.
         // Через max+1 в подзапросе гонка исчезает (PostgreSQL сериализует UPDATE/INSERT).
@@ -168,18 +187,23 @@ export class AutopostService {
             .maybeSingle();
         const nextSort = (maxRow?.sort_order || 0) + 1;
 
+        // Текстовые посты (без fileIds) получают media_type='text' явно,
+        // чтобы не маскироваться под 'photo' и корректно исключаться из best-of.
+        const hasMedia = fileIds && fileIds.length > 0;
+        const resolvedMediaType = mediaType || (hasMedia ? 'photo' : 'text');
+
         const { data, error } = await this.supabase
             .from('autopost_items')
             .insert({
                 bot_id: botId,
                 target_channel_id: targetChannelId || null,
                 file_ids: fileIds || [],
-                file_id: fileIds && fileIds.length > 0 ? fileIds[0] : null,
+                file_id: hasMedia ? fileIds[0] : null,
                 caption: caption || '',
                 status,
                 sort_order: nextSort,
                 is_suggestion: isSuggestion,
-                media_type: mediaType,
+                media_type: resolvedMediaType,
                 suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
             })
             .select()
