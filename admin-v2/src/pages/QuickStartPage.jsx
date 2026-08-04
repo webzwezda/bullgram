@@ -574,6 +574,46 @@ export function QuickStartPage() {
         </div>
       </Card>
 
+      {/* Заметка про API — только в пустом состоянии, пока ни один бот не подключён */}
+      {existingBots.length === 0 && selectedBotId === 'new' && (
+        <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-gradient-to-br from-slate-50 to-white overflow-hidden rounded-2xl">
+          <div className="p-5 sm:p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-slate-900">Публикация через API</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  После подключения бота текстовые посты можно отправлять программно — например, из n8n, Zapier или скриптов.
+                  Кнопки и автореакция наследуются из настроек канала. Понадобится токен <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-slate-200">brapi_</code> со скоупом <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-slate-200">api:autopost:write</code>.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-slate-900 text-slate-100 p-3 sm:p-4 overflow-x-auto text-[11px] sm:text-xs font-mono leading-relaxed">
+              <div className="text-slate-400 mb-1"># published synchronously (publish_now=true)</div>
+              <div><span className="text-emerald-400">curl</span> -X POST \</div>
+              <div className="pl-4">https://bullgram.xyz/api/external/v1/autopost/bots/<span className="text-amber-300">{'{bot_id}'}</span>/posts \</div>
+              <div className="pl-4">-H <span className="text-sky-300">"Authorization: Bearer brapi_..."</span> \</div>
+              <div className="pl-4">-H <span className="text-sky-300">"Content-Type: application/json"</span> \</div>
+              <div className="pl-4">-d <span className="text-sky-300">{'\'{"target_channel_id":"-100...","caption":"Hello","publish_now":true}\''}</span></div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-semibold border-slate-200 bg-white">
+                <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="flex items-center gap-1.5">
+                  API-документация <ExternalLink className="w-3 h-3" />
+                </a>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="h-8 rounded-lg text-xs font-semibold text-slate-600">
+                <a href="/app/integrations" className="flex items-center gap-1.5">
+                  Выпустить токен <ExternalLink className="w-3 h-3" />
+                </a>
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Onboarding State: Ожидание администратора */}
       {createdBot && !hasAdmin && (
         <Card className="border-0 shadow-lg shadow-indigo-100 ring-2 ring-indigo-500 bg-white overflow-hidden rounded-2xl p-6 sm:p-8 text-center space-y-6">
