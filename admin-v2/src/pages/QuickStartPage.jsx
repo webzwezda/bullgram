@@ -599,7 +599,7 @@ export function QuickStartPage() {
             </div>
 
             <CodeBlock
-              label="POST /autopost/bots/{bot_id}/posts — синхронная публикация"
+              label="POST /autopost/bots/{bot_id}/posts"
               value={AUTOPOST_POST_CURL}
             />
 
