@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink } from 'lucide-react';
+import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink, Code, FileText, Key } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -7,6 +7,7 @@ import { Card } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
 import { supabase } from '../lib/supabase.js';
+import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import {
     fetchChannels,
@@ -23,6 +24,12 @@ import {
 function postingTimesFor(n) {
   return n === 1 ? ['10:00'] : n === 2 ? ['10:00', '18:00'] : ['08:00', '14:00', '20:00'];
 }
+
+const AUTOPOST_POST_CURL = `curl -X POST \\
+https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
+-H "Authorization: Bearer brapi_..." \\
+-H "Content-Type: application/json" \\
+-d '{"target_channel_id":"-100...","caption":"Hello","publish_now":true}'`;
 
 export function QuickStartPage() {
   const { user, accessToken } = useAuth();
@@ -576,37 +583,43 @@ export function QuickStartPage() {
 
       {/* Заметка про API — показываем, когда в селекторе выбрано «создать нового» */}
       {selectedBotId === 'new' && (
-        <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-gradient-to-br from-slate-50 to-white overflow-hidden rounded-2xl">
-          <div className="p-5 sm:p-6 space-y-4">
+        <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-white overflow-hidden rounded-2xl">
+          <div className="p-5 sm:p-6 space-y-3">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-                <Zap className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                <Code className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Публикация через API</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  После подключения бота текстовые посты можно отправлять программно — например, из n8n, Zapier или скриптов.
-                  Кнопки и автореакция наследуются из настроек канала. Понадобится токен <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-slate-200">brapi_</code> со скоупом <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-slate-200">api:autopost:write</code>.
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Из n8n, Zapier или скриптов. Кнопки и автореакция наследуются из настроек канала.
+                  Нужен токен <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">brapi_</code> со скоупом <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">api:autopost:write</code>.
                 </p>
               </div>
             </div>
-            <div className="rounded-xl bg-slate-900 text-slate-100 p-3 sm:p-4 overflow-x-auto text-[11px] sm:text-xs font-mono leading-relaxed">
-              <div className="text-slate-400 mb-1"># published synchronously (publish_now=true)</div>
-              <div><span className="text-emerald-400">curl</span> -X POST \</div>
-              <div className="pl-4">https://bullgram.xyz/api/external/v1/autopost/bots/<span className="text-amber-300">{'{bot_id}'}</span>/posts \</div>
-              <div className="pl-4">-H <span className="text-sky-300">"Authorization: Bearer brapi_..."</span> \</div>
-              <div className="pl-4">-H <span className="text-sky-300">"Content-Type: application/json"</span> \</div>
-              <div className="pl-4">-d <span className="text-sky-300">{'\'{"target_channel_id":"-100...","caption":"Hello","publish_now":true}\''}</span></div>
-            </div>
+
+            <CodeBlock
+              label="POST /autopost/bots/{bot_id}/posts — синхронная публикация"
+              value={AUTOPOST_POST_CURL}
+            />
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Чтобы узнать <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">bot_id</code> и <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">target_channel_id</code>:{' '}
+              <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots</code>, затем{' '}
+              <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots/{'{bot_id}'}/channels</code>.
+            </p>
+
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-semibold border-slate-200 bg-white">
+              <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-semibold border-slate-200 bg-white shadow-sm">
                 <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="flex items-center gap-1.5">
-                  API-документация <ExternalLink className="w-3 h-3" />
+                  <FileText className="w-3.5 h-3.5" />
+                  API-документация
                 </a>
               </Button>
-              <Button asChild variant="ghost" size="sm" className="h-8 rounded-lg text-xs font-semibold text-slate-600">
+              <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-semibold border-slate-200 bg-white shadow-sm">
                 <a href="/app/integrations" className="flex items-center gap-1.5">
-                  Выпустить токен <ExternalLink className="w-3 h-3" />
+                  <Key className="w-3.5 h-3.5" />
+                  Выпустить токен
                 </a>
               </Button>
             </div>
