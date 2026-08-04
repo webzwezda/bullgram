@@ -16,4 +16,6 @@ import './messages/search-messages.js';
 import './messages/send-message.js';
 import './participants/list-participants.js';
 
+import './autopost/list-bots.js';
+import './autopost/list-channels.js';
 import './autopost/create-post.js';
