@@ -574,8 +574,8 @@ export function QuickStartPage() {
         </div>
       </Card>
 
-      {/* Заметка про API — только в пустом состоянии, пока ни один бот не подключён */}
-      {existingBots.length === 0 && selectedBotId === 'new' && (
+      {/* Заметка про API — показываем, когда в селекторе выбрано «создать нового» */}
+      {selectedBotId === 'new' && (
         <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-gradient-to-br from-slate-50 to-white overflow-hidden rounded-2xl">
           <div className="p-5 sm:p-6 space-y-4">
             <div className="flex items-start gap-3">
