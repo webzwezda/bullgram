@@ -7,7 +7,8 @@ const PURPOSE_CONFIG = {
         defaultScopes: [
             'mcp:use',
             'mcp:proxy:read', 'mcp:proxy:write',
-            'mcp:userbot:read', 'mcp:userbot:write'
+            'mcp:userbot:read', 'mcp:userbot:write',
+            'mcp:autopost:read', 'mcp:autopost:write'
         ],
         tokenPrefix: 'brmcp'
     },
@@ -16,7 +17,8 @@ const PURPOSE_CONFIG = {
         defaultScopes: [
             'api:use',
             'api:proxy:read', 'api:proxy:write',
-            'api:userbot:read', 'api:userbot:write'
+            'api:userbot:read', 'api:userbot:write',
+            'api:autopost:read', 'api:autopost:write'
         ],
         tokenPrefix: 'brapi'
     },
@@ -39,8 +41,10 @@ const ALLOWED_SCOPES = new Set([
     // Plan 01/02 — per-domain scopes consumed by the unified dispatcher.
     'mcp:proxy:read', 'mcp:proxy:write',
     'mcp:userbot:read', 'mcp:userbot:write',
+    'mcp:autopost:read', 'mcp:autopost:write',
     'api:proxy:read', 'api:proxy:write',
-    'api:userbot:read', 'api:userbot:write'
+    'api:userbot:read', 'api:userbot:write',
+    'api:autopost:read', 'api:autopost:write'
 ]);
 
 export function hashIntegrationToken(token) {

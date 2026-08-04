@@ -285,14 +285,22 @@ export function buildOpenApiSpec({ baseURL = '', serverUrl = '' } = {}) {
       title: 'Bullgram External API',
       version: 'v1',
       description:
-        'REST access to Bullgram userbots, dialogs, messages, and proxies. ' +
+        'REST access to Bullgram userbots, autoposters, dialogs, messages, and proxies. ' +
         'Authenticate with a brapi_ integration token (Bearer header). ' +
-        'All operations are also available via MCP at POST /api/mcp.',
+        'All operations are also available via MCP at POST /api/mcp.\n\n' +
+        '**Auth:** issue a `brapi_` token at `/app/integrations` (purpose=api or custom). ' +
+        'Pass it as `Authorization: Bearer brapi_...`. Tokens are scoped per domain ' +
+        '(userbot / autopost / proxy) and per access level (read / write).\n\n' +
+        '**External integrations (n8n, zapier, scripts):** ' +
+        'use `POST /autopost/bots/{bot_id}/posts` to publish text posts to Telegram channels ' +
+        'with inline buttons inherited from channel settings. Set `publish_now=true` for ' +
+        'immediate send, or omit to enqueue per channel schedule.',
       contact: { name: 'Bullgram', url: 'https://bullgram.xyz' }
     },
     servers,
     tags: [
       { name: 'userbots', description: 'Userbot account management and operations' },
+      { name: 'autopost', description: 'Autoposter bots — text posts with inline buttons, scheduling, and queue management. Use cases: n8n / external integrations publishing to Telegram channels.' },
       { name: 'proxies', description: 'Managed proxy infrastructure' },
       { name: 'infra', description: 'Account-level summaries' }
     ],

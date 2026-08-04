@@ -15,3 +15,5 @@ import './messages/fetch-messages.js';
 import './messages/search-messages.js';
 import './messages/send-message.js';
 import './participants/list-participants.js';
+
+import './autopost/create-post.js';

@@ -35,6 +35,16 @@ const SCOPE_GROUPS = [
     ]
   },
   {
+    domain: 'autopost',
+    label: 'Autopost',
+    scopes: [
+      { name: 'mcp:autopost:read', desc: 'Чтение очередей и настроек автопостера' },
+      { name: 'mcp:autopost:write', desc: 'Создание постов через MCP' },
+      { name: 'api:autopost:read', desc: 'Те же чтения через REST' },
+      { name: 'api:autopost:write', desc: 'Те же записи через REST (n8n, внешние интеграции)' }
+    ]
+  },
+  {
     domain: 'proxy',
     label: 'Proxy',
     scopes: [
