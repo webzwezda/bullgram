@@ -79,10 +79,7 @@ export function registerOnboardingHandler(bot, service, botId) {
         }
 
         if (startPayload && (startPayload === 'suggest_pub' || startPayload === 'suggest_priv')) {
-            await service.setGuestSession(botId, tgUserId, {
-                targetChannelType: startPayload === 'suggest_pub' ? 'public' : 'private'
-            });
-            return ctx.reply('Отлично! Пришлите фото, видео или текст с подписью, чтобы предложить пост в канал.');
+            return ctx.reply('Ссылка предложки устарела. Откройте свежую ссылку «Предложить новость» под постом в нужном канале.');
         }
 
         return ctx.reply('Привет! Вы можете предложить новость для публикации в наших каналах. Нажмите кнопку "Предложить новость" под постами в канале.');

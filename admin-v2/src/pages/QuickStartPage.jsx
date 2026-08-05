@@ -46,20 +46,19 @@ export function QuickStartPage() {
   
   // Modals & Action loading states
   const [initing, setIniting] = useState(false);
-  const [savingChannel, setSavingChannel] = useState({ public: false, private: false });
-  const [unlinkingChannel, setUnlinkingChannel] = useState({ public: false, private: false });
-  const [refreshingChannel, setRefreshingChannel] = useState({ public: false, private: false });
+  const [savingChannel, setSavingChannel] = useState({});
+  const [unlinkingChannel, setUnlinkingChannel] = useState({});
+  const [refreshingChannel, setRefreshingChannel] = useState({});
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [newAdminTgId, setNewAdminTgId] = useState('');
-  
-  // Active Tab for connected channels config
-  const [activeTab, setActiveTab] = useState('public');
-  
-  // Configs for channels
-  const [channelConfigs, setChannelConfigs] = useState({
-    public: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null },
-    private: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: 'Europe/Moscow', suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null }
-  });
+
+  // Active channel UUID for config panel (null when no channels connected).
+  // Таб больше не 'public'/'private' — каналов может быть N любого visibility.
+  const [activeChannelId, setActiveChannelId] = useState(null);
+
+  // Configs for channels — keyed by channel UUID (supports N channels per bot,
+  // включая несколько public или несколько private).
+  const [channelConfigs, setChannelConfigs] = useState({});
 
   // Загрузка существующих ботов
   const loadBots = useCallback(async () => {
@@ -90,11 +89,8 @@ export function QuickStartPage() {
       setAdmins([]);
       setInviteLink('');
       setCreatedBot(null);
-      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-      setChannelConfigs({
-        public: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null },
-        private: { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null }
-      });
+      setActiveChannelId(null);
+      setChannelConfigs({});
       return;
     }
 
@@ -143,33 +139,30 @@ export function QuickStartPage() {
     };
   }
 
-  function emptyChannelConfig() {
-    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
-    return { id: null, tgChatId: null, title: '', username: null, visibility: null, postsPerDay: '1', postingTimes: ['10:00'], autoAccept: false, buttons: [], timezone: browserTz, suggestionPostingTimes: ['12:00'], suggestButtonEnabled: false, maxSuggestionsPerDay: 5, seedReactionEmoji: null };
-  }
-
   function applyChannelsToConfig(channelsList) {
-    const pubCh = channelsList.find(c => c.visibility === 'public');
-    const privCh = channelsList.find(c => c.visibility === 'private');
-    setChannelConfigs({
-      public: mapChannelRow(pubCh),
-      private: mapChannelRow(privCh)
+    const next = {};
+    for (const ch of channelsList) next[ch.id] = mapChannelRow(ch);
+    setChannelConfigs(next);
+    setActiveChannelId(prev => {
+      if (prev && next[prev]) return prev;
+      return channelsList[0]?.id || null;
     });
   }
 
-  // Polling-режим: не затираем поля, которые уже редактирует пользователь.
-  // Заполняем конфиг только при первом обнаружении канала и сбрасываем при исчезновении.
+  // Realtime-merge: сохраняем отредактированные пользователем поля (поля,
+  // которые ещё не сохранены в БД). Добавляем новые каналы, убираем отвязанные.
   function mergeChannelsIntoConfig(channelsList) {
-    const pubCh = channelsList.find(c => c.visibility === 'public');
-    const privCh = channelsList.find(c => c.visibility === 'private');
-    setChannelConfigs(prev => ({
-      public: !pubCh && prev.public.id
-        ? emptyChannelConfig()
-        : pubCh && !prev.public.id ? mapChannelRow(pubCh) : prev.public,
-      private: !privCh && prev.private.id
-        ? emptyChannelConfig()
-        : privCh && !prev.private.id ? mapChannelRow(privCh) : prev.private
-    }));
+    setChannelConfigs(prev => {
+      const next = {};
+      for (const ch of channelsList) {
+        next[ch.id] = prev[ch.id]?.id ? prev[ch.id] : mapChannelRow(ch);
+      }
+      return next;
+    });
+    setActiveChannelId(prev => {
+      const stillThere = prev && channelsList.some(c => c.id === prev);
+      return stillThere ? prev : (channelsList[0]?.id || null);
+    });
   }
 
   async function loadAdmins(botId) {
@@ -228,11 +221,11 @@ export function QuickStartPage() {
   }
 
   // Сохранить настройки конкретного канала
-  async function handleSaveChannelConfig(type) {
-    const config = channelConfigs[type];
+  async function handleSaveChannelConfig(channelId) {
+    const config = channelConfigs[channelId];
     if (!config.id || !createdBot?.id) return;
-    
-    setSavingChannel(prev => ({ ...prev, [type]: true }));
+
+    setSavingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
       const sortedPostingTimes = [...(config.postingTimes || ['10:00'])].sort();
       const sortedSuggestionTimes = [...(config.suggestionPostingTimes || ['12:00'])].sort();
@@ -252,8 +245,8 @@ export function QuickStartPage() {
 
       setChannelConfigs(prev => ({
         ...prev,
-        [type]: {
-          ...prev[type],
+        [channelId]: {
+          ...prev[channelId],
           postingTimes: sortedPostingTimes,
           suggestionPostingTimes: sortedSuggestionTimes,
           suggestButtonEnabled: config.suggestButtonEnabled,
@@ -261,22 +254,22 @@ export function QuickStartPage() {
           seedReactionEmoji: config.seedReactionEmoji || null
         }
       }));
-      
+
       toast.success(`Настройки канала "${config.title}" успешно сохранены`);
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setSavingChannel(prev => ({ ...prev, [type]: false }));
+      setSavingChannel(prev => ({ ...prev, [channelId]: false }));
     }
   }
 
   // Отвязать канал от автопостера (только в Bullgram, бот остаётся админом в Telegram)
-  async function handleUnlinkChannel(type) {
-    const cfg = channelConfigs[type];
+  async function handleUnlinkChannel(channelId) {
+    const cfg = channelConfigs[channelId];
     if (!cfg.id || !createdBot?.id) return;
     if (!confirm(`Отвязать канал "${cfg.title}" от автопостера?\n\nБот останется админом в Telegram — вы сможете привязать канал заново без повторного добавления.`)) return;
 
-    setUnlinkingChannel(prev => ({ ...prev, [type]: true }));
+    setUnlinkingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
       await unlinkChannel(createdBot.id, cfg.id, accessToken);
       toast.success(`Канал "${cfg.title}" отвязан`);
@@ -284,17 +277,17 @@ export function QuickStartPage() {
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setUnlinkingChannel(prev => ({ ...prev, [type]: false }));
+      setUnlinkingChannel(prev => ({ ...prev, [channelId]: false }));
     }
   }
 
   // Обновить метаданные канала из Telegram (title, username, visibility).
   // Если бот больше не админ — бэкенд авто-отвяжет канал.
-  async function handleRefreshChannel(type) {
-    const cfg = channelConfigs[type];
+  async function handleRefreshChannel(channelId) {
+    const cfg = channelConfigs[channelId];
     if (!cfg.id || !createdBot?.id) return;
 
-    setRefreshingChannel(prev => ({ ...prev, [type]: true }));
+    setRefreshingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
       const data = await refreshChannel(createdBot.id, cfg.id, accessToken);
       if (data.unbound) {
@@ -306,7 +299,7 @@ export function QuickStartPage() {
     } catch (err) {
       toast.error(err.message);
     } finally {
-      setRefreshingChannel(prev => ({ ...prev, [type]: false }));
+      setRefreshingChannel(prev => ({ ...prev, [channelId]: false }));
     }
   }
 
@@ -364,12 +357,12 @@ export function QuickStartPage() {
   }
 
   // Изменение кнопок
-  const handleAddButton = (type) => {
+  const handleAddButton = (channelId) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           buttons: [...ch.buttons, { text: '', url: '' }]
         }
@@ -377,12 +370,12 @@ export function QuickStartPage() {
     });
   };
 
-  const handleRemoveButton = (type, index) => {
+  const handleRemoveButton = (channelId, index) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           buttons: ch.buttons.filter((_, i) => i !== index)
         }
@@ -390,14 +383,14 @@ export function QuickStartPage() {
     });
   };
 
-  const handleButtonChange = (type, index, field, val) => {
+  const handleButtonChange = (channelId, index, field, val) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const newButtons = [...ch.buttons];
       newButtons[index] = { ...newButtons[index], [field]: val };
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           buttons: newButtons
         }
@@ -406,13 +399,13 @@ export function QuickStartPage() {
   };
 
   // Изменение времени публикаций
-  const handleAddPostingTime = (type) => {
+  const handleAddPostingTime = (channelId) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const currentTimes = ch.postingTimes || ['10:00'];
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           postingTimes: [...currentTimes, '12:00']
         }
@@ -420,9 +413,9 @@ export function QuickStartPage() {
     });
   };
 
-  const handleRemovePostingTime = (type, index) => {
+  const handleRemovePostingTime = (channelId, index) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const currentTimes = ch.postingTimes || ['10:00'];
       if (currentTimes.length <= 1) {
         toast.error('Должно быть выбрано хотя бы одно время публикации');
@@ -430,7 +423,7 @@ export function QuickStartPage() {
       }
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           postingTimes: currentTimes.filter((_, i) => i !== index)
         }
@@ -438,14 +431,14 @@ export function QuickStartPage() {
     });
   };
 
-  const handlePostingTimeChange = (type, index, val) => {
+  const handlePostingTimeChange = (channelId, index, val) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const newTimes = [...(ch.postingTimes || ['10:00'])];
       newTimes[index] = val;
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           postingTimes: newTimes
         }
@@ -454,13 +447,13 @@ export function QuickStartPage() {
   };
 
   // Изменение времени публикаций для предложений
-  const handleAddSuggestionTime = (type) => {
+  const handleAddSuggestionTime = (channelId) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const currentTimes = ch.suggestionPostingTimes || ['12:00'];
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           suggestionPostingTimes: [...currentTimes, '12:00']
         }
@@ -468,9 +461,9 @@ export function QuickStartPage() {
     });
   };
 
-  const handleRemoveSuggestionTime = (type, index) => {
+  const handleRemoveSuggestionTime = (channelId, index) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const currentTimes = ch.suggestionPostingTimes || ['12:00'];
       if (currentTimes.length <= 1) {
         toast.error('Должно быть выбрано хотя бы одно время публикации предложений');
@@ -478,7 +471,7 @@ export function QuickStartPage() {
       }
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           suggestionPostingTimes: currentTimes.filter((_, i) => i !== index)
         }
@@ -486,14 +479,14 @@ export function QuickStartPage() {
     });
   };
 
-  const handleSuggestionTimeChange = (type, index, val) => {
+  const handleSuggestionTimeChange = (channelId, index, val) => {
     setChannelConfigs(prev => {
-      const ch = prev[type];
+      const ch = prev[channelId];
       const newTimes = [...(ch.suggestionPostingTimes || ['12:00'])];
       newTimes[index] = val;
       return {
         ...prev,
-        [type]: {
+        [channelId]: {
           ...ch,
           suggestionPostingTimes: newTimes
         }
@@ -677,9 +670,9 @@ export function QuickStartPage() {
           <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 space-y-3">
             <p className="text-sm font-semibold text-slate-700">Инструкция по подключению:</p>
             <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
-              <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> в ваш <b>Публичный канал</b> в качестве администратора (с правами на публикацию сообщений).</li>
-              <li>Добавьте бота в ваш <b>Приватный канал</b> в качестве администратора.</li>
-              <li>Бот автоматически поймает добавление и подключит каналы на эту страницу.</li>
+              <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> в любой канал (публичный или приватный) в качестве администратора с правами на публикацию сообщений.</li>
+              <li>Можно подключить сколько угодно каналов: например, два публичных для разных тем. Каждый получит свои кнопки, реакции и расписание.</li>
+              <li>Бот автоматически поймает добавление и покажет канал на этой странице.</li>
             </ol>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
@@ -694,97 +687,52 @@ export function QuickStartPage() {
         <div className="space-y-6 animate-fade-in">
           {/* Объединенное окно конфигурации каналов */}
           <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
-            {/* Интегрированный современный переключатель каналов внутри шапки карточки */}
+            {/* Список каналов — динамический, N любого visibility */}
             <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setActiveTab('public')}
-                  className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
-                    activeTab === 'public'
-                      ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
-                      : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-start justify-between w-full">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                      activeTab === 'public' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      <Globe className="w-5 h-5" />
-                    </div>
-                    {channelConfigs.public.id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                        Подключен
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                        Ожидание
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900">Публичный канал</h4>
-                    <p className="text-xs text-slate-400 font-semibold mt-1">
-                      Предложка новостей и открытая лента
-                    </p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('private')}
-                  className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
-                    activeTab === 'private'
-                      ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
-                      : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-start justify-between w-full">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                      activeTab === 'private' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      <Lock className="w-5 h-5" />
-                    </div>
-                    {channelConfigs.private.id ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                        Подключен
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200">
-                        Ожидание
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900">Приватный канал</h4>
-                    <p className="text-xs text-slate-400 font-semibold mt-1">
-                      Платный доступ по подписке
-                    </p>
-                  </div>
-                </button>
+                {Object.values(channelConfigs).map(ch => {
+                  const isActive = activeChannelId === ch.id;
+                  const isPublic = ch.visibility === 'public';
+                  const Icon = isPublic ? Globe : Lock;
+                  const visibilityLabel = isPublic ? 'Публичный' : 'Приватный';
+                  return (
+                    <button
+                      key={ch.id}
+                      onClick={() => setActiveChannelId(ch.id)}
+                      className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                        isActive
+                          ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
+                          : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between w-full">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                          isActive ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                          {visibilityLabel}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900 truncate">{ch.title || 'Новый канал'}</h4>
+                        <p className="text-xs text-slate-400 font-semibold mt-1 truncate">
+                          {ch.username ? `@${ch.username}` : (isPublic ? 'Открытая лента' : 'Платный доступ')}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Контент activeTab */}
-            {['public', 'private'].map((tab) => {
-              if (activeTab !== tab) return null;
+            {/* Контент activeChannelId */}
+            {Object.values(channelConfigs).map((ch) => {
+              if (activeChannelId !== ch.id) return null;
+              const tab = ch.id;
               const config = channelConfigs[tab];
-
-              if (!config.id) {
-                return (
-                  <div key={tab} className="p-8 text-center space-y-4 animate-fade-in">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                      {tab === 'public' ? <Globe className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
-                    </div>
-                    <div className="max-w-md mx-auto space-y-1">
-                      <h3 className="font-bold text-slate-800">Канал не подключен</h3>
-                      <p className="text-sm text-slate-500">
-                        Для настройки добавьте бота в ваш {tab === 'public' ? 'публичный' : 'приватный'} канал в Telegram.
-                      </p>
-                    </div>
-                  </div>
-                );
-              }
 
               return (
                 <div key={tab} className="animate-fade-in divide-y divide-slate-100">

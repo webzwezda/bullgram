@@ -10,14 +10,13 @@ function isExpired(row) {
     return Date.now() - new Date(row.created_at).getTime() > SESSION_TTL_MS;
 }
 
-export async function setGuestSession(supabase, { botId, tgUserId, targetChannelId = null, targetChannelType = null }) {
+export async function setGuestSession(supabase, { botId, tgUserId, targetChannelId = null }) {
     const { error } = await supabase
         .from('autopost_guest_sessions')
         .upsert({
             tg_user_id: tgUserId,
             bot_id: botId,
             target_channel_id: targetChannelId,
-            target_channel_type: targetChannelType,
             created_at: new Date().toISOString()
         }, { onConflict: 'bot_id,tg_user_id' });
 
@@ -52,7 +51,6 @@ export async function getGuestSession(supabase, botId, tgUserId) {
         botId: data.bot_id,
         tgUserId: data.tg_user_id,
         targetChannelId: data.target_channel_id,
-        targetChannelType: data.target_channel_type,
         createdAt: data.created_at
     };
 }

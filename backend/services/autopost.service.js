@@ -31,34 +31,6 @@ export class AutopostService {
         // Ключение по tg_user_id, короткий TTL, хранение в памяти приемлемо —
         // рестарт просто сбросит статус 'editing' через stuck-editing cron.
         this.adminStates = new Map();
-        // adminStickyModes: липкий маршрут для следующего поста админа.
-        // Выставляется текстом "1" (public) или "2" (private). Читается
-        // media-хендлером, очищается после первого же поста. TTL 5 мин чтобы
-        // забытый режим не увёл фото в неправильный канал через час.
-        this.adminStickyModes = new Map();
-    }
-
-    setStickyMode(tgUserId, visibility) {
-        const prev = this.adminStickyModes.get(tgUserId);
-        if (prev?.timer) clearTimeout(prev.timer);
-        const entry = { visibility };
-        entry.timer = setTimeout(() => {
-            this.adminStickyModes.delete(tgUserId);
-        }, 5 * 60 * 1000);
-        this.adminStickyModes.set(tgUserId, entry);
-    }
-
-    getStickyMode(tgUserId) {
-        const entry = this.adminStickyModes.get(tgUserId);
-        return entry?.visibility || null;
-    }
-
-    consumeStickyMode(tgUserId) {
-        const entry = this.adminStickyModes.get(tgUserId);
-        if (!entry) return null;
-        if (entry.timer) clearTimeout(entry.timer);
-        this.adminStickyModes.delete(tgUserId);
-        return entry.visibility;
     }
 
     // --- Await text post state ---

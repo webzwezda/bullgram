@@ -100,28 +100,6 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         }
     });
 
-    // Sticky-маршрут для следующего поста: "1" → public, "2" → private.
-    // Удобно для пересланных постов с готовой подписью — не надо переключать
-    // "🔄 Направление" и не надо заменять подпись на маркер.
-    bot.hears(/^[12]$/, async (ctx, next) => {
-        const tgUserId = ctx.from.id;
-
-        // Если админ сейчас редактирует подпись ИЛИ ждёт создания текстового поста —
-        // "1"/"2" это текст контента, не сигнал маршрутизации. Пропускаем дальше.
-        const state = service.adminStates.get(tgUserId);
-        if (state && (state.action === 'edit_caption' || state.action === 'await_text_post')) {
-            return next();
-        }
-
-        const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
-        if (!isAdmin) return next();
-
-        const visibility = ctx.message.text === '1' ? 'public' : 'private';
-        service.setStickyMode(tgUserId, visibility);
-        const label = visibility === 'public' ? '📢 Публичный' : '🔒 Приватный';
-        await ctx.reply(`✅ Следующий пост → ${label}. Жду фото или альбом (в течение 5 мин).`);
-    });
-
     bot.hears('📋 Очередь', async (ctx) => {
         const tgUserId = ctx.from.id;
         const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
@@ -144,27 +122,6 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         }
 
         await showQueueForChannel(ctx, botId, activeChannel, supabase);
-    });
-
-    bot.action(/show_queue:(public|private)/, async (ctx) => {
-        const type = ctx.match[1];
-        const tgUserId = ctx.from.id;
-        const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
-        if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
-
-        const { data: channels } = await supabase
-            .from('channels')
-            .select('*')
-            .eq('autopost_bot_id', botId)
-            .eq('visibility', type);
-
-        if (!channels || channels.length === 0) {
-            await ctx.answerCbQuery();
-            return ctx.reply(`Канал типа "${type === 'public' ? 'публичный' : 'приватный'}" не подключен.`);
-        }
-
-        await ctx.answerCbQuery();
-        await showQueueForChannel(ctx, botId, channels[0], supabase);
     });
 
     bot.hears('📥 Предложки', async (ctx) => {
