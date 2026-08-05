@@ -6,6 +6,7 @@
  * текста). Любой другой caption → активный канал из active_modes.
  */
 import { Markup } from 'telegraf';
+import { promptChannelPicker } from './channel-select.js';
 
 function pickChannelByMarker(caption, channels) {
     if (caption === '1') return channels.find(c => c.visibility === 'public') || null;
@@ -27,9 +28,10 @@ export function registerMediaHandler(bot, service, botId) {
 
             // BUG#2 fix: админ передумал — присылает медиа вместо текста. Чистим
             // await_text_post state, иначе он висит до TTL (10 мин) и следующее
-            // сообщение молча станет постом.
+            // сообщение молча станет постом. Также чистим await_channel_select
+            // (админ в picker прислал новое медиа — старый выбор невалиден).
             const existingState = service.adminStates.get(tgUserId);
-            if (existingState?.action === 'await_text_post') {
+            if (existingState?.action === 'await_text_post' || existingState?.action === 'await_channel_select') {
                 if (existingState.timer) clearTimeout(existingState.timer);
                 service.adminStates.delete(tgUserId);
             }
@@ -219,19 +221,30 @@ export function registerMediaHandler(bot, service, botId) {
                 const rawCaption = ctx.message.caption || '';
                 const strippedCaption = isMarkerCaption(rawCaption) ? '' : rawCaption;
                 if (isAdmin) {
-                    await service.addPostItem({
-                        botId,
-                        targetChannelId: targetChannel.tg_chat_id,
-                        fileIds: [fileId],
-                        caption: strippedCaption,
-                        status: 'queued',
-                        mediaType
-                    });
-                    await service.collapseQueue(botId, targetChannel.tg_chat_id);
-                    // Sticky-режим расходуется на первый же пост
+                    // Sticky-режим расходуется на первый же пост — даже если дальше
+                    // админ уберёт канал в picker, канал по умолчанию уже выбран.
                     service.consumeStickyMode(tgUserId);
-                    const typeLabel = mediaType === 'video' ? 'Видео добавлено' : mediaType === 'animation' ? 'Гифка добавлена' : mediaType === 'document' ? 'Файл добавлен' : 'Картинка добавлена';
-                    await ctx.reply(`✅ ${typeLabel} в очередь для канала "${targetChannel.title}".`);
+
+                    // Multi-channel bot → picker. Single-channel → old behavior.
+                    if (channels.length > 1) {
+                        await promptChannelPicker(ctx, service, tgUserId, {
+                            content: { type: 'media', caption: strippedCaption, fileIds: [fileId], mediaType },
+                            defaultChannelId: targetChannel.tg_chat_id,
+                            channels
+                        });
+                    } else {
+                        await service.addPostItem({
+                            botId,
+                            targetChannelId: targetChannel.tg_chat_id,
+                            fileIds: [fileId],
+                            caption: strippedCaption,
+                            status: 'queued',
+                            mediaType
+                        });
+                        await service.collapseQueue(botId, targetChannel.tg_chat_id);
+                        const typeLabel = mediaType === 'video' ? 'Видео добавлено' : mediaType === 'animation' ? 'Гифка добавлена' : mediaType === 'document' ? 'Файл добавлен' : 'Картинка добавлена';
+                        await ctx.reply(`✅ ${typeLabel} в очередь для канала "${targetChannel.title}".`);
+                    }
                 } else {
                     const autoAccept = targetChannel.auto_accept_suggestions || false;
                     const status = autoAccept ? 'queued' : 'suggested';

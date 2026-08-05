@@ -80,6 +80,27 @@ export class AutopostService {
         this.adminStates.set(tgUserId, entry);
     }
 
+    // --- Await channel select state ---
+    // Админ прислал контент (текст/медиа/альбом) — бот показал picker каналов.
+    // TTL 10 минут — симметрично с await_text_post и edit_caption.
+    // Живёт в памяти, при рестарте сбрасывается (контент придётся прислать заново).
+    setAwaitChannelSelect(tgUserId, { content, selectedChannelIds, channels, pickerMessageId }) {
+        const prev = this.adminStates.get(tgUserId);
+        if (prev?.timer) clearTimeout(prev.timer);
+        const entry = {
+            action: 'await_channel_select',
+            content,
+            selectedChannelIds: selectedChannelIds.map(String),
+            channels,
+            pickerMessageId,
+            createdAt: Date.now()
+        };
+        entry.timer = setTimeout(() => {
+            this.adminStates.delete(tgUserId);
+        }, 10 * 60 * 1000);
+        this.adminStates.set(tgUserId, entry);
+    }
+
     // --- Guest sessions (БД-backed, переживают рестарт) ---
     setGuestSession(botId, tgUserId, data) {
         return setGuestSession(this.supabase, { botId, tgUserId, ...data });
@@ -174,7 +195,16 @@ export class AutopostService {
         });
     }
 
-    async addPostItem({ botId, targetChannelId, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, suggestedByTgId = null }) {
+    async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, suggestedByTgId = null }) {
+        // Resolve target channels: array takes precedence over scalar; both can be passed.
+        // Multi-target fan-out: one logical post → N item rows grouped by post_batch_id.
+        const scalar = targetChannelId != null ? [String(targetChannelId)] : [];
+        const fromArray = Array.isArray(targetChannelIds) ? targetChannelIds.map(String) : [];
+        const channelIds = [...new Set([...scalar, ...fromArray])];
+        if (channelIds.length === 0) {
+            throw new Error('addPostItem requires at least one target channel');
+        }
+
         // Bug 7 fix: atomic sort_order. Было count+1, два одновременных добавления
         // получали одинаковый sort_order и порядок очереди становился недетерминированным.
         // Через max+1 в подзапросе гонка исчезает (PostgreSQL сериализует UPDATE/INSERT).
@@ -185,31 +215,34 @@ export class AutopostService {
             .order('sort_order', { ascending: false })
             .limit(1)
             .maybeSingle();
-        const nextSort = (maxRow?.sort_order || 0) + 1;
+        const baseSort = (maxRow?.sort_order || 0) + 1;
 
         // Текстовые посты (без fileIds) получают media_type='text' явно,
         // чтобы не маскироваться под 'photo' и корректно исключаться из best-of.
         const hasMedia = fileIds && fileIds.length > 0;
         const resolvedMediaType = mediaType || (hasMedia ? 'photo' : 'text');
 
+        const batchId = crypto.randomUUID();
+        const rows = channelIds.map((cid, idx) => ({
+            bot_id: botId,
+            target_channel_id: cid,
+            post_batch_id: batchId,
+            file_ids: fileIds || [],
+            file_id: hasMedia ? fileIds[0] : null,
+            caption: caption || '',
+            status,
+            sort_order: baseSort + idx,
+            is_suggestion: isSuggestion,
+            media_type: resolvedMediaType,
+            suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
+        }));
+
         const { data, error } = await this.supabase
             .from('autopost_items')
-            .insert({
-                bot_id: botId,
-                target_channel_id: targetChannelId || null,
-                file_ids: fileIds || [],
-                file_id: hasMedia ? fileIds[0] : null,
-                caption: caption || '',
-                status,
-                sort_order: nextSort,
-                is_suggestion: isSuggestion,
-                media_type: resolvedMediaType,
-                suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
-            })
-            .select()
-            .single();
+            .insert(rows)
+            .select('*');
         if (error) throw error;
-        return data;
+        return { batch_id: batchId, items: data };
     }
 
     async collapseQueue(botId, channelId) {

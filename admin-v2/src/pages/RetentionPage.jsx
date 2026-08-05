@@ -383,7 +383,7 @@ export function RetentionPage() {
             </p>
             <a
               href="/sales-bot"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors"
             >
               Создать бота
               <ChevronRight className="w-4 h-4" />

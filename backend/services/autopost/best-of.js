@@ -45,7 +45,7 @@ export async function composeBestOfMonth(supabase, botId, channelId, year, month
 
     let query = supabase
         .from('autopost_items')
-        .select('id, file_id, file_ids, caption, reaction_total, posted_at, media_type, posted_message_ids')
+        .select('id, file_id, file_ids, caption, reaction_total, posted_at, media_type, posted_message_ids, post_batch_id, target_channel_id')
         .eq('bot_id', botId)
         .eq('status', 'posted')
         .gt('reaction_total', 0)
@@ -60,11 +60,24 @@ export async function composeBestOfMonth(supabase, botId, channelId, year, month
     if (error) throw error;
 
     const all = Array.isArray(data) ? data : [];
-    const items = all
+
+    // Дедупликация по post_batch_id: один логический пост = одна строка в топе.
+    // data уже отсортирован по reaction_total DESC → первая запись per batch
+    // это и есть максимум по реакциям в группе fan-out.
+    const seenBatches = new Set();
+    const deduped = [];
+    for (const it of all) {
+        const batchKey = it.post_batch_id || it.id;
+        if (seenBatches.has(batchKey)) continue;
+        seenBatches.add(batchKey);
+        deduped.push(it);
+    }
+
+    const items = deduped
         .filter(it => Boolean((it.file_ids && it.file_ids.length > 0) || it.file_id))
         .slice(0, BEST_OF_LIMIT);
 
-    return { items, totalWithReactions: all.length };
+    return { items, totalWithReactions: deduped.length };
 }
 
 function chunkArray(arr, size) {

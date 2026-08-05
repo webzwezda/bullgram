@@ -29,7 +29,7 @@ const AUTOPOST_POST_CURL = `curl -X POST \\
 https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 -H "Authorization: Bearer brapi_..." \\
 -H "Content-Type: application/json" \\
--d '{"target_channel_id":"-100...","caption":"Hello","publish_now":true}'`;
+-d '{"target_channel_ids":["-100111","-100222"],"caption":"Hello","publish_now":true}'`;
 
 export function QuickStartPage() {
   const { user, accessToken } = useAuth();
@@ -604,7 +604,7 @@ export function QuickStartPage() {
             />
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Чтобы узнать <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">bot_id</code> и <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">target_channel_id</code>:{' '}
+              Чтобы узнать <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">bot_id</code> и <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">target_channel_ids</code>:{' '}
               <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots</code>, затем{' '}
               <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots/{'{bot_id}'}/channels</code>.
             </p>

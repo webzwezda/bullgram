@@ -4,6 +4,7 @@
  */
 import { Markup } from 'telegraf';
 import { showQueueForChannel } from '../keyboard.js';
+import { promptChannelPicker } from './channel-select.js';
 
 export function registerQueueCallbacksHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -155,7 +156,8 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
     });
 
     // Редактирование текста подписи через текстовый ввод + создание текстового поста.
-    // Branching по state.action: 'edit_caption' (старая логика) или 'await_text_post' (новая).
+    // Branching по state.action: 'edit_caption' (старая логика), 'await_text_post' (новая),
+    // 'await_channel_select' (admin в picker — игнорим текст, подсказываем).
     bot.on('text', async (ctx, next) => {
         const tgUserId = ctx.from.id;
         const state = service.adminStates.get(tgUserId);
@@ -179,6 +181,21 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             if (state.timer) clearTimeout(state.timer);
 
             try {
+                // Multi-channel bot → показываем picker. Single-channel → old behavior.
+                const { data: channels } = await supabase
+                    .from('channels')
+                    .select('tg_chat_id, title')
+                    .eq('autopost_bot_id', botId);
+
+                if (channels && channels.length > 1) {
+                    await promptChannelPicker(ctx, service, tgUserId, {
+                        content: { type: 'text', caption: text, fileIds: [], mediaType: 'text' },
+                        defaultChannelId: state.targetChannelId,
+                        channels
+                    });
+                    return;
+                }
+
                 await service.addPostItem({
                     botId,
                     targetChannelId: state.targetChannelId,
@@ -194,6 +211,11 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
                 await ctx.reply('❌ Не удалось создать пост. Попробуйте позже.');
             }
             return;
+        }
+
+        // Админ в picker — текст не нужен, подсказываем
+        if (state.action === 'await_channel_select') {
+            return ctx.reply('📋 Вы выбираете каналы. Нажмите «🚀 Опубликовать» или «❌ Отмена» под сообщением выше.');
         }
 
         // Существующая ветка — редактирование подписи

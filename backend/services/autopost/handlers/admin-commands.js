@@ -93,6 +93,11 @@ export function registerAdminCommandsHandler(bot, service, botId) {
             service.adminStates.delete(tgUserId);
             return ctx.reply('❌ Создание текстового поста отменено.');
         }
+        if (state?.action === 'await_channel_select') {
+            if (state.timer) clearTimeout(state.timer);
+            service.adminStates.delete(tgUserId);
+            return ctx.reply('❌ Выбор каналов отменён.');
+        }
     });
 
     // Sticky-маршрут для следующего поста: "1" → public, "2" → private.

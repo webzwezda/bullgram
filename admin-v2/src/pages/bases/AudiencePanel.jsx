@@ -235,7 +235,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
               <div className="text-sm text-amber-700 mb-4">
                 Базы аудитории тянут людей через живого юзербота. Если сессия умерла или прокси недоступен — переподключите аккаунт.
               </div>
-              <a href="/app/userbots" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+              <a href="/app/userbots" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
                 Открыть Юзерботы <ChevronRight className="w-4 h-4" />
               </a>
             </div>
@@ -256,7 +256,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
           <p className="text-slate-500 font-medium text-sm mb-6 max-w-md">
             Создайте бота, чтобы собирать аудиторию из его каналов и групп и работать с сегментами.
           </p>
-          <a href="/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+          <a href="/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
             Создать бота <ChevronRight className="w-4 h-4" />
           </a>
         </div>
@@ -405,7 +405,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
                   <div className="text-sm opacity-90 mb-3">
                     Без юзербота синк из групп недоступен. Подключите аккаунт на странице «Юзерботы».
                   </div>
-                  <a href="/app/userbots" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 transition-colors">
+                  <a href="/app/userbots" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 !text-white hover:bg-slate-700 transition-colors">
                     Открыть Юзерботы <ChevronRight className="w-3.5 h-3.5" />
                   </a>
                 </div>
