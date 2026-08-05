@@ -6,6 +6,31 @@ import { Markup } from 'telegraf';
 import { showQueueForChannel } from '../keyboard.js';
 import { promptChannelPicker } from './channel-select.js';
 
+const CHANNEL_FORMS = ['канал', 'канала', 'каналов'];
+
+function pluralizeChannels(n) {
+    const n10 = Math.abs(n) % 10;
+    const n100 = Math.abs(n) % 100;
+    if (n10 === 1 && n100 !== 11) return CHANNEL_FORMS[0];
+    if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return CHANNEL_FORMS[1];
+    return CHANNEL_FORMS[2];
+}
+
+// Восстанавливает editable siblings предыдущей незавершённой правки.
+// Используется в Bug 6 guard (edit_post_txt) и при cancel.
+async function restorePrevEdit(supabase, state) {
+    if (!state?.editableSiblings) return;
+    for (const s of state.editableSiblings) {
+        await supabase
+            .from('autopost_items')
+            .update({
+                status: s.prevStatus || 'queued',
+                scheduled_at: s.prevScheduledAt || null
+            })
+            .eq('id', s.id);
+    }
+}
+
 export function registerQueueCallbacksHandler(bot, service, botId) {
     const supabase = service.supabase;
 
@@ -54,39 +79,73 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
         const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
         if (!isAdmin) return ctx.answerCbQuery('Доступ запрещен');
 
-        // Bug 6 guard: если админ уже редактирует другой пост — сбрасываем
-        // старый предмет обратно в его прежний статус, иначе он зависнет в 'editing'
-        // на 10 минут до того, как stuck-editing cron до него доберётся.
+        // Bug 6 guard: если админ уже редактирует другой пост — восстанавливаем
+        // editable siblings предыдущего batch'а, иначе они зависнут в 'editing'
+        // на 10 минут до stuck-editing cron.
         const prevState = service.adminStates.get(tgUserId);
-        if (prevState && prevState.action === 'edit_caption' && prevState.itemId !== itemId) {
-            await supabase
-                .from('autopost_items')
-                .update({ status: prevState.prevStatus || 'queued', scheduled_at: prevState.prevScheduledAt || null })
-                .eq('id', prevState.itemId);
+        if (prevState && prevState.action === 'edit_caption' && prevState.clickedItemId !== itemId) {
+            await restorePrevEdit(supabase, prevState);
             service.adminStates.delete(tgUserId);
         }
 
-        const { data: itemBefore } = await supabase
+        const { data: item } = await supabase
             .from('autopost_items')
-            .select('status, scheduled_at')
+            .select('id, post_batch_id')
             .eq('id', itemId)
             .single();
+        if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
 
+        const batchId = item.post_batch_id;
+
+        // Concurrent-edit protection: отказываем если другой админ активно
+        // редактирует этот же batch. Проверка через adminStates (не status='editing'!)
+        // — иначе блокировали бы легитимную правку после забытой, пока cron не сработал.
+        const isBeingEditedByOther = service.adminStates && Array.from(service.adminStates.values())
+            .some(s => s.action === 'edit_caption' && s.batchId === batchId);
+        if (isBeingEditedByOther) {
+            return ctx.answerCbQuery('Этот пост сейчас редактируют');
+        }
+
+        // Load siblings, split editable (queued/scheduled) vs posted (already public).
+        // 'failed' остаёмся не трогаем — админ решит отдельно через retry/delete.
+        const { data: siblings } = await supabase
+            .from('autopost_items')
+            .select('id, status, scheduled_at, target_channel_id')
+            .eq('post_batch_id', batchId);
+        const allSiblings = siblings || [];
+        const editable = allSiblings.filter(s => ['queued', 'scheduled', 'editing'].includes(s.status));
+        const posted = allSiblings.filter(s => s.status === 'posted');
+
+        if (editable.length === 0) {
+            return ctx.answerCbQuery('В очереди нет редактируемых постов этого batch');
+        }
+
+        // Помечаем editable как 'editing' — scheduler их пропустит. Single UPDATE.
         await supabase
             .from('autopost_items')
             .update({ status: 'editing' })
-            .eq('id', itemId);
+            .in('id', editable.map(s => s.id));
 
         service.adminStates.set(tgUserId, {
             action: 'edit_caption',
-            itemId,
+            batchId,
+            clickedItemId: itemId,
             messageId: ctx.callbackQuery.message.message_id,
             chatId: ctx.chat.id,
-            prevStatus: itemBefore?.status || 'queued',
-            prevScheduledAt: itemBefore?.scheduled_at || null
+            editableSiblings: editable.map(s => ({
+                id: s.id,
+                prevStatus: s.status === 'editing' ? 'queued' : s.status,
+                prevScheduledAt: s.scheduled_at
+            })),
+            postedSiblingIds: posted.map(s => s.id)
         });
 
-        await ctx.reply('Введите новый текст для этого поста (или напишите "нет" для пустой подписи):');
+        const totalChannels = editable.length + posted.length;
+        const plural = pluralizeChannels(totalChannels);
+        const prompt = totalChannels > 1
+            ? `Введите новый текст (применится ко всем ${totalChannels} ${plural} этого поста, или напишите "нет" для пустой подписи):`
+            : 'Введите новый текст для этого поста (или напишите "нет" для пустой подписи):';
+        await ctx.reply(prompt);
         await ctx.answerCbQuery();
     });
 
@@ -138,20 +197,32 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
 
         const { data: item } = await supabase
             .from('autopost_items')
-            .select('target_channel_id')
+            .select('post_batch_id')
             .eq('id', itemId)
             .single();
+        if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
+
+        // Actionable siblings: queued/scheduled/editing. Posted/failed не трогаем —
+        // posted уже в Telegram, deleting DB row только запутает счётчик.
+        const { data: siblings } = await supabase
+            .from('autopost_items')
+            .select('target_channel_id')
+            .eq('post_batch_id', item.post_batch_id)
+            .in('status', ['queued', 'scheduled', 'editing']);
+        const affectedChannels = [...new Set((siblings || []).map(s => String(s.target_channel_id)))];
+        const affectedCount = siblings?.length || 0;
 
         await supabase
             .from('autopost_items')
             .delete()
-            .eq('id', itemId);
+            .eq('post_batch_id', item.post_batch_id)
+            .in('status', ['queued', 'scheduled', 'editing']);
 
-        await ctx.answerCbQuery('Пост удален');
+        await ctx.answerCbQuery(`Удалено из очереди: ${affectedCount} ${pluralizeChannels(affectedCount)}`);
         try { await ctx.deleteMessage(); } catch (e) {}
 
-        if (item?.target_channel_id) {
-            await service.collapseQueue(botId, item.target_channel_id);
+        for (const cid of affectedChannels) {
+            await service.collapseQueue(botId, cid);
         }
     });
 
@@ -228,50 +299,65 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             newCaption = '';
         }
 
-        // Важно: апдейтим caption + восстанавливаем прежний status/scheduled_at.
-        // Раньше код сбрасывал status → 'queued' и scheduled_at → null,
-        // после чего collapseQueue пересчитывал весь канал. Это означало, что
-        // правка подписи у одного поста незаметно сдвигала расписание всех остальных.
-        // Теперь status/scheduled_at сохраняются — правка текста не двигает расписание.
-        await supabase
-            .from('autopost_items')
-            .update({
-                caption: newCaption,
-                status: state.prevStatus || 'queued',
-                scheduled_at: state.prevScheduledAt || null
-            })
-            .eq('id', state.itemId);
+        // Восстанавливаем per-sibling prev status/scheduled_at + обновляем caption.
+        // Posted siblings получают только caption-апдейт (Telegram stays as-is).
+        const affectedCount = (state.editableSiblings?.length || 0) + (state.postedSiblingIds?.length || 0);
+        for (const s of state.editableSiblings || []) {
+            await supabase
+                .from('autopost_items')
+                .update({
+                    caption: newCaption,
+                    status: s.prevStatus || 'queued',
+                    scheduled_at: s.prevScheduledAt || null
+                })
+                .eq('id', s.id);
+        }
+        if (state.postedSiblingIds && state.postedSiblingIds.length > 0) {
+            await supabase
+                .from('autopost_items')
+                .update({ caption: newCaption })
+                .in('id', state.postedSiblingIds);
+        }
 
+        // Обновляем только кликнутую карточку. Sibling-карточки в других каналах
+        // устаревают — обновятся при следующем открытии очереди (задокументированная
+        // UX-шероховатость).
         const { data: item } = await supabase
             .from('autopost_items')
             .select('*')
-            .eq('id', state.itemId)
-            .single();
+            .eq('id', state.clickedItemId)
+            .maybeSingle();
 
-        try {
-            const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
-            const statusText = `📦 В очереди (подпись изменена)`;
-            const buttons = [
-                [
-                    Markup.button.callback('⚡️ Опубликовать', `post_now:${item.id}`),
-                    Markup.button.callback('📝 Изменить текст', `edit_post_txt:${item.id}`)
-                ],
-                [
-                    Markup.button.callback('❌ Удалить', `del_post:${item.id}`)
-                ]
-            ];
+        if (item) {
+            try {
+                const fileId = item.file_ids && item.file_ids.length > 0 ? item.file_ids[0] : item.file_id;
+                const statusText = item.status === 'scheduled'
+                    ? `📅 Запланирован на ${new Date(item.scheduled_at).toLocaleString('ru-RU')} (подпись изменена)`
+                    : '📦 В очереди (подпись изменена)';
+                const buttons = [
+                    [
+                        Markup.button.callback('⚡️ Опубликовать', `post_now:${item.id}`),
+                        Markup.button.callback('📝 Изменить текст', `edit_post_txt:${item.id}`)
+                    ],
+                    [Markup.button.callback('❌ Удалить', `del_post:${item.id}`)]
+                ];
 
-            if (fileId) {
-                await ctx.telegram.editMessageCaption(state.chatId, state.messageId, undefined, `${statusText}\n\n${newCaption}`, Markup.inlineKeyboard(buttons));
-            } else {
-                await ctx.telegram.editMessageText(state.chatId, state.messageId, undefined, `${statusText}\n\n${newCaption}`, Markup.inlineKeyboard(buttons));
+                if (fileId) {
+                    await ctx.telegram.editMessageCaption(state.chatId, state.messageId, undefined, `${statusText}\n\n${newCaption}`, Markup.inlineKeyboard(buttons));
+                } else {
+                    await ctx.telegram.editMessageText(state.chatId, state.messageId, undefined, `${statusText}\n\n${newCaption}`, Markup.inlineKeyboard(buttons));
+                }
+            } catch (e) {
+                console.error('Failed to update inline message caption:', e.message);
             }
-        } catch (e) {
-            console.error('Failed to update inline message caption:', e.message);
         }
 
         try { await ctx.deleteMessage(); } catch (e) {}
-        return ctx.reply('✅ Подпись успешно изменена!');
+        const plural = pluralizeChannels(affectedCount);
+        const replyText = affectedCount > 1
+            ? `✅ Подпись изменена в ${affectedCount} ${plural}`
+            : '✅ Подпись успешно изменена!';
+        return ctx.reply(replyText);
     });
 
     // Пагинация очереди: callback_data = queue_page:CHANNEL_ID:offset (число или 'last')
