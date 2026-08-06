@@ -247,6 +247,33 @@ export function useOfficialBotsController({
     }
   }
 
+  async function deleteOfficialBot(account) {
+    const accountId = String(account?.id || '');
+    if (!accountId) return;
+
+    const username = account?.tg_username ? ` @${account.tg_username}` : '';
+    if (!window.confirm(`Удалить бота продаж${username}? Отвяжутся тарифты, каналы, контуры и webhook. Действие необратимо.`)) return;
+
+    setState((prev) => ({ ...prev, deletingBotId: accountId }));
+    try {
+      await apiRequest(`/api/official-bot/${accountId}`, {
+        accessToken,
+        method: 'DELETE'
+      });
+      await reloadAccounts();
+      setSelectedOfficialBotId((prev) => {
+        if (prev !== accountId) return prev;
+        const next = officialBots.find((b) => String(b.id) !== accountId);
+        return next ? String(next.id) : 'new';
+      });
+      showUiMessage('Бот удалён.', 'success');
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+    } finally {
+      setState((prev) => ({ ...prev, deletingBotId: '' }));
+    }
+  }
+
   return {
     addOfficialBot,
     addingBotAdmin,
@@ -254,6 +281,7 @@ export function useOfficialBotsController({
     botAdmins,
     botAdminsLoading,
     botForm,
+    deleteOfficialBot,
     handleAddBotAdmin,
     handleRemoveBotAdmin,
     handleRegenerateBotAdminInvite,

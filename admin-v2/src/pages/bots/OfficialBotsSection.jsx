@@ -121,6 +121,7 @@ function BotConfigSection({
   botForm,
   setBotForm,
   addOfficialBot,
+  deleteOfficialBot,
   state,
   salesContourSectionProps,
   channelsByBotId,
@@ -157,19 +158,38 @@ function BotConfigSection({
             </div>
           </div>
 
-          <Select value={selectedOfficialBotId || 'new'} onValueChange={setSelectedOfficialBotId}>
-            <SelectTrigger className="h-10 w-[220px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl">
-              <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
-              {officialBots.map((account) => (
-                <SelectItem key={account.id} value={account.id} className="rounded-lg py-2.5">
-                  <span className="font-medium text-slate-900">{botTitle(account)}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-2">
+            <Select value={selectedOfficialBotId || 'new'} onValueChange={setSelectedOfficialBotId}>
+              <SelectTrigger className="h-10 w-[220px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
+                {officialBots.map((account) => (
+                  <SelectItem key={account.id} value={account.id} className="rounded-lg py-2.5">
+                    <span className="font-medium text-slate-900">{botTitle(account)}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {!isNew && selectedOfficialBot ? (
+              <Button
+                variant="ghost"
+                onClick={() => deleteOfficialBot?.(selectedOfficialBot)}
+                disabled={state?.deletingBotId === selectedOfficialBot.id}
+                title="Удалить бота"
+                className="h-10 px-3 rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-bold border border-rose-100 shadow-sm"
+              >
+                {state?.deletingBotId === selectedOfficialBot.id ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                )}
+                <span className="text-sm">Удалить</span>
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -1079,6 +1099,7 @@ export function OfficialBotsSection({
   setBotForm,
   state,
   addOfficialBot,
+  deleteOfficialBot,
   selectedOfficialBot,
   selectedOfficialBotId,
   setSelectedOfficialBotId,
@@ -1135,6 +1156,7 @@ export function OfficialBotsSection({
         botForm={botForm}
         setBotForm={setBotForm}
         addOfficialBot={addOfficialBot}
+        deleteOfficialBot={deleteOfficialBot}
         state={state}
         salesContourSectionProps={salesContourSectionProps}
         channelsByBotId={channelsByBotId}

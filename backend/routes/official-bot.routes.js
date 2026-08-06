@@ -1016,6 +1016,53 @@ export default function (supabase) {
         }
     });
 
+    // Удалить бота целиком: остановка runtime, снятие webhook, detach тарифов,
+    // удаление строки tg_accounts. sales_bot_contours / official_bot_userbot_bindings /
+    // official_bot_update_queue / channels уходят по cascade.
+    router.delete('/:accountId', authenticateUser, async (req, res) => {
+        try {
+            const account = await loadOwnedOfficialBotAccount(supabase, req.user.id, req.params.accountId);
+            if (!account) return res.status(404).json({ error: 'Бот не найден' });
+
+            // 1) Стопаем локальный runtime (polling/webhook service instance).
+            officialBotService.stopBot(account.id);
+
+            // 2) Снимаем webhook у Telegram — best effort, не падаем если токен уже невалиден.
+            if (account.session_data) {
+                try {
+                    const token = decrypt(account.session_data);
+                    const cleanupBot = new Telegraf(token);
+                    await cleanupBot.telegram.deleteWebhook({ drop_pending_updates: false });
+                } catch (cleanupErr) {
+                    console.warn(`[official-bot] deleteWebhook skip для ${account.id}: ${cleanupErr.message}`);
+                }
+            }
+
+            // 3) Detach тарифов — tariffs.bot_id имеет NO ACTION, без этого удаление не пройдёт.
+            //     Тарифы остаются, просто привязка к боту отваливается.
+            const { error: detachTariffsError } = await supabase
+                .from('tariffs')
+                .update({ bot_id: null })
+                .eq('bot_id', account.id);
+            if (detachTariffsError) throw detachTariffsError;
+
+            // 4) Удаляем сам аккаунт. Cascade почистит sales_bot_contours, channels,
+            //    official_bot_userbot_bindings, official_bot_update_queue.
+            const { error: deleteError } = await supabase
+                .from('tg_accounts')
+                .delete()
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id)
+                .eq('account_type', 'bot');
+            if (deleteError) throw deleteError;
+
+            res.json({ success: true });
+        } catch (err) {
+            console.error('Ошибка удаления бота:', err.message);
+            res.status(500).json({ error: 'Не получилось удалить бота' });
+        }
+    });
+
     return router;
 }
 
