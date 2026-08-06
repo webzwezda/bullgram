@@ -56,6 +56,9 @@ export function QuickStartPage() {
   // Таб больше не 'public'/'private' — каналов может быть N любого visibility.
   const [activeChannelId, setActiveChannelId] = useState(null);
 
+  // Раскрытая инструкция под slot-карточкой «Подключить ещё канал».
+  const [showAddChannelHint, setShowAddChannelHint] = useState(false);
+
   // Configs for channels — keyed by channel UUID (supports N channels per bot,
   // включая несколько public или несколько private).
   const [channelConfigs, setChannelConfigs] = useState({});
@@ -725,7 +728,51 @@ export function QuickStartPage() {
                     </button>
                   );
                 })}
+
+                {/* Slot-карточка «Подключить ещё канал» — не просто decoration,
+                    показывает куда нажать/что сделать чтобы добавить N+1 канал.
+                    Клик → раскрывает инструкция. */}
+                <button
+                  onClick={() => setShowAddChannelHint(prev => !prev)}
+                  className={`p-5 rounded-2xl border-2 border-dashed text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                    showAddChannelHint
+                      ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-200'
+                      : 'border-slate-300 bg-slate-50/40 hover:border-indigo-400 hover:bg-indigo-50/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between w-full">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-white text-indigo-500 shadow-sm">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-indigo-700">Подключить ещё канал</h4>
+                    <p className="text-xs text-slate-500 font-semibold mt-1">
+                      Публичный или приватный — без ограничений
+                    </p>
+                  </div>
+                </button>
               </div>
+
+              {/* Развернутая инструкция под слотом «Подключить ещё канал» */}
+              {showAddChannelHint && createdBot?.bot_username && (
+                <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 animate-fade-in">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Plus className="w-4 h-4 text-indigo-700" />
+                    </div>
+                    <div className="space-y-1.5 text-sm text-slate-700 min-w-0">
+                      <p className="font-bold text-slate-900">Как подключить новый канал</p>
+                      <ol className="list-decimal list-inside space-y-1 text-xs text-slate-600">
+                        <li>В Telegram откройте нужный канал → <b>Управление каналом</b> → <b>Администраторы</b>.</li>
+                        <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> с правом <b>«Публиковать посты»</b>.</li>
+                        <li>Канал появится здесь автоматически — настраивайте кнопки, реакции и расписание.</li>
+                      </ol>
+                      <p className="text-[11px] text-slate-500 pt-1">Можно подключить сколько угодно каналов. Каждый публикует со своими кнопками и реакциями.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Контент activeChannelId */}
