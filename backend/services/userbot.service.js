@@ -2066,6 +2066,33 @@ export class UserbotService {
         }
     }
 
+    async leaveChat(userbot, { chatId } = {}) {
+        assertUserbotOperatable(userbot);
+        const id = normalizeChatIdInput(chatId);
+        if (!id) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "chat_id" is required.', {});
+        }
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const entity = await withTimeout(
+                client.getInputEntity(id),
+                30_000,
+                'leaveChat.resolveEntity'
+            );
+            await withTimeout(
+                client.invoke(new Api.channels.LeaveChannel({ channel: entity })),
+                30_000,
+                'leaveChat.leaveChannel'
+            );
+            return { success: true, chat_id: String(id) };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'leaveChat');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
     async joinChatByInvite(userbot, { inviteLink } = {}) {
         assertUserbotOperatable(userbot);
         const raw = String(inviteLink || '').trim();
