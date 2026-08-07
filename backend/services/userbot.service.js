@@ -2066,6 +2066,72 @@ export class UserbotService {
         }
     }
 
+    async joinChatByInvite(userbot, { inviteLink } = {}) {
+        assertUserbotOperatable(userbot);
+        const raw = String(inviteLink || '').trim();
+        if (!raw) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "invite_link" is required.', {});
+        }
+        const parsed = parseTelegramInviteLink(raw);
+        if (!parsed) {
+            throw new MCPError(
+                ERROR_CODES.INVALID_PARAMS,
+                'Unsupported invite link. Use t.me/+hash, t.me/joinchat/hash, t.me/username, or @username.',
+                {}
+            );
+        }
+        if (parsed.kind === 'private_permalink') {
+            throw new MCPError(
+                ERROR_CODES.INVALID_PARAMS,
+                't.me/c/<id> private permalinks cannot be joined directly. Need an invite hash (t.me/+hash or t.me/joinchat/hash).',
+                {}
+            );
+        }
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            let title = null;
+            let chatId = null;
+            let kind = parsed.kind === 'username' ? 'channel' : 'group';
+
+            if (parsed.kind === 'invite_hash') {
+                const result = await withTimeout(
+                    client.invoke(new Api.messages.ImportChatInvite({ hash: parsed.value })),
+                    30_000,
+                    'joinChatByInvite.importInvite'
+                );
+                const chat = result?.chats?.[0] || null;
+                title = chat?.title || null;
+                chatId = chat?.id ? String(chat.id) : null;
+                kind = chat?.className === 'Channel' ? 'channel' : 'group';
+            } else {
+                const entity = await withTimeout(
+                    client.getEntity(parsed.value),
+                    30_000,
+                    'joinChatByInvite.resolveEntity'
+                );
+                await withTimeout(
+                    client.invoke(new Api.channels.JoinChannel({ channel: entity })),
+                    30_000,
+                    'joinChatByInvite.joinChannel'
+                );
+                title = entity?.title || entity?.username || null;
+                chatId = entity?.id ? String(entity.id) : null;
+                kind = entity?.className === 'Channel' ? 'channel' : 'group';
+            }
+
+            return {
+                chat_id: chatId,
+                title,
+                kind
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'joinChatByInvite');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
     async _lastTelegramEventFor(userbotId) {
         if (!userbotId) return null;
         const { data } = await this.supabase
@@ -2082,6 +2148,50 @@ export class UserbotService {
 // ============================================================
 // Local helpers — pure functions for Plan 01 Phase 4 userbot helpers
 // ============================================================
+
+function parseTelegramInviteLink(rawValue = '') {
+    const value = String(rawValue || '').trim();
+    if (!value) return null;
+
+    const stripped = value
+        .replace(/^@/, '')
+        .replace(/^(https?:\/\/)?t\.me\//i, '')
+        .replace(/^(https?:\/\/)?telegram\.me\//i, '')
+        .replace(/\/+$/, '')
+        .trim();
+
+    const plusMatch = value.match(/(?:https?:\/\/)?t\.me\/\+([A-Za-z0-9_-]+)/i)
+        || value.match(/^@(?:joinchat)\+(.+)$/i);
+    if (plusMatch) {
+        return { kind: 'invite_hash', value: plusMatch[1] };
+    }
+
+    const joinchatMatch = value.match(/(?:https?:\/\/)?t\.me\/joinchat\/([A-Za-z0-9_-]+)/i);
+    if (joinchatMatch) {
+        return { kind: 'invite_hash', value: joinchatMatch[1] };
+    }
+
+    const sMatch = value.match(/(?:https?:\/\/)?t\.me\/s\/([A-Za-z0-9_]{5,})/i);
+    if (sMatch) {
+        return { kind: 'username', value: sMatch[1] };
+    }
+
+    const privatePermalinkMatch = value.match(/(?:https?:\/\/)?t\.me\/c\/(\d+)/i);
+    if (privatePermalinkMatch) {
+        return { kind: 'private_permalink', value: privatePermalinkMatch[1] };
+    }
+
+    const usernameFromUrlMatch = value.match(/(?:https?:\/\/)?t\.me\/([A-Za-z][A-Za-z0-9_]{4,})\/?$/i);
+    if (usernameFromUrlMatch) {
+        return { kind: 'username', value: usernameFromUrlMatch[1] };
+    }
+
+    if (!/\s/.test(value) && /^[A-Za-z][A-Za-z0-9_]{4,}$/.test(stripped)) {
+        return { kind: 'username', value: stripped };
+    }
+
+    return null;
+}
 
 function assertUserbotOperatable(userbot) {
     if (!userbot?.id) {

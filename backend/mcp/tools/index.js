@@ -11,6 +11,7 @@ import './proxy/proxy-import.js';
 import './account/list-userbots.js';
 import './account/health.js';
 import './dialogs/list-dialogs.js';
+import './dialogs/join-chat.js';
 import './messages/fetch-messages.js';
 import './messages/search-messages.js';
 import './messages/send-message.js';
