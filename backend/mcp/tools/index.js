@@ -21,3 +21,4 @@ import './participants/list-participants.js';
 import './autopost/list-bots.js';
 import './autopost/list-channels.js';
 import './autopost/create-post.js';
+import './autopost/delete-message.js';
