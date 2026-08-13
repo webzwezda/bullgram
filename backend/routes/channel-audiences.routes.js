@@ -397,7 +397,12 @@ export default function channelAudiencesRoutes(supabase) {
             }));
 
             const summary = hydratedMembers.reduce((stats, member) => {
+                if (member.is_bot) {
+                    stats.bots += 1;
+                    return stats;
+                }
                 stats.total += 1;
+                stats.humans += 1;
                 if (member.payment_status === 'active_paid') stats.active_paid += 1;
                 if (member.payment_status === 'expired_paid' || member.payment_status === 'expired_paid_inside') stats.expired_paid += 1;
                 if (member.payment_status === 'unpaid_lead') stats.unpaid_leads += 1;
@@ -405,6 +410,8 @@ export default function channelAudiencesRoutes(supabase) {
                 return stats;
             }, {
                 total: 0,
+                humans: 0,
+                bots: 0,
                 active_paid: 0,
                 expired_paid: 0,
                 unpaid_leads: 0,
@@ -585,93 +592,6 @@ export default function channelAudiencesRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка массового импорта из базы в CRM:', error);
             res.status(500).json({ error: 'Ошибка массового импорта из базы в CRM' });
-        }
-    });
-
-    router.post('/:id/actions/manual-add', authenticateUser, async (req, res) => {
-        try {
-            const baseId = req.params.id;
-            const base = await loadOwnedBase(req.user.id, baseId);
-            if (!base) return res.status(404).json({ error: 'База не найдена' });
-
-            const entries = Array.isArray(req.body.entries) ? req.body.entries : [];
-            const cleanedEntries = entries
-                .map(entry => ({
-                    tg_user_id: String(entry?.tg_user_id || '').trim(),
-                    username: String(entry?.username || '').trim().replace(/^@+/, ''),
-                    display_name: String(entry?.display_name || '').trim()
-                }))
-                .filter(entry => entry.tg_user_id);
-
-            if (cleanedEntries.length === 0) {
-                return res.status(400).json({ error: 'Нужен хотя бы один Telegram ID. Без него человек даже в рассылку нормально не полетит.' });
-            }
-
-            const deduped = new Map();
-            for (const entry of cleanedEntries) {
-                deduped.set(entry.tg_user_id, entry);
-            }
-
-            const dedupedIds = Array.from(deduped.keys());
-            const duplicate_count = cleanedEntries.length - dedupedIds.length;
-
-            const { data: existingMembers, error: existingError } = await supabase
-                .from('channel_audience_members')
-                .select('tg_user_id')
-                .eq('owner_id', req.user.id)
-                .eq('base_id', baseId)
-                .in('tg_user_id', dedupedIds);
-
-            if (existingError) throw existingError;
-
-            const existingIds = new Set((existingMembers || []).map(member => String(member.tg_user_id)));
-
-            const upsertPayload = Array.from(deduped.values()).map(entry => ({
-                owner_id: req.user.id,
-                base_id: baseId,
-                tg_user_id: entry.tg_user_id,
-                username: entry.username || null,
-                first_name: null,
-                last_name: null,
-                display_name: entry.display_name || buildDisplayName({
-                    tg_user_id: entry.tg_user_id,
-                    username: entry.username || null,
-                    first_name: null,
-                    last_name: null
-                }),
-                is_bot: false,
-                source_channel_ids: [],
-                channels_count: 0,
-                present_now: false,
-                last_seen_at: null,
-                source: 'manual',
-                updated_at: new Date().toISOString()
-            }));
-
-            const { error: upsertError } = await supabase
-                .from('channel_audience_members')
-                .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
-
-            if (upsertError) throw upsertError;
-
-            await supabase
-                .from('channel_audiences')
-                .update({ updated_at: new Date().toISOString() })
-                .eq('id', baseId)
-                .eq('owner_id', req.user.id);
-
-            res.json({
-                success: true,
-                added_count: upsertPayload.length,
-                received_count: entries.length,
-                valid_count: cleanedEntries.length,
-                duplicate_count,
-                updated_count: existingIds.size,
-                inserted_count: upsertPayload.length - existingIds.size
-            });
-        } catch (error) {
-            console.error('Ошибка ручного добавления в базу:', error);
-            res.status(500).json({ error: 'Ошибка ручного добавления в базу' });
         }
     });
 

@@ -6,9 +6,7 @@ export const MEMBER_FILTERS = [
   { id: 'unpaid_leads', label: 'Не оплатили' },
   { id: 'free_riders', label: 'Без подписки' },
   { id: 'all_channels', label: 'Есть везде' },
-  { id: 'partial_channels', label: 'Есть не везде' },
-  { id: 'manual_only', label: 'Вбиты руками' },
-  { id: 'synced_only', label: 'Из групп' }
+  { id: 'partial_channels', label: 'Есть не везде' }
 ];
 
 export function formatRelativeTime(iso) {
@@ -30,6 +28,25 @@ export function coverageLabel(member) {
   if (member.coverage_status === 'partial_channels') return 'Не во всех местах';
   if (member.coverage_status === 'missing_everywhere') return 'Не найден';
   return '—';
+}
+
+export function coverageChannels(member, maxNames = 3) {
+  const present = Array.isArray(member.present_channel_titles) ? member.present_channel_titles : [];
+  const missing = Array.isArray(member.missing_channel_titles) ? member.missing_channel_titles : [];
+
+  function truncate(list) {
+    if (list.length <= maxNames) return list;
+    return [...list.slice(0, maxNames), `+${list.length - maxNames}`];
+  }
+
+  return {
+    present: truncate(present),
+    presentMore: Math.max(0, present.length - maxNames),
+    missing: truncate(missing),
+    missingMore: Math.max(0, missing.length - maxNames),
+    presentTotal: present.length,
+    missingTotal: missing.length
+  };
 }
 
 export function paymentBadge(payment_status) {
@@ -59,8 +76,6 @@ export function filterAudienceMembers(members, filter, search) {
     if (filter === 'free_riders' && !['free_rider', 'expired_paid_inside'].includes(member.payment_status)) return false;
     if (filter === 'all_channels' && member.coverage_status !== 'all_channels') return false;
     if (filter === 'partial_channels' && member.coverage_status !== 'partial_channels') return false;
-    if (filter === 'manual_only' && member.source !== 'manual') return false;
-    if (filter === 'synced_only' && member.source === 'manual') return false;
 
     if (!needle) return true;
 

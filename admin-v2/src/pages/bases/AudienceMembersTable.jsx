@@ -1,12 +1,34 @@
 import { Fragment } from 'react';
 import { Plus } from 'lucide-react';
-import { coverageLabel, paymentBadge } from './shared.js';
+import { coverageLabel, coverageChannels, paymentBadge } from './shared.js';
+
+function ChannelList({ cov, presentNow }) {
+  return (
+    <div className="text-xs font-medium leading-relaxed">
+      {cov.presentTotal > 0 ? (
+        <div className="text-slate-700">
+          В: {cov.present.join(', ')}
+        </div>
+      ) : (
+        <div className="text-slate-400">Нигде не найден</div>
+      )}
+      {cov.missingTotal > 0 ? (
+        <div className="text-slate-400">
+          Нет в: {cov.missing.join(', ')}
+        </div>
+      ) : null}
+      {!presentNow && cov.presentTotal > 0 ? (
+        <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">
+          сейчас не синкается
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function AudienceMemberRow({ member, onCopyToBase, disabled }) {
   const badge = paymentBadge(member.payment_status);
-  const sourceBadge = member.source === 'manual'
-    ? { text: 'Вбит руками', cls: 'bg-slate-100 text-slate-600' }
-    : { text: 'Из групп', cls: 'bg-emerald-50 text-emerald-700' };
+  const cov = coverageChannels(member);
 
   return (
     <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/30 transition-colors">
@@ -27,15 +49,10 @@ function AudienceMemberRow({ member, onCopyToBase, disabled }) {
         </div>
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm font-medium text-slate-700">{coverageLabel(member)}</div>
-        <div className="text-xs text-slate-500 font-medium">
-          {member.channels_count || 0} мест · {member.present_now ? 'сейчас найден' : 'сейчас не найден'}
+        <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
+          {coverageLabel(member)}
         </div>
-      </td>
-      <td className="px-4 py-3">
-        <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-bold ${sourceBadge.cls}`}>
-          {sourceBadge.text}
-        </span>
+        <ChannelList cov={cov} presentNow={member.present_now} />
       </td>
       <td className="px-4 py-3 text-right">
         <button
@@ -72,7 +89,6 @@ export function AudienceMembersTable({ members, onCopyToBase, addToBaseDisabled 
             <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
             <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Деньги</th>
             <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Покрытие</th>
-            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Источник</th>
             <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400">В базу</th>
           </tr>
         </thead>

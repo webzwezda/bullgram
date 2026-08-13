@@ -8,7 +8,7 @@ import {
   fetchClientBaseMembers, addClientBaseMembers, deleteClientBaseMember,
   updateClientBase, deleteClientBase
 } from '../../api/client-bases.js';
-import { generateTempId, memberDisplayName } from './shared.js';
+import { generateTempId, memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './shared.js';
 
 function makeOptimisticEntry(fromMember) {
   return {
@@ -275,46 +275,83 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
+                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Деньги</th>
+                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Где есть</th>
                 <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Источник</th>
                 <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400"></th>
               </tr>
             </thead>
             <tbody>
-              {visibleMembers.map((member) => (
-                <tr
-                  key={member.id}
-                  className={`border-b border-slate-50 last:border-0 hover:bg-slate-50/30 transition-colors ${member._pending ? 'opacity-60' : ''}`}
-                >
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-bold text-slate-900">
-                      {memberDisplayName(member)}
-                    </div>
-                    <div className="text-xs text-slate-500 font-mono">
-                      {member.username ? `@${member.username}` : 'без username'} · {member.tg_user_id}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-bold ${
-                      member.source === 'manual' ? 'bg-slate-100 text-slate-600'
-                      : member.source === 'copied' ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-blue-50 text-blue-700'
-                    }`}>
-                      {member.source === 'manual' ? 'Вбит' : member.source === 'copied' ? 'Из аудитории' : 'Импорт'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => removeMember(member)}
-                      disabled={member._pending && member._pendingRemoval}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      title="Удалить из базы"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {visibleMembers.map((member) => {
+                const badge = paymentBadge(member.payment_status);
+                const cov = coverageChannels(member);
+                const sourceBadge = member.source === 'manual'
+                  ? { text: 'Вбит', cls: 'bg-slate-100 text-slate-600' }
+                  : member.source === 'copied'
+                    ? { text: 'Из аудитории', cls: 'bg-emerald-50 text-emerald-700' }
+                    : { text: 'Импорт', cls: 'bg-blue-50 text-blue-700' };
+                return (
+                  <tr
+                    key={member.id}
+                    className={`border-b border-slate-50 last:border-0 hover:bg-slate-50/30 transition-colors ${member._pending ? 'opacity-60' : ''}`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-bold text-slate-900">
+                        {memberDisplayName(member)}
+                      </div>
+                      <div className="text-xs text-slate-500 font-mono">
+                        {member.username ? `@${member.username}` : 'без username'} · {member.tg_user_id}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-black ${badge.cls}`}>
+                        {badge.text}
+                      </span>
+                      <div className="text-xs text-slate-500 font-medium mt-1">
+                        {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
+                        {coverageLabel(member)}
+                      </div>
+                      {cov.presentTotal > 0 ? (
+                        <div className="text-xs text-slate-700">
+                          В: {cov.present.join(', ')}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400">Нигде не найден</div>
+                      )}
+                      {cov.missingTotal > 0 ? (
+                        <div className="text-xs text-slate-400">
+                          Нет в: {cov.missing.join(', ')}
+                        </div>
+                      ) : null}
+                      {!member.present_now && cov.presentTotal > 0 ? (
+                        <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">
+                          сейчас не синкается
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-bold ${sourceBadge.cls}`}>
+                        {sourceBadge.text}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeMember(member)}
+                        disabled={member._pending && member._pendingRemoval}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        title="Удалить из базы"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {members.length > 200 ? (
