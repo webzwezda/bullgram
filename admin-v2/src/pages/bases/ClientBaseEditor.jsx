@@ -277,7 +277,6 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
                 <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
                 <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Деньги</th>
                 <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Где есть</th>
-                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Источник</th>
                 <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400"></th>
               </tr>
             </thead>
@@ -285,11 +284,6 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
               {visibleMembers.map((member) => {
                 const badge = paymentBadge(member.payment_status);
                 const cov = coverageChannels(member);
-                const sourceBadge = member.source === 'manual'
-                  ? { text: 'Вбит', cls: 'bg-slate-100 text-slate-600' }
-                  : member.source === 'copied'
-                    ? { text: 'Из аудитории', cls: 'bg-emerald-50 text-emerald-700' }
-                    : { text: 'Импорт', cls: 'bg-blue-50 text-blue-700' };
                 return (
                   <tr
                     key={member.id}
@@ -332,11 +326,6 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
                           сейчас не синкается
                         </div>
                       ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-bold ${sourceBadge.cls}`}>
-                        {sourceBadge.text}
-                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
