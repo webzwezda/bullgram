@@ -95,7 +95,7 @@ export async function sendItemToChannel(telegramClient, targetChatId, item, opti
     if (!fileId) {
         const msg = await safeSend(
             (opts) => telegramClient.sendMessage(targetChatId, item.caption, opts),
-            { reply_markup: replyMarkup },
+            { reply_markup: replyMarkup, disable_web_page_preview: true },
             hasCaption ? parseMode : null
         );
         messageId = msg.message_id;
