@@ -319,13 +319,24 @@ function isPreparationSuccessStatus(status) {
   return ['prepared', 'promoted', 'ready', 'already_admin', 'already_prepared'].includes(normalizeStatusKey(status));
 }
 
-function buildDraft({ entry, paidChannelOptions, publicChatOptions, userbotOptions }) {
+function pickSingleOption(currentValue, options, excludeId) {
+  if (currentValue) return currentValue;
+  const available = (Array.isArray(options) ? options : []).filter((option) => {
+    const optionId = toId(option?.id);
+    if (!optionId) return false;
+    if (excludeId && optionId === toId(excludeId)) return false;
+    return true;
+  });
+  return available.length === 1 ? toId(available[0].id) : '';
+}
+
+function buildDraft({ entry, publicChannelOptions, paidChannelOptions, publicChatOptions, paidChatOptions, userbotOptions }) {
   const contour = getContourConfig(entry);
   const eligibleUserbotOptions = userbotOptions.filter((option) => option.eligible !== false);
-  const publicChannelId = toId(contour?.public_channel_id || contour?.publicChannelId || entry?.public_channel_id);
-  const paidChannelId = toId(contour?.paid_channel_id || contour?.paidChannelId || entry?.paid_channel_id);
-  const publicChatId = toId(contour?.public_chat_id || contour?.publicChatId || entry?.public_chat_id);
-  const paidChatId = toId(contour?.paid_chat_id || contour?.paidChatId || entry?.paid_chat_id);
+  const contourPublicChannelId = toId(contour?.public_channel_id || contour?.publicChannelId || entry?.public_channel_id);
+  const contourPaidChannelId = toId(contour?.paid_channel_id || contour?.paidChannelId || entry?.paid_channel_id);
+  const contourPublicChatId = toId(contour?.public_chat_id || contour?.publicChatId || entry?.public_chat_id);
+  const contourPaidChatId = toId(contour?.paid_chat_id || contour?.paidChatId || entry?.paid_chat_id);
   const userbotMode = normalizeUserbotMode(contour?.userbot_mode || contour?.userbotMode || entry?.userbot_mode);
   const selectedUserbotId = toId(contour?.selected_userbot_id || contour?.selectedUserbotId || entry?.selected_userbot_id);
   const selectedUserbotIds = asArray(
@@ -333,6 +344,21 @@ function buildDraft({ entry, paidChannelOptions, publicChatOptions, userbotOptio
       || contour?.selectedUserbotIds
       || entry?.selected_userbot_ids
   ).map(toId).filter(Boolean);
+
+  // Авто-выбор: если слот пустой и остался ровно один доступный вариант — берем его.
+  // Пары (каналы/чаты) обрабатываем последовательно, чтобы public и paid не получили один и тот же ID.
+  let publicChannelId = contourPublicChannelId;
+  let paidChannelId = contourPaidChannelId;
+  let publicChatId = contourPublicChatId;
+  let paidChatId = contourPaidChatId;
+
+  publicChannelId = pickSingleOption(publicChannelId, publicChannelOptions, paidChannelId);
+  paidChannelId = pickSingleOption(paidChannelId, paidChannelOptions, publicChannelId);
+  publicChannelId = pickSingleOption(publicChannelId, publicChannelOptions, paidChannelId);
+
+  publicChatId = pickSingleOption(publicChatId, publicChatOptions, paidChatId);
+  paidChatId = pickSingleOption(paidChatId, paidChatOptions, publicChatId);
+  publicChatId = pickSingleOption(publicChatId, publicChatOptions, paidChatId);
 
   return {
     publicChannelId: publicChannelId || '',
@@ -489,8 +515,10 @@ export function useSalesContourController({
 
     const nextDraft = buildDraft({
       entry: contourEntry,
+      publicChannelOptions,
       paidChannelOptions,
       publicChatOptions,
+      paidChatOptions,
       userbotOptions
     });
 
@@ -505,7 +533,25 @@ export function useSalesContourController({
         [selectedBotId]: nextDraft
       };
     });
-  }, [contourEntry, dirtyBotIds, paidChannelOptions, publicChatOptions, selectedBotId, userbotOptions]);
+
+    // Если buildDraft авто-выбрал значение, которого ещё нет в контуре на бэке — сохраняем.
+    const contour = getContourConfig(contourEntry);
+    const contourValuesByField = {
+      publicChannelId: contour?.public_channel_id || contourEntry?.public_channel_id,
+      paidChannelId: contour?.paid_channel_id || contourEntry?.paid_channel_id,
+      publicChatId: contour?.public_chat_id || contourEntry?.public_chat_id,
+      paidChatId: contour?.paid_chat_id || contourEntry?.paid_chat_id
+    };
+    const hasAutoPick = Object.entries(contourValuesByField).some(
+      ([field, contourValue]) => nextDraft[field] && toId(nextDraft[field]) !== toId(contourValue)
+    );
+
+    if (hasAutoPick && !state?.savingContourBotId) {
+      saveContour(nextDraft, { auto: true }).catch((error) => {
+        console.error('[salesContour] auto-save failed:', error?.message || error);
+      });
+    }
+  }, [contourEntry, dirtyBotIds, publicChannelOptions, paidChannelOptions, publicChatOptions, paidChatOptions, selectedBotId, userbotOptions, state?.savingContourBotId]);
 
   useEffect(() => {
     const targetFieldByKey = {
