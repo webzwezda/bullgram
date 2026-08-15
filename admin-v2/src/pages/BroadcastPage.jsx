@@ -470,20 +470,20 @@ export function BroadcastPage() {
                     className={`flex flex-col items-center gap-1.5 ${locked && !current ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <span
-                      className={`flex items-center justify-center w-9 h-9 rounded-full text-xs font-black transition-colors ${
+                      className={`flex items-center justify-center w-9 h-9 rounded-full text-xs font-black transition-all ${
                         done || current
-                          ? 'bg-slate-900 text-white'
+                          ? 'bg-indigo-600 text-white shadow-sm'
                           : 'bg-white border border-slate-200 text-slate-400'
-                      } ${locked && !current ? 'opacity-40' : ''}`}
+                      } ${current ? 'ring-4 ring-indigo-100' : ''} ${locked && !current ? 'opacity-40' : ''}`}
                     >
                       {done ? <Check className="w-4 h-4" /> : i + 1}
                     </span>
-                    <span className={`text-[11px] font-bold whitespace-nowrap ${current ? 'text-slate-900' : done ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <span className={`text-[11px] font-bold whitespace-nowrap ${current ? 'text-indigo-700' : done ? 'text-slate-600' : 'text-slate-400'}`}>
                       {item.label}
                     </span>
                   </button>
                   {i < STEPS.length - 1 ? (
-                    <div className={`hidden md:block flex-1 h-0.5 mx-2 mt-[18px] ${done ? 'bg-slate-900' : 'bg-slate-200'}`} aria-hidden="true" />
+                    <div className={`hidden md:block flex-1 h-0.5 mx-2 mt-[18px] rounded-full ${done ? 'bg-indigo-500' : 'bg-slate-200'}`} aria-hidden="true" />
                   ) : null}
                 </li>
               );
