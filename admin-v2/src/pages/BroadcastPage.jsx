@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Send, Users, Bot, MessageSquare, ListChecks, Loader2 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
+import { fetchClientBaseMembers } from '../api/client-bases.js';
+import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { getProductTierRules } from '../app/productTier.js';
 import { supabase } from '../lib/supabase.js';
@@ -78,7 +80,6 @@ export function BroadcastPage() {
   const [state, setState] = useState({
     loading: true,
     error: '',
-    bases: [],
     clientBases: [],
     userbots: [],
     campaigns: [],
@@ -94,6 +95,7 @@ export function BroadcastPage() {
   const [sending, setSending] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [previewCount, setPreviewCount] = useState(0);
+  const [members, setMembers] = useState({ rows: [], total: 0, loading: false });
   const pollRef = useRef(null);
 
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
@@ -130,24 +132,18 @@ export function BroadcastPage() {
   }, [preparation, audienceType, baseId, manualIdsKey]);
 
   const baseOptions = useMemo(() => {
-    const options = [
-      ...state.clientBases.map((b) => ({
-        value: `client:${b.id}`, id: b.id, name: b.name,
-        count: b.stats?.total ?? null, tag: 'клиенты'
-      })),
-      ...state.bases.map((b) => ({
-        value: `aud:${b.id}`, id: b.id, name: b.name,
-        count: b.stats?.humans ?? b.stats?.total ?? null, tag: 'по каналам'
-      }))
-    ];
+    const options = state.clientBases.map((b) => ({
+      value: `client:${b.id}`, id: b.id, name: b.name,
+      count: b.stats?.total ?? null
+    }));
     if ((manual.tg_user_ids || []).length > 0) {
-      options.unshift({ value: 'manual', id: null, name: 'Ручная выборка', count: manual.tg_user_ids.length, tag: 'вручную' });
+      options.unshift({ value: 'manual', id: null, name: 'Ручная выборка', count: manual.tg_user_ids.length });
     }
     if (baseSelected && form.base !== 'manual' && !options.some((o) => o.value === form.base)) {
-      options.unshift({ value: form.base, id: baseId, name: 'База (возможно, удалена)', count: null, tag: '' });
+      options.unshift({ value: form.base, id: baseId, name: 'База (возможно, удалена)', count: null });
     }
     return options;
-  }, [state.clientBases, state.bases, manual.tg_user_ids, form.base, baseSelected, baseId]);
+  }, [state.clientBases, manual.tg_user_ids, form.base, baseSelected, baseId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +155,7 @@ export function BroadcastPage() {
         const urlParams = new URLSearchParams(window.location.search);
         const queryBaseId = urlParams.get('base_id');
         const queryAudienceType = urlParams.get('audience_type');
-        const [{ data: rawUserbots }, reserved, bases, clientBases, campaigns, preparations] = await Promise.all([
+        const [{ data: rawUserbots }, reserved, clientBases, campaigns, preparations] = await Promise.all([
           supabase
             .from('tg_accounts')
             .select('id, tg_username, tg_account_id, runtime_status, proxy_id, proxies(id, name, is_working, last_check_country, host, port)')
@@ -167,7 +163,6 @@ export function BroadcastPage() {
             .eq('account_type', 'userbot')
             .order('created_at', { ascending: false }),
           apiRequest('/api/shop/seller/reserved-assets', { accessToken }),
-          apiRequest('/api/channel-audiences', { accessToken }),
           apiRequest('/api/client-bases', { accessToken }),
           apiRequest('/api/broadcast/campaigns', { accessToken }),
           apiRequest('/api/broadcast/preparations', { accessToken })
@@ -181,7 +176,6 @@ export function BroadcastPage() {
           ...prev,
           loading: false,
           error: '',
-          bases: bases.bases || [],
           clientBases: clientBases.bases || [],
           userbots,
           campaigns: campaigns.campaigns || [],
@@ -284,6 +278,32 @@ export function BroadcastPage() {
       cancelled = true;
     };
   }, [accessToken, audienceType, baseId, manualIdsKey]);
+
+  // Состав выбранной базы
+  useEffect(() => {
+    if (!accessToken || !form.base.startsWith('client:')) {
+      setMembers({ rows: [], total: 0, loading: false });
+      return;
+    }
+    let cancelled = false;
+    async function loadMembers() {
+      setMembers((prev) => ({ ...prev, loading: true }));
+      try {
+        const data = await fetchClientBaseMembers(accessToken, form.base.slice('client:'.length), { limit: 200, offset: 0 });
+        if (!cancelled) {
+          setMembers({ rows: data.members || [], total: data.summary?.total || 0, loading: false });
+        }
+      } catch {
+        if (!cancelled) {
+          setMembers({ rows: [], total: 0, loading: false });
+        }
+      }
+    }
+    loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, form.base]);
 
   // Поллинг активной подготовки
   useEffect(() => {
@@ -538,18 +558,76 @@ export function BroadcastPage() {
                 <option value="">Выбери базу</option>
                 {baseOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.name}{opt.tag ? ` • ${opt.tag}` : ''}{opt.count !== null ? ` • ${opt.count} чел.` : ''}
+                    {opt.name}{opt.count !== null ? ` • ${opt.count} чел.` : ''}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="mt-3 text-sm text-slate-500 font-medium">
-              {!baseSelected
-                ? 'Базы создаются на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.'
-                : previewing
-                  ? 'Считаем аудиторию...'
-                  : `В базе: ${previewCount} человек`}
-            </div>
+            {!baseSelected ? (
+              <div className="mt-3 text-sm text-slate-500 font-medium">
+                Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
+              </div>
+            ) : null}
+            {form.base.startsWith('client:') ? (
+              members.loading ? (
+                <div className="mt-4"><EmptyNote>Грузим состав базы...</EmptyNote></div>
+              ) : members.rows.length === 0 ? (
+                <div className="mt-4"><EmptyNote>База пустая.</EmptyNote></div>
+              ) : (
+                <div className="mt-4">
+                  <TableShell>
+                    <thead>
+                      <tr>
+                        <Th>Кто</Th>
+                        <Th>Деньги</Th>
+                        <Th>Где есть</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members.rows.map((member) => {
+                        const badge = paymentBadge(member.payment_status);
+                        const cov = coverageChannels(member);
+                        return (
+                          <Tr key={member.id}>
+                            <Td>
+                              <div className="text-sm font-bold text-slate-900">{memberDisplayName(member)}</div>
+                              <div className="text-xs text-slate-500 font-mono">
+                                {member.username ? `@${member.username}` : 'без username'} · {member.tg_user_id}
+                              </div>
+                            </Td>
+                            <Td>
+                              <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-black ${badge.cls}`}>
+                                {badge.text}
+                              </span>
+                              <div className="text-xs text-slate-500 font-medium mt-1">
+                                {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
+                              </div>
+                            </Td>
+                            <Td>
+                              <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
+                                {coverageLabel(member)}
+                              </div>
+                              {cov.presentTotal > 0 ? (
+                                <div className="text-xs text-slate-700">В: {cov.present.join(', ')}</div>
+                              ) : (
+                                <div className="text-xs text-slate-400">Нигде не найден</div>
+                              )}
+                            </Td>
+                          </Tr>
+                        );
+                      })}
+                    </tbody>
+                  </TableShell>
+                  <div className="mt-3 text-xs text-slate-500 font-medium">
+                    Показываем первые {members.rows.length} из {members.total}.
+                  </div>
+                </div>
+              )
+            ) : form.base === 'manual' ? (
+              <div className="mt-3 text-sm text-slate-500 font-medium">
+                Ручная выборка: {manual.tg_user_ids.length} человек.
+              </div>
+            ) : null}
             <div className="mt-5">
               <button type="button" className={btnPrimary} disabled={!baseSelected} onClick={() => setStep('userbots')}>
                 Дальше
