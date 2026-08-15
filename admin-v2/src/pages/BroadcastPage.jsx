@@ -159,6 +159,13 @@ export function BroadcastPage() {
     return String(preparation.base_id || '') === String(baseId || '');
   }, [preparation, audienceType, baseId, manualIdsKey]);
 
+  const poolMatchesPreparation = useMemo(() => {
+    if (!preparation) return false;
+    const key = (list) => [...(list || [])].map(String).sort().join(',');
+    return key(preparation.userbot_ids) === key(poolIds);
+  }, [preparation, poolIds]);
+  const selectionMatchesPreparation = Boolean(preparation && baseMatchesPreparation && poolMatchesPreparation);
+
   const baseOptions = useMemo(() => {
     const options = state.clientBases.map((b) => ({
       value: `client:${b.id}`, id: b.id, name: b.name,
@@ -232,6 +239,10 @@ export function BroadcastPage() {
           }
           if (cancelled) return;
           setPreparation(full);
+          if ((full.userbot_ids || []).length) {
+            const existing = new Set(userbots.map((row) => String(row.id)));
+            setPoolIds(full.userbot_ids.filter((id) => existing.has(String(id))));
+          }
           const value = baseValueFromPreparation(full);
           if (value) {
             setForm((prev) => ({ ...prev, base: prev.base || value }));
@@ -399,7 +410,15 @@ export function BroadcastPage() {
           userbot_ids: poolIds
         }
       });
-      setPreparation({ id: data.id, status: 'pending', phase_detail: {} });
+      setPreparation({
+        id: data.id,
+        status: 'pending',
+        phase_detail: {},
+        audience_type: audienceType,
+        base_id: apiBaseId,
+        manual_tg_user_ids: manualPayload.tg_user_ids,
+        userbot_ids: poolIds
+      });
       setStep('prepare');
     } catch (error) {
       toast.error(error.message);
@@ -460,8 +479,16 @@ export function BroadcastPage() {
       toast.error('Напиши текст сообщения.');
       return;
     }
-    if (preparation?.status === 'ready' && !baseMatchesPreparation) {
-      toast.error('База изменилась — запусти подготовку заново.');
+    if (!preparation) {
+      toast.error('Сначала прогони подготовку.');
+      return;
+    }
+    if (ACTIVE_PREPARATION_STATUSES.has(preparation.status)) {
+      toast.error('Подготовка ещё идёт — дождись готовности.');
+      return;
+    }
+    if (preparation.status !== 'ready' || !selectionMatchesPreparation) {
+      toast.error('База или юзерботы изменились — запусти подготовку заново.');
       return;
     }
     const confirmed = window.confirm(
@@ -510,10 +537,33 @@ export function BroadcastPage() {
   const eligibleUserbots = state.userbots.filter((row) => row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
   const allSelected = eligibleUserbots.length > 0 && eligibleUserbots.every((row) => poolIds.map(String).includes(String(row.id)));
   const messageEmpty = !form.message_text.trim();
+  const preparationBlocking = !preparation
+    ? 'Сначала прогони подготовку.'
+    : ACTIVE_PREPARATION_STATUSES.has(preparation.status)
+      ? 'Подготовка ещё идёт — вернись на шаг 3.'
+      : preparation.status !== 'ready'
+        ? 'Подготовка не завершена — вернись на шаг 3.'
+        : !selectionMatchesPreparation
+          ? 'База или юзерботы изменились — запусти подготовку заново.'
+          : '';
   const sendDisabled = sending || messageEmpty || !baseSelected || poolIds.length === 0
     || !planRules.canSendBroadcasts
-    || (preparation?.status === 'ready' && !baseMatchesPreparation);
+    || Boolean(preparationBlocking);
   const stepIndex = STEPS.findIndex((item) => item.id === step);
+  let nextAction = null;
+  if (step === 'base') {
+    nextAction = { label: 'Дальше — Юзерботы', onClick: () => setStep('userbots'), disabled: !baseSelected };
+  } else if (step === 'userbots') {
+    nextAction = selectionMatchesPreparation
+      ? { label: 'Дальше — Подготовка', onClick: () => setStep('prepare') }
+      : { label: 'Подготовить', onClick: startPreparation, disabled: preparing || poolIds.length === 0, busy: preparing };
+  } else if (step === 'prepare') {
+    nextAction = {
+      label: 'Дальше — Отправка',
+      onClick: () => setStep('send'),
+      disabled: preparation?.status !== 'ready' || !selectionMatchesPreparation
+    };
+  }
 
   return (
     <section className="page page--flush space-y-6">
@@ -523,7 +573,7 @@ export function BroadcastPage() {
             {STEPS.map((item, i) => {
               const done = i < stepIndex;
               const current = i === stepIndex;
-              const locked = (item.id === 'prepare' || item.id === 'send') && !preparation;
+              const locked = (item.id === 'prepare' || item.id === 'send') && !selectionMatchesPreparation;
               return (
                 <li key={item.id} className="flex items-start flex-1 last:flex-none">
                   <button
@@ -780,26 +830,29 @@ export function BroadcastPage() {
               </div>
               </div>
             )}
-            <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <button type="button" className={`${btnGhost} w-full sm:w-auto`} onClick={() => setStep('base')}>
-                Назад
-              </button>
-              <button
-                type="button"
-                className={`${btnPrimary} w-full sm:w-auto`}
-                disabled={preparing || poolIds.length === 0}
-                onClick={startPreparation}
-              >
-                {preparing ? <><Loader2 className="w-4 h-4 animate-spin" /> Запускаем...</> : 'Подготовить'}
-              </button>
-            </div>
+            {preparation && !selectionMatchesPreparation ? (
+              <div className="mt-4 text-sm text-amber-700 font-medium">
+                Выбор изменился — нужна новая подготовка.
+              </div>
+            ) : null}
           </Section>
         </Card>
       ) : null}
 
       {step === 'prepare' ? (
         preparation ? (
-          <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
+          <>
+            <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
+            {preparation.status === 'ready' && selectionMatchesPreparation ? (
+              <ReadinessDashboard
+                accessToken={accessToken}
+                preparation={preparation}
+                onRecheck={recheckPreparation}
+                onAddGroups={addJoinTargets}
+                busy={sending}
+              />
+            ) : null}
+          </>
         ) : (
           <Card>
             <Section>
@@ -810,20 +863,20 @@ export function BroadcastPage() {
       ) : null}
 
       {step === 'send' ? (
-        preparation?.status === 'ready' ? (
+        preparation?.status === 'ready' && selectionMatchesPreparation ? (
           <ReadinessDashboard
             accessToken={accessToken}
             preparation={preparation}
-            onRecheck={recheckPreparation}
-            onAddGroups={addJoinTargets}
-            busy={sending}
+            readOnly
           />
-        ) : preparation ? (
-          <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
         ) : (
           <Card>
             <Section>
-              <EmptyNote>Сначала прогони подготовку.</EmptyNote>
+              <EmptyNote>
+                {preparation && ACTIVE_PREPARATION_STATUSES.has(preparation.status)
+                  ? 'Подготовка ещё идёт — вернись на шаг 3.'
+                  : 'Сначала прогони подготовку.'}
+              </EmptyNote>
             </Section>
           </Card>
         )
@@ -841,9 +894,9 @@ export function BroadcastPage() {
                 onChange={(e) => setField('message_text', e.target.value)}
                 placeholder="Текст сообщения"
               />
-              {preparation?.status === 'ready' && !baseMatchesPreparation ? (
+              {preparationBlocking ? (
                 <div className="mt-3 text-sm text-amber-700 font-medium">
-                  База изменилась — запусти подготовку заново.
+                  {preparationBlocking}
                 </div>
               ) : null}
               <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -859,14 +912,14 @@ export function BroadcastPage() {
         </>
       ) : null}
 
-      {stepIndex >= 0 && stepIndex < STEPS.length - 1 ? (
+      {nextAction ? (
         <button
           type="button"
-          disabled={((STEPS[stepIndex + 1].id === 'prepare' || STEPS[stepIndex + 1].id === 'send') && !preparation) || (step === 'base' && !baseSelected)}
-          onClick={() => setStep(STEPS[stepIndex + 1].id)}
+          disabled={nextAction.disabled}
+          onClick={nextAction.onClick}
           className="w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-indigo-600 !text-white text-sm font-black hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Дальше — {STEPS[stepIndex + 1].label}
+          {nextAction.busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Запускаем...</> : nextAction.label}
         </button>
       ) : null}
 
