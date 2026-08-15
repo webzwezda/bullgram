@@ -332,7 +332,6 @@ export default function clientBasesRoutes(supabase) {
                     stats.bots += 1;
                     return stats;
                 }
-                stats.total += 1;
                 stats.humans += 1;
                 if (member.payment_status === 'active_paid') stats.active_paid += 1;
                 if (member.payment_status === 'expired_paid' || member.payment_status === 'expired_paid_inside') stats.expired_paid += 1;
