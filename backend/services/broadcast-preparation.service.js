@@ -281,9 +281,8 @@ export class BroadcastPreparationService {
             .from('broadcast_preparations')
             .select('*')
             .eq('id', preparationId);
-        const { data } = ownerId
-            ? query.eq('owner_id', ownerId).maybeSingle()
-            : query.maybeSingle();
+        const request = ownerId ? query.eq('owner_id', ownerId) : query;
+        const { data } = await request.maybeSingle();
         return data || null;
     }
 
