@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { Send, Users, Bot, Radar, MessageSquare, ListChecks, Loader2 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { getProductTierRules } from '../app/productTier.js';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { PlanBanner } from '../ui/PlanBanner.jsx';
-import { StatCard } from '../ui/StatCard.jsx';
 import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 import { ExternalTargetsField } from './broadcast/ExternalTargetsField.jsx';
 import { PreparationRunner } from './broadcast/PreparationRunner.jsx';
 import { ReadinessDashboard } from './broadcast/ReadinessDashboard.jsx';
+import {
+  Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge, StatTile,
+  TableShell, Th, Td, Tr, inputCls, btnPrimary, btnGhost
+} from './broadcast/ui.jsx';
 
 const AUDIENCES = [
   { id: 'channel_audience_members', label: 'Вся база по нескольким группам' },
@@ -383,23 +388,23 @@ export function BroadcastPage() {
 
   async function startPreparation() {
     if (!isPreparable) {
-      window.alert('Для этой аудитории подготовка не нужна — там пишет официальный бот.');
+      toast.error('Для этой аудитории подготовка не нужна — там пишет официальный бот.');
       return;
     }
     if (requiresBase && !form.base_id) {
-      window.alert('Выбери базу.');
+      toast.error('Выбери базу.');
       return;
     }
     if (requiresClientBase && !form.base_id) {
-      window.alert('Выбери базу клиентов.');
+      toast.error('Выбери базу клиентов.');
       return;
     }
     if (requiresManual && !(form.manual_tg_user_ids || []).length) {
-      window.alert('Ручная выборка пустая.');
+      toast.error('Ручная выборка пустая.');
       return;
     }
     if (poolIds.length === 0) {
-      window.alert('Выбери хотя бы одного юзербота.');
+      toast.error('Выбери хотя бы одного юзербота.');
       return;
     }
 
@@ -422,7 +427,7 @@ export function BroadcastPage() {
       setPreparation({ id: data.id, status: 'pending', phase_detail: {} });
       setStep('prepare');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     } finally {
       setPreparing(false);
     }
@@ -435,7 +440,7 @@ export function BroadcastPage() {
       setPreparation(null);
       setStep('pool');
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
@@ -445,7 +450,7 @@ export function BroadcastPage() {
       await apiRequest(`/api/broadcast/preparations/${preparation.id}/recheck`, { accessToken, method: 'POST' });
       setPreparation((prev) => (prev ? { ...prev, status: 'scanning' } : prev));
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
@@ -459,41 +464,41 @@ export function BroadcastPage() {
       });
       setPreparation((prev) => (prev ? { ...prev, status: 'joining' } : prev));
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     }
   }
 
   async function sendCampaign() {
     if (!planRules.canSendBroadcasts) {
-      window.alert(`На ${planRules.label} рассылки закрыты. Здесь можно собрать аудиторию и понять, кого будешь добивать после апгрейда на Normal.`);
+      toast.error(`На ${planRules.label} рассылки закрыты. Здесь можно собрать аудиторию и понять, кого будешь добивать после апгрейда на Normal.`);
       return;
     }
     if (!form.message_text.trim()) {
-      window.alert('Без текста рассылка не поедет.');
+      toast.error('Без текста рассылка не поедет.');
       return;
     }
     if (requiresChannel && !form.channel_id) {
-      window.alert('Выбери канал.');
+      toast.error('Выбери канал.');
       return;
     }
     if (requiresBase && !form.base_id) {
-      window.alert('Выбери базу.');
+      toast.error('Выбери базу.');
       return;
     }
     if (requiresClientBase && !form.base_id) {
-      window.alert('Выбери базу клиентов.');
+      toast.error('Выбери базу клиентов.');
       return;
     }
     if (requiresManual && !(form.manual_tg_user_ids || []).length) {
-      window.alert('Ручная выборка пустая.');
+      toast.error('Ручная выборка пустая.');
       return;
     }
     if (usesUserbot && !usesPool && !form.sender_userbot_id && form.sender_type !== 'official_then_userbot_pool') {
-      window.alert('Выбери юзербота.');
+      toast.error('Выбери юзербота.');
       return;
     }
     if (usesUserbot && usesPool && !(form.sender_userbot_ids || []).length) {
-      window.alert('Выбери хотя бы одного юзербота в пул.');
+      toast.error('Выбери хотя бы одного юзербота в пул.');
       return;
     }
     if (usesUserbot) {
@@ -525,7 +530,7 @@ export function BroadcastPage() {
           manual_confirmed_userbot_risk: usesUserbot ? true : undefined
         }
       });
-      window.alert('Рассылка ушла. Экран сам подтянет результат.');
+      toast.success('Рассылка ушла. Экран сам подтянет результат.');
       const campaigns = await apiRequest('/api/broadcast/campaigns', { accessToken });
       setState((prev) => ({
         ...prev,
@@ -534,7 +539,7 @@ export function BroadcastPage() {
         summary: campaigns.summary || {}
       }));
     } catch (error) {
-      window.alert(error.message);
+      toast.error(error.message);
     } finally {
       setSending(false);
     }
@@ -547,51 +552,64 @@ export function BroadcastPage() {
   const selectedPoolUserbots = state.userbots.filter((row) => poolIds.map(String).includes(String(row.id)));
 
   return (
-    <section className="page">
-      <div className="page__header">
-        <h1>Рассылки</h1>
-        <p>
-          Собери аудиторию, подготовь точки прикосновения через юзерботов и бей по базе, зная заранее, до кого достучишься.
-        </p>
-        <div className="page__meta">
-          <span>{previewing ? 'Считаем аудиторию...' : `Под ударом: ${preview.count}`}</span>
-          <span>Пул: {selectedPoolUserbots.length} юзербот(ов)</span>
-        </div>
-      </div>
-
-      <div className="toolbar-card section">
-        <div className="toolbar-card__body">
-          {STEPS.map((item) => {
-            const disabled = (item.id === 'prepare' || item.id === 'ready') && !preparation;
-            return (
-              <button
-                key={item.id}
-                className={`ghost-button ${step === item.id ? 'ghost-button--primary' : ''}`}
-                disabled={disabled}
-                onClick={() => setStep(item.id)}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-          <button
-            key="direct"
-            className={`ghost-button ${step === 'direct' ? 'ghost-button--primary' : ''}`}
-            onClick={() => setStep('direct')}
-          >
-            Без подготовки
-          </button>
-        </div>
-        {step !== 'direct' ? (
-          <div className="toolbar-card__hint">
-            {isPreparable
-              ? 'Мастер: база → пул юзерботов → подготовка → отправка.'
-              : 'Эта аудитория живет в подписках — официальный бот знает этих людей, подготовка не нужна.'}
+    <section className="page page--flush space-y-6">
+      <Card>
+        <Section>
+          <SectionTitle icon={Send}>Рассылки</SectionTitle>
+          <p className="text-sm text-slate-500 font-medium max-w-2xl mb-4">
+            Собери аудиторию, подготовь точки прикосновения через юзерботов и бей по базе, зная заранее, до кого достучишься.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
+              <Users className="w-3.5 h-3.5" />
+              {previewing ? 'Считаем аудиторию...' : `Под ударом: ${preview.count}`}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
+              <Bot className="w-3.5 h-3.5" />
+              Пул: {selectedPoolUserbots.length} юзербот(ов)
+            </span>
           </div>
-        ) : (
-          <div className="toolbar-card__hint">Старый путь: сразу форма отправки без матрицы достижимости.</div>
-        )}
-      </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {STEPS.map((item) => {
+              const disabled = (item.id === 'prepare' || item.id === 'ready') && !preparation;
+              const active = step === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setStep(item.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                    active
+                      ? 'bg-slate-900 !text-white'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setStep('direct')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                step === 'direct'
+                  ? 'bg-slate-900 !text-white'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              Без подготовки
+            </button>
+          </div>
+          <div className="mt-3 text-xs text-slate-400 font-medium">
+            {step !== 'direct'
+              ? (isPreparable
+                  ? 'Мастер: база → пул юзерботов → подготовка → отправка.'
+                  : 'Эта аудитория живет в подписках — официальный бот знает этих людей, подготовка не нужна.')
+              : 'Старый путь: сразу форма отправки без матрицы достижимости.'}
+          </div>
+        </Section>
+      </Card>
 
       {!planRules.canSendBroadcasts ? (
         <>
@@ -609,153 +627,171 @@ export function BroadcastPage() {
         </>
       ) : null}
 
-      {state.error ? <div className="error-card">{state.error}</div> : null}
+      {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
 
       {step === 'audience' ? (
         <>
-          <div className="toolbar-card section">
-            <div className="toolbar-card__title">Собери аудиторию</div>
-            <div className="toolbar-card__body">
-              <input className="field" type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название кампании" />
-              <select className="field" value={form.audience_type} onChange={(e) => setField('audience_type', e.target.value)}>
-                {AUDIENCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
-              {requiresChannel ? (
-                <select className="field" value={form.channel_id} onChange={(e) => setField('channel_id', e.target.value)}>
-                  <option value="">Выбери канал</option>
-                  {state.channels.map((row) => <option key={row.id} value={row.id}>{row.title}</option>)}
+          <Card>
+            <Section>
+              <SectionTitle icon={Users}>Собери аудиторию</SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название кампании" />
+                <select className={inputCls} value={form.audience_type} onChange={(e) => setField('audience_type', e.target.value)}>
+                  {AUDIENCES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
                 </select>
-              ) : null}
-              {requiresBase ? (
-                <>
-                  <select className="field" value={form.base_id} onChange={(e) => setField('base_id', e.target.value)}>
-                    <option value="">Выбери базу</option>
-                    {state.bases.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                {requiresChannel ? (
+                  <select className={inputCls} value={form.channel_id} onChange={(e) => setField('channel_id', e.target.value)}>
+                    <option value="">Выбери канал</option>
+                    {state.channels.map((row) => <option key={row.id} value={row.id}>{row.title}</option>)}
                   </select>
-                  <select className="field" value={form.base_filter} onChange={(e) => setField('base_filter', e.target.value)}>
-                    <option value="all_members">Вся база</option>
-                    <option value="partial_only">Есть только в части базы</option>
-                    <option value="present_only">Только найденные сейчас</option>
-                    <option value="missing_only">Только пропавшие</option>
-                    <option value="multi_channel_only">Есть сразу в нескольких местах</option>
+                ) : null}
+                {requiresBase ? (
+                  <>
+                    <select className={inputCls} value={form.base_id} onChange={(e) => setField('base_id', e.target.value)}>
+                      <option value="">Выбери базу</option>
+                      {state.bases.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                    </select>
+                    <select className={inputCls} value={form.base_filter} onChange={(e) => setField('base_filter', e.target.value)}>
+                      <option value="all_members">Вся база</option>
+                      <option value="partial_only">Есть только в части базы</option>
+                      <option value="present_only">Только найденные сейчас</option>
+                      <option value="missing_only">Только пропавшие</option>
+                      <option value="multi_channel_only">Есть сразу в нескольких местах</option>
+                    </select>
+                  </>
+                ) : null}
+                {requiresClientBase ? (
+                  <select className={inputCls} value={form.base_id} onChange={(e) => setField('base_id', e.target.value)}>
+                    <option value="">Выбери базу клиентов</option>
+                    {state.clientBases.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.name}{row.stats?.total ? ` • ${row.stats.total} чел.` : ''}
+                      </option>
+                    ))}
                   </select>
-                </>
-              ) : null}
-              {requiresClientBase ? (
-                <select className="field" value={form.base_id} onChange={(e) => setField('base_id', e.target.value)}>
-                  <option value="">Выбери базу клиентов</option>
-                  {state.clientBases.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.name}{row.stats?.total ? ` • ${row.stats.total} чел.` : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-            <div className="toolbar-card__hint">{audienceHint(form.audience_type)}</div>
-            {requiresManual ? (
-              <div className="toolbar-card__body">
-                <button className="ghost-button" onClick={clearManualSelection}>Очистить ручную выборку</button>
+                ) : null}
               </div>
-            ) : null}
-            <div className="toolbar-card__body">
-              <button className="ghost-button ghost-button--primary" onClick={() => setStep(isPreparable ? 'pool' : 'direct')}>
-                Дальше
-              </button>
-            </div>
-          </div>
+              <div className="mt-3 text-sm text-slate-500 font-medium">{audienceHint(form.audience_type)}</div>
+              {requiresManual ? (
+                <div className="mt-4">
+                  <button type="button" className={btnGhost} onClick={clearManualSelection}>Очистить ручную выборку</button>
+                </div>
+              ) : null}
+              <div className="mt-5">
+                <button type="button" className={btnPrimary} onClick={() => setStep(isPreparable ? 'pool' : 'direct')}>
+                  Дальше
+                </button>
+              </div>
+            </Section>
+          </Card>
 
-          <div className="table-card section">
-            <div className="table-card__title">Кто сейчас попадет под удар</div>
-            {!preview.rows.length ? (
-              <div className="empty-inline">Тут пока пусто. Или аудитория нулевая, или надо выбрать канал/базу.</div>
-            ) : (
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Клиент</th>
-                    <th>Канал</th>
-                    <th>Сегмент</th>
-                    <th>Источник</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.map((row) => (
-                    <tr key={`${row.tg_user_id}-${row.channel_id || 'global'}`}>
-                      <td>
-                        <div>{previewClientLabel(row)}</div>
-                        <div className="table-subtext">{row.tg_user_id}</div>
-                      </td>
-                      <td>{row.channel_title}</td>
-                      <td>{row.segment_label || (row.is_trial ? 'Пробник' : 'Обычный')}</td>
-                      <td>{row.source_type}</td>
+          <Card>
+            <Section>
+              <SectionTitle icon={ListChecks}>Кто сейчас попадет под удар</SectionTitle>
+              {!preview.rows.length ? (
+                <EmptyNote>Тут пока пусто. Или аудитория нулевая, или надо выбрать канал/базу.</EmptyNote>
+              ) : (
+                <TableShell>
+                  <thead>
+                    <tr>
+                      <Th>Клиент</Th>
+                      <Th>Канал</Th>
+                      <Th>Сегмент</Th>
+                      <Th>Источник</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((row) => (
+                      <Tr key={`${row.tg_user_id}-${row.channel_id || 'global'}`}>
+                        <Td>
+                          <div className="text-sm font-bold text-slate-900">{previewClientLabel(row)}</div>
+                          <div className="text-xs text-slate-500 font-mono">{row.tg_user_id}</div>
+                        </Td>
+                        <Td><div className="text-sm font-medium text-slate-700">{row.channel_title}</div></Td>
+                        <Td><div className="text-xs font-black uppercase tracking-wider text-slate-500">{row.segment_label || (row.is_trial ? 'Пробник' : 'Обычный')}</div></Td>
+                        <Td><div className="text-xs text-slate-500 font-mono">{row.source_type}</div></Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </TableShell>
+              )}
+            </Section>
+          </Card>
         </>
       ) : null}
 
       {step === 'pool' ? (
         <>
-          <div className="toolbar-card section">
-            <div className="toolbar-card__title">Пул юзерботов</div>
-            <div className="toolbar-card__hint">
-              Выбери, от чьего имени будем готовить точки прикосновения. Safe-mode и сдохшие прокси не попадут в подготовку.
-            </div>
-            {state.userbots.length === 0 ? (
-              <div className="empty-inline">Нет живых юзерботов. Подключи аккаунты на /app/userbots.</div>
-            ) : (
-              <div className="list-stack">
-                {state.userbots.map((row) => {
-                  const safeMode = row.runtime_status === 'pending_activation';
-                  const deadProxy = row.proxy_id && row.proxies?.is_working === false;
-                  const checked = poolIds.map(String).includes(String(row.id));
-                  return (
-                    <label key={row.id} className="list-item" style={{ cursor: safeMode || deadProxy ? 'not-allowed' : 'pointer', opacity: safeMode || deadProxy ? 0.55 : 1 }}>
-                      <div className="list-item__head">
-                        <div className="list-item__title">@{row.tg_username || row.tg_account_id}</div>
+          <Card>
+            <Section>
+              <SectionTitle icon={Bot}>Пул юзерботов</SectionTitle>
+              <div className="text-sm text-slate-500 font-medium mb-4">
+                Выбери, от чьего имени будем готовить точки прикосновения. Safe-mode и сдохшие прокси не попадут в подготовку.
+              </div>
+              {state.userbots.length === 0 ? (
+                <EmptyNote>Нет живых юзерботов. Подключи аккаунты на /app/userbots.</EmptyNote>
+              ) : (
+                <div className="space-y-2">
+                  {state.userbots.map((row) => {
+                    const safeMode = row.runtime_status === 'pending_activation';
+                    const deadProxy = row.proxy_id && row.proxies?.is_working === false;
+                    const checked = poolIds.map(String).includes(String(row.id));
+                    return (
+                      <label
+                        key={row.id}
+                        className={`flex items-center justify-between gap-3 p-4 rounded-2xl border transition-all ${
+                          checked ? 'border-slate-900 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                        } ${safeMode || deadProxy ? 'opacity-55 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-slate-900 truncate">@{row.tg_username || row.tg_account_id}</div>
+                          <div className="text-xs text-slate-500 font-medium mt-0.5 flex flex-wrap items-center gap-2">
+                            {safeMode ? <StatusBadge tone="warning">safe-mode: активируй вручную</StatusBadge> : null}
+                            {deadProxy ? <StatusBadge tone="danger">прокси сдох</StatusBadge> : null}
+                            {!safeMode && !deadProxy ? (
+                              <span>
+                                {row.proxies?.host ? `${row.proxies.host}:${row.proxies.port}` : 'Прокси не найден'}
+                                {row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
                         <input
                           type="checkbox"
+                          className="w-4 h-4 accent-slate-900 shrink-0"
                           disabled={safeMode || deadProxy}
                           checked={checked}
                           onChange={() => togglePoolUserbot(row.id)}
                         />
-                      </div>
-                      <div className="list-item__meta">
-                        {safeMode ? 'safe-mode: активируй вручную' : null}
-                        {deadProxy ? 'прокси сдох' : null}
-                        {!safeMode && !deadProxy
-                          ? `${row.proxies?.host ? `${row.proxies.host}:${row.proxies.port}` : 'Прокси не найден'}${row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}`
-                          : null}
-                      </div>
-                    </label>
-                  );
-                })}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-5">
+                <button
+                  type="button"
+                  className={btnPrimary}
+                  disabled={preparing || poolIds.length === 0}
+                  onClick={startPreparation}
+                >
+                  {preparing ? <><Loader2 className="w-4 h-4 animate-spin" /> Запускаем...</> : 'Подготовиться к рассылке'}
+                </button>
               </div>
-            )}
-            <div className="toolbar-card__body">
-              <button
-                className="ghost-button ghost-button--primary"
-                disabled={preparing || poolIds.length === 0}
-                onClick={startPreparation}
-              >
-                {preparing ? 'Запускаем...' : 'Подготовиться к рассылке'}
-              </button>
-            </div>
-          </div>
+            </Section>
+          </Card>
 
           {state.flags.auto_join_enabled ? (
             <ExternalTargetsField value={externalTargetsText} onChange={setExternalTargetsText} disabled={preparing} />
           ) : (
-            <div className="toolbar-card section">
-              <div className="toolbar-card__title">Сторонние группы</div>
-              <div className="toolbar-card__hint">
-                Автовступление выключено (USERBOT_AUTO_JOIN_ENABLED). Подготовка посчитает точки по текущим чатам и диалогам юзерботов.
-              </div>
-            </div>
+            <Card>
+              <Section>
+                <SectionTitle icon={Radar}>Сторонние группы</SectionTitle>
+                <EmptyNote>
+                  Автовступление выключено (USERBOT_AUTO_JOIN_ENABLED). Подготовка посчитает точки по текущим чатам и диалогам юзерботов.
+                </EmptyNote>
+              </Section>
+            </Card>
           )}
         </>
       ) : null}
@@ -764,7 +800,11 @@ export function BroadcastPage() {
         preparation ? (
           <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
         ) : (
-          <div className="empty-inline">Активной подготовки нет. Вернись к пулу юзерботов и запусти.</div>
+          <Card>
+            <Section>
+              <EmptyNote>Активной подготовки нет. Вернись к пулу юзерботов и запусти.</EmptyNote>
+            </Section>
+          </Card>
         )
       ) : null}
 
@@ -781,163 +821,186 @@ export function BroadcastPage() {
         ) : preparation ? (
           <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
         ) : (
-          <div className="empty-inline">Сначала прогони подготовку.</div>
+          <Card>
+            <Section>
+              <EmptyNote>Сначала прогони подготовку.</EmptyNote>
+            </Section>
+          </Card>
         )
       ) : null}
 
       {(step === 'ready' || step === 'direct') ? (
         <>
-          <div className="toolbar-card section">
-            <div className="toolbar-card__title">Сообщение</div>
-            <div className="toolbar-card__body">
+          <Card>
+            <Section>
+              <SectionTitle icon={MessageSquare}>Сообщение</SectionTitle>
               <textarea
-                className="field"
+                className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-400 shadow-sm transition resize-none min-h-[160px]"
                 rows="8"
                 value={form.message_text}
                 onChange={(e) => setField('message_text', e.target.value)}
                 placeholder="Пиши как будто реально хочешь вернуть человека или дотащить его до оплаты."
               />
-            </div>
-          </div>
+            </Section>
+          </Card>
 
-          <div className="toolbar-card section">
-            <div className="toolbar-card__title">Кто пишет людям</div>
-            <div className="toolbar-card__body">
-              <select className="field" value={form.sender_type} onChange={(e) => setField('sender_type', e.target.value)}>
-                <option value="official_only">Только официальный бот</option>
-                <option value="official_then_userbot_pool">Официальный бот, если не пробьет — пул юзерботов</option>
-                <option value="userbot_pool_round_robin">Пул юзерботов по кругу</option>
-                <option value="userbot_only">Только один выбранный юзербот</option>
-              </select>
-              {!usesPool && usesUserbot ? (
-                <select className="field" value={form.sender_userbot_id} onChange={(e) => setField('sender_userbot_id', e.target.value)}>
-                  <option value="">Выбери юзербота</option>
-                  {state.userbots.map((row) => (
-                    <option key={row.id} value={row.id}>
-                      @{row.tg_username || row.tg_account_id}{row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}
-                    </option>
-                  ))}
+          <Card>
+            <Section>
+              <SectionTitle icon={Bot}>Кто пишет людям</SectionTitle>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select className={inputCls} value={form.sender_type} onChange={(e) => setField('sender_type', e.target.value)}>
+                  <option value="official_only">Только официальный бот</option>
+                  <option value="official_then_userbot_pool">Официальный бот, если не пробьет — пул юзерботов</option>
+                  <option value="userbot_pool_round_robin">Пул юзерботов по кругу</option>
+                  <option value="userbot_only">Только один выбранный юзербот</option>
                 </select>
+                {!usesPool && usesUserbot ? (
+                  <select className={inputCls} value={form.sender_userbot_id} onChange={(e) => setField('sender_userbot_id', e.target.value)}>
+                    <option value="">Выбери юзербота</option>
+                    {state.userbots.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        @{row.tg_username || row.tg_account_id}{row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                <input
+                  className={inputCls}
+                  type="number"
+                  min={usesUserbot ? '5000' : '0'}
+                  max="30000"
+                  step="250"
+                  value={form.delay_ms}
+                  onChange={(e) => setField('delay_ms', e.target.value)}
+                  placeholder="Пауза, мс"
+                />
+              </div>
+              {usesPool ? (
+                <div className="space-y-2 mt-4">
+                  {state.userbots.map((row) => {
+                    const checked = (form.sender_userbot_ids || []).map(String).includes(String(row.id));
+                    return (
+                      <label
+                        key={row.id}
+                        className={`flex items-center justify-between gap-3 p-4 rounded-2xl border transition-all cursor-pointer ${
+                          checked ? 'border-slate-900 bg-slate-50' : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-black text-slate-900 truncate">@{row.tg_username || row.tg_account_id}</div>
+                          <div className="text-xs text-slate-500 font-medium mt-0.5">
+                            {row.proxies?.host ? `${row.proxies.host}:${row.proxies.port}` : 'Прокси не найден'}
+                            {row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-slate-900 shrink-0"
+                          checked={checked}
+                          onChange={() => togglePoolUserbot(row.id)}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
               ) : null}
-              <input
-                className="field"
-                type="number"
-                min={usesUserbot ? '5000' : '0'}
-                max="30000"
-                step="250"
-                value={form.delay_ms}
-                onChange={(e) => setField('delay_ms', e.target.value)}
-                placeholder="Пауза, мс"
-              />
-            </div>
-            {usesPool ? (
-              <div className="list-stack">
-                {state.userbots.map((row) => (
-                  <label key={row.id} className="list-item" style={{ cursor: 'pointer' }}>
-                    <div className="list-item__head">
-                      <div className="list-item__title">@{row.tg_username || row.tg_account_id}</div>
-                      <input type="checkbox" checked={(form.sender_userbot_ids || []).map(String).includes(String(row.id))} onChange={() => togglePoolUserbot(row.id)} />
-                    </div>
-                    <div className="list-item__meta">
-                      {row.proxies?.host ? `${row.proxies.host}:${row.proxies.port}` : 'Прокси не найден'}
-                      {row.proxies?.last_check_country ? ` • ${row.proxies.last_check_country}` : ''}
-                    </div>
-                  </label>
-                ))}
+              <div className="mt-4 text-xs text-slate-400 font-medium">
+                Safe-first: по умолчанию шлет официальный бот. Юзербот-режимы — для ручного дожима теплого хвоста.
               </div>
-            ) : null}
-            <div className="toolbar-card__hint">
-              Safe-first: по умолчанию шлет официальный бот. Юзербот-режимы — для ручного дожима теплого хвоста.
-            </div>
-            {usesUserbot ? (
-              <div className="toolbar-card__hint" style={{ color: '#b45309' }}>
-                Рискованный режим: Telegram может ограничить sender-аккаунт. Пиши тем, кого юзербот уже знает или с кем в общем чате.
+              {usesUserbot ? (
+                <div className="mt-3 p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-sm text-amber-800 font-medium">
+                  Рискованный режим: Telegram может ограничить sender-аккаунт. Пиши тем, кого юзербот уже знает или с кем в общем чате.
+                </div>
+              ) : null}
+              {preparation?.status === 'ready' ? (
+                <div className="mt-3 p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-sm text-emerald-800 font-medium">
+                  Всё готово к рассылке: отправка пойдет по матрице достижимости, каждому — через юзербота, который его знает.
+                </div>
+              ) : null}
+              <div className="mt-5">
+                <button type="button" className={btnPrimary} onClick={sendCampaign} disabled={sending || preview.count === 0}>
+                  {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Шлем...</> : !planRules.canSendBroadcasts ? 'Нужен Normal' : 'Пульнуть рассылку'}
+                </button>
               </div>
-            ) : null}
-            {preparation?.status === 'ready' ? (
-              <div className="toolbar-card__hint" style={{ color: '#15803d' }}>
-                Всё готово к рассылке: отправка пойдет по матрице достижимости, каждому — через юзербота, который его знает.
-              </div>
-            ) : null}
-            <div className="toolbar-card__body">
-              <button className="ghost-button ghost-button--primary" onClick={sendCampaign} disabled={sending || preview.count === 0}>
-                {sending ? 'Шлем...' : !planRules.canSendBroadcasts ? 'Нужен Normal' : 'Пульнуть рассылку'}
-              </button>
-            </div>
-          </div>
+            </Section>
+          </Card>
         </>
       ) : null}
 
-      <div className="grid section">
-        <StatCard title="Всего кампаний" value={state.summary.totalCampaigns || 0} hint="Все рассылки по текущему владельцу." />
-        <StatCard title="Ушли нормально" value={state.summary.sentCampaigns || 0} hint="Кампании без ошибок." tone="ok" />
-        <StatCard title="С косяками" value={state.summary.partialCampaigns || 0} hint="Есть хвост недоставки." tone={(state.summary.partialCampaigns || 0) > 0 ? 'warning' : 'default'} />
-        <StatCard title="Сообщений дошло" value={state.summary.totalSent || 0} hint="Суммарная доставка." />
-        <StatCard title="Не достучались" value={state.summary.totalFailed || 0} hint="Главный хвост на ручную добивку." tone={(state.summary.totalFailed || 0) > 0 ? 'danger' : 'default'} />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatTile label="Всего кампаний" value={state.summary.totalCampaigns || 0} hint="Все рассылки по текущему владельцу." />
+        <StatTile label="Ушли нормально" value={state.summary.sentCampaigns || 0} hint="Кампании без ошибок." tone="ok" />
+        <StatTile label="С косяками" value={state.summary.partialCampaigns || 0} hint="Есть хвост недоставки." tone={(state.summary.partialCampaigns || 0) > 0 ? 'warning' : 'default'} />
+        <StatTile label="Сообщений дошло" value={state.summary.totalSent || 0} hint="Суммарная доставка." />
+        <StatTile label="Не достучались" value={state.summary.totalFailed || 0} hint="Главный хвост на ручную добивку." tone={(state.summary.totalFailed || 0) > 0 ? 'danger' : 'default'} />
       </div>
 
-      <div className="grid grid--double section">
-        <div className="table-card">
-          <div className="table-card__title">Последние рассылки</div>
-          {state.campaigns.length === 0 ? (
-            <div className="empty-inline">Рассылок еще не было.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Дата</th>
-                  <th>Название</th>
-                  <th>Аудитория</th>
-                  <th>Кто слал</th>
-                  <th>Статус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.campaigns.slice(0, 20).map((campaign) => (
-                  <tr key={campaign.id}>
-                    <td>{formatWhen(campaign.created_at)}</td>
-                    <td>{campaign.title}</td>
-                    <td>{campaign.audience_type}</td>
-                    <td>{senderLabel(campaign)}</td>
-                    <td>
-                      <span className={campaign.status === 'sent' ? 'pill pill--ok' : campaign.status === 'completed_with_errors' ? 'pill pill--warning' : 'pill'}>
-                        {campaign.status}
-                      </span>
-                    </td>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <Section>
+            <SectionTitle icon={ListChecks}>Последние рассылки</SectionTitle>
+            {state.campaigns.length === 0 ? (
+              <EmptyNote>Рассылок еще не было.</EmptyNote>
+            ) : (
+              <TableShell>
+                <thead>
+                  <tr>
+                    <Th>Дата</Th>
+                    <Th>Название</Th>
+                    <Th>Аудитория</Th>
+                    <Th>Кто слал</Th>
+                    <Th>Статус</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {state.campaigns.slice(0, 20).map((campaign) => (
+                    <Tr key={campaign.id}>
+                      <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(campaign.created_at)}</div></Td>
+                      <Td><div className="text-sm font-bold text-slate-900">{campaign.title}</div></Td>
+                      <Td><div className="text-xs text-slate-500 font-mono">{campaign.audience_type}</div></Td>
+                      <Td><div className="text-xs text-slate-600 font-medium">{senderLabel(campaign)}</div></Td>
+                      <Td>
+                        <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
+                          {campaign.status}
+                        </StatusBadge>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            )}
+          </Section>
+        </Card>
 
-        <div className="table-card">
-          <div className="table-card__title">Куда не пробились</div>
-          {state.failures.length === 0 ? (
-            <div className="empty-inline">По последним кампаниям фейлов не видно.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Дата</th>
-                  <th>TG ID</th>
-                  <th>Кампания</th>
-                  <th>Ошибка</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.failures.slice(0, 20).map((row) => (
-                  <tr key={row.id}>
-                    <td>{formatWhen(row.created_at)}</td>
-                    <td>{row.tg_user_id}</td>
-                    <td>{row.campaign_id}</td>
-                    <td>{row.error_text || 'Без текста ошибки'}</td>
+        <Card>
+          <Section>
+            <SectionTitle icon={MessageSquare}>Куда не пробились</SectionTitle>
+            {state.failures.length === 0 ? (
+              <EmptyNote>По последним кампаниям фейлов не видно.</EmptyNote>
+            ) : (
+              <TableShell>
+                <thead>
+                  <tr>
+                    <Th>Дата</Th>
+                    <Th>TG ID</Th>
+                    <Th>Кампания</Th>
+                    <Th>Ошибка</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {state.failures.slice(0, 20).map((row) => (
+                    <Tr key={row.id}>
+                      <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(row.created_at)}</div></Td>
+                      <Td><div className="text-xs text-slate-600 font-mono">{row.tg_user_id}</div></Td>
+                      <Td><div className="text-xs text-slate-400 font-mono">{row.campaign_id?.slice(0, 8)}</div></Td>
+                      <Td><div className="text-xs text-rose-600 font-medium">{row.error_text || 'Без текста ошибки'}</div></Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </TableShell>
+            )}
+          </Section>
+        </Card>
       </div>
     </section>
   );

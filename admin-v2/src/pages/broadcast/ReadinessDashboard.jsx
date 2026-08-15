@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ShieldCheck, Bot, UserX, RefreshCw, Plus } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
-import { StatCard } from '../../ui/StatCard.jsx';
+import { Card, Section, SectionTitle, EmptyNote, StatTile, TableShell, Th, Td, Tr, btnGhost, btnPrimary, inputCls } from './ui.jsx';
 
 const PAGE_SIZE = 25;
 
@@ -49,94 +50,98 @@ export function ReadinessDashboard({ accessToken, preparation, userbots, onReche
 
   return (
     <>
-      <div className="grid section">
-        <StatCard title="Достигнем точно" value={stats.confirmed || 0} hint="Есть диалог, контакт в кэше или access hash." tone="ok" />
-        <StatCard title="Скорее всего достучимся" value={stats.probable || 0} hint="Только общий чат — приватность может зарезать." tone={(stats.probable || 0) > 0 ? 'warning' : 'default'} />
-        <StatCard title="Не достучимся" value={stats.unreachable || 0} hint="Нет ни одной точки прикосновения." tone={(stats.unreachable || 0) > 0 ? 'danger' : 'default'} />
-        <StatCard title="Покрытие" value={`${stats.coverage_pct || 0}%`} hint={`Из ${stats.total || 0} человек в базе.`} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile label="Достигнем точно" value={stats.confirmed || 0} hint="Есть диалог, контакт в кэше или access hash." tone="ok" />
+        <StatTile label="Скорее всего" value={stats.probable || 0} hint="Только общий чат — приватность может зарезать." tone={(stats.probable || 0) > 0 ? 'warning' : 'default'} />
+        <StatTile label="Не достучимся" value={stats.unreachable || 0} hint="Нет ни одной точки прикосновения." tone={(stats.unreachable || 0) > 0 ? 'danger' : 'default'} />
+        <StatTile label="Покрытие" value={`${stats.coverage_pct || 0}%`} hint={`Из ${stats.total || 0} человек в базе.`} />
       </div>
 
       {userbotEntries.length > 0 ? (
-        <div className="table-card section">
-          <div className="table-card__title">Кому сколько людей доступно</div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Юзербот</th>
-                <th>Доступных людей</th>
-              </tr>
-            </thead>
-            <tbody>
-              {userbotEntries.map(([userbotId, count]) => (
-                <tr key={userbotId}>
-                  <td>{userbotLabel(userbotId, userbots)}</td>
-                  <td>{count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      <div className="table-card section">
-        <div className="table-card__title">
-          Кого не достанем ({unreachable.total})
-        </div>
-        {unreachable.total === 0 ? (
-          <div className="empty-inline">Пробелов нет — база покрыта целиком.</div>
-        ) : (
-          <>
-            <table className="table">
+        <Card>
+          <Section>
+            <SectionTitle icon={Bot}>Кому сколько людей доступно</SectionTitle>
+            <TableShell>
               <thead>
                 <tr>
-                  <th>Человек</th>
-                  <th>TG ID</th>
+                  <Th>Юзербот</Th>
+                  <Th>Доступных людей</Th>
                 </tr>
               </thead>
               <tbody>
-                {unreachable.members.map((member) => (
-                  <tr key={member.tg_user_id}>
-                    <td>{memberLabel(member)}</td>
-                    <td>{member.tg_user_id}</td>
-                  </tr>
+                {userbotEntries.map(([userbotId, count]) => (
+                  <Tr key={userbotId}>
+                    <Td><div className="text-sm font-bold text-slate-900">{userbotLabel(userbotId, userbots)}</div></Td>
+                    <Td><div className="text-sm font-black text-slate-900">{count}</div></Td>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
-            <div className="toolbar-card__body">
-              {unreachable.offset > 0 ? (
-                <button className="ghost-button" disabled={unreachable.loading} onClick={() => loadUnreachable(Math.max(unreachable.offset - PAGE_SIZE, 0))}>
-                  Назад
-                </button>
-              ) : null}
-              {unreachable.offset + PAGE_SIZE < unreachable.total ? (
-                <button className="ghost-button" disabled={unreachable.loading} onClick={() => loadUnreachable(unreachable.offset + PAGE_SIZE)}>
-                  Дальше
-                </button>
-              ) : null}
-            </div>
-          </>
-        )}
-        <div className="toolbar-card__body">
-          <button className="ghost-button" disabled={busy} onClick={onRecheck}>Проверить снова</button>
-          <button className="ghost-button" disabled={busy} onClick={() => setShowAddGroups((prev) => !prev)}>
-            Добавить группы
-          </button>
-        </div>
-        {showAddGroups ? (
-          <div className="toolbar-card__body" style={{ flexDirection: 'column', gap: '8px' }}>
-            <textarea
-              className="field"
-              rows="3"
-              value={targetsText}
-              onChange={(e) => setTargetsText(e.target.value)}
-              placeholder={'@group\nhttps://t.me/+AbCdEf...\nПо одной группе на строку'}
-            />
-            <button className="ghost-button ghost-button--primary" disabled={busy || !targetsText.trim()} onClick={submitTargets}>
-              Вступиться и пересчитать
+            </TableShell>
+          </Section>
+        </Card>
+      ) : null}
+
+      <Card>
+        <Section>
+          <SectionTitle icon={UserX}>Кого не достанем ({unreachable.total})</SectionTitle>
+          {unreachable.total === 0 ? (
+            <EmptyNote>Пробелов нет — база покрыта целиком.</EmptyNote>
+          ) : (
+            <>
+              <TableShell>
+                <thead>
+                  <tr>
+                    <Th>Человек</Th>
+                    <Th>TG ID</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unreachable.members.map((member) => (
+                    <Tr key={member.tg_user_id}>
+                      <Td><div className="text-sm font-bold text-slate-900">{memberLabel(member)}</div></Td>
+                      <Td><div className="text-xs text-slate-500 font-mono">{member.tg_user_id}</div></Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </TableShell>
+              <div className="flex items-center gap-2 mt-4">
+                {unreachable.offset > 0 ? (
+                  <button type="button" className={btnGhost} disabled={unreachable.loading} onClick={() => loadUnreachable(Math.max(unreachable.offset - PAGE_SIZE, 0))}>
+                    Назад
+                  </button>
+                ) : null}
+                {unreachable.offset + PAGE_SIZE < unreachable.total ? (
+                  <button type="button" className={btnGhost} disabled={unreachable.loading} onClick={() => loadUnreachable(unreachable.offset + PAGE_SIZE)}>
+                    Дальше
+                  </button>
+                ) : null}
+              </div>
+            </>
+          )}
+          <div className="flex flex-wrap items-center gap-2 mt-5">
+            <button type="button" className={btnGhost} disabled={busy} onClick={onRecheck}>
+              <RefreshCw className="w-4 h-4" /> Проверить снова
+            </button>
+            <button type="button" className={btnGhost} disabled={busy} onClick={() => setShowAddGroups((prev) => !prev)}>
+              <Plus className="w-4 h-4" /> Добавить группы
             </button>
           </div>
-        ) : null}
-      </div>
+          {showAddGroups ? (
+            <div className="mt-4 space-y-3">
+              <textarea
+                className={`${inputCls} resize-none min-h-[90px] font-medium`}
+                rows="3"
+                value={targetsText}
+                onChange={(e) => setTargetsText(e.target.value)}
+                placeholder={'@group\nhttps://t.me/+AbCdEf...\nПо одной группе на строку'}
+              />
+              <button type="button" className={btnPrimary} disabled={busy || !targetsText.trim()} onClick={submitTargets}>
+                Вступиться и пересчитать
+              </button>
+            </div>
+          ) : null}
+        </Section>
+      </Card>
     </>
   );
 }
