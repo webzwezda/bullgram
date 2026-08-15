@@ -568,6 +568,11 @@ export function BroadcastPage() {
                 Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
               </div>
             ) : null}
+            <div className="mt-5">
+              <button type="button" className={btnPrimary} disabled={!baseSelected} onClick={() => setStep('userbots')}>
+                Дальше — выбрать юзерботов
+              </button>
+            </div>
             {form.base.startsWith('client:') ? (
               members.loading ? (
                 <div className="mt-4"><EmptyNote>Грузим состав базы...</EmptyNote></div>
@@ -628,11 +633,6 @@ export function BroadcastPage() {
                 Ручная выборка: {manual.tg_user_ids.length} человек.
               </div>
             ) : null}
-            <div className="mt-5">
-              <button type="button" className={btnPrimary} disabled={!baseSelected} onClick={() => setStep('userbots')}>
-                Дальше
-              </button>
-            </div>
           </Section>
         </Card>
       ) : null}
