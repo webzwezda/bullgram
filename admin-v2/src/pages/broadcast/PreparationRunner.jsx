@@ -3,9 +3,9 @@ import { Card, Section, SectionTitle, StatusBadge } from './ui.jsx';
 
 const STATUS_LABELS = {
   pending: 'В очереди',
-  scanning: 'Сканируем диалоги юзерботов',
+  scanning: 'Сканируем диалоги',
   joining: 'Вступаем в группы',
-  recomputing: 'Пересчитываем достижимость',
+  recomputing: 'Пересчитываем покрытие',
   ready: 'Готово',
   failed: 'Ошибка',
   cancelled: 'Отменено'
@@ -30,7 +30,7 @@ export function PreparationRunner({ preparation, onCancel }) {
             </StatusBadge>
           }
         >
-          Подготовка рассылки
+          Подготовка
         </SectionTitle>
 
         <div className="space-y-3">

@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck, Bot, UserX, RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw, Plus } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
 import { Card, Section, SectionTitle, EmptyNote, StatTile, TableShell, Th, Td, Tr, btnGhost, btnPrimary, inputCls } from './ui.jsx';
 
 const PAGE_SIZE = 25;
-
-function userbotLabel(userbotId, userbots) {
-  const found = userbots.find((row) => String(row.id) === String(userbotId));
-  return found ? `@${found.tg_username || found.tg_account_id}` : userbotId;
-}
 
 function memberLabel(member) {
   if (member.username) return `@${member.username}`;
@@ -16,10 +11,10 @@ function memberLabel(member) {
   return `TG ID ${member.tg_user_id}`;
 }
 
-export function ReadinessDashboard({ accessToken, preparation, userbots, onRecheck, onAddGroups, busy }) {
+export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddGroups, busy }) {
   const stats = preparation?.stats || {};
-  const perUserbot = stats.per_userbot || {};
   const [unreachable, setUnreachable] = useState({ members: [], total: 0, offset: 0, loading: false });
+  const [showUnreachable, setShowUnreachable] = useState(false);
   const [targetsText, setTargetsText] = useState('');
   const [showAddGroups, setShowAddGroups] = useState(false);
 
@@ -35,8 +30,10 @@ export function ReadinessDashboard({ accessToken, preparation, userbots, onReche
   }, [accessToken, preparation?.id]);
 
   useEffect(() => {
-    loadUnreachable(0);
-  }, [loadUnreachable, preparation?.updated_at]);
+    if (showUnreachable) {
+      loadUnreachable(0);
+    }
+  }, [loadUnreachable, showUnreachable, preparation?.updated_at]);
 
   async function submitTargets() {
     const targets = targetsText.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -46,48 +43,31 @@ export function ReadinessDashboard({ accessToken, preparation, userbots, onReche
     setShowAddGroups(false);
   }
 
-  const userbotEntries = Object.entries(perUserbot);
-
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile label="Достигнем точно" value={stats.confirmed || 0} hint="Есть диалог, контакт в кэше или access hash." tone="ok" />
-        <StatTile label="Скорее всего" value={stats.probable || 0} hint="Только общий чат — приватность может зарезать." tone={(stats.probable || 0) > 0 ? 'warning' : 'default'} />
-        <StatTile label="Не достучимся" value={stats.unreachable || 0} hint="Нет ни одной точки прикосновения." tone={(stats.unreachable || 0) > 0 ? 'danger' : 'default'} />
-        <StatTile label="Покрытие" value={`${stats.coverage_pct || 0}%`} hint={`Из ${stats.total || 0} человек в базе.`} />
+        <StatTile label="Доставим точно" value={stats.confirmed || 0} tone="ok" />
+        <StatTile label="Возможна доставка" value={stats.probable || 0} tone={(stats.probable || 0) > 0 ? 'warning' : 'default'} />
+        <StatTile label="Недоступны" value={stats.unreachable || 0} tone={(stats.unreachable || 0) > 0 ? 'danger' : 'default'} />
+        <StatTile label="Покрытие" value={`${stats.coverage_pct || 0}%`} hint={`Из ${stats.total || 0} человек`} />
       </div>
-
-      {userbotEntries.length > 0 ? (
-        <Card>
-          <Section>
-            <SectionTitle icon={Bot}>Кому сколько людей доступно</SectionTitle>
-            <TableShell>
-              <thead>
-                <tr>
-                  <Th>Юзербот</Th>
-                  <Th>Доступных людей</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {userbotEntries.map(([userbotId, count]) => (
-                  <Tr key={userbotId}>
-                    <Td><div className="text-sm font-bold text-slate-900">{userbotLabel(userbotId, userbots)}</div></Td>
-                    <Td><div className="text-sm font-black text-slate-900">{count}</div></Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </TableShell>
-          </Section>
-        </Card>
-      ) : null}
 
       <Card>
         <Section>
-          <SectionTitle icon={UserX}>Кого не достанем ({unreachable.total})</SectionTitle>
-          {unreachable.total === 0 ? (
-            <EmptyNote>Пробелов нет — база покрыта целиком.</EmptyNote>
+          <SectionTitle icon={RefreshCw}>Готовность</SectionTitle>
+          {unreachable.total === 0 && (stats.unreachable || 0) === 0 ? (
+            <EmptyNote>База покрыта целиком.</EmptyNote>
           ) : (
-            <>
+            <button
+              type="button"
+              className="text-sm font-bold text-slate-700 hover:text-slate-900 transition-colors"
+              onClick={() => setShowUnreachable((prev) => !prev)}
+            >
+              Недоступные: {stats.unreachable ?? unreachable.total} {showUnreachable ? '▾' : '▸'}
+            </button>
+          )}
+          {showUnreachable && unreachable.total > 0 ? (
+            <div className="mt-4">
               <TableShell>
                 <thead>
                   <tr>
@@ -116,8 +96,8 @@ export function ReadinessDashboard({ accessToken, preparation, userbots, onReche
                   </button>
                 ) : null}
               </div>
-            </>
-          )}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 mt-5">
             <button type="button" className={btnGhost} disabled={busy} onClick={onRecheck}>
               <RefreshCw className="w-4 h-4" /> Проверить снова
