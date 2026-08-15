@@ -212,6 +212,15 @@ export function BroadcastPage() {
         if (preparations.active?.id) {
           setPreparation(preparations.active);
           setStep(ACTIVE_PREPARATION_STATUSES.has(preparations.active.status) ? 'prepare' : 'ready');
+        } else {
+          const latestReady = (preparations.preparations || []).find((row) => {
+            if (row.status !== 'ready') return false;
+            return Date.now() - new Date(row.updated_at || row.created_at).getTime() < 24 * 60 * 60 * 1000;
+          });
+          if (latestReady) {
+            setPreparation(latestReady);
+            setStep('ready');
+          }
         }
 
         setForm((prev) => {
