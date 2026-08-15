@@ -107,6 +107,7 @@ export function BroadcastPage() {
   const [form, setForm] = useState({ title: '', base: '', message_text: '' });
   const [manual, setManual] = useState({ tg_user_ids: [], members: [] });
   const [showMembers, setShowMembers] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [poolIds, setPoolIds] = useState([]);
   const [preparation, setPreparation] = useState(null);
   const [preparing, setPreparing] = useState(false);
@@ -123,7 +124,8 @@ export function BroadcastPage() {
   }, [trialEndsAt]);
   const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
-  const audienceType = form.base === 'manual'
+  const clientSelectionActive = form.base.startsWith('client:') && (selectedIds || []).length > 0;
+  const audienceType = form.base === 'manual' || clientSelectionActive
     ? 'manual_list'
     : form.base.startsWith('client:')
       ? 'client_base_members'
@@ -132,9 +134,19 @@ export function BroadcastPage() {
         : '';
   const baseId = form.base.includes(':') ? form.base.split(':')[1] : null;
   const baseSelected = Boolean(form.base);
+  const apiBaseId = audienceType === 'client_base_members' ? baseId : null;
+  const manualPayload = clientSelectionActive
+    ? {
+        tg_user_ids: selectedIds,
+        members: selectedIds.map((id) => {
+          const row = (members.rows || []).find((r) => String(r.tg_user_id) === String(id));
+          return { tg_user_id: id, username: row?.username || '', display_name: row?.display_name || '' };
+        })
+      }
+    : { tg_user_ids: manual.tg_user_ids || [], members: manual.members || [] };
   const manualIdsKey = useMemo(
-    () => [...(manual.tg_user_ids || [])].map(String).sort().join(','),
-    [manual.tg_user_ids]
+    () => [...(manualPayload.tg_user_ids || [])].map(String).sort().join(','),
+    [manualPayload.tg_user_ids]
   );
 
   const baseMatchesPreparation = useMemo(() => {
@@ -289,6 +301,11 @@ export function BroadcastPage() {
     };
   }, [accessToken, form.base]);
 
+  // Смена базы сбрасывает отметки получателей
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [form.base]);
+
   // Черновик формы переживает перезагрузку
   useEffect(() => {
     if (state.loading) return;
@@ -342,6 +359,23 @@ export function BroadcastPage() {
     setPoolIds((prev) => update(prev));
   }
 
+  function toggleRecipient(id) {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    ));
+  }
+
+  function toggleAllVisibleRecipients() {
+    const visibleIds = (members.rows || []).map((r) => String(r.tg_user_id));
+    if (visibleIds.length === 0) return;
+    const allVisible = visibleIds.every((id) => selectedIds.includes(id));
+    setSelectedIds((prev) => (
+      allVisible
+        ? prev.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...prev, ...visibleIds]))
+    ));
+  }
+
   async function startPreparation() {
     if (!baseSelected) {
       toast.error('Выбери базу.');
@@ -359,9 +393,9 @@ export function BroadcastPage() {
         method: 'POST',
         body: {
           audience_type: audienceType,
-          base_id: baseId,
-          manual_tg_user_ids: manual.tg_user_ids || [],
-          manual_members: manual.members || [],
+          base_id: apiBaseId,
+          manual_tg_user_ids: manualPayload.tg_user_ids,
+          manual_members: manualPayload.members,
           userbot_ids: poolIds
         }
       });
@@ -443,9 +477,9 @@ export function BroadcastPage() {
         body: {
           title: form.title,
           audience_type: audienceType,
-          base_id: baseId,
-          manual_tg_user_ids: manual.tg_user_ids || [],
-          manual_members: manual.members || [],
+          base_id: apiBaseId,
+          manual_tg_user_ids: manualPayload.tg_user_ids,
+          manual_members: manualPayload.members,
           sender_type: 'userbot_pool_round_robin',
           sender_userbot_ids: poolIds,
           delay_ms: 5000,
@@ -472,6 +506,7 @@ export function BroadcastPage() {
     return <LoadingState text="Загружаем рассылки..." />;
   }
 
+  const visibleMemberIds = (members.rows || []).map((r) => String(r.tg_user_id));
   const eligibleUserbots = state.userbots.filter((row) => row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
   const allSelected = eligibleUserbots.length > 0 && eligibleUserbots.every((row) => poolIds.map(String).includes(String(row.id)));
   const messageEmpty = !form.message_text.trim();
@@ -556,23 +591,47 @@ export function BroadcastPage() {
                 <div className="mt-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm text-slate-600 font-medium">
-                      {members.total === 0 ? 'База пустая.' : `В базе: ${members.total} человек.`}
+                      {members.total === 0
+                        ? 'База пустая.'
+                        : clientSelectionActive
+                          ? `Получат: ${selectedIds.length} из ${members.total} человек.`
+                          : `В базе: ${members.total} человек — письмо пойдёт всем.`}
                     </div>
-                    {members.total > 0 ? (
-                      <button
-                        type="button"
-                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
-                        onClick={() => setShowMembers((prev) => !prev)}
-                      >
-                        {showMembers ? 'Скрыть состав' : 'Показать состав'}
-                      </button>
-                    ) : null}
+                    <div className="flex items-center gap-4 shrink-0">
+                      {clientSelectionActive ? (
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                          onClick={() => setSelectedIds([])}
+                        >
+                          Писать всей базе
+                        </button>
+                      ) : null}
+                      {members.total > 0 ? (
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                          onClick={() => setShowMembers((prev) => !prev)}
+                        >
+                          {showMembers ? 'Скрыть состав' : 'Показать состав'}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   {showMembers && members.rows.length > 0 ? (
                     <div className="mt-3">
                       <TableShell>
                     <thead>
                       <tr>
+                        <Th>
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-indigo-600"
+                            checked={visibleMemberIds.length > 0 && visibleMemberIds.every((id) => selectedIds.includes(id))}
+                            onChange={toggleAllVisibleRecipients}
+                            aria-label="Отметить всех видимых"
+                          />
+                        </Th>
                         <Th>Кто</Th>
                         <Th>Деньги</Th>
                         <Th>Где есть</Th>
@@ -584,6 +643,14 @@ export function BroadcastPage() {
                         const cov = coverageChannels(member);
                         return (
                           <Tr key={member.id}>
+                            <Td>
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 accent-indigo-600"
+                                checked={selectedIds.includes(String(member.tg_user_id))}
+                                onChange={() => toggleRecipient(String(member.tg_user_id))}
+                              />
+                            </Td>
                             <Td>
                               <div className="text-sm font-bold text-slate-900">{memberDisplayName(member)}</div>
                               <div className="text-xs text-slate-500 font-mono">
