@@ -276,9 +276,6 @@ export function BroadcastPage() {
         window.clearTimeout(pollRef.current);
         pollRef.current = null;
       }
-      if (preparation?.status === 'ready' && step === 'prepare') {
-        setStep('send');
-      }
       return;
     }
 
@@ -299,7 +296,7 @@ export function BroadcastPage() {
         pollRef.current = null;
       }
     };
-  }, [accessToken, preparation?.id, preparation?.status, step]);
+  }, [accessToken, preparation?.id, preparation?.status]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -572,11 +569,6 @@ export function BroadcastPage() {
                 Ручная выборка: {manual.tg_user_ids.length} человек.
               </div>
             ) : null}
-            <div className="mt-6 flex items-center justify-end">
-              <button type="button" className={`${btnPrimary} w-full md:w-auto`} disabled={!baseSelected} onClick={() => setStep('userbots')}>
-                Дальше
-              </button>
-            </div>
           </Section>
         </Card>
       ) : null}
@@ -723,6 +715,17 @@ export function BroadcastPage() {
             </Section>
           </Card>
         </>
+      ) : null}
+
+      {stepIndex >= 0 && stepIndex < STEPS.length - 1 ? (
+        <button
+          type="button"
+          disabled={((STEPS[stepIndex + 1].id === 'prepare' || STEPS[stepIndex + 1].id === 'send') && !preparation) || (step === 'base' && !baseSelected)}
+          onClick={() => setStep(STEPS[stepIndex + 1].id)}
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-indigo-600 !text-white text-sm font-black hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Дальше — {STEPS[stepIndex + 1].label}
+        </button>
       ) : null}
 
       <Card>
