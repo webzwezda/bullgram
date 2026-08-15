@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Send, Users, Bot, MessageSquare, ListChecks, Loader2 } from 'lucide-react';
+import { Users, Bot, MessageSquare, ListChecks, Loader2 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { fetchClientBaseMembers } from '../api/client-bases.js';
 import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
@@ -93,8 +93,6 @@ export function BroadcastPage() {
   const [preparation, setPreparation] = useState(null);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const [previewCount, setPreviewCount] = useState(0);
   const [members, setMembers] = useState({ rows: [], total: 0, loading: false });
   const pollRef = useRef(null);
 
@@ -244,40 +242,6 @@ export function BroadcastPage() {
       cancelled = true;
     };
   }, [accessToken, user?.id]);
-
-  // Счётчик аудитории выбранной базы
-  useEffect(() => {
-    let cancelled = false;
-    async function runPreview() {
-      if (!accessToken || !audienceType) return;
-      setPreviewing(true);
-      try {
-        const data = await apiRequest('/api/broadcast/preview', {
-          accessToken,
-          method: 'POST',
-          body: {
-            audience_type: audienceType,
-            base_id: baseId,
-            manual_tg_user_ids: manual.tg_user_ids || [],
-            manual_members: manual.members || []
-          }
-        });
-        if (!cancelled) {
-          setPreviewing(false);
-          setPreviewCount(data.count || 0);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setPreviewing(false);
-          setPreviewCount(0);
-        }
-      }
-    }
-    runPreview();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, audienceType, baseId, manualIdsKey]);
 
   // Состав выбранной базы
   useEffect(() => {
@@ -482,11 +446,12 @@ export function BroadcastPage() {
     return <LoadingState text="Загружаем рассылки..." />;
   }
 
-  const selectedPoolUserbots = state.userbots.filter((row) => poolIds.map(String).includes(String(row.id)));
   const messageEmpty = !form.message_text.trim();
   const sendDisabled = sending || messageEmpty || !baseSelected || poolIds.length === 0
     || !planRules.canSendBroadcasts
     || (preparation?.status === 'ready' && !baseMatchesPreparation);
+  const stepIndex = STEPS.findIndex((item) => item.id === step);
+  const nextStep = stepIndex >= 0 && stepIndex < STEPS.length - 1 ? STEPS[stepIndex + 1] : null;
 
   return (
     <section className="page page--flush space-y-6">
@@ -581,20 +546,6 @@ export function BroadcastPage() {
 
       <Card>
         <Section>
-          <SectionTitle icon={Send}>Рассылки</SectionTitle>
-          <p className="text-sm text-slate-500 font-medium max-w-2xl mb-4">
-            Рассылка по базе от имени пула юзерботов. Подготовка заранее проверяет, до кого каждый аккаунт достучится.
-          </p>
-          <div className="flex flex-wrap items-center gap-2 mb-5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
-              <Users className="w-3.5 h-3.5" />
-              {previewing ? 'Считаем аудиторию...' : `Аудитория: ${previewCount}`}
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
-              <Bot className="w-3.5 h-3.5" />
-              Юзерботы: {selectedPoolUserbots.length}
-            </span>
-          </div>
           <div className="flex flex-wrap items-center gap-2">
             {STEPS.map((item) => {
               const disabled = (item.id === 'prepare' || item.id === 'send') && !preparation;
@@ -616,6 +567,18 @@ export function BroadcastPage() {
               );
             })}
           </div>
+          {nextStep ? (
+            <div className="mt-4">
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={(nextStep.id === 'prepare' || nextStep.id === 'send') && !preparation}
+                onClick={() => setStep(nextStep.id)}
+              >
+                Дальше
+              </button>
+            </div>
+          ) : null}
         </Section>
       </Card>
 
