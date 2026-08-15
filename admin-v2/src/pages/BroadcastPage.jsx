@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Users, Bot, MessageSquare, ListChecks, Loader2 } from 'lucide-react';
+import { Users, Bot, MessageSquare, ListChecks, Loader2, Check } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { fetchClientBaseMembers } from '../api/client-bases.js';
 import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
@@ -14,14 +14,14 @@ import { PreparationRunner } from './broadcast/PreparationRunner.jsx';
 import { ReadinessDashboard } from './broadcast/ReadinessDashboard.jsx';
 import {
   Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge,
-  TableShell, Th, Td, Tr, inputCls, btnPrimary
+  TableShell, Th, Td, Tr, inputCls, btnPrimary, btnGhost
 } from './broadcast/ui.jsx';
 
 const STEPS = [
-  { id: 'base', label: '1. База' },
-  { id: 'userbots', label: '2. Юзерботы' },
-  { id: 'prepare', label: '3. Подготовка' },
-  { id: 'send', label: '4. Отправка' }
+  { id: 'base', label: 'База' },
+  { id: 'userbots', label: 'Юзерботы' },
+  { id: 'prepare', label: 'Подготовка' },
+  { id: 'send', label: 'Отправка' }
 ];
 
 const ACTIVE_PREPARATION_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
@@ -451,10 +451,47 @@ export function BroadcastPage() {
     || !planRules.canSendBroadcasts
     || (preparation?.status === 'ready' && !baseMatchesPreparation);
   const stepIndex = STEPS.findIndex((item) => item.id === step);
-  const nextStep = stepIndex >= 0 && stepIndex < STEPS.length - 1 ? STEPS[stepIndex + 1] : null;
 
   return (
     <section className="page page--flush space-y-6">
+      <Card>
+        <Section>
+          <ol className="flex items-start w-full">
+            {STEPS.map((item, i) => {
+              const done = i < stepIndex;
+              const current = i === stepIndex;
+              const locked = (item.id === 'prepare' || item.id === 'send') && !preparation;
+              return (
+                <li key={item.id} className="flex items-start flex-1 last:flex-none">
+                  <button
+                    type="button"
+                    disabled={locked && !current}
+                    onClick={() => setStep(item.id)}
+                    className={`flex flex-col items-center gap-1.5 ${locked && !current ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <span
+                      className={`flex items-center justify-center w-9 h-9 rounded-full text-xs font-black transition-colors ${
+                        done || current
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-white border border-slate-200 text-slate-400'
+                      } ${locked && !current ? 'opacity-40' : ''}`}
+                    >
+                      {done ? <Check className="w-4 h-4" /> : i + 1}
+                    </span>
+                    <span className={`text-[11px] font-bold whitespace-nowrap ${current ? 'text-slate-900' : done ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {item.label}
+                    </span>
+                  </button>
+                  {i < STEPS.length - 1 ? (
+                    <div className={`hidden md:block flex-1 h-0.5 mx-2 mt-[18px] ${done ? 'bg-slate-900' : 'bg-slate-200'}`} aria-hidden="true" />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </Section>
+      </Card>
+
       {step === 'base' ? (
         <Card>
           <Section>
@@ -475,11 +512,6 @@ export function BroadcastPage() {
                 Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
               </div>
             ) : null}
-            <div className="mt-5">
-              <button type="button" className={btnPrimary} disabled={!baseSelected} onClick={() => setStep('userbots')}>
-                Дальше — выбрать юзерботов
-              </button>
-            </div>
             {form.base.startsWith('client:') ? (
               members.loading ? (
                 <div className="mt-4"><EmptyNote>Грузим состав базы...</EmptyNote></div>
@@ -540,47 +572,14 @@ export function BroadcastPage() {
                 Ручная выборка: {manual.tg_user_ids.length} человек.
               </div>
             ) : null}
-          </Section>
-        </Card>
-      ) : null}
-
-      <Card>
-        <Section>
-          <div className="flex flex-wrap items-center gap-2">
-            {STEPS.map((item) => {
-              const disabled = (item.id === 'prepare' || item.id === 'send') && !preparation;
-              const active = step === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => setStep(item.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                    active
-                      ? 'bg-slate-900 !text-white'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-          {nextStep ? (
-            <div className="mt-4">
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={(nextStep.id === 'prepare' || nextStep.id === 'send') && !preparation}
-                onClick={() => setStep(nextStep.id)}
-              >
+            <div className="mt-6 flex items-center justify-end">
+              <button type="button" className={`${btnPrimary} w-full md:w-auto`} disabled={!baseSelected} onClick={() => setStep('userbots')}>
                 Дальше
               </button>
             </div>
-          ) : null}
-        </Section>
-      </Card>
+          </Section>
+        </Card>
+      ) : null}
 
       {!planRules.canSendBroadcasts ? (
         <>
@@ -604,6 +603,9 @@ export function BroadcastPage() {
         <Card>
           <Section>
             <SectionTitle icon={Bot}>Юзерботы</SectionTitle>
+          <div className="text-sm text-slate-500 font-medium mb-4">
+            Рассылка пойдёт от имени выбранных аккаунтов. Safe-mode и аккаунты с недоступным прокси не участвуют.
+          </div>
             {state.userbots.length === 0 ? (
               <EmptyNote>Нет юзерботов. Подключи аккаунты на /app/userbots.</EmptyNote>
             ) : (
@@ -644,10 +646,13 @@ export function BroadcastPage() {
                 })}
               </div>
             )}
-            <div className="mt-5">
+            <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <button type="button" className={`${btnGhost} w-full sm:w-auto`} onClick={() => setStep('base')}>
+                Назад
+              </button>
               <button
                 type="button"
-                className={btnPrimary}
+                className={`${btnPrimary} w-full sm:w-auto`}
                 disabled={preparing || poolIds.length === 0}
                 onClick={startPreparation}
               >
@@ -707,8 +712,11 @@ export function BroadcastPage() {
                   База изменилась — запусти подготовку заново.
                 </div>
               ) : null}
-              <div className="mt-5">
-                <button type="button" className={btnPrimary} onClick={sendCampaign} disabled={sendDisabled}>
+              <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <button type="button" className={`${btnGhost} w-full sm:w-auto`} onClick={() => setStep('userbots')}>
+                  Назад
+                </button>
+                <button type="button" className={`${btnPrimary} w-full sm:w-auto`} onClick={sendCampaign} disabled={sendDisabled}>
                   {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Отправляем...</> : !planRules.canSendBroadcasts ? 'Нужен Normal' : 'Отправить рассылку'}
                 </button>
               </div>
