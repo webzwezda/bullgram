@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Users, Bot, MessageSquare, ListChecks, Loader2, Check } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
@@ -67,6 +68,23 @@ function consumeManualSelection() {
   return selection;
 }
 
+function loadDraft() {
+  try {
+    const raw = window.localStorage.getItem('broadcast_draft');
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object') {
+      return {
+        title: typeof parsed.title === 'string' ? parsed.title : '',
+        base: typeof parsed.base === 'string' ? parsed.base : '',
+        message_text: typeof parsed.message_text === 'string' ? parsed.message_text : ''
+      };
+    }
+  } catch {
+    // черновик испорчен — игнорируем
+  }
+  return null;
+}
+
 function baseValueFromPreparation(prep) {
   if (!prep) return '';
   if (prep.audience_type === 'client_base_members' && prep.base_id) return `client:${prep.base_id}`;
@@ -83,12 +101,12 @@ export function BroadcastPage() {
     clientBases: [],
     userbots: [],
     campaigns: [],
-    failures: [],
-    summary: {}
+    failures: []
   });
   const [step, setStep] = useState('base');
   const [form, setForm] = useState({ title: '', base: '', message_text: '' });
   const [manual, setManual] = useState({ tg_user_ids: [], members: [] });
+  const [showMembers, setShowMembers] = useState(false);
   const [poolIds, setPoolIds] = useState([]);
   const [preparation, setPreparation] = useState(null);
   const [preparing, setPreparing] = useState(false);
@@ -149,6 +167,10 @@ export function BroadcastPage() {
     async function loadAll() {
       if (!accessToken || !user?.id) return;
       try {
+        const draft = loadDraft();
+        if (draft) {
+          setForm((prev) => ({ ...prev, ...draft, base: prev.base || draft.base }));
+        }
         const manualSelection = consumeManualSelection();
         const urlParams = new URLSearchParams(window.location.search);
         const queryBaseId = urlParams.get('base_id');
@@ -177,8 +199,7 @@ export function BroadcastPage() {
           clientBases: clientBases.bases || [],
           userbots,
           campaigns: campaigns.campaigns || [],
-          failures: campaigns.failures || [],
-          summary: campaigns.summary || {}
+          failures: campaigns.failures || []
         }));
 
         setPoolIds((prev) => (prev.length ? prev : (userbots[0] ? [userbots[0].id] : [])));
@@ -268,6 +289,16 @@ export function BroadcastPage() {
       cancelled = true;
     };
   }, [accessToken, form.base]);
+
+  // Черновик формы переживает перезагрузку
+  useEffect(() => {
+    if (state.loading) return;
+    try {
+      window.localStorage.setItem('broadcast_draft', JSON.stringify(form));
+    } catch {
+      // localStorage недоступен — не критично
+    }
+  }, [form, state.loading]);
 
   // Поллинг активной подготовки
   useEffect(() => {
@@ -429,8 +460,7 @@ export function BroadcastPage() {
       setState((prev) => ({
         ...prev,
         campaigns: campaigns.campaigns || [],
-        failures: campaigns.failures || [],
-        summary: campaigns.summary || {}
+        failures: campaigns.failures || []
       }));
     } catch (error) {
       toast.error(error.message);
@@ -443,6 +473,8 @@ export function BroadcastPage() {
     return <LoadingState text="Загружаем рассылки..." />;
   }
 
+  const eligibleUserbots = state.userbots.filter((row) => row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
+  const allSelected = eligibleUserbots.length > 0 && eligibleUserbots.every((row) => poolIds.map(String).includes(String(row.id)));
   const messageEmpty = !form.message_text.trim();
   const sendDisabled = sending || messageEmpty || !baseSelected || poolIds.length === 0
     || !planRules.canSendBroadcasts
@@ -505,18 +537,41 @@ export function BroadcastPage() {
               </select>
             </div>
             {!baseSelected ? (
-              <div className="mt-3 text-sm text-slate-500 font-medium">
-                Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
-              </div>
+              state.clientBases.length === 0 && (manual.tg_user_ids || []).length === 0 ? (
+                <div className="mt-3">
+                  <EmptyNote>
+                    Пока нет ни одной базы.{' '}
+                    <Link to="/app/bases" className="text-indigo-600 font-bold hover:text-indigo-700">Создать базу</Link>
+                  </EmptyNote>
+                </div>
+              ) : (
+                <div className="mt-3 text-sm text-slate-500 font-medium">
+                  Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
+                </div>
+              )
             ) : null}
             {form.base.startsWith('client:') ? (
               members.loading ? (
                 <div className="mt-4"><EmptyNote>Грузим состав базы...</EmptyNote></div>
-              ) : members.rows.length === 0 ? (
-                <div className="mt-4"><EmptyNote>База пустая.</EmptyNote></div>
               ) : (
                 <div className="mt-4">
-                  <TableShell>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm text-slate-600 font-medium">
+                      {members.total === 0 ? 'База пустая.' : `В базе: ${members.total} человек.`}
+                    </div>
+                    {members.total > 0 ? (
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                        onClick={() => setShowMembers((prev) => !prev)}
+                      >
+                        {showMembers ? 'Скрыть состав' : 'Показать состав'}
+                      </button>
+                    ) : null}
+                  </div>
+                  {showMembers && members.rows.length > 0 ? (
+                    <div className="mt-3">
+                      <TableShell>
                     <thead>
                       <tr>
                         <Th>Кто</Th>
@@ -559,12 +614,14 @@ export function BroadcastPage() {
                       })}
                     </tbody>
                   </TableShell>
-                  <div className="mt-3 text-xs text-slate-500 font-medium">
-                    Показываем первые {members.rows.length} из {members.total}.
+                      <div className="mt-3 text-xs text-slate-500 font-medium">
+                        Показываем первые {members.rows.length} из {members.total}.
+                      </div>
                   </div>
+                    ) : null}
                 </div>
               )
-            ) : form.base === 'manual' ? (
+              ) : form.base === 'manual' ? (
               <div className="mt-3 text-sm text-slate-500 font-medium">
                 Ручная выборка: {manual.tg_user_ids.length} человек.
               </div>
@@ -595,12 +652,30 @@ export function BroadcastPage() {
         <Card>
           <Section>
             <SectionTitle icon={Bot}>Юзерботы</SectionTitle>
-          <div className="text-sm text-slate-500 font-medium mb-4">
-            Рассылка пойдёт от имени выбранных аккаунтов. Safe-mode и аккаунты с недоступным прокси не участвуют.
-          </div>
+            <div className="text-sm text-slate-500 font-medium mb-4">
+              Рассылка пойдёт от имени выбранных аккаунтов. Safe-mode и аккаунты с недоступным прокси не участвуют.
+            </div>
             {state.userbots.length === 0 ? (
-              <EmptyNote>Нет юзерботов. Подключи аккаунты на /app/userbots.</EmptyNote>
+              <EmptyNote>
+                Нет юзерботов.{' '}
+                <Link to="/app/userbots" className="text-indigo-600 font-bold hover:text-indigo-700">Подключить аккаунты</Link>
+              </EmptyNote>
             ) : (
+              <div>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Выбрано: {poolIds.length} из {eligibleUserbots.length}
+                </span>
+                {eligibleUserbots.length > 0 ? (
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                    onClick={() => setPoolIds(allSelected ? [] : eligibleUserbots.map((row) => row.id))}
+                  >
+                    {allSelected ? 'Снять всех' : 'Выбрать всех'}
+                  </button>
+                ) : null}
+              </div>
               <div className="space-y-2">
                 {state.userbots.map((row) => {
                   const safeMode = row.runtime_status === 'pending_activation';
@@ -636,6 +711,7 @@ export function BroadcastPage() {
                     </label>
                   );
                 })}
+              </div>
               </div>
             )}
             <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
