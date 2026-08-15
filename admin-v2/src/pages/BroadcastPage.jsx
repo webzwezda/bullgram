@@ -490,64 +490,6 @@ export function BroadcastPage() {
 
   return (
     <section className="page page--flush space-y-6">
-      <Card>
-        <Section>
-          <SectionTitle icon={Send}>Рассылки</SectionTitle>
-          <p className="text-sm text-slate-500 font-medium max-w-2xl mb-4">
-            Рассылка по базе от имени пула юзерботов. Подготовка заранее проверяет, до кого каждый аккаунт достучится.
-          </p>
-          <div className="flex flex-wrap items-center gap-2 mb-5">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
-              <Users className="w-3.5 h-3.5" />
-              {previewing ? 'Считаем аудиторию...' : `Аудитория: ${previewCount}`}
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
-              <Bot className="w-3.5 h-3.5" />
-              Юзерботы: {selectedPoolUserbots.length}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {STEPS.map((item) => {
-              const disabled = (item.id === 'prepare' || item.id === 'send') && !preparation;
-              const active = step === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => setStep(item.id)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
-                    active
-                      ? 'bg-slate-900 !text-white'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      </Card>
-
-      {!planRules.canSendBroadcasts ? (
-        <>
-          <PlanBanner
-            tone="warning"
-            title="Trial: отправка рассылок закрыта"
-            text="На Trial можно собрать базу и прогнать подготовку. Отправка откроется на Normal."
-          />
-          <UpgradeCallout
-            title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
-            text={trialUpgradeUrgent
-              ? 'Не упирайся в trial-лимит до дедлайна — переходи на Normal и запускай рассылки.'
-              : 'Переходи на Normal, чтобы отправлять рассылки по собранной базе.'}
-          />
-        </>
-      ) : null}
-
-      {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
-
       {step === 'base' ? (
         <Card>
           <Section>
@@ -636,6 +578,64 @@ export function BroadcastPage() {
           </Section>
         </Card>
       ) : null}
+
+      <Card>
+        <Section>
+          <SectionTitle icon={Send}>Рассылки</SectionTitle>
+          <p className="text-sm text-slate-500 font-medium max-w-2xl mb-4">
+            Рассылка по базе от имени пула юзерботов. Подготовка заранее проверяет, до кого каждый аккаунт достучится.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
+              <Users className="w-3.5 h-3.5" />
+              {previewing ? 'Считаем аудиторию...' : `Аудитория: ${previewCount}`}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs font-bold text-slate-600">
+              <Bot className="w-3.5 h-3.5" />
+              Юзерботы: {selectedPoolUserbots.length}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {STEPS.map((item) => {
+              const disabled = (item.id === 'prepare' || item.id === 'send') && !preparation;
+              const active = step === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setStep(item.id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                    active
+                      ? 'bg-slate-900 !text-white'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </Section>
+      </Card>
+
+      {!planRules.canSendBroadcasts ? (
+        <>
+          <PlanBanner
+            tone="warning"
+            title="Trial: отправка рассылок закрыта"
+            text="На Trial можно собрать базу и прогнать подготовку. Отправка откроется на Normal."
+          />
+          <UpgradeCallout
+            title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
+            text={trialUpgradeUrgent
+              ? 'Не упирайся в trial-лимит до дедлайна — переходи на Normal и запускай рассылки.'
+              : 'Переходи на Normal, чтобы отправлять рассылки по собранной базе.'}
+          />
+        </>
+      ) : null}
+
+      {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
 
       {step === 'userbots' ? (
         <Card>
