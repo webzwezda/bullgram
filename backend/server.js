@@ -17,6 +17,8 @@ import { ChecklistService } from './services/checklist/index.js';
 import analyticsRoutes from './routes/analytics.routes.js'; // <-- НОВОЕ: Импорт роутов аналитики
 import accessRoutes from './routes/access.routes.js';
 import broadcastRoutes from './routes/broadcast.routes.js';
+import broadcastPreparationRoutes from './routes/broadcast-preparation.routes.js';
+import { BroadcastPreparationService } from './services/broadcast-preparation.service.js';
 import paymentRoutes from './routes/payment.routes.js';
 import billingRoutes from './routes/billing.routes.js';
 import { publicBillingRoutes } from './routes/billing-public.routes.js';
@@ -187,6 +189,7 @@ app.use('/api/checklist', checklistRoutes(supabase));
 app.use('/api/analytics', analyticsRoutes(supabase)); // <-- НОВОЕ: Подключение роута аналитики
 app.use('/api/access', accessRoutes(supabase));
 app.use('/api/broadcast', broadcastRoutes(supabase, getBotById));
+app.use('/api/broadcast', broadcastPreparationRoutes(supabase));
 app.use('/api/payment', paymentRoutes(supabase, getBotById));
 app.use('/api/billing', billingRoutes(supabase));
 app.use('/api/billing', publicBillingRoutes(supabase));
@@ -332,6 +335,10 @@ httpServer.listen(PORT, async () => {
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
     startAudienceSync(supabase);
+    const broadcastPreparationService = new BroadcastPreparationService(supabase);
+    broadcastPreparationService.resumeStuckPreparations().catch(err => {
+        console.error('[BroadcastPreparation] resume failed:', err?.message || err);
+    });
     startTelegramWebHealth(supabase);
     startTonReserveWatch(supabase);
     startCryptoRatesRefresh(supabase);

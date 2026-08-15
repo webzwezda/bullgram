@@ -17,6 +17,7 @@ import {
   sanitizeDialog,
   sanitizeParticipant
 } from '../shared/content-sanitizer.js';
+import { getPeerFromCache } from '../utils/peer-cache.js';
 
 const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -1339,6 +1340,24 @@ export class UserbotService {
                 rememberResolutionError('preferred_chat', error);
                 rememberTimeout(error);
             }
+        }
+
+        try {
+            const cachedPeer = await getPeerFromCache(this.supabase, userbot?.id, normalizedId);
+            if (cachedPeer?.access_hash) {
+                const cachedInputPeer = new Api.InputPeerUser({
+                    userId: BigInt(normalizedId),
+                    accessHash: BigInt(cachedPeer.access_hash)
+                });
+                await client.invoke(new Api.users.GetFullUser({ id: cachedInputPeer }));
+                return {
+                    peer: cachedInputPeer,
+                    source: 'cached_access_hash'
+                };
+            }
+        } catch (error) {
+            rememberResolutionError('cached_access_hash', error);
+            rememberTimeout(error);
         }
 
         try {

@@ -51,6 +51,7 @@ export function App() {
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
         { to: '/bases', label: 'Аудитория и базы', icon: Database },
+        { to: '/broadcast', label: 'Рассылки', icon: Send },
         { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
@@ -74,7 +75,6 @@ export function App() {
         title: 'Для админа',
         items: [
           { to: '/dossier', label: 'Досье', icon: UserPlus },
-          { to: '/broadcast', label: 'Рассылки', icon: Send },
         ]
       }]
       : [])

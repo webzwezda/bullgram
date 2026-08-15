@@ -1,4 +1,5 @@
 import { UserbotService } from '../services/userbot.service.js';
+import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
 
 const TARGET_FIELDS = {
     public_channel: 'public_channel_id',
@@ -156,6 +157,17 @@ export const startAudienceSync = (supabase) => {
                     .from('channel_audience_members')
                     .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
             }
+
+            await upsertPeerCacheBatch(supabase, (participants || [])
+                .filter(p => p?.accessHash != null)
+                .map(p => ({
+                    owner_id: contour.owner_id,
+                    userbot_id: userbot.id,
+                    tg_user_id: String(p.id),
+                    access_hash: p.accessHash.toString(),
+                    username: p.username || null,
+                    source: 'get_participants'
+                })));
 
             await supabase
                 .from('channel_audiences')

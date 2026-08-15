@@ -119,6 +119,11 @@ USERBOT_AUTO_KICK_DM_ENABLED=false
 # userbot-based broadcasts
 USERBOT_BROADCAST_ENABLED=false
 
+# broadcast preparation: auto-join userbots into groups for DM touchpoints
+USERBOT_AUTO_JOIN_ENABLED=false
+USERBOT_JOIN_PER_HOUR=4
+USERBOT_JOIN_SLEEP_MS=45000
+
 # auto-delete restricted userbots after quarantine window
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72

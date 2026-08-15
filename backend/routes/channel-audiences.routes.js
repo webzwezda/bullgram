@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
 
 function buildDisplayName(user) {
     if (user.username) return `@${user.username}`;
@@ -464,6 +465,17 @@ export default function channelAudiencesRoutes(supabase) {
                 for (const channel of linkedChannels) {
                     try {
                         const participants = await client.getParticipants(channel.tg_chat_id, { limit: 5000 });
+
+                        await upsertPeerCacheBatch(supabase, (participants || [])
+                            .filter(participant => participant?.accessHash != null)
+                            .map(participant => ({
+                                owner_id: req.user.id,
+                                userbot_id: userbot.id,
+                                tg_user_id: String(participant.id),
+                                access_hash: participant.accessHash.toString(),
+                                username: participant.username || null,
+                                source: 'get_participants'
+                            })));
 
                         for (const participant of participants || []) {
                             const tgUserId = String(participant.id);

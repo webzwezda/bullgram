@@ -2,6 +2,7 @@ import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { classifyTelegramError } from '../utils/telegram-error-events.js';
 import { ensureBroadcastAllowed } from '../utils/product-tier.js';
 
 function isUserbotBroadcastEnabled() {
@@ -453,6 +454,69 @@ export default function(supabase, getBotById) {
         throw lastError || new Error('Ни один юзербот из пула не смог доставить сообщение');
     }
 
+    async function loadPreparationMatrix(ownerId, preparationId) {
+        const { data: preparation } = await supabase
+            .from('broadcast_preparations')
+            .select('id, status, userbot_ids')
+            .eq('id', preparationId)
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+
+        if (!preparation) throw new Error('Подготовка не найдена');
+        if (preparation.status !== 'ready') throw new Error('Подготовка еще не завершена — дождись статуса «готово»');
+
+        const items = [];
+        let from = 0;
+        while (true) {
+            const { data } = await supabase
+                .from('broadcast_preparation_items')
+                .select('tg_user_id, reachable_by')
+                .eq('preparation_id', preparationId)
+                .range(from, from + 999)
+                .order('id', { ascending: true });
+            if (!data || data.length === 0) break;
+            items.push(...data);
+            if (data.length < 1000) break;
+            from += 1000;
+        }
+
+        const matrix = new Map();
+        for (const item of items) {
+            const touchpoints = Array.isArray(item.reachable_by) ? item.reachable_by : [];
+            touchpoints.sort((a, b) => Number(b.confirmed) - Number(a.confirmed));
+            matrix.set(String(item.tg_user_id), touchpoints);
+        }
+        return matrix;
+    }
+
+    async function recordDmOutcomes(ownerId, sentIds, blockedByUser) {
+        for (let i = 0; i < sentIds.length; i += 500) {
+            await supabase
+                .from('channel_audience_members')
+                .update({ dm_last_sent_at: new Date().toISOString() })
+                .eq('owner_id', ownerId)
+                .in('tg_user_id', sentIds.slice(i, i + 500));
+        }
+
+        for (const [tgUserId, errorText] of Object.entries(blockedByUser)) {
+            const { data: current } = await supabase
+                .from('channel_audience_members')
+                .select('dm_failed_count')
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', tgUserId)
+                .limit(1);
+            await supabase
+                .from('channel_audience_members')
+                .update({
+                    dm_blocked: true,
+                    dm_last_error: String(errorText || '').slice(0, 300),
+                    dm_failed_count: (current?.[0]?.dm_failed_count || 0) + 1
+                })
+                .eq('owner_id', ownerId)
+                .eq('tg_user_id', tgUserId);
+        }
+    }
+
     router.get('/campaigns', authenticateUser, async (req, res) => {
         try {
             const [{ data: campaigns, error }, { data: failures, error: failuresError }] = await Promise.all([
@@ -568,7 +632,7 @@ export default function(supabase, getBotById) {
     router.post('/send', authenticateUser, async (req, res) => {
         try {
             ensureBroadcastAllowed(req.profile);
-            const { audience_type, channel_id, base_id, manual_tg_user_ids, base_filter, manual_members, title, message_text, sender_type, sender_userbot_id, sender_userbot_ids, delay_ms } = req.body;
+            const { audience_type, channel_id, base_id, manual_tg_user_ids, base_filter, manual_members, title, message_text, sender_type, sender_userbot_id, sender_userbot_ids, delay_ms, preparation_id, skip_unreachable } = req.body;
             if (!audience_type) return res.status(400).json({ error: 'Не выбрана аудитория' });
             if (!message_text || !message_text.trim()) return res.status(400).json({ error: 'Нет текста рассылки' });
 
@@ -621,6 +685,24 @@ export default function(supabase, getBotById) {
                 return res.status(400).json({ error: 'Выбери хотя бы одного юзербота для отправки' });
             }
 
+            let preparationMatrix = null;
+            let skippedUnreachableCount = 0;
+            if (preparation_id && senderTypeUsesUserbot(normalizedSenderType)) {
+                preparationMatrix = await loadPreparationMatrix(req.user.id, preparation_id);
+                const routed = audience.filter(row => preparationMatrix.has(String(row.tg_user_id)));
+                skippedUnreachableCount = audience.length - routed.length;
+                if (skippedUnreachableCount > 0 && skip_unreachable === false) {
+                    return res.status(400).json({
+                        error: `По матрице подготовки ${skippedUnreachableCount} человек недостижимы. Убери их из базы или подтверди отправку без них.`
+                    });
+                }
+                if (routed.length === 0) {
+                    return res.status(400).json({ error: 'Матрица подготовки не покрывает ни одного получателя этой аудитории' });
+                }
+                audience.length = 0;
+                audience.push(...routed);
+            }
+
             const { data: campaign, error: campaignError } = await supabase
                 .from('broadcast_campaigns')
                 .insert({
@@ -650,6 +732,8 @@ export default function(supabase, getBotById) {
 
             let sentCount = 0;
             let failedCount = 0;
+            const dmSentIds = [];
+            const dmBlockedByUser = {};
 
             for (let index = 0; index < audience.length; index++) {
                 const row = audience[index];
@@ -686,22 +770,51 @@ export default function(supabase, getBotById) {
                             throw botError;
                         }
                         if (selectedUserbots.length === 0) throw botError;
+
+                        let pool = senderTypeUsesUserbotPool(normalizedSenderType)
+                            ? [...selectedUserbots]
+                            : [selectedUserbot].filter(Boolean);
+                        let startIndex = senderTypeUsesUserbotPool(normalizedSenderType) ? index % selectedUserbots.length : 0;
+                        let commonChatId = null;
+
+                        if (preparationMatrix) {
+                            const touchpoints = preparationMatrix.get(String(row.tg_user_id)) || [];
+                            const selectedIds = new Set(selectedUserbots.map(userbot => String(userbot.id)));
+                            const preferred = touchpoints.find(tp => selectedIds.has(String(tp.userbot_id)));
+                            if (preferred) {
+                                const preferredUserbot = selectedUserbots.find(userbot => String(userbot.id) === String(preferred.userbot_id));
+                                if (preferredUserbot) {
+                                    pool = [preferredUserbot, ...pool.filter(userbot => String(userbot.id) !== String(preferred.userbot_id))];
+                                    startIndex = 0;
+                                }
+                                if (preferred.via === 'shared_chat' && preferred.chat_id) {
+                                    commonChatId = preferred.chat_id;
+                                }
+                            }
+                        }
+
                         actualSenderUserbot = await sendViaUserbotPool(
-                            senderTypeUsesUserbotPool(normalizedSenderType) ? selectedUserbots : [selectedUserbot].filter(Boolean),
-                            senderTypeUsesUserbotPool(normalizedSenderType) ? index % selectedUserbots.length : 0,
+                            pool,
+                            startIndex,
                             row.tg_user_id,
                             message_text,
                             {
                                 campaign_id: campaign.id,
-                                channel_id: row.channel_id || null
+                                channel_id: row.channel_id || null,
+                                ...(commonChatId ? { common_chat_id: commonChatId } : {})
                             }
                         );
                         deliveryStatus = 'sent';
                         deliveredAt = new Date().toISOString();
                         sentCount++;
+                        dmSentIds.push(String(row.tg_user_id));
                     } catch (userbotError) {
                         failedCount++;
                         errorText = userbotError.message || botError.message || 'Не удалось доставить сообщение';
+                        const classification = classifyTelegramError(userbotError);
+                        if (['privacy_restricted', 'user_blocked', 'peer_invalid'].includes(classification.restriction_kind)) {
+                            dmBlockedByUser[String(row.tg_user_id)] = errorText;
+                        }
                     }
                 }
 
@@ -730,6 +843,10 @@ export default function(supabase, getBotById) {
                 }
             }
 
+            await recordDmOutcomes(req.user.id, dmSentIds, dmBlockedByUser).catch(error => {
+                console.error('Ошибка записи DM-исходов:', error?.message || error);
+            });
+
             await supabase
                 .from('broadcast_campaigns')
                 .update({
@@ -745,7 +862,9 @@ export default function(supabase, getBotById) {
                         delay_ms: normalizedDelayMs,
                         total: audience.length,
                         sent: sentCount,
-                        failed: failedCount
+                        failed: failedCount,
+                        preparation_id: preparation_id || null,
+                        skipped_unreachable: skippedUnreachableCount
                     }
                 })
                 .eq('id', campaign.id);
@@ -754,12 +873,16 @@ export default function(supabase, getBotById) {
                 success: true,
                 campaign_id: campaign.id,
                 sent_count: sentCount,
-                failed_count: failedCount
+                failed_count: failedCount,
+                skipped_unreachable_count: skippedUnreachableCount
             });
         } catch (error) {
             console.error('Ошибка send broadcast:', error);
-            const statusCode = String(error.message || '').includes('На Trial') ? 403 : 500;
-            res.status(statusCode).json({ error: statusCode === 403 ? error.message : 'Ошибка отправки рассылки' });
+            const message = String(error.message || '');
+            const statusCode = message.includes('На Trial') ? 403
+                : (message.includes('Подготовка') || message.includes('матриц')) ? 400
+                : 500;
+            res.status(statusCode).json({ error: statusCode === 500 ? 'Ошибка отправки рассылки' : message });
         }
     });
 
