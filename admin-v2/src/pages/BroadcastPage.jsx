@@ -220,7 +220,6 @@ export function BroadcastPage() {
           }
           if (cancelled) return;
           setPreparation(full);
-          setStep(ACTIVE_PREPARATION_STATUSES.has(full.status) ? 'prepare' : 'send');
           const value = baseValueFromPreparation(full);
           if (value) {
             setForm((prev) => ({ ...prev, base: prev.base || value }));
