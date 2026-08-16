@@ -363,6 +363,19 @@ export class BroadcastPreparationService {
         const audienceType = preparation.audience_type;
         const map = new Map();
 
+        const fillByTgIds = async (tgIds) => {
+            for (const part of chunk(tgIds, 500)) {
+                const { data } = await this.supabase
+                    .from('channel_audience_members')
+                    .select('tg_user_id, source_channel_ids')
+                    .eq('owner_id', ownerId)
+                    .in('tg_user_id', part);
+                for (const row of data || []) {
+                    map.set(String(row.tg_user_id), Array.isArray(row.source_channel_ids) ? row.source_channel_ids : []);
+                }
+            }
+        };
+
         if (audienceType === 'channel_audience_members') {
             const { data } = await this.supabase
                 .from('channel_audience_members')
@@ -379,17 +392,9 @@ export class BroadcastPreparationService {
                 .select('tg_user_id')
                 .eq('owner_id', ownerId)
                 .eq('base_id', preparation.base_id);
-            const tgIds = (members || []).map(member => String(member.tg_user_id));
-            for (const part of chunk(tgIds, 500)) {
-                const { data } = await this.supabase
-                    .from('channel_audience_members')
-                    .select('tg_user_id, source_channel_ids')
-                    .eq('owner_id', ownerId)
-                    .in('tg_user_id', part);
-                for (const row of data || []) {
-                    map.set(String(row.tg_user_id), Array.isArray(row.source_channel_ids) ? row.source_channel_ids : []);
-                }
-            }
+            await fillByTgIds((members || []).map(member => String(member.tg_user_id)));
+        } else if (audienceType === 'manual_list') {
+            await fillByTgIds((preparation.manual_tg_user_ids || []).map(String));
         }
 
         return map;
@@ -591,6 +596,34 @@ export class BroadcastPreparationService {
                     chat_id: channel.tg_chat_id ? String(channel.tg_chat_id) : null,
                     title: channel.title
                 });
+            }
+        } else if (preparation.audience_type === 'client_base_members' || preparation.audience_type === 'manual_list') {
+            // вступаем в каналы-источники получателей: где человек замечен в аудиториях, там и ищем общий чат
+            const sourceMap = await this.loadMemberSourceChannels(preparation.owner_id, preparation);
+            const neededIds = new Set();
+            for (const list of sourceMap.values()) {
+                for (const id of list || []) neededIds.add(String(id));
+            }
+            if (neededIds.size > 0) {
+                const { data: channels } = await this.supabase
+                    .from('channels')
+                    .select('id, title, tg_chat_id, username')
+                    .eq('owner_id', preparation.owner_id)
+                    .in('id', [...neededIds]);
+                for (const channel of channels || []) {
+                    if (!channel.username) {
+                        await this.updatePhaseDetail(preparation.id, {
+                            errors: [`«${channel.title}» — приватный канал без ссылки-инвайта, юзерботу не вступить. Добавь группу вручную по ссылке.`]
+                        });
+                        continue;
+                    }
+                    targets.push({
+                        raw: `https://t.me/${channel.username}`,
+                        scope: 'owner',
+                        chat_id: channel.tg_chat_id ? String(channel.tg_chat_id) : null,
+                        title: channel.title
+                    });
+                }
             }
         }
 
