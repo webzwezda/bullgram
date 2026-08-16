@@ -653,7 +653,13 @@ export function BroadcastPage() {
           <Section>
             <SectionTitle icon={Users}>База</SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название рассылки — обязательно" />
+              <input
+                className={`${inputCls} ${titleEmpty ? '!border-rose-300 focus:!border-rose-400' : ''}`}
+                type="text"
+                value={form.title}
+                onChange={(e) => setField('title', e.target.value)}
+                placeholder="Название рассылки — обязательно"
+              />
               <select className={inputCls} value={form.base} onChange={(e) => setField('base', e.target.value)}>
                 <option value="">Выбери базу</option>
                 {baseOptions.map((opt) => (
@@ -663,9 +669,6 @@ export function BroadcastPage() {
                 ))}
               </select>
             </div>
-            {titleEmpty && baseSelected ? (
-              <div className="mt-3 text-sm text-amber-700 font-medium">Дай рассылке название — без него не получится перейти к следующему шагу.</div>
-            ) : null}
             {!baseSelected ? (
               state.clientBases.length === 0 && (manual.tg_user_ids || []).length === 0 ? (
                 <div className="mt-3">
@@ -993,8 +996,13 @@ export function BroadcastPage() {
               ) : null}
               {titleEmpty ? (
                 <div className="mt-3">
-                  <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название рассылки — обязательно" />
-                  <div className="mt-2 text-xs text-amber-700 font-bold">Кнопка отправки серая, пока нет названия — по нему рассылка потом ищется в истории.</div>
+                  <input
+                    className={`${inputCls} !border-rose-300 focus:!border-rose-400`}
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => setField('title', e.target.value)}
+                    placeholder="Название рассылки — обязательно"
+                  />
                 </div>
               ) : null}
               {!preparationBlocking && messageEmpty ? (
