@@ -729,9 +729,16 @@ export class BroadcastPreparationService {
                                 const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
                                 await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
                             } catch (scanError) {
-                                await this.updatePhaseDetail(preparation.id, {
-                                    errors: [`Скан участников ${target.raw}: ${String(scanError?.message || scanError).slice(0, 200)}`]
-                                });
+                                const scanMessage = String(scanError?.message || scanError);
+                                if (scanMessage.toUpperCase().includes('CHAT_ADMIN_REQUIRED')) {
+                                    await this.updatePhaseDetail(preparation.id, {
+                                        errors: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
+                                    });
+                                } else {
+                                    await this.updatePhaseDetail(preparation.id, {
+                                        errors: [`Скан участников ${target.raw}: ${scanMessage.slice(0, 200)}`]
+                                    });
+                                }
                             }
                         }
 
