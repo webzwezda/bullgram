@@ -1,3 +1,4 @@
+import { Api } from 'telegram';
 import { UserbotService } from './userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
@@ -630,10 +631,17 @@ export class BroadcastPreparationService {
         return targets;
     }
 
-    async scanChatParticipants(userbot, chatId) {
+    async scanChatParticipants(userbot, chatId, accessHash = null) {
         const client = await this.userbotService.createAuthorizedClient(userbot);
         try {
-            const participants = await withTimeout(client.getParticipants(chatId, { limit: 5000 }), 120_000, 'Скан участников группы');
+            // сырой положительный id канала свежий клиент не разрезолвит (PeerUser) — ходим через access_hash из вступления
+            const entity = accessHash
+                ? new Api.InputPeerChannel({
+                    channelId: String(chatId).replace(/^-100/, ''),
+                    accessHash: String(accessHash)
+                })
+                : chatId;
+            const participants = await withTimeout(client.getParticipants(entity, { limit: 5000 }), 120_000, 'Скан участников группы');
             await upsertPeerCacheBatch(this.supabase, (participants || [])
                 .filter(participant => participant?.accessHash != null)
                 .map(participant => ({
@@ -715,9 +723,10 @@ export class BroadcastPreparationService {
                         await this.supabase.from('userbot_join_log').insert({ userbot_id: userbot.id, target: target.raw });
 
                         const chatId = joined?.chat_id ? String(joined.chat_id) : target.chat_id;
+                        const accessHash = joined?.access_hash || null;
                         if (chatId) {
                             try {
-                                const confirmed = await this.scanChatParticipants(userbot, chatId);
+                                const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
                                 await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
                             } catch (scanError) {
                                 await this.updatePhaseDetail(preparation.id, {

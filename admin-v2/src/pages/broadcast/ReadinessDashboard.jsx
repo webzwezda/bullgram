@@ -13,6 +13,7 @@ function memberLabel(member) {
 
 export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddGroups, busy }) {
   const stats = preparation?.stats || {};
+  const coverageReady = preparation?.status === 'ready';
   const [unreachable, setUnreachable] = useState({ members: [], total: 0, offset: 0, loading: false });
   const [showUnreachable, setShowUnreachable] = useState(false);
   const [targetsText, setTargetsText] = useState('');
@@ -49,16 +50,22 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddG
       <Card>
         <Section>
           <SectionTitle icon={RefreshCw}>Готовность</SectionTitle>
-          {unreachable.total === 0 && (stats.unreachable || 0) === 0 ? (
-            <EmptyNote>База покрыта целиком.</EmptyNote>
+          {coverageReady ? (
+            unreachable.total === 0 && (stats.unreachable || 0) === 0 ? (
+              <EmptyNote>База покрыта целиком.</EmptyNote>
+            ) : (
+              <button
+                type="button"
+                className="text-sm font-bold text-slate-700 hover:text-slate-900 transition-colors"
+                onClick={() => setShowUnreachable((prev) => !prev)}
+              >
+                Недоступные: {stats.unreachable ?? unreachable.total} {showUnreachable ? '▾' : '▸'}
+              </button>
+            )
           ) : (
-            <button
-              type="button"
-              className="text-sm font-bold text-slate-700 hover:text-slate-900 transition-colors"
-              onClick={() => setShowUnreachable((prev) => !prev)}
-            >
-              Недоступные: {stats.unreachable ?? unreachable.total} {showUnreachable ? '▾' : '▸'}
-            </button>
+            <div className="text-sm text-amber-700 font-medium">
+              Подготовка упала — добавь группы и нажми «Проверить снова».
+            </div>
           )}
           {showUnreachable && unreachable.total > 0 ? (
             <div className="mt-4">

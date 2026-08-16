@@ -2142,6 +2142,7 @@ export class UserbotService {
         try {
             let title = null;
             let chatId = null;
+            let accessHash = null;
             let kind = parsed.kind === 'username' ? 'channel' : 'group';
 
             if (parsed.kind === 'invite_hash') {
@@ -2153,6 +2154,7 @@ export class UserbotService {
                 const chat = result?.chats?.[0] || null;
                 title = chat?.title || null;
                 chatId = chat?.id ? String(chat.id) : null;
+                accessHash = chat?.accessHash != null ? String(chat.accessHash) : null;
                 kind = chat?.className === 'Channel' ? 'channel' : 'group';
             } else {
                 const entity = await withTimeout(
@@ -2167,11 +2169,13 @@ export class UserbotService {
                 );
                 title = entity?.title || entity?.username || null;
                 chatId = entity?.id ? String(entity.id) : null;
+                accessHash = entity?.accessHash != null ? String(entity.accessHash) : null;
                 kind = entity?.className === 'Channel' ? 'channel' : 'group';
             }
 
             return {
                 chat_id: chatId,
+                access_hash: accessHash,
                 title,
                 kind
             };

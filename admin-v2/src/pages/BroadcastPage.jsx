@@ -870,7 +870,7 @@ export function BroadcastPage() {
         preparation ? (
           <>
             <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
-            {preparation.status === 'ready' && selectionMatchesPreparation ? (
+            {['ready', 'failed'].includes(preparation.status) && selectionMatchesPreparation ? (
               <ReadinessDashboard
                 accessToken={accessToken}
                 preparation={preparation}
