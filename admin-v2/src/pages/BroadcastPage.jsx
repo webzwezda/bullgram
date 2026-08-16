@@ -884,24 +884,16 @@ export function BroadcastPage() {
         )
       ) : null}
 
-      {step === 'send' ? (
-        preparation?.status === 'ready' && selectionMatchesPreparation ? (
-          <ReadinessDashboard
-            accessToken={accessToken}
-            preparation={preparation}
-            readOnly
-          />
-        ) : (
-          <Card>
-            <Section>
-              <EmptyNote>
-                {preparation && ACTIVE_PREPARATION_STATUSES.has(preparation.status)
-                  ? 'Подготовка ещё идёт — вернись на шаг 3.'
-                  : 'Сначала прогони подготовку.'}
-              </EmptyNote>
-            </Section>
-          </Card>
-        )
+      {step === 'send' && !(preparation?.status === 'ready' && selectionMatchesPreparation) ? (
+        <Card>
+          <Section>
+            <EmptyNote>
+              {preparation && ACTIVE_PREPARATION_STATUSES.has(preparation.status)
+                ? 'Подготовка ещё идёт — вернись на шаг 3.'
+                : 'Сначала прогони подготовку.'}
+            </EmptyNote>
+          </Section>
+        </Card>
       ) : null}
 
       {step === 'send' ? (

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Plus } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
-import { Card, Section, SectionTitle, EmptyNote, StatTile, TableShell, Th, Td, Tr, btnGhost, btnPrimary, inputCls } from './ui.jsx';
+import { Card, Section, SectionTitle, EmptyNote, TableShell, Th, Td, Tr, btnGhost, btnPrimary, inputCls } from './ui.jsx';
 
 const PAGE_SIZE = 25;
 
@@ -11,7 +11,7 @@ function memberLabel(member) {
   return `TG ID ${member.tg_user_id}`;
 }
 
-export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddGroups, busy, readOnly = false }) {
+export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddGroups, busy }) {
   const stats = preparation?.stats || {};
   const [unreachable, setUnreachable] = useState({ members: [], total: 0, offset: 0, loading: false });
   const [showUnreachable, setShowUnreachable] = useState(false);
@@ -43,20 +43,8 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddG
     setShowAddGroups(false);
   }
 
-  const tiles = (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <StatTile label="Доставим точно" value={stats.confirmed || 0} tone="ok" />
-      <StatTile label="Возможна доставка" value={stats.probable || 0} tone={(stats.probable || 0) > 0 ? 'warning' : 'default'} />
-      <StatTile label="Недоступны" value={stats.unreachable || 0} tone={(stats.unreachable || 0) > 0 ? 'danger' : 'default'} />
-      <StatTile label="Покрытие" value={`${stats.coverage_pct || 0}%`} hint={`Из ${stats.total || 0} человек`} />
-    </div>
-  );
-
-  if (readOnly) return tiles;
-
   return (
     <>
-      {tiles}
 
       <Card>
         <Section>
