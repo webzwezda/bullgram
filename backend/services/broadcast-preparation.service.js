@@ -1,5 +1,6 @@
 import { Api } from 'telegram';
 import { UserbotService } from './userbot.service.js';
+import { ChatAdminRightsService } from './chat-admin-rights.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
 import { classifyTelegramError } from '../utils/telegram-error-events.js';
@@ -55,6 +56,10 @@ function jitter(baseMs) {
 
 function isAutoJoinEnabled() {
     return envFlag('USERBOT_AUTO_JOIN_ENABLED');
+}
+
+function isAutoAdminEnabled() {
+    return envFlag('USERBOT_AUTO_ADMIN_ENABLED');
 }
 
 function normalizeExternalTargets(rawList = []) {
@@ -631,6 +636,55 @@ export class BroadcastPreparationService {
         return targets;
     }
 
+    // CHAT_ADMIN_REQUIRED: пытаемся выдать юзерботу админ-права — сначала через официального бота, потом через юзербота-админа из пула
+    async tryGrantAdminRights(preparation, pool, userbot, chatId, rawLink) {
+        if (!isAutoAdminEnabled()) return false;
+        try {
+            const rights = new ChatAdminRightsService(this.supabase);
+
+            let tgUserId = String(userbot.tg_account_id || '').trim();
+            if (!tgUserId || tgUserId === 'null') {
+                const client = await this.userbotService.createAuthorizedClient(userbot);
+                try {
+                    tgUserId = String((await client.getMe()).id);
+                } finally {
+                    await client.disconnect();
+                }
+            }
+
+            const bot = await rights.findPromoterBot(preparation.owner_id, chatId);
+            if (bot) {
+                const promoted = await rights.grantAdminViaBot(bot.bot, chatId, tgUserId);
+                if (promoted.ok) {
+                    await this.updatePhaseDetail(preparation.id, {
+                        note: `${rawLink}: админ-права выданы ботом @${bot.bot.tg_username || 'official'} — сканируем участников.`
+                    });
+                    return true;
+                }
+                await this.updatePhaseDetail(preparation.id, {
+                    errors: [`${rawLink}: бот @${bot.bot.tg_username || 'official'} не смог выдать права (${promoted.description}) — пробуем юзербота-админа.`]
+                });
+            }
+
+            const candidates = (pool || []).filter(candidate => String(candidate.id) !== String(userbot.id));
+            const viaUserbot = await rights.findPromoterUserbot(this.userbotService, candidates, rawLink, chatId, tgUserId);
+            if (viaUserbot) {
+                await this.updatePhaseDetail(preparation.id, {
+                    note: `${rawLink}: админ-права выданы юзерботом @${viaUserbot.userbot.tg_username || viaUserbot.userbot.id} — сканируем участников.`
+                });
+                return true;
+            }
+
+            await this.updatePhaseDetail(preparation.id, {
+                errors: [`${rawLink}: выдать админ-права некому — ни официальный бот, ни юзерботы пула не админы этого чата. Выдай права руками и нажми «Проверить снова».`]
+            });
+            return false;
+        } catch (error) {
+            console.error(`[broadcast-preparation] auto-admin ${rawLink} failed:`, error?.message || error);
+            return false;
+        }
+    }
+
     async scanChatParticipants(userbot, chatId, accessHash = null) {
         const client = await this.userbotService.createAuthorizedClient(userbot);
         try {
@@ -730,10 +784,22 @@ export class BroadcastPreparationService {
                                 await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
                             } catch (scanError) {
                                 const scanMessage = String(scanError?.message || scanError);
-                                if (scanMessage.toUpperCase().includes('CHAT_ADMIN_REQUIRED')) {
-                                    await this.updatePhaseDetail(preparation.id, {
-                                        errors: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
-                                    });
+                                if (scanMessage.toUpperCase().includes('CHAT_ADMIN_REQUIRED') && chatId) {
+                                    const granted = await this.tryGrantAdminRights(preparation, pool, userbot, chatId, target.raw);
+                                    if (granted) {
+                                        try {
+                                            const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
+                                            await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
+                                        } catch (retryError) {
+                                            await this.updatePhaseDetail(preparation.id, {
+                                                errors: [`Повторный скан участников ${target.raw}: ${String(retryError?.message || retryError).slice(0, 200)}`]
+                                            });
+                                        }
+                                    } else {
+                                        await this.updatePhaseDetail(preparation.id, {
+                                            errors: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
+                                        });
+                                    }
                                 } else {
                                     await this.updatePhaseDetail(preparation.id, {
                                         errors: [`Скан участников ${target.raw}: ${scanMessage.slice(0, 200)}`]
