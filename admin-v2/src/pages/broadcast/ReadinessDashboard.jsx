@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Plus } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
-import { Card, Section, SectionTitle, EmptyNote, TableShell, Th, Td, Tr, btnGhost, btnPrimary, inputCls } from './ui.jsx';
+import { Card, Section, SectionTitle, EmptyNote, TableShell, Th, Td, Tr, btnGhost } from './ui.jsx';
 
 const PAGE_SIZE = 25;
 
@@ -11,13 +11,11 @@ function memberLabel(member) {
   return `TG ID ${member.tg_user_id}`;
 }
 
-export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddGroups, busy }) {
+export function ReadinessDashboard({ accessToken, preparation, onRecheck, busy }) {
   const stats = preparation?.stats || {};
   const coverageReady = preparation?.status === 'ready';
   const [unreachable, setUnreachable] = useState({ members: [], total: 0, offset: 0, loading: false });
   const [showUnreachable, setShowUnreachable] = useState(false);
-  const [targetsText, setTargetsText] = useState('');
-  const [showAddGroups, setShowAddGroups] = useState(false);
 
   const loadUnreachable = useCallback(async (offset) => {
     if (!accessToken || !preparation?.id) return;
@@ -35,14 +33,6 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddG
       loadUnreachable(0);
     }
   }, [loadUnreachable, showUnreachable, preparation?.updated_at]);
-
-  async function submitTargets() {
-    const targets = targetsText.split('\n').map((line) => line.trim()).filter(Boolean);
-    if (targets.length === 0) return;
-    await onAddGroups(targets);
-    setTargetsText('');
-    setShowAddGroups(false);
-  }
 
   return (
     <>
@@ -103,24 +93,7 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, onAddG
             <button type="button" className={btnGhost} disabled={busy} onClick={onRecheck}>
               <RefreshCw className="w-4 h-4" /> Проверить снова
             </button>
-            <button type="button" className={btnGhost} disabled={busy} onClick={() => setShowAddGroups((prev) => !prev)}>
-              <Plus className="w-4 h-4" /> Добавить группы
-            </button>
           </div>
-          {showAddGroups ? (
-            <div className="mt-4 space-y-3">
-              <textarea
-                className={`${inputCls} resize-none min-h-[90px] font-medium`}
-                rows="3"
-                value={targetsText}
-                onChange={(e) => setTargetsText(e.target.value)}
-                placeholder={'@group\nhttps://t.me/+AbCdEf...\nПо одной группе на строку'}
-              />
-              <button type="button" className={btnPrimary} disabled={busy || !targetsText.trim()} onClick={submitTargets}>
-                Вступиться и пересчитать
-              </button>
-            </div>
-          ) : null}
         </Section>
       </Card>
     </>

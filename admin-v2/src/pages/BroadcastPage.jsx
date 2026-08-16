@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Users, Bot, MessageSquare, ListChecks, Loader2, Check } from 'lucide-react';
+import { Users, Bot, MessageSquare, ListChecks, Loader2, Check, Plus } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { fetchClientBaseMembers } from '../api/client-bases.js';
 import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
@@ -36,6 +36,29 @@ const AUDIENCE_LABELS = {
   channel_audience_members: 'База по каналам',
   manual_list: 'Ручная выборка'
 };
+
+const BROADCAST_TEMPLATES = [
+  {
+    label: 'Дожим базы',
+    text: 'Салют! Видел, что ты интересовался нашим каналом, но подписка так и не оформилась. Контент уже ждёт — вступай: [ссылка]. Если что-то не получается, просто ответь на это сообщение, помогу.'
+  },
+  {
+    label: 'Продление',
+    text: 'Привет! Подписка на канал скоро заканчивается. Чтобы не потерять доступ, продлить можно здесь: [ссылка]. Цена для тебя не меняется — успей на прежних условиях.'
+  },
+  {
+    label: 'Скидка',
+    text: 'Короткая новость: на этой неделе скидка [размер]% на любую подписку. Акция действует до [дата]. Забрать: [ссылка].'
+  },
+  {
+    label: 'Возврат в канал',
+    text: 'Давно не виделись в канале! Пока тебя не было, мы добавили много нового. Вернуться можно за пару секунд: [ссылка] — старая цена для тебя сохранена.'
+  },
+  {
+    label: 'Реактивация',
+    text: 'Привет! Ты раньше был с нами — открываем доступ обратно на льготных условиях: [ссылка]. Если канал больше не интересен, просто не отвечай на это сообщение.'
+  }
+];
 
 function formatWhen(value) {
   if (!value) return '—';
@@ -117,6 +140,9 @@ export function BroadcastPage() {
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
   const [members, setMembers] = useState({ rows: [], total: 0, loading: false });
+  const [groupsText, setGroupsText] = useState('');
+  const [pendingGroups, setPendingGroups] = useState([]);
+  const [addingGroups, setAddingGroups] = useState(false);
   const pollRef = useRef(null);
   const memberIndexRef = useRef(new Map());
 
@@ -475,6 +501,40 @@ export function BroadcastPage() {
     }
   }
 
+  async function submitGroups() {
+    const targets = groupsText.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (targets.length === 0 || !preparation?.id) return;
+    if (ACTIVE_PREPARATION_STATUSES.has(preparation.status)) {
+      setPendingGroups((prev) => [...prev, ...targets]);
+      setGroupsText('');
+      toast('Группы в очереди — юзерботы вступятся сразу после конца подготовки.');
+      return;
+    }
+    setAddingGroups(true);
+    try {
+      await addJoinTargets(targets);
+      setGroupsText('');
+    } finally {
+      setAddingGroups(false);
+    }
+  }
+
+  // очередь групп из submitGroups вступается, как только подготовка закончится
+  useEffect(() => {
+    if (pendingGroups.length === 0 || !preparation?.id) return;
+    if (preparation.status !== 'ready' && preparation.status !== 'failed') return;
+    const targets = pendingGroups;
+    setPendingGroups([]);
+    addJoinTargets(targets);
+  }, [preparation?.id, preparation?.status, pendingGroups]);
+
+  function applyTemplate(template) {
+    if (form.message_text.trim() && form.message_text.trim() !== template.text) {
+      if (!window.confirm('Заменить текущий текст шаблоном?')) return;
+    }
+    setField('message_text', template.text);
+  }
+
   async function sendCampaign() {
     if (!planRules.canSendBroadcasts) {
       toast.error(`На тарифе ${planRules.label} отправка рассылок закрыта.`);
@@ -577,8 +637,6 @@ export function BroadcastPage() {
       onClick: () => setStep('send'),
       disabled: preparation?.status !== 'ready' || !selectionMatchesPreparation
     };
-  } else if (step === 'send') {
-    nextAction = { label: 'Дальше — История', onClick: () => setStep('history'), disabled: sending };
   }
 
   return (
@@ -869,13 +927,42 @@ export function BroadcastPage() {
       {step === 'prepare' ? (
         preparation ? (
           <>
+            <Card>
+              <Section>
+                <SectionTitle icon={Plus}>Группы для касания</SectionTitle>
+                <div className="text-sm text-slate-500 font-medium mb-3">
+                  Юзерботы сами вступают в каналы, где замечены получатели базы. Если человеку не хватает общего чата — добавь группу руками: юзерботы вступятся и получат точки касания.
+                </div>
+                <textarea
+                  className={`${inputCls} resize-none min-h-[90px] font-medium`}
+                  rows="3"
+                  value={groupsText}
+                  onChange={(e) => setGroupsText(e.target.value)}
+                  placeholder={'@group\nhttps://t.me/+AbCdEf...\nПо одной группе на строку'}
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs font-bold text-amber-700">
+                    {pendingGroups.length > 0
+                      ? `В очереди: ${pendingGroups.length} — вступятся сразу после конца подготовки`
+                      : ''}
+                  </div>
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    disabled={addingGroups || !groupsText.trim()}
+                    onClick={submitGroups}
+                  >
+                    {addingGroups ? <><Loader2 className="w-4 h-4 animate-spin" /> Добавляем...</> : 'Вступиться и пересчитать'}
+                  </button>
+                </div>
+              </Section>
+            </Card>
             <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
             {['ready', 'failed'].includes(preparation.status) && selectionMatchesPreparation ? (
               <ReadinessDashboard
                 accessToken={accessToken}
                 preparation={preparation}
                 onRecheck={recheckPreparation}
-                onAddGroups={addJoinTargets}
                 busy={sending}
               />
             ) : null}
@@ -906,6 +993,19 @@ export function BroadcastPage() {
           <Card>
             <Section>
               <SectionTitle icon={MessageSquare}>Сообщение</SectionTitle>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Шаблоны</span>
+                {BROADCAST_TEMPLATES.map((template) => (
+                  <button
+                    key={template.label}
+                    type="button"
+                    className="px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+                    onClick={() => applyTemplate(template)}
+                  >
+                    {template.label}
+                  </button>
+                ))}
+              </div>
               <textarea
                 className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-400 shadow-sm transition resize-none min-h-[160px]"
                 rows="8"
