@@ -988,6 +988,15 @@ export function BroadcastPage() {
                   {preparationBlocking}
                 </div>
               ) : null}
+              {titleEmpty ? (
+                <div className="mt-3">
+                  <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название рассылки — обязательно" />
+                  <div className="mt-2 text-xs text-amber-700 font-bold">Кнопка отправки серая, пока нет названия — по нему рассылка потом ищется в истории.</div>
+                </div>
+              ) : null}
+              {!preparationBlocking && messageEmpty ? (
+                <div className="mt-3 text-sm text-amber-700 font-medium">Напиши текст сообщения — без него кнопка отправки серая.</div>
+              ) : null}
               <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <button type="button" className={`${btnGhost} w-full sm:w-auto`} onClick={() => setStep('userbots')}>
                   Назад
