@@ -27,6 +27,8 @@ const STEPS = [
 
 const ACTIVE_PREPARATION_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
 
+const MEMBERS_PAGE_SIZE = 25;
+
 const AUDIENCE_LABELS = {
   client_base_members: 'База клиентов',
   channel_audience_members: 'База по каналам',
@@ -106,14 +108,15 @@ export function BroadcastPage() {
   const [step, setStep] = useState('base');
   const [form, setForm] = useState({ title: '', base: '', message_text: '' });
   const [manual, setManual] = useState({ tg_user_ids: [], members: [] });
-  const [showMembers, setShowMembers] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [membersPage, setMembersPage] = useState(0);
   const [poolIds, setPoolIds] = useState([]);
   const [preparation, setPreparation] = useState(null);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
   const [members, setMembers] = useState({ rows: [], total: 0, loading: false });
   const pollRef = useRef(null);
+  const memberIndexRef = useRef(new Map());
 
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
   const trialHoursLeft = useMemo(() => {
@@ -139,7 +142,7 @@ export function BroadcastPage() {
     ? {
         tg_user_ids: selectedIds,
         members: selectedIds.map((id) => {
-          const row = (members.rows || []).find((r) => String(r.tg_user_id) === String(id));
+          const row = memberIndexRef.current.get(String(id));
           return { tg_user_id: id, username: row?.username || '', display_name: row?.display_name || '' };
         })
       }
@@ -286,7 +289,7 @@ export function BroadcastPage() {
     };
   }, [accessToken, user?.id]);
 
-  // Состав выбранной базы
+  // Состав выбранной базы (постранично)
   useEffect(() => {
     if (!accessToken || !form.base.startsWith('client:')) {
       setMembers({ rows: [], total: 0, loading: false });
@@ -296,9 +299,16 @@ export function BroadcastPage() {
     async function loadMembers() {
       setMembers((prev) => ({ ...prev, loading: true }));
       try {
-        const data = await fetchClientBaseMembers(accessToken, form.base.slice('client:'.length), { limit: 200, offset: 0 });
+        const data = await fetchClientBaseMembers(accessToken, form.base.slice('client:'.length), {
+          limit: MEMBERS_PAGE_SIZE,
+          offset: membersPage * MEMBERS_PAGE_SIZE
+        });
         if (!cancelled) {
-          setMembers({ rows: data.members || [], total: data.summary?.total || 0, loading: false });
+          const rows = data.members || [];
+          for (const row of rows) {
+            memberIndexRef.current.set(String(row.tg_user_id), row);
+          }
+          setMembers({ rows, total: data.summary?.total || 0, loading: false });
         }
       } catch {
         if (!cancelled) {
@@ -310,11 +320,12 @@ export function BroadcastPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, form.base]);
+  }, [accessToken, form.base, membersPage]);
 
-  // Смена базы сбрасывает отметки получателей
+  // Смена базы сбрасывает отметки получателей и страницу
   useEffect(() => {
     setSelectedIds([]);
+    setMembersPage(0);
   }, [form.base]);
 
   // Черновик формы переживает перезагрузку
@@ -657,18 +668,9 @@ export function BroadcastPage() {
                           Писать всей базе
                         </button>
                       ) : null}
-                      {members.total > 0 ? (
-                        <button
-                          type="button"
-                          className="text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
-                          onClick={() => setShowMembers((prev) => !prev)}
-                        >
-                          {showMembers ? 'Скрыть состав' : 'Показать состав'}
-                        </button>
-                      ) : null}
                     </div>
                   </div>
-                  {showMembers && members.rows.length > 0 ? (
+                  {members.rows.length > 0 ? (
                     <div className="mt-3">
                       <TableShell>
                     <thead>
@@ -730,8 +732,28 @@ export function BroadcastPage() {
                       })}
                     </tbody>
                   </TableShell>
-                      <div className="mt-3 text-xs text-slate-500 font-medium">
-                        Показываем первые {members.rows.length} из {members.total}.
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-xs text-slate-500 font-medium">
+                          Страница {membersPage + 1} из {Math.max(Math.ceil(members.total / MEMBERS_PAGE_SIZE), 1)} · всего {members.total}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            disabled={membersPage === 0 || members.loading}
+                            onClick={() => setMembersPage((prev) => Math.max(prev - 1, 0))}
+                          >
+                            Назад
+                          </button>
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            disabled={(membersPage + 1) * MEMBERS_PAGE_SIZE >= members.total || members.loading}
+                            onClick={() => setMembersPage((prev) => prev + 1)}
+                          >
+                            Вперёд
+                          </button>
+                        </div>
                       </div>
                   </div>
                     ) : null}
