@@ -63,6 +63,7 @@ import { startReferralPayoutSender } from './jobs/referral-payout-sender.job.js'
 import { startReferralPayoutConfirmation } from './jobs/referral-payout-confirmation.job.js';
 import { startOfficialBotWebhookQueue } from './jobs/official-bot-webhook-queue.job.js';
 import { startManagedProxyReconcile } from './jobs/managed-proxy-reconcile.job.js';
+import { runProxyBootSweep } from './jobs/proxy-boot-sweep.job.js';
 import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
 import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.js';
 import { startBillingActivationRecovery } from './jobs/billing-activation-recovery.job.js';
@@ -336,9 +337,15 @@ httpServer.listen(PORT, async () => {
     startRestrictedUserbotCleanup(supabase);
     startAudienceSync(supabase);
     const broadcastPreparationService = new BroadcastPreparationService(supabase);
-    broadcastPreparationService.resumeStuckPreparations().catch(err => {
-        console.error('[BroadcastPreparation] resume failed:', err?.message || err);
-    });
+    // сначала перепроверяем прокси (после ребута сервера они могли лежать), потом возобновляем зависшие подготовки
+    runProxyBootSweep(supabase)
+        .then(() => broadcastPreparationService.resumeStuckPreparations())
+        .catch(err => {
+            console.error('[ProxyBootSweep] failed:', err?.message || err);
+            broadcastPreparationService.resumeStuckPreparations().catch(resumeErr => {
+                console.error('[BroadcastPreparation] resume failed:', resumeErr?.message || resumeErr);
+            });
+        });
     startTelegramWebHealth(supabase);
     startTonReserveWatch(supabase);
     startCryptoRatesRefresh(supabase);
