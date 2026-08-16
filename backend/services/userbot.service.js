@@ -1698,7 +1698,11 @@ export class UserbotService {
 
         this.prepareServiceClient(client);
         this._forceManagedIpv6Dc(client, userbot);
-        await this.connectWithProxyFallback(client, userbot);
+        await withTimeout(
+            this.connectWithProxyFallback(client, userbot),
+            90_000,
+            'Подключение юзербота к Telegram'
+        );
         return client;
     }
 

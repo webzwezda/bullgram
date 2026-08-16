@@ -2,6 +2,7 @@ import { UserbotService } from './userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
 import { classifyTelegramError } from '../utils/telegram-error-events.js';
+import { withTimeout } from '../shared/utils.js';
 
 const ACTIVE_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
 const PREPARABLE_AUDIENCE_TYPES = new Set(['channel_audience_members', 'client_base_members', 'manual_list']);
@@ -407,7 +408,7 @@ export class BroadcastPreparationService {
     async scanUserbotDialogs(userbot) {
         const client = await this.userbotService.createAuthorizedClient(userbot);
         try {
-            const dialogs = await client.getDialogs({ limit: 300 });
+            const dialogs = await withTimeout(client.getDialogs({ limit: 300 }), 120_000, 'Скан диалогов');
             const dialogUserIds = new Set();
             const chatIds = new Set();
             const peerCacheEntries = [];
@@ -599,7 +600,7 @@ export class BroadcastPreparationService {
     async scanChatParticipants(userbot, chatId) {
         const client = await this.userbotService.createAuthorizedClient(userbot);
         try {
-            const participants = await client.getParticipants(chatId, { limit: 5000 });
+            const participants = await withTimeout(client.getParticipants(chatId, { limit: 5000 }), 120_000, 'Скан участников группы');
             await upsertPeerCacheBatch(this.supabase, (participants || [])
                 .filter(participant => participant?.accessHash != null)
                 .map(participant => ({
