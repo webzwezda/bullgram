@@ -518,6 +518,10 @@ export function BroadcastPage() {
       toast.error('Выбери юзерботов.');
       return;
     }
+    if (!form.title.trim()) {
+      toast.error('Введи название рассылки.');
+      return;
+    }
     if (!form.message_text.trim()) {
       toast.error('Напиши текст сообщения.');
       return;
@@ -575,6 +579,7 @@ export function BroadcastPage() {
   const eligibleUserbots = state.userbots.filter((row) => row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
   const allSelected = eligibleUserbots.length > 0 && eligibleUserbots.every((row) => poolIds.map(String).includes(String(row.id)));
   const messageEmpty = !form.message_text.trim();
+  const titleEmpty = !form.title.trim();
   const preparationBlocking = !preparation
     ? 'Сначала прогони подготовку.'
     : ACTIVE_PREPARATION_STATUSES.has(preparation.status)
@@ -584,7 +589,7 @@ export function BroadcastPage() {
         : !selectionMatchesPreparation
           ? 'База или юзерботы изменились — запусти подготовку заново.'
           : '';
-  const sendDisabled = sending || messageEmpty || !baseSelected || poolIds.length === 0
+  const sendDisabled = sending || titleEmpty || messageEmpty || !baseSelected || poolIds.length === 0
     || !planRules.canSendBroadcasts
     || Boolean(preparationBlocking);
   const stepIndex = STEPS.findIndex((item) => item.id === step);
@@ -648,7 +653,7 @@ export function BroadcastPage() {
           <Section>
             <SectionTitle icon={Users}>База</SectionTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название кампании" />
+              <input className={inputCls} type="text" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Название рассылки — обязательно" />
               <select className={inputCls} value={form.base} onChange={(e) => setField('base', e.target.value)}>
                 <option value="">Выбери базу</option>
                 {baseOptions.map((opt) => (

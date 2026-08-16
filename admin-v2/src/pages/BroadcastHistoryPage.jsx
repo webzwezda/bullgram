@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ListChecks } from 'lucide-react';
+import { ListChecks, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -37,6 +37,8 @@ function senderLabel(campaign) {
 export function BroadcastHistoryPage() {
   const { accessToken, user } = useAuth();
   const [state, setState] = useState({ loading: true, error: '', campaigns: [], failures: [], userbots: [] });
+  const [activeCampaignId, setActiveCampaignId] = useState(null);
+  const activeCampaign = state.campaigns.find((campaign) => campaign.id === activeCampaignId) || null;
 
   useEffect(() => {
     if (!accessToken || !user?.id) return undefined;
@@ -78,9 +80,11 @@ export function BroadcastHistoryPage() {
 
   return (
     <section className="page page--flush space-y-6">
-      <RepliesChecker accessToken={accessToken} userbots={state.userbots} campaigns={state.campaigns} poolIds={[]} />
-
       {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
+
+      {activeCampaign ? (
+        <RepliesChecker accessToken={accessToken} userbots={state.userbots} campaign={activeCampaign} />
+      ) : null}
 
       <Card>
         <Section>
@@ -96,6 +100,7 @@ export function BroadcastHistoryPage() {
                   <Th>База</Th>
                   <Th>Отправители</Th>
                   <Th>Статус</Th>
+                  <Th>Ответы</Th>
                 </tr>
               </thead>
               <tbody>
@@ -109,6 +114,19 @@ export function BroadcastHistoryPage() {
                       <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
                         {campaign.status}
                       </StatusBadge>
+                    </Td>
+                    <Td>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${
+                          activeCampaignId === campaign.id
+                            ? 'bg-indigo-600 border-indigo-600 !text-white'
+                            : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-700'
+                        }`}
+                        onClick={() => setActiveCampaignId((prev) => (prev === campaign.id ? null : campaign.id))}
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" /> Проверить ответы
+                      </button>
                     </Td>
                   </Tr>
                 ))}

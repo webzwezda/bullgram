@@ -15,7 +15,7 @@ function memberLabel(reply) {
   return `TG ID ${reply.tg_user_id}`;
 }
 
-export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
+export function RepliesChecker({ accessToken, userbots, campaign }) {
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(false);
   const [state, setState] = useState({ phase: 'idle', progress: '', replies: [], errors: [] });
 
@@ -29,6 +29,11 @@ export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  // сменили рассылку — сбрасываем прошлый скан
+  useEffect(() => {
+    setState({ phase: 'idle', progress: '', replies: [], errors: [] });
+  }, [campaign?.id]);
 
   async function loadRecipientIds(campaignId) {
     const ids = new Set();
@@ -49,17 +54,16 @@ export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
   }
 
   async function checkReplies() {
+    if (!campaign?.id) return;
     const eligible = (userbots || []).filter((row) =>
       row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
-    const lastCampaign = (campaigns || [])[0];
-    const senderIds = (lastCampaign?.meta?.sender_userbot_ids || []).map(String);
-    const wanted = senderIds.length > 0 ? senderIds : (poolIds || []).map(String);
-    const targets = wanted
+    const senderIds = (campaign.meta?.sender_userbot_ids || []).map(String);
+    const targets = senderIds
       .map((id) => eligible.find((row) => String(row.id) === id))
       .filter(Boolean);
 
     if (targets.length === 0) {
-      setState({ phase: 'idle', progress: '', replies: [], errors: ['Нет живых юзерботов для проверки ответов.'] });
+      setState({ phase: 'idle', progress: '', replies: [], errors: ['У этой рассылки нет живых юзерботов-отправителей — ответы проверять не у кого.'] });
       return;
     }
 
@@ -68,12 +72,10 @@ export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
     const errors = [];
 
     let recipientIds = new Set();
-    if (lastCampaign?.id) {
-      try {
-        recipientIds = await loadRecipientIds(lastCampaign.id);
-      } catch {
-        // без списка получателей покажем все входящие диалоги
-      }
+    try {
+      recipientIds = await loadRecipientIds(campaign.id);
+    } catch {
+      // без списка получателей покажем все входящие диалоги
     }
 
     for (let i = 0; i < targets.length; i++) {
@@ -111,12 +113,12 @@ export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
   return (
     <Card>
       <Section>
-        <SectionTitle icon={MessageCircle}>Ответы</SectionTitle>
+        <SectionTitle icon={MessageCircle}>Ответы — «{campaign?.title || 'рассылка'}»</SectionTitle>
         <div className="text-sm text-slate-500 font-medium">
-          Сканируем диалоги юзерботов из последней рассылки: показываем людей, чьё сообщение стало последним в переписке.
+          Сканируем диалоги юзерботов, отправлявших эту рассылку: показываем получателей, чьё сообщение стало последним в переписке.
         </div>
         <div className="mt-4">
-          <button type="button" className={btnPrimary} disabled={scanning} onClick={checkReplies}>
+          <button type="button" className={btnPrimary} disabled={scanning || !campaign?.id} onClick={checkReplies}>
             {scanning ? <><Loader2 className="w-4 h-4 animate-spin" /> {state.progress}</> : 'Проверить ответы'}
           </button>
         </div>
@@ -127,7 +129,7 @@ export function RepliesChecker({ accessToken, userbots, campaigns, poolIds }) {
         ) : null}
         {state.phase === 'done' ? (
           state.replies.length === 0 ? (
-            <div className="mt-4"><EmptyNote>Ответов нет — по последней рассылке все молчат.</EmptyNote></div>
+            <div className="mt-4"><EmptyNote>Ответов нет — по этой рассылке все молчат.</EmptyNote></div>
           ) : (
             <div className="mt-4">
               <TableShell>
