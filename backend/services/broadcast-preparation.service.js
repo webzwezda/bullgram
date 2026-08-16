@@ -10,6 +10,7 @@ const ACTIVE_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing'
 const PREPARABLE_AUDIENCE_TYPES = new Set(['channel_audience_members', 'client_base_members', 'manual_list']);
 
 const runningPreparations = new Set();
+const scanChatIdsCache = new Map(); // preparationId -> Map(userbotId, Set<chat_id из диалогов>)
 
 export class PreparationError extends Error {
     constructor(statusCode, message) {
@@ -508,6 +509,12 @@ export class BroadcastPreparationService {
             throw new PreparationError(400, 'Ни один юзербот из пула не отдал диалоги');
         }
 
+        const knownChats = new Map();
+        for (const [userbotId, scan] of scanResults.entries()) {
+            knownChats.set(String(userbotId), scan.chatIds);
+        }
+        scanChatIdsCache.set(preparation.id, knownChats);
+
         // peer cache + пересечение
         const items = await this.loadItems(preparation.id);
         const memberIds = items.map(item => item.tg_user_id);
@@ -756,6 +763,7 @@ export class BroadcastPreparationService {
         const pool = await this.loadPoolUserbots(ownerId, preparation.userbot_ids);
         const targets = await this.buildJoinTargets(preparation);
         const externalTargets = preparation.external_targets || [];
+        const knownChats = scanChatIdsCache.get(preparation.id);
 
         const pausedUntil = new Map(); // userbot_id -> ts
         const joinStates = new Map(); // `${scope}:${raw}:${userbot_id}` -> 'done' | 'failed'
@@ -778,6 +786,16 @@ export class BroadcastPreparationService {
                     const key = `${target.scope}:${target.raw}:${userbot.id}`;
                     if (joinStates.get(key) === 'done' || joinStates.get(key) === 'failed') continue;
                     allDone = false;
+
+                    // JoinChannel идемпотентен: повторный вызов не падает USER_ALREADY_PARTICIPANT, но жжёт квоту —
+                    // если по скану диалогов юзербот уже в канале, отмечаем done без похода в Telegram
+                    if (target.scope === 'owner' && target.chat_id && knownChats?.get(String(userbot.id))?.has(String(target.chat_id))) {
+                        joinStates.set(key, 'done');
+                        joinsDone += 1;
+                        progressed = true;
+                        await this.updatePhaseDetail(preparation.id, { joins: { done: joinsDone, total: totalOps } });
+                        continue;
+                    }
 
                     const pauseTs = pausedUntil.get(userbot.id) || 0;
                     if (Date.now() < pauseTs) continue;
@@ -843,7 +861,9 @@ export class BroadcastPreparationService {
 
                         if (message.toUpperCase().includes('USER_ALREADY_PARTICIPANT')) {
                             joinStates.set(key, 'done');
+                            joinsDone += 1;
                             progressed = true;
+                            await this.updatePhaseDetail(preparation.id, { joins: { done: joinsDone, total: totalOps } });
                             continue;
                         }
                         if (floodSeconds) {
@@ -1024,6 +1044,7 @@ export class BroadcastPreparationService {
             throw new PreparationError(400, 'Эта подготовка уже не активна');
         }
         await this.setStatus(preparationId, 'cancelled');
+        scanChatIdsCache.delete(preparationId);
         return { status: 'cancelled' };
     }
 }
