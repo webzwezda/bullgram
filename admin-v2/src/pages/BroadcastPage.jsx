@@ -595,7 +595,7 @@ export function BroadcastPage() {
   const stepIndex = STEPS.findIndex((item) => item.id === step);
   let nextAction = null;
   if (step === 'base') {
-    nextAction = { label: 'Дальше — Юзерботы', onClick: () => setStep('userbots'), disabled: !baseSelected };
+    nextAction = { label: 'Дальше — Юзерботы', onClick: () => setStep('userbots'), disabled: !baseSelected || titleEmpty };
   } else if (step === 'userbots') {
     nextAction = selectionMatchesPreparation
       ? { label: 'Дальше — Подготовка', onClick: () => setStep('prepare') }
@@ -616,7 +616,7 @@ export function BroadcastPage() {
             {STEPS.map((item, i) => {
               const done = i < stepIndex;
               const current = i === stepIndex;
-              const locked = (item.id === 'prepare' || item.id === 'send') && !selectionMatchesPreparation;
+              const locked = (i > 0 && titleEmpty) || ((item.id === 'prepare' || item.id === 'send') && !selectionMatchesPreparation);
               return (
                 <li key={item.id} className="flex items-start flex-1 last:flex-none">
                   <button
@@ -663,6 +663,9 @@ export function BroadcastPage() {
                 ))}
               </select>
             </div>
+            {titleEmpty && baseSelected ? (
+              <div className="mt-3 text-sm text-amber-700 font-medium">Дай рассылке название — без него не получится перейти к следующему шагу.</div>
+            ) : null}
             {!baseSelected ? (
               state.clientBases.length === 0 && (manual.tg_user_ids || []).length === 0 ? (
                 <div className="mt-3">
