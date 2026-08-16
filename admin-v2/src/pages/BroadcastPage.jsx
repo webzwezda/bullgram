@@ -957,15 +957,16 @@ export function BroadcastPage() {
                 </div>
               </Section>
             </Card>
-            <PreparationRunner preparation={preparation} onCancel={cancelPreparation} />
-            {['ready', 'failed'].includes(preparation.status) && selectionMatchesPreparation ? (
-              <ReadinessDashboard
-                accessToken={accessToken}
-                preparation={preparation}
-                onRecheck={recheckPreparation}
-                busy={sending}
-              />
-            ) : null}
+            <PreparationRunner preparation={preparation} onCancel={cancelPreparation}>
+              {['ready', 'failed'].includes(preparation.status) && selectionMatchesPreparation ? (
+                <ReadinessDashboard
+                  accessToken={accessToken}
+                  preparation={preparation}
+                  onRecheck={recheckPreparation}
+                  busy={sending}
+                />
+              ) : null}
+            </PreparationRunner>
           </>
         ) : (
           <Card>
