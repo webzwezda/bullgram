@@ -315,9 +315,21 @@ export class BroadcastPreparationService {
             await this.phaseRecompute(preparation);
         } catch (error) {
             console.error(`[broadcast-preparation] ${preparationId} failed:`, error?.message || error);
+            const { data: row } = await this.supabase
+                .from('broadcast_preparations')
+                .select('phase_detail')
+                .eq('id', preparationId)
+                .maybeSingle();
+            const current = row?.phase_detail || {};
+            const adminHints = Array.isArray(current.admin_hints) ? [...new Set(current.admin_hints)] : [];
             await this.supabase
                 .from('broadcast_preparations')
-                .update({ status: 'failed', error: String(error?.message || error).slice(0, 500), updated_at: new Date().toISOString() })
+                .update({
+                    status: 'failed',
+                    error: String(error?.message || error).slice(0, 500),
+                    phase_detail: { ...current, errors: [...new Set([...(current.errors || []), ...adminHints])].slice(-30), admin_hints: [] },
+                    updated_at: new Date().toISOString()
+                })
                 .eq('id', preparationId);
         }
     }
@@ -330,10 +342,12 @@ export class BroadcastPreparationService {
             .single();
         const current = row?.phase_detail || {};
         const errors = [...(current.errors || []), ...(patch.errors || [])].slice(-30);
+        // admin_hints не показываем в рантайме — всплывают в финале, только если есть недостижимые
+        const adminHints = [...(current.admin_hints || []), ...(patch.admin_hints || [])].slice(-30);
         await this.supabase
             .from('broadcast_preparations')
             .update({
-                phase_detail: { ...current, ...patch, errors },
+                phase_detail: { ...current, ...patch, errors, admin_hints: adminHints },
                 updated_at: new Date().toISOString()
             })
             .eq('id', preparationId);
@@ -662,7 +676,7 @@ export class BroadcastPreparationService {
                     return true;
                 }
                 await this.updatePhaseDetail(preparation.id, {
-                    errors: [`${rawLink}: бот @${bot.bot.tg_username || 'official'} не смог выдать права (${promoted.description}) — пробуем юзербота-админа.`]
+                    admin_hints: [`${rawLink}: бот @${bot.bot.tg_username || 'official'} не смог выдать права (${promoted.description}) — пробуем юзербота-админа.`]
                 });
             }
 
@@ -676,7 +690,7 @@ export class BroadcastPreparationService {
             }
 
             await this.updatePhaseDetail(preparation.id, {
-                errors: [`${rawLink}: выдать админ-права некому — ни официальный бот, ни юзерботы пула не админы этого чата. Выдай права руками и нажми «Проверить снова».`]
+                admin_hints: [`${rawLink}: выдать админ-права некому — ни официальный бот, ни юзерботы пула не админы этого чата. Выдай права руками и нажми «Проверить снова».`]
             });
             return false;
         } catch (error) {
@@ -797,7 +811,7 @@ export class BroadcastPreparationService {
                                         }
                                     } else {
                                         await this.updatePhaseDetail(preparation.id, {
-                                            errors: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
+                                            admin_hints: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
                                         });
                                     }
                                 } else {
@@ -916,6 +930,16 @@ export class BroadcastPreparationService {
         const total = items.length;
         const coverage = total > 0 ? Math.round(((confirmed + probable) / total) * 100) : 0;
 
+        // подсказки про админ-права всплывают только в финале и только когда есть кому помогло бы
+        const { data: row } = await this.supabase
+            .from('broadcast_preparations')
+            .select('phase_detail')
+            .eq('id', preparation.id)
+            .single();
+        const current = row?.phase_detail || {};
+        const adminHints = Array.isArray(current.admin_hints) ? [...new Set(current.admin_hints)] : [];
+        const mergedErrors = [...new Set([...(current.errors || []), ...(unreachable > 0 ? adminHints : [])])].slice(-30);
+
         await this.supabase
             .from('broadcast_preparations')
             .update({
@@ -928,6 +952,7 @@ export class BroadcastPreparationService {
                     coverage_pct: coverage,
                     per_userbot: Object.fromEntries(perUserbot)
                 },
+                phase_detail: { ...current, errors: mergedErrors, admin_hints: [] },
                 updated_at: new Date().toISOString()
             })
             .eq('id', preparation.id)
