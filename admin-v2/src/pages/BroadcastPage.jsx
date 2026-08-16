@@ -13,6 +13,7 @@ import { PlanBanner } from '../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 import { PreparationRunner } from './broadcast/PreparationRunner.jsx';
 import { ReadinessDashboard } from './broadcast/ReadinessDashboard.jsx';
+import { RepliesChecker } from './broadcast/RepliesChecker.jsx';
 import {
   Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge,
   TableShell, Th, Td, Tr, inputCls, btnPrimary, btnGhost
@@ -22,7 +23,8 @@ const STEPS = [
   { id: 'base', label: 'База' },
   { id: 'userbots', label: 'Юзерботы' },
   { id: 'prepare', label: 'Подготовка' },
-  { id: 'send', label: 'Отправка' }
+  { id: 'send', label: 'Отправка' },
+  { id: 'history', label: 'История' }
 ];
 
 const ACTIVE_PREPARATION_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
@@ -527,6 +529,7 @@ export function BroadcastPage() {
         }
       });
       toast.success('Рассылка запущена.');
+      setStep('history');
       const campaigns = await apiRequest('/api/broadcast/campaigns', { accessToken });
       setState((prev) => ({
         ...prev,
@@ -574,6 +577,8 @@ export function BroadcastPage() {
       onClick: () => setStep('send'),
       disabled: preparation?.status !== 'ready' || !selectionMatchesPreparation
     };
+  } else if (step === 'send') {
+    nextAction = { label: 'Дальше — История', onClick: () => setStep('history'), disabled: sending };
   }
 
   return (
@@ -937,9 +942,17 @@ export function BroadcastPage() {
         </button>
       ) : null}
 
-      <Card>
-        <Section>
-          <SectionTitle icon={ListChecks}>История</SectionTitle>
+      {step === 'history' ? (
+        <>
+          <RepliesChecker
+            accessToken={accessToken}
+            userbots={state.userbots}
+            campaigns={state.campaigns}
+            poolIds={poolIds}
+          />
+          <Card>
+            <Section>
+              <SectionTitle icon={ListChecks}>История</SectionTitle>
           {state.campaigns.length === 0 ? (
             <EmptyNote>Рассылок еще не было.</EmptyNote>
           ) : (
@@ -993,8 +1006,10 @@ export function BroadcastPage() {
               </TableShell>
             </div>
           ) : null}
-        </Section>
-      </Card>
+            </Section>
+          </Card>
+        </>
+      ) : null}
     </section>
   );
 }
