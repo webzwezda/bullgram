@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Users, Bot, MessageSquare, ListChecks, Loader2, Check, Plus } from 'lucide-react';
+import { Users, Bot, MessageSquare, Loader2, Check, Plus } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { fetchClientBaseMembers } from '../api/client-bases.js';
 import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
@@ -13,7 +13,6 @@ import { PlanBanner } from '../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../ui/UpgradeCallout.jsx';
 import { PreparationRunner } from './broadcast/PreparationRunner.jsx';
 import { ReadinessDashboard } from './broadcast/ReadinessDashboard.jsx';
-import { RepliesChecker } from './broadcast/RepliesChecker.jsx';
 import {
   Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge,
   TableShell, Th, Td, Tr, inputCls, btnPrimary, btnGhost
@@ -23,19 +22,12 @@ const STEPS = [
   { id: 'base', label: 'База' },
   { id: 'userbots', label: 'Юзерботы' },
   { id: 'prepare', label: 'Подготовка' },
-  { id: 'send', label: 'Отправка' },
-  { id: 'history', label: 'История' }
+  { id: 'send', label: 'Отправка' }
 ];
 
 const ACTIVE_PREPARATION_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
 
 const MEMBERS_PAGE_SIZE = 25;
-
-const AUDIENCE_LABELS = {
-  client_base_members: 'База клиентов',
-  channel_audience_members: 'База по каналам',
-  manual_list: 'Ручная выборка'
-};
 
 const BROADCAST_TEMPLATES = [
   {
@@ -59,24 +51,6 @@ const BROADCAST_TEMPLATES = [
     text: 'Привет! Ты раньше был с нами — открываем доступ обратно на льготных условиях: [ссылка]. Если канал больше не интересен, просто не отвечай на это сообщение.'
   }
 ];
-
-function formatWhen(value) {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(value));
-}
-
-function senderLabel(campaign) {
-  if (campaign?.meta?.sender_usernames?.length) {
-    return campaign.meta.sender_usernames.map((name) => `@${name}`).join(', ');
-  }
-  if (campaign?.meta?.sender_username) {
-    return `@${campaign.meta.sender_username}`;
-  }
-  return 'Официальный бот';
-}
 
 function loadManualSelection() {
   try {
@@ -122,13 +96,12 @@ function baseValueFromPreparation(prep) {
 
 export function BroadcastPage() {
   const { accessToken, user, profilePlan, trialEndsAt } = useAuth();
+  const navigate = useNavigate();
   const [state, setState] = useState({
     loading: true,
     error: '',
     clientBases: [],
-    userbots: [],
-    campaigns: [],
-    failures: []
+    userbots: []
   });
   const [step, setStep] = useState('base');
   const [form, setForm] = useState({ title: '', base: '', message_text: '' });
@@ -225,7 +198,7 @@ export function BroadcastPage() {
         const urlParams = new URLSearchParams(window.location.search);
         const queryBaseId = urlParams.get('base_id');
         const queryAudienceType = urlParams.get('audience_type');
-        const [{ data: rawUserbots }, reserved, clientBases, campaigns, preparations] = await Promise.all([
+        const [{ data: rawUserbots }, reserved, clientBases, preparations] = await Promise.all([
           supabase
             .from('tg_accounts')
             .select('id, tg_username, tg_account_id, runtime_status, proxy_id, proxies(id, name, is_working, last_check_country, host, port)')
@@ -234,7 +207,6 @@ export function BroadcastPage() {
             .order('created_at', { ascending: false }),
           apiRequest('/api/shop/seller/reserved-assets', { accessToken }),
           apiRequest('/api/client-bases', { accessToken }),
-          apiRequest('/api/broadcast/campaigns', { accessToken }),
           apiRequest('/api/broadcast/preparations', { accessToken })
         ]);
 
@@ -247,9 +219,7 @@ export function BroadcastPage() {
           loading: false,
           error: '',
           clientBases: clientBases.bases || [],
-          userbots,
-          campaigns: campaigns.campaigns || [],
-          failures: campaigns.failures || []
+          userbots
         }));
 
         setPoolIds((prev) => (prev.length ? prev : (userbots[0] ? [userbots[0].id] : [])));
@@ -589,13 +559,7 @@ export function BroadcastPage() {
         }
       });
       toast.success('Рассылка запущена.');
-      setStep('history');
-      const campaigns = await apiRequest('/api/broadcast/campaigns', { accessToken });
-      setState((prev) => ({
-        ...prev,
-        campaigns: campaigns.campaigns || [],
-        failures: campaigns.failures || []
-      }));
+      navigate('/broadcast/history');
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -1043,74 +1007,6 @@ export function BroadcastPage() {
         </button>
       ) : null}
 
-      {step === 'history' ? (
-        <>
-          <RepliesChecker
-            accessToken={accessToken}
-            userbots={state.userbots}
-            campaigns={state.campaigns}
-            poolIds={poolIds}
-          />
-          <Card>
-            <Section>
-              <SectionTitle icon={ListChecks}>История</SectionTitle>
-          {state.campaigns.length === 0 ? (
-            <EmptyNote>Рассылок еще не было.</EmptyNote>
-          ) : (
-            <TableShell>
-              <thead>
-                <tr>
-                  <Th>Дата</Th>
-                  <Th>Название</Th>
-                  <Th>База</Th>
-                  <Th>Отправители</Th>
-                  <Th>Статус</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.campaigns.slice(0, 20).map((campaign) => (
-                  <Tr key={campaign.id}>
-                    <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(campaign.created_at)}</div></Td>
-                    <Td><div className="text-sm font-bold text-slate-900">{campaign.title}</div></Td>
-                    <Td><div className="text-xs text-slate-600 font-medium">{AUDIENCE_LABELS[campaign.audience_type] || campaign.audience_type}</div></Td>
-                    <Td><div className="text-xs text-slate-600 font-medium">{senderLabel(campaign)}</div></Td>
-                    <Td>
-                      <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
-                        {campaign.status}
-                      </StatusBadge>
-                    </Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </TableShell>
-          )}
-          {state.failures.length > 0 ? (
-            <div className="mt-6">
-              <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Не доставлено</div>
-              <TableShell>
-                <thead>
-                  <tr>
-                    <Th>Дата</Th>
-                    <Th>TG ID</Th>
-                    <Th>Ошибка</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.failures.slice(0, 20).map((row) => (
-                    <Tr key={row.id}>
-                      <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(row.created_at)}</div></Td>
-                      <Td><div className="text-xs text-slate-600 font-mono">{row.tg_user_id}</div></Td>
-                      <Td><div className="text-xs text-rose-600 font-medium">{row.error_text || '—'}</div></Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </TableShell>
-            </div>
-          ) : null}
-            </Section>
-          </Card>
-        </>
-      ) : null}
     </section>
   );
 }

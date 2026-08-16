@@ -4,7 +4,7 @@ import {
   Users, UserPlus, ShoppingBag, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
   RefreshCcw, Landmark,
-  Zap, CheckSquare
+  Zap, CheckSquare, History
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -25,6 +25,7 @@ const AbandonedPage = lazy(() => import('./pages/AbandonedPage.jsx').then((modul
 const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage.jsx').then((module) => ({ default: module.PaymentSettingsPage })));
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
+const BroadcastHistoryPage = lazy(() => import('./pages/BroadcastHistoryPage.jsx').then((module) => ({ default: module.BroadcastHistoryPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
@@ -50,10 +51,16 @@ export function App() {
         { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
-        { to: '/bases', label: 'Аудитория и базы', icon: Database },
-        { to: '/broadcast', label: 'Рассылки', icon: Send },
         { to: '/referrals', label: 'Партнерка', icon: Users },
         ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
+      ]
+    },
+    {
+      title: 'Рассылка',
+      items: [
+        { to: '/bases', label: 'Базы', icon: Database },
+        { to: '/broadcast', label: 'Рассылка', icon: Send, exact: true },
+        { to: '/broadcast/history', label: 'История рассылок', icon: History },
       ]
     },
     {
@@ -83,8 +90,10 @@ export function App() {
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Командный центр';
-    const current = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to));
-    return current?.label || 'Bullgram';
+    const exact = navItems.find((item) => item.to === location.pathname);
+    if (exact) return exact.label;
+    const prefix = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`));
+    return prefix?.label || 'Bullgram';
   }, [location.pathname, navItems]);
 
   useEffect(() => {
@@ -149,7 +158,7 @@ export function App() {
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      end={item.to === '/'}
+                      end={item.to === '/' || Boolean(item.exact)}
                       onClick={() => setMobileNavOpen(false)}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
@@ -217,6 +226,7 @@ export function App() {
                 <Route path="/retention" element={<RetentionPage />} />
                 <Route path="/abandoned" element={<AbandonedPage />} />
                 <Route path="/analytics" element={<Navigate to="/customers" replace />} />
+                <Route path="/broadcast/history" element={<BroadcastHistoryPage />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
                 <Route path="/claw" element={<Navigate to="/mcp" replace />} />
