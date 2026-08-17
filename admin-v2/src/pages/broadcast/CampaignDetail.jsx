@@ -75,6 +75,12 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatTile label="Доставлено" value={counts.sent ?? '—'} tone="ok" />
+        <StatTile label="Недоставлено" value={counts.failed ?? '—'} tone={(counts.failed || 0) > 0 ? 'danger' : 'default'} />
+        <StatTile label="Всего получателей" value={counts.total ?? '—'} />
+      </div>
+
       <Card>
         <Section>
           <button type="button" className={`${btnGhost} mb-4`} onClick={onBack}>
@@ -88,12 +94,6 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
           </div>
           <div className="mt-1.5 text-xs text-slate-500 font-medium">
             {formatWhen(campaign.created_at)} · {AUDIENCE_LABELS[campaign.audience_type] || campaign.audience_type}
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <StatTile label="Доставлено" value={counts.sent ?? '—'} tone="ok" />
-            <StatTile label="Недоставлено" value={counts.failed ?? '—'} tone={(counts.failed || 0) > 0 ? 'danger' : 'default'} />
-            <StatTile label="Всего получателей" value={counts.total ?? '—'} />
           </div>
         </Section>
       </Card>
