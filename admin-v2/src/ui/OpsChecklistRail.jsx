@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
+import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
 import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users } from 'lucide-react';
 
 const ICONS = {
@@ -300,6 +301,7 @@ export function OpsChecklistRail() {
         </div>
 
         {user ? <TonWalletSidebarRow /> : null}
+        {user ? <TelegramSidebarRow /> : null}
 
         {user ? (
           <button 

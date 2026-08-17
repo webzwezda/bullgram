@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
+import { TelegramLoginWidget } from '../telegram/TelegramLoginWidget.jsx';
 
 function normalizeTgId(value) {
   return String(value || '').replace(/[^\d]/g, '').trim();
@@ -19,7 +20,6 @@ export function ProfileTelegramCard() {
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
-  const widgetRef = useRef(null);
   const accessTokenRef = useRef('');
   accessTokenRef.current = accessToken;
 
@@ -67,29 +67,8 @@ export function ProfileTelegramCard() {
     }
   }, [applyBinding]);
 
-  // Telegram Login Widget: script reads the global callback by name at parse time
-  useEffect(() => {
-    const container = widgetRef.current;
-    if (!container || !botUsername) return undefined;
+  // Telegram Login Widget: подключается общим компонентом (уникальный глобальный колбэк на инстанс)
 
-    window.onTelegramAuth = (user) => handleWidgetAuth(user);
-
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.setAttribute('data-telegram-login', botUsername);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-userpic', 'false');
-    script.setAttribute('data-radius', '12');
-    script.setAttribute('data-request-access', 'write');
-    script.setAttribute('data-onauth', 'onTelegramAuth');
-    container.appendChild(script);
-
-    return () => {
-      delete window.onTelegramAuth;
-      container.innerHTML = '';
-    };
-  }, [botUsername, handleWidgetAuth]);
 
   const handleSave = useCallback(async () => {
     const normalizedTgId = normalizeTgId(tgIdValue);
@@ -135,7 +114,7 @@ export function ProfileTelegramCard() {
 
         {botUsername ? (
           <div className="flex items-center gap-3 flex-wrap">
-            <div ref={widgetRef} className="min-h-[40px]" />
+            <TelegramLoginWidget botUsername={botUsername} onAuth={handleWidgetAuth} />
             {verifying ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
