@@ -347,6 +347,11 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* утилитарные сетки (grid grid-cols-*) не должны наследовать отступ легаси .grid */
+.grid--flush {
+  margin-top: 0;
+}
+
 .userbots-buy-grid {
   margin-top: 0;
 }

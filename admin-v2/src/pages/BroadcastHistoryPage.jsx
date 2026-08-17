@@ -132,7 +132,7 @@ export function BroadcastHistoryPage() {
       {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
 
       {summary ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid--flush grid-cols-1 sm:grid-cols-3 gap-3">
           <StatTile
             label="Рассылок"
             value={summary.totalCampaigns ?? '—'}

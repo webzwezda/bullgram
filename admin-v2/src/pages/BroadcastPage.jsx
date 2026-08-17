@@ -649,7 +649,7 @@ export function BroadcastPage() {
         <Card>
           <Section>
             <SectionTitle icon={Users}>База</SectionTitle>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid--flush grid-cols-1 md:grid-cols-2 gap-3">
               <input
                 className={`${inputCls} ${titleEmpty ? '!border-rose-300 focus:!border-rose-400' : ''}`}
                 type="text"
