@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Sliders, Sparkles } from 'lucide-react';
+import { ShoppingBag, Sliders, Sparkles } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
-import { RequisitesSection } from './payment-settings/RequisitesSection.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
 import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
-import { usePaymentSettingsController } from './payment-settings/usePaymentSettingsController.js';
+import { BillingContactsCard } from '../features/billing/BillingContactsCard.jsx';
+import { MyPurchasesCard } from '../features/billing/MyPurchasesCard.jsx';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
 
 
-export function PaymentSettingsPage({ mode = 'requisites' }) {
+export function PaymentSettingsPage() {
   const { user, accessToken } = useAuth();
   const [billingTab, setBillingTab] = useState('subscription');
   const [state, setState] = useState({
@@ -34,17 +34,6 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     selectedBotId: null,
     updatedAt: null
   });
-  const {
-    fieldErrors,
-    patchSettings,
-    saveSettings,
-    validatePaymentFields
-  } = usePaymentSettingsController({
-    accessToken,
-    setState,
-    settings: state.settings
-  });
-
   useEffect(() => {
     let cancelled = false;
 
@@ -200,12 +189,7 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
     };
   }, [user?.id, accessToken]);
 
-  const {
-    prioritySignals,
-    isRequisitesMode,
-    isBillingMode,
-    pageCopy
-  } = usePaymentSettingsDerivedState({ mode, paymentEventFilter: 'all', state });
+  const { prioritySignals } = usePaymentSettingsDerivedState({ state });
 
   const bots = useMemo(() => {
     const botIds = new Set(state.tariffs.map((t) => t.bot_id).filter(Boolean));
@@ -242,109 +226,92 @@ export function PaymentSettingsPage({ mode = 'requisites' }) {
   }
 
   return (
-    <section className={`page${isRequisitesMode ? ' payment-page' : ''}`}>
-      {!isRequisitesMode && prioritySignals.length > 0 ? (
+    <section className="page">
+      {prioritySignals.length > 0 ? (
         <PrioritySignalsGrid signals={prioritySignals} />
       ) : null}
 
       {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
 
-      {isRequisitesMode ? (
-        <RequisitesSection
-          fieldErrors={fieldErrors}
-          patchSettings={patchSettings}
-          saveSettings={saveSettings}
-          saving={state.saving}
-          settings={state.settings}
-          validatePaymentFields={validatePaymentFields}
-        />
-      ) : null}
-
-      {isBillingMode ? (
-        <section className="page page--flush space-y-6">
-          <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
-            {/* Tabs Segment */}
-            <section className="p-6 md:p-8 bg-slate-50/50">
-              <div className="flex gap-1 overflow-x-auto border-b border-slate-100 mb-6">
-                {[
-                  { id: 'subscription', label: 'Подписка', icon: Sparkles },
-                  { id: 'purchases', label: 'Покупки', icon: Sliders },
-                  { id: 'settings', label: 'Настройки кассы', icon: Sliders }
-                ].map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = billingTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      className={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
-                        isActive
-                          ? 'border-indigo-600 text-indigo-600'
-                          : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                      }`}
-                      onClick={() => setBillingTab(tab.id)}
-                    >
-                      {Icon && <Icon className="w-4 h-4" />}
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {billingTab === 'purchases' && bots.length > 0 && (
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                  <div className="w-full md:w-[280px] shrink-0">
-                    <select
-                      className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
-                      value={state.selectedBotId || ''}
-                      onChange={(e) => setState((prev) => ({ ...prev, selectedBotId: e.target.value || null }))}
-                    >
-                      <option value="">Все боты</option>
-                      {bots.map((bot) => (
-                        <option key={bot.id} value={bot.id}>
-                          @{bot.tg_username}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            {/* Bottom Content Segment */}
-            <div className="border-t border-slate-200/60 bg-white">
-              {billingTab === 'settings' ? (
-                <div className="p-6 md:p-8 space-y-8">
-                  <RequisitesSection
-                    fieldErrors={fieldErrors}
-                    patchSettings={patchSettings}
-                    saveSettings={saveSettings}
-                    saving={state.saving}
-                    settings={state.settings}
-                    validatePaymentFields={validatePaymentFields}
-                    plain={true}
-                  />
-                </div>
-              ) : billingTab === 'purchases' ? (
-                <div className="p-6 md:p-8">
-                  <CryptoPurchasesSection
-                    paymentEvents={filteredPaymentEvents}
-                    invoiceMap={invoiceMap}
-                    tariffs={state.tariffs}
-                    plain={true}
-                  />
-                </div>
-              ) : (
-                <div className="p-6 md:p-8">
-                  <PlatformTierUpgradeCard />
-                </div>
-              )}
+      <section className="page page--flush space-y-6">
+        <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
+          {/* Tabs Segment */}
+          <section className="p-6 md:p-8 bg-slate-50/50">
+            <div className="flex gap-1 overflow-x-auto border-b border-slate-100 mb-6">
+              {[
+                { id: 'subscription', label: 'Подписка', icon: Sparkles },
+                { id: 'purchases', label: 'Покупки', icon: Sliders },
+                { id: 'my-purchases', label: 'Мои покупки', icon: ShoppingBag },
+                { id: 'settings', label: 'Настройки кассы', icon: Sliders }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = billingTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
+                      isActive
+                        ? 'border-indigo-600 text-indigo-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    }`}
+                    onClick={() => setBillingTab(tab.id)}
+                  >
+                    {Icon && <Icon className="w-4 h-4" />}
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
 
-          </div>
-        </section>
-      ) : null}
+            {billingTab === 'purchases' && bots.length > 0 && (
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="w-full md:w-[280px] shrink-0">
+                  <select
+                    className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
+                    value={state.selectedBotId || ''}
+                    onChange={(e) => setState((prev) => ({ ...prev, selectedBotId: e.target.value || null }))}
+                  >
+                    <option value="">Все боты</option>
+                    {bots.map((bot) => (
+                      <option key={bot.id} value={bot.id}>
+                        @{bot.tg_username}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </section>
 
+          {/* Bottom Content Segment */}
+          <div className="border-t border-slate-200/60 bg-white">
+            {billingTab === 'settings' ? (
+              <div className="p-6 md:p-8">
+                <BillingContactsCard />
+              </div>
+            ) : billingTab === 'my-purchases' ? (
+              <div className="p-6 md:p-8">
+                <MyPurchasesCard />
+              </div>
+            ) : billingTab === 'purchases' ? (
+              <div className="p-6 md:p-8">
+                <CryptoPurchasesSection
+                  paymentEvents={filteredPaymentEvents}
+                  invoiceMap={invoiceMap}
+                  tariffs={state.tariffs}
+                  plain={true}
+                />
+              </div>
+            ) : (
+              <div className="p-6 md:p-8">
+                <PlatformTierUpgradeCard />
+              </div>
+            )}
+          </div>
+
+        </div>
+      </section>
     </section>
   );
 }

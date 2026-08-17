@@ -21,7 +21,7 @@ function statusBadge(status) {
   return { label: status || '—', class: 'bg-slate-100 text-slate-600', Icon: Clock };
 }
 
-export function ProfilePurchasesCard() {
+export function MyPurchasesCard() {
   const { accessToken } = useAuth();
   const [state, setState] = useState({ loading: true, items: [], error: '' });
 

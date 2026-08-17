@@ -15,7 +15,7 @@ function normalizeTgId(value) {
   return String(value || '').replace(/[^\d]/g, '').trim();
 }
 
-export function ProfileContactsCard() {
+export function BillingContactsCard() {
   const { accessToken } = useAuth();
   const tonConnectAddress = useTonAddress();
   const tonConnectWallet = useTonWallet();
@@ -187,7 +187,7 @@ export function ProfileContactsCard() {
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-7">
       <div>
-        <h3 className="text-lg font-black text-slate-900 tracking-tight">Контакты</h3>
+        <h3 className="text-lg font-black text-slate-900 tracking-tight">Реквизиты и уведомления</h3>
         <p className="text-sm text-slate-500 mt-0.5">
           TON-кошелёк для приёма платежей и Telegram ID для уведомлений.
         </p>
