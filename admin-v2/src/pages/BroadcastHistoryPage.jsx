@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ListChecks, MessageCircle } from 'lucide-react';
+import { ListChecks, ChevronRight } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { RepliesChecker } from './broadcast/RepliesChecker.jsx';
+import { CampaignDetail } from './broadcast/CampaignDetail.jsx';
 import {
-  Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge,
-  TableShell, Th, Td, Tr
+  Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge, StatTile,
+  TableShell, Th, Td, Tr, btnGhost
 } from './broadcast/ui.jsx';
 
 const AUDIENCE_LABELS = {
@@ -24,7 +24,21 @@ function formatWhen(value) {
   }).format(new Date(value));
 }
 
-function senderLabel(campaign) {
+function deliveredLabel(campaign) {
+  const meta = campaign.meta || {};
+  if (meta.sent != null || meta.total != null) {
+    return `${meta.sent ?? 0} из ${meta.total ?? meta.sent ?? 0}`;
+  }
+  const stats = Array.isArray(meta.sender_stats) ? meta.sender_stats : [];
+  if (stats.length > 0) {
+    const sent = stats.reduce((sum, row) => sum + Number(row.sent || 0), 0);
+    const failed = stats.reduce((sum, row) => sum + Number(row.failed || 0), 0);
+    return `${sent} из ${sent + failed}`;
+  }
+  return '—';
+}
+
+function sendersLabel(campaign) {
   if (campaign?.meta?.sender_usernames?.length) {
     return campaign.meta.sender_usernames.map((name) => `@${name}`).join(', ');
   }
@@ -36,9 +50,10 @@ function senderLabel(campaign) {
 
 export function BroadcastHistoryPage() {
   const { accessToken, user } = useAuth();
-  const [state, setState] = useState({ loading: true, error: '', campaigns: [], failures: [], userbots: [] });
-  const [activeCampaignId, setActiveCampaignId] = useState(null);
-  const activeCampaign = state.campaigns.find((campaign) => campaign.id === activeCampaignId) || null;
+  const [state, setState] = useState({ loading: true, error: '', campaigns: [], summary: null, userbots: [] });
+  const [activeCampaignId, setActiveCampaignId] = useState(
+    () => new URLSearchParams(window.location.search).get('campaign')
+  );
 
   useEffect(() => {
     if (!accessToken || !user?.id) return undefined;
@@ -59,7 +74,7 @@ export function BroadcastHistoryPage() {
           loading: false,
           error: '',
           campaigns: campaigns.campaigns || [],
-          failures: campaigns.failures || [],
+          summary: campaigns.summary || null,
           userbots: rawUserbots || []
         });
       } catch (error) {
@@ -74,16 +89,62 @@ export function BroadcastHistoryPage() {
     };
   }, [accessToken, user?.id]);
 
+  function openCampaign(id) {
+    setActiveCampaignId(id);
+    window.history.replaceState(
+      {},
+      '',
+      id ? `/app/broadcast/history?campaign=${encodeURIComponent(id)}` : '/app/broadcast/history'
+    );
+  }
+
+  // битый deep-link (?campaign= нет в списке) — возвращаемся к списку
+  useEffect(() => {
+    if (!state.loading && activeCampaignId && !state.campaigns.some((row) => row.id === activeCampaignId)) {
+      openCampaign(null);
+    }
+  }, [state.loading, state.campaigns, activeCampaignId]);
+
   if (state.loading) {
     return <LoadingState text="Загружаем историю рассылок..." />;
   }
+
+  const activeCampaign = state.campaigns.find((row) => row.id === activeCampaignId) || null;
+
+  if (activeCampaign) {
+    return (
+      <section className="page page--flush space-y-6">
+        {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
+        <CampaignDetail
+          accessToken={accessToken}
+          userbots={state.userbots}
+          campaign={activeCampaign}
+          onBack={() => openCampaign(null)}
+        />
+      </section>
+    );
+  }
+
+  const summary = state.summary;
 
   return (
     <section className="page page--flush space-y-6">
       {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
 
-      {activeCampaign ? (
-        <RepliesChecker accessToken={accessToken} userbots={state.userbots} campaign={activeCampaign} />
+      {summary ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <StatTile
+            label="Рассылок"
+            value={summary.totalCampaigns ?? '—'}
+            hint={summary.partialCampaigns > 0 ? `с ошибками: ${summary.partialCampaigns}` : 'все чисто'}
+          />
+          <StatTile label="Отправлено" value={summary.totalSent ?? '—'} tone="ok" />
+          <StatTile
+            label="Недоставлено"
+            value={summary.totalFailed ?? '—'}
+            tone={(summary.totalFailed || 0) > 0 ? 'danger' : 'default'}
+          />
+        </div>
       ) : null}
 
       <Card>
@@ -99,33 +160,39 @@ export function BroadcastHistoryPage() {
                   <Th>Название</Th>
                   <Th>База</Th>
                   <Th>Отправители</Th>
+                  <Th>Доставлено</Th>
                   <Th>Статус</Th>
-                  <Th>Ответы</Th>
+                  <Th right />
                 </tr>
               </thead>
               <tbody>
-                {state.campaigns.slice(0, 50).map((campaign) => (
+                {state.campaigns.map((campaign) => (
                   <Tr key={campaign.id}>
                     <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(campaign.created_at)}</div></Td>
-                    <Td><div className="text-sm font-bold text-slate-900">{campaign.title}</div></Td>
+                    <Td>
+                      <button
+                        type="button"
+                        className="text-left text-sm font-bold text-slate-900 hover:text-indigo-700 transition-colors"
+                        onClick={() => openCampaign(campaign.id)}
+                      >
+                        {campaign.title}
+                      </button>
+                    </Td>
                     <Td><div className="text-xs text-slate-600 font-medium">{AUDIENCE_LABELS[campaign.audience_type] || campaign.audience_type}</div></Td>
-                    <Td><div className="text-xs text-slate-600 font-medium">{senderLabel(campaign)}</div></Td>
+                    <Td><div className="text-xs text-slate-600 font-medium">{sendersLabel(campaign)}</div></Td>
+                    <Td><div className="text-xs text-slate-600 font-bold whitespace-nowrap">{deliveredLabel(campaign)}</div></Td>
                     <Td>
                       <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
                         {campaign.status}
                       </StatusBadge>
                     </Td>
-                    <Td>
+                    <Td right>
                       <button
                         type="button"
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-colors ${
-                          activeCampaignId === campaign.id
-                            ? 'bg-indigo-600 border-indigo-600 !text-white'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-700'
-                        }`}
-                        onClick={() => setActiveCampaignId((prev) => (prev === campaign.id ? null : campaign.id))}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+                        onClick={() => openCampaign(campaign.id)}
                       >
-                        <MessageCircle className="w-3.5 h-3.5" /> Проверить ответы
+                        Открыть <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </Td>
                   </Tr>
@@ -133,29 +200,6 @@ export function BroadcastHistoryPage() {
               </tbody>
             </TableShell>
           )}
-          {state.failures.length > 0 ? (
-            <div className="mt-6">
-              <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-3">Не доставлено</div>
-              <TableShell>
-                <thead>
-                  <tr>
-                    <Th>Дата</Th>
-                    <Th>TG ID</Th>
-                    <Th>Ошибка</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.failures.slice(0, 50).map((row) => (
-                    <Tr key={row.id}>
-                      <Td><div className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatWhen(row.created_at)}</div></Td>
-                      <Td><div className="text-xs text-slate-600 font-mono">{row.tg_user_id}</div></Td>
-                      <Td><div className="text-xs text-rose-600 font-medium">{row.error_text || '—'}</div></Td>
-                    </Tr>
-                  ))}
-                </tbody>
-              </TableShell>
-            </div>
-          ) : null}
         </Section>
       </Card>
     </section>
