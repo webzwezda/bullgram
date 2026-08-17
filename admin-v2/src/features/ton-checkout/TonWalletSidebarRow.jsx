@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTonAddress, useTonWallet, useTonConnectModal, useTonConnectUI } from '@tonconnect/ui-react';
-import { Check, Copy, Loader2, Wallet, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Copy, Loader2, Wallet, X } from 'lucide-react';
 
 function shortAddress(addr) {
   if (!addr || addr.length < 12) return addr || '';
@@ -13,7 +14,6 @@ export function TonWalletSidebarRow() {
   const { open } = useTonConnectModal();
   const [tonConnectUI] = useTonConnectUI();
   const [disconnecting, setDisconnecting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const connected = Boolean(wallet);
 
   async function disconnect() {
@@ -31,10 +31,9 @@ export function TonWalletSidebarRow() {
     if (!address) return;
     try {
       await navigator.clipboard.writeText(address);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      toast.success('Адрес кошелька скопирован');
     } catch {
-      // clipboard недоступен — просто ничего не делаем
+      toast.error('Не удалось скопировать адрес');
     }
   }
 
@@ -53,13 +52,11 @@ export function TonWalletSidebarRow() {
         <button
           type="button"
           onClick={copyAddress}
-          className={`w-8 h-8 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 transition-colors shadow-sm ${
-            copied ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
-          }`}
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
           title="Скопировать адрес кошелька"
           aria-label="Скопировать адрес кошелька"
         >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          <Copy className="w-3.5 h-3.5" />
         </button>
         <button
           type="button"

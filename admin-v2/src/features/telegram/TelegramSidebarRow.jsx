@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Copy, Loader2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Copy, Loader2, X } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
 import { TelegramLoginWidget } from './TelegramLoginWidget.jsx';
@@ -16,7 +17,6 @@ export function TelegramSidebarRow() {
   });
   const [verifying, setVerifying] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -77,10 +77,9 @@ export function TelegramSidebarRow() {
     if (!state.telegramUserId) return;
     try {
       await navigator.clipboard.writeText(state.telegramUserId);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      toast.success(`TG ID скопирован: ${state.telegramUserId}`);
     } catch {
-      // clipboard недоступен — просто ничего не делаем
+      toast.error('Не удалось скопировать TG ID');
     }
   }
 
@@ -101,13 +100,11 @@ export function TelegramSidebarRow() {
         <button
           type="button"
           onClick={copyTgId}
-          className={`w-8 h-8 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 transition-colors shadow-sm ${
-            copied ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
-          }`}
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
           title="Скопировать Telegram ID"
           aria-label="Скопировать Telegram ID"
         >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          <Copy className="w-3.5 h-3.5" />
         </button>
         <button
           type="button"
