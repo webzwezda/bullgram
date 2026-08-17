@@ -117,5 +117,19 @@ export default function profileRoutes(supabase) {
         });
     });
 
+    router.delete('/telegram', authenticateUser, async (req, res) => {
+        await Promise.all([
+            supabase
+                .from('profiles')
+                .update({ telegram_user_id: null, telegram_username: null })
+                .eq('id', req.user.id),
+            supabase
+                .from('payment_settings')
+                .update({ admin_tg_id: null })
+                .eq('owner_id', req.user.id)
+        ]);
+        return res.json({ success: true });
+    });
+
     return router;
 }
