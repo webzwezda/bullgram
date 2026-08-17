@@ -499,9 +499,6 @@ export function BroadcastPage() {
   }, [preparation?.id, preparation?.status, pendingGroups]);
 
   function applyTemplate(template) {
-    if (form.message_text.trim() && form.message_text.trim() !== template.text) {
-      if (!window.confirm('Заменить текущий текст шаблоном?')) return;
-    }
     setField('message_text', template.text);
   }
 
