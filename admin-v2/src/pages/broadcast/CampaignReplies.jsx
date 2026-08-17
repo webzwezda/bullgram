@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MessageCircle, Loader2, ExternalLink, CheckCheck } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
 import { supabase } from '../../lib/supabase.js';
-import { Card, Section, SectionTitle, EmptyNote, ErrorNote, TableShell, Th, Td, Tr, btnPrimary, btnGhost } from './ui.jsx';
+import { Card, Section, SectionTitle, EmptyNote, ErrorNote, TableShell, Th, Td, Tr, btnPrimary, btnAccent, btnGhost } from './ui.jsx';
 
 function formatWhen(value) {
   if (!value) return '—';
@@ -139,6 +139,10 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
   const unreadReplies = state.replies.filter((reply) => (reply.unread_count || 0) > 0);
   const visibleReplies = state.filter === 'unread' ? unreadReplies : state.replies;
   const hasSenderIds = (campaign?.meta?.sender_userbot_ids || []).length > 0;
+  const senderTargets = (campaign?.meta?.sender_userbot_ids || [])
+    .map(String)
+    .map((id) => (userbots || []).find((row) => String(row.id) === id))
+    .filter((row) => row && row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
 
   return (
     <Card>
@@ -166,6 +170,22 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
             </div>
             {state.lastScanAt ? (
               <div className="mt-2 text-xs text-slate-400 font-bold">Последняя проверка: {minutesAgo(state.lastScanAt)} мин назад</div>
+            ) : null}
+
+            {telegramWebEnabled && senderTargets.length > 0 ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-400">TG Web:</span>
+                {senderTargets.map((target) => (
+                  <button
+                    key={target.id}
+                    type="button"
+                    className={`${btnGhost} !px-3 !py-1.5`}
+                    onClick={() => window.open(`/app/telegram-web/${target.id}`, '_blank', 'noopener')}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> @{target.tg_username || 'юзербот'}
+                  </button>
+                ))}
+              </div>
             ) : null}
 
             {state.errors.length > 0 ? (
@@ -236,10 +256,10 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
                                 {telegramWebEnabled ? (
                                   <button
                                     type="button"
-                                    className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors"
+                                    className={`${btnAccent} !px-3 !py-1.5 !text-xs`}
                                     onClick={() => window.open(`/app/telegram-web/${reply.userbot_id}`, '_blank', 'noopener')}
                                   >
-                                    <ExternalLink className="w-3 h-3" /> TG Web
+                                    <ExternalLink className="w-3.5 h-3.5" /> TG Web
                                   </button>
                                 ) : null}
                                 {(reply.unread_count || 0) > 0 ? (
