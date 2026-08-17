@@ -37,7 +37,13 @@ export function ProfileTelegramCard() {
     if (!accessToken) return;
     try {
       const data = await apiRequest('/api/profile/telegram/status', { accessToken });
-      if (data?.linked) applyBinding(data);
+      if (data?.linked) {
+        applyBinding(data);
+      } else if (data?.manual_tg_id) {
+        // ручной ID — предзаполняем поле, но это не «залогиненный» TG
+        setTgIdValue(String(data.manual_tg_id));
+        setTgIdSaved(String(data.manual_tg_id));
+      }
       setBotUsername(data?.bot_username || null);
     } catch {
       // card stays in manual mode if status check fails
