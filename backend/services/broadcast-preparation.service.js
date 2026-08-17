@@ -958,7 +958,9 @@ export class BroadcastPreparationService {
             .single();
         const current = row?.phase_detail || {};
         const adminHints = Array.isArray(current.admin_hints) ? [...new Set(current.admin_hints)] : [];
-        const mergedErrors = [...new Set([...(current.errors || []), ...(unreachable > 0 ? adminHints : [])])].slice(-30);
+        // при полном покрытии подсказки про админ-права неактуальны — вычищаем в том числе старые из errors
+        const withoutHints = (current.errors || []).filter(message => !adminHints.includes(message));
+        const mergedErrors = [...new Set([...withoutHints, ...(unreachable > 0 ? adminHints : [])])].slice(-30);
 
         await this.supabase
             .from('broadcast_preparations')
