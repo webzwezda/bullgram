@@ -41,7 +41,6 @@ import profileRoutes from './routes/profile.routes.js';
 import { buildExternalRouter } from './external/router.js';
 import { UserbotService } from './services/userbot.service.js';
 import { MtprotoBridgeService } from './services/mtproto-bridge.service.js';
-import { getPlatformBot } from './services/platform-bot.service.js';
 
 // Импортируем фоновые задачи (Cron)
 import { startAutoKick } from './jobs/auto-kick.job.js';
@@ -156,11 +155,6 @@ mtprotoBridgeWss.on('connection', (ws, req) => {
     mtprotoBridgeService.handleConnection(ws, req);
 });
 mtprotoBridgeService.start();
-
-// ==========================================
-// PLATFORM BOT (TG-link deep-link verification)
-// ==========================================
-getPlatformBot(supabase);
 
 // ==========================================
 // МИДДЛВАР: ПРОВЕРКА АВТОРИЗАЦИИ

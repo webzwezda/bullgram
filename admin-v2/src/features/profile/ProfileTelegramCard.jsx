@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link2, Loader2, Send } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
-
-const POLL_INTERVAL_MS = 2000;
-const POLL_MAX_DURATION_MS = 5 * 60 * 1000;
 
 function normalizeTgId(value) {
   return String(value || '').replace(/[^\d]/g, '').trim();
@@ -17,54 +14,87 @@ export function ProfileTelegramCard() {
   const [tgIdSaved, setTgIdSaved] = useState('');
   const [tgUsername, setTgUsername] = useState(null);
   const [tgSource, setTgSource] = useState(null);
+  const [botUsername, setBotUsername] = useState(null);
   const [toast, setToast] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const [tgLoading, setTgLoading] = useState(true);
-  const [tgError, setTgError] = useState('');
-  const [linking, setLinking] = useState(false);
-  const pollRef = useRef(null);
-  const pollDeadlineRef = useRef(0);
+  const widgetRef = useRef(null);
+  const accessTokenRef = useRef('');
+  accessTokenRef.current = accessToken;
 
-  // Refs let polling/async callbacks read current state without
-  // recreating the callback (which would retrigger effects → flicker).
-  const tgIdSavedRef = useRef('');
-  const tgSourceRef = useRef(null);
-  tgIdSavedRef.current = tgIdSaved;
-  tgSourceRef.current = tgSource;
+  const applyBinding = useCallback((data) => {
+    setTgUsername(data.telegram_username || null);
+    setTgSource(data.source || null);
+    const incoming = String(data.telegram_user_id || '');
+    if (incoming) {
+      setTgIdValue(incoming);
+      setTgIdSaved(incoming);
+    }
+  }, []);
 
-  const loadTgStatus = useCallback(async () => {
+  const loadStatus = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const data = await apiRequest('/api/profile/tg-link/status', { accessToken });
-      if (data?.linked) {
-        setTgUsername(data.telegram_username || null);
-        setTgSource(data.source || null);
-        const incoming = String(data.telegram_user_id || '');
-        if (incoming && incoming !== tgIdSavedRef.current) {
-          setTgIdValue(incoming);
-          setTgIdSaved(incoming);
-        }
-      }
-      setTgError('');
-    } catch (err) {
-      setTgError(err?.message || 'Не удалось проверить Telegram');
+      const data = await apiRequest('/api/profile/telegram/status', { accessToken });
+      if (data?.linked) applyBinding(data);
+      setBotUsername(data?.bot_username || null);
+    } catch {
+      // card stays in manual mode if status check fails
     }
-  }, [accessToken]);
+  }, [accessToken, applyBinding]);
 
   useEffect(() => {
-    loadTgStatus().finally(() => setTgLoading(false));
-  }, [loadTgStatus]);
+    loadStatus();
+  }, [loadStatus]);
 
-  useEffect(() => () => {
-    if (pollRef.current) window.clearInterval(pollRef.current);
-  }, []);
+  const handleWidgetAuth = useCallback(async (user) => {
+    if (!accessTokenRef.current) return;
+    setVerifying(true);
+    setToast(null);
+    try {
+      const data = await apiRequest('/api/profile/telegram/widget', {
+        accessToken: accessTokenRef.current,
+        method: 'POST',
+        body: user
+      });
+      applyBinding(data);
+      setToast({ kind: 'success', text: 'Telegram привязан' });
+    } catch (err) {
+      setToast({ kind: 'error', text: err?.message || 'Не удалось привязать Telegram' });
+    } finally {
+      setVerifying(false);
+    }
+  }, [applyBinding]);
+
+  // Telegram Login Widget: script reads the global callback by name at parse time
+  useEffect(() => {
+    const container = widgetRef.current;
+    if (!container || !botUsername) return undefined;
+
+    window.onTelegramAuth = (user) => handleWidgetAuth(user);
+
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', botUsername);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-userpic', 'false');
+    script.setAttribute('data-radius', '12');
+    script.setAttribute('data-request-access', 'write');
+    script.setAttribute('data-onauth', 'onTelegramAuth');
+    container.appendChild(script);
+
+    return () => {
+      delete window.onTelegramAuth;
+      container.innerHTML = '';
+    };
+  }, [botUsername, handleWidgetAuth]);
 
   const handleSave = useCallback(async () => {
     const normalizedTgId = normalizeTgId(tgIdValue);
     setSaving(true);
     setToast(null);
-    setTgError('');
     try {
       await apiRequest('/api/payment-settings', {
         accessToken,
@@ -84,66 +114,6 @@ export function ProfileTelegramCard() {
     }
   }, [accessToken, tgIdValue]);
 
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      window.clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
-
-  const startPolling = useCallback(() => {
-    stopPolling();
-    pollDeadlineRef.current = Date.now() + POLL_MAX_DURATION_MS;
-    pollRef.current = window.setInterval(async () => {
-      if (Date.now() > pollDeadlineRef.current) {
-        stopPolling();
-        setLinking(false);
-        setTgError('Код истёк — попробуйте ещё раз');
-        return;
-      }
-      try {
-        const data = await apiRequest('/api/profile/tg-link/status', { accessToken });
-        if (data?.linked) {
-          const incoming = String(data.telegram_user_id || '');
-          // Polling should fire when bot deep-link sets telegram_user_id (source flips to 'verified')
-          // OR when value itself changes
-          const becameVerified = data.source === 'verified' && tgSourceRef.current !== 'verified';
-          if ((incoming && incoming !== tgIdSavedRef.current) || becameVerified) {
-            setTgIdValue(incoming);
-            setTgIdSaved(incoming);
-            setTgUsername(data.telegram_username || null);
-            setTgSource(data.source || null);
-            stopPolling();
-            setLinking(false);
-            setTgError('');
-          }
-        }
-      } catch {
-        // silent — retry on next tick
-      }
-    }, POLL_INTERVAL_MS);
-  }, [accessToken, stopPolling]);
-
-  const handleTgLink = useCallback(async () => {
-    setTgError('');
-    setLinking(true);
-    try {
-      const data = await apiRequest('/api/profile/tg-link/init', {
-        accessToken,
-        method: 'POST',
-        body: {}
-      });
-      if (!data?.deeplink_url) {
-        throw new Error('Не удалось получить ссылку');
-      }
-      window.open(data.deeplink_url, '_blank', 'noopener,noreferrer');
-      startPolling();
-    } catch (err) {
-      setLinking(false);
-      setTgError(err?.message || 'Не удалось начать привязку');
-    }
-  }, [accessToken, startPolling]);
-
   const tgIdDirty = normalizeTgId(tgIdValue) !== normalizeTgId(tgIdSaved);
   const verified = tgSource === 'verified' && tgUsername;
 
@@ -153,6 +123,7 @@ export function ProfileTelegramCard() {
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Telegram</h3>
         <p className="text-sm text-slate-500 mt-0.5">
           Твой Telegram ID — сюда приходят уведомления: оплаты, конец триала, проблемы с юзерботами.
+          Нажми «Log in to Telegram» — ID подтянется сам.
         </p>
       </div>
 
@@ -161,6 +132,19 @@ export function ProfileTelegramCard() {
           <Send className="w-4 h-4 text-slate-500" />
           Telegram ID
         </div>
+
+        {botUsername ? (
+          <div className="flex items-center gap-3 flex-wrap">
+            <div ref={widgetRef} className="min-h-[40px]" />
+            {verifying ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Проверяем подпись…
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <input
           type="text"
           value={tgIdValue}
@@ -170,21 +154,10 @@ export function ProfileTelegramCard() {
           inputMode="numeric"
           className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-mono text-slate-900 focus:outline-none focus:border-slate-400 focus:bg-white transition-all"
         />
-        <div>
-          <button
-            type="button"
-            disabled={linking || tgLoading}
-            onClick={handleTgLink}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-xs font-bold hover:bg-sky-100 disabled:opacity-50 transition-all"
-          >
-            {linking ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
-            {linking ? 'Ждём подтверждения…' : 'Привязать через Telegram'}
-          </button>
-        </div>
+
         {verified ? (
           <p className="text-xs text-emerald-600 font-bold">Привязан: @{tgUsername}</p>
         ) : null}
-        {tgError ? <p className="text-xs text-rose-600">{tgError}</p> : null}
       </div>
 
       {toast ? (
