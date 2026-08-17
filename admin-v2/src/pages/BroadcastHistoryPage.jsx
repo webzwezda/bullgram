@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ListChecks, ChevronRight } from 'lucide-react';
+import { ListChecks, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -189,10 +189,10 @@ export function BroadcastHistoryPage() {
                     <Td right>
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
                         onClick={() => openCampaign(campaign.id)}
                       >
-                        Открыть <ChevronRight className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-3.5 h-3.5" /> Ответы
                       </button>
                     </Td>
                   </Tr>

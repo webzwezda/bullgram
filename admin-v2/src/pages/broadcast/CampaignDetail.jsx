@@ -95,7 +95,13 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
             <StatTile label="Недоставлено" value={counts.failed ?? '—'} tone={(counts.failed || 0) > 0 ? 'danger' : 'default'} />
             <StatTile label="Всего получателей" value={counts.total ?? '—'} />
           </div>
+        </Section>
+      </Card>
 
+      <CampaignReplies accessToken={accessToken} userbots={userbots} campaign={campaign} />
+
+      <Card>
+        <Section>
           {senderStats.length > 0 ? (
             <div className="mt-5">
               <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">Отправители</div>
@@ -185,8 +191,6 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
           )}
         </Section>
       </Card>
-
-      <CampaignReplies accessToken={accessToken} userbots={userbots} campaign={campaign} />
     </div>
   );
 }
