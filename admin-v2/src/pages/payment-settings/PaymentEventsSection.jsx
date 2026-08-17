@@ -80,16 +80,6 @@ export function PaymentEventsSection({
                       >
                         Заказы
                       </button>
-                      {event.payload?.tg_user_id ? (
-                        <a
-                          className="inline-action"
-                          href={`/app/dossier?tg=${encodeURIComponent(event.payload.tg_user_id)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Досье
-                        </a>
-                      ) : null}
                     </div>
                   </td>
                 </tr>

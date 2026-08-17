@@ -150,7 +150,7 @@ RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
 - `feat: ...` — New feature
 - `fix: ...` — Bug fix
 
-**When Adding Features:** Wire the scenario across the entire flow, not isolated screens. If adding an operational state, consider whether it should surface in: command center, dossier, orders, access, broadcast, and shop.
+**When Adding Features:** Wire the scenario across the entire flow, not isolated screens. If adding an operational state, consider whether it should surface in: command center, orders, access, broadcast, and shop.
 
 ## Testing & Verification
 
@@ -206,7 +206,7 @@ set(document.querySelector("input[placeholder*=\"...\"]"), "значение");
 
 ## Product Surfaces
 
-**Admin-v2 Routes:** `/app` (command center), `/app/crm`, `/app/orders`, `/app/access`, `/app/broadcast`, `/app/abandoned`, `/app/retention`, `/app/analytics`, `/app/proxies`, `/app/userbots`, `/app/sales-bot`, `/app/admin-groups`, `/app/bases`, `/app/dossier`, `/app/shop`, `/app/shop-receipts`, `/app/referrals`, `/app/payments`, `/app/billing`, `/app/plans`, `/app/claw`
+**Admin-v2 Routes:** `/app` (command center), `/app/crm`, `/app/orders`, `/app/access`, `/app/broadcast`, `/app/abandoned`, `/app/retention`, `/app/analytics`, `/app/proxies`, `/app/userbots`, `/app/sales-bot`, `/app/admin-groups`, `/app/bases`, `/app/shop`, `/app/shop-receipts`, `/app/referrals`, `/app/payments`, `/app/billing`, `/app/plans`, `/app/claw`
 
 **Backend Endpoints:** See `backend/README.md` for full API documentation. Key areas:
 - `/api/userbot/*` — Userbot operations, health checks, manual actions

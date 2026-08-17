@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  Users, UserPlus, ShoppingBag, ShoppingCart, Database,
+  Users, ShoppingBag, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
   RefreshCcw, Landmark,
   Zap, CheckSquare, History
@@ -15,7 +15,6 @@ import { Toaster } from './components/ui/sonner.jsx';
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
-const ClientDossierPage = lazy(() => import('./pages/ClientDossierPage.jsx').then((module) => ({ default: module.ClientDossierPage })));
 const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
 const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
@@ -76,15 +75,7 @@ export function App() {
         { to: '/billing', label: 'Касса', icon: Wallet },
         ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
-    },
-    ...(profileRole === 'admin'
-      ? [{
-        title: 'Для админа',
-        items: [
-          { to: '/dossier', label: 'Досье', icon: UserPlus },
-        ]
-      }]
-      : [])
+    }
   ];
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -216,7 +207,7 @@ export function App() {
                 <Route path="/orders" element={<Navigate to="/customers?tab=paid-orders" replace />} />
                 <Route path="/access" element={<Navigate to="/customers?tab=access" replace />} />
                 <Route path="/bases" element={<BasesPage />} />
-                <Route path="/dossier" element={<ClientDossierPage />} />
+                <Route path="/dossier" element={<Navigate to="/customers" replace />} />
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />

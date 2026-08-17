@@ -20,7 +20,7 @@ Current v2 product surfaces already in the repo:
 
 - paid-access ops: `command center` (`/app`), `crm` (`/app/crm`), `orders` (`/app/orders`), `access` (`/app/access`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`), `analytics` (`/app/analytics`)
 - Telegram infra: `proxies` (`/app/proxies`), `userbots` (`/app/userbots`), `sales-bot / official bot` (`/app/sales-bot`), `admin-groups` (`/app/admin-groups`)
-- ecosystem tooling: `bases` (`/app/bases`, legacy label `customer-bases`), `dossier` (`/app/dossier`, legacy label `client-dossier`), `observer` (`/app/observer`)
+- ecosystem tooling: `bases` (`/app/bases`, legacy label `customer-bases`), `observer` (`/app/observer`)
 - commerce: `shop` (`/app/shop`), `shop receipts` (`/app/shop-receipts`), `referrals` (`/app/referrals`), `payments` (`/app/payments`), `billing` (`/app/billing`), `plans` (`/app/plans`)
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
 
@@ -63,7 +63,7 @@ The deploy scripts use `rsync` to a live server. Treat them as production-only c
 ## Coding Style & Naming Conventions
 The codebase uses ESM (`import`/`export`) and plain JavaScript on the backend, plus React/Vite for `admin-v2` and `site-v2`. Match the surrounding file’s indentation; existing files mix 2-space and 4-space indents. Prefer small route/service modules, descriptive function names, and early returns for request validation.
 
-When adding admin features, wire the same scenario across the whole flow instead of creating isolated screens. In practice this means: if you add a new operational state, consider whether it should also surface in `command center`, `dossier`, `orders`, `access`, `broadcast`, and `shop`.
+When adding admin features, wire the same scenario across the whole flow instead of creating isolated screens. In practice this means: if you add a new operational state, consider whether it should also surface in `command center`, `orders`, `access`, `broadcast`, and `shop`.
 
 Current product focus:
 
@@ -195,7 +195,7 @@ Bullgram workflow:
 
 - start by mapping whether the task belongs to `backend`, `admin-v2`, `site-v2`, or `Bullgram MCP`
 - if the task spans `backend` plus `admin-v2` or `site-v2`, treat it as a cross-runtime flow immediately and assign separate implementation and review slices
-- if a task changes an operational state, also check `command center`, `dossier`, `orders`, `access`, and `shop`
+- if a task changes an operational state, also check `command center`, `orders`, `access`, `broadcast`, and `shop`
 - treat `Bullgram MCP` as the primary agent integration path
 - treat `Supabase MCP` as the primary database access path
 - when the task is about database contents, schema, or data fixes, prefer `Supabase MCP` before touching direct Postgres access

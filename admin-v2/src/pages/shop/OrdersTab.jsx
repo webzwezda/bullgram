@@ -1,4 +1,4 @@
-import { ShoppingCart, Search, FileCheck, CheckCircle2, XCircle, ExternalLink, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Search, FileCheck, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -145,16 +145,6 @@ export function OrdersTab({
                               Отклонить
                             </Button>
                           </>
-                        )}
-                        {purchase.payload?.buyer_tg_user_id && (
-                          <a
-                            href={`/app/dossier?tg=${encodeURIComponent(purchase.payload.buyer_tg_user_id)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
                         )}
                         {purchaseHasAssetType(purchase, 'proxy') && (
                           <a href="/app/proxies" target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-indigo-600">Прокси</a>

@@ -276,9 +276,6 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                               <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
                                 <Send className="w-3.5 h-3.5" />
                               </button>
-                              <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
-                                <Database className="w-3.5 h-3.5" />
-                              </a>
                             </>
                           )}
                         </div>
@@ -296,9 +293,6 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                             <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
                               <Send className="w-3.5 h-3.5" />
                             </button>
-                            <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
-                              <Database className="w-3.5 h-3.5" />
-                            </a>
                           </>
                         )}
                       </div>
@@ -2189,11 +2183,6 @@ export function CustomersPage() {
                 ))}
               </select>
             </div>
-            <div className="flex gap-2 w-full md:w-auto shrink-0">
-              <a className="flex-1 md:flex-none px-6 py-3.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all flex items-center justify-center gap-2" href="/app/dossier" target="_blank" rel="noreferrer">
-                <Database className="w-4 h-4 text-slate-400" /> Досье
-              </a>
-            </div>
           </div>
         </section>
 
@@ -2458,9 +2447,6 @@ export function CustomersPage() {
                                   <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать">
                                     <Send className="w-3.5 h-3.5" />
                                   </button>
-                                  <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-50 rounded-lg transition-all shadow-sm" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
-                                    <Database className="w-3.5 h-3.5" />
-                                  </a>
                                 </>
                               )}
                               <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 rounded-lg transition-all shadow-sm" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">

@@ -523,7 +523,7 @@ export function AbandonedPage() {
             </div>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
-            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков в рассылку или разберите индивидуально через Досье.
+            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков в рассылку.
           </p>
 
           {stale.length === 0 ? (
@@ -783,14 +783,6 @@ function InvoiceRow({ inv, channelTitle, onPush }) {
             {formatRelativeTime(inv.created_at)}
           </div>
         </div>
-        <a
-          href={`/app/dossier?tg=${encodeURIComponent(inv.tg_user_id)}`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-2.5 py-1.5 rounded-md text-[11px] font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          Досье
-        </a>
         <button
           type="button"
           className="px-2.5 py-1.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"

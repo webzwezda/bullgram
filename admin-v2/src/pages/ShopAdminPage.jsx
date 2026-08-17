@@ -1879,15 +1879,6 @@ export function ShopAdminPage() {
                             <button className="inline-action" onClick={() => rejectPurchase(purchase)}>Отклонить</button>
                           </>
                         ) : null}
-                        {purchase.payload?.buyer_tg_user_id ? (
-                          <a
-                            href={`/app/dossier?tg=${encodeURIComponent(purchase.payload.buyer_tg_user_id)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Досье
-                          </a>
-                        ) : null}
                         {purchaseHasAssetType(purchase, 'proxy') ? (
                           <a href="/app/proxies" target="_blank" rel="noreferrer">Прокси</a>
                         ) : null}

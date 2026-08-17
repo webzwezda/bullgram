@@ -1510,9 +1510,6 @@ export function ReferralsPage() {
                               <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" onClick={() => sendMessagePrompt(row)} title="Написать">
                                 <Bot className="w-4 h-4" />
                               </button>
-                              <a className="p-2 !text-slate-400 hover:!text-purple-600 hover:bg-purple-50 rounded-lg transition-all" href={`/app/dossier?tg=${encodeURIComponent(row.tg_user_id)}`} target="_blank" rel="noreferrer" title="Досье">
-                                <Activity className="w-4 h-4" />
-                              </a>
                               {hasBalance && (
                                 <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => markPayout(row, 'TON')} title="Выплатить">
                                   <CreditCard className="w-4 h-4" />
@@ -1621,9 +1618,6 @@ export function ReferralsPage() {
                             <div className="font-black text-slate-900 text-base mb-0.5">{lead.referred_display_name || lead.referred_username || lead.referred_tg_user_id}</div>
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-black uppercase text-slate-400 tracking-tight">ID: {lead.referred_tg_user_id}</span>
-                              <a className="p-1 !text-slate-300 hover:!text-purple-600 transition-colors" href={`/app/dossier?tg=${encodeURIComponent(lead.referred_tg_user_id)}`} target="_blank" rel="noreferrer">
-                                <Activity className="w-3.5 h-3.5" />
-                              </a>
                             </div>
                           </td>
                           <td className="px-8 py-6">
