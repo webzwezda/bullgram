@@ -1,30 +1,12 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
-
-const WIDGET_MAX_AGE_SEC = 3600;
-
-function verifyTelegramWidget(data, botToken) {
-    const { hash, ...rest } = data;
-    const checkString = Object.keys(rest)
-        .sort()
-        .map((key) => `${key}=${rest[key]}`)
-        .join('\n');
-    const secret = crypto.createHash('sha256').update(botToken).digest();
-    const hmac = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
-    if (hmac !== hash) return false;
-    const authDate = Number(data.auth_date || 0);
-    if (!authDate || Date.now() / 1000 - authDate > WIDGET_MAX_AGE_SEC) return false;
-    return true;
-}
 
 export default function profileRoutes(supabase) {
     const router = Router();
-    const BOT_USERNAME = process.env.PLATFORM_BOT_USERNAME;
-    const BOT_TOKEN = process.env.TG_BOT_TOKEN;
 
     router.get('/telegram/status', authenticateUser, async (req, res) => {
-        const [profileResp, settingsResp] = await Promise.all([
+        const [adminResp, profileResp, settingsResp] = await Promise.all([
+            supabase.auth.admin.getUserById(req.user.id),
             supabase
                 .from('profiles')
                 .select('telegram_user_id, telegram_username')
@@ -36,71 +18,52 @@ export default function profileRoutes(supabase) {
                 .eq('owner_id', req.user.id)
                 .maybeSingle()
         ]);
+        if (adminResp.error) return res.status(500).json({ error: adminResp.error.message });
         if (profileResp.error) return res.status(500).json({ error: profileResp.error.message });
 
-        // «Залогинен» = только verified-привязка через Login Widget (profiles.telegram_user_id).
-        // Ручной admin_tg_id и admin-права автопост-ботов — это настройки, не логин:
-        // иначе после отвязки сайдбар «залогинивался» обратно при перезагрузке.
-        const fromProfile = profileResp.data?.telegram_user_id || null;
+        // TG-логин = oidc-identity в gotrue. «Залогинен» — только она:
+        // ручной admin_tg_id и admin-права автопост-ботов — настройки, не логин.
+        const identities = adminResp.data?.user?.identities || [];
+        const oidcIdentity = identities.find((identity) => identity.provider === 'oidc') || null;
+        const telegramUserId = oidcIdentity ? String(oidcIdentity.provider_id) : null;
+        const telegramUsername = oidcIdentity?.identity_data?.preferred_username || null;
+
+        // Ленивый синк — только когда profiles ещё не знает TG ID (первый вход/линк).
+        // Вне этой ветки admin_tg_id не трогаем: юзер мог войти через TG A,
+        // а уведомления вручную перенаправить на B. 23505 (TG уже у другого
+        // аккаунта — осколок widget-эры) тихо пропускаем, статус не ломаем.
+        if (telegramUserId && String(profileResp.data?.telegram_user_id || '') !== telegramUserId) {
+            const { error: syncError } = await supabase
+                .from('profiles')
+                .update({ telegram_user_id: Number(telegramUserId), telegram_username: telegramUsername })
+                .eq('id', req.user.id);
+            if (!syncError) {
+                await supabase
+                    .from('payment_settings')
+                    .upsert({ owner_id: req.user.id, admin_tg_id: telegramUserId }, { onConflict: 'owner_id' });
+            }
+        }
+
         const manualTgId = settingsResp.data?.admin_tg_id
             ? String(settingsResp.data.admin_tg_id).trim() || null
             : null;
-        return res.json({
-            linked: Boolean(fromProfile),
-            telegram_user_id: fromProfile,
-            telegram_username: profileResp.data?.telegram_username || null,
-            source: fromProfile ? 'verified' : null,
-            manual_tg_id: manualTgId,
-            bot_username: BOT_USERNAME || null
-        });
-    });
-
-    router.post('/telegram/widget', authenticateUser, async (req, res) => {
-        if (!BOT_TOKEN || !BOT_USERNAME) {
-            return res.status(503).json({ error: 'TG_BOT_TOKEN или PLATFORM_BOT_USERNAME не настроен' });
-        }
-        const payload = req.body || {};
-        if (!payload.id || !payload.auth_date || !payload.hash) {
-            return res.status(400).json({ error: 'Неполные данные Telegram' });
-        }
-        if (!verifyTelegramWidget(payload, BOT_TOKEN)) {
-            return res.status(401).json({ error: 'Подпись Telegram не прошла проверку' });
-        }
-
-        const telegramUserId = Number(payload.id);
-        const telegramUsername = payload.username || null;
-
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ telegram_user_id: telegramUserId, telegram_username: telegramUsername })
-            .eq('id', req.user.id);
-        if (profileError) {
-            if (String(profileError.code || '').includes('23505')) {
-                return res.status(409).json({ error: 'Этот Telegram уже привязан к другому аккаунту Bullgram' });
-            }
-            return res.status(500).json({ error: profileError.message });
-        }
-
-        // Sync admin_tg_id so autopost/sales-bot/referral all see the same ID
-        const { error: settingsError } = await supabase
-            .from('payment_settings')
-            .upsert({ owner_id: req.user.id, admin_tg_id: String(telegramUserId) }, { onConflict: 'owner_id' });
-        if (settingsError) {
-            return res.status(500).json({ error: settingsError.message });
-        }
 
         return res.json({
-            linked: true,
-            telegram_user_id: String(telegramUserId),
+            linked: Boolean(telegramUserId),
+            telegram_user_id: telegramUserId,
             telegram_username: telegramUsername,
-            source: 'verified'
+            source: telegramUserId ? 'verified' : null,
+            manual_tg_id: manualTgId,
+            can_unlink: identities.length > 1
         });
     });
 
     router.delete('/telegram', authenticateUser, async (req, res) => {
-        // Отвязка = logout: чистим только verified-привязку.
+        // Отвязка = logout из TG: чистим только verified-привязку.
         // Ручной admin_tg_id (куда слать уведомления) и admin-права
-        // автопост-ботов не трогаем — это не «логин».
+        // автопост-ботов не трогаем — это не «логин». Саму oidc-identity
+        // в gotrue отвязывает фронт через supabase.auth.unlinkIdentity
+        // до этого вызова (нельзя удалить единственный способ входа).
         const { error } = await supabase
             .from('profiles')
             .update({ telegram_user_id: null, telegram_username: null })

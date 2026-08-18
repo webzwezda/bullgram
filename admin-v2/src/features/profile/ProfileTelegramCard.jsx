@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Send } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
-import { TelegramLoginWidget } from '../telegram/TelegramLoginWidget.jsx';
+import { supabase } from '../../lib/supabase.js';
 
 function normalizeTgId(value) {
   return String(value || '').replace(/[^\d]/g, '').trim();
@@ -15,13 +15,9 @@ export function ProfileTelegramCard() {
   const [tgIdSaved, setTgIdSaved] = useState('');
   const [tgUsername, setTgUsername] = useState(null);
   const [tgSource, setTgSource] = useState(null);
-  const [botUsername, setBotUsername] = useState(null);
   const [toast, setToast] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-
-  const accessTokenRef = useRef('');
-  accessTokenRef.current = accessToken;
+  const [linking, setLinking] = useState(false);
 
   const applyBinding = useCallback((data) => {
     setTgUsername(data.telegram_username || null);
@@ -44,7 +40,6 @@ export function ProfileTelegramCard() {
         setTgIdValue(String(data.manual_tg_id));
         setTgIdSaved(String(data.manual_tg_id));
       }
-      setBotUsername(data?.bot_username || null);
     } catch {
       // card stays in manual mode if status check fails
     }
@@ -54,27 +49,25 @@ export function ProfileTelegramCard() {
     loadStatus();
   }, [loadStatus]);
 
-  const handleWidgetAuth = useCallback(async (user) => {
-    if (!accessTokenRef.current) return;
-    setVerifying(true);
+  const handleLink = useCallback(async () => {
+    setLinking(true);
     setToast(null);
     try {
-      const data = await apiRequest('/api/profile/telegram/widget', {
-        accessToken: accessTokenRef.current,
-        method: 'POST',
-        body: user
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'oidc',
+        options: { redirectTo: `${window.location.origin}/app/profile` }
       });
-      applyBinding(data);
-      setToast({ kind: 'success', text: 'Telegram привязан' });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
     } catch (err) {
       setToast({ kind: 'error', text: err?.message || 'Не удалось привязать Telegram' });
     } finally {
-      setVerifying(false);
+      setLinking(false);
     }
-  }, [applyBinding]);
-
-  // Telegram Login Widget: подключается общим компонентом (уникальный глобальный колбэк на инстанс)
-
+  }, []);
 
   const handleSave = useCallback(async () => {
     const normalizedTgId = normalizeTgId(tgIdValue);
@@ -100,7 +93,7 @@ export function ProfileTelegramCard() {
   }, [accessToken, tgIdValue]);
 
   const tgIdDirty = normalizeTgId(tgIdValue) !== normalizeTgId(tgIdSaved);
-  const verified = tgSource === 'verified' && tgUsername;
+  const verified = tgSource === 'verified';
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-7">
@@ -108,7 +101,7 @@ export function ProfileTelegramCard() {
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Telegram</h3>
         <p className="text-sm text-slate-500 mt-0.5">
           Твой Telegram ID — сюда приходят уведомления: оплаты, конец триала, проблемы с юзерботами.
-          Нажми «Log in to Telegram» — ID подтянется сам.
+          Войди через Telegram — ID подтянется сам.
         </p>
       </div>
 
@@ -118,15 +111,17 @@ export function ProfileTelegramCard() {
           Telegram ID
         </div>
 
-        {botUsername ? (
+        {!verified ? (
           <div className="flex items-center gap-3 flex-wrap">
-            <TelegramLoginWidget botUsername={botUsername} onAuth={handleWidgetAuth} />
-            {verifying ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Проверяем подпись…
-              </span>
-            ) : null}
+            <button
+              type="button"
+              onClick={handleLink}
+              disabled={linking}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold transition-all disabled:opacity-50"
+            >
+              {linking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Привязать Telegram
+            </button>
           </div>
         ) : null}
 
@@ -141,7 +136,9 @@ export function ProfileTelegramCard() {
         />
 
         {verified ? (
-          <p className="text-xs text-emerald-600 font-bold">Привязан: @{tgUsername}</p>
+          <p className="text-xs text-emerald-600 font-bold">
+            {tgUsername ? `Привязан: @${tgUsername}` : 'Привязан через Telegram-логин'}
+          </p>
         ) : null}
       </div>
 

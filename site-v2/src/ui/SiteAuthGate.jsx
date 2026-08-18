@@ -228,14 +228,17 @@ export function SiteAuthGate({ children }) {
                 <div className="site-auth-gate__sidebar-content">
                   <div>
                     <div className="site-auth-gate__sidebar-label">Вход</div>
-                    <h2 className="site-auth-gate__sidebar-title">Нужен вход через Google</h2>
+                    <h2 className="site-auth-gate__sidebar-title">Нужен вход в аккаунт</h2>
                     <p className="site-auth-gate__sidebar-text">
                       Без авторизации не будет доступа к тарифам, покупке и рабочему кабинету.
                     </p>
                   </div>
 
-                  <button className="site-button site-button--primary" type="button" onClick={login} style={{ width: '100%', height: '44px' }}>
+                  <button className="site-button site-button--primary" type="button" onClick={() => login()} style={{ width: '100%', height: '44px' }}>
                     Войти через Google
+                  </button>
+                  <button className="site-button site-button--primary" type="button" onClick={() => login(null, 'oidc')} style={{ width: '100%', height: '44px', marginTop: '8px' }}>
+                    Войти через Telegram
                   </button>
 
                   <div className="site-auth-gate__login-note">

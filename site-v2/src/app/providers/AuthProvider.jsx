@@ -152,13 +152,13 @@ export function AuthProvider({ children }) {
     normalStartedAt,
     normalEndsAt,
     billingOrder,
-    async login(targetPath = null) {
+    async login(targetPath = null, provider = 'google') {
       const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
       const requestedPath = targetPath || currentPath;
       const url = new URL(requestedPath, window.location.origin);
       const redirectTo = url.origin === window.location.origin ? url.toString() : `${window.location.origin}/`;
       await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo }
       });
     },

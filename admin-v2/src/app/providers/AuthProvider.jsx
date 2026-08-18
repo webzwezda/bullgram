@@ -109,10 +109,10 @@ export function AuthProvider({ children }) {
     normalEndsAt,
     accessToken: session?.access_token || '',
     refreshProfile: () => loadProfile(session?.user?.id),
-    async login() {
+    async login(provider = 'google') {
       const redirectTo = `${window.location.origin}${window.location.pathname}`;
       await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo }
       });
     },

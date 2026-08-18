@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Copy, Loader2, X } from 'lucide-react';
+import { Copy, Loader2, Send, X } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../../api/client.js';
-import { TelegramLoginWidget } from './TelegramLoginWidget.jsx';
+import { supabase } from '../../lib/supabase.js';
 
 export function TelegramSidebarRow() {
   const { accessToken } = useAuth();
@@ -13,9 +13,9 @@ export function TelegramSidebarRow() {
     linked: false,
     telegramUsername: null,
     telegramUserId: null,
-    botUsername: null
+    canUnlink: true
   });
-  const [verifying, setVerifying] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export function TelegramSidebarRow() {
           linked: Boolean(data?.linked),
           telegramUsername: data?.telegram_username || null,
           telegramUserId: data?.telegram_user_id ? String(data.telegram_user_id) : null,
-          botUsername: data?.bot_username || null
+          canUnlink: data?.can_unlink !== false
         });
       })
       .catch(() => {
@@ -38,40 +38,48 @@ export function TelegramSidebarRow() {
     return () => { cancelled = true; };
   }, [accessToken]);
 
-  const handleAuth = useCallback(async (user) => {
-    if (!accessToken) return;
-    setVerifying(true);
+  const handleLink = useCallback(async () => {
+    setLinking(true);
     try {
-      const data = await apiRequest('/api/profile/telegram/widget', {
-        accessToken,
-        method: 'POST',
-        body: user
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'oidc',
+        options: { redirectTo: `${window.location.origin}/app/profile` }
       });
-      setState((prev) => ({
-        ...prev,
-        linked: true,
-        telegramUsername: data?.telegram_username || null,
-        telegramUserId: data?.telegram_user_id ? String(data.telegram_user_id) : null
-      }));
-    } catch {
-      // детали ошибки покажет карточка на /app/profile
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Не удалось привязать Telegram');
     } finally {
-      setVerifying(false);
+      setLinking(false);
     }
-  }, [accessToken]);
+  }, []);
 
   const handleUnlink = useCallback(async () => {
     if (!accessToken) return;
+    if (!state.canUnlink) {
+      toast.error('Telegram — единственный способ входа в этот аккаунт. Сначала войдите через Google и привяжите его.');
+      return;
+    }
     setUnlinking(true);
     try {
+      const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
+      if (identitiesError) throw identitiesError;
+      const oidcIdentity = (identitiesData?.identities || []).find((identity) => identity.provider === 'oidc');
+      if (oidcIdentity) {
+        const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: oidcIdentity.id });
+        if (unlinkError) throw unlinkError;
+      }
       await apiRequest('/api/profile/telegram', { accessToken, method: 'DELETE' });
       setState((prev) => ({ ...prev, linked: false, telegramUsername: null, telegramUserId: null }));
-    } catch {
-      // молча — повторная попытка через крестик
+    } catch (err) {
+      toast.error(err?.message || 'Не удалось отвязать Telegram');
     } finally {
       setUnlinking(false);
     }
-  }, [accessToken]);
+  }, [accessToken, state.canUnlink]);
 
   async function copyTgId() {
     if (!state.telegramUserId) return;
@@ -111,7 +119,7 @@ export function TelegramSidebarRow() {
           onClick={handleUnlink}
           disabled={unlinking}
           className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
-          title="Отвязать Telegram"
+          title={state.canUnlink ? 'Отвязать Telegram' : 'Единственный способ входа — отвязка недоступна'}
           aria-label="Отвязать Telegram"
         >
           {unlinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
@@ -121,13 +129,14 @@ export function TelegramSidebarRow() {
   }
 
   return (
-    <div className="mb-4 flex flex-col items-center gap-1">
-      {state.botUsername ? (
-        <TelegramLoginWidget botUsername={state.botUsername} onAuth={handleAuth} size="medium" radius={8} />
-      ) : null}
-      {verifying ? (
-        <span className="text-[10px] font-bold text-slate-400">Проверяем подпись…</span>
-      ) : null}
-    </div>
+    <button
+      type="button"
+      onClick={handleLink}
+      disabled={linking}
+      className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg border border-sky-600 transition-colors shadow-sm mb-4 disabled:opacity-50"
+    >
+      {linking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+      Привязать Telegram
+    </button>
   );
 }

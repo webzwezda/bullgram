@@ -1,10 +1,11 @@
+import { Send } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 
 export function LoginCard() {
   const { login } = useAuth();
 
   return (
-    <div className="flex flex-col mb-8 mt-2">
+    <div className="flex flex-col gap-2 mb-8 mt-2">
       <button
         className="group relative flex items-center justify-center gap-2 w-full px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl transition-all border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 overflow-hidden"
         type="button"
@@ -18,6 +19,14 @@ export function LoginCard() {
         </svg>
         Войти через Google
         <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity" />
+      </button>
+      <button
+        className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold rounded-xl transition-all border border-sky-600 shadow-sm hover:shadow-md"
+        type="button"
+        onClick={() => login(null, 'oidc')}
+      >
+        <Send className="w-4 h-4" />
+        Войти через Telegram
       </button>
     </div>
   );

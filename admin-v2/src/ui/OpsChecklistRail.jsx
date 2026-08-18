@@ -5,7 +5,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users } from 'lucide-react';
+import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users, Send } from 'lucide-react';
 
 const ICONS = {
   CreditCard, Bot, LayoutList, Globe, Smartphone, Users
@@ -312,13 +312,22 @@ export function OpsChecklistRail() {
             Выйти из системы
           </button>
         ) : (
-          <button 
-            onClick={login}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            Войти через Google
-          </button>
+          <div className="flex flex-col gap-1.5">
+            <button
+              onClick={() => login()}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              Войти через Google
+            </button>
+            <button
+              onClick={() => login('oidc')}
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Войти через Telegram
+            </button>
+          </div>
         )}
       </div>
 
