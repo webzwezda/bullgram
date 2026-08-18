@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { supabase } from '../../lib/supabase.js';
 
 function formatDateOnly(value) {
   if (!value) return '—';
@@ -18,6 +21,42 @@ function planMeta(plan, trialEndsAt, normalEndsAt) {
 
 export function ProfileIdentityCard() {
   const { user, profilePlan, trialEndsAt, normalEndsAt } = useAuth();
+
+  const [identities, setIdentities] = useState(null);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [linkError, setLinkError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUserIdentities()
+      .then(({ data }) => { if (alive) setIdentities(data?.identities || []); })
+      .catch(() => { if (alive) setIdentities([]); });
+    return () => { alive = false; };
+  }, [user?.id]);
+
+  const handleLinkGoogle = async () => {
+    setLinkingGoogle(true);
+    setLinkError(null);
+    try {
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/app/profile` }
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error('Не удалось открыть Google');
+    } catch (err) {
+      setLinkError(err?.message || 'Не удалось привязать Google');
+    } finally {
+      setLinkingGoogle(false);
+    }
+  };
+
+  const hasGoogle = (identities || []).some((i) => i.provider === 'google');
+  const hasTelegram = (identities || []).some((i) => i.provider === 'custom:telegram');
 
   const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Без имени';
   const profileEmail = user?.email || '';
@@ -50,6 +89,42 @@ export function ProfileIdentityCard() {
           </div>
         </div>
       </div>
+
+      {identities ? (
+        <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-xs font-black uppercase tracking-wider text-slate-400">Способы входа</div>
+            <p className="text-xs text-slate-400">Два способа — запасной вход, если один заблокируют</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {hasGoogle ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
+                Google подключён
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLinkGoogle}
+                disabled={linkingGoogle}
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-bold transition-all disabled:opacity-50"
+              >
+                {linkingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Привязать Google
+              </button>
+            )}
+            {hasTelegram ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
+                Telegram подключён
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-400 text-xs font-bold">
+                Telegram не привязан — кнопка ниже
+              </span>
+            )}
+          </div>
+          {linkError ? <p className="text-xs text-rose-600 font-bold">{linkError}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
