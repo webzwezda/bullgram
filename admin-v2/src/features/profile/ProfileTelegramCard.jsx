@@ -21,25 +21,18 @@ export function ProfileTelegramCard() {
 
   const applyBinding = useCallback((data) => {
     setTgUsername(data.telegram_username || null);
-    setTgSource(data.source || null);
-    const incoming = String(data.telegram_user_id || '');
-    if (incoming) {
-      setTgIdValue(incoming);
-      setTgIdSaved(incoming);
-    }
+    setTgSource(data?.linked ? (data.source || 'verified') : null);
+    // поле уведомлений — только ручное значение; oauth-ID после логина сюда не пишем
+    const manual = String(data.manual_tg_id || '').trim();
+    setTgIdValue(manual);
+    setTgIdSaved(manual);
   }, []);
 
   const loadStatus = useCallback(async () => {
     if (!accessToken) return;
     try {
       const data = await apiRequest('/api/profile/telegram/status', { accessToken });
-      if (data?.linked) {
-        applyBinding(data);
-      } else if (data?.manual_tg_id) {
-        // ручной ID — предзаполняем поле, но это не «залогиненный» TG
-        setTgIdValue(String(data.manual_tg_id));
-        setTgIdSaved(String(data.manual_tg_id));
-      }
+      applyBinding(data);
     } catch {
       // card stays in manual mode if status check fails
     }
@@ -81,9 +74,6 @@ export function ProfileTelegramCard() {
       });
       setTgIdSaved(normalizedTgId);
       setTgIdValue(normalizedTgId);
-      // Manual save clears verification flag, source becomes 'manual'
-      setTgUsername(null);
-      setTgSource(normalizedTgId ? 'manual' : null);
       setToast({ kind: 'success', text: 'Сохранено' });
     } catch (err) {
       setToast({ kind: 'error', text: err?.message || 'Ошибка сохранения' });
@@ -101,7 +91,8 @@ export function ProfileTelegramCard() {
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Telegram</h3>
         <p className="text-sm text-slate-500 mt-0.5">
           Твой Telegram ID — сюда приходят уведомления: оплаты, конец триала, проблемы с юзерботами.
-          Войди через Telegram — ID подтянется сам.
+          Это номер, который видят боты — узнай его у <span className="font-bold">@bullgram_getid_bot</span> и впиши сюда.
+          Вход через Telegram подтверждает аккаунт, но даёт другой (OAuth) номер — для уведомлений он не подходит.
         </p>
       </div>
 

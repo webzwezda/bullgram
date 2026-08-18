@@ -25,26 +25,21 @@ export default function profileRoutes(supabase) {
         // ручной admin_tg_id и admin-права автопост-ботов — настройки, не логин.
         const identities = adminResp.data?.user?.identities || [];
         const tgIdentity = identities.find((identity) => identity.provider === 'custom:telegram') || null;
-        // gotrue >=2.195: provider_id убран из сериализации, uid провайдера теперь в `id`
+        // gotrue >=2.195: provider_id убран из сериализации, uid провайдера теперь в `id`.
+        // ВАЖНО: это oauth-субъект Telegram (sub), НЕ классический аккаунтный TG ID,
+        // который видят боты — в admin_tg_id (уведомления) его писать нельзя.
         const telegramUserId = tgIdentity ? String(tgIdentity.provider_id ?? tgIdentity.id) : null;
         const telegramUsername = tgIdentity?.identity_data?.preferred_username
             || tgIdentity?.identity_data?.name
             || null;
 
-        // Ленивый синк — только когда profiles ещё не знает TG ID (первый вход/линк).
-        // Вне этой ветки admin_tg_id не трогаем: юзер мог войти через TG A,
-        // а уведомления вручную перенаправить на B. 23505 (TG уже у другого
-        // аккаунта — осколок widget-эры) тихо пропускаем, статус не ломаем.
+        // Ленивый синк логин-identity в profiles. payment_settings.admin_tg_id
+        // не трогаем никогда: ботам нужен классический TG ID, его знает только юзер.
         if (telegramUserId && String(profileResp.data?.telegram_user_id || '') !== telegramUserId) {
-            const { error: syncError } = await supabase
+            await supabase
                 .from('profiles')
                 .update({ telegram_user_id: telegramUserId, telegram_username: telegramUsername })
                 .eq('id', req.user.id);
-            if (!syncError) {
-                await supabase
-                    .from('payment_settings')
-                    .upsert({ owner_id: req.user.id, admin_tg_id: telegramUserId }, { onConflict: 'owner_id' });
-            }
         }
 
         const manualTgId = settingsResp.data?.admin_tg_id

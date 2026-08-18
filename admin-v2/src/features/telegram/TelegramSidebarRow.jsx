@@ -12,7 +12,7 @@ export function TelegramSidebarRow() {
     loading: true,
     linked: false,
     telegramUsername: null,
-    telegramUserId: null,
+    manualTgId: null,
     canUnlink: true
   });
   const [linking, setLinking] = useState(false);
@@ -28,7 +28,8 @@ export function TelegramSidebarRow() {
           loading: false,
           linked: Boolean(data?.linked),
           telegramUsername: data?.telegram_username || null,
-          telegramUserId: data?.telegram_user_id ? String(data.telegram_user_id) : null,
+          // классический TG ID (цель уведомлений), не oauth-субъект
+          manualTgId: data?.manual_tg_id ? String(data.manual_tg_id).trim() || null : null,
           canUnlink: data?.can_unlink !== false
         });
       })
@@ -82,38 +83,38 @@ export function TelegramSidebarRow() {
   }, [accessToken, state.canUnlink]);
 
   async function copyTgId() {
-    if (!state.telegramUserId) return;
+    if (!state.manualTgId) return;
     try {
-      await navigator.clipboard.writeText(state.telegramUserId);
-      toast.success(`TG ID скопирован: ${state.telegramUserId}`);
+      await navigator.clipboard.writeText(state.manualTgId);
+      toast.success(`TG ID скопирован: ${state.manualTgId}`);
     } catch {
       toast.error('Не удалось скопировать TG ID');
     }
   }
 
   if (state.linked) {
-    const label = state.telegramUsername
-      ? `@${state.telegramUsername}`
-      : (state.telegramUserId || 'Telegram');
+    const label = state.telegramUsername ? `@${state.telegramUsername}` : 'Telegram';
     return (
       <div className="flex items-center gap-1.5 mb-4">
         <Link
           to="/profile"
           className="flex-1 min-w-0 flex items-center justify-center gap-2 py-2 px-3 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm truncate"
-          title={state.telegramUserId ? `TG ID: ${state.telegramUserId} — открыть профиль` : 'Telegram привязан — открыть профиль'}
+          title={state.manualTgId ? `TG ID: ${state.manualTgId} — открыть профиль` : 'Telegram привязан — открыть профиль'}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
           <span className="truncate">{label}</span>
         </Link>
-        <button
-          type="button"
-          onClick={copyTgId}
-          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
-          title="Скопировать Telegram ID"
-          aria-label="Скопировать Telegram ID"
-        >
-          <Copy className="w-3.5 h-3.5" />
-        </button>
+        {state.manualTgId ? (
+          <button
+            type="button"
+            onClick={copyTgId}
+            className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
+            title="Скопировать Telegram ID"
+            aria-label="Скопировать Telegram ID"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={handleUnlink}
