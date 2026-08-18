@@ -70,5 +70,34 @@ export default function profileRoutes(supabase) {
         return res.json({ success: true });
     });
 
+    // Кошелёк юзера (TonConnect) — «последний подключённый», display-поле.
+    // Не касса продавца (payment_settings.ton_wallet) и не proof владения.
+    const WALLET_RE = /^(EQ|UQ)[A-Za-z0-9_\-]{45,60}$/;
+
+    router.get('/wallet', authenticateUser, async (req, res) => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('ton_wallet_address')
+            .eq('id', req.user.id)
+            .maybeSingle();
+        if (error) return res.status(500).json({ error: error.message });
+        return res.json({ address: data?.ton_wallet_address || null });
+    });
+
+    router.put('/wallet', authenticateUser, async (req, res) => {
+        const address = req.body?.address;
+        const normalized = typeof address === 'string' ? address.trim() : '';
+        if (normalized && !WALLET_RE.test(normalized)) {
+            return res.status(400).json({ error: 'Некорректный адрес TON-кошелька' });
+        }
+        const value = normalized || null;
+        const { error } = await supabase
+            .from('profiles')
+            .update({ ton_wallet_address: value })
+            .eq('id', req.user.id);
+        if (error) return res.status(500).json({ error: error.message });
+        return res.json({ success: true, address: value });
+    });
+
     return router;
 }
