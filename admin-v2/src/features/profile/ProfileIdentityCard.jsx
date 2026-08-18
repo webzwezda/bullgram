@@ -24,6 +24,7 @@ export function ProfileIdentityCard() {
 
   const [identities, setIdentities] = useState(null);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [unlinkingGoogle, setUnlinkingGoogle] = useState(false);
   const [linkError, setLinkError] = useState(null);
 
   useEffect(() => {
@@ -52,6 +53,28 @@ export function ProfileIdentityCard() {
       setLinkError(err?.message || 'Не удалось привязать Google');
     } finally {
       setLinkingGoogle(false);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    setUnlinkingGoogle(true);
+    setLinkError(null);
+    try {
+      const { data, error } = await supabase.auth.getUserIdentities();
+      if (error) throw error;
+      const list = data?.identities || [];
+      if (list.length <= 1) {
+        throw new Error('Google — единственный способ входа. Сначала привяжите другой.');
+      }
+      const googleIdentity = list.find((i) => i.provider === 'google');
+      if (!googleIdentity) throw new Error('Google не привязан');
+      const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: googleIdentity.id });
+      if (unlinkError) throw unlinkError;
+      setIdentities(list.filter((i) => i.provider !== 'google'));
+    } catch (err) {
+      setLinkError(err?.message || 'Не удалось отвязать Google');
+    } finally {
+      setUnlinkingGoogle(false);
     }
   };
 
@@ -98,9 +121,24 @@ export function ProfileIdentityCard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {hasGoogle ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
-                Google подключён
-              </span>
+              <>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
+                  Google подключён
+                </span>
+                {identities.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={handleUnlinkGoogle}
+                    disabled={unlinkingGoogle}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-slate-400 hover:text-rose-600 text-xs font-bold transition-all disabled:opacity-50"
+                  >
+                    {unlinkingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    Отвязать Google
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400 font-bold">единственный способ входа — не удалить</span>
+                )}
+              </>
             ) : (
               <button
                 type="button"
