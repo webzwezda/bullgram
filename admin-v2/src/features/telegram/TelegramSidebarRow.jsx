@@ -69,7 +69,7 @@ export function TelegramSidebarRow() {
       if (identitiesError) throw identitiesError;
       const oidcIdentity = (identitiesData?.identities || []).find((identity) => identity.provider === 'custom:telegram');
       if (oidcIdentity) {
-        const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: oidcIdentity.id });
+        const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: oidcIdentity.identity_id || oidcIdentity.id });
         if (unlinkError) throw unlinkError;
       }
       await apiRequest('/api/profile/telegram', { accessToken, method: 'DELETE' });

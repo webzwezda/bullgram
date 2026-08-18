@@ -68,7 +68,7 @@ export function ProfileIdentityCard() {
       }
       const googleIdentity = list.find((i) => i.provider === 'google');
       if (!googleIdentity) throw new Error('Google не привязан');
-      const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: googleIdentity.id });
+      const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: googleIdentity.identity_id || googleIdentity.id });
       if (unlinkError) throw unlinkError;
       setIdentities(list.filter((i) => i.provider !== 'google'));
     } catch (err) {

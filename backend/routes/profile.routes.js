@@ -25,7 +25,8 @@ export default function profileRoutes(supabase) {
         // ручной admin_tg_id и admin-права автопост-ботов — настройки, не логин.
         const identities = adminResp.data?.user?.identities || [];
         const tgIdentity = identities.find((identity) => identity.provider === 'custom:telegram') || null;
-        const telegramUserId = tgIdentity ? String(tgIdentity.provider_id) : null;
+        // gotrue >=2.195: provider_id убран из сериализации, uid провайдера теперь в `id`
+        const telegramUserId = tgIdentity ? String(tgIdentity.provider_id ?? tgIdentity.id) : null;
         const telegramUsername = tgIdentity?.identity_data?.preferred_username
             || tgIdentity?.identity_data?.name
             || null;
@@ -37,7 +38,7 @@ export default function profileRoutes(supabase) {
         if (telegramUserId && String(profileResp.data?.telegram_user_id || '') !== telegramUserId) {
             const { error: syncError } = await supabase
                 .from('profiles')
-                .update({ telegram_user_id: Number(telegramUserId), telegram_username: telegramUsername })
+                .update({ telegram_user_id: telegramUserId, telegram_username: telegramUsername })
                 .eq('id', req.user.id);
             if (!syncError) {
                 await supabase
