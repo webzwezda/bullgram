@@ -102,7 +102,7 @@ export function AuthGate({ children }) {
                   Войти через Google
                 </Button>
 
-                <Button className="h-12 w-full rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98] transition-all bg-sky-500 hover:bg-sky-600 text-white" onClick={() => login('oidc')}>
+                <Button className="h-12 w-full rounded-2xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer shadow-sm hover:shadow-md active:scale-[0.98] transition-all bg-sky-500 hover:bg-sky-600 text-white" onClick={() => login('custom:telegram')}>
                   <Send className="w-5 h-5 mr-1 shrink-0" />
                   Войти через Telegram
                 </Button>

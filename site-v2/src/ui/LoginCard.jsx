@@ -23,7 +23,7 @@ export function LoginCard() {
       <button
         className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold rounded-xl transition-all border border-sky-600 shadow-sm hover:shadow-md"
         type="button"
-        onClick={() => login(null, 'oidc')}
+        onClick={() => login(null, 'custom:telegram')}
       >
         <Send className="w-4 h-4" />
         Войти через Telegram

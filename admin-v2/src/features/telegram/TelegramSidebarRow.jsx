@@ -42,7 +42,7 @@ export function TelegramSidebarRow() {
     setLinking(true);
     try {
       const { data, error } = await supabase.auth.linkIdentity({
-        provider: 'oidc',
+        provider: 'custom:telegram',
         options: { redirectTo: `${window.location.origin}/app/profile` }
       });
       if (error) throw error;
@@ -67,7 +67,7 @@ export function TelegramSidebarRow() {
     try {
       const { data: identitiesData, error: identitiesError } = await supabase.auth.getUserIdentities();
       if (identitiesError) throw identitiesError;
-      const oidcIdentity = (identitiesData?.identities || []).find((identity) => identity.provider === 'oidc');
+      const oidcIdentity = (identitiesData?.identities || []).find((identity) => identity.provider === 'custom:telegram');
       if (oidcIdentity) {
         const { error: unlinkError } = await supabase.auth.unlinkIdentity({ identity_id: oidcIdentity.id });
         if (unlinkError) throw unlinkError;

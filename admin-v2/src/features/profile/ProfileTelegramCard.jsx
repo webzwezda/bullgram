@@ -54,7 +54,7 @@ export function ProfileTelegramCard() {
     setToast(null);
     try {
       const { data, error } = await supabase.auth.linkIdentity({
-        provider: 'oidc',
+        provider: 'custom:telegram',
         options: { redirectTo: `${window.location.origin}/app/profile` }
       });
       if (error) throw error;

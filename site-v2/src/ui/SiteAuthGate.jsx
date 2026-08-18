@@ -237,7 +237,7 @@ export function SiteAuthGate({ children }) {
                   <button className="site-button site-button--primary" type="button" onClick={() => login()} style={{ width: '100%', height: '44px' }}>
                     Войти через Google
                   </button>
-                  <button className="site-button site-button--primary" type="button" onClick={() => login(null, 'oidc')} style={{ width: '100%', height: '44px', marginTop: '8px' }}>
+                  <button className="site-button site-button--primary" type="button" onClick={() => login(null, 'custom:telegram')} style={{ width: '100%', height: '44px', marginTop: '8px' }}>
                     Войти через Telegram
                   </button>
 

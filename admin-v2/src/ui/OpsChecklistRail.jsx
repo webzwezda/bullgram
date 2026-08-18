@@ -321,7 +321,7 @@ export function OpsChecklistRail() {
               Войти через Google
             </button>
             <button
-              onClick={() => login('oidc')}
+              onClick={() => login('custom:telegram')}
               className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
             >
               <Send className="w-3.5 h-3.5" />

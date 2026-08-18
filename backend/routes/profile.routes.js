@@ -21,12 +21,14 @@ export default function profileRoutes(supabase) {
         if (adminResp.error) return res.status(500).json({ error: adminResp.error.message });
         if (profileResp.error) return res.status(500).json({ error: profileResp.error.message });
 
-        // TG-логин = oidc-identity в gotrue. «Залогинен» — только она:
+        // TG-логин = custom:telegram identity в gotrue. «Залогинен» — только она:
         // ручной admin_tg_id и admin-права автопост-ботов — настройки, не логин.
         const identities = adminResp.data?.user?.identities || [];
-        const oidcIdentity = identities.find((identity) => identity.provider === 'oidc') || null;
-        const telegramUserId = oidcIdentity ? String(oidcIdentity.provider_id) : null;
-        const telegramUsername = oidcIdentity?.identity_data?.preferred_username || null;
+        const tgIdentity = identities.find((identity) => identity.provider === 'custom:telegram') || null;
+        const telegramUserId = tgIdentity ? String(tgIdentity.provider_id) : null;
+        const telegramUsername = tgIdentity?.identity_data?.preferred_username
+            || tgIdentity?.identity_data?.name
+            || null;
 
         // Ленивый синк — только когда profiles ещё не знает TG ID (первый вход/линк).
         // Вне этой ветки admin_tg_id не трогаем: юзер мог войти через TG A,
