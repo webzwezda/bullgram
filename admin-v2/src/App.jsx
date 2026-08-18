@@ -51,7 +51,6 @@ export function App() {
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
         { to: '/referrals', label: 'Партнерка', icon: Users },
-        ...(profileRole === 'admin' ? [{ to: '/shop', label: 'Магазин', icon: ShoppingBag }] : []),
       ]
     },
     {
@@ -73,9 +72,15 @@ export function App() {
       title: 'Финансы',
       items: [
         { to: '/billing', label: 'Касса', icon: Wallet },
-        ...(profileRole === 'admin' ? [{ to: '/treasury', label: 'Казна проекта', icon: Landmark }] : [])
       ]
-    }
+    },
+    ...(profileRole === 'admin' ? [{
+      title: 'Админ',
+      items: [
+        { to: '/shop', label: 'Магазин', icon: ShoppingBag },
+        { to: '/treasury', label: 'Казна проекта', icon: Landmark },
+      ]
+    }] : [])
   ];
   const navItems = navSections.flatMap((section) => section.items);
 
