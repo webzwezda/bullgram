@@ -130,7 +130,7 @@ export function CommandCenterPage() {
             {pointers.map((pointer) => (
               <li key={pointer.href}>
                 <Link
-                  to={pointer.href}
+                  to={pointer.href.replace(/^\/app/, '') || '/'}
                   className="flex items-center gap-3 px-5 py-4 sm:px-6 hover:bg-slate-50 transition-colors group"
                 >
                   <span
