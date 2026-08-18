@@ -121,7 +121,8 @@ export default function dashboardRoutes(supabase) {
                     .eq('owner_id', ownerId),
                 supabase
                     .from('payment_settings')
-                    .select('id, ton_wallet, billing_provider, billing_mode, admin_tg_id')
+                    // PK = owner_id, колонки id нет
+                    .select('owner_id, ton_wallet, billing_provider, billing_mode, admin_tg_id')
                     .eq('owner_id', ownerId)
                     .maybeSingle()
             ]);
@@ -130,7 +131,15 @@ export default function dashboardRoutes(supabase) {
             if (channelsError) throw channelsError;
             if (proxiesError) throw proxiesError;
             if (customerBasesError && !(customerBasesError.message || '').includes('channel_audiences')) throw customerBasesError;
-            if (paymentSettingsError && !(paymentSettingsError.message || '').includes('payment_settings')) throw paymentSettingsError;
+            // Терпим только «таблицы ещё нет» на свежих инсталлах; остальное логируем,
+            // иначе ошибки схемы (как с несуществующей колонкой id) молча зануляют readiness.
+            if (paymentSettingsError) {
+                if ((paymentSettingsError.code || '') === 'PGRST205') {
+                    console.warn('dashboard: payment_settings недоступна:', paymentSettingsError.message);
+                } else {
+                    throw paymentSettingsError;
+                }
+            }
 
             const channelIds = (channels || []).map(channel => channel.id);
             const botIds = new Set((accounts || []).filter(account => account.account_type === 'bot').map(account => account.id));
@@ -536,7 +545,7 @@ export default function dashboardRoutes(supabase) {
                     shopTonRevenue: Number(shopTonRevenue.toFixed(4))
                 },
                 paymentReadiness: {
-                    hasSettings: !!paymentSettings?.id,
+                    hasSettings: !!paymentSettings,
                     hasTon: !!paymentSettings?.ton_wallet,
                     adminTgId: paymentSettings?.admin_tg_id ? String(paymentSettings.admin_tg_id) : '',
                     billingProvider: paymentSettings?.billing_provider || null,
