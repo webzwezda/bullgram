@@ -3,22 +3,26 @@ import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
-import { Package, ShoppingCart } from 'lucide-react';
+import { Package, ShoppingCart, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { apiRequest } from '../../api/client.js';
 import { INITIAL_FORM_STATE, INITIAL_PROXY_COMPOSER } from './shop.utils.js';
 import { useShopData } from './useShopData.js';
 import { useShopDerivedState } from './useShopDerivedState.js';
 import { useShopMutations } from './useShopMutations.js';
+import { useTreasuryData } from './useTreasuryData.js';
 import { ShopOverviewCards } from './ShopOverviewCards.jsx';
 import { ItemsTab } from './ItemsTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
+import { TreasuryTab } from './TreasuryTab.jsx';
 import { CreateItemDialog } from './CreateItemDialog.jsx';
 import { ProxyComposerDialog } from './ProxyComposerDialog.jsx';
 
 const TABS = [
   { id: 'items', label: 'Мои товары', icon: Package },
-  { id: 'orders', label: 'Заказы', icon: ShoppingCart }
+  { id: 'orders', label: 'Заказы', icon: ShoppingCart },
+  { id: 'treasury', label: 'Казна', icon: Landmark }
 ];
 
 export function ShopAdminPage() {
@@ -35,6 +39,8 @@ export function ShopAdminPage() {
   const [confirmState, setConfirmState] = useState({ open: false, title: '', onConfirm: null });
 
   const { state, setState, loadShop } = useShopData({ accessToken });
+  const treasury = useTreasuryData({ accessToken });
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const derived = useShopDerivedState({
     state,
@@ -69,6 +75,10 @@ export function ShopAdminPage() {
 
   const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
+  const openWithdrawalsCount = useMemo(() => (
+    (treasury.data?.withdrawals || []).filter((w) => ['requested', 'queued', 'sending'].includes(w.status)).length
+  ), [treasury.data]);
+
   // Prefill proxy composer from URL params
   useEffect(() => {
     if (!derived.canUseAssetSeller || !derived.saleProxies) return;
@@ -84,6 +94,40 @@ export function ShopAdminPage() {
       window.history.replaceState({}, '', '/app/shop');
     }
   }, [derived.canUseAssetSeller, derived.saleProxies]);
+
+  // Deep link /app/shop?tab=treasury
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') !== 'treasury') return;
+    setActiveTab('treasury');
+    window.history.replaceState({}, '', '/app/shop');
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'treasury' && !treasury.data && !treasury.loading && !treasury.error) {
+      treasury.reload();
+    }
+  }, [activeTab, treasury.data, treasury.loading, treasury.error, treasury.reload]);
+
+  async function handleSubmitWithdrawal(payload) {
+    setWithdrawing(true);
+    try {
+      const data = await apiRequest('/api/project-admin/treasury/withdrawals', {
+        accessToken,
+        method: 'POST',
+        body: { ...payload, network_fee_ton: 0.05 }
+      });
+      if (data.treasury) treasury.setData(data.treasury);
+      toast.success('Заявка на вывод создана');
+      return true;
+    } catch (error) {
+      toast.error(error.message || 'Не удалось создать заявку на вывод.');
+      return false;
+    } finally {
+      setWithdrawing(false);
+    }
+  }
 
   function handleOpenCreate() {
     setFormState({ ...INITIAL_FORM_STATE });
@@ -136,12 +180,6 @@ export function ShopAdminPage() {
   return (
     <section className="page">
       <div className="mb-6 space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Магазин</h1>
-          <p className="text-sm text-slate-500 mt-1">Товары, заказы и подтверждение оплат.</p>
-        </div>
-
         {/* Overview Cards */}
         <ShopOverviewCards data={{
           itemSummary: derived.itemSummary,
@@ -177,7 +215,9 @@ export function ShopAdminPage() {
             const isActive = activeTab === tab.id;
             const count = tab.id === 'items'
               ? derived.itemSummary.total
-              : derived.purchaseSummary.total;
+              : tab.id === 'orders'
+                ? derived.purchaseSummary.total
+                : openWithdrawalsCount;
             return (
               <button
                 key={tab.id}
@@ -202,7 +242,16 @@ export function ShopAdminPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'items' ? (
+        {activeTab === 'treasury' ? (
+          <TreasuryTab
+            data={treasury.data}
+            loading={treasury.loading}
+            error={treasury.error}
+            onReload={treasury.reload}
+            onSubmitWithdrawal={handleSubmitWithdrawal}
+            withdrawing={withdrawing}
+          />
+        ) : activeTab === 'items' ? (
           <ItemsTab
             filteredItems={derived.filteredItems}
             itemSummary={derived.itemSummary}

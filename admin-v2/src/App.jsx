@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Users, ShoppingBag, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
-  RefreshCcw, Landmark,
+  RefreshCcw,
   Zap, CheckSquare, History
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
@@ -26,7 +26,6 @@ const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then(
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const BroadcastHistoryPage = lazy(() => import('./pages/BroadcastHistoryPage.jsx').then((module) => ({ default: module.BroadcastHistoryPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
-const ProjectTreasuryPage = lazy(() => import('./pages/ProjectTreasuryPage.jsx').then((module) => ({ default: module.ProjectTreasuryPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
@@ -78,7 +77,6 @@ export function App() {
       title: 'Админ',
       items: [
         { to: '/shop', label: 'Магазин', icon: ShoppingBag },
-        { to: '/treasury', label: 'Казна проекта', icon: Landmark },
       ]
     }] : [])
   ];
@@ -234,7 +232,7 @@ export function App() {
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
-                <Route path="/treasury" element={<ProjectTreasuryPage />} />
+                <Route path="/treasury" element={<Navigate to="/shop?tab=treasury" replace />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
