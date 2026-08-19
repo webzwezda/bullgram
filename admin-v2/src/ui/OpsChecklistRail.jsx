@@ -202,7 +202,7 @@ export function OpsChecklistRail() {
         done: !!payment.hasTon,
         title: 'Способы оплаты',
         hint: 'Укажите реквизиты для приема платежей',
-        href: '/app/payments',
+        href: '/app/billing',
         icon: 'CreditCard'
       },
       {

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ShoppingBag, Sliders, Sparkles } from 'lucide-react';
+import { Coins, ShoppingBag, Sparkles, Wallet } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { DEFAULT_SETTINGS } from './payment-settings/payment-settings.constants.js';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
 import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
@@ -12,28 +11,38 @@ import { BillingContactsCard } from '../features/billing/BillingContactsCard.jsx
 import { MyPurchasesCard } from '../features/billing/MyPurchasesCard.jsx';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
 
+const BILLING_TABS = [
+  { id: 'subscription', label: 'Подписка Bullgram', icon: Sparkles },
+  { id: 'purchases', label: 'Оплаты от подписчиков', icon: Coins },
+  { id: 'my-purchases', label: 'Мои покупки', icon: ShoppingBag }
+];
 
 export function PaymentSettingsPage() {
   const { user, accessToken } = useAuth();
   const [billingTab, setBillingTab] = useState('subscription');
   const [state, setState] = useState({
     loading: true,
-    refreshing: false,
-    saving: false,
     error: '',
-    settings: DEFAULT_SETTINGS,
-    userbots: [],
-    channels: [],
-    tariffs: [],
     officialBots: [],
-    bundleItems: [],
-    bundleSupport: true,
+    tariffs: [],
     billingHealth: null,
     paymentEvents: [],
     invoices: [],
     selectedBotId: null,
     updatedAt: null
   });
+
+  // Deep link /app/billing?tab=purchases
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (BILLING_TABS.some((entry) => entry.id === tab)) {
+      setBillingTab(tab);
+    }
+    window.history.replaceState({}, '', '/app/billing');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -44,32 +53,16 @@ export function PaymentSettingsPage() {
         setState((prev) => ({
           ...prev,
           loading: !prev.updatedAt,
-          refreshing: !!prev.updatedAt,
           error: ''
         }));
       }
 
       try {
         const [
-          { data: settings },
-          { data: userbots, error: userbotsError },
-          { data: channels, error: channelsError },
           { data: officialBots, error: officialBotsError },
           health,
           { data: paymentEvents, error: paymentEventsError }
         ] = await Promise.all([
-          supabase.from('payment_settings').select('*').eq('owner_id', user.id).maybeSingle(),
-          supabase
-            .from('tg_accounts')
-            .select('id, tg_account_id, tg_username')
-            .eq('owner_id', user.id)
-            .eq('account_type', 'userbot')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('channels')
-            .select('id, title, tg_chat_id, chat_type, bot_id, visibility, username')
-            .eq('owner_id', user.id)
-            .order('created_at', { ascending: false }),
           supabase
             .from('tg_accounts')
             .select('id, tg_account_id, tg_username')
@@ -85,15 +78,10 @@ export function PaymentSettingsPage() {
             .limit(30)
         ]);
 
-        if (userbotsError) throw userbotsError;
-        if (channelsError) throw channelsError;
+        if (officialBotsError) throw officialBotsError;
         if (paymentEventsError && !(paymentEventsError.message || '').includes('payment_events')) {
           throw paymentEventsError;
         }
-
-        let tariffs = [];
-        let bundleItems = [];
-        let bundleSupport = true;
 
         const tariffsResult = await supabase
           .from('tariffs')
@@ -103,7 +91,7 @@ export function PaymentSettingsPage() {
           .order('created_at', { ascending: false });
 
         if (tariffsResult.error) throw tariffsResult.error;
-        tariffs = tariffsResult.data || [];
+        const tariffs = tariffsResult.data || [];
         const tariffIds = tariffs.map((t) => t.id);
 
         let invoicesData = [];
@@ -121,55 +109,24 @@ export function PaymentSettingsPage() {
           invoicesData = invoicesResult.data || [];
         }
 
-        const bundleItemsResult = await supabase
-          .from('tariff_bundle_items')
-          .select('*, channels(id, title)')
-          .eq('owner_id', user.id)
-          .eq('is_active', true)
-          .order('sort_order', { ascending: true })
-          .order('created_at', { ascending: true });
-
-        if (bundleItemsResult.error) {
-          if ((bundleItemsResult.error.message || '').includes('tariff_bundle_items')) {
-            bundleSupport = false;
-          } else {
-            throw bundleItemsResult.error;
-          }
-        } else {
-          bundleItems = bundleItemsResult.data || [];
-        }
-
         if (!cancelled) {
-          const nextUserbots = userbots || [];
-          const nextTariffs = tariffs || [];
-          setState({
+          setState((prev) => ({
+            ...prev,
             loading: false,
-            refreshing: false,
-            saving: false,
             error: '',
-            settings: {
-              ...DEFAULT_SETTINGS,
-              ...(settings || {})
-            },
-            userbots: nextUserbots,
-            channels: channels || [],
             officialBots: officialBots || [],
-            tariffs: nextTariffs,
-            bundleItems,
-            bundleSupport,
+            tariffs,
             billingHealth: health || null,
             paymentEvents: paymentEvents || [],
             invoices: invoicesData,
             updatedAt: new Date().toISOString()
-          });
+          }));
         }
       } catch (error) {
         if (!cancelled) {
           setState((prev) => ({
             ...prev,
             loading: false,
-            refreshing: false,
-            saving: false,
             error: error.message
           }));
         }
@@ -222,7 +179,7 @@ export function PaymentSettingsPage() {
   }, [state.paymentEvents, state.selectedBotId, invoiceMap, tariffBotMap]);
 
   if (state.loading) {
-    return <LoadingState text="Тянем реквизиты и кассу..." />;
+    return <LoadingState text="Тянем кассу и сверки..." />;
   }
 
   return (
@@ -235,15 +192,24 @@ export function PaymentSettingsPage() {
 
       <section className="page page--flush space-y-6">
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
+          <div className="p-6 md:p-8 bg-slate-50/50 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+                <Wallet className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Касса</h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Ваша подписка Bullgram, приём оплат от подписчиков и покупки в магазине.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Tabs Segment */}
           <section className="p-6 md:p-8 bg-slate-50/50">
             <div className="flex gap-1 overflow-x-auto border-b border-slate-100 mb-6">
-              {[
-                { id: 'subscription', label: 'Подписка', icon: Sparkles },
-                { id: 'purchases', label: 'Покупки', icon: Sliders },
-                { id: 'my-purchases', label: 'Мои покупки', icon: ShoppingBag },
-                { id: 'settings', label: 'Настройки кассы', icon: Sliders }
-              ].map((tab) => {
+              {BILLING_TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = billingTab === tab.id;
                 return (
@@ -257,7 +223,7 @@ export function PaymentSettingsPage() {
                     }`}
                     onClick={() => setBillingTab(tab.id)}
                   >
-                    {Icon && <Icon className="w-4 h-4" />}
+                    <Icon className="w-4 h-4" />
                     {tab.label}
                   </button>
                 );
@@ -286,22 +252,19 @@ export function PaymentSettingsPage() {
 
           {/* Bottom Content Segment */}
           <div className="border-t border-slate-200/60 bg-white">
-            {billingTab === 'settings' ? (
-              <div className="p-6 md:p-8">
+            {billingTab === 'purchases' ? (
+              <div className="p-6 md:p-8 space-y-6">
                 <BillingContactsCard />
-              </div>
-            ) : billingTab === 'my-purchases' ? (
-              <div className="p-6 md:p-8">
-                <MyPurchasesCard />
-              </div>
-            ) : billingTab === 'purchases' ? (
-              <div className="p-6 md:p-8">
                 <CryptoPurchasesSection
                   paymentEvents={filteredPaymentEvents}
                   invoiceMap={invoiceMap}
                   tariffs={state.tariffs}
                   plain={true}
                 />
+              </div>
+            ) : billingTab === 'my-purchases' ? (
+              <div className="p-6 md:p-8">
+                <MyPurchasesCard />
               </div>
             ) : (
               <div className="p-6 md:p-8">

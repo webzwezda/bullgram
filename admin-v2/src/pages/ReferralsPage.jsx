@@ -671,7 +671,7 @@ export function ReferralsPage() {
     const automaticRefund = !!state.support?.automaticRefundSender;
     const confirmed = window.confirm(
       defaultRefundWallet
-        ? `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)} на кошелек из app/payments?\n\nДепозит: ${formatTon(grossRefundableTon)}\nКомиссия сети: ${formatTon(refundNetworkFeeTon)}\nК получению: ${formatTon(refundableTon)}\n\n${defaultRefundWallet}`
+        ? `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)} на кошелек из Кассы → Оплаты от подписчиков (/app/billing)?\n\nДепозит: ${formatTon(grossRefundableTon)}\nКомиссия сети: ${formatTon(refundNetworkFeeTon)}\nК получению: ${formatTon(refundableTon)}\n\n${defaultRefundWallet}`
         : `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`
     );
     if (!confirmed) return;
@@ -679,7 +679,7 @@ export function ReferralsPage() {
     if (rawWallet === null) return;
     const refundWallet = String(rawWallet || '').trim();
     if (!refundWallet) {
-      window.alert('Нужен TON-кошелек для возврата. Укажи его в app/payments.');
+      window.alert('Нужен TON-кошелек для возврата. Укажи его в Кассе на табе «Оплаты от подписчиков» (/app/billing).');
       return;
     }
     const note = window.prompt('Комментарий к возврату:', '') || '';
@@ -1086,7 +1086,7 @@ export function ReferralsPage() {
                   </div>
                   <p className="text-sm text-slate-500 font-medium">
                     {state.reserve?.status === 'refund_requested'
-                      ? `Заявка на ${formatTon(state.reserve?.refundRequestedTon)}. Вернем на TON-кошелек из app/payments.`
+                      ? `Заявка на ${formatTon(state.reserve?.refundRequestedTon)}. Вернем на TON-кошелек из Кассы → Оплаты от подписчиков (/app/billing).`
                       : state.reserve?.canRequestRefund
                         ? `К возврату: ${formatTon(state.reserve?.refundableTon)}. Сеть: ${formatTon(state.reserve?.refundNetworkFeeTon)}.`
                         : state.reserve?.lockedUntil
