@@ -16,7 +16,7 @@ const COLOR_MAP = {
 
 export function ShopOverviewCards({ data }) {
   return (
-    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid--flush gap-4 grid-cols-2 lg:grid-cols-4">
       {CARDS.map((card) => {
         const Icon = card.icon;
         const colors = COLOR_MAP[card.color];

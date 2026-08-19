@@ -129,7 +129,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid--flush grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <TreasuryStatCard
                   icon={Wallet}
                   iconClasses="bg-indigo-100 text-indigo-600"
@@ -161,7 +161,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                 />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid--flush grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-2xl ring-1 ring-slate-200/60 bg-white shadow-sm p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-slate-900">Деньги</h3>
