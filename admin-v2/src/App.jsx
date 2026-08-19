@@ -40,7 +40,6 @@ export function App() {
       items: [
         { to: '/autopost', label: 'Автопостер', icon: Zap },
         { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
-        { to: '/checklist', label: 'Чеклисты', icon: CheckSquare },
       ]
     },
     {
@@ -77,6 +76,7 @@ export function App() {
       title: 'Админ',
       items: [
         { to: '/shop', label: 'Магазин', icon: ShoppingBag },
+        { to: '/checklist', label: 'Чеклисты', icon: CheckSquare },
       ]
     }] : [])
   ];
@@ -242,7 +242,11 @@ export function App() {
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/shop" replace />} />
                 <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/checklist" element={<ChecklistPage accessToken={accessToken} />} />
+                <Route path="/checklist" element={
+                  profileLoading
+                    ? <LoadingState text="Проверяем доступ..." />
+                    : profileRole === 'admin' ? <ChecklistPage accessToken={accessToken} /> : <Navigate to="/" replace />
+                } />
               </Routes>
             </Suspense>
           </AuthGate>
