@@ -92,7 +92,6 @@ function normalizeItem(row) {
         post_purchase_message: row.post_purchase_message || '',
         item_type: row.item_type,
         price_ton: Number(row.price_ton || 0),
-        price_rub: Number(row.price_rub || 0),
         status: row.status || 'draft',
         visibility: row.visibility || 'public',
         sales_channel: normalizeSalesChannel(row?.sales_channel, row?.item_type),
@@ -145,11 +144,6 @@ function buildAvailablePaymentMethods(item, settings) {
 function isMissingPaymentMethodsColumn(error) {
     const message = error?.message || '';
     return message.includes('payment_methods');
-}
-
-function isMissingPriceRubColumn(error) {
-    const message = error?.message || '';
-    return message.includes('price_rub');
 }
 
 function isMissingSalesChannelColumn(error) {
@@ -392,7 +386,6 @@ async function createOrRefreshBuyerPurchase({
 
     const memo = String(memoOverride || buildShopMemo()).trim();
     const amountTon = Number(item.price_ton || 0);
-    const amountRub = Number(item.price_rub || 0);
 
     const payloadPatch = {
         payment_method: paymentMethod,
@@ -462,7 +455,6 @@ async function createOrRefreshBuyerPurchase({
         item,
         settings,
         amountTon,
-        amountRub,
         memo,
         paymentMethod
     };
@@ -1180,7 +1172,7 @@ export default function shopRoutes(supabase) {
         try {
             const { data: purchases, error } = await supabase
                 .from('shop_purchases')
-                .select('id, shop_item_id, buyer_owner_id, status, amount_ton, ownership_transfer_status, ownership_transfer_error, created_at, payload, shop_items(id, title, item_type, price_ton, price_rub)')
+                .select('id, shop_item_id, buyer_owner_id, status, amount_ton, ownership_transfer_status, ownership_transfer_error, created_at, payload, shop_items(id, title, item_type, price_ton)')
                 .eq('seller_owner_id', ownerId)
                 .order('created_at', { ascending: false })
                 .limit(50);
@@ -1226,9 +1218,7 @@ export default function shopRoutes(supabase) {
                     shop_item_id: row.shop_item_id,
                     buyer_owner_id: row.buyer_owner_id,
                     status: row.status === 'pending' && isPendingPurchaseExpired(row) ? 'expired' : row.status,
-                    amount_ton: Number(row.amount_ton || 0),
-                    amount_rub: Number(row.payload?.amount_rub || row.shop_items?.price_rub || 0),
-                    ownership_transfer_status: row.ownership_transfer_status || 'pending',
+                    amount_ton: Number(row.amount_ton || 0),                    ownership_transfer_status: row.ownership_transfer_status || 'pending',
                     ownership_transfer_error: row.ownership_transfer_error || null,
                     created_at: row.created_at,
                     expires_at: row.status === 'pending' ? getPendingPurchaseExpiry(row.created_at).toISOString() : null,
@@ -1237,9 +1227,7 @@ export default function shopRoutes(supabase) {
                         id: row.shop_items.id,
                         title: row.shop_items.title,
                         item_type: row.shop_items.item_type,
-                        price_ton: Number(row.shop_items.price_ton || 0),
-                        price_rub: Number(row.shop_items.price_rub || 0),
-                        assets: assetsByItem.get(row.shop_items.id) || []
+                        price_ton: Number(row.shop_items.price_ton || 0),                        assets: assetsByItem.get(row.shop_items.id) || []
                     } : null
                 })),
                 support: {
@@ -1324,7 +1312,6 @@ export default function shopRoutes(supabase) {
             offer_code,
             item_type,
             price_ton,
-            price_rub,
             status,
             visibility,
             preview_text,
@@ -1377,7 +1364,6 @@ export default function shopRoutes(supabase) {
                     post_purchase_message: post_purchase_message || null,
                     item_type: 'text_offer',
                     price_ton: Number(price_ton || 0),
-                    price_rub: Number(price_rub || 0),
                     status: status || 'draft',
                     visibility: visibility || 'public',
                     sales_channel: normalizedSalesChannel,
@@ -1397,11 +1383,9 @@ export default function shopRoutes(supabase) {
                         .select('*')
                         .single();
                     if (error) {
-                        if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
+                        if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
                             const legacyPayload = { ...itemPayload };
-                            delete legacyPayload.payment_methods;
-                            delete legacyPayload.price_rub;
-                            delete legacyPayload.sales_channel;
+                            delete legacyPayload.payment_methods;                            delete legacyPayload.sales_channel;
                             const legacy = await supabase
                                 .from('shop_items')
                                 .update(legacyPayload)
@@ -1431,11 +1415,9 @@ export default function shopRoutes(supabase) {
                         .select('*')
                         .single();
                     if (error) {
-                        if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
+                        if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
                             const legacyPayload = { ...itemPayload };
-                            delete legacyPayload.payment_methods;
-                            delete legacyPayload.price_rub;
-                            delete legacyPayload.sales_channel;
+                            delete legacyPayload.payment_methods;                            delete legacyPayload.sales_channel;
                             const legacy = await supabase
                                 .from('shop_items')
                                 .insert(legacyPayload)
@@ -1560,9 +1542,7 @@ export default function shopRoutes(supabase) {
                 description: description || null,
                 post_purchase_message: post_purchase_message || null,
                 item_type: normalizedItemType,
-                price_ton: Number(price_ton || 0),
-                price_rub: Number(price_rub || 0),
-                status: status || 'draft',
+                price_ton: Number(price_ton || 0),                status: status || 'draft',
                 visibility: visibility || 'public',
                 sales_channel: normalizedSalesChannel,
                 preview_text: preview_text || null,
@@ -1581,11 +1561,9 @@ export default function shopRoutes(supabase) {
                     .select('*')
                     .single();
                 if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
+                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
                         const legacyPayload = { ...itemPayload };
-                        delete legacyPayload.payment_methods;
-                        delete legacyPayload.price_rub;
-                        delete legacyPayload.sales_channel;
+                        delete legacyPayload.payment_methods;                        delete legacyPayload.sales_channel;
                         const legacy = await supabase
                             .from('shop_items')
                             .update(legacyPayload)
@@ -1616,11 +1594,9 @@ export default function shopRoutes(supabase) {
                     .select('*')
                     .single();
                 if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
+                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
                         const legacyPayload = { ...itemPayload };
-                        delete legacyPayload.payment_methods;
-                        delete legacyPayload.price_rub;
-                        delete legacyPayload.sales_channel;
+                        delete legacyPayload.payment_methods;                        delete legacyPayload.sales_channel;
                         const legacy = await supabase
                             .from('shop_items')
                             .insert(legacyPayload)
@@ -1658,126 +1634,6 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка сохранения shop item:', error);
             res.status(500).json({ error: 'Ошибка сохранения лота' });
-        }
-    });
-
-    router.post('/p2p/items', authenticateUser, async (req, res) => {
-        const ownerId = req.user.id;
-        const {
-            id,
-            title,
-            description,
-            post_purchase_message,
-            price_ton,
-            price_rub,
-            status,
-            visibility,
-            preview_text,
-            payment_methods,
-            sales_channel
-        } = req.body;
-
-        if (!title || !String(title).trim()) {
-            return res.status(400).json({ error: 'Название оффера обязательно' });
-        }
-
-        if (!String(post_purchase_message || '').trim()) {
-            return res.status(400).json({ error: 'Для P2P-оффера нужно заполнить скрытое сообщение после оплаты.' });
-        }
-
-        try {
-            const normalizedPaymentMethods = normalizePaymentMethods(payment_methods);
-            const normalizedSalesChannel = normalizeSalesChannel(sales_channel, 'text_offer');
-            const itemPayload = {
-                owner_id: ownerId,
-                title: String(title).trim(),
-                description: description || null,
-                post_purchase_message: post_purchase_message || null,
-                item_type: 'text_offer',
-                price_ton: Number(price_ton || 0),
-                price_rub: Number(price_rub || 0),
-                status: status || 'draft',
-                visibility: visibility || 'public',
-                sales_channel: normalizedSalesChannel,
-                preview_text: preview_text || null,
-                payment_methods: normalizedPaymentMethods,
-                offer_code: 'p2p',
-                transfer_mode: 'post_purchase_message'
-            };
-
-            let savedItem = null;
-            if (id) {
-                const { data, error } = await supabase
-                    .from('shop_items')
-                    .update(itemPayload)
-                    .eq('id', id)
-                    .eq('owner_id', ownerId)
-                    .select('*')
-                    .single();
-                if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
-                        const legacyPayload = { ...itemPayload };
-                        delete legacyPayload.payment_methods;
-                        delete legacyPayload.price_rub;
-                        delete legacyPayload.sales_channel;
-                        const legacy = await supabase
-                            .from('shop_items')
-                            .update(legacyPayload)
-                            .eq('id', id)
-                            .eq('owner_id', ownerId)
-                            .select('*')
-                            .single();
-                        if (legacy.error) throw legacy.error;
-                        savedItem = { ...legacy.data, payment_methods: normalizedPaymentMethods };
-                    } else if (isMissingShopTables(error)) {
-                        return res.status(400).json({ error: 'Сначала примени SQL под shop foundation' });
-                    } else {
-                        throw error;
-                    }
-                } else {
-                    savedItem = data;
-                }
-
-                await supabase
-                    .from('shop_item_assets')
-                    .delete()
-                    .eq('shop_item_id', id);
-            } else {
-                const { data, error } = await supabase
-                    .from('shop_items')
-                    .insert(itemPayload)
-                    .select('*')
-                    .single();
-                if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingPriceRubColumn(error) || isMissingSalesChannelColumn(error)) {
-                        const legacyPayload = { ...itemPayload };
-                        delete legacyPayload.payment_methods;
-                        delete legacyPayload.price_rub;
-                        delete legacyPayload.sales_channel;
-                        const legacy = await supabase
-                            .from('shop_items')
-                            .insert(legacyPayload)
-                            .select('*')
-                            .single();
-                        if (legacy.error) throw legacy.error;
-                        savedItem = { ...legacy.data, payment_methods: normalizedPaymentMethods };
-                    } else if (isMissingShopTables(error)) {
-                        return res.status(400).json({ error: 'Сначала примени SQL под shop foundation' });
-                    } else {
-                        throw error;
-                    }
-                } else {
-                    savedItem = data;
-                }
-            }
-
-            return res.json({
-                success: true,
-                item: normalizeItem(savedItem)
-            });
-        } catch (error) {
-            console.error('Ошибка сохранения P2P-оффера:', error);
-            res.status(500).json({ error: 'Ошибка сохранения P2P-оффера' });
         }
     });
 
@@ -2100,7 +1956,7 @@ export default function shopRoutes(supabase) {
         try {
             const { data: purchases, error } = await supabase
                 .from('shop_purchases')
-                .select('*, shop_items(id, title, description, post_purchase_message, item_type, price_ton, price_rub, preview_text, payment_methods)')
+                .select('*, shop_items(id, title, description, post_purchase_message, item_type, price_ton, preview_text, payment_methods)')
                 .eq('buyer_owner_id', buyerOwnerId)
                 .order('created_at', { ascending: false });
 
@@ -2160,9 +2016,7 @@ export default function shopRoutes(supabase) {
                     id: row.id,
                     status: row.status === 'pending' && isPendingPurchaseExpired(row) ? 'expired' : row.status,
                     amount_ton: Number(row.amount_ton || 0),
-                    amount_nanoton: tonToNanoString(Number(row.amount_ton || 0)),
-                    amount_rub: Number(row.payload?.amount_rub || row.shop_items?.price_rub || 0),
-                    network: detectNetwork(),
+                    amount_nanoton: tonToNanoString(Number(row.amount_ton || 0)),                    network: detectNetwork(),
                     ownership_transfer_status: row.ownership_transfer_status || 'pending',
                     ownership_transfer_error: row.ownership_transfer_error || null,
                     created_at: row.created_at,
@@ -2181,9 +2035,7 @@ export default function shopRoutes(supabase) {
                             description: row.shop_items.description || '',
                             post_purchase_message: row.shop_items.post_purchase_message || '',
                             item_type: row.shop_items.item_type,
-                            price_ton: Number(row.shop_items.price_ton || 0),
-                            price_rub: Number(row.shop_items.price_rub || 0),
-                            preview_text: row.shop_items.preview_text || '',
+                            price_ton: Number(row.shop_items.price_ton || 0),                            preview_text: row.shop_items.preview_text || '',
                             payment_methods: normalizePaymentMethods(row.shop_items.payment_methods)
                         }
                         : null,
@@ -2330,7 +2182,6 @@ export default function shopRoutes(supabase) {
                 item,
                 settings,
                 amountTon,
-                amountRub,
                 memo
             } = await createOrRefreshBuyerPurchase({
                 supabase,
@@ -2408,8 +2259,6 @@ export default function shopRoutes(supabase) {
 
             const first = created[0];
             const totalTon = created.reduce((sum, row) => sum + Number(row.amountTon || 0), 0);
-            const totalRub = created.reduce((sum, row) => sum + Number(row.amountRub || 0), 0);
-
             const expiresAt = created
                 .map((row) => getPendingPurchaseExpiry(row.purchase.created_at).getTime())
                 .filter(Number.isFinite)
