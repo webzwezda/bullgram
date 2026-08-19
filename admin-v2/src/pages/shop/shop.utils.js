@@ -105,16 +105,6 @@ export function salesChannelLabel(value) {
   return 'Публичный сайт';
 }
 
-export function paymentMethodLabel(method) {
-  void method;
-  return 'TON';
-}
-
-export function paymentMethodsLabel(value) {
-  void value;
-  return 'TON';
-}
-
 // --- Price / Amount ---
 
 export function itemPriceSummary(item) {
@@ -134,10 +124,6 @@ export function purchaseAmountSummary(purchase) {
 
 export function assetText(row) {
   return (row.assets || []).map((asset) => asset.label || asset.asset_type).join(' • ');
-}
-
-export function purchaseAssetText(row) {
-  return (row.item?.assets || []).map((asset) => asset.label || asset.asset_type).join(' • ');
 }
 
 export function purchaseHasAssetType(row, type) {
@@ -219,10 +205,7 @@ export const INITIAL_FORM_STATE = {
   payment_methods: ['ton'],
   price_ton: '',
   status: 'draft',
-  visibility: 'public',
-  selectedProxyId: '',
-  selectedUserbotId: '',
-  selectedBaseId: ''
+  visibility: 'public'
 };
 
 export const TONE_COLORS = {

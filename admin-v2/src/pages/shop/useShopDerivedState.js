@@ -71,24 +71,14 @@ export function useShopDerivedState({
     unlisted: state.items.filter((i) => i.visibility === 'unlisted').length
   }), [state.items]);
 
-  const sellerStats = useMemo(() => {
-    const paid = groupedPurchases.filter((p) => p.status === 'paid');
-    const completed = paid.filter((p) => p.ownership_transfer_status === 'completed');
-    const pending = groupedPurchases.filter((p) => p.status === 'pending');
-    const awaitingReceipt = groupedPurchases.filter((p) => p.status === 'awaiting_receipt');
-    const expired = groupedPurchases.filter((p) => p.status === 'expired');
-    const failedTransfers = paid.filter((p) => p.ownership_transfer_status === 'failed');
-
-    return {
-      paidTon: Number(paid.reduce((s, p) => s + Number(p.amount_ton || 0), 0).toFixed(4)),
-      pendingTon: Number(pending.reduce((s, p) => s + Number(p.amount_ton || 0), 0).toFixed(4)),
-      awaitingReceiptCount: awaitingReceipt.length,
-      expiredCount: expired.length,
-      failedTransferCount: failedTransfers.length,
-      conversion: groupedPurchases.length > 0 ? Math.round((paid.length / groupedPurchases.length) * 100) : 0,
-      transferSuccessRate: paid.length > 0 ? Math.round((completed.length / paid.length) * 100) : 0
-    };
-  }, [groupedPurchases]);
+  const sellerStats = useMemo(() => ({
+    paidTon: Number(
+      groupedPurchases
+        .filter((p) => p.status === 'paid')
+        .reduce((s, p) => s + Number(p.amount_ton || 0), 0)
+        .toFixed(4)
+    )
+  }), [groupedPurchases]);
 
   const purchaseSummary = useMemo(() => ({
     total: groupedPurchases.length,
@@ -125,12 +115,9 @@ export function useShopDerivedState({
   ), [availableAssets.proxies, listedProxyIds]);
 
   return {
-    planRules,
-    availableAssets,
     canUseAssetSeller,
     filteredItems,
     filteredPurchases,
-    groupedPurchases,
     itemSummary,
     sellerStats,
     purchaseSummary,

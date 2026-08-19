@@ -1,11 +1,11 @@
-import { ShoppingCart, Search, FileCheck, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Search, FileCheck, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   PURCHASE_FILTERS, purchaseStatusMeta, purchaseAmountSummary,
-  formatWhen, paymentMethodLabel, purchaseAssetText, purchaseHasAssetType, TONE_COLORS
+  formatWhen, purchaseHasAssetType, TONE_COLORS
 } from './shop.utils.js';
 
 function StatusBadge({ tone, children, className = '' }) {
@@ -21,8 +21,6 @@ export function OrdersTab({
   purchaseSummary,
   receiptQueue,
   onCheck,
-  onApprove,
-  onReject,
   purchaseFilter,
   setPurchaseFilter,
   purchaseSearch,
@@ -134,18 +132,6 @@ export function OrdersTab({
                         <Button variant="outline" size="sm" className="text-xs h-8 rounded-lg" onClick={() => onCheck(purchase)}>
                           Проверить
                         </Button>
-                        {purchase.status === 'awaiting_receipt' && (
-                          <>
-                            <Button size="sm" className="text-xs h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => onApprove(purchase)}>
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                              Подтвердить
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-xs h-8 rounded-lg text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => onReject(purchase)}>
-                              <XCircle className="w-3.5 h-3.5 mr-1" />
-                              Отклонить
-                            </Button>
-                          </>
-                        )}
                         {purchaseHasAssetType(purchase, 'proxy') && (
                           <a href="/app/proxies" target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-indigo-600">Прокси</a>
                         )}
@@ -190,7 +176,7 @@ export function OrdersTab({
                   <div className="min-w-0">
                     <div className="font-semibold text-sm text-slate-900">{purchase.item?.title || 'Лот'}</div>
                     <div className="text-xs text-slate-500 mt-0.5">
-                      {purchaseAmountSummary(purchase)} • {paymentMethodLabel(purchase.payload?.payment_method)}
+                      {purchaseAmountSummary(purchase)} • TON
                       {purchase.purchase_ids?.length > 1 && ` • ${purchase.purchase_ids.length} счёта`}
                     </div>
                     {purchase.payload?.receipt_note && (
@@ -203,12 +189,6 @@ export function OrdersTab({
                         Открыть чек
                       </a>
                     )}
-                    <Button size="sm" className="text-xs h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => onApprove(purchase)}>
-                      Подтвердить
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-xs h-8 rounded-lg text-rose-600 border-rose-200 hover:bg-rose-50" onClick={() => onReject(purchase)}>
-                      Отклонить
-                    </Button>
                   </div>
                 </div>
               </div>

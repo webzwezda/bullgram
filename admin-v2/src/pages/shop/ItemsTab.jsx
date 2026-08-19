@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ITEM_FILTERS, itemStatusMeta, offerCodeLabel, visibilityLabel, salesChannelLabel, paymentMethodsLabel, itemPriceSummary, assetText, TONE_COLORS } from './shop.utils.js';
+import { ITEM_FILTERS, itemStatusMeta, offerCodeLabel, visibilityLabel, salesChannelLabel, itemPriceSummary, assetText, TONE_COLORS } from './shop.utils.js';
 
 function StatusBadge({ tone, children, className = '' }) {
   return (
@@ -16,9 +16,6 @@ function StatusBadge({ tone, children, className = '' }) {
 export function ItemsTab({
   filteredItems,
   itemSummary,
-  canUseAssetSeller,
-  planRules,
-  profileRole,
   onUnpublish,
   onDelete,
   onOpenCreate,
@@ -48,12 +45,10 @@ export function ItemsTab({
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            {canUseAssetSeller && (
-              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={onOpenProxyComposer}>
-                <Server className="w-3.5 h-3.5 mr-1.5" />
-                Продать прокси
-              </Button>
-            )}
+            <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={onOpenProxyComposer}>
+              <Server className="w-3.5 h-3.5 mr-1.5" />
+              Продать прокси
+            </Button>
             <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs" onClick={onOpenCreate}>
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Создать оффер
@@ -63,14 +58,6 @@ export function ItemsTab({
       </div>
 
       <CardContent className="p-5 sm:p-6 space-y-4">
-        {profileRole !== 'admin' && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Тариф: {planRules.label}</span>
-            <span className="mx-2">•</span>
-            {planRules.canUseShopAdmin ? 'Полный seller-режим' : 'Только текстовые офферы'}
-          </div>
-        )}
-
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -135,7 +122,7 @@ export function ItemsTab({
                         <span>•</span>
                         <span>{salesChannelLabel(item.sales_channel)}</span>
                         <span>•</span>
-                        <span>{paymentMethodsLabel(item.payment_methods)}</span>
+                        <span>TON</span>
                       </div>
                       {(item.assets || []).length > 0 && (
                         <div className="text-xs text-slate-400 mt-1">{assetText(item)}</div>

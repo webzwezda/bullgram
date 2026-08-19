@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
-import { PlanBanner } from '../../ui/PlanBanner.jsx';
-import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
 import { Package, ShoppingCart, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,7 +24,7 @@ const TABS = [
 ];
 
 export function ShopAdminPage() {
-  const { accessToken, profilePlan, profileRole, trialEndsAt } = useAuth();
+  const { accessToken, profilePlan, profileRole } = useAuth();
   const [activeTab, setActiveTab] = useState('items');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showProxyDialog, setShowProxyDialog] = useState(false);
@@ -62,18 +60,8 @@ export function ShopAdminPage() {
     proxyComposer,
     setProxyComposer,
     saleProxies: derived.saleProxies,
-    canUseAssetSeller: derived.canUseAssetSeller,
-    planRules: derived.planRules
+    canUseAssetSeller: derived.canUseAssetSeller
   });
-
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
   const openWithdrawalsCount = useMemo(() => (
     (treasury.data?.withdrawals || []).filter((w) => ['requested', 'queued', 'sending'].includes(w.status)).length
@@ -187,27 +175,6 @@ export function ShopAdminPage() {
           sellerStats: derived.sellerStats
         }} />
 
-        {/* Plan Banner for non-asset sellers */}
-        {!derived.canUseAssetSeller && (
-          <>
-            <PlanBanner
-              tone={derived.planRules.canUseShopAdmin ? 'info' : 'warning'}
-              title={derived.planRules.canUseShopAdmin ? 'P2P режим активен' : 'На Trial открыт P2P режим'}
-              text={derived.planRules.canUseShopAdmin
-                ? 'Доступны офферы с текстом после оплаты. Для продажи активов нужен admin-контур.'
-                : 'Trial позволяет собирать офферы и принимать оплату. Продажа активов откроется на Normal.'}
-            />
-            {!derived.planRules.canUseShopAdmin && (
-              <UpgradeCallout
-                title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
-                text={trialUpgradeUrgent
-                  ? 'Офферы уже доступны, но для продажи активов не ждите дедлайна. Переходите на Normal.'
-                  : 'Офферы уже можно продавать. Для продажи активов следующий шаг — Normal.'}
-              />
-            )}
-          </>
-        )}
-
         {/* Tab Bar */}
         <div className="flex gap-1 overflow-x-auto border-b border-slate-100">
           {TABS.map((tab) => {
@@ -255,9 +222,6 @@ export function ShopAdminPage() {
           <ItemsTab
             filteredItems={derived.filteredItems}
             itemSummary={derived.itemSummary}
-            canUseAssetSeller={derived.canUseAssetSeller}
-            planRules={derived.planRules}
-            profileRole={profileRole}
             onUnpublish={mutations.unpublishItem}
             onDelete={handleDelete}
             onOpenCreate={handleOpenCreate}
@@ -273,8 +237,6 @@ export function ShopAdminPage() {
             purchaseSummary={derived.purchaseSummary}
             receiptQueue={derived.receiptQueue}
             onCheck={mutations.checkPurchase}
-            onApprove={mutations.approvePurchase}
-            onReject={mutations.rejectPurchase}
             purchaseFilter={purchaseFilter}
             setPurchaseFilter={setPurchaseFilter}
             purchaseSearch={purchaseSearch}

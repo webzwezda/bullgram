@@ -222,7 +222,6 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
       ? 'paid'
       : 'pending';
   const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
-  const amountRub = rows.reduce((sum, purchase) => sum + Number(purchase.amount_rub || 0), 0);
   const amountNanoParts = rows
     .map((purchase) => String(purchase.amount_nanoton || '').trim())
     .filter(Boolean);
@@ -251,7 +250,6 @@ export function normalizeOpenUserbotPurchaseGroup(rows = []) {
     status,
     amount_ton: amountTon,
     amount_nanoton: amountNanoTon,
-    amount_rub: amountRub,
     network: first.network || 'mainnet',
     ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
     created_at: first.created_at,

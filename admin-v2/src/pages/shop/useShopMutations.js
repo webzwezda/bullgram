@@ -3,12 +3,10 @@ import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
 import {
   INITIAL_FORM_STATE,
-  INITIAL_PROXY_COMPOSER,
-  purchaseAssetText,
-  purchaseHasAssetType
+  INITIAL_PROXY_COMPOSER
 } from './shop.utils.js';
 
-export function useShopMutations({ accessToken, state, setState, loadShop, formState, setFormState, proxyComposer, setProxyComposer, saleProxies, canUseAssetSeller, planRules }) {
+export function useShopMutations({ accessToken, state, setState, loadShop, formState, setFormState, proxyComposer, setProxyComposer, saleProxies, canUseAssetSeller }) {
 
   const saveItem = useCallback(async () => {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
@@ -81,40 +79,6 @@ export function useShopMutations({ accessToken, state, setState, loadShop, formS
     }
   }, [accessToken, loadShop]);
 
-  const approvePurchase = useCallback(async (target) => {
-    const purchaseIds = Array.isArray(target?.purchase_ids) && target.purchase_ids.length
-      ? target.purchase_ids
-      : [target?.id || target].filter(Boolean);
-    try {
-      if (purchaseIds.length > 1) {
-        await apiRequest('/api/shop/seller/purchases/approve-batch', { accessToken, method: 'POST', body: { purchase_ids: purchaseIds } });
-      } else {
-        await apiRequest(`/api/shop/seller/purchases/${purchaseIds[0]}/approve`, { accessToken, method: 'POST' });
-      }
-      await loadShop();
-      toast.success('Заказ подтверждён');
-    } catch (error) {
-      toast.error(error.message);
-    }
-  }, [accessToken, loadShop]);
-
-  const rejectPurchase = useCallback(async (target) => {
-    const purchaseIds = Array.isArray(target?.purchase_ids) && target.purchase_ids.length
-      ? target.purchase_ids
-      : [target?.id || target].filter(Boolean);
-    try {
-      if (purchaseIds.length > 1) {
-        await apiRequest('/api/shop/seller/purchases/reject-batch', { accessToken, method: 'POST', body: { purchase_ids: purchaseIds } });
-      } else {
-        await apiRequest(`/api/shop/seller/purchases/${purchaseIds[0]}/reject`, { accessToken, method: 'POST', body: {} });
-      }
-      await loadShop();
-      toast.success('Заказ отклонён');
-    } catch (error) {
-      toast.error(error.message);
-    }
-  }, [accessToken, loadShop]);
-
   const openProxyComposer = useCallback((proxy) => {
     setProxyComposer({
       proxyId: String(proxy.id),
@@ -176,8 +140,6 @@ export function useShopMutations({ accessToken, state, setState, loadShop, formS
     unpublishItem,
     deleteItem,
     checkPurchase,
-    approvePurchase,
-    rejectPurchase,
     openProxyComposer,
     resetProxyComposer,
     saveProxyComposer
