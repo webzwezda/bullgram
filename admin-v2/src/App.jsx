@@ -31,7 +31,7 @@ const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((mod
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 const ChecklistPage = lazy(() => import('./pages/ChecklistPage.jsx').then((module) => ({ default: module.ChecklistPage })));
 export function App() {
-  const { user, profileRole, accessToken } = useAuth();
+  const { user, profileRole, profileLoading, accessToken } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -214,7 +214,11 @@ export function App() {
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />
-                <Route path="/shop" element={profileRole === 'admin' ? <ShopAdminPage /> : <Navigate to="/" replace />} />
+                <Route path="/shop" element={
+                  profileLoading
+                    ? <LoadingState text="Проверяем доступ..." />
+                    : profileRole === 'admin' ? <ShopAdminPage /> : <Navigate to="/" replace />
+                } />
                 <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />

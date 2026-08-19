@@ -11,6 +11,7 @@ export function AuthProvider({ children }) {
   const [trialEndsAt, setTrialEndsAt] = useState(null);
   const [normalEndsAt, setNormalEndsAt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) {
@@ -19,9 +20,11 @@ export function AuthProvider({ children }) {
       setTrialStartedAt(null);
       setTrialEndsAt(null);
       setNormalEndsAt(null);
+      setProfileLoading(false);
       return;
     }
 
+    setProfileLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -55,6 +58,8 @@ export function AuthProvider({ children }) {
       setTrialStartedAt(null);
       setTrialEndsAt(null);
       setNormalEndsAt(null);
+    } finally {
+      setProfileLoading(false);
     }
   }, []);
 
@@ -100,6 +105,7 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     loading,
+    profileLoading,
     session,
     user: session?.user || null,
     profileRole,
@@ -121,7 +127,7 @@ export function AuthProvider({ children }) {
       window.localStorage.clear();
       window.location.reload();
     }
-  }), [loading, session, profileRole, profilePlan, trialStartedAt, trialEndsAt, normalEndsAt, loadProfile]);
+  }), [loading, profileLoading, session, profileRole, profilePlan, trialStartedAt, trialEndsAt, normalEndsAt, loadProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
