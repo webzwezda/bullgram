@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Coins, ShoppingBag, Sparkles, Wallet } from 'lucide-react';
+import { Coins, ShoppingBag, Wallet } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { PrioritySignalsGrid } from './payment-settings/PrioritySignalsGrid.jsx';
 import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSection.jsx';
-import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
 import { BillingContactsCard } from '../features/billing/BillingContactsCard.jsx';
 import { MyPurchasesCard } from '../features/billing/MyPurchasesCard.jsx';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
 
 const BILLING_TABS = [
-  { id: 'subscription', label: 'Подписка Bullgram', icon: Sparkles },
   { id: 'purchases', label: 'Оплаты от подписчиков', icon: Coins },
   { id: 'my-purchases', label: 'Мои покупки', icon: ShoppingBag }
 ];
 
 export function PaymentSettingsPage() {
   const { user, accessToken } = useAuth();
-  const [billingTab, setBillingTab] = useState('subscription');
+  const [billingTab, setBillingTab] = useState('purchases');
   const [state, setState] = useState({
     loading: true,
     error: '',
@@ -200,7 +198,7 @@ export function PaymentSettingsPage() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Касса</h2>
                 <p className="text-sm text-slate-500 mt-0.5">
-                  Ваша подписка Bullgram, приём оплат от подписчиков и покупки в магазине.
+                  Приём оплат от подписчиков и ваши покупки в магазине. Подписка Bullgram — в профиле.
                 </p>
               </div>
             </div>
@@ -262,13 +260,9 @@ export function PaymentSettingsPage() {
                   plain={true}
                 />
               </div>
-            ) : billingTab === 'my-purchases' ? (
-              <div className="p-6 md:p-8">
-                <MyPurchasesCard />
-              </div>
             ) : (
               <div className="p-6 md:p-8">
-                <PlatformTierUpgradeCard />
+                <MyPurchasesCard />
               </div>
             )}
           </div>
