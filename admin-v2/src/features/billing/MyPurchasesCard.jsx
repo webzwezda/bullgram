@@ -41,7 +41,7 @@ export function MyPurchasesCard() {
   }, [load]);
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5">
+    <div className="space-y-5">
       <div>
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Мои покупки</h3>
         <p className="text-sm text-slate-500 mt-0.5">

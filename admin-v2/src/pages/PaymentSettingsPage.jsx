@@ -251,14 +251,16 @@ export function PaymentSettingsPage() {
           {/* Bottom Content Segment */}
           <div className="border-t border-slate-200/60 bg-white">
             {billingTab === 'purchases' ? (
-              <div className="p-6 md:p-8 space-y-6">
+              <div className="p-6 md:p-8">
                 <BillingContactsCard />
-                <CryptoPurchasesSection
-                  paymentEvents={filteredPaymentEvents}
-                  invoiceMap={invoiceMap}
-                  tariffs={state.tariffs}
-                  plain={true}
-                />
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <CryptoPurchasesSection
+                    paymentEvents={filteredPaymentEvents}
+                    invoiceMap={invoiceMap}
+                    tariffs={state.tariffs}
+                    plain={true}
+                  />
+                </div>
               </div>
             ) : (
               <div className="p-6 md:p-8">
