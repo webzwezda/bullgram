@@ -44,21 +44,21 @@ function shortTitle(purchase, fallback) {
 }
 
 export function UserbotStorefrontSection({
-  openUserbotPurchases,
+  openPurchases,
   setSelectedOpenPurchaseId,
-  showUserbotPurchaseInline,
+  showPurchaseInline,
   storefrontState,
   bundledUserbotLot,
   bundledUserbotLots,
-  userbotBuyQuantity,
-  setUserbotBuyQuantity,
+  buyQuantities,
+  setBuyQuantities,
   checkoutState,
   setCheckoutState,
-  cancelUserbotCheckout,
-  createUserbotBatchCheckout,
-  openUserbotCheckout,
+  cancelCheckout,
+  createBatchCheckout,
+  openCheckout,
   refreshPurchases,
-  reloadAccounts
+  reloadAssets
 }) {
   const { accessToken } = useAuth();
 
@@ -72,7 +72,7 @@ export function UserbotStorefrontSection({
   }), [bundledUserbotLot, bundledUserbotLots]);
 
   const quantity = Math.min(
-    Math.max(Number(userbotBuyQuantity[bundleSlot.slotKey] || 1), 1),
+    Math.max(Number(buyQuantities[bundleSlot.slotKey] || 1), 1),
     Math.max(bundleSlot.items.length, 1)
   );
   const selectedItems = bundleSlot.items.slice(0, quantity);
@@ -96,11 +96,11 @@ export function UserbotStorefrontSection({
       noticeTone: 'default'
     });
     try {
-      await Promise.all([refreshPurchases(), reloadAccounts()]);
+      await Promise.all([refreshPurchases(), reloadAssets()]);
     } catch {
       // surface не критичен — список обновится при следующем заходе
     }
-  }, [refreshPurchases, reloadAccounts, setCheckoutState]);
+  }, [refreshPurchases, reloadAssets, setCheckoutState]);
 
   const handlePayError = useCallback((err) => {
     setCheckoutState((prev) => ({
@@ -152,19 +152,19 @@ export function UserbotStorefrontSection({
           ) : null}
 
           {/* Pending purchases compact list */}
-          {openUserbotPurchases.length > 0 ? (
+          {openPurchases.length > 0 ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-wider text-amber-700">
                   <CreditCard className="size-4" />
                   Ожидают оплаты
                   <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0 rounded-full px-2 text-[11px]">
-                    {openUserbotPurchases.length}
+                    {openPurchases.length}
                   </Badge>
                 </div>
               </div>
               <ul className="space-y-2">
-                {openUserbotPurchases.map((purchase) => {
+                {openPurchases.map((purchase) => {
                   const isActive = String(activePurchase?.id || '') === String(purchase.id)
                     || (activePurchase?.batch && Array.isArray(activePurchase?.purchase_ids)
                       && activePurchase.purchase_ids.includes(String(purchase.id)));
@@ -181,7 +181,7 @@ export function UserbotStorefrontSection({
                         className="flex-1 min-w-0 text-left"
                         onClick={() => {
                           setSelectedOpenPurchaseId(String(purchase.id));
-                          showUserbotPurchaseInline(purchase);
+                          showPurchaseInline(purchase);
                         }}
                       >
                         <div className="text-[14px] font-bold text-slate-900 truncate">
@@ -199,7 +199,7 @@ export function UserbotStorefrontSection({
                         variant="ghost"
                         size="sm"
                         className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                        onClick={() => cancelUserbotCheckout(purchase)}
+                        onClick={() => cancelCheckout(purchase)}
                         disabled={checkoutState.checking && isActive}
                         aria-label="Отменить покупку"
                       >
@@ -271,7 +271,7 @@ export function UserbotStorefrontSection({
                     <button
                       type="button"
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => setUserbotBuyQuantity((prev) => ({
+                      onClick={() => setBuyQuantities((prev) => ({
                         ...prev,
                         [bundleSlot.slotKey]: Math.max(Number(prev[bundleSlot.slotKey] || 1) - 1, 1)
                       }))}
@@ -284,7 +284,7 @@ export function UserbotStorefrontSection({
                     <button
                       type="button"
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => setUserbotBuyQuantity((prev) => ({
+                      onClick={() => setBuyQuantities((prev) => ({
                         ...prev,
                         [bundleSlot.slotKey]: Math.min(Number(prev[bundleSlot.slotKey] || 1) + 1, Math.max(bundleSlot.items.length, 1))
                       }))}
@@ -366,9 +366,9 @@ export function UserbotStorefrontSection({
                     className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20"
                     onClick={() => {
                       if (selectedItems.length > 1) {
-                        createUserbotBatchCheckout(selectedItems, 'ton');
+                        createBatchCheckout(selectedItems, 'ton');
                       } else if (selectedItems.length === 1) {
-                        openUserbotCheckout(selectedItems[0], 'ton');
+                        openCheckout(selectedItems[0], 'ton');
                       }
                     }}
                   >

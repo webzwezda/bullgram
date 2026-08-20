@@ -1,13 +1,29 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
-import {
-  batchUserbotLotPaymentMethods,
-  isUserbotPurchase,
-  isUserbotShopItem,
-  userbotLotPaymentMethods
-} from './bots-accounts.utils.js';
 
 const DEFAULT_NETWORK = 'mainnet';
+
+function shopItemPaymentMethods(item) {
+  const source = Array.isArray(item?.available_payment_methods)
+    ? item.available_payment_methods
+    : Array.isArray(item?.payment_methods) && item.payment_methods.length
+      ? item.payment_methods
+      : ['ton'];
+  return source.filter((method) => method === 'ton');
+}
+
+function batchPaymentMethods(items) {
+  const batchItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!batchItems.length) return ['ton'];
+
+  const methods = batchItems.reduce((allowed, item, index) => {
+    const itemMethods = shopItemPaymentMethods(item);
+    if (index === 0) return itemMethods;
+    return allowed.filter((method) => itemMethods.includes(method));
+  }, []);
+
+  return methods.length ? methods : shopItemPaymentMethods(batchItems[0]);
+}
 
 function purchaseShapeFromApiResponse(data, fallbackPaymentMethod, isBatch = false) {
   return {
@@ -18,6 +34,10 @@ function purchaseShapeFromApiResponse(data, fallbackPaymentMethod, isBatch = fal
     payment_method: data.payment_method || fallbackPaymentMethod,
     seller_wallet: data.seller_wallet || '',
     memo: data.memo || '',
+    ton_uri: data.ton_uri || '',
+    trust_wallet_uri: data.trust_wallet_uri || '',
+    trust_wallet_qr: data.trust_wallet_qr || '',
+    ton_qr: data.ton_qr || '',
     expires_at: data.expires_at || null,
     network: data.network || DEFAULT_NETWORK,
     status: 'pending',
@@ -35,6 +55,10 @@ function purchaseShapeFromRow(row, fallbackPaymentMethod) {
     payment_method: row.payload?.payment_method || fallbackPaymentMethod,
     seller_wallet: row.payload?.seller_wallet || '',
     memo: row.payload?.memo || '',
+    ton_uri: row.payload?.ton_uri || '',
+    trust_wallet_uri: row.payload?.trust_wallet_uri || '',
+    trust_wallet_qr: row.payload?.trust_wallet_qr || '',
+    ton_qr: row.payload?.ton_qr || '',
     expires_at: row.expires_at || null,
     network: row.network || DEFAULT_NETWORK,
     status: row.status,
@@ -55,10 +79,19 @@ function emptyCheckoutState(prevPaymentMethod = 'ton') {
   };
 }
 
-export function useUserbotStorefront({
+function defaultBatchTitleFor(count, firstItem) {
+  const base = firstItem?.title || 'Пакет';
+  return count > 1 ? `${base} x${count}` : base;
+}
+
+export function useShopStorefront({
   accessToken,
   profileRole,
-  showUiMessage
+  showUiMessage,
+  isShopItem,
+  isPurchase,
+  batchTitleFor = defaultBatchTitleFor,
+  onAssetsChanged = null
 }) {
   const [storefrontState, setStorefrontState] = useState({
     loading: true,
@@ -67,21 +100,9 @@ export function useUserbotStorefront({
     purchases: [],
     network: DEFAULT_NETWORK
   });
-  const [checkoutState, setCheckoutState] = useState({
-    item: null,
-    purchase: null,
-    paymentMethod: 'ton',
-    loading: false,
-    checking: false,
-    error: '',
-    notice: '',
-    noticeTone: 'default'
-  });
+  const [checkoutState, setCheckoutState] = useState(emptyCheckoutState());
   const [selectedOpenPurchaseId, setSelectedOpenPurchaseId] = useState('');
-  const [userbotBuyQuantity, setUserbotBuyQuantity] = useState({
-    userbot: 1,
-    bundle: 1
-  });
+  const [buyQuantities, setBuyQuantities] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -109,8 +130,8 @@ export function useUserbotStorefront({
         setStorefrontState({
           loading: false,
           error: '',
-          items: (itemsData.items || []).filter(isUserbotShopItem),
-          purchases: (purchasesData.purchases || []).filter(isUserbotPurchase),
+          items: (itemsData.items || []).filter((item) => isShopItem(item)),
+          purchases: (purchasesData.purchases || []).filter((purchase) => isPurchase(purchase)),
           network: purchasesData.network || DEFAULT_NETWORK
         });
       } catch (error) {
@@ -131,11 +152,11 @@ export function useUserbotStorefront({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, profileRole]);
+  }, [accessToken, profileRole, isShopItem, isPurchase]);
 
   async function refreshPurchases() {
     const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
-    const purchases = (purchasesData.purchases || []).filter(isUserbotPurchase);
+    const purchases = (purchasesData.purchases || []).filter((purchase) => isPurchase(purchase));
     setStorefrontState((prev) => ({
       ...prev,
       purchases,
@@ -144,12 +165,12 @@ export function useUserbotStorefront({
     return purchases;
   }
 
-  async function openUserbotCheckout(item, preferredPaymentMethod = null) {
-    const selectedPaymentMethod = userbotLotPaymentMethods(item).includes(preferredPaymentMethod)
+  async function openCheckout(item, preferredPaymentMethod = null) {
+    const selectedPaymentMethod = shopItemPaymentMethods(item).includes(preferredPaymentMethod)
       ? preferredPaymentMethod
-      : userbotLotPaymentMethods(item).includes(checkoutState.paymentMethod)
+      : shopItemPaymentMethods(item).includes(checkoutState.paymentMethod)
         ? checkoutState.paymentMethod
-        : (userbotLotPaymentMethods(item)[0] || 'ton');
+        : (shopItemPaymentMethods(item)[0] || 'ton');
 
     setCheckoutState({
       item,
@@ -209,23 +230,23 @@ export function useUserbotStorefront({
     }
   }
 
-  async function createUserbotBatchCheckout(items, preferredPaymentMethod = null) {
+  async function createBatchCheckout(items, preferredPaymentMethod = null) {
     const batchItems = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!batchItems.length) return;
 
-    const availableMethods = batchUserbotLotPaymentMethods(batchItems);
+    const availableMethods = batchPaymentMethods(batchItems);
     const selectedPaymentMethod = availableMethods.includes(preferredPaymentMethod)
       ? preferredPaymentMethod
       : (availableMethods[0] || 'ton');
 
     if (batchItems.length === 1) {
-      await openUserbotCheckout(batchItems[0], selectedPaymentMethod);
+      await openCheckout(batchItems[0], selectedPaymentMethod);
       return;
     }
 
     const syntheticItem = {
-      item_type: batchItems[0]?.item_type || 'userbot',
-      title: batchItems[0]?.item_type === 'bundle' ? `Аккаунты + прокси x${batchItems.length}` : `Аккаунты x${batchItems.length}`
+      item_type: batchItems[0]?.item_type || '',
+      title: batchTitleFor(batchItems.length, batchItems[0])
     };
 
     setCheckoutState({
@@ -269,14 +290,14 @@ export function useUserbotStorefront({
         paymentMethod: selectedPaymentMethod,
         loading: false,
         checking: false,
-        error: error.message || 'Не удалось создать общую покупку аккаунтов.',
+        error: error.message || 'Не удалось создать общую покупку.',
         notice: '',
         noticeTone: 'default'
       });
     }
   }
 
-  function showUserbotPurchaseInline(purchase) {
+  function showPurchaseInline(purchase) {
     setCheckoutState({
       item: purchase.item || null,
       purchase: purchaseShapeFromRow(purchase, 'ton'),
@@ -289,7 +310,7 @@ export function useUserbotStorefront({
     });
   }
 
-  async function cancelUserbotCheckout(purchaseOverride = null) {
+  async function cancelCheckout(purchaseOverride = null) {
     const targetPurchase = purchaseOverride || checkoutState.purchase;
     const targetIds = Array.isArray(targetPurchase?.purchase_ids) && targetPurchase.purchase_ids.length
       ? targetPurchase.purchase_ids
@@ -325,6 +346,7 @@ export function useUserbotStorefront({
       }
 
       await refreshPurchases();
+      if (onAssetsChanged) await onAssetsChanged().catch(() => null);
       setCheckoutState(emptyCheckoutState(checkoutState.paymentMethod));
       showUiMessage('Покупка отменена, бронь снята.', 'success');
     } catch (error) {
@@ -338,18 +360,73 @@ export function useUserbotStorefront({
     }
   }
 
+  // Ручная проверка оплаты (запасной способ без TonConnect).
+  // /check возвращает 200 + status:'pending', пока платёж не найден —
+  // различаем их, чтобы не рапортовать ложный успех.
+  async function checkPurchase(purchaseOverride = null) {
+    const targetPurchase = purchaseOverride || checkoutState.purchase;
+    const targetIds = Array.isArray(targetPurchase?.purchase_ids) && targetPurchase.purchase_ids.length
+      ? targetPurchase.purchase_ids
+      : [targetPurchase?.id].filter(Boolean);
+    if (!targetIds.length) return null;
+
+    setCheckoutState((prev) => ({
+      ...prev,
+      checking: true,
+      error: ''
+    }));
+
+    try {
+      const data = targetIds.length > 1
+        ? await apiRequest('/api/shop/public/purchase/check-batch', {
+            accessToken,
+            method: 'POST',
+            body: { purchase_ids: targetIds }
+          })
+        : await apiRequest('/api/shop/public/purchase/check', {
+            accessToken,
+            method: 'POST',
+            body: { purchase_id: targetIds[0] }
+          });
+
+      const paid = data?.status === 'paid';
+      await refreshPurchases();
+
+      if (paid) {
+        if (onAssetsChanged) await onAssetsChanged().catch(() => null);
+        setCheckoutState(emptyCheckoutState(checkoutState.paymentMethod));
+        return 'paid';
+      }
+
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false,
+        error: 'Платёж пока не найден. Проверь memo и сумму перевода — потом нажми ещё раз.'
+      }));
+      return 'pending';
+    } catch (error) {
+      setCheckoutState((prev) => ({
+        ...prev,
+        checking: false,
+        error: error.message
+      }));
+      return null;
+    }
+  }
+
   return {
-    cancelUserbotCheckout,
+    cancelCheckout,
+    checkPurchase,
     checkoutState,
-    createUserbotBatchCheckout,
-    openUserbotCheckout,
+    createBatchCheckout,
+    openCheckout,
     refreshPurchases,
     selectedOpenPurchaseId,
     setCheckoutState,
     setSelectedOpenPurchaseId,
-    setUserbotBuyQuantity,
-    showUserbotPurchaseInline,
+    setBuyQuantities,
+    showPurchaseInline,
     storefrontState,
-    userbotBuyQuantity
+    buyQuantities
   };
 }

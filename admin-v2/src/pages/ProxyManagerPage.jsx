@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Globe, Shield, AlertTriangle, Server, Plus, ShoppingBag, Wallet, QrCode, Copy, ExternalLink, Filter } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Globe, Server, Plus, ExternalLink, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
-import { getProductTierRules } from '../app/productTier.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
-import { APP_CONFIG } from '../config.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
+import { ProxyStorefrontSection, isProxyShopItem, isProxyPurchase } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
+import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
 
@@ -15,12 +15,14 @@ const LANE_OPTIONS = [
   { id: 'sold', label: 'Продано' }
 ];
 
-function resolveBackendAssetUrl(value) {
-  const url = String(value || '').trim();
-  if (!url) return '';
-  if (/^(https?:|data:|blob:)/i.test(url)) return url;
-  if (url.startsWith('/')) return `${APP_CONFIG.backendUrl}${url}`;
-  return `${APP_CONFIG.backendUrl}/${url}`;
+function showUiMessage(text, tone = 'default') {
+  if (tone === 'success') return toast.success(text);
+  if (tone === 'error') return toast.error(text);
+  return toast(text);
+}
+
+function proxyBatchTitleFor(count) {
+  return `Прокси x${count}`;
 }
 
 function formatWhen(value) {
@@ -60,20 +62,6 @@ function proxyBadge(proxy) {
   return { text: 'Не проверен', className: 'pill' };
 }
 
-function getProxyLoad(proxy) {
-  const linked = Array.isArray(proxy?.linked_userbots) ? proxy.linked_userbots : [];
-  if (!linked.length) {
-    return 'На этом прокси сейчас никто не сидит.';
-  }
-  const labels = linked
-    .map((account) => account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`)
-    .join(', ');
-  if (linked.length === 1) {
-    return `На нем сидит 1 юзербот: ${labels}`;
-  }
-  return `Опасная связка: на нем сидит ${linked.length} юзербота: ${labels}`;
-}
-
 function buildServerProxyName(inventoryGroup, existingNames = []) {
   const prefix = inventoryGroup === 'self_use' ? 'Прокси сервера' : 'Прокси для Shop';
   const normalized = new Set(existingNames.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
@@ -88,145 +76,9 @@ function formatTon(value) {
   return Number(value || 0).toFixed(2);
 }
 
-function CopyRow({ label, value }) {
-  if (!value) return null;
-
-  async function copyValue() {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`${label} скопирован.`);
-    } catch {
-      window.prompt(label, value);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-left shadow-sm hover:bg-slate-50 transition-colors"
-      onClick={copyValue}
-    >
-      <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
-      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
-        <Copy className="h-3.5 w-3.5" />
-        Copy
-      </span>
-    </button>
-  );
-}
-
-function isProxyShopItem(item) {
-  if (!item) return false;
-  return item.item_type === 'proxy';
-}
-
-function isProxyPurchase(purchase) {
-  if (!purchase) return false;
-  return purchase.item?.item_type === 'proxy';
-}
-
-function isOpenProxyPurchase(purchase) {
-  if (!isProxyPurchase(purchase)) return false;
-  if (purchase.status === 'awaiting_receipt') return true;
-  if (purchase.status === 'pending') return true;
-  if (purchase.status === 'paid' && purchase.ownership_transfer_status !== 'completed') return true;
-  return false;
-}
-
-function normalizeOpenProxyPurchaseGroup(rows = []) {
-  if (!rows.length) return null;
-  const first = rows[0];
-  const status = rows.some((purchase) => purchase.status === 'awaiting_receipt')
-    ? 'awaiting_receipt'
-    : rows.some((purchase) => purchase.status === 'paid' && purchase.ownership_transfer_status !== 'completed')
-      ? 'paid'
-      : 'pending';
-  const amountTon = rows.reduce((sum, purchase) => sum + Number(purchase.amount_ton || 0), 0);
-  const assets = rows.flatMap((purchase) => purchase.assets || []);
-  const uniqueLabels = Array.from(new Set(assets.map((asset) => asset.label || 'Proxy')));
-  const sellerWallet = first.payload?.seller_wallet || '';
-  const memo = first.payload?.memo || '';
-  const expiresAt = rows
-    .map((purchase) => purchase.expires_at ? new Date(purchase.expires_at).getTime() : null)
-    .filter((value) => Number.isFinite(value))
-    .sort((left, right) => left - right)[0];
-
-  return {
-    id: first.payload?.batch_token || first.id,
-    purchase_ids: rows.map((purchase) => purchase.id),
-    status,
-    amount_ton: amountTon,
-    ownership_transfer_status: rows.every((purchase) => purchase.ownership_transfer_status === 'completed') ? 'completed' : 'pending',
-    created_at: first.created_at,
-    expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
-    payload: {
-      ...(first.payload || {}),
-      seller_wallet: sellerWallet,
-      memo,
-      ton_uri: sellerWallet ? `ton://transfer/${sellerWallet}?amount=${Math.round(amountTon * 1000000000)}&text=${encodeURIComponent(memo)}` : '',
-      trust_wallet_uri: sellerWallet ? `https://link.trustwallet.com/send?${new URLSearchParams({
-        asset: 'c607',
-        address: sellerWallet,
-        amount: String(amountTon),
-        ...(memo ? { memo } : {})
-      }).toString()}` : ''
-    },
-    item: {
-      ...(first.item || {}),
-      title: rows.length > 1 ? `Прокси x${rows.length}` : (first.item?.title || 'Прокси')
-    },
-    assets: uniqueLabels.map((label) => ({ label })),
-    batch: rows.length > 1 || !!first.payload?.batch_token
-  };
-}
-
-function itemPaymentMethods(item) {
-  const source = Array.isArray(item?.available_payment_methods)
-    ? item.available_payment_methods
-    : Array.isArray(item?.payment_methods) && item.payment_methods.length
-      ? item.payment_methods
-      : ['ton'];
-  return source.filter((method) => method === 'ton');
-}
-
-function paymentMethodLabel(value) {
-  void value;
-  return 'TON';
-}
-
-function purchaseStatusMeta(status) {
-  if (status === 'awaiting_receipt') {
-    return { text: 'Оплата отмечена', className: 'pill pill--warning' };
-  }
-  if (status === 'paid') {
-    return { text: 'Оплата есть', className: 'pill pill--ok' };
-  }
-  return { text: 'Ждет оплату', className: 'pill pill--info' };
-}
-
-function itemPriceSummary(item) {
-  const methods = itemPaymentMethods(item);
-  const parts = [];
-  if (methods.includes('ton') && Number(item?.price_ton || 0) > 0) {
-    parts.push(`${formatTon(item.price_ton)} TON`);
-  }
-  return parts.join(' / ') || 'Нужна цена в TON';
-}
-
-function purchaseAmountSummary(purchase) {
-  return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
-}
-
 function inventoryGroupActionLabel(value) {
   if (value === 'self_use') return 'Использую сам';
   return 'На продажу';
-}
-
-function summaryTone(value, { danger = false, warning = false } = {}) {
-  if (danger) return 'danger';
-  if (warning) return 'warning';
-  return value > 0 ? 'ok' : 'neutral';
 }
 
 function proxyEgressSummary(proxy) {
@@ -235,18 +87,10 @@ function proxyEgressSummary(proxy) {
   return 'IP не зафиксирован';
 }
 
-function preferredTonCheckoutView(purchase) {
-  if (purchase?.trust_wallet_qr || purchase?.trust_wallet_uri) return 'trust';
-  if (purchase?.ton_qr || purchase?.ton_uri) return 'ton';
-  return 'trust';
-}
-
 export function ProxyManagerPage() {
   const { accessToken, profilePlan } = useAuth();
   const [filter, setFilter] = useState('all');
   const [selectedLane, setSelectedLane] = useState('self-use');
-  const [purchaseView, setPurchaseView] = useState('shop');
-  const [proxyBuyQuantity, setProxyBuyQuantity] = useState(1);
   const [formState, setFormState] = useState({
     id: '',
     name: '',
@@ -266,163 +110,103 @@ export function ProxyManagerPage() {
     support: null,
     updatedAt: null
   });
-
-  const [shopState, setShopState] = useState({
-    loading: true,
-    error: '',
-    items: [],
-    sellerItems: [],
-    purchases: []
-  });
-  const [checkoutState, setCheckoutState] = useState({
-    item: null,
-    purchase: null,
-    paymentMethod: 'ton',
-    loading: false,
-    checking: false,
-    error: ''
-  });
-  const [tonCheckoutView, setTonCheckoutView] = useState('trust');
+  const [sellerItems, setSellerItems] = useState([]);
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
   });
 
-  function sourceBadge(proxy) {
-    const source = proxy?.provision_source || 'manual_free';
-    if (source === 'manual_admin') {
-      return { text: 'Инвентарь админа', className: 'pill pill--warning' };
+  const reloadProxies = useCallback(async ({ silent = false } = {}) => {
+    if (!accessToken) return;
+    if (!silent) {
+      setState((prev) => ({
+        ...prev,
+        loading: !prev.updatedAt,
+        refreshing: !!prev.updatedAt,
+        error: ''
+      }));
     }
-    if (source === 'purchased') {
-      return { text: 'Купленный', className: 'pill pill--ok' };
-    }
-    if (source === 'manual_owned') {
-      return { text: 'Свой', className: 'pill pill--info' };
-    }
-    if (source === 'manual_trial') {
-      return { text: 'Старый trial', className: 'pill pill--warning' };
-    }
-    return { text: 'Временный', className: 'pill' };
-  }
 
-  function inventoryGroupBadge(proxy) {
-    if (proxy?.inventory_group === 'self_use') {
-      return { text: 'Использую сам', className: 'pill' };
+    try {
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        error: '',
+        proxies: data.proxies || [],
+        support: data.support || null,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      setState({
+        loading: false,
+        refreshing: false,
+        error: error.message,
+        proxies: [],
+        support: null,
+        updatedAt: null
+      });
     }
-    if (proxy?.inventory_group === 'shop_sale') {
-      return { text: 'На продажу', className: 'pill pill--warning' };
-    }
-    return null;
-  }
+  }, [accessToken]);
+
+  const {
+    buyQuantities,
+    cancelCheckout,
+    checkPurchase,
+    checkoutState,
+    createBatchCheckout,
+    openCheckout,
+    refreshPurchases,
+    setBuyQuantities,
+    setCheckoutState,
+    setSelectedOpenPurchaseId,
+    showPurchaseInline,
+    storefrontState
+  } = useShopStorefront({
+    accessToken,
+    profileRole: state.support?.profile_role,
+    showUiMessage,
+    isShopItem: isProxyShopItem,
+    isPurchase: isProxyPurchase,
+    batchTitleFor: proxyBatchTitleFor,
+    onAssetsChanged: reloadProxies
+  });
 
   useEffect(() => {
-    let cancelled = false;
+    if (!accessToken) return undefined;
 
-    async function loadProxies({ silent = false } = {}) {
-      if (!silent) {
-        setState((prev) => ({
-          ...prev,
-            loading: !prev.updatedAt,
-            refreshing: !!prev.updatedAt,
-            error: ''
-        }));
-      }
-
-      try {
-        const data = await apiRequest('/api/userbot/proxies', { accessToken });
-        if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            refreshing: false,
-            error: '',
-            proxies: data.proxies || [],
-            support: data.support || null,
-            updatedAt: new Date().toISOString()
-          }));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setState({
-            loading: false,
-            refreshing: false,
-            error: error.message,
-            proxies: [],
-            support: null,
-            updatedAt: null
-          });
-        }
-      }
-    }
-
-    if (accessToken) {
-      loadProxies();
-    }
+    reloadProxies();
 
     const refreshIntervalMs = hasPendingProxyChecks ? 10_000 : 60_000;
-    const intervalId = accessToken
-      ? window.setInterval(() => {
-          loadProxies({ silent: true });
-        }, refreshIntervalMs)
-      : null;
+    const intervalId = window.setInterval(() => {
+      reloadProxies({ silent: true });
+    }, refreshIntervalMs);
 
-    return () => {
-      cancelled = true;
-      if (intervalId) window.clearInterval(intervalId);
-    };
-  }, [accessToken, hasPendingProxyChecks]);
+    return () => window.clearInterval(intervalId);
+  }, [accessToken, hasPendingProxyChecks, reloadProxies]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadShopItems() {
-      try {
-        const requests = [];
-        if (accessToken) {
-          requests.push(apiRequest('/api/shop/app/items', { accessToken }));
-          requests.push(apiRequest('/api/shop/public/my-purchases', { accessToken }));
-        } else {
-          requests.push(apiRequest('/api/shop/public/items'));
-        }
-        if (state.support?.profile_role === 'admin' && accessToken) {
-          requests.push(apiRequest('/api/shop/seller/items', { accessToken }));
-        }
-        const [itemsData, purchasesData, sellerData] = await Promise.all(requests);
-        if (cancelled) return;
-        setShopState({
-          loading: false,
-          error: '',
-          items: (itemsData.items || []).filter(isProxyShopItem),
-          sellerItems: sellerData?.items || [],
-          purchases: purchasesData?.purchases || []
-        });
-      } catch (error) {
-        if (cancelled) return;
-        setShopState({
-          loading: false,
-          error: error.message,
-          items: [],
-          sellerItems: [],
-          purchases: []
-        });
-      }
+    if (!(accessToken && state.support?.profile_role === 'admin')) {
+      setSellerItems([]);
+      return undefined;
     }
 
-    loadShopItems();
+    apiRequest('/api/shop/seller/items', { accessToken })
+      .then((data) => {
+        if (!cancelled) setSellerItems(data?.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setSellerItems([]);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [accessToken, state.support?.profile_role]);
 
-  const stats = {
-    total: state.proxies.length,
-    working: state.proxies.filter((proxy) => proxy.is_working === true).length,
-    broken: state.proxies.filter((proxy) => proxy.is_working === false).length,
-    unchecked: state.proxies.filter((proxy) => proxy.is_working !== true && proxy.is_working !== false).length,
-    shared: state.proxies.filter((proxy) => Number(proxy.userbot_count || 0) > 1).length,
-    purchasedReady: state.proxies.filter((proxy) => proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0).length
-  };
   const isAdmin = state.support?.profile_role === 'admin';
 
   function matchesStatusFilter(proxy) {
@@ -472,48 +256,10 @@ export function ProxyManagerPage() {
   const selfUseProxies = adminInventoryProxies.filter((proxy) => (proxy.inventory_group || 'shop_sale') === 'self_use');
   const shopSaleProxies = adminInventoryProxies.filter((proxy) => (proxy.inventory_group || 'shop_sale') === 'shop_sale');
   const nonAdminInventoryProxies = filteredProxies.filter((proxy) => proxy.provision_source !== 'manual_admin');
-  const visibleProxyItems = shopState.items.slice(0, 6);
-  const proxyBatchOffer = useMemo(() => {
-    if (!visibleProxyItems.length) return null;
-    const first = visibleProxyItems[0];
-    const paymentSignature = JSON.stringify(itemPaymentMethods(first));
-    const samePrice = visibleProxyItems.every((item) =>
-      Number(item.price_ton || 0) === Number(first.price_ton || 0)
-      && JSON.stringify(itemPaymentMethods(item)) === paymentSignature
-    );
-
-    const tonValues = visibleProxyItems
-      .filter((item) => itemPaymentMethods(item).includes('ton'))
-      .map((item) => Number(item.price_ton || 0))
-      .filter((value) => value > 0);
-
-    return {
-      title: 'Прокси Bullgram',
-      previewText: 'Один живой seller-лот с выбором количества. После брони оплаты появятся ниже в блоке «Нужно оплатить».',
-      items: visibleProxyItems,
-      unitPriceText: samePrice
-        ? itemPriceSummary(first)
-        : `${tonValues.length ? `от ${formatTon(Math.min(...tonValues))} TON` : ''}` || 'Нужна цена в TON',
-      paymentMethods: itemPaymentMethods(first),
-      samePrice
-    };
-  }, [visibleProxyItems]);
-  const openProxyPurchases = useMemo(() => (
-    (() => {
-      const rows = (shopState.purchases || []).filter(isOpenProxyPurchase);
-      const grouped = new Map();
-      for (const purchase of rows) {
-        const key = purchase.payload?.batch_token || purchase.id;
-        const bucket = grouped.get(key) || [];
-        bucket.push(purchase);
-        grouped.set(key, bucket);
-      }
-      return Array.from(grouped.values()).map((bucket) => normalizeOpenProxyPurchaseGroup(bucket)).filter(Boolean);
-    })()
-  ), [shopState.purchases]);
+  const shopOfferItems = useMemo(() => (storefrontState.items || []).slice(0, 6), [storefrontState.items]);
   const sellerProxyItemMap = useMemo(() => {
     const map = new Map();
-    for (const item of shopState.sellerItems || []) {
+    for (const item of sellerItems) {
       for (const asset of item.assets || []) {
         if (asset.asset_type !== 'proxy') continue;
         const key = String(asset.asset_id);
@@ -523,74 +269,12 @@ export function ProxyManagerPage() {
       }
     }
     return map;
-  }, [shopState.sellerItems]);
+  }, [sellerItems]);
   const soldProxyItems = useMemo(() => (
-    (shopState.sellerItems || []).filter((item) =>
+    sellerItems.filter((item) =>
       item.status === 'sold' && (item.assets || []).some((asset) => asset.asset_type === 'proxy')
     )
-  ), [shopState.sellerItems]);
-  const proxySummaryCards = useMemo(() => {
-    if (isAdmin) {
-      return [
-        {
-          label: 'Свои',
-          value: selfUseProxies.length,
-          hint: 'Прокси под свои userbot-задачи.',
-          tone: summaryTone(selfUseProxies.length)
-        },
-        {
-          label: 'На продаже',
-          value: shopSaleProxies.length,
-          hint: 'Прокси для shop — созданные и опубликованные.',
-          tone: summaryTone(shopSaleProxies.length)
-        },
-        {
-          label: 'С ошибкой',
-          value: stats.broken,
-          hint: 'Надо перепроверить или убрать из контура.',
-          tone: summaryTone(stats.broken, { danger: stats.broken > 0 })
-        }
-      ];
-    }
-
-    const planRules = getProductTierRules(profilePlan);
-    const planHint = Number.isFinite(state.support?.owned_proxy_quota_total)
-      ? `На вашем тарифе только ${state.support?.owned_proxy_quota_total} proxy.`
-      : 'На вашем тарифе лимит по proxy не режет базовую работу.';
-
-    return [
-      {
-        label: 'Мои прокси',
-        value: filteredProxies.length,
-        hint: 'Все прокси, которые сейчас закреплены за тобой.',
-        tone: summaryTone(filteredProxies.length)
-      },
-      {
-        label: 'Нужно оплатить',
-        value: openProxyPurchases.length,
-        hint: 'Открытые покупки, которые еще ждут TON-оплату.',
-        tone: summaryTone(openProxyPurchases.length, { warning: openProxyPurchases.length > 0 })
-      },
-      {
-        label: 'Тариф',
-        value: planRules.label,
-        hint: planHint,
-        tone: summaryTone(Number.isFinite(state.support?.owned_proxy_quota_total) ? state.support.owned_proxy_quota_total : 1)
-      },
-    ];
-  }, [
-    filteredProxies.length,
-    isAdmin,
-    openProxyPurchases.length,
-    profilePlan,
-    selfUseProxies.length,
-    shopSaleProxies.length,
-    state.support?.max_owned_userbots,
-    state.support?.owned_proxy_quota_total,
-    state.support?.owned_proxy_quota_used,
-    stats.broken,
-  ]);
-
+  ), [sellerItems]);
   const manualQuotaText = !state.support
     ? null
     : state.support.profile_role === 'admin'
@@ -609,19 +293,12 @@ export function ProxyManagerPage() {
   const canEditProxy = state.support?.profile_role === 'admin';
   const showQuotaLock = !formState.id && state.support?.profile_role !== 'admin' && !canCreateManualProxy;
   const proxyBuyLimit = useMemo(() => {
-    if (!proxyBatchOffer) return 1;
-    if (state.support?.profile_role === 'admin') return proxyBatchOffer.items.length;
-    if (profilePlan !== 'trial') return proxyBatchOffer.items.length;
-    return Math.max(0, Math.min(proxyBatchOffer.items.length, 1 - state.proxies.length));
-  }, [profilePlan, proxyBatchOffer, state.proxies.length, state.support?.profile_role]);
+    if (!shopOfferItems.length) return 1;
+    if (state.support?.profile_role === 'admin') return shopOfferItems.length;
+    if (profilePlan !== 'trial') return shopOfferItems.length;
+    return Math.max(0, Math.min(shopOfferItems.length, 1 - state.proxies.length));
+  }, [shopOfferItems, profilePlan, state.proxies.length, state.support?.profile_role]);
 
-  useEffect(() => {
-    if (!proxyBatchOffer) {
-      setProxyBuyQuantity(1);
-      return;
-    }
-    setProxyBuyQuantity((prev) => Math.min(Math.max(prev, 1), Math.max(proxyBuyLimit, 1)));
-  }, [proxyBatchOffer, proxyBuyLimit]);
   const latestServerProxy = useMemo(() => {
     return state.proxies.find((proxy) => proxy.provision_source === 'manual_admin') || null;
   }, [state.proxies]);
@@ -867,451 +544,6 @@ export function ProxyManagerPage() {
     }
   }
 
-  async function openCheckout(item, preferredPaymentMethod = null) {
-    const selectedPaymentMethod = itemPaymentMethods(item).includes(preferredPaymentMethod)
-      ? preferredPaymentMethod
-      : itemPaymentMethods(item).includes(checkoutState.paymentMethod)
-        ? checkoutState.paymentMethod
-      : (itemPaymentMethods(item)[0] || 'ton');
-
-    if (!accessToken) {
-      setCheckoutState({
-        item,
-        purchase: null,
-        paymentMethod: selectedPaymentMethod,
-        loading: false,
-        checking: false,
-        error: 'Сначала войди через Google, чтобы купить прокси.'
-      });
-      return;
-    }
-
-    setCheckoutState({
-      item,
-      purchase: null,
-      paymentMethod: selectedPaymentMethod,
-      loading: true,
-      checking: false,
-      error: ''
-    });
-
-    try {
-      const data = await apiRequest('/api/shop/public/purchase', {
-        accessToken,
-        method: 'POST',
-        body: {
-          item_id: item.id,
-          payment_method: selectedPaymentMethod
-        }
-      });
-      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
-      setShopState((prev) => ({
-        ...prev,
-        purchases: purchasesData.purchases || prev.purchases
-      }));
-
-      setCheckoutState({
-        item,
-        paymentMethod: selectedPaymentMethod,
-        loading: false,
-        checking: false,
-        error: '',
-        purchase: {
-          id: data.purchase_id,
-          amount_ton: data.amount_ton,
-          payment_method: data.payment_method || selectedPaymentMethod,
-          seller_wallet: data.seller_wallet,
-          memo: data.memo,
-          ton_uri: data.ton_uri,
-          trust_wallet_uri: data.trust_wallet_uri || '',
-          trust_wallet_qr: data.trust_wallet_qr || '',
-          ton_qr: data.ton_qr,
-          expires_at: data.expires_at,
-          payment_url: data.payment_url || ''
-        }
-      });
-    } catch (error) {
-      let existingPurchase = null;
-      if (accessToken) {
-        try {
-          const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
-          existingPurchase = (purchasesData.purchases || []).find((purchase) => (
-            String(purchase.item?.id || '') === String(item.id) &&
-            (purchase.status === 'pending' || purchase.status === 'awaiting_receipt' || purchase.status === 'paid')
-          )) || null;
-        } catch {
-          existingPurchase = null;
-        }
-      }
-
-      setCheckoutState({
-        item,
-        paymentMethod: selectedPaymentMethod,
-        purchase: existingPurchase ? {
-          id: existingPurchase.id,
-          amount_ton: existingPurchase.amount_ton,
-          payment_method: existingPurchase.payload?.payment_method || selectedPaymentMethod,
-          seller_wallet: existingPurchase.payload?.seller_wallet || '',
-          memo: existingPurchase.payload?.memo || '',
-          ton_uri: existingPurchase.payload?.ton_uri || '',
-          trust_wallet_uri: existingPurchase.payload?.trust_wallet_uri || '',
-          trust_wallet_qr: existingPurchase.payload?.trust_wallet_qr || '',
-          ton_qr: existingPurchase.payload?.ton_qr || '',
-          expires_at: existingPurchase.expires_at || null,
-          status: existingPurchase.status,
-          receipt_file_url: existingPurchase.payload?.receipt_file_url || '',
-          payment_url: ''
-        } : null,
-        loading: false,
-        checking: false,
-        error: error.message
-      });
-    }
-  }
-
-  async function createProxyBatchCheckout(preferredPaymentMethod) {
-    if (!proxyBatchOffer?.items?.length) return;
-
-    if (proxyBuyLimit <= 0) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        error: 'На Trial ты уже упёрся в лимит по прокси. Сначала перейди на Normal или освободи текущий proxy.'
-      }));
-      return;
-    }
-
-    const quantity = Math.min(Math.max(Number(proxyBuyQuantity || 1), 1), Math.max(proxyBuyLimit, 1));
-    const batchItems = proxyBatchOffer.items.slice(0, quantity);
-    const selectedPaymentMethod = proxyBatchOffer.paymentMethods.includes(preferredPaymentMethod)
-      ? preferredPaymentMethod
-      : (proxyBatchOffer.paymentMethods[0] || 'ton');
-
-    if (batchItems.length === 1) {
-      await openCheckout(batchItems[0], selectedPaymentMethod);
-      return;
-    }
-
-    setCheckoutState({
-      item: null,
-      purchase: null,
-      paymentMethod: selectedPaymentMethod,
-      loading: true,
-      checking: false,
-      error: ''
-    });
-
-    try {
-      const data = await apiRequest('/api/shop/public/purchase/batch', {
-        accessToken,
-        method: 'POST',
-        body: {
-          item_ids: batchItems.map((item) => item.id),
-          payment_method: selectedPaymentMethod
-        }
-      });
-      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken });
-      setShopState((prev) => ({
-        ...prev,
-        purchases: purchasesData.purchases || prev.purchases
-      }));
-      setCheckoutState({
-        item: {
-          title: `Прокси x${batchItems.length}`
-        },
-        purchase: {
-          id: data.batch_token || data.purchase_ids?.[0] || '',
-          purchase_ids: data.purchase_ids || [],
-          amount_ton: data.amount_ton,
-          payment_method: data.payment_method || selectedPaymentMethod,
-          seller_wallet: data.seller_wallet || '',
-          memo: data.memo || '',
-          ton_uri: data.ton_uri || '',
-          trust_wallet_uri: data.trust_wallet_uri || '',
-          trust_wallet_qr: data.trust_wallet_qr || '',
-          ton_qr: data.ton_qr || '',
-          expires_at: data.expires_at || null,
-          payment_url: '',
-          status: 'pending',
-          batch: true
-        },
-        paymentMethod: selectedPaymentMethod,
-        loading: false,
-        checking: false,
-        error: ''
-      });
-    } catch (error) {
-      const purchasesData = await apiRequest('/api/shop/public/my-purchases', { accessToken }).catch(() => null);
-      if (purchasesData?.purchases) {
-        setShopState((prev) => ({
-          ...prev,
-          purchases: purchasesData.purchases
-        }));
-      }
-      setCheckoutState({
-        item: null,
-        purchase: null,
-        paymentMethod: selectedPaymentMethod,
-        loading: false,
-        checking: false,
-        error: error.message || 'Не удалось создать покупки по прокси.'
-      });
-    }
-  }
-
-  async function checkCheckout() {
-    if (!checkoutState.purchase?.id) return;
-
-    setCheckoutState((prev) => ({
-      ...prev,
-      checking: true,
-      error: ''
-    }));
-
-    try {
-      if (Array.isArray(checkoutState.purchase?.purchase_ids) && checkoutState.purchase.purchase_ids.length > 1) {
-        await apiRequest('/api/shop/public/purchase/check-batch', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_ids: checkoutState.purchase.purchase_ids
-          }
-        });
-      } else {
-        await apiRequest('/api/shop/public/purchase/check', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_id: checkoutState.purchase.id
-          }
-        });
-      }
-      const [data, purchasesData] = await Promise.all([
-        apiRequest('/api/userbot/proxies', { accessToken }),
-        apiRequest('/api/shop/public/my-purchases', { accessToken })
-      ]);
-      setState((prev) => ({
-        ...prev,
-        proxies: data.proxies || [],
-        support: data.support || prev.support,
-        updatedAt: new Date().toISOString()
-      }));
-      toast.success('Оплата найдена. Прокси скоро появится в кабинете.');
-      setShopState((prev) => ({
-        ...prev,
-        purchases: purchasesData.purchases || prev.purchases
-      }));
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false,
-        item: null,
-        purchase: null,
-        paymentMethod: 'ton',
-        error: ''
-      }));
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        checking: false,
-        error: error.message
-      }));
-    }
-  }
-
-  function showPurchaseInline(purchase) {
-    setCheckoutState({
-      item: purchase.item || null,
-      purchase: {
-        id: purchase.id,
-        purchase_ids: purchase.purchase_ids || [purchase.id],
-        amount_ton: purchase.amount_ton,
-        payment_method: purchase.payload?.payment_method || 'ton',
-        seller_wallet: purchase.payload?.seller_wallet || '',
-        memo: purchase.payload?.memo || '',
-        ton_uri: purchase.payload?.ton_uri || '',
-        trust_wallet_uri: purchase.payload?.trust_wallet_uri || '',
-        trust_wallet_qr: purchase.payload?.trust_wallet_qr || '',
-        ton_qr: purchase.payload?.ton_qr || '',
-        expires_at: purchase.expires_at || null,
-        status: purchase.status,
-        receipt_file_url: purchase.payload?.receipt_file_url || '',
-        payment_url: '',
-        batch: !!purchase.batch
-      },
-      paymentMethod: purchase.payload?.payment_method || 'ton',
-      loading: false,
-      checking: false,
-      error: ''
-    });
-  }
-
-  async function cancelCheckoutPurchase(target = checkoutState.purchase) {
-    const targetIds = Array.isArray(target?.purchase_ids) && target.purchase_ids.length
-      ? target.purchase_ids
-      : [target?.id].filter(Boolean);
-    if (!targetIds.length) return;
-
-    try {
-      if (targetIds.length > 1) {
-        await apiRequest('/api/shop/public/purchase/cancel-batch', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_ids: targetIds
-          }
-        });
-      } else {
-        await apiRequest('/api/shop/public/purchase/cancel', {
-          accessToken,
-          method: 'POST',
-          body: {
-            purchase_id: targetIds[0]
-          }
-        });
-      }
-
-      const [data, purchasesData] = await Promise.all([
-        apiRequest('/api/userbot/proxies', { accessToken }),
-        apiRequest('/api/shop/public/my-purchases', { accessToken })
-      ]);
-
-      setState((prev) => ({
-        ...prev,
-        error: '',
-        proxies: data.proxies || [],
-        support: data.support || prev.support,
-        updatedAt: new Date().toISOString()
-      }));
-      toast.success('Бронь снята.');
-      setShopState((prev) => ({
-        ...prev,
-        purchases: purchasesData.purchases || prev.purchases
-      }));
-      setCheckoutState((prev) => (
-        targetIds.includes(String(prev.purchase?.id || '')) || targetIds.some((id) => (prev.purchase?.purchase_ids || []).includes(id))
-          ? {
-              item: null,
-              purchase: null,
-              paymentMethod: 'ton',
-              loading: false,
-              checking: false,
-              error: ''
-            }
-          : prev
-      ));
-    } catch (error) {
-      setCheckoutState((prev) => ({
-        ...prev,
-        error: error.message || 'Не удалось снять бронь.'
-      }));
-    }
-  }
-
-function renderOpenProxyPurchases(rows) {
-    return (
-      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-slate-900">Нужно оплатить</h2>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">
-                Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.
-              </p>
-            </div>
-            <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-bold border border-amber-100">
-              {rows.length}
-            </div>
-          </div>
-        </div>
-
-        {rows.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
-              <ShoppingBag className="w-8 h-8" />
-            </div>
-            <p className="text-slate-400 font-bold">Открытых покупок по прокси сейчас нет</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {rows.map((purchase) => {
-              const statusMeta = purchaseStatusMeta(purchase.status);
-              return (
-                <div key={purchase.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div className="flex-1 space-y-3">
-                      <div>
-                        <div className="text-lg font-black text-slate-900">{purchase.item?.title || 'Прокси'}</div>
-                        <div className="text-sm text-slate-500 mt-1">
-                          {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 text-sm">
-                        <div>
-                          <span className="text-slate-500">Сумма:</span>{' '}
-                          <span className="font-bold text-slate-900">{purchaseAmountSummary(purchase)}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Способ:</span>{' '}
-                          <span className="font-bold text-slate-900">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Дедлайн:</span>{' '}
-                          <span className="font-bold text-slate-900">{formatWhen(purchase.expires_at)}</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
-                          statusMeta.className === 'pill pill--ok'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : statusMeta.className === 'pill pill--warning'
-                              ? 'bg-amber-50 text-amber-700 border-amber-100'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {statusMeta.text}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                        type="button"
-                        onClick={() => showPurchaseInline(purchase)}
-                      >
-                        Открыть оплату
-                      </button>
-                      <button
-                        className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                        type="button"
-                        onClick={() => cancelCheckoutPurchase(purchase)}
-                      >
-                        Снять бронь
-                      </button>
-                      {purchase.payload?.ton_uri ? (
-                        <a
-                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                          href={purchase.payload.ton_uri}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          TON
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   function ProxyTableSection() {
     const { items: visibleItems, isSold } = getVisibleProxies();
     const laneInfo = LANE_OPTIONS.find(l => l.id === selectedLane);
@@ -1535,448 +767,6 @@ function renderOpenProxyPurchases(rows) {
 
 
 
-  function ProxyPurchaseSection() {
-    return (
-      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
-        {/* VIEW TABS - навигация между состояниями */}
-        <div className="flex border-b border-slate-100">
-          <button
-            type="button"
-            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
-              purchaseView === 'shop'
-                ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/50'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-            onClick={() => setPurchaseView('shop')}
-          >
-            <ShoppingBag className="w-5 h-5 inline mr-2" />
-            Купить прокси
-          </button>
-          <button
-            type="button"
-            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
-              purchaseView === 'checkout'
-                ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-            onClick={() => setPurchaseView('checkout')}
-            disabled={!checkoutState.item}
-          >
-            <Wallet className="w-5 h-5 inline mr-2" />
-            Оплата прокси
-            {checkoutState.item ? <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">1</span> : null}
-          </button>
-          <button
-            type="button"
-            className={`flex-1 px-6 py-4 text-sm font-bold transition-all ${
-              purchaseView === 'open-purchases'
-                ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50/50'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-            onClick={() => setPurchaseView('open-purchases')}
-          >
-            <ShoppingBag className="w-5 h-5 inline mr-2" />
-            Нужно оплатить
-            {openProxyPurchases.length > 0 ? <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs">{openProxyPurchases.length}</span> : null}
-          </button>
-        </div>
-
-        {/* SHOP VIEW */}
-        {purchaseView === 'shop' && (
-          <div className="p-6 md:p-8">
-            {shopState.loading ? (
-              <div className="text-center py-12 text-slate-500">Загружаем предложения...</div>
-            ) : shopState.error ? (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800">
-                {shopState.error}
-              </div>
-            ) : !proxyBatchOffer ? (
-              <div className="text-center py-12 text-slate-500">Сейчас готовых лотов нет.</div>
-            ) : (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <div className="text-sm text-slate-600 mb-1">{proxyBatchOffer.title}</div>
-                    <div className="text-3xl font-black text-slate-900 mb-2">{proxyBatchOffer.unitPriceText}</div>
-                    <div className="text-sm text-slate-500">{proxyBatchOffer.previewText}</div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Свободно</span>
-                      <span className="font-bold text-slate-900">{proxyBatchOffer.items.length}</span>
-                    </div>
-                    {profilePlan === 'trial' && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">Лимит</span>
-                        <span className="font-bold text-amber-600">{proxyBuyLimit}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="border-t border-slate-200 pt-6">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-semibold text-slate-700">Количество</label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
-                          type="button"
-                          disabled={proxyBuyQuantity <= 1}
-                          onClick={() => setProxyBuyQuantity((prev) => Math.max(1, prev - 1))}
-                        >
-                          −
-                        </button>
-                        <input
-                          className="w-20 px-3 py-2 text-center border border-slate-200 rounded-xl text-xl font-bold text-slate-900"
-                          type="number"
-                          min="1"
-                          max={Math.max(proxyBuyLimit, 1)}
-                          value={proxyBuyQuantity}
-                          disabled={proxyBuyLimit <= 0}
-                          onChange={(event) => {
-                            const next = Number.parseInt(event.target.value, 10);
-                            if (Number.isNaN(next)) {
-                              setProxyBuyQuantity(1);
-                              return;
-                            }
-                            setProxyBuyQuantity(Math.min(Math.max(next, 1), Math.max(proxyBuyLimit, 1)));
-                          }}
-                        />
-                        <button
-                          className="w-12 h-12 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-xl font-bold"
-                          type="button"
-                          disabled={proxyBuyQuantity >= Math.max(proxyBuyLimit, 1) || proxyBuyLimit <= 0}
-                          onClick={() => setProxyBuyQuantity((prev) => Math.min(Math.max(proxyBuyLimit, 1), prev + 1))}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      {proxyBatchOffer.paymentMethods.map((method) => (
-                        <button
-                          key={method}
-                          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all ${
-                            method === 'ton'
-                              ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                          type="button"
-                          disabled={checkoutState.loading || proxyBuyLimit <= 0}
-                          onClick={() => createProxyBatchCheckout(method)}
-                        >
-                          {checkoutState.loading ? 'Готовим...' : paymentMethodLabel(method)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* CHECKOUT VIEW */}
-        {purchaseView === 'checkout' && checkoutState.item ? (
-          <div>
-            <div className="p-6 md:p-8 border-b border-slate-100">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20">
-                    <Wallet className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-xl font-bold text-slate-900">Оплата прокси</h2>
-                    <p className="text-sm text-slate-500 font-medium mt-0.5">
-                      {checkoutState.item?.title || 'Прокси'} • {itemPriceSummary(checkoutState.item)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl">
-                  {itemPaymentMethods(checkoutState.item).map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                        checkoutState.paymentMethod === method
-                          ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                      disabled={checkoutState.loading}
-                      onClick={() => {
-                        openCheckout(checkoutState.item, method);
-                      }}
-                    >
-                      {paymentMethodLabel(method)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 md:p-8">
-              {checkoutState.loading ? (
-                <div className="text-center py-12 text-slate-500">Готовим оплату...</div>
-              ) : checkoutState.error && !checkoutState.purchase ? (
-                <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 mb-6">
-                  {checkoutState.error}
-                </div>
-              ) : checkoutState.purchase ? (
-                <div className="space-y-6">
-                  {checkoutState.error ? (
-                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800">
-                      {checkoutState.error}
-                    </div>
-                  ) : null}
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <div className="text-slate-500 mb-1">Метод оплаты</div>
-                      <div className="font-semibold text-slate-900">{paymentMethodLabel(checkoutState.purchase.payment_method)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 mb-1">Сумма</div>
-                      <div className="font-semibold text-slate-900">{purchaseAmountSummary(checkoutState.purchase)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-500 mb-1">Дедлайн</div>
-                      <div className="font-semibold text-slate-900">{formatWhen(checkoutState.purchase.expires_at)}</div>
-                    </div>
-                  </div>
-
-                  {checkoutState.purchase.payment_method === 'ton' ? (
-                    <div className="flex flex-col md:flex-row gap-6 p-6 sm:p-8 rounded-[2rem] bg-slate-50/50 border border-slate-200 mt-8 mb-4">
-                      <div className="flex-1 flex flex-col">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 shadow-inner">
-                            <Wallet className="w-5 h-5" strokeWidth={2.5} />
-                          </div>
-                          <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Оплата через кошелек</h3>
-                        </div>
-
-                        <p className="text-base text-slate-600 font-medium mb-8 leading-relaxed max-w-md">
-                          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{purchaseAmountSummary(checkoutState.purchase)}</strong>.
-                        </p>
-
-                        <div className="mb-6 flex w-full flex-col gap-2">
-                          <CopyRow label="Кошелек" value={checkoutState.purchase.seller_wallet} />
-                          <CopyRow label="Memo" value={checkoutState.purchase.memo || ''} />
-                        </div>
-
-                        <div className="flex flex-wrap gap-3 mt-auto">
-                          {checkoutState.purchase.trust_wallet_uri && (
-                            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 !text-white text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all" href={checkoutState.purchase.trust_wallet_uri} target="_blank" rel="noreferrer">
-                              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> Trust Wallet
-                            </a>
-                          )}
-                          {checkoutState.purchase.ton_uri && (
-                            <a className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 !text-white text-sm font-bold shadow-md shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 transition-all" href={checkoutState.purchase.ton_uri} target="_blank" rel="noreferrer">
-                              <ExternalLink className="w-4 h-4" strokeWidth={2.5} /> TON
-                            </a>
-                          )}
-                        </div>
-                      </div>
-
-                      {(checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr) && (
-                        <div className="shrink-0 flex flex-col bg-white p-5 rounded-3xl border border-slate-200 shadow-sm w-full md:w-[260px]">
-                          {checkoutState.purchase.trust_wallet_qr && checkoutState.purchase.ton_qr && (
-                            <div className="flex p-1 bg-slate-100 rounded-xl mb-5 w-full">
-                              <button
-                                type="button"
-                                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${tonCheckoutView === 'trust' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                onClick={() => setTonCheckoutView('trust')}
-                              >
-                                Trust
-                              </button>
-                              <button
-                                type="button"
-                                className={`flex-1 px-3 py-2 text-xs font-extrabold uppercase tracking-wide rounded-lg transition-all ${tonCheckoutView === 'ton' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                onClick={() => setTonCheckoutView('ton')}
-                              >
-                                TON
-                              </button>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400 mb-3">
-                            <QrCode className="w-3.5 h-3.5" />
-                            {tonCheckoutView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
-                          </div>
-                          <div className="w-full aspect-square rounded-2xl border border-slate-100 p-2 bg-slate-50/50">
-                            <img
-                              className="w-full h-full object-contain mix-blend-multiply"
-                              src={tonCheckoutView === 'ton'
-                                ? (checkoutState.purchase.ton_qr || checkoutState.purchase.trust_wallet_qr)
-                                : (checkoutState.purchase.trust_wallet_qr || checkoutState.purchase.ton_qr)}
-                              alt={tonCheckoutView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-                    <button
-                      className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                      type="button"
-                      onClick={() => {
-                        setCheckoutState({
-                          item: null,
-                          purchase: null,
-                          paymentMethod: 'ton',
-                          loading: false,
-                          checking: false,
-                          error: ''
-                        });
-                        setPurchaseView('shop');
-                      }}
-                    >
-                      Скрыть
-                    </button>
-
-                    <div className="flex gap-3">
-                      {(checkoutState.purchase.status === 'pending' || checkoutState.purchase.status === 'awaiting_receipt') ? (
-                        <button
-                          className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                          type="button"
-                          onClick={() => cancelCheckoutPurchase(checkoutState.purchase)}
-                        >
-                          Снять бронь
-                        </button>
-                      ) : null}
-
-                      {checkoutState.purchase.payment_method === 'ton' ? (
-                        <button
-                          className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                          type="button"
-                          disabled={checkoutState.checking}
-                          onClick={checkCheckout}
-                        >
-                          {checkoutState.checking ? 'Проверяем...' : 'Проверить оплату'}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* OPEN PURCHASES VIEW */}
-        {purchaseView === 'open-purchases' && (
-          <div>
-            <div className="p-6 md:p-8 border-b border-slate-100">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
-                  <ShoppingBag className="w-6 h-6" />
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl font-bold text-slate-900">Нужно оплатить</h2>
-                  <p className="text-sm text-slate-500 font-medium mt-0.5">
-                    Открытые покупки не пропадают после брони. Отсюда можно вернуться в оплату.
-                  </p>
-                </div>
-                <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-xl text-sm font-bold border border-amber-100">
-                  {openProxyPurchases.length}
-                </div>
-              </div>
-            </div>
-
-            <div className="divide-y divide-slate-50">
-              {openProxyPurchases.length === 0 ? (
-                <div className="p-12 text-center">
-                  <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
-                    <ShoppingBag className="w-8 h-8" />
-                  </div>
-                  <p className="text-slate-400 font-bold">Открытых покупок по прокси сейчас нет</p>
-                </div>
-              ) : (
-                openProxyPurchases.map((purchase) => {
-                  const statusMeta = purchaseStatusMeta(purchase.status);
-                  return (
-                    <div key={purchase.id} className="p-6 md:p-8 hover:bg-slate-50/50 transition-colors">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                        <div className="flex-1 space-y-3">
-                          <div>
-                            <div className="text-lg font-black text-slate-900">{purchase.item?.title || 'Прокси'}</div>
-                            <div className="text-sm text-slate-500 mt-1">
-                              {(purchase.assets || []).map((asset) => asset.label || 'Proxy').join(' • ') || 'Proxy'}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div>
-                              <span className="text-slate-500">Сумма:</span>{' '}
-                              <span className="font-bold text-slate-900">{purchaseAmountSummary(purchase)}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">Способ:</span>{' '}
-                              <span className="font-bold text-slate-900">{paymentMethodLabel(purchase.payload?.payment_method || 'ton')}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">Дедлайн:</span>{' '}
-                              <span className="font-bold text-slate-900">{formatWhen(purchase.expires_at)}</span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide border ${
-                              statusMeta.className === 'pill pill--ok'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                : statusMeta.className === 'pill pill--warning'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                  : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}>
-                              {statusMeta.text}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                          <button
-                            className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all"
-                            type="button"
-                            onClick={() => {
-                              showPurchaseInline(purchase);
-                              setPurchaseView('checkout');
-                            }}
-                          >
-                            Открыть оплату
-                          </button>
-                          <button
-                            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                            type="button"
-                            onClick={() => cancelCheckoutPurchase(purchase)}
-                          >
-                            Снять бронь
-                          </button>
-                          {purchase.payload?.ton_uri ? (
-                            <a
-                              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                              href={purchase.payload.ton_uri}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              TON
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
   if (state.loading) {
     return <LoadingState text="Загружаем прокси..." />;
   }
@@ -2000,7 +790,24 @@ function renderOpenProxyPurchases(rows) {
         </div>
       ) : null}
 
-      <ProxyPurchaseSection />
+      {state.support?.profile_role !== 'admin' ? (
+        <ProxyStorefrontSection
+          buyLimit={proxyBuyLimit}
+          buyQuantities={buyQuantities}
+          cancelCheckout={cancelCheckout}
+          checkPurchase={checkPurchase}
+          checkoutState={checkoutState}
+          createBatchCheckout={createBatchCheckout}
+          openCheckout={openCheckout}
+          refreshPurchases={refreshPurchases}
+          reloadProxies={reloadProxies}
+          setBuyQuantities={setBuyQuantities}
+          setCheckoutState={setCheckoutState}
+          setSelectedOpenPurchaseId={setSelectedOpenPurchaseId}
+          showPurchaseInline={showPurchaseInline}
+          storefrontState={storefrontState}
+        />
+      ) : null}
 
       {state.support?.profile_role !== 'admin' ? (
         <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">

@@ -11,10 +11,11 @@ import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
-  batchUserbotLotPaymentMethods,
   canRestoreFromFiles,
   defaultCheckLines,
   formatWhen,
+  isUserbotPurchase,
+  isUserbotShopItem,
   paymentMethodLabel,
   proxyLabel,
   purchaseStatusMeta,
@@ -23,7 +24,6 @@ import {
   restrictedMarker,
   userbotItemPriceSummary,
   userbotLotKindLabel,
-  userbotLotPaymentMethods,
   userbotPurchaseAmountSummary
 } from './bots/bots-accounts.utils.js';
 import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.js';
@@ -32,12 +32,17 @@ import { useLiveUserbotsController } from './bots/useLiveUserbotsController.js';
 import { useOfficialBotsController } from './bots/useOfficialBotsController.js';
 import { useSalesContourController } from './bots/useSalesContourController.js';
 import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
-import { useUserbotStorefront } from './bots/useUserbotStorefront.js';
+import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
 
 function showUiMessage(text, tone = 'default') {
   if (tone === 'success') return toast.success(text);
   if (tone === 'error') return toast.error(text);
   return toast(text);
+}
+
+function userbotBatchTitleFor(count, firstItem) {
+  if (firstItem?.item_type === 'bundle') return `Аккаунты + прокси x${count}`;
+  return `Аккаунты x${count}`;
 }
 
 const CONTOUR_ROLE_LABELS = {
@@ -60,22 +65,25 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   });
 
   const {
-    cancelUserbotCheckout,
+    buyQuantities,
+    cancelCheckout,
     checkoutState,
-    createUserbotBatchCheckout,
-    openUserbotCheckout,
+    createBatchCheckout,
+    openCheckout,
     refreshPurchases,
     selectedOpenPurchaseId,
+    setBuyQuantities,
     setCheckoutState,
     setSelectedOpenPurchaseId,
-    setUserbotBuyQuantity,
-    showUserbotPurchaseInline,
-    storefrontState,
-    userbotBuyQuantity
-  } = useUserbotStorefront({
+    showPurchaseInline,
+    storefrontState
+  } = useShopStorefront({
     accessToken,
     profileRole: state.proxySupport?.profile_role,
-    showUiMessage
+    showUiMessage,
+    isShopItem: isUserbotShopItem,
+    isPurchase: isUserbotPurchase,
+    batchTitleFor: userbotBatchTitleFor
   });
 
   const {
@@ -339,21 +347,21 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   };
 
   const buyerStorefrontSectionProps = {
-    openUserbotPurchases,
+    openPurchases: openUserbotPurchases,
     setSelectedOpenPurchaseId,
-    showUserbotPurchaseInline,
+    showPurchaseInline,
     storefrontState,
     bundledUserbotLot,
     bundledUserbotLots,
-    userbotBuyQuantity,
-    setUserbotBuyQuantity,
+    buyQuantities,
+    setBuyQuantities,
     checkoutState,
     setCheckoutState,
-    cancelUserbotCheckout,
-    createUserbotBatchCheckout,
-    openUserbotCheckout,
+    cancelCheckout,
+    createBatchCheckout,
+    openCheckout,
     refreshPurchases,
-    reloadAccounts
+    reloadAssets: reloadAccounts
   };
 
   const listedShopUserbotsSectionProps = {
