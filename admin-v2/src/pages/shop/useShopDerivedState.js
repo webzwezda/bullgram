@@ -6,9 +6,7 @@ export function useShopDerivedState({
   state,
   profilePlan,
   profileRole,
-  itemFilter,
   purchaseFilter,
-  itemSearch,
   purchaseSearch
 }) {
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
@@ -17,22 +15,6 @@ export function useShopDerivedState({
   const support = availableAssets.support || {};
   const sellerCanSellAssets = !!support.asset_marketplace || profileRole === 'admin';
   const canUseAssetSeller = profileRole === 'admin' || (sellerCanSellAssets && planRules.canUseShopAdmin);
-
-  const filteredItems = useMemo(() => {
-    const needle = itemSearch.trim().toLowerCase();
-    return state.items.filter((item) => {
-      if (itemFilter === 'published' && item.status !== 'published') return false;
-      if (itemFilter === 'draft' && item.status !== 'draft') return false;
-      if (itemFilter === 'reserved' && !(item.stats?.pending_purchases > 0)) return false;
-      if (itemFilter === 'sold' && item.status !== 'sold') return false;
-      if (itemFilter === 'unlisted' && item.visibility !== 'unlisted') return false;
-      if (!needle) return true;
-      const text = [item.title, item.description, item.preview_text, item.item_type, item.status, item.visibility,
-        (item.assets || []).map((a) => a.label || a.asset_type).join(' ')
-      ].filter(Boolean).join(' ').toLowerCase();
-      return text.includes(needle);
-    });
-  }, [itemFilter, itemSearch, state.items]);
 
   const groupedPurchases = useMemo(() => {
     const buckets = new Map();
@@ -98,7 +80,6 @@ export function useShopDerivedState({
 
   return {
     canUseAssetSeller,
-    filteredItems,
     filteredPurchases,
     itemSummary,
     sellerStats,

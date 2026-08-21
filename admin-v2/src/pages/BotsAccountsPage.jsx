@@ -68,6 +68,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   const {
     buyQuantities,
     cancelCheckout,
+    checkPurchase,
     checkoutState,
     createBatchCheckout,
     openCheckout,
@@ -359,6 +360,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     checkoutState,
     setCheckoutState,
     cancelCheckout,
+    checkPurchase,
     createBatchCheckout,
     openCheckout,
     refreshPurchases,

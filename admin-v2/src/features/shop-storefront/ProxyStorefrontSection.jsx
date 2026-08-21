@@ -1,16 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import {
   AlertCircle,
-  Check,
-  ChevronDown,
   CreditCard,
-  ExternalLink,
   Globe,
   Loader2,
   Minus,
   Plus,
-  QrCode,
   ShoppingCart,
   X
 } from 'lucide-react';
@@ -20,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TonConnectPayButton } from '../ton-checkout/TonConnectPayButton.jsx';
 import { TonWalletChip } from '../ton-checkout/TonWalletChip.jsx';
+import { ManualTonPaymentCard } from '../ton-checkout/ManualTonPaymentCard.jsx';
 
 const VERIFY_ENDPOINT = '/api/shop/public/purchase/verify-ton-connect';
 const PROXY_SLOT_KEY = 'proxy';
@@ -110,36 +107,6 @@ function purchaseBadge(status) {
   }
 }
 
-function CopyRow({ label, value }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copyValue() {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error('Не удалось скопировать');
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2 text-left hover:bg-slate-50 transition-colors"
-      onClick={copyValue}
-    >
-      <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
-      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <span className="h-3.5 w-3.5" aria-hidden />}
-        {copied ? 'Ок' : 'Copy'}
-      </span>
-    </button>
-  );
-}
-
 export function ProxyStorefrontSection({
   buyLimit,
   buyQuantities,
@@ -157,8 +124,6 @@ export function ProxyStorefrontSection({
   storefrontState
 }) {
   const { accessToken } = useAuth();
-  const [manualOpen, setManualOpen] = useState(false);
-  const [qrView, setQrView] = useState('trust');
 
   const openPurchases = useMemo(
     () => groupOpenProxyPurchases((storefrontState.purchases || []).filter(isOpenProxyPurchase)),
@@ -198,7 +163,6 @@ export function ProxyStorefrontSection({
       notice: '',
       noticeTone: 'default'
     });
-    setManualOpen(false);
     try {
       await Promise.all([refreshPurchases(), reloadProxies()]);
     } catch {
@@ -230,15 +194,9 @@ export function ProxyStorefrontSection({
   const handleManualCheck = useCallback(async () => {
     const result = await checkPurchase();
     if (result === 'paid') {
-      setManualOpen(false);
       toast.success('Оплата найдена. Прокси скоро появится в кабинете.');
     }
   }, [checkPurchase]);
-
-  const effectiveQrView = activePurchase?.trust_wallet_qr ? qrView : 'ton';
-  const qrSrc = effectiveQrView === 'trust'
-    ? (activePurchase?.trust_wallet_qr || activePurchase?.ton_qr)
-    : (activePurchase?.ton_qr || activePurchase?.trust_wallet_qr);
 
   return (
     <div className="mb-6">
@@ -252,7 +210,7 @@ export function ProxyStorefrontSection({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Магазин прокси</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Живые прокси для юзерботов. Оплата через TON Connect.</p>
+                <p className="text-sm text-slate-500 mt-0.5">Живые прокси для юзерботов. Оплата: TON Connect или перевод вручную.</p>
               </div>
             </div>
             <TonWalletChip />
@@ -440,102 +398,11 @@ export function ProxyStorefrontSection({
                       onError={handlePayError}
                     />
 
-                    {/* Ручная оплата — запасной способ без TonConnect */}
-                    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition"
-                        onClick={() => setManualOpen((prev) => !prev)}
-                      >
-                        <span className="inline-flex items-center gap-2">
-                          <QrCode className="size-4 text-slate-400" />
-                          Оплатить вручную
-                        </span>
-                        <ChevronDown className={`size-4 text-slate-400 transition-transform ${manualOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      {manualOpen ? (
-                        <div className="border-t border-slate-100 p-4 space-y-4">
-                          <p className="text-[12px] text-slate-500">
-                            Переведи ровно <strong className="text-slate-800 font-mono">{Number(activePurchase.amount_ton || 0)} TON</strong> с этим memo,
-                            потом нажми «Проверить оплату».
-                          </p>
-                          <div className="flex flex-col md:flex-row gap-4">
-                            <div className="flex-1 space-y-2">
-                              <CopyRow label="Кошелек" value={activePurchase.seller_wallet} />
-                              <CopyRow label="Memo" value={activePurchase.memo || ''} />
-                              {(activePurchase.trust_wallet_uri || activePurchase.ton_uri) ? (
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                  {activePurchase.trust_wallet_uri ? (
-                                    <a
-                                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
-                                      href={activePurchase.trust_wallet_uri}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" /> Trust Wallet
-                                    </a>
-                                  ) : null}
-                                  {activePurchase.ton_uri ? (
-                                    <a
-                                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
-                                      href={activePurchase.ton_uri}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" /> TON
-                                    </a>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-                            {qrSrc ? (
-                              <div className="shrink-0 flex flex-col bg-slate-50/50 p-3 rounded-2xl border border-slate-100 w-full md:w-[200px]">
-                                {activePurchase.trust_wallet_qr && activePurchase.ton_qr ? (
-                                  <div className="flex p-1 bg-slate-100 rounded-xl mb-3 w-full">
-                                    <button
-                                      type="button"
-                                      className={`flex-1 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${effectiveQrView === 'trust' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                      onClick={() => setQrView('trust')}
-                                    >
-                                      Trust
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={`flex-1 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${effectiveQrView === 'ton' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                      onClick={() => setQrView('ton')}
-                                    >
-                                      TON
-                                    </button>
-                                  </div>
-                                ) : null}
-                                <div className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2 text-center">
-                                  {effectiveQrView === 'ton' ? 'QR для TON' : 'QR для Trust'}
-                                </div>
-                                <div className="w-full aspect-square rounded-xl border border-slate-100 p-1.5 bg-white">
-                                  <img
-                                    className="w-full h-full object-contain mix-blend-multiply"
-                                    src={qrSrc}
-                                    alt={effectiveQrView === 'ton' ? 'QR для TON' : 'QR для Trust Wallet'}
-                                  />
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                          <Button
-                            className="w-full h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm"
-                            onClick={handleManualCheck}
-                            disabled={checkoutState.checking}
-                          >
-                            {checkoutState.checking ? (
-                              <>
-                                <Loader2 className="size-4 mr-2 animate-spin" />
-                                Проверяем...
-                              </>
-                            ) : 'Проверить оплату'}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
+                    <ManualTonPaymentCard
+                      purchase={activePurchase}
+                      checking={checkoutState.checking}
+                      onCheck={handleManualCheck}
+                    />
 
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] text-slate-500">
@@ -547,7 +414,6 @@ export function ProxyStorefrontSection({
                         type="button"
                         className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition"
                         onClick={() => {
-                          setManualOpen(false);
                           setCheckoutState({
                             item: null,
                             purchase: null,

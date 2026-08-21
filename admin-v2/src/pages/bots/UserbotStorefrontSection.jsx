@@ -13,12 +13,14 @@ import {
   Star,
   X
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TonConnectPayButton } from '../../features/ton-checkout/TonConnectPayButton.jsx';
 import { TonWalletChip } from '../../features/ton-checkout/TonWalletChip.jsx';
+import { ManualTonPaymentCard } from '../../features/ton-checkout/ManualTonPaymentCard.jsx';
 
 const VERIFY_ENDPOINT = '/api/shop/public/purchase/verify-ton-connect';
 
@@ -55,6 +57,7 @@ export function UserbotStorefrontSection({
   checkoutState,
   setCheckoutState,
   cancelCheckout,
+  checkPurchase,
   createBatchCheckout,
   openCheckout,
   refreshPurchases,
@@ -123,6 +126,13 @@ export function UserbotStorefrontSection({
     };
   }, [activePurchase]);
 
+  const handleManualCheck = useCallback(async () => {
+    const result = await checkPurchase();
+    if (result === 'paid') {
+      toast.success('Оплата найдена. Покупка скоро появится в кабинете.');
+    }
+  }, [checkPurchase]);
+
   return (
     <div className="mb-6">
       <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
@@ -135,7 +145,7 @@ export function UserbotStorefrontSection({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Магазин аккаунтов</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Готовые юзерботы с прокси. Оплата через TON Connect.</p>
+                <p className="text-sm text-slate-500 mt-0.5">Готовые юзерботы с прокси. Оплата: TON Connect или перевод вручную.</p>
               </div>
             </div>
             <TonWalletChip />
@@ -332,6 +342,13 @@ export function UserbotStorefrontSection({
                       onPaid={handlePaid}
                       onError={handlePayError}
                     />
+
+                    <ManualTonPaymentCard
+                      purchase={activePurchase}
+                      checking={checkoutState.checking}
+                      onCheck={handleManualCheck}
+                    />
+
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] text-slate-500">
                         {activePurchase.expires_at

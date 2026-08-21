@@ -12,7 +12,7 @@ import { tonToNanoString } from '../utils/ton.js';
 import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 
-const SHOP_PENDING_PURCHASE_TTL_MINUTES = 30;
+const SHOP_PENDING_PURCHASE_TTL_MINUTES = Number(process.env.SHOP_PENDING_PURCHASE_TTL_MINUTES || 30);
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
 
 fs.mkdirSync(SHOP_RECEIPTS_DIR, { recursive: true });
@@ -225,6 +225,22 @@ async function buildTrustWalletQrDataUrl(wallet, amountTon, memo) {
     return {
         trustWalletUri,
         qrCode
+    };
+}
+
+// Ссылки/QR для ручной оплаты (без TonConnect) — отдаются сразу при создании
+// покупки, чтобы фронт мог показать полный чекаут без повторного запроса.
+async function buildManualPaymentLinks(wallet, amountTon, memo) {
+    if (!wallet || !memo) return {};
+    const [ton, trust] = await Promise.all([
+        buildTonQrDataUrl(wallet, amountTon, memo),
+        buildTrustWalletQrDataUrl(wallet, amountTon, memo)
+    ]);
+    return {
+        ton_uri: ton.tonUri,
+        ton_qr: ton.qrCode,
+        trust_wallet_uri: trust.trustWalletUri,
+        trust_wallet_qr: trust.qrCode
     };
 }
 
@@ -736,20 +752,6 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
         };
     }
 
-    if (purchase.status === 'expired' || isPendingPurchaseExpired(purchase)) {
-        await markExpired({ supabase, table: 'shop_purchases', id: purchase.id });
-
-        return {
-            ok: false,
-            statusCode: 400,
-            body: {
-                error: 'Время на оплату истекло. Создай покупку заново.',
-                status: 'expired',
-                ownership_transfer_status: 'pending'
-            }
-        };
-    }
-
     if (purchase.status === 'paid' && purchase.ownership_transfer_status === 'completed') {
         return {
             ok: true,
@@ -768,7 +770,23 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     const wallet = purchase.payload?.seller_wallet || siteWallet();
     const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet, senderWallet });
 
+    // Платёж мог прийти после истечения брони. Деньги уже на кошельке сайта —
+    // сначала ищем платёж и только потом решаем, истекла ли покупка.
     if (!isPaid) {
+        if (purchase.status === 'expired' || isPendingPurchaseExpired(purchase)) {
+            await markExpired({ supabase, table: 'shop_purchases', id: purchase.id });
+
+            return {
+                ok: false,
+                statusCode: 400,
+                body: {
+                    error: 'Время на оплату истекло. Создай покупку заново.',
+                    status: 'expired',
+                    ownership_transfer_status: 'pending'
+                }
+            };
+        }
+
         return {
             ok: true,
             statusCode: 200,
@@ -789,11 +807,25 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     const textServiceItem = isTextServiceItem(item);
 
     if (!textServiceItem && item.status === 'sold' && purchase.ownership_transfer_status !== 'completed') {
+        // Платёж найден, но лот уже продан другому — фиксируем как paid+failed,
+        // чтобы у покупки осталась долговечная запись для ручного возврата.
+        if (purchase.status === 'pending') {
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    status: 'paid',
+                    ownership_transfer_status: 'failed',
+                    ownership_transfer_error: 'Платёж получен, но лот уже продан другому покупателю — нужен возврат',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', purchase.id)
+                .eq('status', 'pending');
+        }
         return {
             ok: false,
             statusCode: 400,
             body: {
-                error: 'Лот уже ушел другому покупателю. Этот заказ больше нельзя завершить.',
+                error: 'Лот уже ушел другому покупателю. Платёж получен — свяжитесь с поддержкой для возврата.',
                 status: 'failed',
                 ownership_transfer_status: 'failed'
             }
@@ -808,6 +840,17 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     if (assetsError) throw assetsError;
 
     const nowIso = new Date().toISOString();
+
+    // Опоздавший платёж: строка уже истекла, а claimPaid делает CAS только по
+    // status='pending'. Возвращаем в pending, чтобы стандартный зачёт сработал.
+    if (purchase.status === 'expired') {
+        await supabase
+            .from('shop_purchases')
+            .update({ status: 'pending', updated_at: nowIso })
+            .eq('id', purchase.id)
+            .eq('status', 'expired');
+    }
+
     const claimed = await claimPaid({
         supabase,
         table: 'shop_purchases',
@@ -827,6 +870,19 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
             .select('status, ownership_transfer_status')
             .eq('id', purchase.id)
             .maybeSingle();
+
+        if (fresh?.status !== 'paid') {
+            return {
+                ok: false,
+                statusCode: 409,
+                body: {
+                    error: 'Платёж найден, но зачесть его не удалось. Нажмите «Проверить оплату» ещё раз.',
+                    status: 'pending',
+                    ownership_transfer_status: fresh?.ownership_transfer_status || 'pending'
+                }
+            };
+        }
+
         return {
             ok: true,
             statusCode: 200,
@@ -2276,7 +2332,8 @@ export default function shopRoutes(supabase) {
                 memo,
                 item_type: item.item_type,
                 expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString(),
-                network: detectNetwork()
+                network: detectNetwork(),
+                ...(await buildManualPaymentLinks(wallet, amountTon, memo))
             });
         } catch (error) {
             console.error('Ошибка создания shop purchase:', error);
@@ -2352,7 +2409,8 @@ export default function shopRoutes(supabase) {
                 memo,
                 item_type: 'proxy_batch',
                 expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
-                network: detectNetwork()
+                network: detectNetwork(),
+                ...(await buildManualPaymentLinks(first.wallet || '', totalTon, memo))
             });
         } catch (error) {
             console.error('Ошибка создания batch shop purchase:', error);

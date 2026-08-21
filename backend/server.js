@@ -66,6 +66,7 @@ import { runProxyBootSweep } from './jobs/proxy-boot-sweep.job.js';
 import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
 import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.js';
 import { startBillingActivationRecovery } from './jobs/billing-activation-recovery.job.js';
+import { startShopPurchaseExpiry } from './jobs/shop-purchase-expiry.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -351,6 +352,7 @@ httpServer.listen(PORT, async () => {
     startInvoiceAutoDetect(supabase, getBotById);
     startPublicInvoicesCleanup(supabase);
     startBillingActivationRecovery(supabase);
+    startShopPurchaseExpiry(supabase);
 
     // Запускаем все активные checklist-боты
     try {
