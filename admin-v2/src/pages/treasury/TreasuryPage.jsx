@@ -4,20 +4,14 @@ import { LoadingState } from '../../ui/LoadingState.jsx';
 import { toast } from 'sonner';
 
 import { apiRequest } from '../../api/client.js';
-import { useShopData } from './useShopData.js';
-import { useShopDerivedState } from './useShopDerivedState.js';
 import { useTreasuryData } from './useTreasuryData.js';
-import { ShopOverviewCards } from './ShopOverviewCards.jsx';
 import { TreasuryTab } from './TreasuryTab.jsx';
 
-export function ShopAdminPage() {
+export function TreasuryPage() {
   const { accessToken } = useAuth();
   const [withdrawing, setWithdrawing] = useState(false);
 
-  const { state } = useShopData({ accessToken });
   const treasury = useTreasuryData({ accessToken });
-
-  const derived = useShopDerivedState({ state });
 
   useEffect(() => {
     if (!treasury.data && !treasury.loading && !treasury.error) {
@@ -44,31 +38,13 @@ export function ShopAdminPage() {
     }
   }
 
-  if (state.loading) {
-    return <LoadingState text="Загружаем магазин..." />;
-  }
-
-  if (state.error && !state.items.length) {
-    return (
-      <section className="page">
-        <div className="mb-6 space-y-6">
-          <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
-            {state.error}
-          </div>
-        </div>
-      </section>
-    );
+  if (!treasury.data && treasury.loading) {
+    return <LoadingState text="Загружаем казну..." />;
   }
 
   return (
     <section className="page">
       <div className="mb-6 space-y-6">
-        <ShopOverviewCards data={{
-          itemSummary: derived.itemSummary,
-          purchaseSummary: derived.purchaseSummary,
-          sellerStats: derived.sellerStats
-        }} />
-
         <TreasuryTab
           data={treasury.data}
           loading={treasury.loading}

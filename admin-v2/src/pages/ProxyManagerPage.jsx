@@ -6,8 +6,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ProxyStorefrontSection, isProxyShopItem, isProxyPurchase } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
-import { ProxyComposerDialog } from './shop/ProxyComposerDialog.jsx';
-import { INITIAL_PROXY_COMPOSER } from './shop/shop.utils.js';
+import { ProxyComposerDialog, INITIAL_PROXY_COMPOSER } from '../components/shop/ProxyComposerDialog.jsx';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
@@ -685,12 +684,12 @@ export function ProxyManagerPage() {
                     </div>
                     <a
                       className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
-                      href="/app/shop"
+                      href="/app/billing?tab=purchases"
                       target="_blank"
                       rel="noreferrer"
                     >
                       <ExternalLink className="w-3.5 h-3.5" strokeWidth={2.5} />
-                      Shop
+                      Заказы
                     </a>
                   </div>
                 </div>

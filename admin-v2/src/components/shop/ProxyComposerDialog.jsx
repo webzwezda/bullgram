@@ -6,7 +6,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { INITIAL_PROXY_COMPOSER } from './shop.utils.js';
+export const INITIAL_PROXY_COMPOSER = {
+  proxyId: '',
+  title: '',
+  preview_text: '',
+  description: '',
+  sales_channel: 'admin_only',
+  payment_methods: ['ton'],
+  price_ton: '',
+  status: 'published',
+  visibility: 'public',
+  saving: false,
+  error: ''
+};
 
 export function ProxyComposerDialog({ open, onOpenChange, composer, setComposer, saleProxies, onSave, onReset }) {
   function handleClose() {

@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  Users, ShoppingBag, ShoppingCart, Database,
+  Users, Landmark, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
   RefreshCcw,
   Zap, CheckSquare, History
@@ -15,7 +15,7 @@ import { Toaster } from './components/ui/sonner.jsx';
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
-const ShopAdminPage = lazy(() => import('./pages/shop/ShopAdminPage.jsx').then((module) => ({ default: module.ShopAdminPage })));
+const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
 const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
 const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage.jsx').then((module) => ({ default: module.ReferralsPage })));
@@ -75,7 +75,7 @@ export function App() {
     ...(profileRole === 'admin' ? [{
       title: 'Админ',
       items: [
-        { to: '/shop', label: 'Магазин', icon: ShoppingBag },
+        { to: '/treasury', label: 'Казна', icon: Landmark },
         { to: '/checklist', label: 'Чеклисты', icon: CheckSquare },
       ]
     }] : [])
@@ -214,11 +214,12 @@ export function App() {
                 <Route path="/userbots" element={<UserbotAccountsPage />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
                 <Route path="/bots" element={<Navigate to="/userbots" replace />} />
-                <Route path="/shop" element={
+                <Route path="/treasury" element={
                   profileLoading
                     ? <LoadingState text="Проверяем доступ..." />
-                    : profileRole === 'admin' ? <ShopAdminPage /> : <Navigate to="/" replace />
+                    : profileRole === 'admin' ? <TreasuryPage /> : <Navigate to="/" replace />
                 } />
+                <Route path="/shop" element={<Navigate to="/treasury" replace />} />
                 <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />
@@ -236,11 +237,10 @@ export function App() {
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
-                <Route path="/treasury" element={<Navigate to="/shop" replace />} />
+                <Route path="/p2p/create" element={<Navigate to="/treasury" replace />} />
+                <Route path="/p2p/orders" element={<Navigate to="/treasury" replace />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
-                <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />
-                <Route path="/p2p/orders" element={<Navigate to="/shop" replace />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/checklist" element={
                   profileLoading

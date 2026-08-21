@@ -486,7 +486,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Shop: права еще не переведены',
                     value: shopPendingTransfers,
                     tone: shopPendingTransfers > 0 ? 'warning' : 'ok',
-                    href: '/app/shop',
+                    href: '/app/billing?tab=purchases',
                     hint: 'Если деньги по shop уже есть, а актив не перешел, это надо разбирать сразу.'
                 }
             ];
