@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 function amountNanoTon(purchase) {
@@ -42,13 +42,14 @@ function buildWalletLinks(purchase) {
   ];
 }
 
-function CopyRow({ label, value }) {
+function RequisiteRow({ label, value, copyValue }) {
   const [copied, setCopied] = useState(false);
 
-  async function copyValue() {
-    if (!value) return;
+  async function copy() {
+    const target = copyValue || value;
+    if (!target) return;
     try {
-      await navigator.clipboard.writeText(value);
+      await navigator.clipboard.writeText(target);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -59,14 +60,15 @@ function CopyRow({ label, value }) {
   return (
     <button
       type="button"
-      className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2 text-left hover:bg-slate-50 transition-colors"
-      onClick={copyValue}
+      className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition-colors"
+      onClick={copy}
     >
-      <span className="w-20 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-slate-700">{value}</span>
-      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-slate-500">
-        {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <span className="h-3.5 w-3.5" aria-hidden />}
-        {copied ? 'Ок' : 'Copy'}
+      <span className="w-14 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-slate-700">{value}</span>
+      <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
+        copied ? 'text-emerald-600' : 'text-slate-300 group-hover:text-slate-500'
+      }`}>
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </span>
     </button>
   );
@@ -89,70 +91,68 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
 
   if (!purchase?.seller_wallet) return null;
 
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
-      <p className="text-[12px] text-slate-500">
-        Переведи ровно <strong className="text-slate-800 font-mono">{Number(purchase.amount_ton || 0)} TON</strong> с этим memo,
-        потом нажми «Проверить оплату».
-      </p>
+  const amountText = String(Number(purchase.amount_ton || 0));
 
-      {links.length ? (
-        <div className="grid grid-cols-2 gap-2">
-          {links.map((link) => (
-            <a
-              key={link.key}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 hover:border-slate-300 transition-all"
-              href={link.url}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              {link.label}
-            </a>
-          ))}
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden divide-y divide-slate-100">
+      {qrSrc ? (
+        <div className="px-4 pt-4 pb-3 flex flex-col items-center gap-2.5">
+          {hasTrustQr && hasTonQr ? (
+            <div className="flex p-0.5 bg-slate-100 rounded-lg">
+              <button
+                type="button"
+                className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide rounded-md transition-all ${effectiveQrView === 'trust' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setQrView('trust')}
+              >
+                Trust
+              </button>
+              <button
+                type="button"
+                className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide rounded-md transition-all ${effectiveQrView === 'ton' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                onClick={() => setQrView('ton')}
+              >
+                TON
+              </button>
+            </div>
+          ) : null}
+          <div className="w-[180px] aspect-square rounded-xl border border-slate-100 p-2 bg-white shadow-sm">
+            <img
+              className="w-full h-full object-contain mix-blend-multiply"
+              src={qrSrc}
+              alt={effectiveQrView === 'ton' ? 'QR для перевода TON' : 'QR для Trust Wallet'}
+            />
+          </div>
+          <p className="text-[11px] text-slate-400">Отсканируй камерой кошелька</p>
         </div>
       ) : null}
 
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex-1 space-y-2">
-          <CopyRow label="Кошелек" value={purchase.seller_wallet} />
-          <CopyRow label="Memo" value={purchase.memo || ''} />
-        </div>
-        {qrSrc ? (
-          <div className="shrink-0 flex flex-col bg-slate-50/50 p-3 rounded-2xl border border-slate-100 w-full md:w-[200px]">
-            {hasTrustQr && hasTonQr ? (
-              <div className="flex p-1 bg-slate-100 rounded-xl mb-3 w-full">
-                <button
-                  type="button"
-                  className={`flex-1 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${effectiveQrView === 'trust' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setQrView('trust')}
-                >
-                  Trust
-                </button>
-                <button
-                  type="button"
-                  className={`flex-1 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${effectiveQrView === 'ton' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setQrView('ton')}
-                >
-                  TON
-                </button>
-              </div>
-            ) : null}
-            <div className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 mb-2 text-center">
-              {effectiveQrView === 'ton' ? 'QR для TON' : 'QR для Trust'}
-            </div>
-            <div className="w-full aspect-square rounded-xl border border-slate-100 p-1.5 bg-white">
-              <img
-                className="w-full h-full object-contain mix-blend-multiply"
-                src={qrSrc}
-                alt={effectiveQrView === 'ton' ? 'QR для перевода TON' : 'QR для Trust Wallet'}
-              />
-            </div>
-          </div>
-        ) : null}
+      <div className="p-2 space-y-0.5">
+        <RequisiteRow label="Сумма" value={`${amountText} TON`} copyValue={amountText} />
+        <RequisiteRow label="Memo" value={purchase.memo || ''} />
+        <RequisiteRow label="Кошелёк" value={purchase.seller_wallet} />
       </div>
 
-      <div className="space-y-2">
+      {links.length ? (
+        <div className="px-4 py-3 space-y-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Или открыть в кошельке</div>
+          <div className="grid grid-cols-2 gap-2">
+            {links.map((link) => (
+              <a
+                key={link.key}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-[11px] font-bold hover:bg-slate-50 hover:border-slate-300 transition-all"
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="size-3 text-slate-400 shrink-0" />
+                {link.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="p-4 space-y-2">
         <button
           type="button"
           className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -167,11 +167,11 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
           ) : 'Проверить оплату'}
         </button>
         <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          <ShieldCheck className="size-3 text-emerald-500" />
-          Memo обязательно — без него платёж не зачтётся
+          <ShieldCheck className="size-3 text-emerald-500 shrink-0" />
+          Переводи ровно сумму с этим memo — иначе платёж не зачтётся
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          <Loader2 className="size-3 animate-spin" />
+          <Loader2 className="size-3 animate-spin shrink-0" />
           Статус проверяется автоматически каждые 15 секунд
         </span>
       </div>
