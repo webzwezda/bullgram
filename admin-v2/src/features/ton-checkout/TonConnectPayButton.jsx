@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useTonAddress, useTonWallet, TonConnectButton } from '@tonconnect/ui-react';
+import { useTonAddress, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
+import { Wallet } from 'lucide-react';
 import { useTonCheckout } from './useTonCheckout.js';
 
 function formatAmount(ton) {
@@ -25,6 +26,7 @@ export function TonConnectPayButton({
 }) {
   const address = useTonAddress();
   const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
   const connected = Boolean(wallet);
 
   const handleComplete = useCallback(
@@ -64,8 +66,14 @@ export function TonConnectPayButton({
   if (!connected) {
     return (
       <div className={`flex flex-col items-start gap-2 ${fullWidth ? 'w-full' : ''} ${className}`}>
-        <TonConnectButton />
-        <span className="text-xs text-slate-500">Подключите TON-кошелёк для оплаты</span>
+        <button
+          type="button"
+          onClick={() => tonConnectUI.openModal()}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
+        >
+          <Wallet className="size-4" />
+          Подключить TON-кошелёк
+        </button>
       </div>
     );
   }

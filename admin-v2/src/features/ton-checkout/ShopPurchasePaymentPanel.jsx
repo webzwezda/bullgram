@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTonAddress } from '@tonconnect/ui-react';
+import { useCallback, useState } from 'react';
 import { QrCode, Wallet } from 'lucide-react';
 import { TonConnectPayButton } from './TonConnectPayButton.jsx';
 import { ManualTonPaymentCard } from './ManualTonPaymentCard.jsx';
@@ -16,20 +15,9 @@ export function ShopPurchasePaymentPanel({
   onManualCheck,
   onReset
 }) {
-  const address = useTonAddress();
-  const [method, setMethod] = useState(address ? 'tonconnect' : 'manual');
-  const methodTouchedRef = useRef(false);
-
-  // Если кошелёк восстановился после маунта — переключаемся на TON Connect,
-  // пока пользователь сам не выбрал способ.
-  useEffect(() => {
-    if (!methodTouchedRef.current && address && method !== 'tonconnect') {
-      setMethod('tonconnect');
-    }
-  }, [address, method]);
+  const [method, setMethod] = useState('tonconnect');
 
   const selectMethod = useCallback((next) => {
-    methodTouchedRef.current = true;
     setMethod(next);
   }, []);
 

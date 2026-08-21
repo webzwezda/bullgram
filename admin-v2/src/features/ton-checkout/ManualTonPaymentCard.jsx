@@ -97,16 +97,16 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
       </p>
 
       {links.length ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {links.map((link) => (
             <a
               key={link.key}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
+              className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 hover:border-slate-300 transition-all"
               href={link.url}
               target="_blank"
               rel="noreferrer"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               {link.label}
             </a>
           ))}
@@ -155,7 +155,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
       <div className="space-y-2">
         <button
           type="button"
-          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onCheck}
           disabled={checking}
         >

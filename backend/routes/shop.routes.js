@@ -168,7 +168,9 @@ function detectNetwork() {
 }
 
 function buildTonUri(wallet, amountTon, memo) {
-    return `ton://transfer/${wallet}?amount=${Number(amountTon || 0) * 1000000000}&text=${encodeURIComponent(memo)}`;
+    // tonToNanoString через BigInt: Number * 1e9 даёт дробные нанотонины
+    // (1.1 TON -> 1100000000.0000001) и ломает URI/QR для кошельков.
+    return `ton://transfer/${wallet}?amount=${tonToNanoString(amountTon)}&text=${encodeURIComponent(memo)}`;
 }
 
 function buildTrustWalletTonUri(wallet, amountTon, memo) {
@@ -2646,7 +2648,7 @@ export default function shopRoutes(supabase) {
                 .maybeSingle();
 
             const memo = purchase.payload?.memo;
-            const amountNano = Math.round(Number(purchase.amount_ton || 0) * 1e9);
+            const amountNano = tonToNanoString(purchase.amount_ton);
             const wallet = purchase.payload?.seller_wallet || siteWallet();
             const network = purchase.payload?.network || 'mainnet';
             const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
