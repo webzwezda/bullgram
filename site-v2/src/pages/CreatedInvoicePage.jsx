@@ -15,6 +15,7 @@ import QRCode from 'qrcode';
 import { apiRequest } from '../api/client.js';
 import { Card } from '../components/ui/card.jsx';
 import { SecretRevealBlock } from '../components/SecretRevealBlock.jsx';
+import { rememberInvoice } from '../lib/my-invoices.js';
 
 const POLL_INTERVAL_MS = 5000;
 const PUBLIC_VIEW_ENDPOINT = (id) => `/api/public-invoices/public/${id}/public-view`;
@@ -46,6 +47,7 @@ export function CreatedInvoicePage() {
       const data = await apiRequest(PUBLIC_VIEW_ENDPOINT(id));
       setInvoice(data);
       setError('');
+      if (data?.status === 'pending' || data?.status === 'paid') rememberInvoice(id);
     } catch (e) {
       setError(e.message || 'Не удалось загрузить счёт');
     } finally {

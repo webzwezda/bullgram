@@ -17,6 +17,7 @@ import {
 import { apiRequest } from '../api/client.js';
 import { Card } from '../components/ui/card.jsx';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { forgetInvoices, getRememberedInvoices, rememberInvoice } from '../lib/my-invoices.js';
 
 const AMOUNT_CHIPS = [0.1, 0.5, 1, 5, 10];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -65,12 +66,62 @@ export function CreateInvoicePage() {
   const [myError, setMyError] = useState('');
 
   const fetchMine = useCallback(async () => {
-    if (!user || !accessToken) return;
     setMyLoading(true);
     setMyError('');
     try {
-      const data = await apiRequest('/api/public-invoices/mine', { accessToken });
-      setMyInvoices(data.items || []);
+      const byId = new Map();
+
+      if (user && accessToken) {
+        try {
+          const data = await apiRequest('/api/public-invoices/mine', { accessToken });
+          for (const inv of data.items || []) {
+            if (inv.status !== 'pending' && inv.status !== 'paid') continue;
+            byId.set(inv.id, {
+              id: inv.id,
+              title: inv.title || null,
+              amount_ton: inv.amount_ton,
+              status: inv.status,
+              created_at: inv.created_at,
+            });
+          }
+        } catch {
+          // не критично — локальные счёта покажем без серверных
+        }
+      }
+
+      // Счета этого браузера (в т.ч. созданные без регистрации): статус через public-view
+      const remembered = getRememberedInvoices();
+      const staleIds = [];
+      const views = await Promise.allSettled(
+        remembered.map((entry) =>
+          apiRequest(`/api/public-invoices/public/${entry.id}/public-view`)
+        )
+      );
+      views.forEach((result, index) => {
+        const entry = remembered[index];
+        if (result.status === 'fulfilled') {
+          const view = result.value;
+          if (view.status !== 'pending' && view.status !== 'paid') {
+            staleIds.push(entry.id);
+            return;
+          }
+          byId.set(view.id, {
+            id: view.id,
+            title: view.item_title || null,
+            amount_ton: view.amount_ton,
+            status: view.status,
+            created_at: entry.created_at,
+          });
+        } else if (result.reason?.status === 404) {
+          staleIds.push(entry.id);
+        }
+      });
+      if (staleIds.length) forgetInvoices(staleIds);
+
+      const items = Array.from(byId.values())
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+        .slice(0, 20);
+      setMyInvoices(items);
     } catch (e) {
       setMyError(e.message || 'Не удалось загрузить счета');
     } finally {
@@ -137,6 +188,7 @@ export function CreateInvoicePage() {
     setSubmitError('');
     try {
       const data = await apiRequest('/api/public-invoices/public/create', {
+        accessToken,
         method: 'POST',
         body: {
           amount_ton: Number(form.amount_ton),
@@ -148,6 +200,7 @@ export function CreateInvoicePage() {
           network: 'mainnet',
         },
       });
+      rememberInvoice(data.id);
       navigate(`/created/${data.id}`);
     } catch (err) {
       setSubmitError(err.message || 'Не удалось создать счёт');
@@ -345,15 +398,13 @@ export function CreateInvoicePage() {
         ))}
       </div>
 
-      {user ? (
-        <MyInvoicesCard
-          items={myInvoices}
-          loading={myLoading}
-          error={myError}
-          onRetry={fetchMine}
-          onOpen={(id) => navigate(`/created/${id}`)}
-        />
-      ) : null}
+      <MyInvoicesCard
+        items={myInvoices}
+        loading={myLoading}
+        error={myError}
+        onRetry={fetchMine}
+        onOpen={(id) => navigate(`/created/${id}`)}
+      />
     </section>
   );
 }
@@ -383,7 +434,7 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold text-slate-900">Мои счета</h2>
             <p className="text-sm font-medium text-slate-500 mt-0.5">
-              {count > 0 ? `Последние ${count} счетов на этом аккаунте` : 'История ваших счетов'}
+              {count > 0 ? `Последние ${count} счетов` : 'История ваших счетов'}
             </p>
           </div>
         </div>
@@ -415,7 +466,7 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
             </div>
             <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
             <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              Создайте первый — он появится здесь. Видны только счета, созданные под вашей учётной записью.
+              Создайте первый — он появится здесь. Неоплаченные счёта исчезают из списка после истечения срока.
             </p>
           </div>
         ) : (
