@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { ExpiryCountdown } from '../../ui/ExpiryCountdown.jsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -86,6 +87,7 @@ export function UserbotStorefrontSection({
 
   const activePurchase = checkoutState.purchase;
   const isCreatingCheckout = checkoutState.loading;
+  const isTestnet = (activePurchase?.network || storefrontState.network) === 'testnet';
 
   const handlePaid = useCallback(async () => {
     setCheckoutState({
@@ -312,6 +314,11 @@ export function UserbotStorefrontSection({
                     <div className="text-xl font-black tracking-tight text-slate-900 leading-tight">
                       {activePurchase ? Number(activePurchase.amount_ton || 0) : bundleTotalTon}
                       <span className="text-sm font-bold text-slate-500 ml-1">TON</span>
+                      {isTestnet ? (
+                        <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider align-middle">
+                          Testnet
+                        </span>
+                      ) : null}
                     </div>
                     {quantity > 1 && !activePurchase ? (
                       <div className="text-[11px] text-slate-400 mt-0.5">
@@ -325,6 +332,17 @@ export function UserbotStorefrontSection({
                   <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
                     <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
                     <div>{checkoutState.error}</div>
+                  </div>
+                ) : null}
+
+                {checkoutState.notice ? (
+                  <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${
+                    checkoutState.noticeTone === 'success'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                      : 'border-amber-200 bg-amber-50 text-amber-800'
+                  }`}>
+                    <CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${checkoutState.noticeTone === 'success' ? 'text-emerald-500' : 'text-amber-500'}`} />
+                    <div>{checkoutState.notice}</div>
                   </div>
                 ) : null}
 
@@ -352,7 +370,7 @@ export function UserbotStorefrontSection({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] text-slate-500">
                         {activePurchase.expires_at
-                          ? `Истекает ${new Date(activePurchase.expires_at).toLocaleString('ru-RU')}`
+                          ? <ExpiryCountdown expiresAt={activePurchase.expires_at} prefix="Бронь держится ещё" />
                           : 'Лот зарезервирован'}
                       </span>
                       <button

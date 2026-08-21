@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
 
 const DEFAULT_NETWORK = 'mainnet';
@@ -104,6 +104,12 @@ export function useShopStorefront({
   const [selectedOpenPurchaseId, setSelectedOpenPurchaseId] = useState('');
   const [buyQuantities, setBuyQuantities] = useState({});
 
+  const refreshPurchasesRef = useRef(null);
+  const onAssetsChangedRef = useRef(onAssetsChanged);
+  useEffect(() => {
+    onAssetsChangedRef.current = onAssetsChanged;
+  }, [onAssetsChanged]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -164,6 +170,8 @@ export function useShopStorefront({
     }));
     return purchases;
   }
+
+  refreshPurchasesRef.current = refreshPurchases;
 
   async function openCheckout(item, preferredPaymentMethod = null) {
     const selectedPaymentMethod = shopItemPaymentMethods(item).includes(preferredPaymentMethod)
@@ -413,6 +421,69 @@ export function useShopStorefront({
       return null;
     }
   }
+
+  // Тихая автопроверка оплаты: пока открыта pending-покупка, опрашиваем статус
+  // без смены состояния. Реагируем только на paid/expired, чтобы панель не мигала.
+  const activePurchaseId = checkoutState.purchase?.id || null;
+  const activePurchaseStatus = checkoutState.purchase?.status || null;
+  const activePurchaseIds = checkoutState.purchase?.purchase_ids || null;
+
+  useEffect(() => {
+    if (!accessToken || !activePurchaseId || activePurchaseStatus !== 'pending') return;
+
+    let cancelled = false;
+    const ids = Array.isArray(activePurchaseIds) && activePurchaseIds.length
+      ? activePurchaseIds.map(String)
+      : [String(activePurchaseId)];
+
+    const timer = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const data = ids.length > 1
+          ? await apiRequest('/api/shop/public/purchase/check-batch', {
+              accessToken,
+              method: 'POST',
+              body: { purchase_ids: ids }
+            })
+          : await apiRequest('/api/shop/public/purchase/check', {
+              accessToken,
+              method: 'POST',
+              body: { purchase_id: ids[0] }
+            });
+        if (cancelled) return;
+
+        if (data?.status === 'paid') {
+          clearInterval(timer);
+          await refreshPurchasesRef.current?.().catch(() => null);
+          await onAssetsChangedRef.current?.().catch(() => null);
+          if (!cancelled) {
+            setCheckoutState((prev) => ({
+              ...emptyCheckoutState(prev.paymentMethod),
+              notice: 'Оплата найдена. Покупка завершена.',
+              noticeTone: 'success'
+            }));
+          }
+        } else if (data?.status === 'expired') {
+          clearInterval(timer);
+          await refreshPurchasesRef.current?.().catch(() => null);
+          if (!cancelled) {
+            setCheckoutState((prev) => ({
+              ...emptyCheckoutState(prev.paymentMethod),
+              notice: 'Время на оплату истекло — бронь снята, лот вернулся в продажу.',
+              noticeTone: 'error'
+            }));
+          }
+        }
+      } catch {
+        // сеть/5xx — попробуем на следующем тике
+      }
+    }, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [accessToken, activePurchaseId, activePurchaseStatus, activePurchaseIds]);
 
   return {
     cancelCheckout,

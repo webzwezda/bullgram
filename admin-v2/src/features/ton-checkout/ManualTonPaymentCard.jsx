@@ -185,6 +185,10 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck, defa
               <ShieldCheck className="size-3 text-emerald-500" />
               Memo обязательно — без него платёж не зачтётся
             </span>
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <Loader2 className="size-3 animate-spin" />
+              Статус проверяется автоматически каждые 15 секунд
+            </span>
           </div>
         </div>
       ) : null}
