@@ -236,7 +236,7 @@ export function App() {
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
-                <Route path="/treasury" element={<Navigate to="/shop?tab=treasury" replace />} />
+                <Route path="/treasury" element={<Navigate to="/shop" replace />} />
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
                 <Route path="/p2p/create" element={<Navigate to="/shop" replace />} />

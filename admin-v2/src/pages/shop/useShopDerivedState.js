@@ -1,21 +1,7 @@
 import { useMemo } from 'react';
-import { getProductTierRules } from '../../app/productTier.js';
 import { normalizeSellerPurchaseGroup } from './shop.utils.js';
 
-export function useShopDerivedState({
-  state,
-  profilePlan,
-  profileRole,
-  purchaseFilter,
-  purchaseSearch
-}) {
-  const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
-
-  const availableAssets = state.assets || {};
-  const support = availableAssets.support || {};
-  const sellerCanSellAssets = !!support.asset_marketplace || profileRole === 'admin';
-  const canUseAssetSeller = profileRole === 'admin' || (sellerCanSellAssets && planRules.canUseShopAdmin);
-
+export function useShopDerivedState({ state }) {
   const groupedPurchases = useMemo(() => {
     const buckets = new Map();
     for (const p of state.purchases) {
@@ -26,24 +12,6 @@ export function useShopDerivedState({
     }
     return Array.from(buckets.values()).map(normalizeSellerPurchaseGroup).filter(Boolean);
   }, [state.purchases]);
-
-  const filteredPurchases = useMemo(() => {
-    const needle = purchaseSearch.trim().toLowerCase();
-    return groupedPurchases.filter((p) => {
-      if (purchaseFilter === 'pending' && p.status !== 'pending') return false;
-      if (purchaseFilter === 'awaiting_receipt' && p.status !== 'awaiting_receipt') return false;
-      if (purchaseFilter === 'rejected' && p.status !== 'rejected') return false;
-      if (purchaseFilter === 'paid' && p.status !== 'paid') return false;
-      if (purchaseFilter === 'expired' && p.status !== 'expired') return false;
-      if (!needle) return true;
-      const text = [p.item?.title, p.item?.item_type, p.buyer_owner_id, p.payload?.memo,
-        p.payload?.seller_wallet, p.status, p.ownership_transfer_status,
-        (p.item?.assets || []).map((a) => a.label || a.asset_type).join(' '),
-        p.purchase_ids?.length ? `x${p.purchase_ids.length}` : ''
-      ].filter(Boolean).join(' ').toLowerCase();
-      return text.includes(needle);
-    });
-  }, [groupedPurchases, purchaseFilter, purchaseSearch]);
 
   const itemSummary = useMemo(() => ({
     total: state.items.length,
@@ -73,17 +41,9 @@ export function useShopDerivedState({
     failed: groupedPurchases.filter((p) => p.ownership_transfer_status === 'failed').length
   }), [groupedPurchases]);
 
-  const receiptQueue = useMemo(
-    () => groupedPurchases.filter((p) => p.status === 'awaiting_receipt'),
-    [groupedPurchases]
-  );
-
   return {
-    canUseAssetSeller,
-    filteredPurchases,
     itemSummary,
     sellerStats,
-    purchaseSummary,
-    receiptQueue
+    purchaseSummary
   };
 }

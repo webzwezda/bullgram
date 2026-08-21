@@ -1,14 +1,3 @@
-// --- Filters ---
-
-export const PURCHASE_FILTERS = [
-  { id: 'all', label: 'Все' },
-  { id: 'pending', label: 'Ожидает оплату' },
-  { id: 'awaiting_receipt', label: 'Ждёт подтверждения' },
-  { id: 'paid', label: 'Оплачен' },
-  { id: 'rejected', label: 'Отклонён' },
-  { id: 'expired', label: 'Срок истёк' }
-];
-
 // --- Formatters ---
 
 export function formatWhen(value) {
@@ -21,31 +10,6 @@ export function formatWhen(value) {
 
 export function formatTon(value) {
   return Number(value || 0).toFixed(4);
-}
-
-// --- Status Mappers (return { label, tone }) ---
-
-export function purchaseStatusMeta(row) {
-  if (row.ownership_transfer_status === 'failed') return { label: 'Ошибка передачи', tone: 'error' };
-  if (row.status === 'paid' && row.ownership_transfer_status === 'completed') return { label: 'Завершён', tone: 'success' };
-  if (row.status === 'awaiting_receipt') return { label: 'Ждёт подтверждения', tone: 'warning' };
-  if (row.status === 'rejected') return { label: 'Отклонён', tone: 'error' };
-  if (row.status === 'paid') return { label: 'Передаётся', tone: 'warning' };
-  if (row.status === 'pending') return { label: 'Ожидает оплату', tone: 'warning' };
-  if (row.status === 'expired') return { label: 'Срок истёк', tone: 'default' };
-  return { label: row.status || '—', tone: 'default' };
-}
-
-// --- Price / Amount ---
-
-export function purchaseAmountSummary(purchase) {
-  return `${formatTon(purchase?.amount_ton || purchase?.item?.price_ton || 0)} TON`;
-}
-
-// --- Asset helpers ---
-
-export function purchaseHasAssetType(row, type) {
-  return (row.item?.assets || []).some((asset) => asset.asset_type === type);
 }
 
 // --- Purchase grouping ---
