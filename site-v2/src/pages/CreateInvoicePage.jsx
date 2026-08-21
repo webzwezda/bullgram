@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
+  ExternalLink,
   FilePlus,
   Loader2,
   Lock,
@@ -422,6 +425,68 @@ const DATE_FMT = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 });
 
+function MyInvoiceRow({ invoice, onOpen }) {
+  const [copied, setCopied] = useState(false);
+  const status = INVOICE_STATUS[invoice.status] || INVOICE_STATUS.expired;
+
+  const copyLink = async () => {
+    const url = `${window.location.origin}/pay/${invoice.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard недоступен — ссылку можно скопировать со страницы счёта
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+      <button
+        type="button"
+        onClick={() => onOpen(invoice.id)}
+        className="flex-1 min-w-0 text-left"
+      >
+        <div className="text-sm font-semibold text-slate-900 truncate">{invoice.title || 'Без названия'}</div>
+        <div className="text-[11px] text-slate-500 mt-0.5">
+          {invoice.created_at ? DATE_FMT.format(new Date(invoice.created_at)) : ''}
+        </div>
+      </button>
+      <div className="shrink-0 text-right">
+        <div className="text-sm font-bold text-slate-900 tabular-nums">
+          {Number(invoice.amount_ton)} <span className="text-slate-500 font-semibold">TON</span>
+        </div>
+        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.cls}`}>
+          {status.label}
+        </span>
+      </div>
+      <div className="shrink-0 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={copyLink}
+          title="Скопировать ссылку для оплаты"
+          className={`inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border text-[11px] font-bold transition-colors ${
+            copied
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-100/60'
+          }`}
+        >
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          <span className="hidden sm:inline">{copied ? 'Готово' : 'Ссылка'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpen(invoice.id)}
+          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 text-[11px] font-bold hover:border-slate-300 hover:bg-slate-100/60 transition-colors"
+        >
+          <ExternalLink className="size-3" />
+          <span className="hidden sm:inline">Открыть</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
   const count = items.length;
   return (
@@ -471,30 +536,9 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
           </div>
         ) : (
           <div className="space-y-2">
-            {items.map((inv) => {
-              const status = INVOICE_STATUS[inv.status] || INVOICE_STATUS.expired;
-              return (
-                <button
-                  key={inv.id}
-                  type="button"
-                  onClick={() => onOpen(inv.id)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-900 truncate">{inv.title || 'Без названия'}</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">{DATE_FMT.format(new Date(inv.created_at))}</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-bold text-slate-900 tabular-nums">
-                      {Number(inv.amount_ton)} <span className="text-slate-500 font-semibold">TON</span>
-                    </div>
-                    <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.cls}`}>
-                      {status.label}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+            {items.map((inv) => (
+              <MyInvoiceRow key={inv.id} invoice={inv} onOpen={onOpen} />
+            ))}
           </div>
         )}
       </div>
