@@ -11,24 +11,12 @@ export function getProductTierRules(plan = 'trial') {
       canCreateMultipleOwnedProxies: true,
       canUseTrialProxy: false,
       canBuyAssets: true,
-      summary: 'Скрытый высокий контур. Здесь уже тяжелая операционка, seller-mode и рост без базовых ограничений.'
+      summary: 'Рабочий тариф Bullgram: безлимит запросов API/MCP, юзерботов и прокси, рассылки и продажи в Shop.'
     };
   }
 
   if (plan === 'normal') {
-    return {
-      id: 'normal',
-      label: 'Normal',
-      maxUserbots: Infinity,
-      maxOwnedProxies: Infinity,
-      canSendBroadcasts: true,
-      canUseShopAdmin: true,
-      canCreateMultipleUserbots: true,
-      canCreateMultipleOwnedProxies: true,
-      canUseTrialProxy: false,
-      canBuyAssets: true,
-      summary: 'Рабочий тариф Bullgram.'
-    };
+    return getProductTierRules('pro');
   }
 
   return {

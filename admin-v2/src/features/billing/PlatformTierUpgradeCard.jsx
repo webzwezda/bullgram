@@ -16,13 +16,20 @@ function formatEndsAt(value) {
   }
 }
 
+const PRO_FEATURES = [
+  'Безлимит запросов API и MCP',
+  'Безлимит юзерботов и своих прокси',
+  '3 автопост-бота',
+  'Живые рассылки',
+  'Продажи в Shop'
+];
+
 export function PlatformTierUpgradeCard() {
-  const { user, accessToken, profilePlan, refreshProfile, normalEndsAt } = useAuth();
+  const { user, accessToken, profilePlan, refreshProfile, proEndsAt } = useAuth();
   const [order, setOrder] = useState(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
-  const isNormal = String(profilePlan || '').toLowerCase() === 'normal';
   const isPro = String(profilePlan || '').toLowerCase() === 'pro';
 
   const createOrder = useCallback(async () => {
@@ -43,20 +50,17 @@ export function PlatformTierUpgradeCard() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (!order && !isNormal && !isPro && !creating && user?.id) {
+    if (!order && !isPro && !creating && user?.id) {
       createOrder();
     }
-  }, [order, isNormal, isPro, creating, user?.id, createOrder]);
+  }, [order, isPro, creating, user?.id, createOrder]);
 
   const handlePaid = useCallback(
-    async (data) => {
+    async () => {
       if (refreshProfile) {
         try {
           await refreshProfile();
         } catch {}
-      }
-      if (data?.profile?.normal_ends_at) {
-        // optional: surface to UI via state if needed
       }
     },
     [refreshProfile]
@@ -71,24 +75,18 @@ export function PlatformTierUpgradeCard() {
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-bold text-slate-900">Подписка Bullgram</h3>
           <p className="text-sm text-slate-500 mt-0.5">
-            Оплата тарифа Normal через TON Connect — без комиссии, мгновенно.
+            Оплата тарифа Pro через TON Connect — без комиссии, мгновенно.
           </p>
         </div>
         <TonWalletChip />
       </div>
 
       {isPro ? (
-        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 text-center">
-          <CheckCircle2 className="w-8 h-8 mx-auto text-slate-500 mb-2" />
-          <p className="text-base font-bold text-slate-700">У вас активен тариф Pro</p>
-          <p className="text-sm text-slate-500 mt-1">Это максимальный тариф, обновление недоступно.</p>
-        </div>
-      ) : isNormal ? (
         <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-6 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 mb-2" />
-          <p className="text-base font-bold text-emerald-700">Normal активен</p>
-          {normalEndsAt ? (
-            <p className="text-sm text-emerald-700/80 mt-1">Действует до {formatEndsAt(normalEndsAt)}</p>
+          <p className="text-base font-bold text-emerald-700">Pro активен</p>
+          {proEndsAt ? (
+            <p className="text-sm text-emerald-700/80 mt-1">Действует до {formatEndsAt(proEndsAt)}</p>
           ) : null}
         </div>
       ) : (
@@ -96,8 +94,16 @@ export function PlatformTierUpgradeCard() {
           <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5 space-y-3">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-bold text-slate-700">Тариф</span>
-              <span className="text-base font-black text-slate-900">Trial → Normal</span>
+              <span className="text-base font-black text-slate-900">Trial → Pro</span>
             </div>
+            <ul className="space-y-2 pt-1">
+              {PRO_FEATURES.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm text-slate-600">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm font-bold text-slate-700">Длительность</span>
               <span className="text-base font-bold text-slate-900">365 дней</span>

@@ -44,19 +44,36 @@ async function loadAdminOwnerIds(supabase) {
     return (data || []).map((row) => row.id).filter(Boolean);
 }
 
+const SHOP_CATEGORIES = ['proxy', 'userbot', 'bundle', 'other'];
+
+function shopCategory(itemType) {
+    const type = String(itemType || '').toLowerCase();
+    if (SHOP_CATEGORIES.includes(type)) return type;
+    return 'other';
+}
+
+function emptyCategorySums() {
+    return SHOP_CATEGORIES.reduce((acc, key) => {
+        acc[key] = 0;
+        return acc;
+    }, {});
+}
+
 async function loadShopRevenue(supabase, adminOwnerIds) {
     if (!adminOwnerIds.length) {
         return {
             paidTon: 0,
             pendingTon: 0,
             paidCount: 0,
-            pendingCount: 0
+            pendingCount: 0,
+            paidByCategory: emptyCategorySums(),
+            pendingByCategory: emptyCategorySums()
         };
     }
 
     const { data, error } = await supabase
         .from('shop_purchases')
-        .select('id, seller_owner_id, status, amount_ton, ownership_transfer_status, payload, created_at')
+        .select('id, seller_owner_id, status, amount_ton, ownership_transfer_status, payload, created_at, shop_items(item_type)')
         .in('seller_owner_id', adminOwnerIds)
         .in('status', ['pending', 'awaiting_receipt', 'paid'])
         .order('created_at', { ascending: false })
@@ -69,7 +86,9 @@ async function loadShopRevenue(supabase, adminOwnerIds) {
                 paidTon: 0,
                 pendingTon: 0,
                 paidCount: 0,
-                pendingCount: 0
+                pendingCount: 0,
+                paidByCategory: emptyCategorySums(),
+                pendingByCategory: emptyCategorySums()
             };
         }
         throw error;
@@ -78,12 +97,74 @@ async function loadShopRevenue(supabase, adminOwnerIds) {
     const paid = (data || []).filter((row) => row.status === 'paid');
     const pending = (data || []).filter((row) => row.status !== 'paid');
 
+    const paidByCategory = emptyCategorySums();
+    const pendingByCategory = emptyCategorySums();
+    for (const row of paid) {
+        paidByCategory[shopCategory(row?.shop_items?.item_type)] += numberOrZero(row?.amount_ton);
+    }
+    for (const row of pending) {
+        pendingByCategory[shopCategory(row?.shop_items?.item_type)] += numberOrZero(row?.amount_ton);
+    }
+    for (const key of SHOP_CATEGORIES) {
+        paidByCategory[key] = roundTon(paidByCategory[key]);
+        pendingByCategory[key] = roundTon(pendingByCategory[key]);
+    }
+
     return {
         paidTon: sumRows(paid),
         pendingTon: sumRows(pending),
         paidCount: paid.length,
-        pendingCount: pending.length
+        pendingCount: pending.length,
+        paidByCategory,
+        pendingByCategory
     };
+}
+
+function nanoToTon(value) {
+    try {
+        return Number(BigInt(String(value || 0))) / 1e9;
+    } catch {
+        return numberOrZero(value) / 1e9;
+    }
+}
+
+// Доход тарифов: только mainnet-платежи. TIER_REVENUE_SINCE (ISO) отсекает
+// тестнет-фантомы phase 1 — на проде равен моменту включения mainnet-кошелька.
+function tierRevenueCutoffMs() {
+    const raw = String(process.env.TIER_REVENUE_SINCE || '').trim();
+    if (!raw) return 0;
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function loadTierRevenue(supabase) {
+    const { data, error } = await supabase
+        .from('billing_orders')
+        .select('id, status, payload, paid_at')
+        .eq('status', 'paid')
+        .order('paid_at', { ascending: false })
+        .limit(1000);
+
+    if (error) {
+        const message = error.message || '';
+        if (message.includes('billing_orders')) {
+            return { tierPaidTon: 0, paidCount: 0 };
+        }
+        throw error;
+    }
+
+    const cutoffMs = tierRevenueCutoffMs();
+    let tierPaidTon = 0;
+    let paidCount = 0;
+    for (const row of data || []) {
+        if (cutoffMs && row?.paid_at && Date.parse(row.paid_at) < cutoffMs) continue;
+        const nano = String(row?.payload?.expected_nanoton || '').trim();
+        if (!nano || !/^\d+$/.test(nano)) continue;
+        tierPaidTon += nanoToTon(nano);
+        paidCount += 1;
+    }
+
+    return { tierPaidTon: roundTon(tierPaidTon), paidCount };
 }
 
 async function loadReferralTreasury(supabase) {
@@ -224,8 +305,9 @@ function summarizeWithdrawals(withdrawals) {
 
 async function buildTreasurySummary(supabase) {
     const adminOwnerIds = await loadAdminOwnerIds(supabase);
-    const [shop, referral, partnerLiability, reserveLiability, withdrawals, walletSnapshotResult] = await Promise.all([
+    const [shop, tier, referral, partnerLiability, reserveLiability, withdrawals, walletSnapshotResult] = await Promise.all([
         loadShopRevenue(supabase, adminOwnerIds),
+        loadTierRevenue(supabase),
         loadReferralTreasury(supabase),
         loadPartnerLiability(supabase),
         loadReserveLiability(supabase),
@@ -237,7 +319,7 @@ async function buildTreasurySummary(supabase) {
     ]);
 
     const withdrawalSummary = summarizeWithdrawals(withdrawals);
-    const grossRevenueTon = roundTon(shop.paidTon + referral.bullgramFeeTon);
+    const grossRevenueTon = roundTon(shop.paidTon + tier.tierPaidTon + referral.bullgramFeeTon);
     const partnerLiabilityTon = roundTon(Math.max(
         partnerLiability.partnerBalanceTon,
         partnerLiability.activePayoutTon,
@@ -281,6 +363,11 @@ async function buildTreasurySummary(supabase) {
         buckets: {
             platformRevenueTon: grossRevenueTon,
             shopRevenueTon: shop.paidTon,
+            tierRevenueTon: tier.tierPaidTon,
+            shopProxyTon: shop.paidByCategory.proxy,
+            shopUserbotTon: shop.paidByCategory.userbot,
+            shopBundleTon: shop.paidByCategory.bundle,
+            shopOtherTon: shop.paidByCategory.other,
             referralFeeTon: referral.bullgramFeeTon,
             partnerLiabilityTon,
             adminReserveLiabilityTon,
@@ -290,7 +377,8 @@ async function buildTreasurySummary(supabase) {
         counters: {
             adminOwners: adminOwnerIds.length,
             paidShopPurchases: shop.paidCount,
-            pendingShopPurchases: shop.pendingCount
+            pendingShopPurchases: shop.pendingCount,
+            paidTierOrders: tier.paidCount
         },
         withdrawals
     };

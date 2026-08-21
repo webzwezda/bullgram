@@ -115,7 +115,7 @@ const faqItems = [
   },
   {
     question: 'Можно использовать с несколькими каналами?',
-    answer: 'Да. Normal-тариф позволяет вести несколько каналов, настраивать разные тарифы и вести единую базу клиентов.'
+    answer: 'Да. Pro-тариф позволяет вести несколько каналов, настраивать разные тарифы и вести единую базу клиентов.'
   },
   {
     question: 'Что происходит, когда подписка у клиента истекает?',
@@ -131,7 +131,7 @@ const faqItems = [
   },
   {
     question: 'Какая цена и есть ли скидки?',
-    answer: 'Trial — 14 дней бесплатно. Normal — 900 руб./год. Подробности на странице тарифов. Скидок и сигнальщиков нет — цена фиксирована.'
+    answer: 'Trial — 14 дней бесплатно. Pro — 900 руб./год. Подробности на странице тарифов. Скидок и сигнальщиков нет — цена фиксирована.'
   }
 ];
 
@@ -250,7 +250,7 @@ export function TelegramPaywallPage() {
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> P2P/TON-поток продавцу
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Normal оплачивается отдельно
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pro оплачивается отдельно
             </div>
           </div>
         </section>

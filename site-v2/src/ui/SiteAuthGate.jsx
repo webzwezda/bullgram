@@ -210,7 +210,7 @@ export function SiteAuthGate({ children }) {
                       <div className="site-auth-gate__step-number">02</div>
                       <h3 className="site-auth-gate__step-title">Выбор тарифа</h3>
                       <p className="site-auth-gate__step-text">
-                        Trial для старта или Normal для постоянной работы с каналом.
+                        Trial для старта или Pro для постоянной работы с каналом.
                       </p>
                     </div>
                     <div className="site-auth-gate__step">

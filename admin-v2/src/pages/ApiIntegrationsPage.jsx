@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Braces, Check, Copy, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { Braces, Check, Copy, Gauge, KeyRound, RefreshCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -203,6 +203,70 @@ function IntegrationCard({
   );
 }
 
+function formatResetDate(value) {
+  if (!value) return '—';
+  try {
+    return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function UsageCard({ usage, tier }) {
+  if (!usage) {
+    return (
+      <Card className="border-slate-200/70 bg-white shadow-sm">
+        <CardContent className="px-6 py-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+            <Gauge className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-slate-900">Запросы API и MCP — безлимит</div>
+            <div className="text-xs text-slate-500 mt-0.5">Тариф {tier === 'admin' ? 'админа' : 'Pro'} не ограничивает количество запросов.</div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const used = Number(usage.used || 0);
+  const limit = Number(usage.limit || 0);
+  const percent = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const exhausted = used >= limit;
+
+  return (
+    <Card className={`shadow-sm ${exhausted ? 'border-amber-300 bg-amber-50/60' : 'border-slate-200/70 bg-white'}`}>
+      <CardContent className="px-6 py-5 space-y-3">
+        <div className="flex items-center gap-4">
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${exhausted ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+            <Gauge className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-slate-900">
+              Запросы API и MCP: {used} / {limit} в месяц
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              Лимит тарифа Trial. Обнуляется {formatResetDate(usage.resets_at)}.
+            </div>
+          </div>
+        </div>
+        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${exhausted ? 'bg-amber-500' : 'bg-indigo-500'}`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+        {exhausted ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Лимит Trial исчерпан — запросы API и MCP отклоняются до начала следующего месяца.{' '}
+            <a href="/app/billing" className="font-bold underline">Перейти на Pro</a>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ApiIntegrationsPage() {
   const { accessToken } = useAuth();
   const [state, setState] = useState({
@@ -210,6 +274,8 @@ export function ApiIntegrationsPage() {
     error: '',
     tokens: []
   });
+  const [usage, setUsage] = useState(null);
+  const [usageTier, setUsageTier] = useState('trial');
   const [secrets, setSecrets] = useState({});
   const [busyId, setBusyId] = useState('');
 
@@ -221,8 +287,15 @@ export function ApiIntegrationsPage() {
     if (!accessToken) return;
     if (!silent) setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await apiRequest('/api/integrations/tokens', { accessToken });
+      const [data, usageData] = await Promise.all([
+        apiRequest('/api/integrations/tokens', { accessToken }),
+        apiRequest('/api/integrations/usage', { accessToken }).catch(() => null)
+      ]);
       setState({ loading: false, error: '', tokens: data.tokens || [] });
+      if (usageData) {
+        setUsage(usageData.usage || null);
+        setUsageTier(usageData.tier || 'trial');
+      }
     } catch (error) {
       setState((prev) => ({ ...prev, loading: false, error: error.message || 'Не удалось загрузить ключи.' }));
     }
@@ -384,6 +457,7 @@ export function ApiIntegrationsPage() {
           onReissue={reissueToken}
           onRevoke={revokeToken}
         />
+        <UsageCard usage={usage} tier={usageTier} />
       </div>
 
       <Card className="border-slate-200/70 bg-white shadow-sm mt-6">

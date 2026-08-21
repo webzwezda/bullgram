@@ -36,6 +36,56 @@ import {
   mapErrorToAuditStatus
 } from './utils.js';
 
+function currentUsageMonth() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function trialMonthlyLimit() {
+  const parsed = Number(process.env.TRIAL_API_REQUESTS_PER_MONTH);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 500;
+}
+
+// Trial-тариф: N запросов API/MCP в месяц. Pro и админы не считаются.
+// RPC api_usage_try_consume не инкрементит заблокированный вызов.
+async function enforceTrialMonthlyQuota(supabase, req, ownerId) {
+  if (!supabase || !ownerId) return;
+  if (typeof supabase.rpc !== 'function') return;
+  const profile = req?.profile;
+  if (profile?.role === 'admin') return;
+  const tier = String(profile?.product_tier || 'trial').trim().toLowerCase();
+  if (tier === 'pro') return;
+
+  const limit = trialMonthlyLimit();
+  const month = currentUsageMonth();
+
+  let used = null;
+  try {
+    const { data, error } = await supabase
+      .rpc('api_usage_try_consume', {
+        p_owner_id: ownerId,
+        p_month: month,
+        p_limit: limit
+      });
+    if (error) throw error;
+    used = Number(data);
+  } catch (quotaError) {
+    const message = String(quotaError.message || '');
+    if (message.includes('api_usage_try_consume') || message.includes('api_usage_monthly')) {
+      return; // таблица/функция ещё не развернуты — не блокируем трафик
+    }
+    throw quotaError;
+  }
+
+  if (used !== null && used < 0) {
+    throw new MCPError(
+      ERROR_CODES.QUOTA_EXCEEDED,
+      `Лимит Trial: ${limit} запросов в месяц исчерпан (использовано ${Math.abs(used)}). Перейди на Pro: подписка в /app/billing`,
+      { auditStatus: 'quota_exceeded' }
+    );
+  }
+}
+
 export async function dispatchOperation({
   supabase,
   req,
@@ -108,6 +158,8 @@ export async function dispatchOperation({
   }
 
   try {
+    await enforceTrialMonthlyQuota(supabase, req, ownerId);
+
     const result = await operation.handler({
       supabase,
       req,

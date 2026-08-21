@@ -11,8 +11,8 @@ export function AuthProvider({ children }) {
   const [profilePlan, setProfilePlan] = useState('trial');
   const [trialStartedAt, setTrialStartedAt] = useState(null);
   const [trialEndsAt, setTrialEndsAt] = useState(null);
-  const [normalStartedAt, setNormalStartedAt] = useState(null);
-  const [normalEndsAt, setNormalEndsAt] = useState(null);
+  const [proStartedAt, setProStartedAt] = useState(null);
+  const [proEndsAt, setProEndsAt] = useState(null);
   const [billingOrder, setBillingOrder] = useState(null);
 
   useEffect(() => {
@@ -51,14 +51,14 @@ export function AuthProvider({ children }) {
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
-        setNormalStartedAt(null);
-        setNormalEndsAt(null);
+        setProStartedAt(null);
+        setProEndsAt(null);
         return;
       }
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, product_tier, trial_started_at, trial_ends_at, normal_started_at, normal_ends_at')
+        .select('role, product_tier, trial_started_at, trial_ends_at, pro_started_at, pro_ends_at')
         .eq('id', session.user.id)
         .single();
 
@@ -68,15 +68,15 @@ export function AuthProvider({ children }) {
         (error.message || '').includes('product_tier')
         || (error.message || '').includes('trial_started_at')
         || (error.message || '').includes('trial_ends_at')
-        || (error.message || '').includes('normal_started_at')
-        || (error.message || '').includes('normal_ends_at')
+        || (error.message || '').includes('pro_started_at')
+        || (error.message || '').includes('pro_ends_at')
       )) {
         setProfileRole(data?.role || null);
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
-        setNormalStartedAt(null);
-        setNormalEndsAt(null);
+        setProStartedAt(null);
+        setProEndsAt(null);
         return;
       }
 
@@ -85,8 +85,8 @@ export function AuthProvider({ children }) {
         setProfilePlan('trial');
         setTrialStartedAt(null);
         setTrialEndsAt(null);
-        setNormalStartedAt(null);
-        setNormalEndsAt(null);
+        setProStartedAt(null);
+        setProEndsAt(null);
         return;
       }
 
@@ -94,8 +94,8 @@ export function AuthProvider({ children }) {
       setProfilePlan(data?.product_tier || 'trial');
       setTrialStartedAt(data?.trial_started_at || null);
       setTrialEndsAt(data?.trial_ends_at || null);
-      setNormalStartedAt(data?.normal_started_at || null);
-      setNormalEndsAt(data?.normal_ends_at || null);
+      setProStartedAt(data?.pro_started_at || null);
+      setProEndsAt(data?.pro_ends_at || null);
     }
 
     loadProfilePlan();
@@ -125,8 +125,8 @@ export function AuthProvider({ children }) {
           setProfilePlan(billingData.profile.product_tier || 'trial');
           setTrialStartedAt(billingData.profile.trial_started_at || null);
           setTrialEndsAt(billingData.profile.trial_ends_at || null);
-          setNormalStartedAt(billingData.profile.normal_started_at || null);
-          setNormalEndsAt(billingData.profile.normal_ends_at || null);
+          setProStartedAt(billingData.profile.pro_started_at || null);
+          setProEndsAt(billingData.profile.pro_ends_at || null);
         }
       } catch {
         if (!mounted) return;
@@ -149,8 +149,8 @@ export function AuthProvider({ children }) {
     profilePlan,
     trialStartedAt,
     trialEndsAt,
-    normalStartedAt,
-    normalEndsAt,
+    proStartedAt,
+    proEndsAt,
     billingOrder,
     async login(targetPath = null, provider = 'google') {
       const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
@@ -166,7 +166,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       window.location.reload();
     }
-  }), [billingOrder, loading, normalEndsAt, normalStartedAt, profilePlan, profileRole, session, trialEndsAt, trialStartedAt]);
+  }), [billingOrder, loading, proEndsAt, proStartedAt, profilePlan, profileRole, session, trialEndsAt, trialStartedAt]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

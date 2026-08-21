@@ -221,7 +221,7 @@ export function useUserbotOnboarding({
 
   async function startQrLogin() {
     if (!planRules.canCreateMultipleUserbots && userbotCount >= planRules.maxUserbots) {
-      showUiMessage(`На ${planRules.label} даем только ${planRules.maxUserbots} юзербота. Для следующего аккаунта переводи кабинет на Normal.`, 'error');
+      showUiMessage(`На ${planRules.label} даем только ${planRules.maxUserbots} юзербота. Для следующего аккаунта переводи кабинет на Pro.`, 'error');
       return;
     }
     if (!onboarding.proxyId) {
@@ -281,7 +281,7 @@ export function useUserbotOnboarding({
 
   async function importSession() {
     if (!planRules.canCreateMultipleUserbots && userbotCount >= planRules.maxUserbots) {
-      showUiMessage(`На ${planRules.label} даем только ${planRules.maxUserbots} юзербота. Для следующего аккаунта переводи кабинет на Normal.`, 'error');
+      showUiMessage(`На ${planRules.label} даем только ${planRules.maxUserbots} юзербота. Для следующего аккаунта переводи кабинет на Pro.`, 'error');
       return;
     }
     if (!onboarding.sessionFile) {

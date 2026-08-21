@@ -1,16 +1,11 @@
 // Robokassa service integration removed
 
-export const NORMAL_PLAN = {
-    code: 'normal_365d',
-    title: 'Bullgram Normal',
-    amountRub: Number(process.env.BILLING_NORMAL_PRICE_RUB || 900),
-    durationDays: Number(process.env.BILLING_NORMAL_DURATION_DAYS || 365)
+export const PRO_PLAN = {
+    code: 'pro_365d',
+    title: 'Bullgram Pro',
+    amountRub: Number(process.env.BILLING_PRO_PRICE_RUB || 900),
+    durationDays: Number(process.env.BILLING_PRO_DURATION_DAYS || 365)
 };
-
-function minutes(value, fallback) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
 
 function addDays(date, days) {
     const next = new Date(date);
@@ -43,8 +38,8 @@ function sanitizeProfile(profile) {
         product_tier: profile.product_tier || 'trial',
         trial_started_at: profile.trial_started_at || null,
         trial_ends_at: profile.trial_ends_at || null,
-        normal_started_at: profile.normal_started_at || null,
-        normal_ends_at: profile.normal_ends_at || null
+        pro_started_at: profile.pro_started_at || null,
+        pro_ends_at: profile.pro_ends_at || null
     };
 }
 
@@ -58,19 +53,19 @@ export function getBillingReadiness() {
     };
 }
 
-export async function downgradeExpiredNormal(supabase, ownerId = null) {
+export async function downgradeExpiredPro(supabase, ownerId = null) {
     const nowIso = new Date().toISOString();
     let query = supabase
         .from('profiles')
         .update({
             product_tier: 'trial'
         })
-        .eq('product_tier', 'normal')
-        .lt('normal_ends_at', nowIso);
+        .eq('product_tier', 'pro')
+        .lt('pro_ends_at', nowIso);
 
     if (ownerId) query = query.eq('id', ownerId);
     const { error } = await query;
-    if (error && !String(error.message || '').includes('normal_ends_at')) {
+    if (error && !String(error.message || '').includes('pro_ends_at')) {
         throw error;
     }
 }
@@ -96,7 +91,7 @@ async function expireStaleOrders(supabase, ownerId = null) {
 async function loadProfile(supabase, ownerId) {
     const { data, error } = await supabase
         .from('profiles')
-        .select('product_tier, trial_started_at, trial_ends_at, normal_started_at, normal_ends_at')
+        .select('product_tier, trial_started_at, trial_ends_at, pro_started_at, pro_ends_at')
         .eq('id', ownerId)
         .maybeSingle();
     if (error) throw error;
@@ -104,13 +99,13 @@ async function loadProfile(supabase, ownerId) {
         product_tier: 'trial',
         trial_started_at: null,
         trial_ends_at: null,
-        normal_started_at: null,
-        normal_ends_at: null
+        pro_started_at: null,
+        pro_ends_at: null
     };
 }
 
 export async function getCurrentBillingState(supabase, ownerId) {
-    await downgradeExpiredNormal(supabase, ownerId);
+    await downgradeExpiredPro(supabase, ownerId);
     await expireStaleOrders(supabase, ownerId);
 
     const [profileResult, orderResult] = await Promise.all([
@@ -127,15 +122,15 @@ export async function getCurrentBillingState(supabase, ownerId) {
     if (orderResult.error) throw orderResult.error;
 
     return {
-        plan: NORMAL_PLAN,
+        plan: PRO_PLAN,
         readiness: getBillingReadiness(),
         profile: sanitizeProfile(profileResult),
         order: sanitizeOrder(orderResult.data)
     };
 }
 
-export async function createNormalCheckoutOrder(supabase, ownerId) {
-    const error = new Error('Онлайн-оплата тарифа временно недоступна. Пожалуйста, обратитесь в поддержку для активации тарифа Normal.');
+export function createProCheckoutOrder() {
+    const error = new Error('Онлайн-оплата тарифа временно недоступна. Пожалуйста, обратитесь в поддержку для активации тарифа Pro.');
     error.statusCode = 503;
     throw error;
 }
@@ -158,7 +153,7 @@ export async function recordBillingEvent(supabase, event) {
     }
 }
 
-export async function activateNormalForOrder(supabase, order) {
+export async function activateProForOrder(supabase, order) {
     if (!order?.owner_id) return null;
 
     const profile = await loadProfile(supabase, order.owner_id);
@@ -167,24 +162,23 @@ export async function activateNormalForOrder(supabase, order) {
     }
 
     const now = new Date();
-    const currentEnd = profile.normal_ends_at ? new Date(profile.normal_ends_at) : null;
+    const currentEnd = profile.pro_ends_at ? new Date(profile.pro_ends_at) : null;
     const baseDate = currentEnd && currentEnd.getTime() > now.getTime() ? currentEnd : now;
-    const normalEndsAt = addDays(baseDate, order.duration_days || NORMAL_PLAN.durationDays).toISOString();
+    const proEndsAt = addDays(baseDate, order.duration_days || PRO_PLAN.durationDays).toISOString();
 
     const { data, error } = await supabase
         .from('profiles')
         .update({
-            product_tier: 'normal',
+            product_tier: 'pro',
             trial_started_at: null,
             trial_ends_at: null,
-            normal_started_at: now.toISOString(),
-            normal_ends_at: normalEndsAt
+            pro_started_at: now.toISOString(),
+            pro_ends_at: proEndsAt
         })
         .eq('id', order.owner_id)
-        .select('product_tier, trial_started_at, trial_ends_at, normal_started_at, normal_ends_at')
+        .select('product_tier, trial_started_at, trial_ends_at, pro_started_at, pro_ends_at')
         .single();
 
     if (error) throw error;
     return sanitizeProfile(data);
 }
-// Robokassa result and load helpers removed

@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import {
-    createNormalCheckoutOrder,
+    createProCheckoutOrder,
     getCurrentBillingState
 } from '../services/bullgram-billing.service.js';
 import {
@@ -28,11 +28,11 @@ export default function billingRoutes(supabase) {
 
     router.post('/checkout/normal', authenticateUser, async (req, res) => {
         try {
-            const checkout = await createNormalCheckoutOrder(supabase, req.user.id);
+            const checkout = createProCheckoutOrder();
             res.json({ success: true, ...checkout });
         } catch (error) {
-            console.error('[Billing] normal checkout error:', error);
-            res.status(statusFor(error)).json({ error: error.message || 'Не удалось создать счет Normal.' });
+            console.error('[Billing] pro checkout error:', error);
+            res.status(statusFor(error)).json({ error: error.message || 'Не удалось создать счет Pro.' });
         }
     });
 

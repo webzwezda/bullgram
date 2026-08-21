@@ -65,7 +65,12 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
 
   const bucketRows = [
     { label: 'Доход сайта', value: buckets.platformRevenueTon },
-    { label: 'Продажи', value: buckets.shopRevenueTon },
+    { label: 'Тарифы', value: buckets.tierRevenueTon },
+    { label: 'Продажи — итого', value: buckets.shopRevenueTon },
+    { label: 'Прокси', value: buckets.shopProxyTon },
+    { label: 'Юзерботы', value: buckets.shopUserbotTon },
+    { label: 'Комплекты (аккаунт+прокси)', value: buckets.shopBundleTon },
+    { label: 'Прочие продажи', value: buckets.shopOtherTon },
     { label: 'Комиссия Bullgram', value: buckets.referralFeeTon },
     { label: 'Партнерам', value: buckets.partnerLiabilityTon },
     { label: 'Возвраты', value: buckets.adminReserveLiabilityTon },
@@ -166,7 +171,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-slate-900">Деньги</h3>
                     <span className="text-xs text-slate-400">
-                      Продавцов: {counters.adminOwners || 0} • Оплачено: {counters.paidShopPurchases || 0} • В ожидании: {counters.pendingShopPurchases || 0}
+                      Продавцов: {counters.adminOwners || 0} • Оплачено: {counters.paidShopPurchases || 0} • В ожидании: {counters.pendingShopPurchases || 0} • Тарифов: {counters.paidTierOrders || 0}
                     </span>
                   </div>
                   <div className="space-y-2">

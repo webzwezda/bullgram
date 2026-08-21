@@ -35,7 +35,7 @@ function assertThrows(fn, label) {
 console.log('--- product-tier.getProductTier ---');
 {
     assert(getProductTier({ product_tier: 'trial' }) === 'trial', 'trial → trial');
-    assert(getProductTier({ product_tier: 'Normal' }) === 'normal', 'Normal (capitalized) → normal');
+    assert(getProductTier({ product_tier: 'Pro' }) === 'pro', 'Pro (capitalized) → pro');
     assert(getProductTier({ product_tier: 'PRO' }) === 'pro', 'PRO (caps) → pro');
     assert(getProductTier({}) === 'trial', 'missing tier → trial');
     assert(getProductTier(null) === 'trial', 'null profile → trial');
@@ -49,22 +49,19 @@ console.log('\n--- product-tier.getTierRules ---');
     assert(trial.canSendBroadcasts === false, 'trial.canSendBroadcasts = false');
     assert(trial.canUseShopSeller === false, 'trial.canUseShopSeller = false');
 
-    const normal = getTierRules({ product_tier: 'normal' });
-    assert(normal.maxAutopostBots === 3, 'normal.maxAutopostBots = 3');
-    assert(normal.canSendBroadcasts === true, 'normal.canSendBroadcasts = true');
-
     const pro = getTierRules({ product_tier: 'pro' });
-    assert(pro.maxAutopostBots === 3, 'pro.maxAutopostBots = 3 (matches normal)');
+    assert(pro.maxAutopostBots === 3, 'pro.maxAutopostBots = 3');
+    assert(pro.canSendBroadcasts === true, 'pro.canSendBroadcasts = true');
 }
 
 console.log('\n--- product-tier.ensureBroadcastAllowed ---');
 {
     assertThrows(() => ensureBroadcastAllowed({ product_tier: 'trial' }), 'trial cannot broadcast');
     try {
-        ensureBroadcastAllowed({ product_tier: 'normal' });
-        console.log('  ✓ normal can broadcast');
+        ensureBroadcastAllowed({ product_tier: 'pro' });
+        console.log('  ✓ pro can broadcast');
     } catch (e) {
-        console.error(`  ✗ normal can broadcast (threw: ${e.message})`);
+        console.error(`  ✗ pro can broadcast (threw: ${e.message})`);
         failures++;
     }
 }
@@ -135,24 +132,24 @@ console.log('\n--- product-tier.enforceAutopostBotQuota ---');
         (e) => { console.error(`  ✗ trial under limit should pass (${e.message})`); failures++; }
     );
 
-    // Normal at limit (3 bots, limit 3) → throws
+    // Pro at limit (3 bots, limit 3) → throws
     await enforceAutopostBotQuota({
         supabase: makeMock(3),
         ownerId: 'user-3',
-        profile: { product_tier: 'normal' }
+        profile: { product_tier: 'pro' }
     }).then(
-        () => { console.error('  ✗ normal at limit should throw'); failures++; },
-        (e) => { console.log(`  ✓ normal at limit throws (${e.message.slice(0, 60)}…)`); }
+        () => { console.error('  ✗ pro at limit should throw'); failures++; },
+        (e) => { console.log(`  ✓ pro at limit throws (${e.message.slice(0, 60)}…)`); }
     );
 
-    // Normal under limit (2 bots, limit 3) → ok
+    // Pro under limit (2 bots, limit 3) → ok
     await enforceAutopostBotQuota({
         supabase: makeMock(2),
         ownerId: 'user-4',
-        profile: { product_tier: 'normal' }
+        profile: { product_tier: 'pro' }
     }).then(
-        () => { console.log('  ✓ normal under limit passes'); },
-        (e) => { console.error(`  ✗ normal under limit should pass (${e.message})`); failures++; }
+        () => { console.log('  ✓ pro under limit passes'); },
+        (e) => { console.error(`  ✗ pro under limit should pass (${e.message})`); failures++; }
     );
 
     // Admin bypasses regardless of count

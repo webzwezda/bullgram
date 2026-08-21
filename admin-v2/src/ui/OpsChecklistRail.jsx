@@ -35,9 +35,9 @@ function planMeta(plan, trialEndsAt) {
 
   if (plan === 'normal') {
     return {
-      title: 'Normal',
-      hint: '',
-      pillClass: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      title: 'Pro',
+      hint: 'Без лимитов',
+      pillClass: 'bg-amber-100 text-amber-800 border-amber-200'
     };
   }
 

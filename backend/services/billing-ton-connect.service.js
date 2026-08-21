@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import {
-    NORMAL_PLAN,
-    activateNormalForOrder,
+    PRO_PLAN,
+    activateProForOrder,
     recordBillingEvent
 } from './bullgram-billing.service.js';
 import { verifyTonConnectPayment } from './ton-connect-verify.service.js';
@@ -70,7 +70,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
         throw error;
     }
 
-    const { ton, nano, tonPriced } = computeTonAmount(NORMAL_PLAN.amountRub);
+    const { ton, nano, tonPriced } = computeTonAmount(PRO_PLAN.amountRub);
 
     // Reuse existing valid pending order if we have one with same amount.
     // Avoids pile-up of orphan pending rows when user reloads /app/billing.
@@ -78,7 +78,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
         .from('billing_orders')
         .select('*')
         .eq('owner_id', ownerId)
-        .eq('plan_code', NORMAL_PLAN.code)
+        .eq('plan_code', PRO_PLAN.code)
         .eq('status', 'pending')
         .eq('provider', 'ton_connect')
         .gt('expires_at', new Date().toISOString())
@@ -100,11 +100,11 @@ export async function createTonConnectOrder(supabase, ownerId) {
         .from('billing_orders')
         .insert({
             owner_id: ownerId,
-            plan_code: NORMAL_PLAN.code,
+            plan_code: PRO_PLAN.code,
             status: 'pending',
-            amount_rub: NORMAL_PLAN.amountRub,
+            amount_rub: PRO_PLAN.amountRub,
             currency: 'RUB',
-            duration_days: NORMAL_PLAN.durationDays,
+            duration_days: PRO_PLAN.durationDays,
             provider: 'ton_connect',
             provider_invoice_id: memo,
             expires_at: expiresAt,
@@ -127,7 +127,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
         owner_id: ownerId,
         event_type: 'ton_connect_order_created',
         provider: 'ton_connect',
-        amount_rub: NORMAL_PLAN.amountRub,
+        amount_rub: PRO_PLAN.amountRub,
         payload: { memo, ton_amount: ton, ton_priced: tonPriced, merchant_wallet: merchantWallet }
     });
 
@@ -243,7 +243,7 @@ export async function verifyAndActivateTonConnectOrder(supabase, orderId, sender
         }
     });
 
-    const profile = await activateNormalForOrder(supabase, updated);
+    const profile = await activateProForOrder(supabase, updated);
 
     return { success: true, status: 'paid', profile };
 }

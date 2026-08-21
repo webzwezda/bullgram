@@ -23,29 +23,29 @@ const plans = [
     title: 'Trial',
     price: '0 ₽',
     period: 'на 14 дней',
-    description: 'Пробный доступ к Bullgram, чтобы проверить сценарий платного Telegram-доступа без оплаты.',
+    description: 'Пробный доступ к Bullgram, чтобы собрать первый рабочий контур и проверить сценарии без оплаты.',
     href: '/app/profile',
     action: 'Начать Trial',
     features: [
-      'до 50 активных подписчиков',
-      'первый checkout и доступ после оплаты',
-      'базовая проверка Telegram-сценария',
-      'ограничения пробного режима'
+      '500 запросов к API и MCP в месяц',
+      '1 юзербот и 1 свой прокси',
+      '1 автопост-бот',
+      'покупка готовых активов в Shop'
     ]
   },
   {
-    id: 'normal',
+    id: 'pro',
     label: 'Первый платный вход',
-    title: 'Normal',
+    title: 'Pro',
     price: '900 ₽',
     period: 'за 365 дней доступа',
-    description: 'Основной платный тариф для доступа к Bullgram: P2P/TON-касса, доступ, CRM, продления и Shop.',
+    description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
     features: [
-      'доступ к кабинету Bullgram на 365 дней',
-      'P2P/TON-касса для Telegram-канала или группы',
-      'CRM, заказы, продления и исключение из доступа',
-      'Shop/P2P-сценарий с прямым денежным потоком продавцу'
+      'безлимит запросов к API и MCP',
+      'безлимит юзерботов и своих прокси',
+      '3 автопост-бота и живые рассылки',
+      'продажа активов в Shop с прямым денежным потоком'
     ]
   },
   {
@@ -66,7 +66,7 @@ const plans = [
   }
 ];
 
-const normalDelivery = [
+const proDelivery = [
   'Нажмите «Оплатить TON», подключите TonConnect-кошелёк и подтвердите платёж.',
   'Деньги уходят напрямую на кошелёк сервиса, платёж отслеживается автоматически.',
   'Сразу после подтверждения тариф активируется — кабинет открывается на 365 дней.',
@@ -77,7 +77,7 @@ const complianceBlocks = [
   {
     icon: Truck,
     title: 'Получение услуги',
-    text: 'Normal открывает дистанционный доступ к сервису Bullgram и рабочим сценариям для Telegram-проекта на оплаченный срок.'
+    text: 'Pro открывает дистанционный доступ к сервису Bullgram и рабочим сценариям для Telegram-проекта на оплаченный срок.'
   },
   {
     icon: RotateCcw,
@@ -107,7 +107,7 @@ function formatCountdown(value) {
   return hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-function NormalCheckoutButton({ profilePlan, normalEndsAt, pendingOrder, user, accessToken }) {
+function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessToken }) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -119,14 +119,14 @@ function NormalCheckoutButton({ profilePlan, normalEndsAt, pendingOrder, user, a
     return () => clearInterval(t);
   }, [pendingOrder?.expires_at]);
 
-  if (profilePlan === 'normal') {
+  if (profilePlan === 'pro' || profilePlan === 'normal') {
     return (
       <a
         href="/app/profile"
         className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-5 py-4 text-base font-black text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
       >
         <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
-        Активирован до {formatEndDate(normalEndsAt) || '—'}
+        Активирован до {formatEndDate(proEndsAt) || '—'}
       </a>
     );
   }
@@ -271,7 +271,7 @@ function PlanCard({ plan, children }) {
 }
 
 export function PricingPage() {
-  const { user, accessToken, profilePlan, normalEndsAt, billingOrder } = useAuth();
+  const { user, accessToken, profilePlan, proEndsAt, billingOrder } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
 
   return (
@@ -280,10 +280,10 @@ export function PricingPage() {
         <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
           {plans.map((plan) => (
             <PlanCard key={plan.id} plan={plan}>
-              {plan.id === 'normal' ? (
-                <NormalCheckoutButton
+              {plan.id === 'pro' ? (
+                <ProCheckoutButton
                   profilePlan={profilePlan}
-                  normalEndsAt={normalEndsAt}
+                  proEndsAt={proEndsAt}
                   pendingOrder={pendingOrder}
                   user={user}
                   accessToken={accessToken}
@@ -313,10 +313,10 @@ export function PricingPage() {
       <section className="grid gap-8 border-b border-slate-200 py-12 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
           <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Что оплачивает покупатель</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Normal на 365 дней</h2>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Pro на 365 дней</h2>
           <p className="mt-4 text-base font-medium leading-7 text-slate-600">
             Это услуга дистанционного доступа к сервису Bullgram для управления платным Telegram-проектом:
-            P2P/TON-касса, заявки, чеки, выдача доступа, CRM, продления, исключения и Shop/P2P-сценарии.
+            юзерботы, автопост, рассылки, доступ, CRM и Shop — без лимитов Trial.
           </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
@@ -325,7 +325,7 @@ export function PricingPage() {
             <h3 className="text-2xl font-black tracking-tight">Порядок оказания услуги</h3>
           </div>
           <ol className="mt-6 space-y-4">
-            {normalDelivery.map((step, index) => (
+            {proDelivery.map((step, index) => (
               <li key={step} className="flex gap-4">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-black text-blue-700">
                   {index + 1}

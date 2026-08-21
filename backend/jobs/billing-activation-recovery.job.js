@@ -1,5 +1,5 @@
 import {
-    activateNormalForOrder,
+    activateProForOrder,
     recordBillingEvent
 } from '../services/bullgram-billing.service.js';
 
@@ -60,7 +60,7 @@ async function loadOrdersNeedingActivation(supabase) {
 
     return data.filter((o) => {
         const tier = tierByOwner.get(o.owner_id) || 'trial';
-        return tier !== 'normal' && tier !== 'pro';
+        return tier !== 'pro';
     });
 }
 
@@ -83,7 +83,7 @@ export function startBillingActivationRecovery(supabase) {
             console.log(`[BillingRecovery] found ${orders.length} paid order(s) needing activation`);
             for (const order of orders) {
                 try {
-                    await activateNormalForOrder(supabase, order);
+                    await activateProForOrder(supabase, order);
                     await recordBillingEvent(supabase, {
                         billing_order_id: order.id,
                         owner_id: order.owner_id,

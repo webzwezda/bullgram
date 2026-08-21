@@ -808,13 +808,13 @@ export function BroadcastPage() {
           <PlanBanner
             tone="warning"
             title="Trial: отправка рассылок закрыта"
-            text="На Trial можно собрать базу и прогнать подготовку. Отправка откроется на Normal."
+            text="На Trial можно собрать базу и прогнать подготовку. Отправка откроется на Pro."
           />
           <UpgradeCallout
             title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
             text={trialUpgradeUrgent
-              ? 'Не упирайся в trial-лимит до дедлайна — переходи на Normal и запускай рассылки.'
-              : 'Переходи на Normal, чтобы отправлять рассылки по собранной базе.'}
+              ? 'Не упирайся в trial-лимит до дедлайна — переходи на Pro и запускай рассылки.'
+              : 'Переходи на Pro, чтобы отправлять рассылки по собранной базе.'}
           />
         </>
       ) : null}
@@ -1010,7 +1010,7 @@ export function BroadcastPage() {
                   Назад
                 </button>
                 <button type="button" className={`${btnPrimary} w-full sm:w-auto`} onClick={sendCampaign} disabled={sendDisabled}>
-                  {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Отправляем...</> : !planRules.canSendBroadcasts ? 'Нужен Normal' : 'Отправить рассылку'}
+                  {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Отправляем...</> : !planRules.canSendBroadcasts ? 'Нужен Pro' : 'Отправить рассылку'}
                 </button>
               </div>
             </Section>

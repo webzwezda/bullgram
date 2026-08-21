@@ -599,7 +599,7 @@ function PaidView({ purchase, processing, purchaseKind }) {
     return () => clearTimeout(timer);
   }, [isBilling]);
 
-  const title = isBilling ? 'Тариф Normal активирован' : processing ? 'Платёж получен' : 'Счёт оплачен';
+  const title = isBilling ? 'Тариф Pro активирован' : processing ? 'Платёж получен' : 'Счёт оплачен';
   const description = isBilling ? (
     <>
       Доступ открыт до {formatBillingEndDate(purchase.duration_days) || '—'}

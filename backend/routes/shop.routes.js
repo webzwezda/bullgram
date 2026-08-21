@@ -671,7 +671,7 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
             throw profileError;
         }
 
-        if (String(profile?.product_tier || '').toLowerCase() === 'normal' || String(profile?.product_tier || '').toLowerCase() === 'pro') {
+        if (String(profile?.product_tier || '').toLowerCase() === 'pro') {
             return;
         }
 

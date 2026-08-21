@@ -255,7 +255,7 @@ console.log('--- GET /me with brmcp_ token → 401 with clear message ---');
 
 console.log('--- GET /me with valid brapi_ token → 200 ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal', role: 'user' };
+  const profile = { id: OWNER_ID, product_tier: 'pro', role: 'user' };
   const supabase = makeMockSupabase({ tokens: [SAMPLE_TOKEN], profile });
   const userbotService = makeMockUserbotService();
   const { port, close } = await startApp({ supabase, userbotService });
@@ -264,13 +264,13 @@ console.log('--- GET /me with valid brapi_ token → 200 ---');
   assertEqual(body.auth_kind, 'integration_token', 'auth_kind');
   assertEqual(body.owner_id, OWNER_ID, 'owner_id');
   assertEqual(body.token.purpose, 'api', 'purpose echoed');
-  assertEqual(body.tier, 'normal', 'tier echoed');
+  assertEqual(body.tier, 'pro', 'tier echoed');
   close();
 }
 
 console.log('--- GET /userbots with valid token → 200, audit success ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const tgAccounts = [{
     id: SAMPLE_USERBOT_ID, owner_id: OWNER_ID, account_type: 'userbot',
     tg_username: 'test_bot', tg_account_id: '123',
@@ -294,7 +294,7 @@ console.log('--- GET /userbots with valid token → 200, audit success ---');
 
 console.log('--- GET /userbots/{id}/health with UUID path param + missing userbot → 404 ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const supabase = makeMockSupabase({ tokens: [SAMPLE_TOKEN], profile, tgAccounts: [] });
   const userbotService = makeMockUserbotService();
   const { port, close } = await startApp({ supabase, userbotService });
@@ -311,7 +311,7 @@ console.log('--- GET /userbots/{id}/health with UUID path param + missing userbo
 
 console.log('--- GET /userbots/{id}/health with real userbot → 200 with snapshot ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const tgAccounts = [{ id: SAMPLE_USERBOT_ID, owner_id: OWNER_ID, account_type: 'userbot', status: 'active' }];
   const supabase = makeMockSupabase({ tokens: [SAMPLE_TOKEN], profile, tgAccounts });
   const userbotService = makeMockUserbotService({ healthResult: { status: 'active', last_seen: 'now' } });
@@ -328,7 +328,7 @@ console.log('--- GET /userbots/{id}/health with real userbot → 200 with snapsh
 
 console.log('--- Scope enforcement: read-only token blocked from POST /proxies/preview ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const readOnlyScopes = ['api:userbot:read'];
   const token = { ...SAMPLE_TOKEN, scopes: readOnlyScopes };
   const supabase = makeMockSupabase({ tokens: [token], profile });
@@ -347,7 +347,7 @@ console.log('--- Scope enforcement: read-only token blocked from POST /proxies/p
 
 console.log('--- Account allowlist: empty list blocks the call ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const tokenWithAllowlist = {
     ...SAMPLE_TOKEN,
     metadata: { allowed_userbot_ids: [] }
@@ -367,7 +367,7 @@ console.log('--- Account allowlist: empty list blocks the call ---');
 
 console.log('--- Query param coercion: limit="50" → integer 50 ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const supabase = makeMockSupabase({ tokens: [SAMPLE_TOKEN], profile, tgAccounts: [] });
   const userbotService = makeMockUserbotService();
   const { port, close } = await startApp({ supabase, userbotService });
@@ -383,7 +383,7 @@ console.log('--- Query param coercion: limit="50" → integer 50 ---');
 
 console.log('--- POST body extraction: /proxies/preview with raw in body ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const writeToken = { ...SAMPLE_TOKEN, scopes: ['api:proxy:write', 'mcp:proxy:write'] };
   const supabase = makeMockSupabase({ tokens: [writeToken], profile });
   const userbotService = makeMockUserbotService();
@@ -405,7 +405,7 @@ console.log('--- POST body extraction: /proxies/preview with raw in body ---');
 
 console.log('--- Handler-thrown MCPError → correct envelope + status ---');
 {
-  const profile = { id: OWNER_ID, product_tier: 'normal' };
+  const profile = { id: OWNER_ID, product_tier: 'pro' };
   const tgAccounts = [{ id: SAMPLE_USERBOT_ID, owner_id: OWNER_ID, account_type: 'userbot', status: 'active' }];
   const supabase = makeMockSupabase({ tokens: [SAMPLE_TOKEN], profile, tgAccounts });
   const userbotService = makeMockUserbotService({

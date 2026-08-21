@@ -38,15 +38,6 @@ export const TEXT_OFFER_TEMPLATES = [
     preview: 'После оплаты покупатель получает скрытое сообщение, ссылку или инструкцию.',
     description: 'Простой оффер: подходит для текстов, гайдов, ссылок, сигналов и разовых услуг.',
     postPurchaseMessage: 'Оплата получена. Вот ваш результат: вставьте сюда ссылку, инструкцию или текст для покупателя.'
-  },
-  {
-    id: 'normal',
-    offerCode: 'normal',
-    title: 'Normal апгрейд',
-    priceTon: '29',
-    preview: 'Апгрейд с Trial: больше юзерботов, больше прокси, CRM и дожим без лимитов.',
-    description: 'Покупатель получает следующий продуктовый слой: рабочий контур для денег, доступа, CRM и рассылок.',
-    postPurchaseMessage: 'Normal открыт. Переходите в /app, подключайте контур и запускайте CRM и рассылки без trial-лимитов.'
   }
 ];
 
@@ -93,7 +84,7 @@ export function visibilityLabel(value) {
 
 export function offerCodeLabel(value) {
   if (value === 'trial') return 'Trial';
-  if (value === 'normal') return 'Normal';
+  if (value === 'normal') return 'Pro';
   if (value === 'seller') return 'Seller';
   if (value === 'p2p') return 'Оффер с текстом';
   return '';

@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import {
-  activateNormalForOrder,
+  activateProForOrder,
   recordBillingEvent,
-  NORMAL_PLAN
+  PRO_PLAN
 } from '../services/bullgram-billing.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -39,12 +39,12 @@ function shapePublicView(order) {
     seller_wallet: merchantWallet,
     network,
     expires_at: order.expires_at,
-    item_title: NORMAL_PLAN.title || 'Bullgram Normal',
-    description: `Тариф Normal на ${order.duration_days || NORMAL_PLAN.durationDays} дн.`,
+    item_title: PRO_PLAN.title || 'Bullgram Pro',
+    description: `Тариф Pro на ${order.duration_days || PRO_PLAN.durationDays} дн.`,
     ton_uri: tonUriFor(merchantWallet, amountNano, memo),
     ton_qr: null,
     plan_code: order.plan_code,
-    duration_days: order.duration_days || NORMAL_PLAN.durationDays
+    duration_days: order.duration_days || PRO_PLAN.durationDays
   };
 }
 
@@ -203,10 +203,9 @@ export function publicBillingRoutes(supabase) {
             .select('product_tier')
             .eq('id', fresh.owner_id)
             .maybeSingle();
-          if (profile && String(profile.product_tier || '').toLowerCase() !== 'normal'
-              && String(profile.product_tier || '').toLowerCase() !== 'pro') {
+          if (profile && String(profile.product_tier || '').toLowerCase() !== 'pro') {
             try {
-              await activateNormalForOrder(supabase, fresh);
+              await activateProForOrder(supabase, fresh);
             } catch (activateErr) {
               console.error('[billing-public] race-lost activate retry failed:', activateErr.message || activateErr);
             }
@@ -230,7 +229,7 @@ export function publicBillingRoutes(supabase) {
       });
 
       try {
-        await activateNormalForOrder(supabase, claimed);
+        await activateProForOrder(supabase, claimed);
       } catch (activateErr) {
         console.error('[billing-public] activate failed (claim already persisted):', activateErr.message || activateErr);
         // Не откатывать paid. Recovery через повторный verify (race-lost path) или ручной SQL.

@@ -162,5 +162,45 @@ export default function integrationsRoutes(supabase) {
         }
     });
 
+    // --- Trial API/MCP usage -------------------------------------------------
+    router.get('/usage', authenticateUser, async (req, res) => {
+        try {
+            const tier = String(req.profile?.product_tier || 'trial').trim().toLowerCase();
+            const isAdmin = req.profile?.role === 'admin';
+            if (isAdmin || tier === 'pro') {
+                return res.json({ success: true, usage: null, tier: isAdmin ? 'admin' : 'pro' });
+            }
+
+            const parsedLimit = Number(process.env.TRIAL_API_REQUESTS_PER_MONTH);
+            const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.floor(parsedLimit) : 500;
+
+            const now = new Date();
+            const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+            const resetsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+
+            const { data, error } = await supabase
+                .from('api_usage_monthly')
+                .select('calls_count')
+                .eq('owner_id', req.user.id)
+                .eq('month', month)
+                .maybeSingle();
+
+            if (error) throw error;
+
+            res.json({
+                success: true,
+                tier: 'trial',
+                usage: {
+                    month,
+                    used: Number(data?.calls_count || 0),
+                    limit,
+                    resets_at: resetsAt
+                }
+            });
+        } catch (error) {
+            httpError(res, error, 'Не удалось загрузить лимит запросов.');
+        }
+    });
+
     return router;
 }

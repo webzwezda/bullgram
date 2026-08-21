@@ -1,20 +1,13 @@
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LogOut, Zap } from 'lucide-react';
 
-function planMeta(plan, trialEndsAt, normalEndsAt) {
-  if (plan === 'pro') {
+function planMeta(plan, trialEndsAt, proEndsAt) {
+  if (plan === 'pro' || plan === 'normal') {
+    const date = proEndsAt ? new Date(proEndsAt) : null;
     return {
       title: 'Pro',
-      pillClass: 'bg-amber-100/80 text-amber-700 border-amber-200/50'
-    };
-  }
-
-  if (plan === 'normal') {
-    const date = normalEndsAt ? new Date(normalEndsAt) : null;
-    return {
-      title: 'Normal',
       hint: date && Number.isFinite(date.getTime()) ? `До ${date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}` : 'Активен',
-      pillClass: 'bg-emerald-100/80 text-emerald-700 border-emerald-200/50'
+      pillClass: 'bg-amber-100/80 text-amber-700 border-amber-200/50'
     };
   }
 
@@ -30,7 +23,7 @@ function planMeta(plan, trialEndsAt, normalEndsAt) {
 }
 
 export function UserProfileCard() {
-  const { user, profilePlan, trialEndsAt, normalEndsAt, logout } = useAuth();
+  const { user, profilePlan, trialEndsAt, proEndsAt, logout } = useAuth();
 
   if (!user) return null;
 
@@ -39,7 +32,7 @@ export function UserProfileCard() {
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
 
-  const currentPlan = planMeta(profilePlan, trialEndsAt, normalEndsAt);
+  const currentPlan = planMeta(profilePlan, trialEndsAt, proEndsAt);
 
   return (
     <div className="flex flex-col mb-8 mt-2">

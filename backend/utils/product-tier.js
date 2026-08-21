@@ -22,19 +22,6 @@ export function getTierRules(profile) {
         };
     }
 
-    if (tier === 'normal') {
-        return {
-            id: 'normal',
-            maxUserbots: Number.POSITIVE_INFINITY,
-            maxOwnedProxies: Number.POSITIVE_INFINITY,
-            maxAutopostBots: 3,
-            canSendBroadcasts: true,
-            canUseShopSeller: true,
-            canUseTrialProxy: false,
-            canBuyAssets: true
-        };
-    }
-
     return {
         id: 'trial',
         maxUserbots: 1,
@@ -63,7 +50,7 @@ export async function enforceUserbotQuota({ supabase, ownerId, profile, ignoreAc
 
     const count = (data || []).filter(row => String(row.id) !== String(ignoreAccountId || '')).length;
     if (count >= rules.maxUserbots) {
-        throw new Error('На Trial можно держать только одного юзербота. Чтобы подключить еще один, сначала перейди на Normal.');
+        throw new Error('На Trial можно держать только одного юзербота. Чтобы подключить еще один, сначала перейди на Pro.');
     }
 }
 
@@ -83,14 +70,14 @@ export async function enforceOwnedProxyQuota({ supabase, ownerId, profile, ignor
 
     const count = (data || []).filter(row => String(row.id) !== String(ignoreProxyId || '')).length;
     if (count >= rules.maxOwnedProxies) {
-        throw new Error('На Trial можно держать только один свой прокси. Чтобы добавить еще один, сначала перейди на Normal.');
+        throw new Error('На Trial можно держать только один свой прокси. Чтобы добавить еще один, сначала перейди на Pro.');
     }
 }
 
 export function ensureBroadcastAllowed(profile) {
     const rules = getTierRules(profile);
     if (!rules.canSendBroadcasts) {
-        throw new Error('На Trial нельзя запускать живые рассылки. Сначала перейди на Normal.');
+        throw new Error('На Trial нельзя запускать живые рассылки. Сначала перейди на Pro.');
     }
 }
 
@@ -100,7 +87,7 @@ export function ensureShopSellerAllowed(profile) {
     }
     const rules = getTierRules(profile);
     if (!rules.canUseShopSeller) {
-        throw new Error('На Trial seller-mode закрыт. Сначала перейди на Normal.');
+        throw new Error('На Trial seller-mode закрыт. Сначала перейди на Pro.');
     }
 }
 
@@ -119,6 +106,6 @@ export async function enforceAutopostBotQuota({ supabase, ownerId, profile }) {
 
     if ((data || []).length >= rules.maxAutopostBots) {
         const word = rules.maxAutopostBots === 1 ? 'одного автопостера' : `${rules.maxAutopostBots} автопостеров`;
-        throw new Error(`На тарифе ${rules.id === 'trial' ? 'Trial' : 'Normal'} можно держать только ${word}. Перейдите на Normal, чтобы добавить ещё.`);
+        throw new Error(`На тарифе ${rules.id === 'trial' ? 'Trial' : 'Pro'} можно держать только ${word}. Перейдите на Pro, чтобы добавить ещё.`);
     }
 }

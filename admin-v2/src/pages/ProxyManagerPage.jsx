@@ -284,7 +284,7 @@ export function ProxyManagerPage() {
           const used = Number(state.support.owned_proxy_quota_used || 0);
           if (!total) return null;
           if (profilePlan === 'trial') {
-            return `На Trial: ${used}/${total} свой proxy. Дальше либо покупай прокси, либо переходи на Normal.`;
+            return `На Trial: ${used}/${total} свой proxy. Дальше либо покупай прокси, либо переходи на Pro.`;
           }
           return `Своих proxy: ${used}/${total}.`;
         })();
@@ -839,7 +839,7 @@ export function ProxyManagerPage() {
           <div className="p-6 md:p-8">
             {showQuotaLock ? (
               <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-medium">
-                На Trial можно держать только один свой прокси. Чтобы добавить ещё, сначала перейди на Normal.
+                На Trial можно держать только один свой прокси. Чтобы добавить ещё, сначала перейди на Pro.
               </div>
             ) : (
               <div className="space-y-4">
@@ -1107,7 +1107,7 @@ export function ProxyManagerPage() {
           <div className="p-6 md:p-8">
             {showQuotaLock ? (
               <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 font-medium">
-                На Trial можно держать только один свой прокси. Чтобы добавить следующий, сначала перейди на Normal.
+                На Trial можно держать только один свой прокси. Чтобы добавить следующий, сначала перейди на Pro.
               </div>
             ) : null}
 

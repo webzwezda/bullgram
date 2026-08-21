@@ -8,19 +8,16 @@ function formatDateOnly(value) {
   return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(value));
 }
 
-function planMeta(plan, trialEndsAt, normalEndsAt) {
+function planMeta(plan, trialEndsAt, proEndsAt) {
   const lower = String(plan || '').toLowerCase();
-  if (lower === 'pro') {
-    return { title: 'Pro', hint: 'Без лимитов', pillClass: 'bg-amber-100 text-amber-800 border-amber-200' };
-  }
-  if (lower === 'normal') {
-    return { title: 'Normal', hint: normalEndsAt ? `До ${formatDateOnly(normalEndsAt)}` : 'Активен', pillClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+  if (lower === 'pro' || lower === 'normal') {
+    return { title: 'Pro', hint: proEndsAt ? `До ${formatDateOnly(proEndsAt)}` : 'Активен', pillClass: 'bg-amber-100 text-amber-800 border-amber-200' };
   }
   return { title: 'Trial', hint: trialEndsAt ? `До ${formatDateOnly(trialEndsAt)}` : 'Активирован', pillClass: 'bg-blue-100 text-blue-800 border-blue-200' };
 }
 
 export function ProfileIdentityCard() {
-  const { user, profilePlan, trialEndsAt, normalEndsAt } = useAuth();
+  const { user, profilePlan, trialEndsAt, proEndsAt } = useAuth();
 
   const [identities, setIdentities] = useState(null);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
@@ -85,7 +82,7 @@ export function ProfileIdentityCard() {
   const profileEmail = user?.email || '';
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
-  const currentPlan = planMeta(profilePlan, trialEndsAt, normalEndsAt);
+  const currentPlan = planMeta(profilePlan, trialEndsAt, proEndsAt);
 
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
