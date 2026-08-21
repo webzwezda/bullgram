@@ -271,6 +271,18 @@ export function ProxyStorefrontSection({
                           </span>
                         </div>
                       </button>
+                      {purchase.status === 'pending' ? (
+                        <Button
+                          size="sm"
+                          className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white border-0 text-xs font-bold"
+                          onClick={() => {
+                            setSelectedOpenPurchaseId(String(purchase.id));
+                            showPurchaseInline(purchase);
+                          }}
+                        >
+                          Оплатить
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="sm"

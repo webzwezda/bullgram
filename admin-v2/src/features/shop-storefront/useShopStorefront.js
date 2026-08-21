@@ -422,6 +422,53 @@ export function useShopStorefront({
     }
   }
 
+  // После перезагрузки страницы чекаут не сохраняется — если есть свежая
+  // pending-покупка, открываем её автоматически (один раз за заход, чтобы
+  // ручной «Сбросить» не открывал панель заново).
+  const autoRestoredRef = useRef(false);
+  useEffect(() => {
+    if (autoRestoredRef.current || storefrontState.loading) return;
+    autoRestoredRef.current = true;
+    if (checkoutState.purchase) return;
+    const pendingRows = (storefrontState.purchases || []).filter((p) => p.status === 'pending');
+    if (!pendingRows.length) return;
+
+    const first = pendingRows[0];
+    const batchToken = first.payload?.batch_token;
+    const batchRows = batchToken
+      ? pendingRows.filter((p) => p.payload?.batch_token === batchToken)
+      : [];
+
+    if (batchRows.length > 1) {
+      const nanoParts = batchRows.map((p) => String(p.amount_nanoton || '').trim()).filter(Boolean);
+      let amountNanoTon = '';
+      if (nanoParts.length === batchRows.length) {
+        try {
+          amountNanoTon = nanoParts.reduce((sum, value) => sum + BigInt(value), 0n).toString();
+        } catch {
+          amountNanoTon = '';
+        }
+      }
+      const expiresAt = batchRows
+        .map((p) => (p.expires_at ? new Date(p.expires_at).getTime() : null))
+        .filter(Number.isFinite)
+        .sort((left, right) => left - right)[0];
+
+      showPurchaseInline({
+        ...first,
+        id: batchToken,
+        purchase_ids: batchRows.map((p) => p.id),
+        amount_ton: batchRows.reduce((sum, p) => sum + Number(p.amount_ton || 0), 0),
+        amount_nanoton: amountNanoTon,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : first.expires_at,
+        batch: true
+      });
+    } else {
+      showPurchaseInline(first);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storefrontState.loading, storefrontState.purchases]);
+
   // Тихая автопроверка оплаты: пока открыта pending-покупка, опрашиваем статус
   // без смены состояния. Реагируем только на paid/expired, чтобы панель не мигала.
   const activePurchaseId = checkoutState.purchase?.id || null;

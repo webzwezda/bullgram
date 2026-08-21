@@ -2126,12 +2126,25 @@ export default function shopRoutes(supabase) {
                 assetsByItem.set(asset.shop_item_id, bucket);
             }
 
+            // Батч оплачивается одним переводом на общую сумму — URI/QR для строк
+            // с batch_token строим на сумму пакета, а не одной строки.
+            const batchTotals = new Map();
+            for (const row of purchases || []) {
+                const token = String(row.payload?.batch_token || '').trim();
+                if (!token || row.status !== 'pending') continue;
+                batchTotals.set(token, Number(batchTotals.get(token) || 0) + Number(row.amount_ton || 0));
+            }
+
             const normalizedPurchases = await Promise.all((purchases || []).map(async row => {
+                const batchToken = String(row.payload?.batch_token || '').trim();
+                const displayAmountTon = row.status === 'pending' && batchTotals.has(batchToken)
+                    ? batchTotals.get(batchToken)
+                    : Number(row.amount_ton || 0);
                 const tonUri = row.status === 'pending' && row.payload?.seller_wallet && row.payload?.memo
-                    ? buildTonUri(row.payload.seller_wallet, row.amount_ton, row.payload.memo)
+                    ? buildTonUri(row.payload.seller_wallet, displayAmountTon, row.payload.memo)
                     : null;
                 const trustWalletUri = row.status === 'pending' && row.payload?.seller_wallet && row.payload?.memo
-                    ? buildTrustWalletTonUri(row.payload.seller_wallet, row.amount_ton, row.payload.memo)
+                    ? buildTrustWalletTonUri(row.payload.seller_wallet, displayAmountTon, row.payload.memo)
                     : null;
                 const trustWalletQr = trustWalletUri ? await QRCode.toDataURL(trustWalletUri, {
                     errorCorrectionLevel: 'H',
