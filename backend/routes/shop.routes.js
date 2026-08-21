@@ -116,6 +116,12 @@ function normalizeSalesChannel(value, itemType = null) {
     return defaultSalesChannelForItemType(itemType);
 }
 
+// Все продажи сайта (лоты shop) принимаются на кошелёк платформы.
+// payment_settings.ton_wallet остаётся только для счетов /app/sales-bot.
+function siteWallet() {
+    return String(process.env.PLATFORM_TON_WALLET || '').trim();
+}
+
 function normalizePaymentMethods(value) {
     const source = Array.isArray(value)
         ? value
@@ -131,10 +137,10 @@ function normalizePaymentMethods(value) {
     return methods.length ? methods : ['ton'];
 }
 
-function buildAvailablePaymentMethods(item, settings) {
+function buildAvailablePaymentMethods(item) {
     const allowed = normalizePaymentMethods(item?.payment_methods);
     const methods = allowed.filter((method) => {
-        if (method === 'ton') return !!settings?.ton_wallet;
+        if (method === 'ton') return !!siteWallet();
         return false;
     });
 
@@ -359,27 +365,16 @@ async function createOrRefreshBuyerPurchase({
         .limit(1)
         .maybeSingle();
 
-    const { data: settingsData, error: settingsError } = await supabase
-        .from('payment_settings')
-        .select('ton_wallet')
-        .eq('owner_id', item.owner_id)
-        .maybeSingle();
-    if (settingsError) throw settingsError;
-    const settings = settingsData
-        ? {
-            ...settingsData
-        }
-        : null;
-
-    const availablePaymentMethods = buildAvailablePaymentMethods(item, settings);
+    const availablePaymentMethods = buildAvailablePaymentMethods(item);
     if (!availablePaymentMethods.includes(paymentMethod)) {
         const methodError = new Error('Этот способ оплаты для лота недоступен');
         methodError.statusCode = 400;
         throw methodError;
     }
 
-    if (paymentMethod === 'ton' && !settings?.ton_wallet) {
-        const walletError = new Error('У продавца не настроен TON-кошелек');
+    const wallet = siteWallet();
+    if (paymentMethod === 'ton' && !wallet) {
+        const walletError = new Error('Приём TON-платежей сайтом не настроен');
         walletError.statusCode = 400;
         throw walletError;
     }
@@ -390,7 +385,7 @@ async function createOrRefreshBuyerPurchase({
     const payloadPatch = {
         payment_method: paymentMethod,
         memo,
-        seller_wallet: settings?.ton_wallet || null,
+        seller_wallet: wallet,
         post_purchase_message: item.post_purchase_message || null,
         batch_token: batchToken || null
     };
@@ -453,7 +448,7 @@ async function createOrRefreshBuyerPurchase({
     return {
         purchase,
         item,
-        settings,
+        wallet,
         amountTon,
         memo,
         paymentMethod
@@ -770,7 +765,7 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     const paymentMethod = normalizePaymentMethod(purchase.payload?.payment_method);
 
     const memo = purchase.payload?.memo;
-    const wallet = purchase.payload?.seller_wallet;
+    const wallet = purchase.payload?.seller_wallet || siteWallet();
     const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet, senderWallet });
 
     if (!isPaid) {
@@ -911,17 +906,11 @@ export default function shopRoutes(supabase) {
 
         try {
             if (!adminSeller) {
-                const { data: settings } = await supabase
-                    .from('payment_settings')
-                    .select('ton_wallet')
-                    .eq('owner_id', ownerId)
-                    .maybeSingle();
-
                 return res.json({
                     proxies: [],
                     userbots: [],
                     channel_audiences: [],
-                    seller_wallet: settings?.ton_wallet || null,
+                    seller_wallet: siteWallet() || null,
                     seller_role: req.profile?.role || null,
                     seller_mode: 'text_service',
                     support: {
@@ -932,7 +921,7 @@ export default function shopRoutes(supabase) {
                 });
             }
 
-            const [proxiesResp, userbotsResp, basesResp, settingsResp] = await Promise.all([
+            const [proxiesResp, userbotsResp, basesResp] = await Promise.all([
                 supabase
                     .from('proxies')
                     .select('id, name, host, port, is_working, last_check_country, last_check_country_code, provision_source, inventory_group')
@@ -948,12 +937,7 @@ export default function shopRoutes(supabase) {
                     .from('channel_audiences')
                     .select('id, title, description, channel_count, members_count, updated_at')
                     .eq('owner_id', ownerId)
-                    .order('created_at', { ascending: false }),
-                supabase
-                    .from('payment_settings')
-                    .select('ton_wallet')
-                    .eq('owner_id', ownerId)
-                    .maybeSingle()
+                    .order('created_at', { ascending: false })
             ]);
 
             const joinedError = [
@@ -998,7 +982,7 @@ export default function shopRoutes(supabase) {
                 proxies,
                 userbots,
                 channel_audiences: customerBasesUnavailable ? [] : (basesResp.data || []),
-                seller_wallet: settingsResp.data?.ton_wallet || null,
+                seller_wallet: siteWallet() || null,
                 seller_role: req.profile?.role || null,
                 seller_mode: 'asset_marketplace',
                 stats: {
@@ -1035,6 +1019,102 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка загрузки reserved assets shop:', error);
             res.status(500).json({ error: 'Ошибка загрузки резервов shop' });
+        }
+    });
+
+    router.get('/admin/market-lots', authenticateUser, async (req, res) => {
+        if (req.profile?.role !== 'admin') {
+            return res.status(403).json({ error: 'Обзор витрины доступен только администратору проекта.' });
+        }
+
+        const allowedTypes = ['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer'];
+        const itemTypes = String(req.query.types || '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter((type) => allowedTypes.includes(type));
+
+        try {
+            let itemsQuery = supabase
+                .from('shop_items')
+                .select('*')
+                .eq('status', 'published')
+                .order('created_at', { ascending: false })
+                .limit(200);
+            if (itemTypes.length) {
+                itemsQuery = itemsQuery.in('item_type', itemTypes);
+            }
+
+            const { data: items, error: itemsError } = await itemsQuery;
+            if (itemsError) throw itemsError;
+
+            const itemIds = (items || []).map((item) => item.id);
+            let assets = [];
+            let purchases = [];
+
+            if (itemIds.length) {
+                const [assetsResp, purchasesResp] = await Promise.all([
+                    supabase
+                        .from('shop_item_assets')
+                        .select('*')
+                        .in('shop_item_id', itemIds)
+                        .order('sort_order', { ascending: true }),
+                    supabase
+                        .from('shop_purchases')
+                        .select('id, shop_item_id, buyer_owner_id, status, created_at')
+                        .in('shop_item_id', itemIds)
+                        .order('created_at', { ascending: false })
+                ]);
+                if (assetsResp.error) throw assetsResp.error;
+                if (purchasesResp.error) throw purchasesResp.error;
+                await expireStalePendingPurchases(supabase, purchasesResp.data || []);
+                assets = assetsResp.data || [];
+                purchases = purchasesResp.data || [];
+            }
+
+            const assetsByItem = new Map();
+            for (const asset of assets) {
+                const bucket = assetsByItem.get(asset.shop_item_id) || [];
+                bucket.push({
+                    id: asset.id,
+                    asset_type: asset.asset_type,
+                    asset_id: asset.asset_id,
+                    label: asset.label || ''
+                });
+                assetsByItem.set(asset.shop_item_id, bucket);
+            }
+
+            const activeReservationByItem = new Map();
+            for (const purchase of purchases) {
+                if (purchase.status !== 'pending' || isPendingPurchaseExpired(purchase)) continue;
+                if (activeReservationByItem.has(purchase.shop_item_id)) continue;
+                activeReservationByItem.set(purchase.shop_item_id, {
+                    buyer_owner_id: purchase.buyer_owner_id,
+                    expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString()
+                });
+            }
+
+            const ownerIds = Array.from(new Set((items || []).map((item) => String(item.owner_id || '')).filter(Boolean)));
+            let ownerNamesById = new Map();
+            if (ownerIds.length) {
+                const { data: ownerProfiles, error: ownerProfilesError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name')
+                    .in('id', ownerIds);
+                if (ownerProfilesError) throw ownerProfilesError;
+                ownerNamesById = new Map((ownerProfiles || []).map((profile) => [String(profile.id), profile.full_name?.trim() || '']));
+            }
+
+            res.json({
+                items: (items || []).map((item) => ({
+                    ...normalizeItem(item),
+                    assets: assetsByItem.get(item.id) || [],
+                    owner_name: ownerNamesById.get(String(item.owner_id)) || null,
+                    active_reservation: activeReservationByItem.get(item.id) || null
+                }))
+            });
+        } catch (error) {
+            console.error('Ошибка загрузки market lots:', error);
+            res.status(500).json({ error: 'Не удалось загрузить лоты витрины' });
         }
     });
 
@@ -1725,15 +1805,19 @@ export default function shopRoutes(supabase) {
         const itemId = req.params.id;
 
         try {
-            const { error } = await supabase
+            let unpublishQuery = supabase
                 .from('shop_items')
                 .update({
                     status: 'draft',
                     visibility: 'private',
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', itemId)
-                .eq('owner_id', ownerId);
+                .eq('id', itemId);
+            if (req.profile?.role !== 'admin') {
+                unpublishQuery = unpublishQuery.eq('owner_id', ownerId);
+            }
+
+            const { error } = await unpublishQuery;
 
             if (error) {
                 if (isMissingShopTables(error)) {
@@ -1843,22 +1927,14 @@ export default function shopRoutes(supabase) {
             let sellerCards = [];
 
             const sellerOwnerIds = Array.from(new Set(visibleItems.map(item => item.owner_id).filter(Boolean).map(String)));
-            let paymentSettingsByOwnerId = new Map();
 
             if (sellerOwnerIds.length) {
-                const [{ data: sellerProfiles }, { data: paymentSettings }] = await Promise.all([
-                    supabase
-                        .from('profiles')
-                        .select('id, full_name, role')
-                        .in('id', sellerOwnerIds),
-                    supabase
-                        .from('payment_settings')
-                        .select('owner_id, ton_wallet')
-                        .in('owner_id', sellerOwnerIds)
-                ]);
+                const { data: sellerProfiles } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, role')
+                    .in('id', sellerOwnerIds);
 
                 const profileByOwnerId = new Map((sellerProfiles || []).map(profile => [String(profile.id), profile]));
-                paymentSettingsByOwnerId = new Map((paymentSettings || []).map((row) => [String(row.owner_id), row]));
                 const sellerBuckets = new Map();
 
                 for (const item of visibleItems) {
@@ -1924,7 +2000,7 @@ export default function shopRoutes(supabase) {
                 items: visibleItems.map(item => ({
                     ...normalizeItem(item),
                     assets: assetsByItem.get(item.id) || [],
-                    available_payment_methods: buildAvailablePaymentMethods(item, paymentSettingsByOwnerId.get(String(item.owner_id))),
+                    available_payment_methods: buildAvailablePaymentMethods(item),
                     active_reservation: reservationByItem.get(item.id) || null
                 })),
                 seller_cards: sellerCards,
@@ -2180,7 +2256,7 @@ export default function shopRoutes(supabase) {
             const {
                 purchase,
                 item,
-                settings,
+                wallet,
                 amountTon,
                 memo
             } = await createOrRefreshBuyerPurchase({
@@ -2196,7 +2272,7 @@ export default function shopRoutes(supabase) {
                 amount_ton: amountTon,
                 amount_nanoton: tonToNanoString(amountTon),
                 payment_method: paymentMethod,
-                seller_wallet: settings?.ton_wallet || null,
+                seller_wallet: wallet,
                 memo,
                 item_type: item.item_type,
                 expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString(),
@@ -2272,7 +2348,7 @@ export default function shopRoutes(supabase) {
                 amount_ton: totalTon,
                 amount_nanoton: tonToNanoString(totalTon),
                 payment_method: paymentMethod,
-                seller_wallet: first.settings?.ton_wallet || null,
+                seller_wallet: first.wallet || null,
                 memo,
                 item_type: 'proxy_batch',
                 expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
@@ -2492,14 +2568,15 @@ export default function shopRoutes(supabase) {
                 purchase.status = fresh.status;
             }
 
-            const [settingsRes, itemRes] = await Promise.all([
-                supabase.from('payment_settings').select('ton_wallet').eq('owner_id', purchase.seller_owner_id).maybeSingle(),
-                supabase.from('shop_items').select('title').eq('id', purchase.shop_item_id).maybeSingle()
-            ]);
+            const { data: itemRes } = await supabase
+                .from('shop_items')
+                .select('title')
+                .eq('id', purchase.shop_item_id)
+                .maybeSingle();
 
             const memo = purchase.payload?.memo;
             const amountNano = Math.round(Number(purchase.amount_ton || 0) * 1e9);
-            const wallet = settingsRes.data?.ton_wallet;
+            const wallet = purchase.payload?.seller_wallet || siteWallet();
             const network = purchase.payload?.network || 'mainnet';
             const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
             const expiresAt = purchase.created_at
@@ -2515,7 +2592,7 @@ export default function shopRoutes(supabase) {
                 seller_wallet: wallet,
                 network,
                 expires_at: expiresAt,
-                item_title: itemRes.data?.title || 'Заказ',
+                item_title: itemRes?.title || 'Заказ',
                 ton_uri: tonUri,
                 ton_qr: purchase.payload?.ton_qr || null
             });

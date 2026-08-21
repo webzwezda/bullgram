@@ -72,7 +72,8 @@ export function BillingContactsCard() {
       <div>
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Реквизиты кассы</h3>
         <p className="text-sm text-slate-500 mt-0.5">
-          TON-кошелёк для приёма платежей от покупателей.
+          TON-кошелёк, на который приходят оплаты по счетам sales-бота.
+          Лоты витрины shop принимаются на кошелёк сайта — здесь его менять не нужно.
         </p>
       </div>
 

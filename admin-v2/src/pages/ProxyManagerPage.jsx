@@ -6,6 +6,9 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ProxyStorefrontSection, isProxyShopItem, isProxyPurchase } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
+import { ProxyComposerDialog } from './shop/ProxyComposerDialog.jsx';
+import { INITIAL_PROXY_COMPOSER } from './shop/shop.utils.js';
+import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
 
@@ -111,6 +114,8 @@ export function ProxyManagerPage() {
     updatedAt: null
   });
   const [sellerItems, setSellerItems] = useState([]);
+  const [showProxyDialog, setShowProxyDialog] = useState(false);
+  const [proxyComposer, setProxyComposer] = useState({ ...INITIAL_PROXY_COMPOSER });
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
@@ -186,28 +191,24 @@ export function ProxyManagerPage() {
     return () => window.clearInterval(intervalId);
   }, [accessToken, hasPendingProxyChecks, reloadProxies]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!(accessToken && state.support?.profile_role === 'admin')) {
-      setSellerItems([]);
-      return undefined;
-    }
-
-    apiRequest('/api/shop/seller/items', { accessToken })
-      .then((data) => {
-        if (!cancelled) setSellerItems(data?.items || []);
-      })
-      .catch(() => {
-        if (!cancelled) setSellerItems([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, state.support?.profile_role]);
-
   const isAdmin = state.support?.profile_role === 'admin';
+
+  const loadSellerItems = useCallback(async () => {
+    if (!(accessToken && isAdmin)) {
+      setSellerItems([]);
+      return;
+    }
+    try {
+      const data = await apiRequest('/api/shop/seller/items', { accessToken });
+      setSellerItems(data?.items || []);
+    } catch {
+      setSellerItems([]);
+    }
+  }, [accessToken, isAdmin]);
+
+  useEffect(() => {
+    loadSellerItems();
+  }, [loadSellerItems]);
 
   function matchesStatusFilter(proxy) {
     if (filter === 'working') {
@@ -275,6 +276,56 @@ export function ProxyManagerPage() {
       item.status === 'sold' && (item.assets || []).some((asset) => asset.asset_type === 'proxy')
     )
   ), [sellerItems]);
+  const saleProxies = useMemo(() => {
+    const listedProxyIds = new Set();
+    for (const item of sellerItems) {
+      if (item.status === 'sold') continue;
+      for (const asset of item.assets || []) {
+        if (asset.asset_type === 'proxy' && asset.asset_id) listedProxyIds.add(String(asset.asset_id));
+      }
+    }
+    return shopSaleProxies.filter((proxy) => !listedProxyIds.has(String(proxy.id)));
+  }, [sellerItems, shopSaleProxies]);
+
+  const resetProxyComposer = useCallback(() => {
+    setProxyComposer({ ...INITIAL_PROXY_COMPOSER });
+  }, []);
+
+  const saveProxyComposer = useCallback(async () => {
+    const proxy = saleProxies.find((p) => String(p.id) === String(proxyComposer.proxyId));
+    if (!proxy) {
+      setProxyComposer((prev) => ({ ...prev, error: 'Прокси не найден.' }));
+      return;
+    }
+    setProxyComposer((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      await apiRequest('/api/shop/seller/items', {
+        accessToken,
+        method: 'POST',
+        body: {
+          title: proxyComposer.title,
+          description: proxyComposer.description,
+          preview_text: proxyComposer.preview_text,
+          payment_methods: proxyComposer.payment_methods,
+          post_purchase_message: null,
+          offer_code: null,
+          item_type: 'proxy',
+          sales_channel: proxyComposer.sales_channel,
+          price_ton: Number(proxyComposer.price_ton || 0),
+          status: proxyComposer.status,
+          visibility: 'public',
+          transfer_mode: 'ownership_transfer',
+          assets: [{ asset_type: 'proxy', asset_id: proxy.id, label: proxy.name || `${proxy.host}:${proxy.port}` }]
+        }
+      });
+      await loadSellerItems();
+      resetProxyComposer();
+      toast.success('Прокси выставлен на продажу');
+    } catch (error) {
+      setProxyComposer((prev) => ({ ...prev, saving: false, error: error.message }));
+      toast.error(error.message);
+    }
+  }, [accessToken, loadSellerItems, proxyComposer, resetProxyComposer, saleProxies]);
   const manualQuotaText = !state.support
     ? null
     : state.support.profile_role === 'admin'
@@ -564,8 +615,20 @@ export function ProxyManagerPage() {
                 </p>
               </div>
             </div>
-            <div className="px-4 py-2 bg-violet-50 text-violet-700 rounded-xl text-sm font-bold border border-violet-100">
-              {visibleItems.length}
+            <div className="flex items-center gap-3">
+              {selectedLane === 'on-sale' && isAdmin ? (
+                <button
+                  type="button"
+                  className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
+                  disabled={!saleProxies.length}
+                  onClick={() => setShowProxyDialog(true)}
+                >
+                  Выставить прокси
+                </button>
+              ) : null}
+              <div className="px-4 py-2 bg-violet-50 text-violet-700 rounded-xl text-sm font-bold border border-violet-100">
+                {visibleItems.length}
+              </div>
             </div>
           </div>
 
@@ -1245,6 +1308,25 @@ export function ProxyManagerPage() {
       {state.support?.profile_role === 'admin' ? (
         <ProxyTableSection />
       ) : null}
+
+      {isAdmin ? (
+        <AdminLotsSection
+          accessToken={accessToken}
+          types="proxy"
+          title="Прокси на витрине"
+          onChanged={loadSellerItems}
+        />
+      ) : null}
+
+      <ProxyComposerDialog
+        open={showProxyDialog}
+        onOpenChange={setShowProxyDialog}
+        composer={proxyComposer}
+        setComposer={setProxyComposer}
+        saleProxies={saleProxies}
+        onSave={saveProxyComposer}
+        onReset={resetProxyComposer}
+      />
 
     </section>
   );

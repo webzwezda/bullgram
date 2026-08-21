@@ -96,24 +96,6 @@ export function useShopDerivedState({
     [groupedPurchases]
   );
 
-  const listedProxyIds = useMemo(() => {
-    const ids = new Set();
-    for (const item of state.items) {
-      if (item.status === 'sold') continue;
-      for (const asset of item.assets || []) {
-        if (asset.asset_type === 'proxy' && asset.asset_id) ids.add(String(asset.asset_id));
-      }
-    }
-    return ids;
-  }, [state.items]);
-
-  const saleProxies = useMemo(() => (
-    (availableAssets.proxies || []).filter((proxy) => (
-      (proxy.inventory_group || 'shop_sale') === 'shop_sale' &&
-      !listedProxyIds.has(String(proxy.id))
-    ))
-  ), [availableAssets.proxies, listedProxyIds]);
-
   return {
     canUseAssetSeller,
     filteredItems,
@@ -121,7 +103,6 @@ export function useShopDerivedState({
     itemSummary,
     sellerStats,
     purchaseSummary,
-    receiptQueue,
-    saleProxies
+    receiptQueue
   };
 }

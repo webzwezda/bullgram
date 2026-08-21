@@ -1,4 +1,4 @@
-import { Package, Plus, Search, Server, Trash2, ExternalLink, EyeOff } from 'lucide-react';
+import { Package, Plus, Search, Trash2, ExternalLink, EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,6 @@ export function ItemsTab({
   onUnpublish,
   onDelete,
   onOpenCreate,
-  onOpenProxyComposer,
   itemFilter,
   setItemFilter,
   itemSearch,
@@ -45,10 +44,6 @@ export function ItemsTab({
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={onOpenProxyComposer}>
-              <Server className="w-3.5 h-3.5 mr-1.5" />
-              Продать прокси
-            </Button>
             <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs" onClick={onOpenCreate}>
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Создать оффер

@@ -5,7 +5,7 @@ import { Package, ShoppingCart, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { apiRequest } from '../../api/client.js';
-import { INITIAL_FORM_STATE, INITIAL_PROXY_COMPOSER } from './shop.utils.js';
+import { INITIAL_FORM_STATE } from './shop.utils.js';
 import { useShopData } from './useShopData.js';
 import { useShopDerivedState } from './useShopDerivedState.js';
 import { useShopMutations } from './useShopMutations.js';
@@ -15,7 +15,6 @@ import { ItemsTab } from './ItemsTab.jsx';
 import { OrdersTab } from './OrdersTab.jsx';
 import { TreasuryTab } from './TreasuryTab.jsx';
 import { CreateItemDialog } from './CreateItemDialog.jsx';
-import { ProxyComposerDialog } from './ProxyComposerDialog.jsx';
 
 const TABS = [
   { id: 'items', label: 'Мои товары', icon: Package },
@@ -27,9 +26,7 @@ export function ShopAdminPage() {
   const { accessToken, profilePlan, profileRole } = useAuth();
   const [activeTab, setActiveTab] = useState('items');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showProxyDialog, setShowProxyDialog] = useState(false);
   const [formState, setFormState] = useState({ ...INITIAL_FORM_STATE });
-  const [proxyComposer, setProxyComposer] = useState({ ...INITIAL_PROXY_COMPOSER });
   const [itemFilter, setItemFilter] = useState('all');
   const [purchaseFilter, setPurchaseFilter] = useState('all');
   const [itemSearch, setItemSearch] = useState('');
@@ -57,31 +54,12 @@ export function ShopAdminPage() {
     loadShop,
     formState,
     setFormState,
-    proxyComposer,
-    setProxyComposer,
-    saleProxies: derived.saleProxies,
     canUseAssetSeller: derived.canUseAssetSeller
   });
 
   const openWithdrawalsCount = useMemo(() => (
     (treasury.data?.withdrawals || []).filter((w) => ['requested', 'queued', 'sending'].includes(w.status)).length
   ), [treasury.data]);
-
-  // Prefill proxy composer from URL params
-  useEffect(() => {
-    if (!derived.canUseAssetSeller || !derived.saleProxies) return;
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('asset') !== 'proxy') return;
-    const proxyId = params.get('proxyId');
-    if (!proxyId) return;
-    const proxy = derived.saleProxies.find((p) => String(p.id) === String(proxyId));
-    if (proxy) {
-      mutations.openProxyComposer(proxy);
-      setShowProxyDialog(true);
-      window.history.replaceState({}, '', '/app/shop');
-    }
-  }, [derived.canUseAssetSeller, derived.saleProxies]);
 
   // Deep link /app/shop?tab=treasury
   useEffect(() => {
@@ -122,11 +100,6 @@ export function ShopAdminPage() {
     setShowCreateDialog(true);
   }
 
-  function handleOpenProxyComposer() {
-    setProxyComposer({ ...INITIAL_PROXY_COMPOSER });
-    setShowProxyDialog(true);
-  }
-
   function handleDelete(itemId) {
     setConfirmState({
       open: true,
@@ -142,11 +115,6 @@ export function ShopAdminPage() {
   function handleSaveItem() {
     mutations.saveItem();
     setShowCreateDialog(false);
-  }
-
-  function handleSaveProxyComposer() {
-    mutations.saveProxyComposer();
-    setShowProxyDialog(false);
   }
 
   if (state.loading) {
@@ -225,7 +193,6 @@ export function ShopAdminPage() {
             onUnpublish={mutations.unpublishItem}
             onDelete={handleDelete}
             onOpenCreate={handleOpenCreate}
-            onOpenProxyComposer={handleOpenProxyComposer}
             itemFilter={itemFilter}
             setItemFilter={setItemFilter}
             itemSearch={itemSearch}
@@ -253,19 +220,6 @@ export function ShopAdminPage() {
           onSave={handleSaveItem}
           saving={state.saving}
         />
-
-        {/* Proxy Composer Dialog */}
-        {derived.canUseAssetSeller && (
-          <ProxyComposerDialog
-            open={showProxyDialog}
-            onOpenChange={setShowProxyDialog}
-            composer={proxyComposer}
-            setComposer={setProxyComposer}
-            saleProxies={derived.saleProxies}
-            onSave={handleSaveProxyComposer}
-            onReset={mutations.resetProxyComposer}
-          />
-        )}
 
         {/* Confirm Dialog */}
         {confirmState.open && (

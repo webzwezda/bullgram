@@ -1,12 +1,9 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
-import {
-  INITIAL_FORM_STATE,
-  INITIAL_PROXY_COMPOSER
-} from './shop.utils.js';
+import { INITIAL_FORM_STATE } from './shop.utils.js';
 
-export function useShopMutations({ accessToken, state, setState, loadShop, formState, setFormState, proxyComposer, setProxyComposer, saleProxies, canUseAssetSeller }) {
+export function useShopMutations({ accessToken, state, setState, loadShop, formState, setFormState, canUseAssetSeller }) {
 
   const saveItem = useCallback(async () => {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
@@ -79,69 +76,10 @@ export function useShopMutations({ accessToken, state, setState, loadShop, formS
     }
   }, [accessToken, loadShop]);
 
-  const openProxyComposer = useCallback((proxy) => {
-    setProxyComposer({
-      proxyId: String(proxy.id),
-      title: proxy.name || `Прокси ${proxy.host}:${proxy.port}`,
-      preview_text: 'Готовый серверный SOCKS5-прокси для одного Telegram-аккаунта.',
-      description: `Прокси ${proxy.host}:${proxy.port}${proxy.last_check_country ? ` • ${proxy.last_check_country}` : ''}. Один прокси = один юзербот.`,
-      sales_channel: 'admin_only',
-      payment_methods: ['ton'],
-      price_ton: '5',
-      status: 'published',
-      visibility: 'public',
-      saving: false,
-      error: ''
-    });
-  }, [setProxyComposer]);
-
-  const resetProxyComposer = useCallback(() => {
-    setProxyComposer({ ...INITIAL_PROXY_COMPOSER });
-  }, [setProxyComposer]);
-
-  const saveProxyComposer = useCallback(async () => {
-    const proxy = saleProxies.find((p) => String(p.id) === String(proxyComposer.proxyId));
-    if (!proxy) {
-      setProxyComposer((prev) => ({ ...prev, error: 'Прокси не найден.' }));
-      return;
-    }
-    setProxyComposer((prev) => ({ ...prev, saving: true, error: '' }));
-    try {
-      await apiRequest('/api/shop/seller/items', {
-        accessToken,
-        method: 'POST',
-        body: {
-          title: proxyComposer.title,
-          description: proxyComposer.description,
-          preview_text: proxyComposer.preview_text,
-          payment_methods: proxyComposer.payment_methods,
-          post_purchase_message: null,
-          offer_code: null,
-          item_type: 'proxy',
-          sales_channel: proxyComposer.sales_channel,
-          price_ton: Number(proxyComposer.price_ton || 0),
-          status: proxyComposer.status,
-          visibility: 'public',
-          transfer_mode: 'ownership_transfer',
-          assets: [{ asset_type: 'proxy', asset_id: proxy.id, label: proxy.name || `${proxy.host}:${proxy.port}` }]
-        }
-      });
-      await loadShop();
-      resetProxyComposer();
-      toast.success('Прокси выставлен на продажу');
-    } catch (error) {
-      setProxyComposer((prev) => ({ ...prev, saving: false, error: error.message }));
-      toast.error(error.message);
-    }
-  }, [accessToken, loadShop, proxyComposer, resetProxyComposer, saleProxies, setProxyComposer]);
-
   return {
     saveItem,
     unpublishItem,
     deleteItem,
-    checkPurchase,
-    openProxyComposer,
-    resetProxyComposer,
-    saveProxyComposer
+    checkPurchase
   };
 }

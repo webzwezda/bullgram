@@ -9,6 +9,7 @@ import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx'
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
+import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   canRestoreFromFiles,
@@ -453,6 +454,15 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
 
           {canSellUserbotAssets ? (
             <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
+          ) : null}
+
+          {state.proxySupport?.profile_role === 'admin' ? (
+            <AdminLotsSection
+              accessToken={accessToken}
+              types="bundle,userbot"
+              title="Юзерботы на витрине"
+              emptyText="Опубликованных лотов юзерботов сейчас нет."
+            />
           ) : null}
 
           <UserbotCenterSection {...userbotCenterSectionProps} />

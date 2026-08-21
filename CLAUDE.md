@@ -239,4 +239,4 @@ For payment/plan UX:
 - Document new Supabase or Telegram variables in relevant README
 - All API endpoints require JWT token in `Authorization: Bearer <token>` header
 - Telegram sessions are encrypted before database storage
-- Shop TON payments must use seller's own wallet from `payment_settings`, not global wallet
+- All shop/site TON payments go to the platform wallet (`PLATFORM_TON_WALLET`); `payment_settings.ton_wallet` is used only by the `/app/sales-bot` invoice flow
