@@ -15,12 +15,8 @@ import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { TonConnectPayButton } from '../ton-checkout/TonConnectPayButton.jsx';
-import { TonWalletChip } from '../ton-checkout/TonWalletChip.jsx';
-import { ManualTonPaymentCard } from '../ton-checkout/ManualTonPaymentCard.jsx';
-import { ExpiryCountdown } from '../../ui/ExpiryCountdown.jsx';
+import { ShopPurchasePaymentPanel } from '../ton-checkout/ShopPurchasePaymentPanel.jsx';
 
-const VERIFY_ENDPOINT = '/api/shop/public/purchase/verify-ton-connect';
 const PROXY_SLOT_KEY = 'proxy';
 
 function formatTon(value) {
@@ -180,19 +176,18 @@ export function ProxyStorefrontSection({
     }));
   }, [setCheckoutState]);
 
-  const buildVerifyBody = useCallback(({ senderWallet }) => {
-    if (!activePurchase) return { sender_wallet: senderWallet };
-    if (activePurchase.batch && Array.isArray(activePurchase.purchase_ids)) {
-      return {
-        purchase_ids: activePurchase.purchase_ids,
-        sender_wallet: senderWallet
-      };
-    }
-    return {
-      purchase_id: activePurchase.id,
-      sender_wallet: senderWallet
-    };
-  }, [activePurchase]);
+  const handleReset = useCallback(() => {
+    setCheckoutState({
+      item: null,
+      purchase: null,
+      paymentMethod: 'ton',
+      loading: false,
+      checking: false,
+      error: '',
+      notice: '',
+      noticeTone: 'default'
+    });
+  }, [setCheckoutState]);
 
   const handleManualCheck = useCallback(async () => {
     const result = await checkPurchase();
@@ -206,17 +201,14 @@ export function ProxyStorefrontSection({
       <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         {/* Header */}
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
-                <ShoppingCart className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Магазин прокси</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Живые прокси для юзерботов. Оплата: TON Connect или перевод вручную.</p>
-              </div>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
+              <ShoppingCart className="w-6 h-6" />
             </div>
-            <TonWalletChip />
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Магазин прокси</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Живые прокси для юзерботов. Оплата: TON Connect или перевод вручную.</p>
+            </div>
           </div>
         </div>
 
@@ -310,7 +302,7 @@ export function ProxyStorefrontSection({
               <Loader2 className="size-8 animate-spin text-indigo-500" />
               <div className="text-sm font-medium text-slate-500">Загружаем предложения из Shop...</div>
             </div>
-          ) : !offerItems.length ? (
+          ) : !offerItems.length && !activePurchase ? (
             <div className="flex flex-col items-center justify-center py-10 text-center bg-slate-50/50 rounded-2xl border border-slate-100">
               <div className="size-14 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 border border-slate-100">
                 <Globe className="size-7 text-slate-300" />
@@ -321,168 +313,169 @@ export function ProxyStorefrontSection({
           ) : (
             <div className="space-y-4">
               {/* HERO ROW */}
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight flex-1 min-w-0">
-                    Прокси Bullgram
-                  </h3>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                    <Globe className="size-3 text-indigo-600" /> Прокси
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                  <span className="font-bold text-slate-600">{offer.unitPriceText}{offer.samePrice ? ' / шт.' : ''}</span>
-                  <span className="text-slate-300">•</span>
-                  <span>Доступно: {offerItems.length} шт.</span>
-                  {Number(buyLimit) < offerItems.length ? (
-                    <>
-                      <span className="text-slate-300">•</span>
-                      <span className="font-bold text-amber-600">Лимит: {buyLimit} шт.</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* BUY PANEL */}
-              <div className="rounded-2xl bg-slate-50/70 p-4 space-y-3">
-                {/* Quantity + Price row */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1 rounded-xl bg-white ring-1 ring-slate-200 p-1">
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => setBuyQuantities((prev) => ({
-                        ...prev,
-                        [PROXY_SLOT_KEY]: Math.max(Number(prev[PROXY_SLOT_KEY] || 1) - 1, 1)
-                      }))}
-                      disabled={!!activePurchase || quantity <= 1}
-                      aria-label="Уменьшить количество"
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                    <span className="min-w-8 text-center font-bold text-sm text-slate-900 tabular-nums px-0.5">{quantity}</span>
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      onClick={() => setBuyQuantities((prev) => ({
-                        ...prev,
-                        [PROXY_SLOT_KEY]: Math.min(Number(prev[PROXY_SLOT_KEY] || 1) + 1, maxQuantity)
-                      }))}
-                      disabled={!!activePurchase || quantity >= maxQuantity || Number(buyLimit) <= 0}
-                      aria-label="Увеличить количество"
-                    >
-                      <Plus className="size-4" />
-                    </button>
+              {offerItems.length ? (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight flex-1 min-w-0">
+                      Прокси Bullgram
+                    </h3>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                      <Globe className="size-3 text-indigo-600" /> Прокси
+                    </span>
                   </div>
-
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      {quantity > 1 ? `Итого за ${quantity} шт.` : 'Стоимость'}
-                    </div>
-                    <div className="text-xl font-black tracking-tight text-slate-900 leading-tight">
-                      {activePurchase ? Number(activePurchase.amount_ton || 0) : totalTon}
-                      <span className="text-sm font-bold text-slate-500 ml-1">TON</span>
-                      {isTestnet ? (
-                        <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider align-middle">
-                          Testnet
-                        </span>
-                      ) : null}
-                    </div>
-                    {quantity > 1 && !activePurchase && offer.samePrice ? (
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        ≈ {(totalTon / quantity).toFixed(2)} TON/шт.
-                      </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                    <span className="font-bold text-slate-600">{offer.unitPriceText}{offer.samePrice ? ' / шт.' : ''}</span>
+                    <span className="text-slate-300">•</span>
+                    <span>Доступно: {offerItems.length} шт.</span>
+                    {Number(buyLimit) < offerItems.length ? (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="font-bold text-amber-600">Лимит: {buyLimit} шт.</span>
+                      </>
                     ) : null}
                   </div>
                 </div>
+              ) : (
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                  {activePurchase.item?.title || 'Прокси'}
+                </h3>
+              )}
 
-                {checkoutState.error ? (
-                  <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
-                    <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
-                    <div>{checkoutState.error}</div>
-                  </div>
-                ) : null}
-
-                {checkoutState.notice ? (
-                  <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${
-                    checkoutState.noticeTone === 'success'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                      : 'border-amber-200 bg-amber-50 text-amber-800'
-                  }`}>
-                    <CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${checkoutState.noticeTone === 'success' ? 'text-emerald-500' : 'text-amber-500'}`} />
-                    <div>{checkoutState.notice}</div>
-                  </div>
-                ) : null}
-
+              {/* BUY PANEL */}
+              <div className="rounded-2xl bg-slate-50/70 p-4 space-y-3">
                 {activePurchase ? (
-                  <div className="space-y-2">
-                    <TonConnectPayButton
-                      amountTon={activePurchase.amount_ton}
-                      amountNano={activePurchase.amount_nanoton}
-                      merchantWallet={activePurchase.seller_wallet}
-                      memo={activePurchase.memo}
-                      network={activePurchase.network || 'mainnet'}
-                      verifyEndpoint={VERIFY_ENDPOINT}
-                      buildVerifyBody={buildVerifyBody}
-                      accessToken={accessToken}
-                      onPaid={handlePaid}
-                      onError={handlePayError}
-                    />
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">К оплате</div>
+                      <div className="text-xl font-black tracking-tight text-slate-900 leading-tight">
+                        {Number(activePurchase.amount_ton || 0)}
+                        <span className="text-sm font-bold text-slate-500 ml-1">TON</span>
+                        {isTestnet ? (
+                          <span className="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider align-middle">
+                            Testnet
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
 
-                    <ManualTonPaymentCard
+                    {checkoutState.error ? (
+                      <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
+                        <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>{checkoutState.error}</div>
+                      </div>
+                    ) : null}
+
+                    {checkoutState.notice ? (
+                      <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${
+                        checkoutState.noticeTone === 'success'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-amber-200 bg-amber-50 text-amber-800'
+                      }`}>
+                        <CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${checkoutState.noticeTone === 'success' ? 'text-emerald-500' : 'text-amber-500'}`} />
+                        <div>{checkoutState.notice}</div>
+                      </div>
+                    ) : null}
+
+                    <ShopPurchasePaymentPanel
                       purchase={activePurchase}
                       checking={checkoutState.checking}
-                      onCheck={handleManualCheck}
+                      accessToken={accessToken}
+                      onPaid={handlePaid}
+                      onPayError={handlePayError}
+                      onManualCheck={handleManualCheck}
+                      onReset={handleReset}
                     />
+                  </>
+                ) : (
+                  <>
+                    {/* Quantity + Price row */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1 rounded-xl bg-white ring-1 ring-slate-200 p-1">
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={() => setBuyQuantities((prev) => ({
+                            ...prev,
+                            [PROXY_SLOT_KEY]: Math.max(Number(prev[PROXY_SLOT_KEY] || 1) - 1, 1)
+                          }))}
+                          disabled={quantity <= 1}
+                          aria-label="Уменьшить количество"
+                        >
+                          <Minus className="size-4" />
+                        </button>
+                        <span className="min-w-8 text-center font-bold text-sm text-slate-900 tabular-nums px-0.5">{quantity}</span>
+                        <button
+                          type="button"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          onClick={() => setBuyQuantities((prev) => ({
+                            ...prev,
+                            [PROXY_SLOT_KEY]: Math.min(Number(prev[PROXY_SLOT_KEY] || 1) + 1, maxQuantity)
+                          }))}
+                          disabled={quantity >= maxQuantity || Number(buyLimit) <= 0}
+                          aria-label="Увеличить количество"
+                        >
+                          <Plus className="size-4" />
+                        </button>
+                      </div>
 
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-500">
-                        {activePurchase.expires_at
-                          ? <ExpiryCountdown expiresAt={activePurchase.expires_at} prefix="Бронь держится ещё" />
-                          : 'Лот зарезервирован'}
-                      </span>
-                      <button
-                        type="button"
-                        className="text-[11px] font-medium text-slate-500 hover:text-rose-600 transition"
+                      <div className="text-right">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          {quantity > 1 ? `Итого за ${quantity} шт.` : 'Стоимость'}
+                        </div>
+                        <div className="text-xl font-black tracking-tight text-slate-900 leading-tight">
+                          {totalTon}
+                          <span className="text-sm font-bold text-slate-500 ml-1">TON</span>
+                        </div>
+                        {quantity > 1 && offer.samePrice ? (
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            ≈ {(totalTon / quantity).toFixed(2)} TON/шт.
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {checkoutState.error ? (
+                      <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-800">
+                        <AlertCircle className="size-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>{checkoutState.error}</div>
+                      </div>
+                    ) : null}
+
+                    {checkoutState.notice ? (
+                      <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${
+                        checkoutState.noticeTone === 'success'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-amber-200 bg-amber-50 text-amber-800'
+                      }`}>
+                        <CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${checkoutState.noticeTone === 'success' ? 'text-emerald-500' : 'text-amber-500'}`} />
+                        <div>{checkoutState.notice}</div>
+                      </div>
+                    ) : null}
+
+                    {isCreatingCheckout ? (
+                      <Button disabled className="w-full h-11 rounded-xl bg-slate-100 text-slate-500">
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Резервируем лот...
+                      </Button>
+                    ) : Number(buyLimit) <= 0 ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] font-medium text-amber-800">
+                        Trial-лимит по прокси исчерпан. Сначала перейди на другой план или освободи текущий прокси.
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20"
                         onClick={() => {
-                          setCheckoutState({
-                            item: null,
-                            purchase: null,
-                            paymentMethod: 'ton',
-                            loading: false,
-                            checking: false,
-                            error: '',
-                            notice: '',
-                            noticeTone: 'default'
-                          });
+                          if (selectedItems.length > 1) {
+                            createBatchCheckout(selectedItems, 'ton');
+                          } else if (selectedItems.length === 1) {
+                            openCheckout(selectedItems[0], 'ton');
+                          }
                         }}
                       >
-                        Сбросить
-                      </button>
-                    </div>
-                  </div>
-                ) : isCreatingCheckout ? (
-                  <Button disabled className="w-full h-11 rounded-xl bg-slate-100 text-slate-500">
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                    Резервируем лот...
-                  </Button>
-                ) : Number(buyLimit) <= 0 ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] font-medium text-amber-800">
-                    Trial-лимит по прокси исчерпан. Сначала перейди на другой план или освободи текущий прокси.
-                  </div>
-                ) : (
-                  <Button
-                    className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20"
-                    onClick={() => {
-                      if (selectedItems.length > 1) {
-                        createBatchCheckout(selectedItems, 'ton');
-                      } else if (selectedItems.length === 1) {
-                        openCheckout(selectedItems[0], 'ton');
-                      }
-                    }}
-                  >
-                    Купить за {totalTon} TON
-                  </Button>
+                        Купить за {totalTon} TON
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

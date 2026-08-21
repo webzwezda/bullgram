@@ -20,6 +20,7 @@ export function TonConnectPayButton({
   onPaid,
   onError,
   disabled = false,
+  fullWidth = false,
   className = ''
 }) {
   const address = useTonAddress();
@@ -62,7 +63,7 @@ export function TonConnectPayButton({
 
   if (!connected) {
     return (
-      <div className={`flex flex-col items-start gap-2 ${className}`}>
+      <div className={`flex flex-col items-start gap-2 ${fullWidth ? 'w-full' : ''} ${className}`}>
         <TonConnectButton />
         <span className="text-xs text-slate-500">Подключите TON-кошелёк для оплаты</span>
       </div>
@@ -80,12 +81,12 @@ export function TonConnectPayButton({
   })();
 
   return (
-    <div className={`flex flex-col items-start gap-2 ${className}`}>
+    <div className={`flex flex-col items-start gap-2 ${fullWidth ? 'w-full' : ''} ${className}`}>
       <button
         type="button"
         disabled={disabled || busy || status === 'paid'}
         onClick={() => pay({ amountNano, merchantWallet, memo, network })}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
       >
         {busy ? (
           <>
