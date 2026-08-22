@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Globe, Server, Plus, ExternalLink, Filter } from 'lucide-react';
+import { Globe, Server, Plus, ExternalLink, Filter, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ProxyStorefrontSection, isProxyShopItem, isProxyPurchase } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
-import { ProxyBulkListSection } from '../components/shop/ProxyBulkListSection.jsx';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
@@ -64,14 +63,13 @@ function proxyBadge(proxy) {
   return { text: 'Не проверен', className: 'pill' };
 }
 
-function buildServerProxyName(inventoryGroup, existingNames = []) {
-  const prefix = inventoryGroup === 'self_use' ? 'Прокси сервера' : 'Прокси для Shop';
+function buildServerProxyName(existingNames = []) {
   const normalized = new Set(existingNames.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
   let index = 1;
-  while (normalized.has(`${prefix.toLowerCase()} ${index}`)) {
+  while (normalized.has(`прокси #${index}`)) {
     index += 1;
   }
-  return `${prefix} ${index}`;
+  return `Прокси #${index}`;
 }
 
 function formatTon(value) {
@@ -114,6 +112,10 @@ export function ProxyManagerPage() {
   });
   const [sellerItems, setSellerItems] = useState([]);
   const [bulkCount, setBulkCount] = useState('1');
+  const [externalProxyMode, setExternalProxyMode] = useState(false);
+  const [saleSelection, setSaleSelection] = useState(() => new Set());
+  const [salePriceTon, setSalePriceTon] = useState('');
+  const [listingSale, setListingSale] = useState(false);
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
@@ -302,6 +304,9 @@ export function ProxyManagerPage() {
   const canCreateManualProxy = !!state.support?.can_create_manual_proxy;
   const canEditProxy = state.support?.profile_role === 'admin';
   const showQuotaLock = !formState.id && state.support?.profile_role !== 'admin' && !canCreateManualProxy;
+  const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
+  const serverProxyMode = isAdminCreate && !externalProxyMode;
+  const serverBatchCount = Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100);
   const proxyBuyLimit = useMemo(() => {
     if (!shopOfferItems.length) return 1;
     if (state.support?.profile_role === 'admin') return shopOfferItems.length;
@@ -309,54 +314,30 @@ export function ProxyManagerPage() {
     return Math.max(0, Math.min(shopOfferItems.length, 1 - state.proxies.length));
   }, [shopOfferItems, profilePlan, state.proxies.length, state.support?.profile_role]);
 
-  const latestServerProxy = useMemo(() => {
-    return state.proxies.find((proxy) => proxy.provision_source === 'manual_admin') || null;
-  }, [state.proxies]);
   const suggestedServerProxyName = useMemo(() => {
     return buildServerProxyName(
-      formState.inventory_group,
       state.proxies
         .filter((proxy) => proxy.provision_source === 'manual_admin')
         .map((proxy) => proxy.name)
     );
-  }, [formState.inventory_group, state.proxies]);
+  }, [state.proxies]);
 
   useEffect(() => {
     if (state.support?.profile_role !== 'admin') return;
     if (formState.id) return;
 
     setFormState((prev) => {
-      const next = { ...prev };
-      let changed = false;
-
-      if (!next.name.trim()) {
-        next.name = buildServerProxyName(
-          next.inventory_group,
+      if (prev.name.trim()) return prev;
+      return {
+        ...prev,
+        name: buildServerProxyName(
           state.proxies
             .filter((proxy) => proxy.provision_source === 'manual_admin')
             .map((proxy) => proxy.name)
-        );
-        changed = true;
-      }
-
-      if (!next.port) {
-        next.port = latestServerProxy?.port ? String(latestServerProxy.port) : '1080';
-        changed = true;
-      }
-
-      if (!next.username && latestServerProxy?.username) {
-        next.username = latestServerProxy.username;
-        changed = true;
-      }
-
-      if (!next.password && latestServerProxy?.password) {
-        next.password = latestServerProxy.password;
-        changed = true;
-      }
-
-      return changed ? next : prev;
+        )
+      };
     });
-  }, [formState.id, latestServerProxy, state.proxies, state.support?.profile_role]);
+  }, [formState.id, state.proxies, state.support?.profile_role]);
 
   async function checkProxy(proxyId) {
     try {
@@ -390,8 +371,7 @@ export function ProxyManagerPage() {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
     try {
       const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
-      const isServerBatch = isAdminCreate && !formState.host.trim();
-      const serverBatchCount = Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100);
+      const isServerBatch = isAdminCreate && !externalProxyMode;
       const normalizedName = formState.name.trim();
       const normalizedHost = formState.host.trim();
       const normalizedPort = Number.parseInt(formState.port, 10);
@@ -401,6 +381,9 @@ export function ProxyManagerPage() {
       }
       if (!isAdminCreate && !normalizedHost) {
         throw new Error('Сначала укажи host или IP прокси.');
+      }
+      if (isAdminCreate && externalProxyMode && !normalizedHost) {
+        throw new Error('Укажи host внешнего прокси или вернись к серверному.');
       }
       if (!isAdminCreate && (!Number.isInteger(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535)) {
         throw new Error('Укажи корректный порт прокси.');
@@ -422,6 +405,7 @@ export function ProxyManagerPage() {
       });
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
       setBulkCount('1');
+      setExternalProxyMode(false);
       setFormState({
         id: '',
         name: '',
@@ -467,31 +451,11 @@ export function ProxyManagerPage() {
       id: '',
       name: '',
       host: '',
-      port: latestServerProxy?.port ? String(latestServerProxy.port) : '1080',
+      port: '',
       username: '',
       password: '',
       inventory_group: 'self_use'
     });
-  }
-
-  function fillFromLatestServerProxy() {
-    if (!latestServerProxy) {
-      toast('Серверных прокси пока нет. Нечего брать как шаблон.');
-      return;
-    }
-
-    setFormState((prev) => ({
-      ...prev,
-      name: buildServerProxyName(
-        prev.inventory_group,
-        state.proxies
-          .filter((proxy) => proxy.provision_source === 'manual_admin')
-          .map((proxy) => proxy.name)
-      ),
-      port: latestServerProxy.port ? String(latestServerProxy.port) : '1080',
-      username: latestServerProxy.username || '',
-      password: latestServerProxy.password || ''
-    }));
   }
 
   async function deleteProxy(proxyId) {
@@ -558,19 +522,73 @@ export function ProxyManagerPage() {
     }
   }
 
+  function toggleSaleSelection(proxyId) {
+    setSaleSelection((prev) => {
+      const next = new Set(prev);
+      const key = String(proxyId);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllSaleSelection() {
+    setSaleSelection((prev) => {
+      const allSelected = saleProxies.length > 0 && saleProxies.every((proxy) => prev.has(String(proxy.id)));
+      if (allSelected) return new Set();
+      return new Set(saleProxies.map((proxy) => String(proxy.id)));
+    });
+  }
+
+  async function listSelectedForSale() {
+    const ids = saleProxies
+      .filter((proxy) => saleSelection.has(String(proxy.id)))
+      .map((proxy) => proxy.id);
+    const price = Number(salePriceTon);
+
+    if (!ids.length) {
+      toast.error('Сначала выбери прокси');
+      return;
+    }
+    if (!(price > 0)) {
+      toast.error('Укажи цену лота в TON');
+      return;
+    }
+
+    setListingSale(true);
+    try {
+      const data = await apiRequest('/api/shop/seller/items/batch-proxy', {
+        accessToken,
+        method: 'POST',
+        body: { proxy_ids: ids, price_ton: price }
+      });
+      if (Number(data?.created || 0) > 0) {
+        toast.success(`Выставлено лотов: ${data.created}`);
+      }
+      const nameById = new Map(saleProxies.map((proxy) => [String(proxy.id), proxy.name || `${proxy.host}:${proxy.port}`]));
+      for (const failure of data?.errors || []) {
+        toast.error(`${nameById.get(String(failure.proxy_id)) || 'Прокси'}: ${failure.error}`);
+      }
+      setSaleSelection(new Set());
+      await loadSellerItems();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setListingSale(false);
+    }
+  }
+
   function ProxyTableSection() {
     const { items: visibleItems, isSold } = getVisibleProxies();
     const laneInfo = LANE_OPTIONS.find(l => l.id === selectedLane);
+    const selectedSaleCount = saleProxies.filter((proxy) => saleSelection.has(String(proxy.id))).length;
+    const allSaleSelected = saleProxies.length > 0 && selectedSaleCount === saleProxies.length;
 
     return (
       <>
-      {selectedLane === 'on-sale' && isAdmin && saleProxies.length > 0 ? (
-        <ProxyBulkListSection
-          accessToken={accessToken}
-          saleProxies={saleProxies}
-          onListed={loadSellerItems}
-        />
-      ) : null}
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {/* Unified header with filters */}
         <div className="p-6 md:p-8 border-b border-slate-100">
@@ -615,6 +633,44 @@ export function ProxyManagerPage() {
               ))}
             </div>
           </div>
+
+          {selectedLane === 'on-sale' && isAdmin && saleProxies.length > 0 ? (
+            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 px-4 py-3">
+              <label className="flex items-center gap-2 text-[13px] font-bold text-slate-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-indigo-600"
+                  checked={allSaleSelected}
+                  onChange={toggleAllSaleSelection}
+                />
+                Все не выставленные ({saleProxies.length})
+              </label>
+              <span className="text-[12px] text-slate-500 font-medium">
+                Отметь прокси в списке, задай цену — лот на каждый создастся и опубликуется сам.
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-[12px] font-bold text-slate-500">Цена/шт</span>
+                <input
+                  className="h-9 w-24 px-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={salePriceTon}
+                  onChange={(event) => setSalePriceTon(event.target.value)}
+                  placeholder="TON"
+                />
+                <button
+                  type="button"
+                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                  disabled={listingSale || !selectedSaleCount || !(Number(salePriceTon) > 0)}
+                  onClick={listSelectedForSale}
+                >
+                  {listingSale ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {listingSale ? 'Выставляем...' : `Выставить${selectedSaleCount ? ` ${selectedSaleCount}` : ''}`}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {visibleItems.length === 0 ? (
@@ -692,6 +748,14 @@ export function ProxyManagerPage() {
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                     <div className="flex-1 min-w-0 space-y-2.5">
                       <div className="flex items-center gap-2.5 flex-wrap">
+                        {selectedLane === 'on-sale' && isAdmin && shopItems.length === 0 ? (
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-indigo-600 shrink-0"
+                            checked={saleSelection.has(String(proxy.id))}
+                            onChange={() => toggleSaleSelection(proxy.id)}
+                          />
+                        ) : null}
                         <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDotColor === 'bg-emerald-400' ? '#34d399' : statusDotColor === 'bg-amber-400' ? '#fbbf24' : statusDotColor === 'bg-red-400' ? '#f87171' : '#cbd5e1' }} />
                         <div className="text-[15px] font-bold text-slate-900">{proxy.name}</div>
                         <span className={`inline-flex px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide border ${statusBgColor}`}>
@@ -1145,7 +1209,7 @@ export function ProxyManagerPage() {
                     type="text"
                     value={formState.name}
                     onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
-                    placeholder="Например: Прокси сервера 1"
+                    placeholder="Например: Прокси #5"
                   />
                 </div>
 
@@ -1159,7 +1223,6 @@ export function ProxyManagerPage() {
                         ...prev,
                         inventory_group: event.target.value,
                         name: prev.id ? prev.name : buildServerProxyName(
-                          event.target.value,
                           state.proxies
                             .filter((proxy) => proxy.provision_source === 'manual_admin')
                             .map((proxy) => proxy.name)
@@ -1173,92 +1236,112 @@ export function ProxyManagerPage() {
                 ) : null}
               </div>
 
-              <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
-                    <input
-                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                      type="text"
-                      value={formState.host}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
-                      placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Оставь пустым — поднимется на сервере' : '192.168.1.1'}
-                    />
-                    {state.support?.profile_role === 'admin' && !formState.id && !formState.host.trim() ? (
-                      <div className="text-[12px] text-blue-600 font-medium">Прокси будет создан автоматически на сервере Bullgram</div>
-                    ) : null}
+              {serverProxyMode ? (
+                <div className="rounded-[16px] bg-blue-50/40 p-4 border border-blue-100 space-y-4">
+                  <div>
+                    <div className="text-[13px] font-bold text-slate-800">Прокси поднимется на сервере Bullgram</div>
+                    <p className="text-[12px] text-slate-500 mt-1">
+                      Host, порт, логин и пароль сгенерируются автоматически. Проверка здоровья пойдёт в фоне.
+                    </p>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[13px] font-semibold text-slate-700">Порт</label>
+                  <div className="space-y-1.5 max-w-xs">
+                    <label className="text-[13px] font-semibold text-slate-700">Сколько прокси поднять (1–100)</label>
                     <input
                       className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
                       type="number"
                       min="1"
-                      max="65535"
-                      value={formState.port}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
-                      placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : '1080'}
+                      max="100"
+                      value={bulkCount}
+                      onChange={(event) => setBulkCount(event.target.value)}
                     />
+                    {serverBatchCount > 1 ? (
+                      <div className="text-[12px] text-blue-600 font-medium">
+                        Имена пронумеруются сами: {formState.name.replace(/\s*#?\d+\s*$/, '').trim() || 'Прокси'} #1…#{serverBatchCount}
+                      </div>
+                    ) : null}
                   </div>
 
-                  {state.support?.profile_role === 'admin' && !formState.id && !formState.host.trim() ? (
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label className="text-[13px] font-semibold text-slate-700">Сколько прокси поднять</label>
-                      <input
-                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={bulkCount}
-                        onChange={(event) => setBulkCount(event.target.value)}
-                      />
-                      <div className="text-[12px] text-blue-600 font-medium">
-                        До 100 за раз. Имена пронумеруются автоматически от «{formState.name.replace(/\s*\d+\s*$/, '').trim()}».
+                  <button
+                    type="button"
+                    className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition"
+                    onClick={() => setExternalProxyMode(true)}
+                  >
+                    У меня внешний прокси — указать вручную
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
+                        <input
+                          className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                          type="text"
+                          value={formState.host}
+                          onChange={(event) => setFormState((prev) => ({ ...prev, host: event.target.value }))}
+                          placeholder="192.168.1.1"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-semibold text-slate-700">Порт</label>
+                        <input
+                          className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                          type="number"
+                          min="1"
+                          max="65535"
+                          value={formState.port}
+                          onChange={(event) => setFormState((prev) => ({ ...prev, port: event.target.value }))}
+                          placeholder="1080"
+                        />
                       </div>
                     </div>
-                  ) : null}
-                </div>
-              </div>
+                  </div>
 
-              <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Авторизация</div>
-                  {state.support?.profile_role === 'admin' && !formState.id && latestServerProxy ? (
+                  <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Авторизация</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-semibold text-slate-700">Username</label>
+                        <input
+                          className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                          type="text"
+                          value={formState.username}
+                          onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
+                          placeholder="Если нужен"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[13px] font-semibold text-slate-700">Password</label>
+                        <input
+                          className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                          type="text"
+                          value={formState.password}
+                          onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
+                          placeholder="Если нужен"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {isAdminCreate && externalProxyMode ? (
                     <button
                       type="button"
-                      className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition"
-                      onClick={fillFromLatestServerProxy}
+                      className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 transition self-start"
+                      onClick={() => {
+                        setExternalProxyMode(false);
+                        setFormState((prev) => ({ ...prev, host: '', port: '', username: '', password: '' }));
+                      }}
                     >
-                      Подставить из последнего
+                      ← Вернуться к серверному прокси
                     </button>
                   ) : null}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[13px] font-semibold text-slate-700">Username</label>
-                    <input
-                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                      type="text"
-                      value={formState.username}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-                      placeholder="Если нужен"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[13px] font-semibold text-slate-700">Password</label>
-                    <input
-                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                      type="text"
-                      value={formState.password}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                      placeholder="Если нужен"
-                    />
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3 pt-6 border-t border-slate-100">
@@ -1268,10 +1351,10 @@ export function ProxyManagerPage() {
                 disabled={state.saving || showQuotaLock}
               >
                 {state.saving ? 'Сохраняем...'
-                  : formState.host.trim() ? 'Сохранить внешний прокси'
-                  : Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100) > 1
-                    ? `Поднять ${Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100)} прокси на сервере`
-                    : 'Поднять прокси на сервере'}
+                  : formState.id ? 'Сохранить изменения'
+                  : serverProxyMode
+                    ? (serverBatchCount > 1 ? `Поднять ${serverBatchCount} прокси на сервере` : 'Поднять прокси на сервере')
+                  : 'Сохранить внешний прокси'}
               </button>
 
               {formState.id ? (

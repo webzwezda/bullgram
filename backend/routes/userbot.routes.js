@@ -484,12 +484,12 @@ function normalizeManagedBatchCount(value) {
 }
 
 function buildBatchProxyNames(baseName, existingNames, count) {
-    const base = String(baseName || '').replace(/\s*\d+\s*$/, '').trim() || 'Прокси сервера';
+    const base = String(baseName || '').replace(/\s*#?\d+\s*$/, '').trim() || 'Прокси';
     const used = new Set((existingNames || []).map((value) => String(value || '').trim()).filter(Boolean));
     const names = [];
     let index = 1;
     while (names.length < count) {
-        const candidate = `${base} ${index}`;
+        const candidate = `${base} #${index}`;
         if (!used.has(candidate)) {
             names.push(candidate);
             used.add(candidate);
