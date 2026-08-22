@@ -87,6 +87,27 @@ function proxyEgressSummary(proxy) {
   return 'IP не зафиксирован';
 }
 
+function IosToggle({ checked, onChange, disabled = false }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 ${
+        checked ? 'bg-emerald-500' : 'bg-slate-200'
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span
+        className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
 export function ProxyManagerPage() {
   const { accessToken, profilePlan } = useAuth();
   const [filter, setFilter] = useState('all');
@@ -113,6 +134,7 @@ export function ProxyManagerPage() {
   const [sellerItems, setSellerItems] = useState([]);
   const [bulkCount, setBulkCount] = useState('1');
   const [externalProxyMode, setExternalProxyMode] = useState(false);
+  const [raisePriceTon, setRaisePriceTon] = useState('');
   const [saleSelection, setSaleSelection] = useState(() => new Set());
   const [salePriceTon, setSalePriceTon] = useState('');
   const [listingSale, setListingSale] = useState(false);
@@ -372,6 +394,8 @@ export function ProxyManagerPage() {
     try {
       const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
       const isServerBatch = isAdminCreate && !externalProxyMode;
+      const forSale = formState.inventory_group === 'shop_sale';
+      const salePrice = Number(raisePriceTon);
       const normalizedName = formState.name.trim();
       const normalizedHost = formState.host.trim();
       const normalizedPort = Number.parseInt(formState.port, 10);
@@ -384,6 +408,9 @@ export function ProxyManagerPage() {
       }
       if (isAdminCreate && externalProxyMode && !normalizedHost) {
         throw new Error('Укажи host внешнего прокси или вернись к серверному.');
+      }
+      if (isServerBatch && forSale && !(salePrice > 0)) {
+        throw new Error('Укажи цену прокси в TON или выключи «На продажу в shop».');
       }
       if (!isAdminCreate && (!Number.isInteger(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535)) {
         throw new Error('Укажи корректный порт прокси.');
@@ -404,8 +431,28 @@ export function ProxyManagerPage() {
         }
       });
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
+
+      let listedCount = 0;
+      if (isServerBatch && forSale && Array.isArray(result?.proxy_ids) && result.proxy_ids.length && salePrice > 0) {
+        try {
+          const listing = await apiRequest('/api/shop/seller/items/batch-proxy', {
+            accessToken,
+            method: 'POST',
+            body: { proxy_ids: result.proxy_ids, price_ton: salePrice }
+          });
+          listedCount = Number(listing?.created || 0);
+          for (const failure of listing?.errors || []) {
+            toast.error(`Не выставлен на продажу: ${failure.error}`);
+          }
+          await loadSellerItems();
+        } catch (listingError) {
+          toast.error(`Прокси подняты, но на продажу не встали: ${listingError.message}`);
+        }
+      }
+
       setBulkCount('1');
       setExternalProxyMode(false);
+      setRaisePriceTon('');
       setFormState({
         id: '',
         name: '',
@@ -422,7 +469,11 @@ export function ProxyManagerPage() {
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
-      toast.success(result?.message || 'Прокси сохранен.');
+      if (listedCount > 0) {
+        toast.success(`Поднято ${result?.created || result.proxy_ids.length} прокси, на витрину встало ${listedCount}.`);
+      } else {
+        toast.success(result?.message || 'Прокси сохранен.');
+      }
     } catch (error) {
       setState((prev) => ({ ...prev, saving: false, error: error.message }));
       toast.error(error.message);
@@ -1216,22 +1267,15 @@ export function ProxyManagerPage() {
                 {state.support?.profile_role === 'admin' ? (
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Группа</label>
-                    <select
-                      className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
-                      value={formState.inventory_group}
-                      onChange={(event) => setFormState((prev) => ({
-                        ...prev,
-                        inventory_group: event.target.value,
-                        name: prev.id ? prev.name : buildServerProxyName(
-                          state.proxies
-                            .filter((proxy) => proxy.provision_source === 'manual_admin')
-                            .map((proxy) => proxy.name)
-                        )
-                      }))}
-                    >
-                      <option value="shop_sale">На продажу в shop</option>
-                      <option value="self_use">Использую сам</option>
-                    </select>
+                    <div className="flex items-center gap-3 h-11">
+                      <IosToggle
+                        checked={formState.inventory_group === 'shop_sale'}
+                        onChange={(next) => setFormState((prev) => ({ ...prev, inventory_group: next ? 'shop_sale' : 'self_use' }))}
+                      />
+                      <span className="text-[14px] font-bold text-slate-800">
+                        {formState.inventory_group === 'shop_sale' ? 'На продажу в shop' : 'Использую сам'}
+                      </span>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -1261,6 +1305,24 @@ export function ProxyManagerPage() {
                       </div>
                     ) : null}
                   </div>
+
+                  {formState.inventory_group === 'shop_sale' ? (
+                    <div className="space-y-1.5 max-w-xs">
+                      <label className="text-[13px] font-semibold text-slate-700">Цена за штуку, TON</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={raisePriceTon}
+                        onChange={(event) => setRaisePriceTon(event.target.value)}
+                        placeholder="0"
+                      />
+                      <div className="text-[12px] text-blue-600 font-medium">
+                        После подъёма прокси сразу уйдут на витрину по этой цене.
+                      </div>
+                    </div>
+                  ) : null}
 
                   <button
                     type="button"
@@ -1353,7 +1415,9 @@ export function ProxyManagerPage() {
                 {state.saving ? 'Сохраняем...'
                   : formState.id ? 'Сохранить изменения'
                   : serverProxyMode
-                    ? (serverBatchCount > 1 ? `Поднять ${serverBatchCount} прокси на сервере` : 'Поднять прокси на сервере')
+                    ? (formState.inventory_group === 'shop_sale'
+                        ? `Поднять${serverBatchCount > 1 ? ` ${serverBatchCount}` : ''} и выставить на продажу`
+                        : serverBatchCount > 1 ? `Поднять ${serverBatchCount} прокси на сервере` : 'Поднять прокси на сервере')
                   : 'Сохранить внешний прокси'}
               </button>
 

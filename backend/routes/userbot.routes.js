@@ -1837,6 +1837,7 @@ export default function (supabase) {
                     success: true,
                     managed: true,
                     created: (insertedProxies || []).length,
+                    proxy_ids: (insertedProxies || []).map((proxy) => proxy.id),
                     verification_status: 'pending',
                     message: (insertedProxies || []).length > 1
                         ? `Поднято ${(insertedProxies || []).length} прокси. ${buildManagedProxyPendingMessage()}`
