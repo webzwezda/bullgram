@@ -1775,6 +1775,159 @@ export default function shopRoutes(supabase) {
         }
     });
 
+    // Массовое выставление серверных прокси: один лот на прокси, автотексты,
+    // публикация сразу. Покупатель на витрине берёт сколько нужно штук одним платежом.
+    router.post(['/admin/items/batch-proxy', '/seller/items/batch-proxy'], authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+        const { proxy_ids = [], price_ton } = req.body;
+        const normalizedPriceTon = Number(price_ton || 0);
+
+        try {
+            if (!isAdminSeller(req.profile)) {
+                return res.status(403).json({ error: 'Продавать активы платформы может только пользователь с role admin.' });
+            }
+
+            const uniqueProxyIds = Array.from(new Set(
+                (Array.isArray(proxy_ids) ? proxy_ids : [])
+                    .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+            ));
+
+            if (!uniqueProxyIds.length) {
+                return res.status(400).json({ error: 'Выбери хотя бы один прокси' });
+            }
+            if (!(normalizedPriceTon > 0)) {
+                return res.status(400).json({ error: 'Укажи цену лота в TON' });
+            }
+
+            const { data: proxyRows, error: proxiesError } = await supabase
+                .from('proxies')
+                .select('id, name, host, port, last_check_country, inventory_group')
+                .eq('owner_id', ownerId)
+                .in('id', uniqueProxyIds);
+            if (proxiesError) throw proxiesError;
+
+            const proxyById = new Map((proxyRows || []).map((row) => [String(row.id), row]));
+            const errors = [];
+            const candidates = [];
+
+            for (const proxyId of uniqueProxyIds) {
+                const proxy = proxyById.get(String(proxyId));
+                if (!proxy) {
+                    errors.push({ proxy_id: proxyId, error: 'Прокси не найден или чужой' });
+                } else {
+                    candidates.push(proxy);
+                }
+            }
+
+            const { usage: proxyUsageMap } = await loadOwnerUserbotProxyUsage(supabase, ownerId);
+            const shopSaleCandidates = [];
+            for (const proxy of candidates) {
+                if ((proxy.inventory_group || 'shop_sale') !== 'shop_sale') {
+                    errors.push({ proxy_id: proxy.id, error: 'Прокси не в группе «На продажу»' });
+                } else if (proxyHasMultipleUserbots(proxyUsageMap, proxy.id)) {
+                    errors.push({ proxy_id: proxy.id, error: 'На прокси сидит больше одного юзербота' });
+                } else {
+                    shopSaleCandidates.push(proxy);
+                }
+            }
+
+            let listableProxies = shopSaleCandidates;
+            if (shopSaleCandidates.length > 0) {
+                const { data: existingItems, error: existingItemsError } = await supabase
+                    .from('shop_items')
+                    .select('id, title, status')
+                    .eq('owner_id', ownerId)
+                    .in('status', ['draft', 'published']);
+                if (existingItemsError) throw existingItemsError;
+
+                let existingAssets = [];
+                if ((existingItems || []).length > 0) {
+                    const { data: rows, error: existingAssetsError } = await supabase
+                        .from('shop_item_assets')
+                        .select('shop_item_id, asset_type, asset_id')
+                        .in('shop_item_id', (existingItems || []).map((item) => item.id));
+                    if (existingAssetsError) throw existingAssetsError;
+                    existingAssets = rows || [];
+                }
+
+                const itemById = new Map((existingItems || []).map((item) => [String(item.id), item]));
+                const listedProxyIds = new Set(
+                    existingAssets
+                        .filter((asset) => asset.asset_type === 'proxy')
+                        .map((asset) => String(asset.asset_id))
+                );
+
+                listableProxies = [];
+                for (const proxy of shopSaleCandidates) {
+                    if (listedProxyIds.has(String(proxy.id))) {
+                        errors.push({ proxy_id: proxy.id, error: 'Прокси уже выставлен в другом лоте' });
+                    } else {
+                        listableProxies.push(proxy);
+                    }
+                }
+            }
+
+            const createdTitles = [];
+            for (const proxy of listableProxies) {
+                const title = String(proxy.name || '').trim() || `Прокси ${proxy.host}:${proxy.port}`;
+                const previewText = 'Готовый серверный SOCKS5-прокси для одного Telegram-аккаунта.';
+                const description = `Прокси ${proxy.host}:${proxy.port}${proxy.last_check_country ? ` • ${proxy.last_check_country}` : ''}.`;
+
+                const itemPayload = {
+                    owner_id: ownerId,
+                    title,
+                    description,
+                    post_purchase_message: null,
+                    item_type: 'proxy',
+                    price_ton: normalizedPriceTon,
+                    status: 'published',
+                    visibility: 'public',
+                    sales_channel: 'both',
+                    preview_text: previewText,
+                    payment_methods: ['ton'],
+                    offer_code: null,
+                    transfer_mode: 'ownership_transfer'
+                };
+
+                const { data: savedItem, error: insertError } = await supabase
+                    .from('shop_items')
+                    .insert(itemPayload)
+                    .select('id')
+                    .single();
+                if (insertError) {
+                    errors.push({ proxy_id: proxy.id, error: 'Не удалось создать лот' });
+                    continue;
+                }
+
+                const { error: assetInsertError } = await supabase
+                    .from('shop_item_assets')
+                    .insert([{
+                        shop_item_id: savedItem.id,
+                        asset_type: 'proxy',
+                        asset_id: proxy.id,
+                        label: title,
+                        sort_order: 0
+                    }]);
+                if (assetInsertError) {
+                    await supabase.from('shop_items').delete().eq('id', savedItem.id);
+                    errors.push({ proxy_id: proxy.id, error: 'Не удалось привязать прокси к лоту' });
+                    continue;
+                }
+
+                createdTitles.push(title);
+            }
+
+            res.json({
+                success: true,
+                created: createdTitles.length,
+                errors
+            });
+        } catch (error) {
+            console.error('Ошибка массового выставления прокси:', error);
+            res.status(500).json({ error: 'Ошибка массового выставления прокси' });
+        }
+    });
+
     router.delete(['/admin/items/:id', '/seller/items/:id'], authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
         const itemId = req.params.id;

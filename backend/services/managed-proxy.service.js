@@ -317,36 +317,77 @@ export class ManagedProxyService {
     }
   }
 
-  async provisionManagedProxy({ name, inventoryGroup }) {
+  // Конфиг 3proxy общий на все прокси, поэтому контейнер перезапускается целиком.
+  // Батч поднимает N прокси с одним saveState и одним рестартом.
+  async provisionManagedProxyBatch({ count, inventoryGroup }) {
     const state = loadState();
     state.publicHost = await detectPublicHost();
     state.ipv6Prefix = state.ipv6Prefix || await detectIpv6Prefix();
 
-    const record = buildManagedRecord(state, inventoryGroup);
-    await ensureIpv6Address(record.ipv6);
+    const records = [];
+    for (let i = 0; i < count; i += 1) {
+      const record = buildManagedRecord(state, inventoryGroup);
+      state.sequence = record.sequence;
+      state.proxies.push(record);
+      records.push(record);
+    }
 
-    state.sequence = record.sequence;
-    state.proxies.push(record);
+    for (const record of records) {
+      await ensureIpv6Address(record.ipv6);
+    }
+
     saveState(state);
 
     try {
       await ensureContainer(state);
     } catch (error) {
-      state.proxies = state.proxies.filter((proxy) => proxy.sequence !== record.sequence);
+      state.proxies = state.proxies.filter((proxy) => !records.some((record) => record.sequence === proxy.sequence));
       saveState(state);
-      await removeIpv6Address(record.ipv6);
+      for (const record of records) {
+        await removeIpv6Address(record.ipv6);
+      }
       throw error;
     }
 
-    return {
-      name,
+    return records.map((record) => ({
       host: state.publicHost,
       port: record.port,
       username: record.username,
       password: record.password,
       ipv6: record.ipv6,
       inventory_group: record.inventory_group
-    };
+    }));
+  }
+
+  async provisionManagedProxy({ name, inventoryGroup }) {
+    const [provisioned] = await this.provisionManagedProxyBatch({ count: 1, inventoryGroup });
+    return { name, ...provisioned };
+  }
+
+  async releaseManagedProxyBatch({ records }) {
+    const wanted = new Set((records || []).map((record) => Number(record.port)).filter(Boolean));
+    const state = loadState();
+    const removed = [];
+    state.proxies = state.proxies.filter((proxy) => {
+      if (wanted.has(Number(proxy.port))) {
+        removed.push(proxy);
+        return false;
+      }
+      return true;
+    });
+
+    if (!removed.length) {
+      return 0;
+    }
+
+    saveState(state);
+    await ensureContainer(state);
+    for (const proxy of removed) {
+      if (proxy?.ipv6) {
+        await removeIpv6Address(proxy.ipv6);
+      }
+    }
+    return removed.length;
   }
 
   async releaseManagedProxy({ host, port, username }) {

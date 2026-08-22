@@ -38,8 +38,9 @@ const upload = multer({
         callback(null, false);
     }
 });
-const MAX_MANAGED_PROXIES_PER_ADMIN = 32;
-const MAX_MANAGED_PROXIES_GLOBAL = 96;
+const MAX_MANAGED_PROXIES_PER_ADMIN = 256;
+const MAX_MANAGED_PROXIES_GLOBAL = 512;
+const MAX_MANAGED_PROXY_BATCH = 100;
 const DEFAULT_ADMIN_PROXY_GROUP = 'shop_sale';
 const TRIAL_PROXY_LEASE_HOURS = 24;
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
@@ -474,6 +475,28 @@ function wait(ms) {
 
 function buildManagedProxyPendingMessage() {
     return 'Сервер поднимает прокси и гоняет фоновую проверку Telegram. Подожди немного и обнови список.';
+}
+
+function normalizeManagedBatchCount(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed < 1) return 1;
+    return Math.min(parsed, MAX_MANAGED_PROXY_BATCH);
+}
+
+function buildBatchProxyNames(baseName, existingNames, count) {
+    const base = String(baseName || '').replace(/\s*\d+\s*$/, '').trim() || 'Прокси сервера';
+    const used = new Set((existingNames || []).map((value) => String(value || '').trim()).filter(Boolean));
+    const names = [];
+    let index = 1;
+    while (names.length < count) {
+        const candidate = `${base} ${index}`;
+        if (!used.has(candidate)) {
+            names.push(candidate);
+            used.add(candidate);
+        }
+        index += 1;
+    }
+    return names;
 }
 
 function launchManagedProxyVerification({
@@ -1674,7 +1697,7 @@ export default function (supabase) {
     });
 
     router.post('/proxies', authenticateUser, async (req, res) => {
-        const { id, name, host, port, username, password, inventory_group } = req.body;
+        const { id, name, host, port, username, password, inventory_group, count } = req.body;
         try {
             const sourceSupported = await supportsProxyProvisionSource(supabase);
             const inventoryGroupSupported = await supportsProxyInventoryGroup(supabase);
@@ -1719,10 +1742,12 @@ export default function (supabase) {
             }
 
             if (isCreate && isAdmin && !normalizedHost) {
+                const batchCount = normalizeManagedBatchCount(count);
                 const managedSummary = managedProxyService.getStateSummary();
-                if (Number(managedSummary.total || 0) >= MAX_MANAGED_PROXIES_GLOBAL) {
+                if (Number(managedSummary.total || 0) + batchCount > MAX_MANAGED_PROXIES_GLOBAL) {
+                    const freeSlots = Math.max(0, MAX_MANAGED_PROXIES_GLOBAL - Number(managedSummary.total || 0));
                     return res.status(403).json({
-                        error: `На сервере уже поднят лимит managed-прокси (${MAX_MANAGED_PROXIES_GLOBAL}). Сначала почисти старый инвентарь.`
+                        error: `На сервере лимит managed-прокси (${MAX_MANAGED_PROXIES_GLOBAL}). Свободно слотов: ${freeSlots}.`
                     });
                 }
 
@@ -1734,70 +1759,88 @@ export default function (supabase) {
 
                 if (ownerCountError) throw ownerCountError;
 
-                if (Number(ownerManagedCount || 0) >= MAX_MANAGED_PROXIES_PER_ADMIN) {
+                if (Number(ownerManagedCount || 0) + batchCount > MAX_MANAGED_PROXIES_PER_ADMIN) {
+                    const freeSlots = Math.max(0, MAX_MANAGED_PROXIES_PER_ADMIN - Number(ownerManagedCount || 0));
                     return res.status(403).json({
-                        error: `У одного админа нельзя держать больше ${MAX_MANAGED_PROXIES_PER_ADMIN} серверных прокси. Сначала продай, удали или переразложи старые.`
+                        error: `У одного админа нельзя держать больше ${MAX_MANAGED_PROXIES_PER_ADMIN} серверных прокси. Свободно слотов: ${freeSlots}.`
                     });
                 }
 
-                const provisionedProxy = await managedProxyService.provisionManagedProxy({
-                    name: String(name || '').trim(),
+                let proxyNames = [String(name || '').trim()];
+                if (batchCount > 1) {
+                    const { data: ownerProxies, error: ownerProxiesError } = await supabase
+                        .from('proxies')
+                        .select('name')
+                        .eq('owner_id', req.user.id);
+                    if (ownerProxiesError) throw ownerProxiesError;
+                    proxyNames = buildBatchProxyNames(
+                        String(name || '').trim(),
+                        (ownerProxies || []).map((row) => row.name),
+                        batchCount
+                    );
+                }
+
+                const provisionedProxies = await managedProxyService.provisionManagedProxyBatch({
+                    count: batchCount,
                     inventoryGroup: normalizedInventoryGroup
                 });
 
-                const proxyData = {
-                    owner_id: req.user.id,
-                    name: provisionedProxy.name,
-                    host: provisionedProxy.host,
-                    port: provisionedProxy.port,
-                    username: provisionedProxy.username,
-                    password: provisionedProxy.password,
-                    is_working: null,
-                    last_checked_at: new Date().toISOString(),
-                    last_check_ip: null,
-                    last_check_country: null,
-                    last_check_city: null,
-                    last_check_isp: null,
-                    last_check_error: buildManagedProxyPendingMessage()
-                };
-
-                if (sourceSupported) {
-                    proxyData.provision_source = 'manual_admin';
-                }
-                if (inventoryGroupSupported) {
-                    proxyData.inventory_group = provisionedProxy.inventory_group;
-                }
-
-                const { data: insertedProxy, error: insertError } = await supabase
-                    .from('proxies')
-                    .insert([proxyData])
-                    .select('id')
-                    .single();
-                if (insertError) {
-                    await managedProxyService.releaseManagedProxy({
+                const proxyRows = provisionedProxies.map((provisionedProxy, index) => {
+                    const proxyData = {
+                        owner_id: req.user.id,
+                        name: proxyNames[index],
                         host: provisionedProxy.host,
                         port: provisionedProxy.port,
-                        username: provisionedProxy.username
-                    });
+                        username: provisionedProxy.username,
+                        password: provisionedProxy.password,
+                        is_working: null,
+                        last_checked_at: new Date().toISOString(),
+                        last_check_ip: null,
+                        last_check_country: null,
+                        last_check_city: null,
+                        last_check_isp: null,
+                        last_check_error: buildManagedProxyPendingMessage()
+                    };
+
+                    if (sourceSupported) {
+                        proxyData.provision_source = 'manual_admin';
+                    }
+                    if (inventoryGroupSupported) {
+                        proxyData.inventory_group = provisionedProxy.inventory_group;
+                    }
+                    return proxyData;
+                });
+
+                const { data: insertedProxies, error: insertError } = await supabase
+                    .from('proxies')
+                    .insert(proxyRows)
+                    .select('id, host, port, username, password');
+                if (insertError) {
+                    await managedProxyService.releaseManagedProxyBatch({ records: provisionedProxies });
                     throw insertError;
                 }
 
-                launchManagedProxyVerification({
-                    supabase,
-                    userbotService,
-                    ownerId: req.user.id,
-                    proxyId: insertedProxy.id,
-                    host: provisionedProxy.host,
-                    port: provisionedProxy.port,
-                    username: provisionedProxy.username,
-                    password: provisionedProxy.password
-                });
+                for (const insertedProxy of insertedProxies || []) {
+                    launchManagedProxyVerification({
+                        supabase,
+                        userbotService,
+                        ownerId: req.user.id,
+                        proxyId: insertedProxy.id,
+                        host: insertedProxy.host,
+                        port: insertedProxy.port,
+                        username: insertedProxy.username,
+                        password: insertedProxy.password
+                    });
+                }
 
                 return res.json({
                     success: true,
                     managed: true,
+                    created: (insertedProxies || []).length,
                     verification_status: 'pending',
-                    message: buildManagedProxyPendingMessage()
+                    message: (insertedProxies || []).length > 1
+                        ? `Поднято ${(insertedProxies || []).length} прокси. ${buildManagedProxyPendingMessage()}`
+                        : buildManagedProxyPendingMessage()
                 });
             }
 

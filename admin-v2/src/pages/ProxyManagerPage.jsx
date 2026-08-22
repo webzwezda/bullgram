@@ -6,7 +6,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ProxyStorefrontSection, isProxyShopItem, isProxyPurchase } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
-import { ProxyComposerDialog, INITIAL_PROXY_COMPOSER } from '../components/shop/ProxyComposerDialog.jsx';
+import { ProxyBulkListSection } from '../components/shop/ProxyBulkListSection.jsx';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
@@ -113,8 +113,7 @@ export function ProxyManagerPage() {
     updatedAt: null
   });
   const [sellerItems, setSellerItems] = useState([]);
-  const [showProxyDialog, setShowProxyDialog] = useState(false);
-  const [proxyComposer, setProxyComposer] = useState({ ...INITIAL_PROXY_COMPOSER });
+  const [bulkCount, setBulkCount] = useState('1');
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
@@ -286,45 +285,6 @@ export function ProxyManagerPage() {
     return shopSaleProxies.filter((proxy) => !listedProxyIds.has(String(proxy.id)));
   }, [sellerItems, shopSaleProxies]);
 
-  const resetProxyComposer = useCallback(() => {
-    setProxyComposer({ ...INITIAL_PROXY_COMPOSER });
-  }, []);
-
-  const saveProxyComposer = useCallback(async () => {
-    const proxy = saleProxies.find((p) => String(p.id) === String(proxyComposer.proxyId));
-    if (!proxy) {
-      setProxyComposer((prev) => ({ ...prev, error: 'Прокси не найден.' }));
-      return;
-    }
-    setProxyComposer((prev) => ({ ...prev, saving: true, error: '' }));
-    try {
-      await apiRequest('/api/shop/seller/items', {
-        accessToken,
-        method: 'POST',
-        body: {
-          title: proxyComposer.title,
-          description: proxyComposer.description,
-          preview_text: proxyComposer.preview_text,
-          payment_methods: proxyComposer.payment_methods,
-          post_purchase_message: null,
-          offer_code: null,
-          item_type: 'proxy',
-          sales_channel: proxyComposer.sales_channel,
-          price_ton: Number(proxyComposer.price_ton || 0),
-          status: proxyComposer.status,
-          visibility: 'public',
-          transfer_mode: 'ownership_transfer',
-          assets: [{ asset_type: 'proxy', asset_id: proxy.id, label: proxy.name || `${proxy.host}:${proxy.port}` }]
-        }
-      });
-      await loadSellerItems();
-      resetProxyComposer();
-      toast.success('Прокси выставлен на продажу');
-    } catch (error) {
-      setProxyComposer((prev) => ({ ...prev, saving: false, error: error.message }));
-      toast.error(error.message);
-    }
-  }, [accessToken, loadSellerItems, proxyComposer, resetProxyComposer, saleProxies]);
   const manualQuotaText = !state.support
     ? null
     : state.support.profile_role === 'admin'
@@ -430,6 +390,8 @@ export function ProxyManagerPage() {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
     try {
       const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
+      const isServerBatch = isAdminCreate && !formState.host.trim();
+      const serverBatchCount = Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100);
       const normalizedName = formState.name.trim();
       const normalizedHost = formState.host.trim();
       const normalizedPort = Number.parseInt(formState.port, 10);
@@ -454,10 +416,12 @@ export function ProxyManagerPage() {
           port: Number.isInteger(normalizedPort) ? normalizedPort : undefined,
           username: formState.username.trim() || null,
           password: formState.password.trim() || null,
-          inventory_group: formState.inventory_group
+          inventory_group: formState.inventory_group,
+          count: isServerBatch ? serverBatchCount : undefined
         }
       });
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      setBulkCount('1');
       setFormState({
         id: '',
         name: '',
@@ -599,6 +563,14 @@ export function ProxyManagerPage() {
     const laneInfo = LANE_OPTIONS.find(l => l.id === selectedLane);
 
     return (
+      <>
+      {selectedLane === 'on-sale' && isAdmin && saleProxies.length > 0 ? (
+        <ProxyBulkListSection
+          accessToken={accessToken}
+          saleProxies={saleProxies}
+          onListed={loadSellerItems}
+        />
+      ) : null}
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
         {/* Unified header with filters */}
         <div className="p-6 md:p-8 border-b border-slate-100">
@@ -615,16 +587,6 @@ export function ProxyManagerPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {selectedLane === 'on-sale' && isAdmin ? (
-                <button
-                  type="button"
-                  className="h-10 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
-                  disabled={!saleProxies.length}
-                  onClick={() => setShowProxyDialog(true)}
-                >
-                  Выставить прокси
-                </button>
-              ) : null}
               <div className="px-4 py-2 bg-violet-50 text-violet-700 rounded-xl text-sm font-bold border border-violet-100">
                 {visibleItems.length}
               </div>
@@ -824,6 +786,7 @@ export function ProxyManagerPage() {
           </div>
         )}
       </div>
+      </>
     );
   }
 
@@ -1239,6 +1202,23 @@ export function ProxyManagerPage() {
                       placeholder={state.support?.profile_role === 'admin' && !formState.id ? 'Авто' : '1080'}
                     />
                   </div>
+
+                  {state.support?.profile_role === 'admin' && !formState.id && !formState.host.trim() ? (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[13px] font-semibold text-slate-700">Сколько прокси поднять</label>
+                      <input
+                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={bulkCount}
+                        onChange={(event) => setBulkCount(event.target.value)}
+                      />
+                      <div className="text-[12px] text-blue-600 font-medium">
+                        До 100 за раз. Имена пронумеруются автоматически от «{formState.name.replace(/\s*\d+\s*$/, '').trim()}».
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -1287,7 +1267,11 @@ export function ProxyManagerPage() {
                 onClick={saveProxy}
                 disabled={state.saving || showQuotaLock}
               >
-                {state.saving ? 'Сохраняем...' : (formState.host.trim() ? 'Сохранить внешний прокси' : 'Поднять прокси на сервере')}
+                {state.saving ? 'Сохраняем...'
+                  : formState.host.trim() ? 'Сохранить внешний прокси'
+                  : Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100) > 1
+                    ? `Поднять ${Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100)} прокси на сервере`
+                    : 'Поднять прокси на сервере'}
               </button>
 
               {formState.id ? (
@@ -1316,16 +1300,6 @@ export function ProxyManagerPage() {
           onChanged={loadSellerItems}
         />
       ) : null}
-
-      <ProxyComposerDialog
-        open={showProxyDialog}
-        onOpenChange={setShowProxyDialog}
-        composer={proxyComposer}
-        setComposer={setProxyComposer}
-        saleProxies={saleProxies}
-        onSave={saveProxyComposer}
-        onReset={resetProxyComposer}
-      />
 
     </section>
   );
