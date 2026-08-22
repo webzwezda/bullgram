@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Globe, Server, Plus, ExternalLink, Filter, Loader2 } from 'lucide-react';
+import { Globe, Server, Plus, ExternalLink, Filter, Loader2, Lock, Store, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -85,27 +85,6 @@ function proxyEgressSummary(proxy) {
   if (proxy?.ipv6) return `IPv6 ${proxy.ipv6}`;
   if (proxy?.last_check_ip) return proxy.last_check_ip;
   return 'IP не зафиксирован';
-}
-
-function IosToggle({ checked, onChange, disabled = false }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 ${
-        checked ? 'bg-emerald-500' : 'bg-slate-200'
-      } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-      <span
-        className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-md transition-transform duration-200 ${
-          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  );
 }
 
 export function ProxyManagerPage() {
@@ -1252,33 +1231,88 @@ export function ProxyManagerPage() {
             ) : null}
 
             <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
-                  <input
-                    className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
-                    type="text"
-                    value={formState.name}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
-                    placeholder="Например: Прокси #5"
-                  />
-                </div>
-
-                {state.support?.profile_role === 'admin' ? (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Группа</label>
-                    <div className="flex items-center gap-3 h-11">
-                      <IosToggle
-                        checked={formState.inventory_group === 'shop_sale'}
-                        onChange={(next) => setFormState((prev) => ({ ...prev, inventory_group: next ? 'shop_sale' : 'self_use' }))}
-                      />
-                      <span className="text-[14px] font-bold text-slate-800">
-                        {formState.inventory_group === 'shop_sale' ? 'На продажу в shop' : 'Использую сам'}
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
+                <input
+                  className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
+                  type="text"
+                  value={formState.name}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Например: Прокси #5"
+                />
               </div>
+
+              {state.support?.profile_role === 'admin' ? (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                    {formState.id ? 'Группа' : 'Зачем поднимаешь'}
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      {
+                        value: 'self_use',
+                        icon: Lock,
+                        title: 'Для себя',
+                        text: 'Останется в инвентаре «Свои» — привяжешь к своему юзерботу.'
+                      },
+                      {
+                        value: 'shop_sale',
+                        icon: Store,
+                        title: 'На продажу в shop',
+                        text: formState.id
+                          ? 'Прокси уйдёт в группу продажи «На продаже».'
+                          : 'Сразу после подъёма встанет на витрину по твоей цене.'
+                      }
+                    ].map((option) => {
+                      const selected = formState.inventory_group === option.value;
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setFormState((prev) => ({ ...prev, inventory_group: option.value }))}
+                          className={`relative text-left p-4 rounded-[16px] border-2 transition-all ${
+                            selected
+                              ? 'border-indigo-500 bg-indigo-50/60'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          {selected ? (
+                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                            </span>
+                          ) : null}
+                          <div className="flex items-center gap-2.5 mb-1.5">
+                            <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${selected ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                              <Icon className="w-[18px] h-[18px]" />
+                            </span>
+                            <span className="text-[14px] font-bold text-slate-900">{option.title}</span>
+                          </div>
+                          <p className="text-[12px] font-medium text-slate-500 leading-snug">{option.text}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {serverProxyMode && formState.inventory_group === 'shop_sale' ? (
+                <div className="space-y-1.5 max-w-xs">
+                  <label className="text-[13px] font-semibold text-slate-700">Цена за штуку, TON</label>
+                  <input
+                    className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={raisePriceTon}
+                    onChange={(event) => setRaisePriceTon(event.target.value)}
+                    placeholder="0"
+                  />
+                  <div className="text-[12px] text-blue-600 font-medium">
+                    Прокси сразу уйдут на витрину по этой цене.
+                  </div>
+                </div>
+              ) : null}
 
               {serverProxyMode ? (
                 <div className="rounded-[16px] bg-blue-50/40 p-4 border border-blue-100 space-y-4">
@@ -1305,24 +1339,6 @@ export function ProxyManagerPage() {
                       </div>
                     ) : null}
                   </div>
-
-                  {formState.inventory_group === 'shop_sale' ? (
-                    <div className="space-y-1.5 max-w-xs">
-                      <label className="text-[13px] font-semibold text-slate-700">Цена за штуку, TON</label>
-                      <input
-                        className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={raisePriceTon}
-                        onChange={(event) => setRaisePriceTon(event.target.value)}
-                        placeholder="0"
-                      />
-                      <div className="text-[12px] text-blue-600 font-medium">
-                        После подъёма прокси сразу уйдут на витрину по этой цене.
-                      </div>
-                    </div>
-                  ) : null}
 
                   <button
                     type="button"
