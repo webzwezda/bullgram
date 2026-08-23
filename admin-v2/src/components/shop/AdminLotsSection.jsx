@@ -17,10 +17,13 @@ function typeLabel(itemType) {
   return TYPE_LABELS[String(itemType || '')] || 'Лот';
 }
 
+const LOTS_PAGE_SIZE = 20;
+
 export function AdminLotsSection({ accessToken, types, title, emptyText, onChanged }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unpublishingId, setUnpublishingId] = useState('');
+  const [page, setPage] = useState(1);
 
   const loadLots = useCallback(async () => {
     if (!accessToken) return;
@@ -38,6 +41,11 @@ export function AdminLotsSection({ accessToken, types, title, emptyText, onChang
     setLoading(true);
     loadLots();
   }, [loadLots]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / LOTS_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStartIndex = (safePage - 1) * LOTS_PAGE_SIZE;
+  const pageItems = items.slice(pageStartIndex, pageStartIndex + LOTS_PAGE_SIZE);
 
   async function unpublishLot(itemId) {
     setUnpublishingId(String(itemId));
@@ -89,7 +97,7 @@ export function AdminLotsSection({ accessToken, types, title, emptyText, onChang
         </div>
       ) : (
         <div className="divide-y divide-slate-100">
-          {items.map((item) => (
+          {pageItems.map((item) => (
             <div key={item.id} className="p-5 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex-1 min-w-0 space-y-1.5">
                 <div className="flex items-center gap-2.5 flex-wrap">
@@ -126,6 +134,33 @@ export function AdminLotsSection({ accessToken, types, title, emptyText, onChang
           ))}
         </div>
       )}
+
+      {!loading && totalPages > 1 ? (
+        <div className="border-t border-slate-100 px-5 sm:px-6 py-3.5 flex items-center justify-between gap-3 bg-slate-50/50">
+          <span className="text-[12px] text-slate-500">
+            Показано {pageStartIndex + 1}–{Math.min(pageStartIndex + LOTS_PAGE_SIZE, items.length)} из {items.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="h-8 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition disabled:opacity-40"
+              disabled={safePage <= 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            >
+              ← Назад
+            </button>
+            <span className="text-[13px] font-bold text-slate-700 tabular-nums">Стр. {safePage} из {totalPages}</span>
+            <button
+              type="button"
+              className="h-8 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition disabled:opacity-40"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Вперёд →
+            </button>
+          </div>
+        </div>
+      ) : null}
     </Card>
   );
 }

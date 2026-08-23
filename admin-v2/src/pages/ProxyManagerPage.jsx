@@ -9,6 +9,7 @@ import { useShopStorefront } from '../features/shop-storefront/useShopStorefront
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 
 const ADMIN_PROXY_GROUPS = ['self_use', 'shop_sale'];
+const PROXY_TABLE_PAGE_SIZE = 20;
 
 const LANE_OPTIONS = [
   { id: 'self-use', label: 'Свои' },
@@ -117,6 +118,8 @@ export function ProxyManagerPage() {
   const [saleSelection, setSaleSelection] = useState(() => new Set());
   const [salePriceTon, setSalePriceTon] = useState('');
   const [listingSale, setListingSale] = useState(false);
+  const [proxyPage, setProxyPage] = useState(1);
+  const [saleStatusFilter, setSaleStatusFilter] = useState('all');
   const hasPendingProxyChecks = state.proxies.some((proxy) => {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
@@ -617,6 +620,34 @@ export function ProxyManagerPage() {
     const selectedSaleCount = saleProxies.filter((proxy) => saleSelection.has(String(proxy.id))).length;
     const allSaleSelected = saleProxies.length > 0 && selectedSaleCount === saleProxies.length;
 
+    const onSaleLane = selectedLane === 'on-sale' && isAdmin;
+    const listingByProxyId = new Map();
+    let listedCount = 0;
+    let unlistedCount = 0;
+    if (onSaleLane) {
+      for (const proxy of visibleItems) {
+        const shopItems = sellerProxyItemMap.get(String(proxy.id)) || [];
+        const isListed = shopItems.some((i) => i.status === 'published' && i.visibility !== 'private');
+        if (isListed) listedCount += 1;
+        if (shopItems.length === 0) unlistedCount += 1;
+        listingByProxyId.set(String(proxy.id), { isListed, hasLot: shopItems.length > 0 });
+      }
+    }
+
+    const tableItems = onSaleLane
+      ? visibleItems.filter((proxy) => {
+          const status = listingByProxyId.get(String(proxy.id));
+          if (saleStatusFilter === 'listed') return status.isListed;
+          if (saleStatusFilter === 'unlisted') return !status.hasLot;
+          return true;
+        })
+      : visibleItems;
+
+    const totalPages = Math.max(1, Math.ceil(tableItems.length / PROXY_TABLE_PAGE_SIZE));
+    const safePage = Math.min(proxyPage, totalPages);
+    const pageStartIndex = (safePage - 1) * PROXY_TABLE_PAGE_SIZE;
+    const pageItems = tableItems.slice(pageStartIndex, pageStartIndex + PROXY_TABLE_PAGE_SIZE);
+
     return (
       <>
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
@@ -656,13 +687,42 @@ export function ProxyManagerPage() {
                       ? 'bg-white text-violet-600 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
-                  onClick={() => setSelectedLane(lane.id)}
+                  onClick={() => {
+                    setSelectedLane(lane.id);
+                    setProxyPage(1);
+                  }}
                 >
                   {lane.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {onSaleLane ? (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {[
+                ['all', `Все · ${visibleItems.length}`],
+                ['listed', `На витрине · ${listedCount}`],
+                ['unlisted', `Не выставлены · ${unlistedCount}`]
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg border transition-all ${
+                    saleStatusFilter === value
+                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  }`}
+                  onClick={() => {
+                    setSaleStatusFilter(value);
+                    setProxyPage(1);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {selectedLane === 'on-sale' && isAdmin && saleProxies.length > 0 ? (
             <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 px-4 py-3">
@@ -703,7 +763,7 @@ export function ProxyManagerPage() {
           ) : null}
         </div>
 
-        {visibleItems.length === 0 ? (
+        {tableItems.length === 0 ? (
           <div className="p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
               <Globe className="w-8 h-8" />
@@ -714,7 +774,7 @@ export function ProxyManagerPage() {
           </div>
         ) : isSold ? (
           <div className="divide-y divide-slate-100">
-            {visibleItems.map((item) => {
+            {pageItems.map((item) => {
               const proxyAssets = (item.assets || []).filter((asset) => asset.asset_type === 'proxy');
               return (
                 <div key={item.id} className="p-5 md:px-8 md:py-5 hover:bg-slate-50/50 transition-colors">
@@ -746,7 +806,7 @@ export function ProxyManagerPage() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {visibleItems.map((proxy) => {
+            {pageItems.map((proxy) => {
               const badge = proxyBadge(proxy);
               const mode = proxyHealthMode(proxy);
               const geo = proxy.last_check_country
@@ -879,6 +939,33 @@ export function ProxyManagerPage() {
             })}
           </div>
         )}
+
+        {totalPages > 1 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 md:px-8 py-4 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-500">
+              Показано {pageStartIndex + 1}–{Math.min(pageStartIndex + PROXY_TABLE_PAGE_SIZE, tableItems.length)} из {tableItems.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="h-8 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition disabled:opacity-40"
+                disabled={safePage <= 1}
+                onClick={() => setProxyPage((prev) => Math.max(1, prev - 1))}
+              >
+                ← Назад
+              </button>
+              <span className="text-[13px] font-bold text-slate-700 tabular-nums">Стр. {safePage} из {totalPages}</span>
+              <button
+                type="button"
+                className="h-8 px-3 rounded-lg border border-slate-200 text-[12px] font-bold text-slate-600 hover:bg-slate-50 transition disabled:opacity-40"
+                disabled={safePage >= totalPages}
+                onClick={() => setProxyPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Вперёд →
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
       </>
     );
