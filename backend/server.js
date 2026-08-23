@@ -11,9 +11,7 @@ import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫ�
 import userbotRoutes from './routes/userbot.routes.js';
 import officialBotRoutes, { initAllBots, getBotById } from './routes/official-bot.routes.js';
 import autopostRoutes from './routes/autopost.routes.js';
-import checklistRoutes from './routes/checklist.routes.js';
 import { AutopostService } from './services/autopost.service.js';
-import { ChecklistService } from './services/checklist/index.js';
 import analyticsRoutes from './routes/analytics.routes.js'; // <-- НОВОЕ: Импорт роутов аналитики
 import accessRoutes from './routes/access.routes.js';
 import broadcastRoutes from './routes/broadcast.routes.js';
@@ -110,7 +108,6 @@ process.on('uncaughtException', (error) => {
 // GRACEFUL SHUTDOWN
 // ==========================================
 import { stopAllAutopostBots } from './services/autopost/bot-lifecycle.js';
-import { stopAllChecklistBots } from './services/checklist/bot-lifecycle.js';
 
 let shuttingDown = false;
 async function gracefulShutdown(signal) {
@@ -122,12 +119,6 @@ async function gracefulShutdown(signal) {
         console.log('[Shutdown] Autopost polling-боты остановлены');
     } catch (e) {
         console.error('[Shutdown] Ошибка остановки autopost-ботов:', e.message);
-    }
-    try {
-        stopAllChecklistBots();
-        console.log('[Shutdown] Checklist polling-боты остановлены');
-    } catch (e) {
-        console.error('[Shutdown] Ошибка остановки checklist-ботов:', e.message);
     }
     // Даём Time Telegram-клиентам закрыться чисто
     setTimeout(() => process.exit(0), 1500);
@@ -181,7 +172,6 @@ const authenticateUser = async (req, res, next) => {
 app.use('/api/userbot', userbotRoutes(supabase));
 app.use('/api/official-bot', officialBotRoutes(supabase));
 app.use('/api/autopost', autopostRoutes(supabase));
-app.use('/api/checklist', checklistRoutes(supabase));
 app.use('/api/analytics', analyticsRoutes(supabase)); // <-- НОВОЕ: Подключение роута аналитики
 app.use('/api/access', accessRoutes(supabase));
 app.use('/api/broadcast', broadcastRoutes(supabase, getBotById));
@@ -353,22 +343,4 @@ httpServer.listen(PORT, async () => {
     startPublicInvoicesCleanup(supabase);
     startBillingActivationRecovery(supabase);
     startShopPurchaseExpiry(supabase);
-
-    // Запускаем все активные checklist-боты
-    try {
-        const { data: checklistBots, error: clErr } = await supabase
-            .from('checklist_bots')
-            .select('id, bot_token, owner_id')
-            .eq('is_active', true);
-        if (clErr) throw clErr;
-        const checklistService = new ChecklistService(supabase);
-        for (const cb of checklistBots || []) {
-            checklistService.startBot(cb.id, cb.bot_token, cb.owner_id);
-        }
-        if ((checklistBots || []).length) {
-            console.log(`[Checklist] Запущено ботов: ${(checklistBots || []).length}`);
-        }
-    } catch (e) {
-        console.error('[Checklist] Ошибка запуска ботов:', e.message);
-    }
 });

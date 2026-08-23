@@ -12,6 +12,7 @@ export function AuthProvider({ children }) {
   const [proEndsAt, setProEndsAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoadedFor, setProfileLoadedFor] = useState(null);
 
   const loadProfile = useCallback(async (userId) => {
     if (!userId) {
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
       setTrialStartedAt(null);
       setTrialEndsAt(null);
       setProEndsAt(null);
+      setProfileLoadedFor(null);
       setProfileLoading(false);
       return;
     }
@@ -59,6 +61,7 @@ export function AuthProvider({ children }) {
       setTrialEndsAt(null);
       setProEndsAt(null);
     } finally {
+      setProfileLoadedFor(userId);
       setProfileLoading(false);
     }
   }, []);
@@ -103,9 +106,12 @@ export function AuthProvider({ children }) {
     };
   }, [session?.user?.id, loadProfile]);
 
+  const currentUserId = session?.user?.id || null;
+  const profileReady = profileLoadedFor === currentUserId;
+
   const value = useMemo(() => ({
     loading,
-    profileLoading,
+    profileLoading: loading || profileLoading || !profileReady,
     session,
     user: session?.user || null,
     profileRole,
@@ -114,7 +120,7 @@ export function AuthProvider({ children }) {
     trialEndsAt,
     proEndsAt,
     accessToken: session?.access_token || '',
-    refreshProfile: () => loadProfile(session?.user?.id),
+    refreshProfile: () => loadProfile(currentUserId),
     async login(provider = 'google') {
       const redirectTo = `${window.location.origin}${window.location.pathname}`;
       await supabase.auth.signInWithOAuth({
@@ -127,7 +133,7 @@ export function AuthProvider({ children }) {
       window.localStorage.clear();
       window.location.reload();
     }
-  }), [loading, profileLoading, session, profileRole, profilePlan, trialStartedAt, trialEndsAt, proEndsAt, loadProfile]);
+  }), [loading, profileLoading, profileReady, currentUserId, session, profileRole, profilePlan, trialStartedAt, trialEndsAt, proEndsAt, loadProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

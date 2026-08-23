@@ -4,12 +4,11 @@ import {
   Users, Landmark, ShoppingCart, Database,
   Bot, Rocket, Globe, Wallet, Receipt, Send,
   RefreshCcw,
-  Zap, CheckSquare, History
+  Zap, History
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
-import { OpsChecklistRail } from './ui/OpsChecklistRail.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
@@ -29,9 +28,8 @@ const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((m
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
-const ChecklistPage = lazy(() => import('./pages/ChecklistPage.jsx').then((module) => ({ default: module.ChecklistPage })));
 export function App() {
-  const { user, profileRole, profileLoading, accessToken } = useAuth();
+  const { user, profileRole, profileLoading } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -76,7 +74,6 @@ export function App() {
       title: 'Админ',
       items: [
         { to: '/treasury', label: 'Казна', icon: Landmark },
-        { to: '/checklist', label: 'Чеклисты', icon: CheckSquare },
       ]
     }] : [])
   ];
@@ -242,17 +239,10 @@ export function App() {
                 <Route path="/proxies" element={<ProxyManagerPage />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
                 <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/checklist" element={
-                  profileLoading
-                    ? <LoadingState text="Проверяем доступ..." />
-                    : profileRole === 'admin' ? <ChecklistPage accessToken={accessToken} /> : <Navigate to="/" replace />
-                } />
               </Routes>
             </Suspense>
           </AuthGate>
         </main>
-
-        <OpsChecklistRail />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>
