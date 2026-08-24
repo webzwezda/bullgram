@@ -54,6 +54,9 @@ fl_orders_rows.csv
 .claude/
 .agents/
 
+# ZCode session artifacts (plans); .zcode/config.json stays committable if added later
+.zcode/plans/
+
 # Vendored reference repos (kept locally, not part of BullRun source)
 archive/
 

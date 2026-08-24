@@ -8,6 +8,13 @@ This repository has three active runtimes plus supporting docs/archive material:
 - `site-v2/`: primary public product site on React/Vite. Source lives in `site-v2/src/`, build output in `site-v2/dist/`.
 - `archive/`: archived notes and local-only operator artifacts that are not part of the active runtime.
 
+Runtime tech notes:
+
+- backend: Node.js, Express, Supabase (PostgreSQL + auth), Telegraf (official bots), GramJS (userbots), node-cron
+- `admin-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
+- admin-v2 structure: `src/pages/` (feature routes), `src/ui/` (components), `src/api/` (backend calls)
+- multi-tenancy: all backend requests enforce `owner_id` for data isolation; each admin sees only their channels, bots, subscribers, orders, and settings
+
 The project is now `v2-only` in active runtime:
 
 - `site-v2/` serves `/`
@@ -22,6 +29,9 @@ Current v2 product surfaces already in the repo:
 - Telegram infra: `proxies` (`/app/proxies`), `userbots` (`/app/userbots`), `sales-bot / official bot` (`/app/sales-bot`), `admin-groups` (`/app/admin-groups`)
 - ecosystem tooling: `bases` (`/app/bases`, legacy label `customer-bases`), `observer` (`/app/observer`)
 - commerce: `shop` (`/app/shop`), `shop receipts` (`/app/shop-receipts`), `referrals` (`/app/referrals`), `payments` (`/app/payments`), `billing` (`/app/billing`), `plans` (`/app/plans`)
+- `treasury` (`/app/treasury`): казна проекта
+- agent onboarding: `claw` (`/app/claw`)
+- key backend areas: `/api/userbot/*` (operations, health checks, manual actions), `/api/official-bot/*` (official bot management), `/api/mcp` (Bullgram MCP endpoint); full API docs in `backend/README.md`
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
 
 Agent integration status:
@@ -60,6 +70,29 @@ Key commands:
 
 The deploy scripts use `rsync` to a live server. Treat them as production-only commands.
 
+Primary deploy flow is push-to-main: GitHub Actions SSHes into prod and runs `scripts/deploy-pull.sh` — `git fetch` + `reset --hard origin/main` → conditional `npm install` (only when `package.json` changed) → `npm run build:v2` → `pm2 reload ecosystem.config.cjs --env production` → smoke HTTP check. `set -euo pipefail` aborts before the pm2 reload if the build fails.
+
+Rollback: `git revert` + push (CI redeploys the previous state), or on prod `cd /srv/bullgram && git checkout HEAD~1 && ./scripts/deploy-pull.sh`.
+
+The `rsync` npm scripts above are the emergency fallback for when CI is broken.
+
+## Environment & Userbot Feature Flags
+
+Required: Node.js 22.22.0 (`see .nvmrc`), npm 10.x. Backend config lives in `backend/.env` (template: `backend/.env.example`); `admin-v2` and `site-v2` have no `.env` files.
+
+Userbot feature flags (all default to `false` unless explicitly enabled):
+
+```env
+USERBOT_DM_ENABLED=false                    # Manual DM from admin UI
+USERBOT_INBOX_WATCH_ENABLED=false           # Background inbox watcher
+USERBOT_RETENTION_DM_ENABLED=false          # Retention DM fallback
+USERBOT_AUTO_KICK_FALLBACK_ENABLED=false    # Userbot fallback for kicks
+USERBOT_AUTO_KICK_DM_ENABLED=false          # DM after auto-kick
+USERBOT_BROADCAST_ENABLED=false             # Userbot-based broadcasts
+RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true # Auto-delete restricted accounts
+RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
+```
+
 ## Coding Style & Naming Conventions
 The codebase uses ESM (`import`/`export`) and plain JavaScript on the backend, plus React/Vite for `admin-v2` and `site-v2`. Match the surrounding file’s indentation; existing files mix 2-space and 4-space indents. Prefer small route/service modules, descriptive function names, and early returns for request validation.
 
@@ -86,6 +119,8 @@ There is no automated test suite configured yet for the product. Until one exist
 
 - admin/public v2: run `npm run build` in `admin-v2` or `site-v2` and test the affected route
 - backend: run `node server.js` and exercise the changed endpoint with the app or `curl`
+- backend autopost: `cd backend && npm run test:autopost`
+- after push: watch the GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; restart PM2 by hand only if you used the emergency rsync fallback
 
 If you add tests, place them next to the feature or under a dedicated `tests/` folder and wire them into `package.json`.
 
@@ -95,7 +130,7 @@ Recent history follows Conventional Commits with short descriptions, often in Ru
 PRs should include a short summary, affected area (`frontend` or `backend`), linked issue/task, manual test notes, and screenshots for UI changes. For API changes, include sample request/response details and required `.env` updates.
 
 ## Security & Configuration Tips
-Never commit `.env`, session files, or production credentials. Document new Supabase or Telegram variables in the relevant README when you introduce them.
+Never commit `.env`, session files, or production credentials. Document new Supabase or Telegram variables in the relevant README when you introduce them. All API endpoints require a JWT token in the `Authorization: Bearer <token>` header. Telegram sessions are encrypted before database storage.
 
 If you touch `shop`, preserve the current ownership-transfer model:
 
@@ -107,12 +142,15 @@ For userbot operations, preserve the current safety/product rules:
 
 - all userbot onboarding must go through proxies
 - `1 proxy record = 1 userbot`
+- new userbots start in `safe-mode` (`runtime_status=pending_activation`) after QR/file import; background jobs must not touch them until manual activation
 - userbot automation must stay `manual-by-default`
 - manual DM flag must stay separate from retention, auto-kick fallback, inbox watcher, and broadcast flags
 - if Telegram `SpamBot` confirms a block, treat that as the source of truth even if a naive session check still passes
 - blocked/restricted userbot assets must not remain public in `shop`
 - dedicated managed proxy of a blocked/restricted userbot should be cleaned up from Bullgram when it is no longer shared
 - if a manual DM flow exists, the UI must warn that Telegram may only allow delivery when the userbot already knows the target or shares a group/chat with them, and that userbot admin rights in that shared group improve the odds
+
+When working with userbot client code, follow the GramJS lifecycle strictly: init the client with the decrypted session → disable the update loop (`client._updateLoop = async () => {}`) → `await client.connect()` → perform operations → `await client.disconnect()` in a `finally` block. This prevents memory leaks and hanging sessions.
 
 For Bullgram agent work:
 
@@ -123,73 +161,67 @@ For Bullgram agent work:
 - onboarding copy should assume ordinary admins, not engineers
 - when adding new agent capabilities, prefer explicit tools like `summary`, `preview`, `import`, `status`, not vague generic "agent actions"
 
-## Codex Workflow And cmux
-For Codex work in this repo:
+## Supabase MCP And Tunnel
 
-- use the main Codex session as the orchestrator
-- treat this repository file as the user's standing instruction that Codex should orchestrate native Codex subagents and Claude CLI workers for Bullgram work whenever the scope is clear
-- global custom agents live in `~/.codex/agents/`
-- before starting non-trivial work, first review which global subagents are available and choose the best candidates for the task
-- custom agents do not auto-run; delegate explicitly in prompts
-- we already have many global subagents available, so prefer delegating as much scoped work as possible to them
+The `supabase` MCP server (selfhosted-supabase-mcp, run via bun from `~/.local/share/selfhosted-supabase-mcp/`) is configured in `.mcp.json`; ZCode reads the same file through the `.agents/mcp.json` symlink, and Claude Code reads `.mcp.json` directly — one source of secrets for both.
+
+The SSH tunnel to the self-hosted Supabase is managed by the macOS LaunchAgent `com.webzwezda.supabase-mcp-tunnel` in `~/Library/LaunchAgents/`: it starts at login, auto-restarts on failure, and forwards `127.0.0.1:8080` → Kong REST API plus `127.0.0.1:5432` → direct PostgreSQL (bypasses PgBouncer). Do not run `ops/scripts/ensure-mcp-tunnel.sh` manually while the LaunchAgent is loaded — it kills the agent's tunnel and they fight over the ports. Database access is `supabase_admin` with the service-role key: full read/write.
+
+## ZCode Workflow And cmux
+For ZCode work in this repo:
+
+- use the main ZCode session as the orchestrator
+- delegate scoped work to native ZCode subagents through the Agent tool:
+  - `Explore` for read-only discovery, code tracing, and context gathering
+  - `general-purpose` for scoped implementation slices, focused verification, and review passes
+- ZCode has no file-based custom agent definitions; use role-framed prompts instead (mapping below)
+- before starting non-trivial work, decide which slices go to subagents and which stay in the main session
 - when a task can be split into isolated slices, proactively assign those slices to subagents instead of keeping all implementation in the main session
-- the main Codex workflow should spend most of its time on orchestration: scoping, agent selection, task splitting, integration, conflict resolution, and final synthesis
+- the main ZCode session should spend most of its time on orchestration: scoping, task splitting, integration, conflict resolution, and final synthesis
 - push exploration, isolated implementation, focused verification, and review work down into subagents whenever the scope is clear
-- keep architecture decisions, cross-runtime integration, and final verification in the main Codex session
+- keep architecture decisions, cross-runtime integration, and final verification in the main ZCode session
 - do not split tightly coupled changes across multiple subagents without a clear merge plan
-- use Claude CLI workers through `cmux` for bounded terminal-based work when a parallel worker is useful, especially read-only discovery, scoped implementation, log inspection, and focused verification
 - keep all delegated workers narrow: exact scope, allowed files, validation expected, and return format
 
 Default delegation bias:
 
-- if a task can be isolated, delegate it to a global subagent
-- if multiple independent tasks exist, delegate them in parallel
-- if a task is read-only discovery, use a subagent
-- if a task is a bounded implementation slice, use a subagent
+- if a task can be isolated, delegate it to a subagent
+- if multiple independent tasks exist, launch them in parallel
+- if a task is read-only discovery, use an `Explore` subagent
+- if a task is a bounded implementation slice, use a `general-purpose` subagent
 - if a task is a focused review or regression check, use a subagent
-- the main workflow should mainly coordinate and merge results instead of doing all detailed work itself
+- the main workflow should mainly coordinate and merge results instead of doing all detailed work
 
-Use the available global subagents aggressively, especially for:
-
-- backend tracing and scoped backend implementation
-- frontend tracing and scoped UI implementation
-- Bullgram MCP and tool-flow changes
-- focused review, regression checks, and architecture sanity checks
-- context gathering before larger changes
-- parallel analysis of adjacent product surfaces
-
-Preferred global subagent mapping:
+Role framing for delegation prompts — these names are prompt frames for `general-purpose`/`Explore` subagents, not files:
 
 - `context-manager`: first delegate for repo context packaging, file/surface discovery, and handoff packets for other subagents
-- `backend-developer`: delegate most scoped backend work in `backend/routes/`, `backend/services/`, `backend/jobs/`, and backend bug fixes
-- `frontend-developer`: delegate most scoped UI work in `admin-v2/src/` and `site-v2/src/`
-- `mcp-developer`: delegate Bullgram MCP work, `/api/mcp`, `/app/claw`, tool wiring, onboarding flow, and agent-facing integration changes
-- `reviewer`: delegate focused regression review, correctness review, risk review, and missing-test review before close-out
-- `code-reviewer`: delegate additional implementation-level review when a change is large or touches risky code paths
-- use `reviewer` as the default close-out review agent; use `code-reviewer` only as a second-pass implementation review for larger or riskier diffs
-- `architect-reviewer`: delegate boundary and coupling review for cross-runtime changes, workflow rewrites, or larger structural decisions
-- `workflow-orchestrator`: delegate workflow design for complex multi-stage tasks when the main session needs a clearer delegation plan
-- `multi-agent-coordinator`: delegate planning for parallel subagent splits when many independent workstreams exist
-- `task-distributor`: delegate task breakdown when one request naturally decomposes into multiple bounded subagent tasks
-- `api-designer`: delegate backend/frontend contract design, request-response shape work, and tool contract cleanup
-- `documentation-engineer`: delegate operator-facing docs, onboarding docs, and cleanup of internal guidance after implementation
+- `backend-developer`: most scoped backend work in `backend/routes/`, `backend/services/`, `backend/jobs/`, and backend bug fixes
+- `frontend-developer`: most scoped UI work in `admin-v2/src/` and `site-v2/src/`
+- `mcp-developer`: Bullgram MCP work, `/api/mcp`, `/app/claw`, tool wiring, onboarding flow, and agent-facing integration changes
+- `reviewer`: default close-out review — regression, correctness, risk, and missing-test review
+- `code-reviewer`: second-pass implementation review when a change is large or touches risky code paths
+- `architect-reviewer`: boundary and coupling review for cross-runtime changes, workflow rewrites, or larger structural decisions
+- `api-designer`: backend/frontend contract design, request-response shape work, and tool contract cleanup
+- `documentation-engineer`: operator-facing docs, onboarding docs, and cleanup of internal guidance after implementation
 
-Maximum delegation rule:
+Required subagent return format (worker contract, applies to every delegated slice):
 
-- default to handing a task to one of the named global subagents whenever the scope is clear
-- if the task is implementable by a specialist subagent, delegate it instead of doing the detailed work in the main workflow
-- if the task can be split into independent backend, frontend, MCP, and review slices, delegate those slices in parallel
-- the main workflow should mainly choose the right subagents, define scope, wait only when needed, and reconcile outputs into one final result
+```
+Scope:
+Changed:
+Validated:
+Risks:
+Needs:
+```
 
 Bullgram-specific delegation defaults:
 
-- start with `context-manager` when the affected runtime or file ownership is not obvious
-- use `backend-developer` for most backend feature and bug work
-- use `frontend-developer` for most `admin-v2` and `site-v2` work
-- use `mcp-developer` for Bullgram MCP and `/app/claw`
-- use `reviewer` on nearly every risky change before final close-out
-- add `architect-reviewer` when touching cross-runtime flows or structural boundaries
-- use `workflow-orchestrator` or `multi-agent-coordinator` when the request is broad enough that the main workflow needs help planning the delegate graph
+- start with a `context-manager`-framed `Explore` pass when the affected runtime or file ownership is not obvious
+- use `backend-developer` framing for most backend feature and bug work
+- use `frontend-developer` framing for most `admin-v2` and `site-v2` work
+- use `mcp-developer` framing for Bullgram MCP and `/app/claw`
+- use `reviewer` framing on nearly every risky change before final close-out
+- add `architect-reviewer` framing when touching cross-runtime flows or structural boundaries
 
 Bullgram workflow:
 
@@ -214,18 +246,30 @@ Default operating sequence:
 
 For `cmux` usage:
 
-- `cmux` is workspace infrastructure, not agent runtime
-- a pane, split, or browser surface is not a Codex subagent
-- use `cmux` to keep logs, dev servers, and browser surfaces visible while the main Codex session coordinates work
-- Codex runs inside `cmux` and may work with windows, workspaces, panes, and surfaces via `cmux` commands
-- use `cmux help` whenever the exact syntax or supported action is uncertain
+- `cmux` is workspace infrastructure, not agent runtime; a pane, split, or browser surface is not a subagent
+- the cmux control socket only accepts processes started inside cmux — an external agent process gets `Access denied`
+- the ZCode desktop app runs outside cmux, so cmux CLI commands are unavailable from a desktop ZCode session; do not fight the socket, use the fallbacks below
+- to get full cmux control, launch ZCode TUI inside a cmux pane: `node /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs tui`
+- when running inside cmux: keep logs, dev servers, and browser surfaces visible via `cmux` while the main session coordinates work; use `cmux help` whenever the exact syntax or supported action is uncertain
 - this is especially relevant when the user asks to split the screen, open a new window or workspace, move focus, or open or call an agent in a neighboring window
-- for browser work in this repo, use `cmux browser` and browser surfaces by default; do not default to Playwright CLI for site/admin runtime checks
-- when verifying `admin-v2` or `site-v2`, keep the dev or preview server in a `cmux` terminal surface and open the route in a `cmux` browser surface so the user can see the same browser state
-- use `cmux browser snapshot`, `cmux browser console`, `cmux browser errors`, `cmux browser screenshot`, and `cmux browser eval` for browser evidence, console errors, screenshots, and runtime checks
-- only use Playwright outside `cmux` when the user explicitly asks for it, when a task requires a Playwright-specific capability, or when `cmux browser` is unavailable; state the reason before doing so
 
-Common terminal and `cmux` operations:
+Browser doctrine:
+
+- inside cmux: use `cmux browser` and browser surfaces by default for site/admin runtime checks so the user can see the same browser state
+- outside cmux (desktop ZCode): use the native Browser Use skill — a real browser with navigate, click, type, screenshot, and console/error inspection; this is not Playwright CLI; provide evidence via screenshots
+- only use Playwright when the user explicitly asks for it or when a task requires a Playwright-specific capability; state the reason before doing so
+
+cmux browser playbook (applies when the session runs inside cmux):
+
+- `cmux browser open <url>` opens a surface; every later subcommand needs the surface handle: `cmux browser surface:N <subcommand>` (the number comes from the `open` response)
+- refs renumber after every snapshot/reload — re-snapshot before clicking, or address elements with CSS selectors through `eval`
+- only CSS selectors work in `click`; Playwright pseudo-classes like `button:has-text("...")` fail — find by text through `eval` instead
+- `eval` must return a primitive (string/number/boolean); wrap objects with `JSON.stringify((() => {...})())`
+- async side effects inside `eval` time out (~30s) — use deferred clicks: `setTimeout(() => btn.click(), 0); return "scheduled"`
+- React forms do not react to `fill`/`type` — set the value through the native prototype setter and dispatch an `input` event
+- not covered by browser checks: real TON transactions, TonConnect modal confirmation, email delivery; verify those side effects in the database through Supabase MCP
+
+Common terminal and `cmux` operations (when the session runs inside cmux):
 
 - use normal shell commands and `cmux` commands for terminal work
 - read terminal state with `cmux read-screen`
@@ -271,18 +315,18 @@ Core execution principles:
 - no laziness: find root causes and avoid temporary fixes
 - minimal impact: only change what is necessary and avoid introducing regressions
 
-## Codex Orchestration Contract
+## ZCode Orchestration Contract
 
 This block is the standing orchestration contract for this repo.
 
-- Codex is the primary orchestrator for both native Codex subagents and Claude terminal workers during Bullgram work.
+- ZCode is the primary orchestrator for native ZCode subagents and any Claude terminal workers during Bullgram work.
 - Keep the distinction explicit:
-  - native Codex subagents are delegated through Codex subagent tooling;
+  - native ZCode subagents are delegated through the Agent tool (`Explore`, `general-purpose`);
   - Claude workers are terminal processes coordinated through `cmux`;
-  - a `cmux` pane, split, browser surface, or terminal surface is not itself a Codex subagent.
-- The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means Codex must not confuse terminal UI state with native subagent state.
-- For Claude work, prefer the project agent file `.claude/agents/bullgram-codex-worker.md` and launch Claude with `claude --agent bullgram-codex-worker` when a bounded worker is useful.
-- For frontend/browser debugging, use `cmux` browser surfaces as the default browser. Keep browser state, screenshots, console output, and runtime errors inside `cmux` unless the user asks for another browser automation path.
+  - a `cmux` pane, split, browser surface, or terminal surface is not itself a subagent.
+- The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means the agent must not confuse terminal UI state with native subagent state.
+- For Claude work, prefer the project agent file `.claude/agents/bullgram-codex-worker.md` and launch Claude with `claude --agent bullgram-codex-worker` in a cmux pane when a bounded worker is useful.
+- For frontend/browser debugging inside cmux, use `cmux` browser surfaces as the default browser; outside cmux, use the native Browser Use skill. Keep browser evidence — screenshots, console output, runtime errors — attached to the session report.
 - Use `cmux help` whenever command syntax is uncertain. The main commands for orchestration are:
   - `cmux tree`
   - `cmux list-panes`
@@ -299,7 +343,7 @@ This block is the standing orchestration contract for this repo.
   - `cmux browser console`
   - `cmux browser errors`
   - `cmux browser screenshot`
-- Codex owns task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, and user-facing summary.
-- Claude workers should receive narrow prompts with exact scope, allowed files or write boundaries, expected validation, and required return format.
-- Do not let Claude deploy, rollback, run destructive commands, or broaden architecture unless Codex explicitly assigns that scope.
-- When Claude or a subagent finishes, Codex must read the result, inspect the diff locally, reconcile conflicts, run final checks, and only then report completion.
+- ZCode owns task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, and user-facing summary.
+- Workers should receive narrow prompts with exact scope, allowed files or write boundaries, expected validation, and required return format.
+- Do not let workers deploy, rollback, run destructive commands, or broaden architecture unless the main session explicitly assigns that scope.
+- When a worker or subagent finishes, the main session must read the result, inspect the diff locally, reconcile conflicts, run final checks, and only then report completion.
