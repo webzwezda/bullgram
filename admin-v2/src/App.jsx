@@ -9,6 +9,7 @@ import {
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
+import { OpsRail } from './ui/OpsRail.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
 
 const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
@@ -243,6 +244,8 @@ export function App() {
             </Suspense>
           </AuthGate>
         </main>
+
+        <OpsRail />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>
