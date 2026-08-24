@@ -249,7 +249,7 @@ For `cmux` usage:
 - `cmux` is workspace infrastructure, not agent runtime; a pane, split, or browser surface is not a subagent
 - the cmux control socket only accepts processes started inside cmux — an external agent process gets `Access denied`
 - the ZCode desktop app runs outside cmux, so cmux CLI commands are unavailable from a desktop ZCode session; do not fight the socket, use the fallbacks below
-- to get full cmux control, launch ZCode TUI inside a cmux pane: `node /Applications/ZCode.app/Contents/Resources/glm/zcode.cjs tui`
+- the `tui` subcommand cannot run from the desktop-app bundle: its runtime package `@zcode/tui` ships only in a standalone CLI build that is not publicly distributed yet (404 on npm, official docs cover the desktop app only). If an official standalone ZCode CLI appears, launch it inside a cmux pane to restore full cmux control; until then, a desktop ZCode session always uses the Browser Use fallback
 - when running inside cmux: keep logs, dev servers, and browser surfaces visible via `cmux` while the main session coordinates work; use `cmux help` whenever the exact syntax or supported action is uncertain
 - this is especially relevant when the user asks to split the screen, open a new window or workspace, move focus, or open or call an agent in a neighboring window
 
