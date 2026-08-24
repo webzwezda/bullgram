@@ -1,9 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { supabase } from '../lib/supabase.js';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { Crown, LogOut, LogIn, Send } from 'lucide-react';
+import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users, Send } from 'lucide-react';
+
+const ICONS = {
+  CreditCard, Bot, LayoutList, Globe, Smartphone, Users
+};
 
 function formatDateOnly(value) {
   if (!value) return '—';
@@ -38,8 +44,215 @@ function planMeta(plan, trialEndsAt) {
   };
 }
 
+function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
+  const completed = steps.filter((s) => s.state === 'done').length;
+  const total = steps.length;
+  const progress = Math.round((completed / total) * 100);
+
+  return (
+    <div className="bg-white border border-slate-200/60 rounded-3xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-2 relative overflow-hidden">
+      <div className="absolute top-0 right-0 p-6 opacity-[0.03] pointer-events-none">
+        <MainIcon className="w-32 h-32" />
+      </div>
+
+      <div className="relative">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100">
+            <MainIcon className="w-5 h-5 text-slate-700" />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 tracking-tight">{title}</h3>
+        </div>
+
+        <p className="text-sm text-slate-500 leading-relaxed mb-5 pr-4">
+          {description}
+        </p>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            {completed} / {total}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {steps.map((step) => {
+            const StepIcon = ICONS[step.icon];
+            const isDone = step.state === 'done';
+
+            return (
+              <a
+                key={step.id}
+                href={step.href}
+                className={`
+                  group relative flex items-center gap-4 p-3.5 rounded-2xl transition-all duration-300 border
+                  ${isDone ? 'bg-slate-50/50 border-transparent hover:bg-slate-50' :
+                    'bg-white border-slate-100 hover:border-slate-200 hover:shadow-sm'}
+                `}
+              >
+                <div className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110">
+                  {isDone ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-slate-200 group-hover:text-slate-300" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className={`text-sm font-bold truncate transition-colors ${isDone ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  <p className={`text-xs mt-0.5 truncate transition-colors ${isDone ? 'text-slate-300' : 'text-slate-500 group-hover:text-slate-600'}`}>
+                    {step.hint}
+                  </p>
+                </div>
+
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-hover:bg-slate-50">
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function OpsRail() {
-  const { user, login, logout, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken, user, login, logout, profilePlan, trialEndsAt } = useAuth();
+  const [state, setState] = useState({
+    loading: true,
+    summary: null,
+    paymentReadiness: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadData() {
+      if (!accessToken) return;
+      try {
+        const [data, settingsResponse, tariffCountResponse] = await Promise.all([
+          apiRequest('/api/dashboard', { accessToken }),
+          apiRequest('/api/payment-settings', { accessToken }).catch(() => null),
+          user?.id
+            ? supabase
+                .from('tariffs')
+                .select('id', { count: 'exact', head: true })
+                .eq('owner_id', user.id)
+                .eq('is_active', true)
+            : Promise.resolve({ count: 0, error: null })
+        ]);
+
+        const settings = settingsResponse?.settings || null;
+        const tariffCount = tariffCountResponse?.error ? 0 : (tariffCountResponse?.count || 0);
+        const paymentReadiness = settings
+          ? {
+              ...(data.paymentReadiness || {}),
+              hasTon: !!settings.ton_wallet
+          }
+          : (data.paymentReadiness || {});
+
+        if (cancelled) return;
+        setState({
+          loading: false,
+          summary: {
+            ...(data.summary || {}),
+            tariffCount
+          },
+          paymentReadiness,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setState((prev) => ({ ...prev, loading: false }));
+      }
+    }
+
+    loadData();
+    const intervalId = accessToken ? window.setInterval(loadData, 60_000) : null;
+    return () => {
+      cancelled = true;
+      if (intervalId) window.clearInterval(intervalId);
+    };
+  }, [accessToken, user?.id]);
+
+  const checklists = useMemo(() => {
+    const summary = state.summary || {};
+    const payment = state.paymentReadiness || {};
+
+    const botSteps = [
+      {
+        id: 'payments',
+        done: !!payment.hasTon,
+        title: 'Способы оплаты',
+        hint: 'Укажите реквизиты для приема платежей',
+        href: '/app/billing',
+        icon: 'CreditCard'
+      },
+      {
+        id: 'bot',
+        done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
+        title: 'Telegram бот',
+        hint: 'Создайте бота для автоматизации продаж',
+        href: '/app/sales-bot',
+        icon: 'Bot'
+      },
+      {
+        id: 'plans',
+        done: (summary.tariffCount || 0) > 0,
+        title: 'Тарифы и доступ',
+        hint: 'Откройте бота и настройте тарифы внутри него',
+        href: '/app/sales-bot',
+        icon: 'LayoutList'
+      },
+      {
+        id: 'referrals',
+        done: false,
+        title: 'Рефералка',
+        hint: 'Настройте бонусную программу',
+        href: '/app/referrals',
+        icon: 'Users'
+      }
+    ];
+
+    const userbotSteps = [
+      {
+        id: 'proxy',
+        done: (summary.proxyCount || 0) > 0,
+        title: 'Прокси-сервер',
+        hint: 'Подключите IPv4 прокси',
+        href: '/app/proxies',
+        icon: 'Globe'
+      },
+      {
+        id: 'userbot',
+        done: (summary.userbotCount || 0) > 0,
+        title: 'Аккаунт юзербота',
+        hint: 'Авторизуйте рабочий Telegram аккаунт',
+        href: '/app/userbots',
+        icon: 'Smartphone'
+      }
+    ];
+
+    const processSteps = (steps) => {
+      return steps.map((item) => ({
+        ...item,
+        state: item.done ? 'done' : 'todo'
+      }));
+    };
+
+    return {
+      bot: processSteps(botSteps),
+      userbots: processSteps(userbotSteps)
+    };
+  }, [state.paymentReadiness, state.summary]);
 
   const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор Bullgram';
   const profileEmail = user?.email || '';
@@ -108,6 +321,20 @@ export function OpsRail() {
           </div>
         )}
       </div>
+
+      <ChecklistGroup
+        title="Продажа доступа"
+        description="Настройка автоматической выдачи инвайтов в приватные группы после оплаты."
+        steps={checklists.bot}
+        icon={Bot}
+      />
+
+      <ChecklistGroup
+        title="Юзерботы"
+        description="Инфраструктура для рассылок и инвайтинга с рабочих аккаунтов Telegram."
+        steps={checklists.userbots}
+        icon={Rocket}
+      />
     </aside>
   );
 }
