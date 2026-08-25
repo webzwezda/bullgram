@@ -180,7 +180,7 @@ export function App() {
         </div>
       </aside>
 
-      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
+      <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
         {isHomeRoute ? (
           appRoutes
         ) : (isPayRoute || isCreateRoute || isDocsRoute) ? (

@@ -239,7 +239,7 @@ function GoogleIcon() {
 
 function ScreenSection({ id, className = '', children }) {
   return (
-    <section id={id} className={`flex min-h-screen snap-start snap-always flex-col py-4 md:py-6 ${className}`}>
+    <section id={id} className={`flex min-h-screen snap-start snap-always flex-col ${className}`}>
       {children}
     </section>
   );
@@ -288,7 +288,7 @@ function KassaFlowMock() {
         const Icon = step.icon;
         return (
           <div key={step.title}>
-            <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start gap-4 rounded-xl bg-slate-50 p-4">
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${step.tone}`}>
                 <Icon className="h-5 w-5" strokeWidth={2.5} />
               </span>
@@ -366,17 +366,17 @@ export function HomePage() {
     <div className="w-full">
       {/* Экран 1 — герой */}
       <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6 py-14 sm:px-10 lg:px-14">
+        <div className="flex w-full flex-1 flex-col justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-6xl">
             <div className="inline-flex items-center rounded-full bg-blue-600/10 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-blue-700 ring-1 ring-inset ring-blue-600/20">
               Bullgram
             </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Юзерботы для Telegram с API и MCP
+              Касса, юзерботы и счета для Telegram
             </h1>
             <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg">
-              Подключите Telegram к коду и AI-агентам: юзербот-инфраструктура, касса закрытой группы
-              и TON-счета — в одном сервисе.
+              Приём оплат для закрытой группы, юзербот-инфраструктура с API и MCP и TON-счета —
+              один сервис вместо зоопарка инструментов.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               {user ? (
@@ -443,7 +443,7 @@ export function HomePage() {
 
       {/* Экран 2 — юзерботы + API/MCP */}
       <ScreenSection id="userbots">
-        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl bg-slate-950 px-6 py-14 sm:px-10 lg:px-14">
+        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
               <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
@@ -497,7 +497,7 @@ export function HomePage() {
 
       {/* Экран 3 — касса закрытой группы */}
       <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-white px-6 py-14 sm:px-10 lg:px-14">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
               <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса</div>
@@ -544,7 +544,7 @@ export function HomePage() {
 
       {/* Экран 4 — счета на оплату */}
       <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl bg-slate-950 px-6 py-14 sm:px-10 lg:px-14">
+        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
               <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Без регистрации</div>
@@ -580,7 +580,7 @@ export function HomePage() {
 
       {/* Экран 5 — тарифы */}
       <ScreenSection id="tariffs">
-        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-white px-6 py-14 sm:px-10 lg:px-14">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-5xl">
             <div className="text-center">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
