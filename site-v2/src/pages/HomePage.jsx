@@ -6,16 +6,15 @@ import {
   ArrowRight,
   Bot,
   CheckCircle2,
-  ChevronDown,
   CreditCard,
   Loader2,
   QrCode,
   ReceiptText,
   Repeat,
   RotateCcw,
-  Send,
   Settings,
   ShieldCheck,
+  Sparkles,
   Terminal,
   UserMinus,
   Users,
@@ -265,17 +264,6 @@ function PlanCard({ plan, children }) {
   );
 }
 
-function GoogleIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24">
-      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-    </svg>
-  );
-}
-
 function ScreenSection({ id, className = '', children }) {
   return (
     <section id={id} className={`flex min-h-screen snap-start snap-always flex-col ${className}`}>
@@ -403,80 +391,57 @@ export function HomePage() {
 
   return (
     <div className="w-full">
-      {/* Экран 1 — герой */}
+      {/* Экран 1 — герой (как в старой версии главной) */}
       <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto w-full max-w-6xl">
-            <div className="inline-flex items-center rounded-full bg-blue-600/10 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-blue-700 ring-1 ring-inset ring-blue-600/20">
-              Bullgram
+        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
+          <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+          <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
+          <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
+
+          <div className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-8 transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200 cursor-pointer">
+            <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
+              <Sparkles className="w-3 h-3 text-white" />
+            </span>
+            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase pr-1 group-hover:text-blue-600 transition-colors">
+              Bullgram 2.0 Автоматизация
+            </span>
+          </div>
+
+          <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
+            P2P-касса для Telegram <br className="hidden sm:block" />
+            без <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">ручной сверки</span>
+          </h1>
+
+          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-12 tracking-tight">
+            Подключите <span className="text-slate-800 font-bold">@BotFather</span> и соберите кассу для своего проекта: реквизиты продавца, чеки, заявки, выдача доступа и контроль продлений в одном месте.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
+            <button
+              type="button"
+              onClick={() => scrollToId('tariffs')}
+              className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
+            >
+              Смотреть тарифы
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToId('userbots')}
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-base font-bold !text-slate-700 transition-all border border-slate-200 hover:bg-slate-50 hover:!text-slate-900 hover:shadow-sm w-full sm:w-auto"
+            >
+              Смотреть функции
+            </button>
+          </div>
+
+          <div className="mt-12 flex items-center justify-center gap-6 text-sm font-semibold text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> P2P/TON-поток продавцу
             </div>
-            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Касса, юзерботы и счета для Telegram
-            </h1>
-            <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg">
-              Приём оплат для закрытой группы, юзербот-инфраструктура с API и MCP и TON-счета —
-              один сервис вместо зоопарка инструментов.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              {user ? (
-                <a
-                  href="/app"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                >
-                  Открыть кабинет
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => login()}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3.5 text-sm font-black text-slate-700 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                  >
-                    <GoogleIcon />
-                    Войти через Google
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => login(null, 'custom:telegram')}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-600"
-                  >
-                    <Send className="h-4 w-4" strokeWidth={2.5} />
-                    Войти через Telegram
-                  </button>
-                </>
-              )}
-              <a
-                href="/docs"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3.5 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-              >
-                Смотреть API и MCP
-                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-              </a>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-                Trial 14 дней бесплатно
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-                Оплата в TON
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-                Счёт можно создать без регистрации
-              </span>
+            <div className="hidden sm:flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pro оплачивается отдельно
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => scrollToId('userbots')}
-            className="mx-auto mt-10 flex flex-col items-center gap-1 text-xs font-black uppercase tracking-[0.14em] text-slate-400 transition hover:text-slate-600"
-          >
-            Листайте вниз
-            <ChevronDown className="h-5 w-5 animate-bounce" strokeWidth={2.5} />
-          </button>
         </div>
       </ScreenSection>
 
