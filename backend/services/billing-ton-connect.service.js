@@ -8,29 +8,13 @@ import { verifyTonConnectPayment } from './ton-connect-verify.service.js';
 import { tonToNano } from '../utils/ton.js';
 
 const TON_SCALE = 9n;
-const TON_RUB_RATE_DEFAULT = 200;
 const ORDER_TTL_MINUTES = 60 * 24;
 
-function envNumber(name, fallback) {
-    const parsed = Number(process.env[name]);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function computeTonAmount(rubAmount) {
-    const fixedTon = envNumber('TON_TIER_PRICE_TON', null);
-    if (fixedTon !== null) {
-        return {
-            ton: fixedTon.toFixed(Number(TON_SCALE) === 9 ? 2 : 2),
-            nano: tonToNano(fixedTon.toFixed(Number(TON_SCALE))),
-            tonPriced: true
-        };
-    }
-    const rate = envNumber('TON_TON_RUB_RATE', TON_RUB_RATE_DEFAULT);
-    const ton = Number(rubAmount) / rate;
+function computeTonAmount() {
+    const ton = PRO_PLAN.amountTon;
     return {
         ton: ton.toFixed(2),
-        nano: tonToNano(ton.toFixed(Number(TON_SCALE))),
-        tonPriced: false
+        nano: tonToNano(ton.toFixed(Number(TON_SCALE)))
     };
 }
 
@@ -70,7 +54,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
         throw error;
     }
 
-    const { ton, nano, tonPriced } = computeTonAmount(PRO_PLAN.amountRub);
+    const { ton, nano } = computeTonAmount();
 
     // Reuse existing valid pending order if we have one with same amount.
     // Avoids pile-up of orphan pending rows when user reloads /app/billing.
@@ -89,7 +73,7 @@ export async function createTonConnectOrder(supabase, ownerId) {
     if (existing) {
         const existingPayload = existing.payload || {};
         if (String(existingPayload.expected_nanoton || '') === String(nano.toString())) {
-            return shapeOrderResponse(existing, tonPriced);
+            return shapeOrderResponse(existing);
         }
     }
 
@@ -102,8 +86,8 @@ export async function createTonConnectOrder(supabase, ownerId) {
             owner_id: ownerId,
             plan_code: PRO_PLAN.code,
             status: 'pending',
-            amount_rub: PRO_PLAN.amountRub,
-            currency: 'RUB',
+            amount_rub: null,
+            currency: 'TON',
             duration_days: PRO_PLAN.durationDays,
             provider: 'ton_connect',
             provider_invoice_id: memo,
@@ -113,7 +97,6 @@ export async function createTonConnectOrder(supabase, ownerId) {
                 memo,
                 expected_nanoton: nano.toString(),
                 ton_amount: ton,
-                ton_priced: tonPriced,
                 sender_wallet: null
             }
         })
@@ -127,14 +110,13 @@ export async function createTonConnectOrder(supabase, ownerId) {
         owner_id: ownerId,
         event_type: 'ton_connect_order_created',
         provider: 'ton_connect',
-        amount_rub: PRO_PLAN.amountRub,
-        payload: { memo, ton_amount: ton, ton_priced: tonPriced, merchant_wallet: merchantWallet }
+        payload: { memo, ton_amount: ton, merchant_wallet: merchantWallet }
     });
 
-    return shapeOrderResponse(order, tonPriced);
+    return shapeOrderResponse(order);
 }
 
-function shapeOrderResponse(order, tonPriced) {
+function shapeOrderResponse(order) {
     const payload = order.payload || {};
     return {
         success: true,
@@ -143,8 +125,6 @@ function shapeOrderResponse(order, tonPriced) {
         merchant_wallet: payload.merchant_wallet || process.env.PLATFORM_TON_WALLET,
         amount_ton: payload.ton_amount,
         amount_nanoton: payload.expected_nanoton,
-        amount_rub: tonPriced ? null : Number(order.amount_rub || 0),
-        ton_priced: tonPriced,
         duration_days: order.duration_days,
         expires_at: order.expires_at,
         network: detectNetwork()
@@ -234,7 +214,6 @@ export async function verifyAndActivateTonConnectOrder(supabase, orderId, sender
         owner_id: updated.owner_id,
         event_type: 'ton_connect_payment_verified',
         provider: 'ton_connect',
-        amount_rub: Number(updated.amount_rub || 0),
         payload: {
             memo,
             tx_hash: result.txHash || null,

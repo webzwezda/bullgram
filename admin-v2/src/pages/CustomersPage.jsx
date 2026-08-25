@@ -458,8 +458,11 @@ function getAbandonedReason(row) {
 }
 
 function formatAttemptAmount(amount, currency) {
-  if (currency === 'TON') return `${Number(amount).toFixed(2)} TON`;
-  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(amount))} ₽`;
+  const value = Number(amount);
+  if (currency === 'TON') return `${value.toFixed(2)} TON`;
+  if (currency === 'USDT') return `${value.toFixed(2)} USDT`;
+  if (currency === 'RUB') return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)} ₽`;
+  return `${value} ${currency || ''}`.trim();
 }
 
 function formatAttemptTime(dateStr) {
