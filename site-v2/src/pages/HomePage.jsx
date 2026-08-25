@@ -4,20 +4,59 @@ import {
   AlertCircle,
   ArrowDown,
   ArrowRight,
+  Bot,
   CheckCircle2,
   ChevronDown,
   CreditCard,
   Loader2,
   QrCode,
   ReceiptText,
+  Repeat,
   RotateCcw,
   Send,
+  Settings,
+  ShieldCheck,
   Terminal,
   UserMinus,
+  Users,
+  Wallet,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
+
+const kassaOutcomes = [
+  {
+    icon: Wallet,
+    title: 'Касса идёт напрямую вам',
+    text: 'Деньги от клиентов поступают на ваши P2P-реквизиты или TON-кошелёк. Bullgram не держит деньги, не берёт процент — ведёт только статус и чек.'
+  },
+  {
+    icon: Bot,
+    title: 'Доступ выдаётся автоматически',
+    text: 'Клиент оплатил — получил приглашение в канал. Клиент не продлил — исключён без ручных действий. Вы контролирующий, не исполняющий.'
+  },
+  {
+    icon: Repeat,
+    title: 'Продления без напоминаний вам',
+    text: 'Bullgram сам напоминает об истекающем доступе, ведёт статус продления и фиксирует новую оплату. Вы просто видите: кто продлил, а кто нет.'
+  },
+  {
+    icon: Users,
+    title: 'База клиентов — не таблица, а система',
+    text: 'История платежей, статусы подписок, оттоков и возвращений. Вы знаете каждого клиента, а не только его последний чек.'
+  },
+  {
+    icon: Settings,
+    title: 'Тарифы под ваш сценарий',
+    text: 'День, неделя, месяц, год — любой период. Несколько тарифов для одного канала. Цена, описание и реквизиты — всё в одном месте.'
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Контроль данных и оплат',
+    text: 'Каждый чек привязан к человеку, тарифу и статусу. Вся история сохраняется, и вы можете проверить её в любой момент.'
+  }
+];
 
 const plans = [
   {
@@ -542,7 +581,51 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 4 — счета на оплату */}
+      {/* Экран 4 — что вы получаете от кассы */}
+      <ScreenSection>
+        <div className="flex w-full flex-1 flex-col justify-center bg-slate-50 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="mx-auto w-full max-w-6xl">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса закрытой группы</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Что вы получаете</h2>
+            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {kassaOutcomes.map((outcome) => {
+                const Icon = outcome.icon;
+                return (
+                  <article key={outcome.title} className="rounded-xl bg-white p-5">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                      <Icon className="h-5 w-5" strokeWidth={2.5} />
+                    </span>
+                    <h3 className="mt-4 text-base font-black leading-6 text-slate-950">{outcome.title}</h3>
+                    <p className="mt-2 text-sm font-medium leading-6 text-slate-600">{outcome.text}</p>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="mt-10 flex justify-center">
+              {user ? (
+                <a
+                  href="/app/profile"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Начать Trial
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => login()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Начать Trial
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 5 — счета на оплату */}
       <ScreenSection>
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
@@ -578,7 +661,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 5 — тарифы */}
+      {/* Экран 6 — тарифы */}
       <ScreenSection id="tariffs">
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-5xl">
