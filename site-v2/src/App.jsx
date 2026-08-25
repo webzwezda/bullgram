@@ -1,13 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Home, LayoutDashboard, CreditCard, FilePlus } from 'lucide-react';
-import { TelegramPaywallPage } from './pages/TelegramPaywallPage.jsx';
+import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
 import { LoginCard } from './ui/LoginCard.jsx';
 
-const PricingPage = lazy(() => import('./pages/PricingPage.jsx').then((m) => ({ default: m.PricingPage })));
 const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
@@ -26,7 +25,7 @@ const navSections = [
     title: 'Сервис',
     items: [
       { to: '/create', label: 'Создать счёт', icon: FilePlus },
-      { to: '/pricing', label: 'Тарифы', icon: CreditCard }
+      { to: '/#tariffs', label: 'Тарифы', icon: CreditCard }
     ]
   }
 ];
@@ -35,7 +34,6 @@ export function App() {
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const isHomeRoute = location.pathname === '/';
-  const isPricingRoute = location.pathname === '/pricing';
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const isDocsRoute = location.pathname.startsWith('/docs');
@@ -58,8 +56,7 @@ export function App() {
   const appRoutes = (
     <Suspense fallback={null}>
       <Routes>
-        <Route path="/" element={<TelegramPaywallPage />} />
-        <Route path="/pricing" element={<PricingPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<Navigate to="/app/profile" replace />} />
         <Route path="/purchases" element={<Navigate to="/app/profile" replace />} />
         <Route path="/plan" element={<Navigate to="/app/profile" replace />} />
@@ -184,7 +181,7 @@ export function App() {
       </aside>
 
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden flex flex-col w-full">
-        {(isHomeRoute || isPricingRoute) ? (
+        {isHomeRoute ? (
           appRoutes
         ) : (isPayRoute || isCreateRoute || isDocsRoute) ? (
           appRoutes
