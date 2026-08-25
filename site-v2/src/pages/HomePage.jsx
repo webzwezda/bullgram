@@ -413,7 +413,7 @@ export function HomePage() {
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-12 tracking-tight">
-            Подключите <span className="text-slate-800 font-bold">@BotFather</span> и соберите кассу для своего проекта: реквизиты продавца, чеки, заявки, выдача доступа и контроль продлений в одном месте.
+            Подключите <span className="text-slate-800 font-bold">@BotFather</span> и соберите кассу для своего проекта: реквизиты продавца, чеки, заявки, выдача доступа и контроль продлений в одном месте. А <span className="text-slate-800 font-bold">REST API и MCP-сервер</span> дают управлять кассой и юзерботами из кода или от AI-агента.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
@@ -432,11 +432,23 @@ export function HomePage() {
             >
               Смотреть функции
             </button>
+            <a
+              href="/api/external/v1/docs#description/introduction"
+              target="_blank"
+              rel="noreferrer"
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-slate-800 hover:shadow-[0_8px_30px_rgba(15,23,42,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
+            >
+              API и MCP
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </a>
           </div>
 
-          <div className="mt-12 flex items-center justify-center gap-6 text-sm font-semibold text-slate-400">
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-400">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> P2P/TON-поток продавцу
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API и Bullgram MCP
             </div>
             <div className="hidden sm:flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pro оплачивается отдельно
@@ -662,9 +674,9 @@ export function HomePage() {
             <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold text-slate-400">
               <a href="/docs" className="transition-colors hover:text-slate-600">Docs</a>
               <span>·</span>
-              <a href="/app/api" className="transition-colors hover:text-slate-600">API</a>
+              <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">API</a>
               <span>·</span>
-              <a href="/app/mcp" className="transition-colors hover:text-slate-600">MCP</a>
+              <a href="/docs" className="transition-colors hover:text-slate-600">MCP</a>
               <span>·</span>
               <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">
                 Поддержка
