@@ -6,13 +6,8 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
-  Mail,
-  ReceiptText,
-  RotateCcw,
-  ShieldCheck,
-  Truck,
 } from 'lucide-react';
-import { SUPPORT_EMAIL, SUPPORT_TELEGRAM } from '../contacts.js';
+import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
 
@@ -63,31 +58,6 @@ const plans = [
       'подходит для нестандартной Telegram-инфраструктуры',
       'будет включен после готовности ручного процесса'
     ]
-  }
-];
-
-const proDelivery = [
-  'Нажмите «Оплатить TON», подключите TonConnect-кошелёк и подтвердите платёж.',
-  'Деньги уходят напрямую на кошелёк сервиса, платёж отслеживается автоматически.',
-  'Сразу после подтверждения тариф активируется — кабинет открывается на 365 дней.',
-  'Услуга оказывается дистанционно в течение оплаченного периода.'
-];
-
-const complianceBlocks = [
-  {
-    icon: Truck,
-    title: 'Получение услуги',
-    text: 'Pro открывает дистанционный доступ к сервису Bullgram и рабочим сценариям для Telegram-проекта на оплаченный срок.'
-  },
-  {
-    icon: RotateCcw,
-    title: 'Отказ и возврат',
-    text: 'До начала оказания услуги покупатель может отказаться от заказа и получить полный возврат. После начала доступного периода возврат рассчитывается по неоказанной части услуги.'
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Персональные данные',
-    text: 'Контакты покупателя используются для связи по заказу, выдачи доступа, чеков и поддержки. Данные не передаются третьим лицам без законного основания.'
   }
 ];
 
@@ -276,7 +246,7 @@ export function PricingPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-12 sm:px-6 md:py-16 lg:px-8">
-      <section className="border-b border-slate-200 pb-12">
+      <section className="pb-12">
         <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
           {plans.map((plan) => (
             <PlanCard key={plan.id} plan={plan}>
@@ -307,73 +277,6 @@ export function PricingPage() {
               )}
             </PlanCard>
           ))}
-        </div>
-      </section>
-
-      <section className="grid gap-8 border-b border-slate-200 py-12 lg:grid-cols-[0.8fr_1.2fr]">
-        <div>
-          <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Что оплачивает покупатель</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Pro на 365 дней</h2>
-          <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Это услуга дистанционного доступа к сервису Bullgram для управления платным Telegram-проектом:
-            юзерботы, автопост, рассылки, доступ, CRM и Shop — без лимитов Trial.
-          </p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <div className="flex items-center gap-3 text-slate-950">
-            <ReceiptText className="h-6 w-6 text-blue-600" strokeWidth={2.5} />
-            <h3 className="text-2xl font-black tracking-tight">Порядок оказания услуги</h3>
-          </div>
-          <ol className="mt-6 space-y-4">
-            {proDelivery.map((step, index) => (
-              <li key={step} className="flex gap-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-black text-blue-700">
-                  {index + 1}
-                </span>
-                <span className="pt-1 text-sm font-semibold leading-6 text-slate-700">{step}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section className="border-b border-slate-200 py-12">
-        <div className="max-w-3xl">
-          <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Правила покупки</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Информация об оплате и правилах покупки</h2>
-        </div>
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {complianceBlocks.map(({ icon: Icon, title, text }) => (
-            <article key={title} className="rounded-lg border border-slate-200 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <Icon className="h-5 w-5 text-blue-600" strokeWidth={2.5} />
-                <h3 className="text-lg font-black text-slate-950">{title}</h3>
-              </div>
-              <p className="mt-3 text-sm font-medium leading-6 text-slate-600">{text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="grid gap-8 py-12 lg:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Поддержка</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Связь с командой</h2>
-          <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Оплата и возвраты — в криптовалюте. По любым вопросам доступа, оплаты и тарифов пишите в поддержку.
-          </p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <a className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100" href={`mailto:${SUPPORT_EMAIL}`}>
-              <Mail className="h-4 w-4" strokeWidth={2.5} />
-              {SUPPORT_EMAIL}
-            </a>
-            <a className="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100" href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer">
-              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-              Telegram поддержки
-            </a>
-          </div>
         </div>
       </section>
     </div>
