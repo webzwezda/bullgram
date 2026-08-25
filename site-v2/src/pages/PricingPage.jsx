@@ -4,7 +4,6 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
-  Clock3,
   Loader2,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
@@ -41,22 +40,6 @@ const plans = [
       'безлимит юзерботов и своих прокси',
       '3 автопост-бота и живые рассылки',
       'продажа активов в Shop с прямым денежным потоком'
-    ]
-  },
-  {
-    id: 'custom',
-    label: 'Индивидуально',
-    title: 'Под заказ',
-    price: 'по согласованию',
-    period: 'после брифа',
-    description: 'Индивидуальная настройка, миграция или отдельный запуск. Пока тариф не принимает оплату на сайте.',
-    action: 'Временно недоступно',
-    disabled: true,
-    features: [
-      'состав работ фиксируется до оплаты',
-      'срок и результат согласуются в заказе',
-      'подходит для нестандартной Telegram-инфраструктуры',
-      'будет включен после готовности ручного процесса'
     ]
   }
 ];
@@ -195,9 +178,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
 function PlanCard({ plan, children }) {
   const cardClass = plan.highlighted
     ? 'relative flex flex-col rounded-lg border-2 border-blue-600 bg-white p-6 shadow-xl shadow-blue-600/10'
-    : plan.disabled
-      ? 'relative flex flex-col rounded-lg border border-slate-200 bg-slate-100/80 p-6 text-slate-500'
-      : 'relative flex flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm';
+    : 'relative flex flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm';
 
   return (
     <article className={cardClass}>
@@ -211,25 +192,19 @@ function PlanCard({ plan, children }) {
 
       {plan.highlighted ? <div className="mb-4 h-2" /> : null}
       <div className="mb-5">
-        <h2 className={`text-2xl font-black ${plan.disabled ? 'text-slate-500' : 'text-slate-950'}`}>{plan.title}</h2>
+        <h2 className="text-2xl font-black text-slate-950">{plan.title}</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{plan.description}</p>
       </div>
 
       <div className="mb-6">
-        <div className={`text-4xl font-black tracking-tight ${plan.disabled ? 'text-slate-500' : 'text-slate-950'}`}>
-          {plan.price}
-        </div>
+        <div className="text-4xl font-black tracking-tight text-slate-950">{plan.price}</div>
         <div className="mt-1 text-sm font-bold text-slate-500">{plan.period}</div>
       </div>
 
       <ul className="mb-8 space-y-3">
         {plan.features.map((feature) => (
           <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-            {plan.disabled ? (
-              <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" strokeWidth={2.5} />
-            ) : (
-              <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${plan.highlighted ? 'text-blue-600' : 'text-emerald-500'}`} strokeWidth={2.5} />
-            )}
+            <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${plan.highlighted ? 'text-blue-600' : 'text-emerald-500'}`} strokeWidth={2.5} />
             <span>{feature}</span>
           </li>
         ))}
@@ -247,7 +222,7 @@ export function PricingPage() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-12 sm:px-6 md:py-16 lg:px-8">
       <section className="pb-12">
-        <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
+        <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
           {plans.map((plan) => (
             <PlanCard key={plan.id} plan={plan}>
               {plan.id === 'pro' ? (
@@ -258,14 +233,6 @@ export function PricingPage() {
                   user={user}
                   accessToken={accessToken}
                 />
-              ) : plan.disabled ? (
-                <button
-                  type="button"
-                  disabled
-                  className="mt-auto inline-flex w-full cursor-not-allowed items-center justify-center rounded-lg bg-slate-200 px-5 py-4 text-base font-black text-slate-500"
-                >
-                  {plan.action}
-                </button>
               ) : (
                 <a
                   href={plan.href}
