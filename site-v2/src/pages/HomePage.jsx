@@ -2,13 +2,18 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  ArrowDown,
   ArrowRight,
-  Bot,
   CheckCircle2,
+  ChevronDown,
   CreditCard,
   Loader2,
+  QrCode,
   ReceiptText,
+  RotateCcw,
   Send,
+  Terminal,
+  UserMinus,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -44,46 +49,6 @@ const plans = [
       'безлимит юзерботов и своих прокси',
       '3 автопост-бота и живые рассылки',
       'продажа активов в Shop с прямым денежным потоком'
-    ]
-  }
-];
-
-const products = [
-  {
-    id: 'userbots',
-    icon: Bot,
-    label: 'Флагман',
-    title: 'Юзерботы + API и MCP',
-    description: 'Юзерботы подключаются через выделенные прокси и управляются из кода или от AI-агента: рассылки, мониторинг, действия в группах.',
-    highlighted: true,
-    features: [
-      'REST API и Bullgram MCP',
-      'выделенный прокси на каждого юзербота',
-      'safe-mode до ручной активации'
-    ]
-  },
-  {
-    id: 'access',
-    icon: CreditCard,
-    label: 'Касса',
-    title: 'Касса закрытой группы',
-    description: 'Официальный бот принимает оплату, сам выдаёт доступ в закрытую группу и забирает его, когда подписка закончилась.',
-    features: [
-      'приём оплат P2P и в TON',
-      'автовыдача и автокик доступа',
-      'продления и база клиентов без ручной сверки'
-    ]
-  },
-  {
-    id: 'invoices',
-    icon: ReceiptText,
-    label: 'Без регистрации',
-    title: 'Счета на оплату',
-    description: 'TON-счёт за 30 секунд: ссылка и QR для покупателя, секрет раскрывается после подтверждения платежа.',
-    features: [
-      'оплата в TON через TonConnect',
-      'QR-код и ссылка на счёт',
-      'секрет доступен покупателю после оплаты'
     ]
   }
 ];
@@ -261,49 +226,6 @@ function PlanCard({ plan, children }) {
   );
 }
 
-function ProductCard({ product, children }) {
-  const cardClass = product.highlighted
-    ? 'relative flex flex-col rounded-lg border-2 border-blue-600 bg-white p-6 shadow-xl shadow-blue-600/10'
-    : 'relative flex flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm';
-  const Icon = product.icon;
-
-  return (
-    <article className={cardClass}>
-      {product.highlighted ? (
-        <div className="absolute -top-4 left-6 rounded-lg bg-blue-600 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-white shadow-md">
-          {product.label}
-        </div>
-      ) : (
-        <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{product.label}</div>
-      )}
-
-      {product.highlighted ? <div className="mb-4 h-2" /> : null}
-      <div className={`mb-4 flex items-center gap-3 ${product.highlighted ? '' : 'mt-1'}`}>
-        <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-            product.highlighted ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-600'
-          }`}
-        >
-          <Icon className="h-5 w-5" strokeWidth={2.5} />
-        </span>
-        <h3 className="text-xl font-black text-slate-950">{product.title}</h3>
-      </div>
-      <p className="mb-5 text-sm font-semibold leading-6 text-slate-600">{product.description}</p>
-
-      <ul className="mb-8 space-y-3">
-        {product.features.map((feature) => (
-          <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-            <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${product.highlighted ? 'text-blue-600' : 'text-emerald-500'}`} strokeWidth={2.5} />
-            <span>{feature}</span>
-          </li>
-        ))}
-      </ul>
-
-      {children}
-    </article>
-  );
-}
-
 function GoogleIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -315,10 +237,124 @@ function GoogleIcon() {
   );
 }
 
+function ScreenSection({ id, className = '', children }) {
+  return (
+    <section id={id} className={`flex min-h-screen snap-start snap-always flex-col py-4 md:py-6 ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+function scrollToId(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function UserbotsCodeMock() {
+  return (
+    <div className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-white/10 shadow-2xl shadow-black/40">
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
+        <span className="h-3 w-3 rounded-full bg-rose-500/80" />
+        <span className="h-3 w-3 rounded-full bg-amber-400/80" />
+        <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
+        <span className="ml-3 inline-flex items-center gap-2 text-xs font-bold text-slate-400">
+          <Terminal className="h-3.5 w-3.5" strokeWidth={2.5} />
+          bullgram api
+        </span>
+      </div>
+      <pre className="overflow-x-auto px-5 py-4 font-mono text-[13px] leading-6 text-slate-300">
+        <code>
+          <span className="text-sky-400">curl</span> -X POST https://bullgram.xyz/api/userbot/u1/send-message {'\n'}
+          {'  '}-H <span className="text-emerald-300">"Authorization: Bearer $TOKEN"</span> {'\n'}
+          {'  '}-d {'\{'}<span className="text-emerald-300">"chat"</span>: <span className="text-emerald-300">"@closed_group"</span>,
+          {'  '}    <span className="text-emerald-300">"text"</span>: <span className="text-emerald-300">"Добро пожаловать!"</span>{'\}'}
+          {'\n\n'}
+          <span className="text-slate-500">→ 200 OK</span> {'{'}<span className="text-emerald-300">"delivered"</span>: <span className="text-amber-300">true</span>{'}'}
+        </code>
+      </pre>
+    </div>
+  );
+}
+
+function KassaFlowMock() {
+  const steps = [
+    { icon: CreditCard, tone: 'bg-blue-50 text-blue-600', title: 'Клиент оплачивает', text: 'P2P-перевод или TON — деньги идут напрямую вам' },
+    { icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-600', title: 'Доступ выдан автоматически', text: 'Бот приглашает в закрытую группу сразу после оплаты' },
+    { icon: RotateCcw, tone: 'bg-amber-50 text-amber-600', title: 'Продление напомнит о себе', text: 'Бот сам напомнит и продлит подписку' },
+    { icon: UserMinus, tone: 'bg-rose-50 text-rose-600', title: 'Подписка истекла — доступ забран', text: 'Автокик сработает без ручной сверки чеков' },
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      {steps.map((step, index) => {
+        const Icon = step.icon;
+        return (
+          <div key={step.title}>
+            <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${step.tone}`}>
+                <Icon className="h-5 w-5" strokeWidth={2.5} />
+              </span>
+              <div>
+                <div className="text-sm font-black text-slate-950">{step.title}</div>
+                <div className="mt-0.5 text-sm font-medium leading-5 text-slate-600">{step.text}</div>
+              </div>
+            </div>
+            {index < steps.length - 1 ? (
+              <div className="flex justify-center py-1">
+                <ArrowDown className="h-4 w-4 text-slate-300" strokeWidth={2.5} />
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InvoiceMock() {
+  return (
+    <div className="mx-auto w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl shadow-black/40">
+      <div className="flex items-center justify-between">
+        <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+          <ReceiptText className="h-4 w-4" strokeWidth={2.5} />
+          Счёт на оплату
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">TON</span>
+      </div>
+      <div className="mt-4 text-4xl font-black tracking-tight text-slate-950">12.5 TON</div>
+      <div className="mt-1 text-sm font-bold text-slate-500">за цифровой товар</div>
+      <div className="mt-5 flex items-center gap-4">
+        <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400">
+          <QrCode className="h-10 w-10" strokeWidth={2} />
+        </div>
+        <div className="space-y-2 text-sm font-semibold text-slate-600">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
+            QR и ссылка для покупателя
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
+            Оплата через TonConnect
+          </div>
+          <div className="rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs font-bold text-slate-200">
+            Секрет: ••••••••
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-bold text-slate-500">
+        секрет раскроется покупателю после подтверждения платежа
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
   const { hash } = useLocation();
+
+  useEffect(() => {
+    document.documentElement.classList.add('home-scroll-snap');
+    return () => document.documentElement.classList.remove('home-scroll-snap');
+  }, []);
 
   useEffect(() => {
     if (hash === '#tariffs') {
@@ -327,92 +363,164 @@ export function HomePage() {
   }, [hash]);
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-10 sm:px-6 md:py-14 lg:px-8">
-      <section className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6 py-12 sm:px-10 md:py-16">
-        <div className="relative max-w-3xl">
-          <div className="inline-flex items-center rounded-full bg-blue-600/10 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-blue-700 ring-1 ring-inset ring-blue-600/20">
-            Bullgram
-          </div>
-          <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            Юзерботы для Telegram с API и MCP
-          </h1>
-          <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-            Подключите Telegram к коду и AI-агентам: юзербот-инфраструктура, касса закрытой группы
-            и TON-счета — в одном сервисе.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            {user ? (
-              <a
-                href="/app"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-              >
-                Открыть кабинет
-                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-              </a>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => login()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-700 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                >
-                  <GoogleIcon />
-                  Войти через Google
-                </button>
-                <button
-                  type="button"
-                  onClick={() => login(null, 'custom:telegram')}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-600"
-                >
-                  <Send className="h-4 w-4" strokeWidth={2.5} />
-                  Войти через Telegram
-                </button>
-              </>
-            )}
-            <a
-              href="/docs"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-            >
-              Смотреть API и MCP
-              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-            </a>
-          </div>
-          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-              Trial 14 дней бесплатно
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-              Оплата в TON
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-              Счёт можно создать без регистрации
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-12">
-        <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Что внутри</div>
-        <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Три продукта — один сервис</h2>
-        <div className="mt-8 grid gap-5 lg:grid-cols-3 lg:items-stretch">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product}>
-              {product.id === 'userbots' ? (
+    <div className="w-full">
+      {/* Экран 1 — герой */}
+      <ScreenSection>
+        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-gradient-to-br from-blue-50 via-white to-slate-50 px-6 py-14 sm:px-10 lg:px-14">
+          <div className="mx-auto w-full max-w-6xl">
+            <div className="inline-flex items-center rounded-full bg-blue-600/10 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-blue-700 ring-1 ring-inset ring-blue-600/20">
+              Bullgram
+            </div>
+            <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+              Юзерботы для Telegram с API и MCP
+            </h1>
+            <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-slate-600 sm:text-lg">
+              Подключите Telegram к коду и AI-агентам: юзербот-инфраструктура, касса закрытой группы
+              и TON-счета — в одном сервисе.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              {user ? (
                 <a
-                  href="/docs"
-                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  href="/app"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                 >
-                  Документация API
+                  Открыть кабинет
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                 </a>
-              ) : product.id === 'access' ? (
-                user ? (
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => login()}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3.5 text-sm font-black text-slate-700 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                  >
+                    <GoogleIcon />
+                    Войти через Google
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => login(null, 'custom:telegram')}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-sky-500 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-sky-500/20 transition hover:bg-sky-600"
+                  >
+                    <Send className="h-4 w-4" strokeWidth={2.5} />
+                    Войти через Telegram
+                  </button>
+                </>
+              )}
+              <a
+                href="/docs"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3.5 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+              >
+                Смотреть API и MCP
+                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+              </a>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
+                Trial 14 дней бесплатно
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
+                Оплата в TON
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
+                Счёт можно создать без регистрации
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => scrollToId('userbots')}
+            className="mx-auto mt-10 flex flex-col items-center gap-1 text-xs font-black uppercase tracking-[0.14em] text-slate-400 transition hover:text-slate-600"
+          >
+            Листайте вниз
+            <ChevronDown className="h-5 w-5 animate-bounce" strokeWidth={2.5} />
+          </button>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 2 — юзерботы + API/MCP */}
+      <ScreenSection id="userbots">
+        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl bg-slate-950 px-6 py-14 sm:px-10 lg:px-14">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+                Юзерботы + API и MCP
+              </h2>
+              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
+                Юзерботы подключаются через выделенные прокси и управляются из кода или от AI-агента:
+                рассылки, мониторинг, действия в группах — без пальцев и без ограничений ботов.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {['REST API и Bullgram MCP из коробки', 'выделенный прокси на каждого юзербота', 'safe-mode до ручной активации'].map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {user ? (
+                  <a
+                    href="/app"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  >
+                    Открыть кабинет
+                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => login()}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  >
+                    Начать бесплатно
+                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                  </button>
+                )}
+                <a
+                  href="/docs"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-black text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+                >
+                  Документация
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </a>
+              </div>
+            </div>
+            <UserbotsCodeMock />
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 3 — касса закрытой группы */}
+      <ScreenSection>
+        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-white px-6 py-14 sm:px-10 lg:px-14">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Касса закрытой группы
+              </h2>
+              <p className="mt-4 text-base font-medium leading-7 text-slate-600">
+                Официальный бот принимает оплату и сам управляет доступом в закрытую группу.
+                Деньги идут напрямую вам — без посредников и комиссий площадки.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {['приём оплат P2P и в TON', 'автовыдача и автокик доступа', 'продления и база клиентов без ручной сверки'].map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8">
+                {user ? (
                   <a
                     href="/app/profile"
-                    className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                   >
                     Начать Trial
                     <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -421,53 +529,102 @@ export function HomePage() {
                   <button
                     type="button"
                     onClick={() => login()}
-                    className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                   >
                     Начать Trial
                     <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                   </button>
-                )
-              ) : (
+                )}
+              </div>
+            </div>
+            <KassaFlowMock />
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 4 — счета на оплату */}
+      <ScreenSection>
+        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl bg-slate-950 px-6 py-14 sm:px-10 lg:px-14">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Без регистрации</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+                Счета на оплату
+              </h2>
+              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
+                TON-счёт за 30 секунд: ссылка и QR для покупателя, оплата через TonConnect,
+                секрет раскрывается сразу после подтверждения платежа.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {['оплата в TON через TonConnect', 'QR-код и ссылка на счёт', 'секрет доступен покупателю после оплаты'].map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8">
                 <a
                   href="/create"
-                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-4 text-base font-black text-white transition hover:bg-slate-800"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-900 transition hover:bg-slate-100"
                 >
-                  Создать счёт
+                  Создать счёт — без регистрации
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                 </a>
-              )}
-            </ProductCard>
-          ))}
+              </div>
+            </div>
+            <InvoiceMock />
+          </div>
         </div>
-      </section>
+      </ScreenSection>
 
-      <section id="tariffs" className="mt-12 scroll-mt-6 pb-12">
-        <div className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
-        <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Начните бесплатно — платите, когда вырастете</h2>
-        <div className="mt-8 grid gap-5 lg:grid-cols-2 lg:items-stretch">
-          {plans.map((plan) => (
-            <PlanCard key={plan.id} plan={plan}>
-              {plan.id === 'pro' ? (
-                <ProCheckoutButton
-                  profilePlan={profilePlan}
-                  proEndsAt={proEndsAt}
-                  pendingOrder={pendingOrder}
-                  user={user}
-                  accessToken={accessToken}
-                />
-              ) : (
-                <a
-                  href={plan.href}
-                  className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                >
-                  {plan.action}
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
-              )}
-            </PlanCard>
-          ))}
+      {/* Экран 5 — тарифы */}
+      <ScreenSection id="tariffs">
+        <div className="flex w-full flex-1 flex-col justify-center rounded-3xl border border-slate-200 bg-white px-6 py-14 sm:px-10 lg:px-14">
+          <div className="mx-auto w-full max-w-5xl">
+            <div className="text-center">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Начните бесплатно — платите, когда вырастете
+              </h2>
+            </div>
+            <div className="mt-10 grid gap-5 lg:grid-cols-2 lg:items-stretch">
+              {plans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan}>
+                  {plan.id === 'pro' ? (
+                    <ProCheckoutButton
+                      profilePlan={profilePlan}
+                      proEndsAt={proEndsAt}
+                      pendingOrder={pendingOrder}
+                      user={user}
+                      accessToken={accessToken}
+                    />
+                  ) : (
+                    <a
+                      href={plan.href}
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                    >
+                      {plan.action}
+                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                    </a>
+                  )}
+                </PlanCard>
+              ))}
+            </div>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold text-slate-400">
+              <a href="/docs" className="transition-colors hover:text-slate-600">Docs</a>
+              <span>·</span>
+              <a href="/app/api" className="transition-colors hover:text-slate-600">API</a>
+              <span>·</span>
+              <a href="/app/mcp" className="transition-colors hover:text-slate-600">MCP</a>
+              <span>·</span>
+              <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">
+                Поддержка
+              </a>
+            </div>
+          </div>
         </div>
-      </section>
+      </ScreenSection>
     </div>
   );
 }

@@ -56,3 +56,8 @@
     text-decoration: none;
   }
 }
+
+/* Homepage: full-screen sections flip like slides on wheel scroll. */
+html.home-scroll-snap {
+  scroll-snap-type: y mandatory;
+}
