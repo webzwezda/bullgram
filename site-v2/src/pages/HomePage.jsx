@@ -462,17 +462,17 @@ export function HomePage() {
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Автоматизация</div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Юзерботы, API и MCP — руки вашей кассы
+                Юзерботы с API и MCP
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Касса принимает оплату и выдаёт доступ, а юзерботы исполняют остальное: рассылки,
-                напоминания о продлении, действия в группе от имени живого аккаунта. REST API и
-                Bullgram MCP подключают всю кассу к вашему коду или AI-агенту.
+                Живые Telegram-аккаунты под вашим управлением: рассылки, мониторинг и действия
+                в группах — из кода или от AI-агента через REST API и Bullgram MCP. Каждый юзербот
+                работает через выделенный прокси и safe-mode до ручной активации.
               </p>
               <ul className="mt-6 space-y-3">
-                {['рассылки и напоминания о продлениях', 'выделенный прокси на каждого юзербота', 'safe-mode до ручной активации', 'REST API и Bullgram MCP из коробки'].map((feature) => (
+                {['рассылки и действия от имени живого аккаунта', 'выделенный прокси на каждого юзербота', 'safe-mode до ручной активации', 'REST API и Bullgram MCP из коробки'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
                     <span>{feature}</span>
@@ -517,7 +517,7 @@ export function HomePage() {
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Флагман</div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
                 Касса закрытой группы
               </h2>
@@ -608,14 +608,14 @@ export function HomePage() {
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Из той же кассы</div>
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Без регистрации</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
                 Счета на оплату
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Когда весь контур не нужен — соберите одиночный TON-счёт за 30 секунд из той же
-                кассы: ссылка и QR для покупателя, оплата через TonConnect, секрет раскрывается
-                сразу после подтверждения платежа.
+                Быстрый инструмент для разовых оплат: TON-счёт за 30 секунд — ссылка и QR
+                для покупателя, оплата через TonConnect, секрет раскрывается сразу после
+                подтверждения платежа.
               </p>
               <ul className="mt-6 space-y-3">
                 {['оплата в TON через TonConnect', 'QR-код и ссылка на счёт', 'секрет доступен покупателю после оплаты'].map((feature) => (
