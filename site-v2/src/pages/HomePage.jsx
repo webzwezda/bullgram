@@ -461,13 +461,7 @@ export function HomePage() {
       <ScreenSection id="tariffs">
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-5xl">
-            <div className="text-center">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Начните бесплатно — платите, когда вырастете
-              </h2>
-            </div>
-            <div className="mt-10 grid gap-5 lg:grid-cols-2 lg:items-stretch">
+            <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
               {plans.map((plan) => (
                 <PlanCard key={plan.id} plan={plan}>
                   {plan.id === 'pro' ? (
@@ -489,17 +483,6 @@ export function HomePage() {
                   )}
                 </PlanCard>
               ))}
-            </div>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold text-slate-400">
-              <a href="/docs" className="transition-colors hover:text-slate-600">Docs</a>
-              <span>·</span>
-              <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">API</a>
-              <span>·</span>
-              <a href="/docs" className="transition-colors hover:text-slate-600">MCP</a>
-              <span>·</span>
-              <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">
-                Поддержка
-              </a>
             </div>
           </div>
         </div>
