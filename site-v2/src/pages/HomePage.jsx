@@ -450,9 +450,6 @@ export function HomePage() {
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API и Bullgram MCP
             </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Pro оплачивается отдельно
-            </div>
           </div>
         </div>
       </ScreenSection>
