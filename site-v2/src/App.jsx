@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Home, LayoutDashboard, CreditCard, FilePlus } from 'lucide-react';
+import { Home, LayoutDashboard, FilePlus } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
@@ -24,8 +24,7 @@ const navSections = [
   {
     title: 'Сервис',
     items: [
-      { to: '/create', label: 'Создать счёт', icon: FilePlus },
-      { to: '/#tariffs', label: 'Тарифы', icon: CreditCard }
+      { to: '/create', label: 'Создать счёт', icon: FilePlus }
     ]
   }
 ];
