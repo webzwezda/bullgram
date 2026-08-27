@@ -393,7 +393,7 @@ export function HomePage() {
     <div className="w-full">
       {/* Экран 1 — герой (как в старой версии главной) */}
       <ScreenSection>
-        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
+        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-16 pb-28 text-center sm:px-6 lg:pt-20 lg:pb-32">
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
           <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
@@ -412,7 +412,7 @@ export function HomePage() {
             с <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">API и MCP</span>
           </h1>
 
-          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-12 tracking-tight">
+          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-10 tracking-tight">
             Подключите <span className="text-slate-800 font-bold">юзербота через выделенный прокси</span> и автоматизируйте Telegram по-настоящему: рассылки, мониторинг и действия в группах от имени живого аккаунта. А <span className="text-slate-800 font-bold">REST API и MCP-сервер</span> дают управлять юзерботами, кассой и доступами из кода или от AI-агента.
           </p>
 
@@ -443,7 +443,7 @@ export function HomePage() {
             </a>
           </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-400">
+          <div className="absolute inset-x-0 bottom-6 flex flex-wrap items-center justify-center gap-6 px-4 text-sm font-semibold text-slate-400">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Выделенный прокси на юзербота
             </div>
@@ -459,7 +459,7 @@ export function HomePage() {
 
       {/* Экран 2 — тарифы */}
       <ScreenSection id="tariffs">
-        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 pb-16 pt-6 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-5xl">
             <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
               {plans.map((plan) => (
