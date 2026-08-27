@@ -408,12 +408,12 @@ export function HomePage() {
           </div>
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
-            P2P-касса для Telegram <br className="hidden sm:block" />
-            без <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">ручной сверки</span>
+            Юзерботы для Telegram <br className="hidden sm:block" />
+            с <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">API и MCP</span>
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-12 tracking-tight">
-            Подключите <span className="text-slate-800 font-bold">@BotFather</span> и соберите кассу для своего проекта: реквизиты продавца, чеки, заявки, выдача доступа и контроль продлений в одном месте. А <span className="text-slate-800 font-bold">REST API и MCP-сервер</span> дают управлять кассой и юзерботами из кода или от AI-агента.
+            Подключите <span className="text-slate-800 font-bold">юзербота через выделенный прокси</span> и автоматизируйте Telegram по-настоящему: рассылки, мониторинг и действия в группах от имени живого аккаунта. А <span className="text-slate-800 font-bold">REST API и MCP-сервер</span> дают управлять юзерботами, кассой и доступами из кода или от AI-агента.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
@@ -445,7 +445,7 @@ export function HomePage() {
 
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-400">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> P2P/TON-поток продавцу
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Выделенный прокси на юзербота
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API и Bullgram MCP
