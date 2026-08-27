@@ -457,7 +457,55 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 2 — юзерботы + API/MCP */}
+      {/* Экран 2 — тарифы */}
+      <ScreenSection id="tariffs">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
+          <div className="mx-auto w-full max-w-5xl">
+            <div className="text-center">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Начните бесплатно — платите, когда вырастете
+              </h2>
+            </div>
+            <div className="mt-10 grid gap-5 lg:grid-cols-2 lg:items-stretch">
+              {plans.map((plan) => (
+                <PlanCard key={plan.id} plan={plan}>
+                  {plan.id === 'pro' ? (
+                    <ProCheckoutButton
+                      profilePlan={profilePlan}
+                      proEndsAt={proEndsAt}
+                      pendingOrder={pendingOrder}
+                      user={user}
+                      accessToken={accessToken}
+                    />
+                  ) : (
+                    <a
+                      href={plan.href}
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                    >
+                      {plan.action}
+                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                    </a>
+                  )}
+                </PlanCard>
+              ))}
+            </div>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold text-slate-400">
+              <a href="/docs" className="transition-colors hover:text-slate-600">Docs</a>
+              <span>·</span>
+              <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">API</a>
+              <span>·</span>
+              <a href="/docs" className="transition-colors hover:text-slate-600">MCP</a>
+              <span>·</span>
+              <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">
+                Поддержка
+              </a>
+            </div>
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 3 — юзерботы + API/MCP */}
       <ScreenSection id="userbots">
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
@@ -512,7 +560,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 3 — касса закрытой группы */}
+      {/* Экран 4 — касса закрытой группы */}
       <ScreenSection>
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
@@ -559,7 +607,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 4 — что вы получаете от кассы */}
+      {/* Экран 5 — что вы получаете от кассы */}
       <ScreenSection>
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-50 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-6xl">
@@ -603,7 +651,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 5 — счета на оплату */}
+      {/* Экран 6 — счета на оплату */}
       <ScreenSection>
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
@@ -636,54 +684,6 @@ export function HomePage() {
               </div>
             </div>
             <InvoiceMock />
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 6 — тарифы */}
-      <ScreenSection id="tariffs">
-        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto w-full max-w-5xl">
-            <div className="text-center">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Тарифы</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Начните бесплатно — платите, когда вырастете
-              </h2>
-            </div>
-            <div className="mt-10 grid gap-5 lg:grid-cols-2 lg:items-stretch">
-              {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan}>
-                  {plan.id === 'pro' ? (
-                    <ProCheckoutButton
-                      profilePlan={profilePlan}
-                      proEndsAt={proEndsAt}
-                      pendingOrder={pendingOrder}
-                      user={user}
-                      accessToken={accessToken}
-                    />
-                  ) : (
-                    <a
-                      href={plan.href}
-                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                    >
-                      {plan.action}
-                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                    </a>
-                  )}
-                </PlanCard>
-              ))}
-            </div>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold text-slate-400">
-              <a href="/docs" className="transition-colors hover:text-slate-600">Docs</a>
-              <span>·</span>
-              <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">API</a>
-              <span>·</span>
-              <a href="/docs" className="transition-colors hover:text-slate-600">MCP</a>
-              <span>·</span>
-              <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-600">
-                Поддержка
-              </a>
-            </div>
           </div>
         </div>
       </ScreenSection>
