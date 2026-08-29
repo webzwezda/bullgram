@@ -30,6 +30,13 @@ npm --prefix docs-site install
 - **nginx**: `/etc/nginx/sites-enabled/bullgram.xyz`. Бэкапы: `/root/nginx-backups/`.
   Конфиг в репозиторий не выносится (решение владельца).
 - **pm2**: `backend/ecosystem.config.cjs` — из репо, релоад: `pm2 reload ecosystem.config.cjs --env production`
+- **Прокси (3proxy)**: при загрузке сервера systemd-юнит
+  `bullgram-managed-proxies.service` (`ops/systemd/`) сверяет состояние с Supabase,
+  рендерит `/var/lib/bullgram/managed-proxies/3proxy.cfg`, возвращает IPv6 на интерфейс
+  и поднимает 3proxy. Юнит должен быть `enabled`. Ручной запуск:
+  `cd /srv/bullgram/backend && node scripts/restore-managed-proxies.mjs`
+  Бэкенд в pm2 дополнительно следит за процессом 3proxy в рантайме
+  (два процесса 3proxy с reuseport — норма после пересозданий).
 - **Статика**: `/var/www/bullgram-site-v2` и `/var/www/bullgram-admin-v2` — симлинки
   на `dist` из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`
 - **Архивы**: `/var/www/_archive/` (бывшие блог/курсы), `/root/nginx-backups/`

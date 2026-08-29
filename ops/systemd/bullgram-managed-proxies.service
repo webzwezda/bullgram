@@ -1,0 +1,13 @@
+[Unit]
+Description=Bullgram managed proxy runtime restore
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/bullgram/backend
+ExecStart=/usr/bin/node scripts/restore-managed-proxies.mjs
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
