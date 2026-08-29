@@ -212,7 +212,7 @@ export default (config) => {
 	});
 
 	config.addFilter('dateLong', (value) => {
-		return new Date(value).toLocaleString('ru', {
+		return new Date(value).toLocaleString('en', {
 			dateStyle: 'long',
 		});
 	});
@@ -230,7 +230,7 @@ export default (config) => {
 				day: 'numeric',
 			};
 
-		return date.toLocaleString('ru', dateFormat);
+		return date.toLocaleString('en', dateFormat);
 	});
 
 	config.addFilter('dateISO', (value) => {
