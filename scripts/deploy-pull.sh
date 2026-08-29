@@ -26,6 +26,7 @@ NEW_HEAD="$(git rev-parse HEAD)"
 echo "    $PREV_HEAD → $NEW_HEAD"
 
 # 2. Re-exec: перечитываем уже обновлённый скрипт из стабильной копии.
+echo "    [debug pass1] SELF_DIR=$SELF_DIR"
 if [ -z "${DEPLOY_REEXEC:-}" ]; then
   export DEPLOY_REEXEC=1
   export DEPLOY_SELF_DIR="$SELF_DIR"
@@ -34,6 +35,7 @@ if [ -z "${DEPLOY_REEXEC:-}" ]; then
   exec bash "$SELF"
 fi
 
+echo "    [debug pass2] SELF_DIR=$SELF_DIR DEPLOY_SELF_DIR=${DEPLOY_SELF_DIR:-UNSET} cwd=$(pwd)"
 echo "==> [$(date -u +%FT%TZ)] deploy-pull start"
 echo "    root: $ROOT"
 
