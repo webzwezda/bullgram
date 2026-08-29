@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Resolve repo root regardless of where the script is called from.
-SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF_DIR="${DEPLOY_SELF_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 cd "$SELF_DIR/.."
 ROOT="$(pwd)"
 
