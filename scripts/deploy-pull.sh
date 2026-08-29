@@ -18,6 +18,7 @@ ROOT="$(pwd)"
 # 1. Pull latest FIRST — так следующий запуск всегда исполняет свежую версию
 #    этого же скрипта (git reset заменяет файл прямо под запущенным bash,
 #    из-за чего раньше молча пропускались шаги).
+echo "==> [fetch-debug] SELF_DIR=$SELF_DIR | DEPLOY_SELF_DIR=${DEPLOY_SELF_DIR:-UNSET} | REEXEC=${DEPLOY_REEXEC:-UNSET} | cwd=$(pwd)"
 echo "==> git fetch + reset --hard origin/main"
 git fetch --all --prune
 PREV_HEAD="$(git rev-parse HEAD)"
