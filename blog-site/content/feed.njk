@@ -13,8 +13,8 @@ eleventyExcludeFromCollections: true
     {% for post in collections.posts %}
       <item>
         <title>{{ post.data.title }}</title>
-        <link>https://bullgram.xyz{{ post.url }}</link>
-        <guid isPermaLink="true">https://bullgram.xyz{{ post.url }}</guid>
+        <link>https://bullgram.xyz{{ post.url | blogUrl }}</link>
+        <guid isPermaLink="true">https://bullgram.xyz{{ post.url | blogUrl }}</guid>
         <description>{{ post.data.description }}</description>
         <pubDate>{{ post.data.date | rfc3339 }}</pubDate>
       </item>
