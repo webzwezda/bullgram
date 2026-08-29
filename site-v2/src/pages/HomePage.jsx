@@ -391,8 +391,8 @@ export function HomePage() {
 
   return (
     <div className="w-full">
-      {/* Экран 1 — герой (как в старой версии главной) */}
-      <ScreenSection>
+      {/* Экран 1 — герой (чуть ниже вьюпорта, чтобы тарифы приходили раньше) */}
+      <section className="relative flex min-h-[86vh] snap-start snap-always flex-col">
         <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-16 pb-28 text-center sm:px-6 lg:pt-20 lg:pb-32">
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
@@ -452,7 +452,7 @@ export function HomePage() {
             </div>
           </div>
         </div>
-      </ScreenSection>
+      </section>
 
       {/* Экран 2 — тарифы */}
       <ScreenSection id="tariffs">
