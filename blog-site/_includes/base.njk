@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}{% if title %} · {% endif %}Bullgram Блог</title>
   {% if description %}<meta name="description" content="{{ description }}">{% endif %}
-  <link rel="alternate" type="application/rss+xml" title="Bullgram Блог" href="/blog/feed.xml">
-  <link rel="stylesheet" href="/blog/css/style.css">
+  <link rel="alternate" type="application/rss+xml" title="Bullgram Блог" href="{{ '/feed.xml' | url }}">
+  <link rel="stylesheet" href="{{ '/css/style.css' | url }}">
 </head>
 <body>
   <header class="blog-header">
     <div class="blog-container blog-header-row">
-      <a class="blog-brand" href="/blog/">Bullgram<span> Блог</span></a>
+      <a class="blog-brand" href="{{ '/' | url }}">Bullgram<span> Блог</span></a>
       <a class="blog-back" href="/">bullgram.xyz</a>
     </div>
   </header>
