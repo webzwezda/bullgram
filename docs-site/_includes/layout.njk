@@ -1,0 +1,88 @@
+---
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} · {% endif %}Bullgram Docs</title>
+  <link rel="stylesheet" href="{{ '/css/style.css' | url }}">
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <symbol id="svg-menu" viewBox="0 0 24 24">
+      <title>Menu</title>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu">
+        <line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </symbol>
+    <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+      <title>Expand</title>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-chevron-right">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </symbol>
+  </svg>
+
+  <div class="side-bar">
+    <div class="site-header">
+      <a href="{{ '/' | url }}" class="site-title lh-tight">Bullgram Docs</a>
+      <a href="#" id="menu-button" class="site-button">
+        <svg viewBox="0 0 24 24" class="icon"><use xlink:href="#svg-menu"></use></svg>
+      </a>
+    </div>
+    <nav role="navigation" aria-label="Main" id="site-nav" class="site-nav">
+      {% set groups = collections.docsPages | groupPages %}
+      {% for group in groups %}
+        <div class="nav-category">{{ group.name }}</div>
+        <ul class="nav-list">
+          {% for item in group.items %}
+            <li class="nav-list-item{% if page.url == item.url %} active{% endif %}">
+              <a href="{{ item.url | url }}" class="nav-list-link{% if page.url == item.url %} active{% endif %}">{{ item.title }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    </nav>
+    <footer class="site-footer">
+      © Bullgram
+    </footer>
+  </div>
+  <div class="main" id="top">
+    <div id="main-header" class="main-header">
+      <nav aria-label="Auxiliary" class="aux-nav">
+        <ul class="aux-nav-list">
+          <li class="aux-nav-list-item">
+            <a href="/" class="site-button">bullgram.xyz</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    <div id="main-content-wrap" class="main-content-wrap">
+      <div id="main-content" class="main-content" role="main">
+        <h1>{{ title }}</h1>
+        {{ content | safe }}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var menuButton = document.getElementById('menu-button');
+      var siteNav = document.getElementById('site-nav');
+      var mainHeader = document.getElementById('main-header');
+      if (!menuButton) return;
+      menuButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        if (menuButton.classList.toggle('nav-open')) {
+          siteNav.classList.add('nav-open');
+          mainHeader.classList.add('nav-open');
+        } else {
+          siteNav.classList.remove('nav-open');
+          mainHeader.classList.remove('nav-open');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

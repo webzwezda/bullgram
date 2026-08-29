@@ -1,0 +1,18 @@
+{
+  "name": "bullgram-docs-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bullgram documentation site built with Eleventy, served at bullgram.xyz/docs",
+  "scripts": {
+    "build": "sass --no-source-map styles/main.scss css/style.css && eleventy",
+    "dev": "sass --no-source-map --watch styles/main.scss css/style.css & eleventy --serve"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^3.1.6",
+    "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.2",
+    "just-the-docs": "github:pmarsceill/just-the-docs#v0.3.3"
+  },
+  "devDependencies": {
+    "sass": "^1.80.0"
+  }
+}

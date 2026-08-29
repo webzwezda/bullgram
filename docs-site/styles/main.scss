@@ -1,0 +1,60 @@
+// Bullgram docs — just-the-docs frontend (pmarsceill/just-the-docs v0.3.3, MIT),
+// light scheme (theme default), compiled with dart-sass for Eleventy.
+
+@import "../node_modules/just-the-docs/_sass/support/support";
+@import "../node_modules/just-the-docs/_sass/color_schemes/light";
+@import "../node_modules/just-the-docs/_sass/modules";
+
+// Map Prism token classes (eleventy-plugin-syntaxhighlight) onto the theme's
+// Rouge palette from _sass/code.scss.
+.token.c,
+.token.comment,
+.token.prologue,
+.token.doctype,
+.token.cdata {
+  color: #586e75;
+}
+.token.punctuation {
+  color: #93a1a1;
+}
+.token.keyword,
+.token.important,
+.token.atrule,
+.token.rule {
+  color: #859900;
+}
+.token.operator,
+.token.entity,
+.token.url {
+  color: #859900;
+}
+.token.string,
+.token.char,
+.token.attr-value,
+.token.regex,
+.token.number,
+.token.boolean {
+  color: #2aa198;
+}
+.token.function,
+.token.class-name,
+.token.selector,
+.token.tag {
+  color: #268bd2;
+}
+.token.builtin,
+.token.symbol {
+  color: #b58900;
+}
+.token.constant,
+.token.property,
+.token.attr-name,
+.token.deleted {
+  color: #cb4b16;
+}
+.token.variable {
+  color: #93a1a1;
+}
+.token.inserted {
+  color: #859900;
+}

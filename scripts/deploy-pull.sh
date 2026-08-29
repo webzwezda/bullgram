@@ -62,10 +62,20 @@ if [ "$need_site_install" = "1" ]; then
   echo "==> npm install site-v2"
   npm --prefix site-v2 install
 fi
+if [ ! -d docs-site/node_modules ] || echo "$CHANGED_FILES" | grep -q '^docs-site/package\.json$'; then
+  echo "==> npm install docs-site"
+  npm --prefix docs-site install
+fi
 
 # 3. Build frontends
 echo "==> npm run build:v2 (site-v2 + admin-v2)"
 npm run build:v2
+
+# 3b. Build docs site into site-v2/dist/docs (static, served by nginx files-first)
+echo "==> npm run build (docs-site)"
+npm --prefix docs-site run build
+rm -rf site-v2/dist/docs
+cp -r docs-site/_site site-v2/dist/docs
 
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)

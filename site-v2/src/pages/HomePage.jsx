@@ -414,7 +414,7 @@ export function HomePage() {
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
             <a
-              href="/quick-start"
+              href="/docs/quick-start/"
               className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
             >
               Quick Start

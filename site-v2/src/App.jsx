@@ -11,8 +11,6 @@ const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ de
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
 const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
-const DocsPage = lazy(() => import('./pages/DocsPage.jsx').then((m) => ({ default: m.DocsPage })));
-const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((m) => ({ default: m.QuickStartPage })));
 
 const navSections = [
   {
@@ -36,8 +34,6 @@ export function App() {
   const isHomeRoute = location.pathname === '/';
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
-  const isDocsRoute = location.pathname.startsWith('/docs');
-  const isQuickStartRoute = location.pathname.startsWith('/quick-start');
   const { user } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -45,8 +41,6 @@ export function App() {
     if (location.pathname === '/') return 'Главная';
     if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
     if (location.pathname.startsWith('/created')) return 'Счёт создан';
-    if (location.pathname.startsWith('/docs')) return 'API & MCP';
-    if (location.pathname.startsWith('/quick-start')) return 'Quick Start';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
@@ -67,8 +61,7 @@ export function App() {
         </Route>
         <Route path="/create" element={<CreateInvoicePage />} />
         <Route path="/created/:id" element={<CreatedInvoicePage />} />
-        <Route path="/docs" element={<DocsPage />} />
-        <Route path="/quick-start" element={<QuickStartPage />} />
+        <Route path="/quick-start" element={<Navigate to="/docs/quick-start/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -167,18 +160,11 @@ export function App() {
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
-            <NavLink
-              to="/docs"
-              className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
-              }
-            >
-              Docs
-            </NavLink>
+            <a href="/docs/" className="transition-colors hover:text-slate-700">Docs</a>
             <span className="text-slate-300">·</span>
-            <a href="/app/api" className="transition-colors hover:text-slate-700">API</a>
+            <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-700">API</a>
             <span className="text-slate-300">·</span>
-            <a href="/app/mcp" className="transition-colors hover:text-slate-700">MCP</a>
+            <a href="/docs/" className="transition-colors hover:text-slate-700">MCP</a>
           </div>
         </div>
       </aside>
@@ -186,7 +172,7 @@ export function App() {
       <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
         {isHomeRoute ? (
           appRoutes
-        ) : (isPayRoute || isCreateRoute || isDocsRoute || isQuickStartRoute) ? (
+        ) : (isPayRoute || isCreateRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>
