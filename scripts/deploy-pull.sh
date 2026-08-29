@@ -18,7 +18,6 @@ ROOT="$(pwd)"
 # 1. Pull latest FIRST — так следующий запуск всегда исполняет свежую версию
 #    этого же скрипта (git reset заменяет файл прямо под запущенным bash,
 #    из-за чего раньше молча пропускались шаги).
-echo "==> [fetch-debug] SELF_DIR=$SELF_DIR | DEPLOY_SELF_DIR=${DEPLOY_SELF_DIR:-UNSET} | REEXEC=${DEPLOY_REEXEC:-UNSET} | cwd=$(pwd)"
 echo "==> git fetch + reset --hard origin/main"
 git fetch --all --prune
 PREV_HEAD="$(git rev-parse HEAD)"
@@ -27,7 +26,6 @@ NEW_HEAD="$(git rev-parse HEAD)"
 echo "    $PREV_HEAD → $NEW_HEAD"
 
 # 2. Re-exec: перечитываем уже обновлённый скрипт из стабильной копии.
-echo "    [debug pass1] SELF_DIR=$SELF_DIR"
 if [ -z "${DEPLOY_REEXEC:-}" ]; then
   export DEPLOY_REEXEC=1
   export DEPLOY_SELF_DIR="$SELF_DIR"
