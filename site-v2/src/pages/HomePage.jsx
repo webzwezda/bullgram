@@ -393,7 +393,7 @@ export function HomePage() {
     <div className="w-full">
       {/* Экран 1 — герой (чуть ниже вьюпорта, чтобы тарифы приходили раньше) */}
       <section className="relative flex min-h-[86vh] snap-start snap-always flex-col">
-        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-16 pb-28 text-center sm:px-6 lg:pt-20 lg:pb-32">
+        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
           <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
@@ -443,7 +443,7 @@ export function HomePage() {
             </a>
           </div>
 
-          <div className="absolute inset-x-0 bottom-6 flex flex-wrap items-center justify-center gap-6 px-4 text-sm font-semibold text-slate-400">
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-400">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Выделенный прокси на юзербота
             </div>
