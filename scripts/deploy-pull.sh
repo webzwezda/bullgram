@@ -5,6 +5,7 @@
 # Re-exec from a stable temp copy so the running script can never change.
 if [ -z "${DEPLOY_REEXEC:-}" ]; then
   export DEPLOY_REEXEC=1
+  export DEPLOY_SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
   SELF="$(mktemp /tmp/deploy-pull.XXXXXX)"
   cp "$0" "$SELF"
   exec bash "$SELF"
@@ -20,7 +21,10 @@ fi
 set -euo pipefail
 
 # Resolve repo root regardless of where the script is called from.
-cd "$(dirname "$0")/.."
+# After the re-exec above $0 points to a temp copy, so the original
+# script directory travels through DEPLOY_SELF_DIR.
+SELF_DIR="${DEPLOY_SELF_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+cd "$SELF_DIR/.."
 ROOT="$(pwd)"
 
 echo "==> [$(date -u +%FT%TZ)] deploy-pull start"
