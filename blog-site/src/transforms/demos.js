@@ -17,7 +17,7 @@ export default async function(window) {
 				<a class="action" href="${source}" target="_blank">
 					Open in the new tab
 					<svg class="action__icon" width="24" height="24" aria-hidden="true">
-						<use href="/images/icons.svg#external">
+						<use href="/blog/images/icons.svg#external">
 					</svg>
 				</a>
 			</figcaption>
