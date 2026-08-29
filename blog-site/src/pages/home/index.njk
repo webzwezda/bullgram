@@ -1,0 +1,46 @@
+{% from 'article-card-list.njk' import articleCardList with context %}
+
+<main class="main column" id="main">
+	<div class="main__gaps">
+		<div class="intro ">
+			<p class="intro__hi">
+				{{ intro.hi | safe }}
+			</p>
+			<h1 class="intro__name">
+				{{ intro.name | safe }}
+			</h1>
+
+			<p class="intro__who">
+				{{ intro.who | safe }}
+			</p>
+			<p class="intro__what content content-inline">
+				{{ intro.what | markdownInline | safe }}
+			</p>
+		</div>
+		<section>
+			<header class="caption">
+				<h2 class="caption__title">
+					Статьи
+					<span class="caption__number">
+						{{ collections.articles.length }}
+						<span class="caption__total">всего</span>
+					</span>
+				</h2>
+				<a class="caption__link action action--hover" href="/articles/" aria-label="Все статьи">
+					<span class="caption__label">
+						Все статьи
+					</span>
+					<svg class="action__icon" width="24" height="24" aria-hidden="true">
+						<use href="/images/icons.svg#right"/>
+					</svg>
+				</a>
+			</header>
+
+			{{ articleCardList(
+				collection=collections.articles | reverse,
+				heading='h3',
+				limit=6
+			) }}
+		</section>
+	</div>
+</main>

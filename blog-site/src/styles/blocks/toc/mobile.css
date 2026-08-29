@@ -1,0 +1,25 @@
+@media (width < 1024px) {
+
+	/* TOC */
+
+	.toc--tablet {
+		display: none;
+	}
+
+	/* Title */
+
+	.toc__title {
+		list-style: none;
+
+		&::-webkit-details-marker {
+			display:none;
+		}
+	}
+
+	/* List */
+
+	.toc__list {
+		padding-block: 12px;
+	}
+
+}

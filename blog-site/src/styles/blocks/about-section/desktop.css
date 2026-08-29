@@ -1,0 +1,14 @@
+@media (width >= 1760px) {
+
+	/* Scribble */
+
+	.about-section__scribble--work {
+		display: none;
+	}
+
+	.about-section__scribble--contacts {
+		inset-inline-start: -620px;
+		inset-block-start: -90px;
+	}
+
+}

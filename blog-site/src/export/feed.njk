@@ -1,0 +1,36 @@
+---
+permalink: /feed/index.xml
+---
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="{{ global.language }}" xml:base="{{ global.domain }}">
+	<title>{{ global.title }}</title>
+	<subtitle>{{ global.description }}</subtitle>
+	<link href="{{ global.domain }}"/>
+	<link href="{{ global.domain + '/blog/feed/' }}" rel="self"/>
+	<updated>{{ collections.articles | getNewestCollectionItemDate | dateToRfc3339 }}</updated>
+	<id>{{ global.domain }}/blog/</id>
+	<author>
+		<name>{{ global.author }}</name>
+		<email>{{ global.email }}</email>
+	</author>
+	{%- for article in collections.articles | reverse %}
+		{%- if article.data.source %}
+			{%- set articleUrl = article.data.source.url %}
+			{%- set articleId = global.domain + '/articles/' + article.fileSlug + '/' %}
+		{%- else %}
+			{%- set articleUrl = global.domain + "/blog" + article.url %}
+			{%- set articleId = global.domain + "/blog" + article.url %}
+		{%- endif %}
+		<entry>
+			<title>{{ article.data.title | trim }}</title>
+			<link href="{{ articleUrl }}"/>
+			<updated>{{ article.date | dateToRfc3339 }}</updated>
+			<id>{{ articleId }}</id>
+			<content type="html">
+				{%- if article.templateContent %}
+				{{- article.templateContent | htmlToAbsoluteUrls(global.domain + "/blog" + article.url) | trim -}}
+				{%- endif %}
+			</content>
+		</entry>
+	{%- endfor %}
+</feed>

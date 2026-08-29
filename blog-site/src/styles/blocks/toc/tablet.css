@@ -1,0 +1,25 @@
+@media (width >= 1024px) {
+
+	/* TOC */
+
+	.toc {
+		position: sticky;
+		top: 136px;
+		scroll-target-group: auto;
+	}
+
+	.toc--mobile {
+		display: none;
+	}
+
+	/* Link */
+
+	.toc__link:target-current {
+		outline: 8px solid var(--toc-current-link);
+		border-radius: 2px;
+		background-color: var(--toc-current-link);
+		color: var(--color-text-primary);
+		text-decoration: none;
+	}
+
+}

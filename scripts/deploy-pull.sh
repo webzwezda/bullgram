@@ -99,7 +99,7 @@ fi
 echo "==> npm run build (blog-site)"
 npm --prefix blog-site run build
 rm -rf site-v2/dist/blog
-cp -r blog-site/_site site-v2/dist/blog
+cp -r blog-site/dist site-v2/dist/blog
 
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)

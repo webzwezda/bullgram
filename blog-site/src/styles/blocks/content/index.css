@@ -1,0 +1,9 @@
+/* Content */
+
+.content {
+	--content-image-outline: hsl(var(--color-manatee) / 0.2);
+}
+
+.content__last-updated {
+	color: var(--color-text-secondary);
+}

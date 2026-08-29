@@ -1,0 +1,20 @@
+social:
+  title: Links
+  list:
+  - title: Telegram
+    url: https://t.me/webzwezda
+  - title: GitHub
+    url: https://github.com/webzwezda/bullgram
+
+email:
+  title: Email
+  text: webzwezda@gmail.com
+  link: mailto:webzwezda@gmail.com
+
+credits:
+  title: Credits
+  list:
+  - title: Powered by Eleventy
+    url: https://www.11ty.dev/
+  - title: Theme based on pepelsbey.dev (MIT)
+    url: https://github.com/pepelsbey/pepelsbey.dev

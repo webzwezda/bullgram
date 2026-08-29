@@ -1,0 +1,30 @@
+/* TOC */
+
+/* List */
+
+.toc__list {
+	display: grid;
+	row-gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* Nested */
+
+.toc__nested {
+	display: grid;
+	row-gap: 8px;
+	margin: 0;
+	padding: 0;
+	padding-inline-start: 20px;
+	padding-block-start: 4px;
+	list-style: none;
+	font-size: var(--font-size-small);
+}
+
+/* Link */
+
+.toc__link {
+	color: var(--color-text-secondary);
+}
