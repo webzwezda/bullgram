@@ -1,4 +1,4 @@
-title: Not found
-desc: A page that’s missing
+title: 404
 layout: page.njk
-permalink: 404/index.html
+permalink: /404.html
+cover: false

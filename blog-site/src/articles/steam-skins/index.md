@@ -1,10 +1,10 @@
-Steam-скины выглядят как косметика для игры, но вокруг них давно появился рынок: спрос, ликвидность, спреды, комиссии и риск заморозки средств.
+Steam skins look like game cosmetics, but a market has long formed around them: demand, liquidity, spreads, fees, and the risk of frozen funds.
 
-Для автора контента это отдельная ниша, вокруг которой можно строить гайды, закрытые разборы и комьюнити.
+For a content creator this is a niche of its own — one where guides, paid deep-dives, and a community can grow.
 
-## Что важно понимать
+## What to understand
 
-- цена зависит от редкости, спроса и состояния предмета;
-- ликвидность важнее красивой картинки;
-- комиссии съедают часть прибыли;
-- риски площадок нужно объяснять заранее.
+- price depends on rarity, demand, and item condition;
+- liquidity matters more than a pretty picture;
+- fees eat part of the profit;
+- marketplace risks should be explained upfront.

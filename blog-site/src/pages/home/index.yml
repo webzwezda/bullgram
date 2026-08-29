@@ -1,7 +1,7 @@
 layout: page.njk
 permalink: index.html
 intro:
-  hi: Привет, это
+  hi: Hey, this is
   name: Bullgram
-  who: Платежи, автоматизация и цифровые рынки вокруг Telegram
-  what: Пишем про кассу для закрытых групп, юзерботов с [API и MCP](https://bullgram.xyz/docs/) и [приём оплат](https://bullgram.xyz/create/)
+  who: Payments, automation, and digital markets around Telegram
+  what: We write about a checkout for closed groups, userbots with [API and MCP](https://bullgram.xyz/docs/), and [accepting payments](https://bullgram.xyz/create/)

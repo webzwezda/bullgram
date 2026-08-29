@@ -1,10 +1,10 @@
-TON удобен для цифровых продуктов, но платеж нужно связать с конкретным заказом. Для этого важны memo, статус и понятная проверка.
+TON is convenient for digital products, but a payment has to be tied to a specific order. That's where memo, status, and a clear verification flow matter.
 
-Без связи платежа с заказом админ быстро возвращается к ручной сверке.
+Without linking a payment to an order, the admin is right back to manual reconciliation.
 
-## Что контролировать
+## What to control
 
-- адрес получателя;
-- memo или другой идентификатор;
-- сумму;
-- статус выдачи доступа после подтверждения.
+- the recipient address;
+- the memo or another identifier;
+- the amount;
+- the access grant status after confirmation.

@@ -1,5 +1,5 @@
-title: Статьи
-desc: Платежи, автоматизация и цифровые рынки вокруг Telegram
+title: Articles
+desc: Payments, automation, and digital markets around Telegram
 layout: page.njk
 pagination:
   data: collections.articles
