@@ -162,9 +162,9 @@ export function App() {
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
             <a href="/docs/" className="transition-colors hover:text-slate-700">Docs</a>
             <span className="text-slate-300">·</span>
-            <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-700">API</a>
+            <a href="/blog/" className="transition-colors hover:text-slate-700">Блог</a>
             <span className="text-slate-300">·</span>
-            <a href="/docs/" className="transition-colors hover:text-slate-700">MCP</a>
+            <a href="/api/external/v1/docs" target="_blank" rel="noreferrer" className="transition-colors hover:text-slate-700">API</a>
           </div>
         </div>
       </aside>

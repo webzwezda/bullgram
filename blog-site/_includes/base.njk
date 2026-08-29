@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}{% if title %} · {% endif %}Bullgram Блог</title>
+  {% if description %}<meta name="description" content="{{ description }}">{% endif %}
+  <link rel="alternate" type="application/rss+xml" title="Bullgram Блог" href="/blog/feed.xml">
+  <link rel="stylesheet" href="/blog/css/style.css">
+</head>
+<body>
+  <header class="blog-header">
+    <div class="blog-container blog-header-row">
+      <a class="blog-brand" href="/blog/">Bullgram<span> Блог</span></a>
+      <a class="blog-back" href="/">bullgram.xyz</a>
+    </div>
+  </header>
+  <main class="blog-container">
+    {{ content | safe }}
+  </main>
+  <footer class="blog-footer">
+    <div class="blog-container">
+      © Bullgram
+    </div>
+  </footer>
+</body>
+</html>

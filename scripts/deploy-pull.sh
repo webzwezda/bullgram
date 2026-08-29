@@ -77,6 +77,16 @@ npm --prefix docs-site run build
 rm -rf site-v2/dist/docs
 cp -r docs-site/_site site-v2/dist/docs
 
+# 3c. Build blog site into site-v2/dist/blog (static, served by nginx files-first)
+if [ ! -d blog-site/node_modules ] || echo "$CHANGED_FILES" | grep -q '^blog-site/package\.json$'; then
+  echo "==> npm install blog-site"
+  npm --prefix blog-site install
+fi
+echo "==> npm run build (blog-site)"
+npm --prefix blog-site run build
+rm -rf site-v2/dist/blog
+cp -r blog-site/_site site-v2/dist/blog
+
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)
 echo "==> pm2 reload bullgram-tg-backend"

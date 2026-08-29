@@ -1,0 +1,16 @@
+{
+  "name": "bullgram-blog-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bullgram blog built with Eleventy, served at bullgram.xyz/blog",
+  "scripts": {
+    "build": "eleventy",
+    "dev": "eleventy --serve"
+  },
+  "dependencies": {
+    "@11ty/eleventy": "^3.1.6",
+    "@11ty/eleventy-plugin-rss": "^3.0.0",
+    "js-yaml": "^5.4.1"
+  },
+  "type": "module"
+}

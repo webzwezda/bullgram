@@ -1,0 +1,23 @@
+---
+layout: base.njk
+permalink: /feed.xml
+eleventyExcludeFromCollections: true
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Bullgram Блог</title>
+    <link>https://bullgram.xyz/blog/</link>
+    <description>Платежи, автоматизация и цифровые рынки вокруг Telegram</description>
+    <language>ru</language>
+    {% for post in collections.posts %}
+      <item>
+        <title>{{ post.data.title }}</title>
+        <link>https://bullgram.xyz{{ post.url }}</link>
+        <guid isPermaLink="true">https://bullgram.xyz{{ post.url }}</guid>
+        <description>{{ post.data.description }}</description>
+        <pubDate>{{ post.data.date | rfc3339 }}</pubDate>
+      </item>
+    {% endfor %}
+  </channel>
+</rss>

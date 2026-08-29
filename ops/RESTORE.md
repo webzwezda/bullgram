@@ -38,7 +38,9 @@ npm --prefix docs-site install
   Бэкенд в pm2 дополнительно следит за процессом 3proxy в рантайме
   (два процесса 3proxy с reuseport — норма после пересозданий).
 - **Статика**: `/var/www/bullgram-site-v2` и `/var/www/bullgram-admin-v2` — симлинки
-  на `dist` из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`
+  на `dist` из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`.
+  Блог (`blog-site/`) собирается туда же в `dist/blog`, отдаётся на `/blog/`
+  (nginx-блок по образцу `/docs`)
 - **Архивы**: `/var/www/_archive/` (бывшие блог/курсы), `/root/nginx-backups/`
 
 ## 4. Локальное окружение (опционально, для Supabase MCP)

@@ -1,0 +1,19 @@
+---
+layout: base.njk
+permalink: /
+title: Блог
+---
+<h1>Блог</h1>
+<p class="blog-intro">Как мы строим платежи, автоматизацию и цифровые рынки вокруг Telegram.</p>
+
+<ul class="blog-list">
+  {% for post in collections.posts %}
+    <li class="blog-list-item">
+      <time datetime="{{ post.data.date }}">{{ post.data.date | ruDate }}</time>
+      <a href="{{ post.url }}">{{ post.data.title }}</a>
+      {% if post.data.description %}
+        <p>{{ post.data.description }}</p>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
