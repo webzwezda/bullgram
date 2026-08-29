@@ -12,6 +12,7 @@ const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default:
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
 const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
 const DocsPage = lazy(() => import('./pages/DocsPage.jsx').then((m) => ({ default: m.DocsPage })));
+const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((m) => ({ default: m.QuickStartPage })));
 
 const navSections = [
   {
@@ -36,6 +37,7 @@ export function App() {
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const isDocsRoute = location.pathname.startsWith('/docs');
+  const isQuickStartRoute = location.pathname.startsWith('/quick-start');
   const { user } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -44,6 +46,7 @@ export function App() {
     if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
     if (location.pathname.startsWith('/created')) return 'Счёт создан';
     if (location.pathname.startsWith('/docs')) return 'API & MCP';
+    if (location.pathname.startsWith('/quick-start')) return 'Quick Start';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
@@ -65,6 +68,7 @@ export function App() {
         <Route path="/create" element={<CreateInvoicePage />} />
         <Route path="/created/:id" element={<CreatedInvoicePage />} />
         <Route path="/docs" element={<DocsPage />} />
+        <Route path="/quick-start" element={<QuickStartPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -182,7 +186,7 @@ export function App() {
       <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
         {isHomeRoute ? (
           appRoutes
-        ) : (isPayRoute || isCreateRoute || isDocsRoute) ? (
+        ) : (isPayRoute || isCreateRoute || isDocsRoute || isQuickStartRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>

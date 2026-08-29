@@ -272,10 +272,6 @@ function ScreenSection({ id, className = '', children }) {
   );
 }
 
-function scrollToId(id) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-}
-
 function UserbotsCodeMock() {
   return (
     <div className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-white/10 shadow-2xl shadow-black/40">
@@ -417,21 +413,13 @@ export function HomePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
-            <button
-              type="button"
-              onClick={() => scrollToId('tariffs')}
+            <a
+              href="/quick-start"
               className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
             >
-              Смотреть тарифы
+              Quick Start
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollToId('userbots')}
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-base font-bold !text-slate-700 transition-all border border-slate-200 hover:bg-slate-50 hover:!text-slate-900 hover:shadow-sm w-full sm:w-auto"
-            >
-              Смотреть функции
-            </button>
+            </a>
             <a
               href="/api/external/v1/docs#description/introduction"
               target="_blank"
