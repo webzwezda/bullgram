@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+
+# Guard: this script replaces itself via `git reset --hard` in step 1, which
+# can shift bash's read offset in the open file and silently skip steps.
+# Re-exec from a stable temp copy so the running script can never change.
+if [ -z "${DEPLOY_REEXEC:-}" ]; then
+  export DEPLOY_REEXEC=1
+  SELF="$(mktemp /tmp/deploy-pull.XXXXXX)"
+  cp "$0" "$SELF"
+  exec bash "$SELF"
+fi
 # Deploy script for pull-based CI/CD.
 # Invoked by GitHub Actions after SSH'ing to prod.
 # Pulls latest main, installs deps if package.json changed, rebuilds
