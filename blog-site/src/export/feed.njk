@@ -6,7 +6,7 @@ permalink: /feed.xml
 	<title>{{ global.title }}</title>
 	<subtitle>{{ global.description }}</subtitle>
 	<link href="{{ global.domain }}"/>
-	<link href="{{ global.domain + '/blog/feed/' }}" rel="self"/>
+	<link href="{{ global.domain + '/blog/feed.xml' }}" rel="self"/>
 	<updated>{{ collections.articles | getNewestCollectionItemDate | dateToRfc3339 }}</updated>
 	<id>{{ global.domain }}/blog/</id>
 	<author>
