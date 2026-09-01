@@ -517,11 +517,11 @@ export function HomePage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Людям с инвалидностью — режим Normal без юзерботов и прокси:{' '}
+              Людям с инвалидностью — предоставим тариф Normal:{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
                 короткая форма без справок
               </a>
-              , рассмотрим лично и поможем всё настроить.
+              , рассмотрим заявки в личке.
             </p>
           </div>
         </div>
