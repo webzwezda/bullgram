@@ -407,11 +407,12 @@ export function HomePage() {
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
           <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
 
+          <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
           <a
             href="https://github.com/webzwezda/bullgram"
             target="_blank"
             rel="noreferrer"
-            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-8 transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200"
+            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200"
             aria-label="Bullgram на GitHub — проект с открытым кодом"
           >
             <svg className="w-4 h-4 text-slate-900" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -434,6 +435,20 @@ export function HomePage() {
               </>
             ) : null}
           </a>
+
+          <span
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]"
+            title="Принимаем оплату только в криптовалюте — TON"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="11" fill="#0098EA" />
+              <path d="M12 5.5 17.5 11 12 18.5 6.5 11 12 5.5Z" fill="#fff" />
+            </svg>
+            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase">
+              Crypto Friendly
+            </span>
+          </span>
+          </div>
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
             Юзерботы для Telegram <br className="hidden sm:block" />
