@@ -521,7 +521,7 @@ export function HomePage() {
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
                 короткая форма без справок
               </a>
-              , рассмотрим заявки в личке.
+              , рассмотрим заявки лично.
             </p>
           </div>
         </div>
