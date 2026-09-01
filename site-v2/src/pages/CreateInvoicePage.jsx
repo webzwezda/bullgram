@@ -156,7 +156,7 @@ export function CreateInvoicePage() {
 
     const amount = Number(form.amount_ton);
     if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
-      next.amount_ton = 'От 0.01 до 10000 TON';
+      next.amount_ton = 'От 0.01 до 10000 GRAM';
     }
 
     if (!form.secret_payload) next.secret_payload = 'Укажите, что получит покупатель';
@@ -226,7 +226,7 @@ export function CreateInvoicePage() {
               <FilePlus className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl font-bold text-slate-900">Счёт на оплату в TON</h2>
+              <h2 className="text-xl font-bold text-slate-900">Счёт на оплату в GRAM</h2>
               <p className="text-sm font-medium text-slate-500 mt-0.5">
                 Заполните условия — мы сгенерируем ссылку для покупателя.{' '}
                 <span className="inline-flex items-center gap-1 font-mono">

@@ -32,7 +32,7 @@ function buildWalletLinks(purchase) {
     },
     {
       key: 'ton',
-      label: 'TON',
+      label: 'GRAM',
       url: `ton://transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}`
     }
   ];
@@ -134,7 +134,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
               <img
                 className="w-full h-full object-contain mix-blend-multiply"
                 src={qrSrc}
-                alt={effectiveQrView === 'ton' ? 'QR для перевода TON' : 'QR для Trust Wallet'}
+                alt={effectiveQrView === 'ton' ? 'QR для перевода GRAM' : 'QR для Trust Wallet'}
               />
             </div>
           ) : (
@@ -145,7 +145,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
 
         <div className="flex-1 min-w-0 divide-y divide-slate-100">
           <div className="p-2 space-y-0.5">
-            <RequisiteRow label="Сумма" value={`${amountText} TON`} copyValue={amountText} />
+            <RequisiteRow label="Сумма" value={`${amountText} GRAM`} copyValue={amountText} />
             <RequisiteRow label="Memo" value={purchase.memo || ''} />
             <RequisiteRow label="Кошелёк" value={purchase.seller_wallet} />
           </div>

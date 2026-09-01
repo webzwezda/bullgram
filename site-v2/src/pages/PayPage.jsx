@@ -268,7 +268,7 @@ function PaymentView({
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма к оплате</div>
             <div className="text-3xl font-black tracking-tight text-slate-900 leading-none">
               {amount}
-              <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
+              <span className="text-sm font-bold text-slate-500 ml-1.5">GRAM</span>
               {isTestnet ? (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider align-middle">
                   Testnet
@@ -443,9 +443,9 @@ function PaidView({ purchase, processing, purchaseKind }) {
       {purchase.duration_days ? ` (${purchase.duration_days} дн.)` : null}.
     </>
   ) : processing ? (
-    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
+    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} GRAM. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
   ) : (
-    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Доступ активирован в течение нескольких минут.`
+    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} GRAM. Доступ активирован в течение нескольких минут.`
   );
 
   return (

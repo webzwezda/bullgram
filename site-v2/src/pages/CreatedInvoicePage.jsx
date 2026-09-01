@@ -105,7 +105,7 @@ export function CreatedInvoicePage() {
     if (!invoice?.id) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bullgram.xyz';
     const url = `${origin}/pay/${invoice.id}`;
-    const text = `Счёт на ${Number(invoice.amount_ton || 0)} TON`;
+    const text = `Счёт на ${Number(invoice.amount_ton || 0)} GRAM`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -164,7 +164,7 @@ export function CreatedInvoicePage() {
   const isExpired = invoice.status === 'expired';
 
   const status = isPaid
-    ? { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт оплачен', desc: `${Number(invoice.amount_ton || 0)} TON пришли на ваш кошелёк. Секрет ниже — что получил покупатель.` }
+    ? { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт оплачен', desc: `${Number(invoice.amount_ton || 0)} GRAM пришли на ваш кошелёк. Секрет ниже — что получил покупатель.` }
     : isExpired
       ? { Icon: Clock, bg: 'bg-slate-500', shadow: 'shadow-slate-400/20', title: 'Срок счёта истёк', desc: 'Создайте новый счёт, если покупка ещё актуальна.' }
       : { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт создан', desc: 'Отправьте ссылку покупателю — он оплатит и увидит секрет.' };
@@ -198,7 +198,7 @@ export function CreatedInvoicePage() {
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма</div>
               <div className="text-2xl font-black tracking-tight text-slate-900">
                 {Number(invoice.amount_ton || 0)}
-                <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
+                <span className="text-sm font-bold text-slate-500 ml-1.5">GRAM</span>
                 {invoice.network === 'testnet' ? (
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider">
                     Testnet

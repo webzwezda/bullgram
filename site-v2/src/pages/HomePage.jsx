@@ -27,7 +27,7 @@ const kassaOutcomes = [
   {
     icon: Wallet,
     title: 'Касса идёт напрямую вам',
-    text: 'Деньги от клиентов поступают на ваши P2P-реквизиты или TON-кошелёк. Bullgram не держит деньги, не берёт процент — ведёт только статус и чек.'
+    text: 'Деньги от клиентов поступают на ваши P2P-реквизиты или GRAM-кошелёк. Bullgram не держит деньги, не берёт процент — ведёт только статус и чек.'
   },
   {
     icon: Bot,
@@ -61,7 +61,7 @@ const plans = [
     id: 'trial',
     label: 'Пробный вход',
     title: 'Trial',
-    price: '0 TON',
+    price: '0 GRAM',
     period: 'на 14 дней',
     description: 'Пробный доступ к Bullgram, чтобы собрать первый рабочий контур и проверить сценарии без оплаты.',
     href: '/app/profile',
@@ -77,7 +77,7 @@ const plans = [
     id: 'pro',
     label: 'Первый платный вход',
     title: 'Pro',
-    price: '4.5 TON',
+    price: '4.5 GRAM',
     period: 'за 365 дней доступа',
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
@@ -200,7 +200,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
           </>
         ) : (
           <>
-            Оплатить TON
+            Оплатить GRAM
             <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
           </>
         )}
@@ -299,7 +299,7 @@ function UserbotsCodeMock() {
 
 function KassaFlowMock() {
   const steps = [
-    { icon: CreditCard, tone: 'bg-blue-50 text-blue-600', title: 'Клиент оплачивает', text: 'P2P-перевод или TON — деньги идут напрямую вам' },
+    { icon: CreditCard, tone: 'bg-blue-50 text-blue-600', title: 'Клиент оплачивает', text: 'P2P-перевод или GRAM — деньги идут напрямую вам' },
     { icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-600', title: 'Доступ выдан автоматически', text: 'Бот приглашает в закрытую группу сразу после оплаты' },
     { icon: RotateCcw, tone: 'bg-amber-50 text-amber-600', title: 'Продление напомнит о себе', text: 'Бот сам напомнит и продлит подписку' },
     { icon: UserMinus, tone: 'bg-rose-50 text-rose-600', title: 'Подписка истекла — доступ забран', text: 'Автокик сработает без ручной сверки чеков' },
@@ -339,9 +339,9 @@ function InvoiceMock() {
           <ReceiptText className="h-4 w-4" strokeWidth={2.5} />
           Счёт на оплату
         </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">TON</span>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">GRAM</span>
       </div>
-      <div className="mt-4 text-4xl font-black tracking-tight text-slate-950">12.5 TON</div>
+      <div className="mt-4 text-4xl font-black tracking-tight text-slate-950">12.5 GRAM</div>
       <div className="mt-1 text-sm font-bold text-slate-500">за цифровой товар</div>
       <div className="mt-5 flex items-center gap-4">
         <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400">
@@ -438,7 +438,7 @@ export function HomePage() {
 
           <span
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]"
-            title="Принимаем оплату только в криптовалюте — TON"
+            title="Принимаем оплату только в криптовалюте — GRAM"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="11" fill="#0098EA" />
@@ -596,7 +596,7 @@ export function HomePage() {
                 Деньги идут напрямую вам — без посредников и комиссий площадки.
               </p>
               <ul className="mt-6 space-y-3">
-                {['приём оплат P2P и в TON', 'автовыдача и автокик доступа', 'продления и база клиентов без ручной сверки'].map((feature) => (
+                {['приём оплат P2P и в GRAM', 'автовыдача и автокик доступа', 'продления и база клиентов без ручной сверки'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
                     <span>{feature}</span>
@@ -683,7 +683,7 @@ export function HomePage() {
                 Счета на оплату
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Быстрый инструмент для разовых оплат: TON-счёт за 30 секунд — ссылка и QR
+                Быстрый инструмент для разовых оплат: GRAM-счёт за 30 секунд — ссылка и QR
                 для покупателя, оплата через TonConnect, секрет раскрывается сразу после
                 подтверждения платежа.
               </p>
