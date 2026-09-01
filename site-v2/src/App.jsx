@@ -104,11 +104,6 @@ export function App() {
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-2xl shadow-slate-950/15 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-72 lg:translate-x-0 lg:border-b-0 lg:shadow-none ${mobileNavOpen ? 'translate-x-0' : ''}`}>
 
-        <a href="/" className="flex items-center gap-2 mb-5 group">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-transform group-hover:scale-105">B</div>
-          <span className="font-black text-lg tracking-tight text-slate-900">Bullgram</span>
-        </a>
-
         {user ? (
           <UserProfileCard />
         ) : (
