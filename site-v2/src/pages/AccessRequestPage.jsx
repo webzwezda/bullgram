@@ -47,8 +47,9 @@ export function AccessRequestPage() {
           <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" strokeWidth={1.8} />
           <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-950">Заявка отправлена</h1>
           <p className="mt-3 text-base font-medium leading-7 text-slate-600">
-            Мы получили ваш запрос и напишем вам по указанному контакту,
-            чтобы подключить доступ в режиме Normal — без юзерботов и прокси.
+            Мы получили вашу заявку и напишем вам по указанному контакту.
+            Доступ подключим в режиме Normal — без юзерботов и прокси,
+            с человеческой помощью в настройке.
           </p>
           <a
             href="/"
@@ -64,13 +65,18 @@ export function AccessRequestPage() {
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-12 sm:px-6">
       <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-        Запросить доступ к Bullgram
+        Особый доступ к Bullgram
       </h1>
       <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-        Заполните короткую форму — мы подключим вас к режиму Normal
-        (работа с сайтом без юзерботов и прокси) и поможем всё настроить.
-        Форма доступна без регистрации.
+        Для людей с инвалидностью цифровые барьеры — не мелочь. Поэтому без справок,
+        очередей и автоматических отказов: заполните три поля — рассмотрим заявку лично
+        и подключим режим Normal (работа с сайтом без юзерботов и прокси).
       </p>
+      <ul className="mt-4 space-y-1.5 text-sm font-semibold text-slate-500">
+        <li>— справки и документы не нужны;</li>
+        <li>— отвечаем лично, обычно в течение 1–2 дней;</li>
+        <li>— заявку видим только мы.</li>
+      </ul>
 
       <form
         onSubmit={onSubmit}
@@ -130,7 +136,7 @@ export function AccessRequestPage() {
 
         <div>
           <label htmlFor="note" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Комментарий <span className="font-medium text-slate-400">(необязательно)</span>
+            Ваша ситуация или пожелания <span className="font-medium text-slate-400">(по желанию)</span>
           </label>
           <textarea
             id="note"
@@ -138,7 +144,7 @@ export function AccessRequestPage() {
             rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Например: какие задачи планируете решать, что важно учесть"
+            placeholder="Например: пользуюсь скринридером, нужен крупный шрифт, важна поддержка без спешки"
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
         </div>

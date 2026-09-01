@@ -18,7 +18,7 @@ async function notifyAdmin(request) {
     }
     try {
         const text = [
-            '📥 Заявка на доступ (Normal)',
+            '♿ Заявка на особый доступ (Normal)',
             `Имя: ${request.name}`,
             `Контакт: ${request.contact}`,
             request.note ? `Комментарий: ${request.note}` : null,
