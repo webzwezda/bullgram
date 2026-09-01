@@ -11,6 +11,7 @@ const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ de
 const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
 const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
 const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
+const AccessRequestPage = lazy(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
 
 const navSections = [
   {
@@ -34,6 +35,7 @@ export function App() {
   const isHomeRoute = location.pathname === '/';
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
+  const isAccessRequestRoute = location.pathname.startsWith('/access-request');
   const { user } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -62,6 +64,7 @@ export function App() {
         <Route path="/create" element={<CreateInvoicePage />} />
         <Route path="/created/:id" element={<CreatedInvoicePage />} />
         <Route path="/quick-start" element={<Navigate to="/docs/quick-start/" replace />} />
+        <Route path="/access-request" element={<AccessRequestPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -172,7 +175,7 @@ export function App() {
       <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
         {isHomeRoute ? (
           appRoutes
-        ) : (isPayRoute || isCreateRoute) ? (
+        ) : (isPayRoute || isCreateRoute || isAccessRequestRoute) ? (
           appRoutes
         ) : (
           <SiteAuthGate>
