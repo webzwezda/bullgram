@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Settings,
   ShieldCheck,
-  Sparkles,
   Terminal,
   UserMinus,
   Users,
@@ -373,6 +372,20 @@ export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
   const { hash } = useLocation();
+  const [stars, setStars] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('https://api.github.com/repos/webzwezda/bullgram')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('github api'))))
+      .then((data) => {
+        if (alive && typeof data?.stargazers_count === 'number') setStars(data.stargazers_count);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.add('home-scroll-snap');
@@ -394,14 +407,33 @@ export function HomePage() {
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
           <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
 
-          <div className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-8 transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200 cursor-pointer">
-            <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
-              <Sparkles className="w-3 h-3 text-white" />
+          <a
+            href="https://github.com/webzwezda/bullgram"
+            target="_blank"
+            rel="noreferrer"
+            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] mb-8 transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200"
+            aria-label="Bullgram на GitHub — проект с открытым кодом"
+          >
+            <svg className="w-4 h-4 text-slate-900" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.91-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase group-hover:text-blue-600 transition-colors">
+              Bullgram 2.0
             </span>
-            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase pr-1 group-hover:text-blue-600 transition-colors">
-              Bullgram 2.0 Автоматизация
+            <span className="w-1 h-1 rounded-full bg-slate-300" aria-hidden="true" />
+            <span className="text-[13px] font-bold tracking-wide text-slate-500 group-hover:text-blue-600 transition-colors">
+              Open Source
             </span>
-          </div>
+            {stars !== null ? (
+              <>
+                <span className="w-px h-3.5 bg-slate-200" aria-hidden="true" />
+                <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2l2.9 6.26 6.6.72-4.9 4.55 1.35 6.47L12 16.9 6.05 20l1.35-6.47-4.9-4.55 6.6-.72L12 2z" />
+                </svg>
+                <span className="text-[13px] font-bold text-slate-600 pr-1">{stars}</span>
+              </>
+            ) : null}
+          </a>
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
             Юзерботы для Telegram <br className="hidden sm:block" />
