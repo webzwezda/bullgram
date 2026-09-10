@@ -62,7 +62,7 @@ const plans = [
     label: 'Пробный вход',
     title: 'Trial',
     price: '0 GRAM',
-    period: 'на 14 дней',
+    period: 'бессрочно',
     description: 'Пробный доступ к Bullgram, чтобы собрать первый рабочий контур и проверить сценарии без оплаты.',
     href: '/app/profile',
     action: 'Начать Trial',

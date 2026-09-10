@@ -95,7 +95,7 @@ function baseValueFromPreparation(prep) {
 }
 
 export function BroadcastPage() {
-  const { accessToken, user, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken, user, profilePlan } = useAuth();
   const navigate = useNavigate();
   const [state, setState] = useState({
     loading: true,
@@ -120,13 +120,6 @@ export function BroadcastPage() {
   const memberIndexRef = useRef(new Map());
 
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
   const clientSelectionActive = form.base.startsWith('client:') && (selectedIds || []).length > 0;
   const audienceType = form.base === 'manual' || clientSelectionActive
@@ -811,10 +804,7 @@ export function BroadcastPage() {
             text="На Trial можно собрать базу и прогнать подготовку. Отправка откроется на Pro."
           />
           <UpgradeCallout
-            title={trialUpgradeUrgent ? `Trial скоро сгорит: осталось около ${trialHoursLeft} ч` : undefined}
-            text={trialUpgradeUrgent
-              ? 'Не упирайся в trial-лимит до дедлайна — переходи на Pro и запускай рассылки.'
-              : 'Переходи на Pro, чтобы отправлять рассылки по собранной базе.'}
+            text="Переходи на Pro, чтобы отправлять рассылки по собранной базе."
           />
         </>
       ) : null}

@@ -135,7 +135,7 @@ export function UserbotCenterSection({
       return () => clearTimeout(timer);
     }
   }, [location.search]);
-  const { accessToken, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken, profilePlan } = useAuth();
   const [initialHandoff] = useState(() => consumeUserbotCenterHandoff());
   const handoffLoadDoneRef = useRef(false);
   const initialParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -249,13 +249,6 @@ export function UserbotCenterSection({
   const [labelDraft, setLabelDraft] = useState('');
   const [labelAccountId, setLabelAccountId] = useState('');
   const [labelSaving, setLabelSaving] = useState(false);
-  const trialHoursLeft = useMemo(() => {
-    if (!trialEndsAt) return null;
-    const diffMs = new Date(trialEndsAt).getTime() - Date.now();
-    if (diffMs <= 0) return 0;
-    return Math.ceil(diffMs / (1000 * 60 * 60));
-  }, [trialEndsAt]);
-  const trialUpgradeUrgent = profilePlan === 'trial' && trialHoursLeft !== null && trialHoursLeft > 0 && trialHoursLeft <= 72;
 
   function applyCenterData(nextData, preferredUserbotId = selectedLiveUserbotId, preferredThreadUserId = threadUserId) {
     const nextConversations = nextData.conversations || [];
@@ -1439,11 +1432,9 @@ export function UserbotCenterSection({
       {profilePlan === 'trial' ? (
         <>
           <PlanBanner
-            tone={trialUpgradeUrgent ? 'warning' : 'info'}
-            title={trialUpgradeUrgent ? 'Trial скоро закончится: userbot center пора вести на Pro' : 'Userbot Center на Trial — это быстрый пробный контур'}
-            text={trialUpgradeUrgent
-              ? `До конца trial осталось около ${trialHoursLeft} ч. Если уже работаешь с личками, сигналами и ручным дожимом, не тяни с апгрейдом: Pro нужен для стабильного рабочего ритма.`
-              : 'На Trial можно собрать первый живой triage по входящим. Но как только userbot становится рабочим closеr-инструментом, переводи кабинет на Pro.'}
+            tone="info"
+            title="Userbot Center на Trial — это быстрый пробный контур"
+            text="На Trial можно собрать первый живой triage по входящим. Но как только userbot становится рабочим closеr-инструментом, переводи кабинет на Pro."
           />
           <UpgradeCallout
             compact

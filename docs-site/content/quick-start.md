@@ -9,7 +9,7 @@ Get up and running with Bullgram in a few minutes.
 
 ## 1. Create an account
 
-Sign in with Google or Telegram — the Trial plan is free for 14 days, no card required.
+Sign in with Google or Telegram — the Trial plan is free indefinitely, no card required.
 
 ## 2. Get an API token
 

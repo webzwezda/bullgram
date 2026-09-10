@@ -1,7 +1,7 @@
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LogOut, Zap } from 'lucide-react';
 
-function planMeta(plan, trialEndsAt, proEndsAt) {
+function planMeta(plan, proEndsAt) {
   if (plan === 'pro' || plan === 'normal') {
     const date = proEndsAt ? new Date(proEndsAt) : null;
     return {
@@ -11,19 +11,15 @@ function planMeta(plan, trialEndsAt, proEndsAt) {
     };
   }
 
-  const daysLeft = trialEndsAt ? Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
-  const expired = daysLeft !== null && daysLeft < 0;
-  const dueSoon = daysLeft !== null && daysLeft <= 3;
-
   return {
-    title: expired ? 'Trial истек' : 'Trial',
-    hint: trialEndsAt ? (expired ? `Истек` : `До ${new Date(trialEndsAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`) : 'Активирован',
-    pillClass: dueSoon || expired ? 'bg-red-100/80 text-red-700 border-red-200/50' : 'bg-blue-100/80 text-blue-700 border-blue-200/50'
+    title: 'Trial',
+    hint: 'Бессрочно',
+    pillClass: 'bg-blue-100/80 text-blue-700 border-blue-200/50'
   };
 }
 
 export function UserProfileCard() {
-  const { user, profilePlan, trialEndsAt, proEndsAt, logout } = useAuth();
+  const { user, profilePlan, proEndsAt, logout } = useAuth();
 
   if (!user) return null;
 
@@ -32,7 +28,7 @@ export function UserProfileCard() {
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
 
-  const currentPlan = planMeta(profilePlan, trialEndsAt, proEndsAt);
+  const currentPlan = planMeta(profilePlan, proEndsAt);
 
   return (
     <div className="flex flex-col mb-8 mt-2">

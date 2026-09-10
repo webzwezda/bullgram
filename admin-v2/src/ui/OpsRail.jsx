@@ -11,20 +11,7 @@ const ICONS = {
   CreditCard, Bot, LayoutList, Globe, Smartphone, Users
 };
 
-function formatDateOnly(value) {
-  if (!value) return '—';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'medium'
-  }).format(new Date(value));
-}
-
-function getTrialDaysLeft(value) {
-  if (!value) return null;
-  const diffMs = new Date(value).getTime() - Date.now();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function planMeta(plan, trialEndsAt) {
+function planMeta(plan) {
   if (plan === 'pro' || plan === 'normal') {
     return {
       title: 'Pro',
@@ -33,14 +20,10 @@ function planMeta(plan, trialEndsAt) {
     };
   }
 
-  const daysLeft = getTrialDaysLeft(trialEndsAt);
-  const expired = daysLeft !== null && daysLeft < 0;
-  const dueSoon = daysLeft !== null && daysLeft <= 3;
-
   return {
-    title: expired ? 'Trial истек' : 'Trial',
-    hint: trialEndsAt ? (expired ? `Истек ${formatDateOnly(trialEndsAt)}` : `До ${formatDateOnly(trialEndsAt)}`) : 'Активирован',
-    pillClass: dueSoon || expired ? 'bg-red-100 text-red-800 border-red-200' : 'bg-blue-100 text-blue-800 border-blue-200'
+    title: 'Trial',
+    hint: 'Бессрочно',
+    pillClass: 'bg-blue-100 text-blue-800 border-blue-200'
   };
 }
 
@@ -126,7 +109,7 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
 }
 
 export function OpsRail() {
-  const { accessToken, user, login, logout, profilePlan, trialEndsAt } = useAuth();
+  const { accessToken, user, login, logout, profilePlan } = useAuth();
   const [state, setState] = useState({
     loading: true,
     summary: null,
@@ -259,7 +242,7 @@ export function OpsRail() {
   const avatarUrl = user?.user_metadata?.avatar_url || '';
   const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
 
-  const currentPlan = useMemo(() => planMeta(profilePlan, trialEndsAt), [profilePlan, trialEndsAt]);
+  const currentPlan = useMemo(() => planMeta(profilePlan), [profilePlan]);
 
   return (
     <aside className="ops-rail font-sans">

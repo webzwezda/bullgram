@@ -675,7 +675,7 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
     if (offerCode === 'trial') {
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('id, product_tier, trial_started_at, trial_ends_at')
+            .select('id, product_tier, trial_started_at')
             .eq('id', ownerId)
             .single();
 
@@ -689,14 +689,14 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
         }
 
         const startedAt = profile?.trial_started_at || now.toISOString();
-        const endsAt = profile?.trial_ends_at || new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+        // Trial бессрочный — срока окончания нет, закрывается только апгрейдом на Pro
         const { error } = await supabase
             .from('profiles')
             .update({
                 product_tier: 'trial',
                 trial_started_at: startedAt,
-                trial_ends_at: endsAt
+                trial_ends_at: null
             })
             .eq('id', ownerId);
 
