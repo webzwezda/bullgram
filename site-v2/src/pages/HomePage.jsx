@@ -75,7 +75,7 @@ const plans = [
   },
   {
     id: 'pro',
-    label: 'Первый платный вход',
+    label: 'Полный доступ',
     title: 'Pro',
     price: '4.5 GRAM',
     period: 'за 365 дней доступа',
@@ -519,9 +519,8 @@ export function HomePage() {
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
               Людям с инвалидностью — предоставим тариф Normal:{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
-                короткая форма без справок
+                заявка на оформление.
               </a>
-              , рассмотрим заявки лично.
             </p>
           </div>
         </div>
