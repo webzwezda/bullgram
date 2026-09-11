@@ -2,59 +2,14 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowDown,
   ArrowRight,
-  Bot,
   CheckCircle2,
-  CreditCard,
   Loader2,
-  QrCode,
-  ReceiptText,
-  Repeat,
-  RotateCcw,
-  Settings,
-  ShieldCheck,
   Terminal,
-  UserMinus,
-  Users,
-  Wallet,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { apiRequest } from '../api/client.js';
-
-const kassaOutcomes = [
-  {
-    icon: Wallet,
-    title: 'Касса идёт напрямую вам',
-    text: 'Деньги от клиентов поступают на ваши P2P-реквизиты или GRAM-кошелёк. Bullgram не держит деньги, не берёт процент — ведёт только статус и чек.'
-  },
-  {
-    icon: Bot,
-    title: 'Доступ выдаётся автоматически',
-    text: 'Клиент оплатил — получил приглашение в канал. Клиент не продлил — исключён без ручных действий. Вы контролирующий, не исполняющий.'
-  },
-  {
-    icon: Repeat,
-    title: 'Продления без напоминаний вам',
-    text: 'Bullgram сам напоминает об истекающем доступе, ведёт статус продления и фиксирует новую оплату. Вы просто видите: кто продлил, а кто нет.'
-  },
-  {
-    icon: Users,
-    title: 'База клиентов — не таблица, а система',
-    text: 'История платежей, статусы подписок, оттоков и возвращений. Вы знаете каждого клиента, а не только его последний чек.'
-  },
-  {
-    icon: Settings,
-    title: 'Тарифы под ваш сценарий',
-    text: 'День, неделя, месяц, год — любой период. Несколько тарифов для одного канала. Цена, описание и реквизиты — всё в одном месте.'
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Контроль данных и оплат',
-    text: 'Каждый чек привязан к человеку, тарифу и статусу. Вся история сохраняется, и вы можете проверить её в любой момент.'
-  }
-];
 
 const plans = [
   {
@@ -297,77 +252,6 @@ function UserbotsCodeMock() {
   );
 }
 
-function KassaFlowMock() {
-  const steps = [
-    { icon: CreditCard, tone: 'bg-blue-50 text-blue-600', title: 'Клиент оплачивает', text: 'P2P-перевод или GRAM — деньги идут напрямую вам' },
-    { icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-600', title: 'Доступ выдан автоматически', text: 'Бот приглашает в закрытую группу сразу после оплаты' },
-    { icon: RotateCcw, tone: 'bg-amber-50 text-amber-600', title: 'Продление напомнит о себе', text: 'Бот сам напомнит и продлит подписку' },
-    { icon: UserMinus, tone: 'bg-rose-50 text-rose-600', title: 'Подписка истекла — доступ забран', text: 'Автокик сработает без ручной сверки чеков' },
-  ];
-  return (
-    <div className="flex flex-col gap-2">
-      {steps.map((step, index) => {
-        const Icon = step.icon;
-        return (
-          <div key={step.title}>
-            <div className="flex items-start gap-4 rounded-xl bg-slate-50 p-4">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${step.tone}`}>
-                <Icon className="h-5 w-5" strokeWidth={2.5} />
-              </span>
-              <div>
-                <div className="text-sm font-black text-slate-950">{step.title}</div>
-                <div className="mt-0.5 text-sm font-medium leading-5 text-slate-600">{step.text}</div>
-              </div>
-            </div>
-            {index < steps.length - 1 ? (
-              <div className="flex justify-center py-1">
-                <ArrowDown className="h-4 w-4 text-slate-300" strokeWidth={2.5} />
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function InvoiceMock() {
-  return (
-    <div className="mx-auto w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl shadow-black/40">
-      <div className="flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-          <ReceiptText className="h-4 w-4" strokeWidth={2.5} />
-          Счёт на оплату
-        </div>
-        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">GRAM</span>
-      </div>
-      <div className="mt-4 text-4xl font-black tracking-tight text-slate-950">12.5 GRAM</div>
-      <div className="mt-1 text-sm font-bold text-slate-500">за цифровой товар</div>
-      <div className="mt-5 flex items-center gap-4">
-        <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-400">
-          <QrCode className="h-10 w-10" strokeWidth={2} />
-        </div>
-        <div className="space-y-2 text-sm font-semibold text-slate-600">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-            QR и ссылка для покупателя
-          </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />
-            Оплата через TonConnect
-          </div>
-          <div className="rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs font-bold text-slate-200">
-            Секрет: ••••••••
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 rounded-lg bg-slate-100 px-3 py-2 text-center text-xs font-bold text-slate-500">
-        секрет раскроется покупателю после подтверждения платежа
-      </div>
-    </div>
-  );
-}
-
 export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
@@ -581,133 +465,6 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 4 — касса закрытой группы */}
-      <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Касса закрытой группы
-              </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-                Официальный бот принимает оплату и сам управляет доступом в закрытую группу.
-                Деньги идут напрямую вам — без посредников и комиссий площадки.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {['приём оплат P2P и в GRAM', 'автовыдача и автокик доступа', 'продления и база клиентов без ручной сверки'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8">
-                {user ? (
-                  <a
-                    href="/app/profile"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                  >
-                    Начать Trial
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => login()}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                  >
-                    Начать Trial
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                  </button>
-                )}
-              </div>
-            </div>
-            <KassaFlowMock />
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 5 — что вы получаете от кассы */}
-      <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center bg-slate-50 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto w-full max-w-6xl">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Касса закрытой группы</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Что вы получаете</h2>
-            <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {kassaOutcomes.map((outcome) => {
-                const Icon = outcome.icon;
-                return (
-                  <article key={outcome.title} className="rounded-xl bg-white p-5">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                      <Icon className="h-5 w-5" strokeWidth={2.5} />
-                    </span>
-                    <h3 className="mt-4 text-base font-black leading-6 text-slate-950">{outcome.title}</h3>
-                    <p className="mt-2 text-sm font-medium leading-6 text-slate-600">{outcome.text}</p>
-                  </article>
-                );
-              })}
-            </div>
-            <div className="mt-10 flex justify-center">
-              {user ? (
-                <a
-                  href="/app/profile"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                >
-                  Начать Trial
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => login()}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                >
-                  Начать Trial
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 6 — счета на оплату */}
-      <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Без регистрации</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Счета на оплату
-              </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Быстрый инструмент для разовых оплат: GRAM-счёт за 30 секунд — ссылка и QR
-                для покупателя, оплата через TonConnect, секрет раскрывается сразу после
-                подтверждения платежа.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {['оплата в TON через TonConnect', 'QR-код и ссылка на счёт', 'секрет доступен покупателю после оплаты'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8">
-                <a
-                  href="/create"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-900 transition hover:bg-slate-100"
-                >
-                  Создать счёт — без регистрации
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
-              </div>
-            </div>
-            <InvoiceMock />
-          </div>
-        </div>
-      </ScreenSection>
     </div>
   );
 }
