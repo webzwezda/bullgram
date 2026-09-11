@@ -255,9 +255,11 @@ For `cmux` usage:
 
 Browser doctrine:
 
+- all runtime tests of site/admin changes must run against the deployed production build (`https://bullgram.xyz`, admin at `/app`) after deploy, in the user's real Chrome — never against a local dev server or headless Chrome
+- the browser path for these tests is the Playwright MCP server in extension mode (`playwright` server in `.mcp.json`, `@playwright/mcp --extension`) plus the user's «Playwright Extension» from the Chrome Web Store: the user clicks Connect in the extension, and the agent drives the user's actual Chrome tab with their logged-in sessions
+- see `docs/plans/04-site-verification.md` for the standing verification rule; do not spin up dev servers for visual checks, including from subagents — forbid it explicitly in their prompts
 - inside cmux: use `cmux browser` and browser surfaces by default for site/admin runtime checks so the user can see the same browser state
-- outside cmux (desktop ZCode): use the native Browser Use skill — a real browser with navigate, click, type, screenshot, and console/error inspection; this is not Playwright CLI; provide evidence via screenshots
-- only use Playwright when the user explicitly asks for it or when a task requires a Playwright-specific capability; state the reason before doing so
+- only use headless rendering when the user explicitly asks for it; state the reason before doing so
 
 cmux browser playbook (applies when the session runs inside cmux):
 
