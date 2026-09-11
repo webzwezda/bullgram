@@ -456,7 +456,7 @@ export function HomePage() {
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-10 tracking-tight">
-            Подключите <span className="text-slate-800 font-bold">юзербота через выделенный прокси</span> и автоматизируйте Telegram по-настоящему: мониторинг и действия в группах от имени живого аккаунта. А REST API и MCP-сервер позволяют управлять юзерботами, через <span className="text-slate-800 font-bold">n8n или hermes-agents</span>.
+            Подключите <span className="text-slate-800 font-bold">юзербота через выделенный прокси</span> — и делегируйте рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта, пока вы занимаетесь контентом и продажами. Управление — из кода, из n8n или от AI-агента через <span className="text-slate-800 font-bold">REST API и MCP</span>.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
