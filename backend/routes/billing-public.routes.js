@@ -6,6 +6,7 @@ import {
   recordBillingEvent,
   PRO_PLAN
 } from '../services/bullgram-billing.service.js';
+import { fulfillProOrderBundle } from '../services/pro-fulfillment.service.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VIEW_RATE_LIMIT_RPM = 60;
@@ -44,7 +45,8 @@ function shapePublicView(order) {
     ton_uri: tonUriFor(merchantWallet, amountNano, memo),
     ton_qr: null,
     plan_code: order.plan_code,
-    duration_days: order.duration_days || PRO_PLAN.durationDays
+    duration_days: order.duration_days || PRO_PLAN.durationDays,
+    fulfillment_status: payload.fulfillment_status || null
   };
 }
 
@@ -209,6 +211,11 @@ export function publicBillingRoutes(supabase) {
             } catch (activateErr) {
               console.error('[billing-public] race-lost activate retry failed:', activateErr.message || activateErr);
             }
+            try {
+              await fulfillProOrderBundle(supabase, fresh);
+            } catch (fulfillErr) {
+              console.error('[billing-public] race-lost pro fulfillment failed:', fulfillErr.message || fulfillErr);
+            }
           }
         }
         return res.json({ status: 'paid', success: true, already: true });
@@ -233,6 +240,12 @@ export function publicBillingRoutes(supabase) {
       } catch (activateErr) {
         console.error('[billing-public] activate failed (claim already persisted):', activateErr.message || activateErr);
         // Не откатывать paid. Recovery через повторный verify (race-lost path) или ручной SQL.
+      }
+
+      try {
+        await fulfillProOrderBundle(supabase, claimed);
+      } catch (fulfillErr) {
+        console.error('[billing-public] pro fulfillment failed:', fulfillErr.message || fulfillErr);
       }
 
       return res.json({ status: 'paid', success: true });

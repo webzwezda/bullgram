@@ -154,6 +154,27 @@ Callback URL для Robokassa:
 - Success URL: `https://bullgram.xyz/api/billing/robokassa/success`
 - Fail URL: `https://bullgram.xyz/api/billing/robokassa/fail`
 
+### Pro fulfillment: выдача бандла из Shop при оплате Pro
+
+Когда заказ `Bullgram Pro` становится `paid`, рядом с активацией тарифа (`activateProForOrder`) запускается
+`fulfillProOrderBundle` (`backend/services/pro-fulfillment.service.js`):
+
+- из витрины Shop берется первый подходящий лот `item_type='bundle'` (один юзербот + один прокси, `status='published'`),
+  юзербот не должен быть `runtime_status='restricted'`;
+- лот забирается CAS-ом (`published → sold`, `visibility='private'`), создается `shop_purchases` с `source: 'pro_billing'`
+  и через `transferShopAssets` (`backend/services/shop-transfer.service.js`) права на юзербота и прокси переходят покупателю;
+- состояние пишется в `billing_orders.payload.fulfillment_status` (`processing → completed | failed`),
+  при успехе в `payload.fulfillment` лежат `shop_item_id`, `userbot_id`, `proxy_id`, `shop_purchase_id`;
+- идемпотентность — атомарный claim по паре `payload->fulfillment_status` + `payload->fulfillment_claimed_at`
+  (CAS), `completed` финален, `failed` и зависший `processing` (старше 10 минут) переигрываются;
+- если свободных бандлов нет или transfer упал, ставится `failed` (лот при этом остается проданным — как в Shop-сценарии
+  «нужен возврат»), а job `billing-activation-recovery.job.js` ретраит выдачу другим бандлом;
+  у свипа есть нижняя граница `PRO_FULFILLMENT_SINCE` (по умолчанию дата запуска фичи) — старые оплаты задним числом
+  бандлы не получают;
+- `GET /api/dashboard` отдает счетчик `proFulfillmentPending` (paid-заказы без fulfillment или с `failed`) —
+  счетчик намеренно платформенный (бандлы на витрине — общий сток платформы), публичный billing-view показывает
+  только `fulfillment_status`, без id и деталей актива.
+
 ### QR onboarding и импорт сессий
 
 - `QR login` теперь не использует один глобальный fingerprint для всех аккаунтов.

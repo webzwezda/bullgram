@@ -182,7 +182,14 @@ export function PayPage() {
   if (loading) return <SkeletonView />;
   if (error) return <ErrorView message={error} onRetry={() => fetchPurchase(true)} />;
   if (purchase?.status === 'paid' || isProcessingStatus(purchase?.status)) {
-    return <PaidView purchase={purchase} processing={isProcessingStatus(purchase?.status)} purchaseKind={purchaseKind} />;
+    return (
+      <PaidView
+        purchase={purchase}
+        processing={isProcessingStatus(purchase?.status)}
+        purchaseKind={purchaseKind}
+        fulfillmentStatus={purchase?.fulfillment_status ?? null}
+      />
+    );
   }
   if (purchase && purchaseKind !== 'public_invoice' && isExpired(purchase)) return <ExpiredView />;
   if (purchase && purchaseKind === 'public_invoice' && purchase.status === 'expired') return <ExpiredView />;
@@ -425,7 +432,7 @@ function formatBillingEndDate(durationDays) {
   return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(date);
 }
 
-function PaidView({ purchase, processing, purchaseKind }) {
+function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
   const isBilling = purchaseKind === 'billing';
 
   useEffect(() => {
@@ -459,6 +466,13 @@ function PaidView({ purchase, processing, purchaseKind }) {
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-bold text-slate-900">{title}</h2>
               <p className="text-sm font-medium text-slate-500 mt-0.5">{description}</p>
+              {isBilling ? (
+                <p className="text-sm font-medium text-slate-500 mt-1">
+                  {fulfillmentStatus === 'completed'
+                    ? 'Юзербот и прокси закреплены за вами — они уже в кабинете.'
+                    : 'Юзербот и прокси из тарифа выдадутся автоматически и появятся в кабинете.'}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>

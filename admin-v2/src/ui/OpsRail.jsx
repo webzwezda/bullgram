@@ -5,7 +5,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users, Send } from 'lucide-react';
+import { CheckCircle2, Circle, CreditCard, Bot, LayoutList, Globe, Smartphone, ChevronRight, Rocket, LogOut, LogIn, Crown, Users, Send, AlertTriangle } from 'lucide-react';
 
 const ICONS = {
   CreditCard, Bot, LayoutList, Globe, Smartphone, Users
@@ -304,6 +304,24 @@ export function OpsRail() {
           </div>
         )}
       </div>
+
+      {(state.summary?.proFulfillmentPending || 0) > 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center border border-amber-200 shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-amber-900 tracking-tight">
+                Pro-оплаты без выдачи: {state.summary.proFulfillmentPending}
+              </h3>
+              <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                На витрине нет свободного бандла или перенос упал. Добавь бандл на витрину или проверь shop_purchases.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ChecklistGroup
         title="Продажа доступа"

@@ -5,6 +5,7 @@ import {
     recordBillingEvent
 } from './bullgram-billing.service.js';
 import { verifyTonConnectPayment } from './ton-connect-verify.service.js';
+import { fulfillProOrderBundle } from './pro-fulfillment.service.js';
 import { tonToNano } from '../utils/ton.js';
 
 const TON_SCALE = 9n;
@@ -223,6 +224,12 @@ export async function verifyAndActivateTonConnectOrder(supabase, orderId, sender
     });
 
     const profile = await activateProForOrder(supabase, updated);
+
+    try {
+        await fulfillProOrderBundle(supabase, updated);
+    } catch (fulfillErr) {
+        console.error('[billing-ton-connect] pro fulfillment failed:', fulfillErr?.message || fulfillErr);
+    }
 
     return { success: true, status: 'paid', profile };
 }

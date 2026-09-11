@@ -2,6 +2,7 @@ import {
     activateProForOrder,
     recordBillingEvent
 } from '../services/bullgram-billing.service.js';
+import { fulfillProOrderBundle } from '../services/pro-fulfillment.service.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MIN_INTERVAL_MS = 60_000;
@@ -64,6 +65,52 @@ async function loadOrdersNeedingActivation(supabase) {
     });
 }
 
+// Fulfillment sweep lower bound: never retro-grant bundles for orders paid before
+// the feature shipped (override with PRO_FULFILLMENT_SINCE env when needed).
+function getFulfillmentSinceIso() {
+    return process.env.PRO_FULFILLMENT_SINCE || '2026-09-10T00:00:00.000Z';
+}
+
+async function loadOrdersNeedingFulfillment(supabase) {
+    const cutoff = new Date(Date.now() - getGracePeriodMs()).toISOString();
+    const { data, error } = await supabase
+        .from('billing_orders')
+        .select('id, owner_id, status, paid_at, payload')
+        .eq('status', 'paid')
+        .lt('paid_at', cutoff)
+        .gte('paid_at', getFulfillmentSinceIso())
+        .order('paid_at', { ascending: false })
+        .limit(getBatchLimit());
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    return (data || []).filter((o) => {
+        const fulfillmentStatus = o.payload?.fulfillment_status;
+        if (!fulfillmentStatus || fulfillmentStatus === 'failed') return true;
+        // Stuck 'processing' (worker died mid-fulfillment) — retry after a grace window.
+        if (fulfillmentStatus === 'processing') {
+            const claimedAt = o.payload?.fulfillment_claimed_at ? Date.parse(o.payload.fulfillment_claimed_at) : 0;
+            return Date.now() - claimedAt > 10 * 60_000;
+        }
+        return false;
+    });
+}
+
+async function runFulfillmentSweep(supabase) {
+    const orders = await loadOrdersNeedingFulfillment(supabase);
+    if (orders.length === 0) return;
+
+    console.log(`[BillingRecovery] found ${orders.length} paid order(s) needing pro bundle fulfillment`);
+    for (const order of orders) {
+        try {
+            const result = await fulfillProOrderBundle(supabase, order);
+            console.log(`[BillingRecovery] pro fulfillment for order ${order.id}:`, result?.fulfillment_status || 'skipped');
+        } catch (err) {
+            console.error(`[BillingRecovery] pro fulfillment failed for order ${order.id}:`, err.message || err);
+        }
+    }
+}
+
 export function startBillingActivationRecovery(supabase) {
     if (!isRetryEnabled()) {
         console.log('[BillingRecovery] disabled by BILLING_ACTIVATION_RECOVERY_ENABLED flag');
@@ -101,6 +148,8 @@ export function startBillingActivationRecovery(supabase) {
                     console.error(`[BillingRecovery] failed to activate order ${order.id}:`, err.message || err);
                 }
             }
+
+            await runFulfillmentSweep(supabase);
         } catch (err) {
             console.error('[BillingRecovery] poll failed:', err.message || err);
         } finally {

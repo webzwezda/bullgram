@@ -322,6 +322,13 @@ export default function dashboardRoutes(supabase) {
             }));
             const buyerPackageSignals = packageCheckoutSignals(normalizedBuyerShopPurchases);
 
+            const { count: proFulfillmentPending, error: proFulfillmentError } = await supabase
+                .from('billing_orders')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'paid')
+                .or('payload->>fulfillment_status.is.null,payload->>fulfillment_status.eq.failed');
+            if (proFulfillmentError) throw proFulfillmentError;
+
             const paidInvoices = ownInvoices.filter(invoice => invoice.status === 'paid');
             const pendingInvoices = ownInvoices.filter(invoice => invoice.status === 'pending');
             const awaitingReceiptInvoices = ownInvoices.filter(invoice => invoice.status === 'awaiting_receipt' || invoice.status === 'wait_admin');
@@ -538,6 +545,7 @@ export default function dashboardRoutes(supabase) {
                     referralOutstandingTon: Number(referralOutstandingTon.toFixed(4)),
                     referralOutstandingUsdt: Number(referralOutstandingUsdt.toFixed(4)),
                     shopItemCount: (shopItems || []).length,
+                    proFulfillmentPending: Number(proFulfillmentPending || 0),
                     shopPublishedItemCount: publishedShopItems,
                     shopPendingPayments: pendingShopPayments,
                     shopPaidPurchases: paidShopPurchases,
