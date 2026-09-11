@@ -3,7 +3,7 @@
 export const PRO_PLAN = {
     code: 'pro_365d',
     title: 'Bullgram Pro',
-    amountTon: Number(process.env.TON_TIER_PRICE_TON || 4.5),
+    amountTon: Number(process.env.TON_TIER_PRICE_TON || 10),
     durationDays: Number(process.env.BILLING_PRO_DURATION_DAYS || 365)
 };
 

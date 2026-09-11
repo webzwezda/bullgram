@@ -77,7 +77,7 @@ const plans = [
     id: 'pro',
     label: 'Полный доступ',
     title: 'Pro',
-    price: '4.5 GRAM',
+    price: '10 GRAM',
     period: 'за 365 дней доступа',
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
