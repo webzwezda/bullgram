@@ -50,14 +50,22 @@
   html {
     font-family: var(--font-sans);
   }
+}
 
-  a {
-    color: inherit;
-    text-decoration: none;
+/* Homepage: snap-slide sections on desktop; on mobile — proximity snapping
+   plus padding so the sticky header does not cover section headings. */
+html.home-scroll-snap {
+  scroll-snap-type: y proximity;
+}
+
+@media (min-width: 1024px) {
+  html.home-scroll-snap {
+    scroll-snap-type: y mandatory;
   }
 }
 
-/* Homepage: full-screen sections flip like slides on wheel scroll. */
-html.home-scroll-snap {
-  scroll-snap-type: y mandatory;
+@media (max-width: 1023.98px) {
+  html.home-scroll-snap {
+    scroll-padding-top: 4.5rem;
+  }
 }

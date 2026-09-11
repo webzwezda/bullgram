@@ -242,13 +242,13 @@ function UserbotsCodeMock() {
           bullgram api
         </span>
       </div>
-      <pre className="overflow-x-auto px-5 py-4 font-mono text-[13px] leading-6 text-slate-300">
+      <pre className="overflow-x-auto px-4 py-4 font-mono text-[11px] leading-5 sm:text-[13px] sm:leading-6 text-slate-300">
         <code>
-          <span className="text-sky-400">curl</span> -X POST https://bullgram.xyz/api/userbot/u1/send-message {'\n'}
-          {'  '}-H <span className="text-emerald-300">"Authorization: Bearer $TOKEN"</span> {'\n'}
-          {'  '}-d {'\{'}<span className="text-emerald-300">"chat"</span>: <span className="text-emerald-300">"@closed_group"</span>,
-          {'  '}    <span className="text-emerald-300">"text"</span>: <span className="text-emerald-300">"Добро пожаловать!"</span>{'\}'}
-          {'\n\n'}
+          <span className="text-sky-400">curl</span> -X POST {'\\\n'}
+          {'  '}bullgram.xyz/api/userbot/u1/send-message {'\\\n'}
+          {'  '}-H <span className="text-emerald-300">"Authorization: Bearer $TOKEN"</span> {'\\\n'}
+          {'  '}-d {'\''}{'{'}<span className="text-emerald-300">"chat"</span>:<span className="text-emerald-300">"@closed_group"</span>,{'\n'}
+          {'      '}<span className="text-emerald-300">"text"</span>:<span className="text-emerald-300">"Добро пожаловать!"</span>{'}'}{'\n\n'}
           <span className="text-slate-500">→ 200 OK</span> {'{'}<span className="text-emerald-300">"delivered"</span>: <span className="text-amber-300">true</span>{'}'}
         </code>
       </pre>
@@ -323,7 +323,7 @@ export function HomePage() {
     <div className="w-full">
       {/* Экран 1 — герой (чуть ниже вьюпорта, чтобы тарифы приходили раньше) */}
       <section className="relative flex min-h-[86vh] snap-start snap-always flex-col">
-        <div className="relative flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
+        <div className="relative isolate flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
           <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
           <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
@@ -346,7 +346,7 @@ export function HomePage() {
             <span className="text-[13px] font-bold tracking-wide text-slate-500 group-hover:text-blue-600 transition-colors">
               Open Source
             </span>
-            {stars !== null ? (
+            {stars !== null && stars > 0 ? (
               <>
                 <span className="w-px h-3.5 bg-slate-200" aria-hidden="true" />
                 <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -399,7 +399,7 @@ export function HomePage() {
             </a>
           </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-400">
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-500">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Выделенный прокси на юзербота
             </div>
