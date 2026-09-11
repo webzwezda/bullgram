@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  ArrowDown,
   ArrowRight,
   CheckCircle2,
   Loader2,
+  Send,
   Terminal,
+  Workflow,
+  Zap,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
