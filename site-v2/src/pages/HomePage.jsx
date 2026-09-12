@@ -389,22 +389,14 @@ export function HomePage() {
               Купить готового юзербота
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
-            <a
-              href="/api/external/v1/docs#description/introduction"
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm font-semibold text-slate-500 underline-offset-4 transition-colors hover:text-slate-800 hover:underline"
-            >
-              REST API и Bullgram MCP — для интеграций
-            </a>
           </div>
 
           <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-500">
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Выделенный прокси на юзербота
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API
             </div>
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API и Bullgram MCP
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />  MCP
             </div>
           </div>
         </div>
