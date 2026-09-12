@@ -2,14 +2,9 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowDown,
   ArrowRight,
   CheckCircle2,
   Loader2,
-  Send,
-  Terminal,
-  Workflow,
-  Zap,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -231,74 +226,30 @@ function ScreenSection({ id, className = '', children }) {
 function UserbotCardMock() {
   const rows = [
     ['Статус', 'Активен', 'text-emerald-300'],
-    ['Прокси', 'Включён', 'text-sky-300'],
+    ['Прокси', 'Выделенный', 'text-sky-300'],
     ['Рассылки', 'По расписанию', 'text-slate-200'],
     ['Мониторинг', 'Группы и чаты', 'text-slate-200']
   ];
   return (
-    <div className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-white/10 shadow-2xl shadow-black/40">
-      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-        <span className="h-3 w-3 rounded-full bg-rose-500/80" />
-        <span className="h-3 w-3 rounded-full bg-amber-400/80" />
-        <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
-        <span className="ml-3 inline-flex items-center gap-2 text-xs font-bold text-slate-400">
-          <Terminal className="h-3.5 w-3.5" strokeWidth={2.5} />
-          мой юзербот
-        </span>
-      </div>
-      <div className="px-5 py-5">
-        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-black text-emerald-300">ЮБ</span>
-          <div>
-            <div className="text-sm font-black text-white">erik-barber · живой аккаунт</div>
-            <div className="text-xs font-semibold text-slate-400">куплен в Bullgram · передан тебе</div>
-          </div>
-        </div>
-        <dl className="space-y-2.5 py-4">
-          {rows.map(([key, value, tone]) => (
-            <div key={key} className="flex items-center justify-between text-sm">
-              <dt className="font-semibold text-slate-400">{key}</dt>
-              <dd className={`font-bold ${tone}`}>{value}</dd>
-            </div>
-          ))}
-        </dl>
-        <div className="rounded-lg bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
-          Готов к работе — ничего настраивать не нужно
+    <div className="rounded-2xl bg-slate-900 p-6 ring-1 ring-white/10 shadow-2xl shadow-black/40">
+      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-black text-emerald-300">ЮБ</span>
+        <div>
+          <div className="text-base font-black text-white">erik-barber</div>
+          <div className="text-xs font-semibold text-slate-400">живой аккаунт · передан тебе</div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function N8nFlowMock() {
-  const nodes = [
-    { icon: Zap, tone: 'bg-amber-500/15 text-amber-300', title: 'n8n: триггер', text: 'Новый пост в закрытой группе' },
-    { icon: Terminal, tone: 'bg-blue-500/15 text-sky-300', title: 'Bullgram API', text: 'Фильтр, анализ и отправка через /api/external/v1' },
-    { icon: Send, tone: 'bg-emerald-500/15 text-emerald-300', title: 'Действие', text: 'Уведомление в чат или ответ от юзербота' },
-  ];
-  return (
-    <div className="flex flex-col gap-2">
-      {nodes.map((node, index) => {
-        const Icon = node.icon;
-        return (
-          <div key={node.title}>
-            <div className="flex items-start gap-4 rounded-xl bg-white/5 p-4 ring-1 ring-white/10">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${node.tone}`}>
-                <Icon className="h-5 w-5" strokeWidth={2.5} />
-              </span>
-              <div>
-                <div className="text-sm font-black text-white">{node.title}</div>
-                <div className="mt-0.5 text-sm font-medium leading-5 text-slate-400">{node.text}</div>
-              </div>
-            </div>
-            {index < nodes.length - 1 ? (
-              <div className="flex justify-center py-1">
-                <ArrowDown className="h-4 w-4 text-slate-600" strokeWidth={2.5} />
-              </div>
-            ) : null}
+      <dl className="space-y-3 py-5">
+        {rows.map(([key, value, tone]) => (
+          <div key={key} className="flex items-center justify-between text-sm">
+            <dt className="font-semibold text-slate-400">{key}</dt>
+            <dd className={`font-bold ${tone}`}>{value}</dd>
           </div>
-        );
-      })}
+        ))}
+      </dl>
+      <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
+        Готов к работе. Ничего настраивать не нужно.
+      </div>
     </div>
   );
 }
@@ -453,22 +404,21 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 3 — юзерботы + API/MCP */}
+      {/* Экран 3 — флагман: готовый юзербот */}
       <ScreenSection id="userbots">
         <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
-            <div>
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
+            <div className="lg:col-span-3">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
                 Готовый юзербот под твои задачи
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Живой Telegram-аккаунт под твоим управлением: рассылки, мониторинг и действия
-                в группах. Юзербот приходит настроенным — с выделенным прокси и готовыми
-                сценариями. Получил — и он работает.
+                Живой Telegram-аккаунт, который берёт на себя рутину: посты, приглашения,
+                контроль чатов. Настраиваем мы. Тебе остаётся только пользоваться.
               </p>
               <ul className="mt-6 space-y-3">
-                {['рассылки и приглашения от твоего имени', 'мониторинг групп и чатов 24/7', 'выделенный прокси включён в стоимость', 'API и MCP — когда захочешь автоматизировать'].map((feature) => (
+                {['рассылки и приглашения от твоего имени', 'мониторинг групп и чатов 24/7', 'выделенный прокси включён в стоимость'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
                     <span>{feature}</span>
@@ -493,21 +443,8 @@ export function HomePage() {
                 </a>
               </div>
             </div>
-            <div className="flex flex-col gap-4">
+            <div className="lg:col-span-2">
               <UserbotCardMock />
-              <div className="flex flex-col items-center gap-1 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
-                <ArrowDown className="h-4 w-4 text-slate-500" strokeWidth={2.5} />
-                автоматизация без кода
-              </div>
-              <N8nFlowMock />
-              <a
-                href="https://github.com/webzwezda/bullgram/blob/main/docs/integrations/guides/n8n-collect-and-analyze.md"
-                target="_blank"
-                rel="noreferrer"
-                className="text-center text-sm font-semibold text-slate-400 underline decoration-slate-600 underline-offset-4 transition-colors hover:text-white hover:decoration-slate-400"
-              >
-                Готовый workflow для n8n — скачать и запустить
-              </a>
             </div>
           </div>
         </div>
