@@ -509,13 +509,6 @@ export function HomePage() {
                   Подключить бота
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                 </button>
-                <a
-                  href="/docs"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50"
-                >
-                  Документация
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
               </div>
             </div>
             <div className="lg:col-span-2">
