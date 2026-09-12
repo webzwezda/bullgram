@@ -537,7 +537,7 @@ export function HomePage() {
             href="/docs/quick-start/"
             className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_12px_40px_rgba(37,99,235,0.28)]"
           >
-            Как это работает
+            Quick Start
             <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
           </a>
         </div>
