@@ -82,7 +82,7 @@ function IntegrationCard({
 
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
-      <CardHeader className="px-6 pt-6">
+      <CardHeader className="px-6 pt-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white shadow-lg ${meta.shadow} shrink-0`}>
@@ -261,7 +261,7 @@ export function ApiIntegrationsPage() {
       </div>
 
       <Card className="border-slate-200/70 bg-white shadow-sm mt-6">
-        <CardHeader className="px-6 pt-6">
+        <CardHeader className="px-6 pt-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20 shrink-0">

@@ -79,7 +79,7 @@ export function RecentCallsTable({ source }) {
 
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
-      <CardHeader className="px-6 pt-6">
+      <CardHeader className="px-6 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle className="text-lg font-bold tracking-tight text-slate-900">{title}</CardTitle>
