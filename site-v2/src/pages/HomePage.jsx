@@ -272,9 +272,9 @@ function UserbotCardMock() {
 
 function N8nFlowMock() {
   const nodes = [
-    { icon: Zap, tone: 'bg-amber-50 text-amber-600', title: 'n8n: триггер', text: 'Новый пост в закрытой группе' },
-    { icon: Terminal, tone: 'bg-blue-50 text-blue-600', title: 'Bullgram API', text: 'Фильтр, анализ и отправка через /api/external/v1' },
-    { icon: Send, tone: 'bg-emerald-50 text-emerald-600', title: 'Действие', text: 'Уведомление в чат или ответ от юзербота' },
+    { icon: Zap, tone: 'bg-amber-500/15 text-amber-300', title: 'n8n: триггер', text: 'Новый пост в закрытой группе' },
+    { icon: Terminal, tone: 'bg-blue-500/15 text-sky-300', title: 'Bullgram API', text: 'Фильтр, анализ и отправка через /api/external/v1' },
+    { icon: Send, tone: 'bg-emerald-500/15 text-emerald-300', title: 'Действие', text: 'Уведомление в чат или ответ от юзербота' },
   ];
   return (
     <div className="flex flex-col gap-2">
@@ -282,18 +282,18 @@ function N8nFlowMock() {
         const Icon = node.icon;
         return (
           <div key={node.title}>
-            <div className="flex items-start gap-4 rounded-xl bg-slate-50 p-4">
+            <div className="flex items-start gap-4 rounded-xl bg-white/5 p-4 ring-1 ring-white/10">
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${node.tone}`}>
                 <Icon className="h-5 w-5" strokeWidth={2.5} />
               </span>
               <div>
-                <div className="text-sm font-black text-slate-950">{node.title}</div>
-                <div className="mt-0.5 text-sm font-medium leading-5 text-slate-600">{node.text}</div>
+                <div className="text-sm font-black text-white">{node.title}</div>
+                <div className="mt-0.5 text-sm font-medium leading-5 text-slate-400">{node.text}</div>
               </div>
             </div>
             {index < nodes.length - 1 ? (
               <div className="flex justify-center py-1">
-                <ArrowDown className="h-4 w-4 text-slate-300" strokeWidth={2.5} />
+                <ArrowDown className="h-4 w-4 text-slate-600" strokeWidth={2.5} />
               </div>
             ) : null}
           </div>
@@ -493,52 +493,22 @@ export function HomePage() {
                 </a>
               </div>
             </div>
-            <UserbotCardMock />
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 4 — автоматизации на n8n */}
-      <ScreenSection>
-        <div className="flex w-full flex-1 flex-col justify-center bg-slate-50 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Автоматизация без кода</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Соберите сценарий в n8n за вечер
-              </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-                Bullgram подключается к n8n как обычный HTTP-узел: забирайте посты
-                из групп, фильтруйте, отправляйте сообщения и стройте воронки —
-                перетаскиванием узлов, без единой строчки кода.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {['готовый workflow «Collect & Analyze» — скачайте и запустите', 'пошаговый гайд: токен, узел HTTP, первый запуск', '100 запросов в месяц бесплатно на Trial'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <a
-                  href="https://github.com/webzwezda/bullgram/blob/main/docs/integrations/guides/n8n-collect-and-analyze.md"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                >
-                  Гайд по n8n
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
-                <a
-                  href="/docs/quick-start/"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50"
-                >
-                  Получить токен
-                </a>
+            <div className="flex flex-col gap-4">
+              <UserbotCardMock />
+              <div className="flex flex-col items-center gap-1 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+                <ArrowDown className="h-4 w-4 text-slate-500" strokeWidth={2.5} />
+                автоматизация без кода
               </div>
+              <N8nFlowMock />
+              <a
+                href="https://github.com/webzwezda/bullgram/blob/main/docs/integrations/guides/n8n-collect-and-analyze.md"
+                target="_blank"
+                rel="noreferrer"
+                className="text-center text-sm font-semibold text-slate-400 underline decoration-slate-600 underline-offset-4 transition-colors hover:text-white hover:decoration-slate-400"
+              >
+                Готовый workflow для n8n — скачать и запустить
+              </a>
             </div>
-            <N8nFlowMock />
           </div>
         </div>
       </ScreenSection>
