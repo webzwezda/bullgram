@@ -256,28 +256,28 @@ function UserbotCardMock() {
 
 function PaywallBotMock() {
   const messages = [
-    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-300'],
-    ['Инвайт выдан', '@private_channel', 'text-sky-300'],
-    ['Подписка активна', 'до 14 мая', 'text-slate-200']
+    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-600'],
+    ['Инвайт выдан', '@private_channel', 'text-sky-600'],
+    ['Подписка активна', 'до 14 мая', 'text-slate-900']
   ];
   return (
-    <div className="rounded-2xl bg-slate-900 p-6 ring-1 ring-white/10 shadow-2xl shadow-black/40">
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/15 text-sm font-black text-sky-300">Б</span>
+    <div className="rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
+      <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/10 text-sm font-black text-sky-600">Б</span>
         <div>
-          <div className="text-base font-black text-white">бот paywall</div>
-          <div className="text-xs font-semibold text-slate-400">подключён к @private_channel</div>
+          <div className="text-base font-black text-slate-900">бот paywall</div>
+          <div className="text-xs font-semibold text-slate-500">подключён к @private_channel</div>
         </div>
       </div>
       <div className="space-y-2.5 py-5">
         {messages.map(([title, detail, tone]) => (
-          <div key={title} className="rounded-lg bg-white/5 px-4 py-2.5 ring-1 ring-white/10">
+          <div key={title} className="rounded-lg bg-white px-4 py-2.5 ring-1 ring-slate-200">
             <div className={`text-sm font-bold ${tone}`}>{title}</div>
-            <div className="text-xs font-semibold text-slate-400">{detail}</div>
+            <div className="text-xs font-semibold text-slate-500">{detail}</div>
           </div>
         ))}
       </div>
-      <div className="rounded-lg bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-300 ring-1 ring-inset ring-sky-500/20">
+      <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700 ring-1 ring-inset ring-sky-200">
         Доступ выдаётся сам. Ты пишешь контент.
       </div>
     </div>
@@ -481,21 +481,21 @@ export function HomePage() {
 
       {/* Экран 5 — paywall бот */}
       <ScreenSection id="paywall">
-        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
             <div className="lg:col-span-3">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Paywall бот</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Paywall бот</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
                 Платный доступ в твой канал
               </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
+              <p className="mt-4 text-base font-medium leading-7 text-slate-500">
                 Бот принимает оплату, выдаёт инвайт и следит за подписками.
                 Ты занимаешься контентом, доступом занимается бот.
               </p>
               <ul className="mt-6 space-y-3">
                 {['автоматическая выдача доступа после оплаты', 'тарифы и подписки внутри бота', 'напоминания и удаление тех, кто не продлил'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -511,7 +511,7 @@ export function HomePage() {
                 </button>
                 <a
                   href="/docs"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-black text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50"
                 >
                   Документация
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
