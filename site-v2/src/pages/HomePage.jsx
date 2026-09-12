@@ -524,15 +524,9 @@ export function HomePage() {
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
           <div className="absolute top-0 -z-10 h-[600px] w-full bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
 
-          <h2 className="max-w-3xl text-4xl font-black tracking-tight text-slate-900 sm:text-5xl">
-            Запусти первого юзербота уже сегодня
-          </h2>
-          <p className="mt-5 max-w-xl text-lg font-medium leading-7 text-slate-500">
-            Документация проведёт тебя от регистрации до работающего юзербота, шаг за шагом.
-          </p>
           <a
             href="/docs/quick-start/"
-            className="group mt-10 inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-12 py-5 text-lg font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)]"
+            className="group inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-12 py-5 text-lg font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)]"
           >
             Quick Start
             <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
