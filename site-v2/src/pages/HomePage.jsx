@@ -21,7 +21,7 @@ const plans = [
     href: '/app/profile',
     action: 'Начать Trial',
     features: [
-      '100 по API и MCP',
+      '100 запросов к API и MCP',
       'Самостоятельное подключение юзербота',
       '1 userbot на аккаунт'
     ]
@@ -371,7 +371,7 @@ export function HomePage() {
             с <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">API и MCP</span>
           </h1>
 
-          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-10 tracking-tight">
+          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-[44rem] leading-relaxed mb-10 tracking-tight">
             <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта.
           </p>
 
@@ -390,6 +390,12 @@ export function HomePage() {
       <ScreenSection id="tariffs">
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 pb-16 pt-6 sm:px-10 lg:px-16">
           <div className="mx-auto w-full max-w-5xl">
+            <div className="mb-8">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Тарифы</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Сколько стоит вход
+              </h2>
+            </div>
             <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
               {plans.map((plan) => (
                 <PlanCard key={plan.id} plan={plan}>
@@ -443,9 +449,9 @@ export function HomePage() {
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
                 Готовый юзербот
               </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Живой Telegram-аккаунт, которым можно управлять через AI-Agents или n8n
-              </p>
+          <p className="mt-4 text-base font-medium leading-7 text-slate-400">
+            Живой Telegram-аккаунт, которым можно управлять через AI-Agents или n8n
+          </p>
               <ul className="mt-6 space-y-3">
                 {['Администрирование ваших групп', 'Мониторинг чужих групп и чатов', 'Участие в рассылках'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
@@ -458,7 +464,7 @@ export function HomePage() {
                 <button
                   type="button"
                   onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                 >
                   Купить готового юзербота
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -504,7 +510,7 @@ export function HomePage() {
                 <button
                   type="button"
                   onClick={() => (user ? window.location.assign('/app/sales-bot') : login('/app/sales-bot'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                 >
                   Подключить бота
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -531,7 +537,7 @@ export function HomePage() {
             href="/docs/quick-start/"
             className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_12px_40px_rgba(37,99,235,0.28)]"
           >
-            Quick Start
+            Как это работает
             <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
           </a>
         </div>
