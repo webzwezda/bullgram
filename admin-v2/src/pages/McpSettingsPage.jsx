@@ -105,6 +105,9 @@ export function McpSettingsPage() {
   }, [accessToken]);
 
   const activeTokens = useMemo(() => tokens.filter((item) => !item.revoked_at), [tokens]);
+  const latestActive = useMemo(() => {
+    return [...activeTokens].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+  }, [activeTokens]);
   const tokenForSetup = lastCreatedToken || '${BULLGRAM_MCP_TOKEN}';
 
   const mcpServerSnippet = useMemo(() => `{
@@ -249,12 +252,18 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                   </p>
                 </div>
               </div>
-              {lastCreatedRecord ? (
+              {latestActive ? (
                 <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Активен</Badge>
               ) : null}
             </div>
           </CardHeader>
           <CardContent className="space-y-4 px-6 pb-6">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-slate-500">Токен</span>
+              <div className="h-9 rounded-lg border border-input bg-slate-50 px-2.5 flex items-center font-mono text-xs text-slate-700">
+                {latestActive?.token_hint || (latestActive ? maskToken(latestActive.token_prefix) : 'Создай токен — полный доступ показывается один раз при создании')}
+              </div>
+            </label>
             <div className="flex flex-wrap gap-3 items-end">
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-slate-500">Название</span>
