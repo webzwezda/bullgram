@@ -228,7 +228,13 @@ function ScreenSection({ id, className = '', children }) {
   );
 }
 
-function UserbotsCodeMock() {
+function UserbotCardMock() {
+  const rows = [
+    ['Статус', 'Активен', 'text-emerald-300'],
+    ['Прокси', 'Включён', 'text-sky-300'],
+    ['Рассылки', 'По расписанию', 'text-slate-200'],
+    ['Мониторинг', 'Группы и чаты', 'text-slate-200']
+  ];
   return (
     <div className="overflow-hidden rounded-2xl bg-slate-900 ring-1 ring-white/10 shadow-2xl shadow-black/40">
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
@@ -237,19 +243,29 @@ function UserbotsCodeMock() {
         <span className="h-3 w-3 rounded-full bg-emerald-500/80" />
         <span className="ml-3 inline-flex items-center gap-2 text-xs font-bold text-slate-400">
           <Terminal className="h-3.5 w-3.5" strokeWidth={2.5} />
-          bullgram api
+          мой юзербот
         </span>
       </div>
-      <pre className="overflow-x-auto px-4 py-4 font-mono text-[11px] leading-5 sm:text-[13px] sm:leading-6 text-slate-300">
-        <code>
-          <span className="text-sky-400">curl</span> -X POST {'\\\n'}
-          {'  '}bullgram.xyz/api/userbot/u1/send-message {'\\\n'}
-          {'  '}-H <span className="text-emerald-300">"Authorization: Bearer $TOKEN"</span> {'\\\n'}
-          {'  '}-d {'\''}{'{'}<span className="text-emerald-300">"chat"</span>:<span className="text-emerald-300">"@closed_group"</span>,{'\n'}
-          {'      '}<span className="text-emerald-300">"text"</span>:<span className="text-emerald-300">"Добро пожаловать!"</span>{'}'}{'\n\n'}
-          <span className="text-slate-500">→ 200 OK</span> {'{'}<span className="text-emerald-300">"delivered"</span>: <span className="text-amber-300">true</span>{'}'}
-        </code>
-      </pre>
+      <div className="px-5 py-5">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-black text-emerald-300">ЮБ</span>
+          <div>
+            <div className="text-sm font-black text-white">erik-barber · живой аккаунт</div>
+            <div className="text-xs font-semibold text-slate-400">куплен в Bullgram · передан тебе</div>
+          </div>
+        </div>
+        <dl className="space-y-2.5 py-4">
+          {rows.map(([key, value, tone]) => (
+            <div key={key} className="flex items-center justify-between text-sm">
+              <dt className="font-semibold text-slate-400">{key}</dt>
+              <dd className={`font-bold ${tone}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="rounded-lg bg-emerald-500/10 px-3 py-2.5 text-xs font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
+          Готов к работе — ничего настраивать не нужно
+        </div>
+      </div>
     </div>
   );
 }
@@ -444,15 +460,15 @@ export function HomePage() {
             <div>
               <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Юзерботы с API и MCP
+                Готовый юзербот под твои задачи
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Живые Telegram-аккаунты под вашим управлением: рассылки, мониторинг и действия
-                в группах — из кода или от AI-агента через REST API и Bullgram MCP. Каждый юзербот
-                работает через выделенный прокси и safe-mode до ручной активации.
+                Живой Telegram-аккаунт под твоим управлением: рассылки, мониторинг и действия
+                в группах. Юзербот приходит настроенным — с выделенным прокси и готовыми
+                сценариями. Получил — и он работает.
               </p>
               <ul className="mt-6 space-y-3">
-                {['рассылки и действия от имени живого аккаунта', 'выделенный прокси на каждого юзербота', 'safe-mode до ручной активации', 'REST API и Bullgram MCP из коробки'].map((feature) => (
+                {['рассылки и приглашения от твоего имени', 'мониторинг групп и чатов 24/7', 'выделенный прокси включён в стоимость', 'API и MCP — когда захочешь автоматизировать'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
                     <span>{feature}</span>
@@ -460,24 +476,14 @@ export function HomePage() {
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap gap-3">
-                {user ? (
-                  <a
-                    href="/app"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                  >
-                    Открыть кабинет
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => login()}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
-                  >
-                    Начать бесплатно
-                    <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Купить готового юзербота
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </button>
                 <a
                   href="/docs"
                   className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-black text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
@@ -487,7 +493,7 @@ export function HomePage() {
                 </a>
               </div>
             </div>
-            <UserbotsCodeMock />
+            <UserbotCardMock />
           </div>
         </div>
       </ScreenSection>
