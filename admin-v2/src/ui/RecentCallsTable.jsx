@@ -52,7 +52,7 @@ export function RecentCallsTable({ source }) {
     if (!accessToken) return;
     setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const params = new URLSearchParams({ limit: '20' });
+      const params = new URLSearchParams({ limit: '50' });
       if (source) params.set('source', source);
       const data = await apiRequest(`/api/integrations/audit-log?${params}`, { accessToken });
       setState({ loading: false, error: '', entries: data.entries || [] });

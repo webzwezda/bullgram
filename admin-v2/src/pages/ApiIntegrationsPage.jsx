@@ -43,14 +43,16 @@ function CopyInput({ value, monospace, placeholder }) {
         placeholder={placeholder || '—'}
         readOnly
       />
-      <button
-        type="button"
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-        onClick={handleCopy}
-        title="Копировать"
-      >
-        {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-      </button>
+      {value ? (
+        <button
+          type="button"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          onClick={handleCopy}
+          title="Копировать"
+        >
+          {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -89,6 +91,14 @@ function IntegrationCard({
             <div>
               <CardTitle className="text-lg font-bold tracking-tight text-slate-900">{meta.title}</CardTitle>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{meta.description}</p>
+              <a
+                href="https://bullgram.xyz/api/external/v1/docs"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                Справочник по API
+              </a>
             </div>
           </div>
           {statusBadge(token)}
@@ -121,7 +131,7 @@ function IntegrationCard({
             </Button>
           ) : null}
           {canReissue ? (
-            <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => onReissue(token)} disabled={busy}>
+            <Button variant="outline" size="sm" className="h-9 rounded-xl text-amber-600 hover:text-amber-700 hover:bg-amber-50" type="button" onClick={() => onReissue(token)} disabled={busy}>
               <RefreshCcw className="h-4 w-4" /> Перевыпустить
             </Button>
           ) : null}
