@@ -139,9 +139,6 @@ export function RecentCallsTable({ source }) {
               </Button>
             </div>
           ) : null}
-              </tbody>
-            </table>
-          </div>
         )}
       </CardContent>
     </Card>
