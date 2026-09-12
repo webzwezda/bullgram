@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, Copy, KeyRound, MessageSquare } from 'lucide-react';
+import { Bot, Check, Copy, KeyRound, MessageSquare, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -68,6 +68,14 @@ export function McpSettingsPage() {
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [promptOpen, setPromptOpen] = useState(false);
+  const [revealedSecret, setRevealedSecret] = useState('');
+  const [revealing, setRevealing] = useState(false);
+
+  useEffect(() => {
+    if (!revealedSecret) return;
+    const timer = setTimeout(() => setRevealedSecret(''), 60000);
+    return () => clearTimeout(timer);
+  }, [revealedSecret]);
 
   async function loadTokens() {
     if (!accessToken) return;
@@ -99,6 +107,23 @@ export function McpSettingsPage() {
   const latestActive = useMemo(() => {
     return [...activeTokens].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
   }, [activeTokens]);
+
+  async function revealActiveSecret() {
+    if (revealedSecret) return revealedSecret;
+    if (!latestActive?.id) return '';
+    setRevealing(true);
+    try {
+      const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(latestActive.id)}/secret`, { accessToken });
+      const secret = data.token || '';
+      if (secret) setRevealedSecret(secret);
+      return secret;
+    } catch (e) {
+      toast.error(e.message || 'Не удалось показать токен.');
+      return '';
+    } finally {
+      setRevealing(false);
+    }
+  }
   const tokenForSetup = lastCreatedToken || '${BULLGRAM_MCP_TOKEN}';
 
   const mcpServerSnippet = useMemo(() => `{
@@ -180,17 +205,18 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
   }
 
   async function testToken() {
-    if (!lastCreatedToken) {
-      setTestResult({ ok: false, text: 'Сначала создай новый токен.' });
+    if (!latestActive) {
+      setTestResult({ ok: false, text: 'Сначала выпусти токен.' });
       return;
     }
+    setTesting(true);
+    setError('');
     try {
-      setTesting(true);
-      setError('');
+      const token = revealedSecret || (await revealActiveSecret());
       const data = await apiRequest('/api/mcp/tokens/test', {
         accessToken,
         method: 'POST',
-        body: { token: lastCreatedToken }
+        body: { token }
       });
       setTestResult({
         ok: true,
@@ -236,20 +262,34 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-slate-500">Токен</span>
               <div className="h-9 rounded-lg border border-input bg-slate-50 px-2.5 flex items-center font-mono text-xs text-slate-700">
-                {latestActive?.token_hint || (latestActive ? maskToken(latestActive.token_prefix) : 'Создай токен — полный доступ показывается один раз при создании')}
+                {revealedSecret || (latestActive ? (latestActive.token_hint || maskToken(latestActive.token_prefix)) : '') || 'Выпусти токен — он покажется один раз'}
               </div>
             </label>
-            <div className="flex flex-wrap gap-3 items-end">
-              <Button className="h-9 rounded-xl" type="button" onClick={createToken} disabled={creating}>
-                {creating ? 'Создаем...' : 'Создать токен'}
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              {latestActive ? (
+                <>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => setRevealedSecret(await revealActiveSecret())} disabled={revealing || testing}>
+                    <KeyRound className="h-4 w-4" /> {revealedSecret ? 'Скрыть' : 'Показать'}
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => { const s = await revealActiveSecret(); if (s) { await navigator.clipboard.writeText(s); toast.success('Токен скопирован.'); } }} disabled={revealing || testing}>
+                    <Copy className="h-4 w-4" /> Скопировать
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl text-amber-600 hover:text-amber-700 hover:bg-amber-50" type="button" onClick={createToken} disabled={creating || testing}>
+                    <RefreshCcw className="h-4 w-4" /> Перевыпустить
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" className="h-9 rounded-xl" type="button" onClick={createToken} disabled={creating}>
+                  <KeyRound className="h-4 w-4" /> Выпустить токен
+                </Button>
+              )}
             </div>
 
             {lastCreatedToken ? (
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-slate-500">Новый токен</span>
                 <CopyInput value={lastCreatedToken} monospace />
-                <span className="text-xs text-slate-400">Скопируй сейчас — позже токен уже не показывается. Потерял: отзови в таблице ниже и выдай новый.</span>
+                <span className="text-xs text-slate-400">Скопируй сейчас — позже токен уже не показывается. Нужен новый: «Перевыпустить» отзовёт старый сам.</span>
               </label>
             ) : null}
           </CardContent>
@@ -327,7 +367,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
             </div>
 
             <div className="flex items-center gap-3">
-              <Button className="h-9 rounded-xl" type="button" onClick={testToken} disabled={testing || !lastCreatedToken}>
+              <Button className="h-9 rounded-xl" type="button" onClick={testToken} disabled={testing}>
                 {testing ? 'Проверяем...' : 'Проверить подключение'}
               </Button>
               {testResult ? (
