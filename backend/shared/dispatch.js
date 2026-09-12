@@ -43,7 +43,7 @@ function currentUsageMonth() {
 
 function trialMonthlyLimit() {
   const parsed = Number(process.env.TRIAL_API_REQUESTS_PER_MONTH);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 500;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 100;
 }
 
 // Trial-тариф: N запросов API/MCP в месяц. Pro и админы не считаются.
