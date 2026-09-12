@@ -26,10 +26,10 @@ const plans = [
     href: '/app/profile',
     action: 'Начать Trial',
     features: [
-      '500 запросов к API и MCP в месяц',
-      '1 юзербот и 1 свой прокси',
+      '500 команд юзерботу в месяц (через API и MCP)',
+      '1 юзербот на своём прокси',
       '1 автопост-бот',
-      'покупка готовых активов в Shop'
+      'покупка готовых юзерботов и прокси'
     ]
   },
   {
@@ -41,10 +41,10 @@ const plans = [
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
     features: [
-      'безлимит запросов к API и MCP',
-      'юзербот с выделенным прокси включён + безлимит своих сверху',
+      'безлимит команд юзерботу (API и MCP включены)',
+      'выделенный прокси и юзербот включены + свои без лимита',
       '3 автопост-бота и живые рассылки',
-      'покупка готовых активов в Shop с прямой передачей прав'
+      'готовые юзерботы с прямой передачей прав'
     ]
   }
 ];
@@ -407,19 +407,34 @@ export function HomePage() {
                       accessToken={accessToken}
                     />
                   ) : (
-                    <a
-                      href={plan.href}
-                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                    >
-                      {plan.action}
-                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                    </a>
+                    user ? (
+                      <a
+                        href="/app/profile"
+                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                      >
+                        Открыть кабинет
+                        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => login('/app/profile')}
+                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
+                      >
+                        {plan.action}
+                        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                    )
                   )}
                 </PlanCard>
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Тариф — это доступ к кабинету. Готовые юзерботы покупаются отдельно и приходят готовыми к работе.
+              Тариф — это доступ к кабинету.{' '}
+              <a href="/app/userbots" className="font-semibold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
+                Готовые юзерботы
+              </a>{' '}
+              покупаются отдельно и приходят готовыми к работе.
             </p>
             <p className="mt-4 text-center text-sm font-medium leading-6 text-slate-500">
               Людям с инвалидностью — предоставим специальный тариф:{' '}
