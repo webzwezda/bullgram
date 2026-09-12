@@ -69,14 +69,15 @@ export function McpSettingsPage() {
   const [testResult, setTestResult] = useState(null);
   const [promptOpen, setPromptOpen] = useState(true);
   const [manualOpen, setManualOpen] = useState(false);
-  const [revealedSecret, setRevealedSecret] = useState('');
+  const [activeSecret, setActiveSecret] = useState('');
+  const [revealed, setRevealed] = useState(false);
   const [revealing, setRevealing] = useState(false);
 
   useEffect(() => {
-    if (!revealedSecret) return;
-    const timer = setTimeout(() => setRevealedSecret(''), 60000);
+    if (!revealed) return;
+    const timer = setTimeout(() => setRevealed(false), 60000);
     return () => clearTimeout(timer);
-  }, [revealedSecret]);
+  }, [revealed]);
 
   async function loadTokens() {
     if (!accessToken) return;
@@ -109,6 +110,27 @@ export function McpSettingsPage() {
     return [...activeTokens].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
   }, [activeTokens]);
 
+  async function ensureActiveSecret() {
+    if (activeSecret) return activeSecret;
+    if (!latestActive?.id) return '';
+    setRevealing(true);
+    try {
+      const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(latestActive.id)}/secret`, { accessToken });
+      const secret = data.token || '';
+      if (secret) setActiveSecret(secret);
+      return secret;
+    } catch (e) {
+      toast.error(e.message || 'Не удалось получить токен.');
+      return '';
+    } finally {
+      setRevealing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (latestActive?.id) ensureActiveSecret();
+  }, [accessToken, latestActive?.id]);
+
   async function revealActiveSecret() {
     if (revealedSecret) return revealedSecret;
     if (!latestActive?.id) return '';
@@ -125,7 +147,7 @@ export function McpSettingsPage() {
       setRevealing(false);
     }
   }
-  const tokenForSetup = lastCreatedToken || '${BULLGRAM_MCP_TOKEN}';
+  const tokenForSetup = lastCreatedToken || activeSecret || '${BULLGRAM_MCP_TOKEN}';
 
   const mcpServersSnippet = useMemo(() => `{
   "mcpServers": {
@@ -190,14 +212,14 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
   }
 
   async function testToken() {
-    if (!latestActive) {
+    if (!latestActive && !lastCreatedToken) {
       setTestResult({ ok: false, text: 'Сначала выпусти токен.' });
       return;
     }
     setTesting(true);
     setError('');
     try {
-      const token = revealedSecret || (await revealActiveSecret());
+      const token = lastCreatedToken || (await ensureActiveSecret());
       const data = await apiRequest('/api/mcp/tokens/test', {
         accessToken,
         method: 'POST',
@@ -247,16 +269,16 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-slate-500">Токен</span>
               <div className="h-9 rounded-lg border border-input bg-slate-50 px-2.5 flex items-center font-mono text-xs text-slate-700">
-                {revealedSecret || (latestActive ? (latestActive.token_hint || maskToken(latestActive.token_prefix)) : '') || 'Выпусти токен — он покажется один раз'}
+                {(revealed && activeSecret) ? activeSecret : (latestActive ? (latestActive.token_hint || maskToken(latestActive.token_prefix)) : '') || 'Выпусти токен — он покажется один раз'}
               </div>
             </label>
             <div className="flex flex-wrap gap-2">
               {latestActive ? (
                 <>
-                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => setRevealedSecret(await revealActiveSecret())} disabled={revealing || testing}>
-                    <KeyRound className="h-4 w-4" /> {revealedSecret ? 'Скрыть' : 'Показать'}
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setRevealed(true)} disabled={revealing || testing}>
+                    <KeyRound className="h-4 w-4" /> Показать
                   </Button>
-                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => { const s = await revealActiveSecret(); if (s) { await navigator.clipboard.writeText(s); toast.success('Токен скопирован.'); } }} disabled={revealing || testing}>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => { const s = await ensureActiveSecret(); if (s) { await navigator.clipboard.writeText(s); toast.success('Токен скопирован.'); } }} disabled={revealing || testing}>
                     <Copy className="h-4 w-4" /> Скопировать
                   </Button>
                   <Button variant="outline" size="sm" className="h-9 rounded-xl text-amber-600 hover:text-amber-700 hover:bg-amber-50" type="button" onClick={createToken} disabled={creating || testing}>
