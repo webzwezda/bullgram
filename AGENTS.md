@@ -163,7 +163,7 @@ For Bullgram agent work:
 
 ## Supabase MCP And Tunnel
 
-The `supabase` MCP server (selfhosted-supabase-mcp, run via bun from `~/.local/share/selfhosted-supabase-mcp/`) is configured in `.mcp.json`; ZCode reads the same file through the `.agents/mcp.json` symlink, and Claude Code reads `.mcp.json` directly — one source of secrets for both.
+The `supabase` MCP server (selfhosted-supabase-mcp, run via bun from `~/.local/share/selfhosted-supabase-mcp/`) is configured in `.mcp.json` (repo root, gitignored); Claude Code reads it directly and via the `.agents/mcp.json` symlink. Desktop ZCode ignores workspace `.mcp.json` files (verified 2026-09-12: `mcpServerCount:0` in session logs despite valid workspace configs) — its MCP servers live in the user config `~/.zcode/cli/config.json` under `mcp.servers` (`playwright`, `supabase`, `bullgram`). Keep the two files in sync when rotating secrets.
 
 The SSH tunnel to the self-hosted Supabase is managed by the macOS LaunchAgent `com.webzwezda.supabase-mcp-tunnel` in `~/Library/LaunchAgents/`: it starts at login, auto-restarts on failure, and forwards `127.0.0.1:8080` → Kong REST API plus `127.0.0.1:5432` → direct PostgreSQL (bypasses PgBouncer). Do not run `ops/scripts/ensure-mcp-tunnel.sh` manually while the LaunchAgent is loaded — it kills the agent's tunnel and they fight over the ports. Database access is `supabase_admin` with the service-role key: full read/write.
 
