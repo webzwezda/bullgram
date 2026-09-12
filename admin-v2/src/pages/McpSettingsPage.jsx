@@ -64,7 +64,6 @@ export function McpSettingsPage() {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [label, setLabel] = useState('OpenClaw');
   const [lastCreatedToken, setLastCreatedToken] = useState('');
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
@@ -160,7 +159,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
       const data = await apiRequest('/api/mcp/tokens', {
         accessToken,
         method: 'POST',
-        body: { label }
+        body: { label: 'MCP-токен' }
       });
       for (const id of previousIds) {
         await apiRequest(`/api/mcp/tokens/${id}/revoke`, {
@@ -241,10 +240,6 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
               </div>
             </label>
             <div className="flex flex-wrap gap-3 items-end">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-slate-500">Название</span>
-                <Input className="h-9 bg-slate-50" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="OpenClaw на ноутбуке" />
-              </label>
               <Button className="h-9 rounded-xl" type="button" onClick={createToken} disabled={creating}>
                 {creating ? 'Создаем...' : 'Создать токен'}
               </Button>
