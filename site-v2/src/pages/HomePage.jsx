@@ -254,6 +254,67 @@ function UserbotCardMock() {
   );
 }
 
+function P2pOfferMock() {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
+      <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-500/10 text-xs font-black text-blue-600">P2P</span>
+        <div>
+          <div className="text-base font-black text-slate-900">оффер · доступ к закрытому каналу</div>
+          <div className="text-xs font-semibold text-slate-500">покупатель: @buyer · оплата в TON</div>
+        </div>
+      </div>
+      <dl className="space-y-3 py-5">
+        <div className="flex items-center justify-between text-sm">
+          <dt className="font-semibold text-slate-500">Оплата</dt>
+          <dd className="font-bold text-emerald-600">15 TON получены</dd>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <dt className="font-semibold text-slate-500">Кошелёк</dt>
+          <dd className="font-bold text-slate-900">твой, напрямую</dd>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <dt className="font-semibold text-slate-500">Скрытый текст</dt>
+          <dd className="font-bold text-sky-600">открыт покупателю</dd>
+        </div>
+      </dl>
+      <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+        Деньги уже у тебя. Посредников нет.
+      </div>
+    </div>
+  );
+}
+
+function PaywallBotMock() {
+  const messages = [
+    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-300'],
+    ['Инвайт выдан', '@private_channel', 'text-sky-300'],
+    ['Подписка активна', 'до 14 мая', 'text-slate-200']
+  ];
+  return (
+    <div className="rounded-2xl bg-slate-900 p-6 ring-1 ring-white/10 shadow-2xl shadow-black/40">
+      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/15 text-sm font-black text-sky-300">Б</span>
+        <div>
+          <div className="text-base font-black text-white">бот paywall</div>
+          <div className="text-xs font-semibold text-slate-400">подключён к @private_channel</div>
+        </div>
+      </div>
+      <div className="space-y-2.5 py-5">
+        {messages.map(([title, detail, tone]) => (
+          <div key={title} className="rounded-lg bg-white/5 px-4 py-2.5 ring-1 ring-white/10">
+            <div className={`text-sm font-bold ${tone}`}>{title}</div>
+            <div className="text-xs font-semibold text-slate-400">{detail}</div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-300 ring-1 ring-inset ring-sky-500/20">
+        Доступ выдаётся сам. Ты пишешь контент.
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
@@ -444,6 +505,96 @@ export function HomePage() {
             </div>
             <div className="lg:col-span-2">
               <UserbotCardMock />
+            </div>
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 4 — p2p telegram payment */}
+      <ScreenSection id="p2p">
+        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
+            <div className="order-last lg:order-first lg:col-span-2">
+              <P2pOfferMock />
+            </div>
+            <div className="lg:col-span-3">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">P2P Telegram Payment</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Деньги покупателя идут напрямую тебе
+              </h2>
+              <p className="mt-4 text-base font-medium leading-7 text-slate-500">
+                Выстави оффер в Telegram. Покупатель платит TON на твой кошелёк, скрытый товар
+                открывается сам. Посредников и задержек нет.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {['оплата TON идёт на твой кошелёк', 'товар или контент открывается сразу после оплаты', 'оффер выставляется за пару минут'].map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <a
+                  href="/create"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Создать счёт
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </a>
+                <a
+                  href="/docs"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50"
+                >
+                  Как это работает
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScreenSection>
+
+      {/* Экран 5 — paywall бот */}
+      <ScreenSection id="paywall">
+        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
+          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
+            <div className="lg:col-span-3">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Paywall бот</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+                Платный доступ в твой канал
+              </h2>
+              <p className="mt-4 text-base font-medium leading-7 text-slate-400">
+                Бот принимает оплату, выдаёт инвайт и следит за подписками.
+                Ты занимаешься контентом, доступом занимается бот.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {['автоматическая выдача доступа после оплаты', 'тарифы и подписки внутри бота', 'напоминания и удаление тех, кто не продлил'].map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => (user ? window.location.assign('/app/sales-bot') : login('/app/sales-bot'))}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Подключить бота
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+                <a
+                  href="/docs"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-black text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+                >
+                  Документация
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </a>
+              </div>
+            </div>
+            <div className="lg:col-span-2">
+              <PaywallBotMock />
             </div>
           </div>
         </div>
