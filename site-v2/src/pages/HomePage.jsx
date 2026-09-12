@@ -26,10 +26,9 @@ const plans = [
     href: '/app/profile',
     action: 'Начать Trial',
     features: [
-      '500 команд юзерботу в месяц (через API и MCP)',
+      '100 по API и MCP',
       'Самостоятельное подключение юзербота',
-      '1 автопост-бот',
-      'покупка готовых юзерботов и прокси'
+      '1 userbot на аккаунт'
     ]
   },
   {
@@ -41,7 +40,7 @@ const plans = [
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
     features: [
-      'безлимит команд юзерботу (API и MCP включены)',
+      'безлимит по API и MCP',
       'уже готовый к работе тг-аккаунт',
       'неограниченное количество ботов'
     ]
@@ -508,7 +507,7 @@ export function HomePage() {
                 перетаскиванием узлов, без единой строчки кода.
               </p>
               <ul className="mt-6 space-y-3">
-                {['готовый workflow «Collect & Analyze» — скачайте и запустите', 'пошаговый гайд: токен, узел HTTP, первый запуск', '500 запросов в месяц бесплатно на Trial'].map((feature) => (
+                {['готовый workflow «Collect & Analyze» — скачайте и запустите', 'пошаговый гайд: токен, узел HTTP, первый запуск', '100 запросов в месяц бесплатно на Trial'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
                     <span>{feature}</span>
