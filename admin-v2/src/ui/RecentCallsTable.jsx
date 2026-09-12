@@ -94,51 +94,53 @@ export function RecentCallsTable({ source }) {
         {state.error ? (
           <div className="error-card">{state.error}</div>
         ) : (
-          <div className="overflow-x-auto -mx-6 px-6">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Время</th>
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Операция</th>
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Задержка</th>
-                  {hasUserbot ? <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Userbot</th> : null}
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">IP</th>
-                  {hasError ? <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Ошибка</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {shown.length ? shown.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="py-3 pr-4 whitespace-nowrap text-xs text-slate-700">{formatTime(row.started_at)}</td>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-900">{row.operation_name}</td>
-                    <td className="py-3 pr-4"><StatusBadge status={row.status} /></td>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-700">{formatLatency(row.latency_ms)}</td>
-                    {hasUserbot ? <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.userbot_id ? String(row.userbot_id).slice(0, 8) + '…' : '—'}</td> : null}
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.request_ip || '—'}</td>
-                    {hasError ? (
-                      <td className="py-3 text-xs text-slate-500 max-w-md truncate" title={row.error_message || ''}>
-                        {row.error_message || '—'}
+          <>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Время</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Операция</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Задержка</th>
+                    {hasUserbot ? <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Userbot</th> : null}
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">IP</th>
+                    {hasError ? <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Ошибка</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {shown.length ? shown.map((row) => (
+                    <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                      <td className="py-3 pr-4 whitespace-nowrap text-xs text-slate-700">{formatTime(row.started_at)}</td>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-900">{row.operation_name}</td>
+                      <td className="py-3 pr-4"><StatusBadge status={row.status} /></td>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-700">{formatLatency(row.latency_ms)}</td>
+                      {hasUserbot ? <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.userbot_id ? String(row.userbot_id).slice(0, 8) + '…' : '—'}</td> : null}
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.request_ip || '—'}</td>
+                      {hasError ? (
+                        <td className="py-3 text-xs text-slate-500 max-w-md truncate" title={row.error_message || ''}>
+                          {row.error_message || '—'}
+                        </td>
+                      ) : null}
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={hasUserbot && hasError ? 7 : 5} className="py-12 text-center text-sm text-slate-500">
+                        Нет вызовов по этому источнику
                       </td>
-                    ) : null}
-                  </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={hasUserbot && hasError ? 7 : 5} className="py-12 text-center text-sm text-slate-500">
-                      Нет вызовов по этому источнику
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {hiddenCount > 0 ? (
-            <div className="mt-4 flex justify-center">
-              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setVisibleCount((v) => v + 5)}>
-                Показать ещё ({hiddenCount})
-              </Button>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : null}
+            {hiddenCount > 0 ? (
+              <div className="mt-4 flex justify-center">
+                <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setVisibleCount((v) => v + 5)}>
+                  Показать ещё ({hiddenCount})
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </CardContent>
     </Card>
