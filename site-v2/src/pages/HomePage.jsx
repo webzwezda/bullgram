@@ -377,28 +377,17 @@ export function HomePage() {
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-2xl leading-relaxed mb-10 tracking-tight">
-            <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой аккаунт — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта, при помощи <span className="text-slate-800 font-bold">AI-Hermes или n8n</span>.
+            <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта.
           </p>
 
-          <div className="flex flex-col items-center gap-3 w-full sm:w-auto z-10">
-            <button
-              type="button"
-              onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-              className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
-            >
-              Купить готового юзербота
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-
-          <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm font-semibold text-slate-500">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" /> REST API
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />  MCP
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
+            className="group relative z-10 mt-12 inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 sm:w-auto"
+          >
+            Купить готового юзербота
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
         </div>
       </section>
 
@@ -430,6 +419,9 @@ export function HomePage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
+              Тариф — это доступ к кабинету. Готовые юзерботы покупаются отдельно и приходят готовыми к работе.
+            </p>
+            <p className="mt-4 text-center text-sm font-medium leading-6 text-slate-500">
               Людям с инвалидностью — предоставим специальный тариф:{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
                 заявка на оформление.
