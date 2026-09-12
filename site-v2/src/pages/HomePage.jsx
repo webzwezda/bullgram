@@ -463,19 +463,20 @@ export function HomePage() {
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
+                  onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
                 >
-                  Купить готового юзербота
+                  REST API
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                 </button>
-                <a
-                  href="/docs"
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-black text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+                <button
+                  type="button"
+                  onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
                 >
-                  Документация
+                  Bullgram MCP
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </a>
+                </button>
               </div>
             </div>
             <div className="lg:col-span-2">
