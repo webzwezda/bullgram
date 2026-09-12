@@ -67,7 +67,8 @@ export function McpSettingsPage() {
   const [lastCreatedToken, setLastCreatedToken] = useState('');
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
-  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(true);
+  const [manualOpen, setManualOpen] = useState(false);
   const [revealedSecret, setRevealedSecret] = useState('');
   const [revealing, setRevealing] = useState(false);
 
@@ -126,54 +127,38 @@ export function McpSettingsPage() {
   }
   const tokenForSetup = lastCreatedToken || '${BULLGRAM_MCP_TOKEN}';
 
-  const mcpServerSnippet = useMemo(() => `{
-  "bullgram": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "mcp-remote@latest",
-      "--http",
-      "${APP_CONFIG.backendUrl}/api/mcp",
-      "--header",
-      "Authorization: Bearer ${tokenForSetup}"
-    ]
+  const mcpServersSnippet = useMemo(() => `{
+  "mcpServers": {
+    "bullgram": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "--http",
+        "${APP_CONFIG.backendUrl}/api/mcp",
+        "--header",
+        "Authorization: Bearer ${tokenForSetup}"
+      ]
+    }
   }
 }`, [tokenForSetup]);
 
-  const openClawConfigSnippet = useMemo(() => `{
-  "plugins": {
-    "entries": {
-      "acpx": {
-        "enabled": true,
-        "config": {
-          "mcpServers": ${mcpServerSnippet}
-        }
-      }
-    }
-  }
-}`, [mcpServerSnippet]);
-
-  const agentSetupPrompt = useMemo(() => `Ты настраиваешь OpenClaw для подключения к Bullgram MCP.
+  const agentSetupPrompt = useMemo(() => `Подключи Bullgram MCP к моему конфигу mcpServers.
 
 Сделай по шагам:
-1. Убедись, что ACPX plugin включен. Если нет, выполни:
-   openclaw plugins enable acpx
-2. Открой файл ~/.openclaw/openclaw.json
-3. Найди или создай секцию plugins.entries.acpx.config.mcpServers
-4. Добавь туда сервер bullgram в точности в таком виде:
+1. Открой мой конфиг ИИ-агента, секцию mcpServers
+2. Добавь туда сервер bullgram в точности в таком виде:
 
-${mcpServerSnippet}
+${mcpServersSnippet}
 
-5. Сохрани файл
-6. Перезапусти gateway командой:
-   openclaw gateway
-7. После этого используй Bullgram MCP и скажи, какие tools доступны
+3. Перезапусти меня (агента)
+4. Проверь, что инструменты Bullgram доступны, и скажи, какие tools появились
 
 Bullgram MCP endpoint:
 ${APP_CONFIG.backendUrl}/api/mcp
 
 MCP token:
-${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
+${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
 
   async function createToken() {
     try {
@@ -249,7 +234,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                 <div>
                   <CardTitle className="text-lg font-bold tracking-tight text-slate-900">MCP-токен</CardTitle>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                    Выдай персональный токен, скопируй готовый config и проверь, что клешня видит Bullgram tools.
+                    Выдай персональный токен — он связывает твоего ИИ-агента с Bullgram API и MCP.
                   </p>
                 </div>
               </div>
@@ -295,113 +280,98 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
           </CardContent>
         </Card>
 
-        {/* Setup steps */}
+        {/* Prompt for AI agent */}
         <Card className="border-slate-200/70 bg-white shadow-sm">
           <CardHeader className="px-6 pt-4">
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
-                <Bot className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+                <MessageSquare className="w-6 h-6" />
               </div>
               <div>
-                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Подключение клешни</CardTitle>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Промпт для ИИ-агента</CardTitle>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                  Включи ACPX, открой конфиг, вставь Bullgram MCP и проверь подключение.
+                  Отправь промпт своему ИИ-агенту — он сам подключит Bullgram MCP.
                 </p>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-6 px-6 pb-6">
-            <div className="space-y-5">
-              <div>
-                <StepHeader number={1} title="Включи ACPX runtime" />
-                <p className="text-sm text-slate-500 mb-2 ml-9">Если плагин ACPX еще не включен, выполни команду.</p>
-                <div className="ml-9">
-                  <CodeBlock label="Команда" value="openclaw plugins enable acpx" />
-                </div>
-              </div>
-
-              <div>
-                <StepHeader number={2} title="Открой конфиг OpenClaw" />
-                <p className="text-sm text-slate-500 mb-2 ml-9">Нужный файл и точка вставки уже известны.</p>
-                <div className="ml-9 grid gap-2">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Файл</span>
-                    <code className="font-mono text-xs text-slate-700">~/.openclaw/openclaw.json</code>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
-                    <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Секция</span>
-                    <code className="font-mono text-xs text-slate-700 break-all">plugins.entries.acpx.config.mcpServers</code>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <StepHeader number={3} title="Вставь Bullgram MCP" />
-                <p className="text-sm text-slate-500 mb-2 ml-9">Готовый фрагмент с токеном и endpoint.</p>
-                <div className="ml-9">
-                  <CodeBlock label="Готовый config" value={openClawConfigSnippet} />
-                </div>
-              </div>
-
-              <div>
-                <StepHeader number={4} title="Перезапусти и проверь" />
-                <p className="text-sm text-slate-500 mb-2 ml-9">Запусти gateway заново и проверь токен.</p>
-                <div className="ml-9">
-                  <CodeBlock label="Команда запуска" value="openclaw gateway" />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-3">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Быстрые значения</div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-slate-500">MCP endpoint</span>
-                  <CopyInput value={`${APP_CONFIG.backendUrl}/api/mcp`} monospace />
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-slate-500">Token</span>
-                  <CopyInput value={tokenForSetup} monospace />
-                </label>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button className="h-9 rounded-xl" type="button" onClick={testToken} disabled={testing}>
-                {testing ? 'Проверяем...' : 'Проверить подключение'}
-              </Button>
-              {testResult ? (
-                <Badge variant="outline" className={testResult.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}>
-                  {testResult.text}
-                </Badge>
-              ) : null}
-            </div>
+          <CardContent className="px-6 pb-6">
+            <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
           </CardContent>
         </Card>
 
-        {/* Agent prompt */}
+        {/* Manual setup */}
         <Card className="border-slate-200/70 bg-white shadow-sm">
           <CardHeader className="px-6 pt-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
-                  <MessageSquare className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+                  <Bot className="w-6 h-6" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Промпт для клешни</CardTitle>
+                  <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Ручная настройка</CardTitle>
                   <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                    Скопируй один промпт и отправь в OpenClaw — он сам поправит свой конфиг.
+                    Универсальный MCP-конфиг: подходит любому ИИ-агенту с поддержкой mcpServers.
                   </p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="h-9 rounded-xl shrink-0" onClick={() => setPromptOpen((v) => !v)}>
-                {promptOpen ? 'Скрыть' : 'Показать'}
+              <Button variant="outline" size="sm" className="h-9 rounded-xl shrink-0" onClick={() => setManualOpen((v) => !v)}>
+                {manualOpen ? 'Скрыть' : 'Показать'}
               </Button>
             </div>
           </CardHeader>
-          {promptOpen ? (
-            <CardContent className="px-6 pb-6">
-              <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
+          {manualOpen ? (
+            <CardContent className="space-y-6 px-6 pb-6">
+              <div className="space-y-5">
+                <div>
+                  <StepHeader number={1} title="Скопируй Bullgram MCP" />
+                  <p className="text-sm text-slate-500 mb-2 ml-9">Готовый фрагмент с токеном и endpoint.</p>
+                  <div className="ml-9">
+                    <CodeBlock label="Готовый config" value={mcpServersSnippet} />
+                  </div>
+                </div>
+
+                <div>
+                  <StepHeader number={2} title="Вставь в конфиг своего ИИ-агента" />
+                  <p className="text-sm text-slate-500 mb-2 ml-9">Нужна секция mcpServers в конфиге твоего клиента.</p>
+                  <div className="ml-9 grid gap-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
+                      <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Секция</span>
+                      <code className="font-mono text-xs text-slate-700 break-all">mcpServers</code>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <StepHeader number={3} title="Перезапусти и проверь" />
+                  <p className="text-sm text-slate-500 mb-2 ml-9">После перезапуска агенту станут доступны инструменты Bullgram.</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Быстрые значения</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-slate-500">MCP endpoint</span>
+                    <CopyInput value={`${APP_CONFIG.backendUrl}/api/mcp`} monospace />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-semibold text-slate-500">Token</span>
+                    <CopyInput value={tokenForSetup} monospace />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button className="h-9 rounded-xl" type="button" onClick={testToken} disabled={testing}>
+                  {testing ? 'Проверяем...' : 'Проверить подключение'}
+                </Button>
+                {testResult ? (
+                  <Badge variant="outline" className={testResult.ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}>
+                    {testResult.text}
+                  </Badge>
+                ) : null}
+              </div>
             </CardContent>
           ) : null}
         </Card>
