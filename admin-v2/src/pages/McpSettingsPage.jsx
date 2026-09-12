@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, Copy, KeyRound, MessageSquare, RefreshCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Bot, Check, Copy, KeyRound, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -11,13 +11,6 @@ import { Input } from '../components/ui/input.jsx';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { RecentCallsTable } from '../ui/RecentCallsTable.jsx';
-
-function formatWhen(value) {
-  if (!value) return 'Еще не использовался';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Дата неизвестна';
-  return date.toLocaleString('ru-RU');
-}
 
 function maskToken(value) {
   const token = String(value || '').trim();
@@ -70,7 +63,6 @@ export function McpSettingsPage() {
   const [tokens, setTokens] = useState([]);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
-  const [revokingId, setRevokingId] = useState('');
   const [testing, setTesting] = useState(false);
   const [label, setLabel] = useState('OpenClaw');
   const [lastCreatedToken, setLastCreatedToken] = useState('');
@@ -164,43 +156,27 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
       setCreating(true);
       setError('');
       setTestResult(null);
+      const previousIds = activeTokens.map((t) => String(t.id));
       const data = await apiRequest('/api/mcp/tokens', {
         accessToken,
         method: 'POST',
         body: { label }
       });
+      for (const id of previousIds) {
+        await apiRequest(`/api/mcp/tokens/${id}/revoke`, {
+          accessToken,
+          method: 'POST',
+          body: { reason: 'replaced_by_new_token' }
+        }).catch(() => {});
+      }
       setLastCreatedToken(data.token || '');
       setLastCreatedRecord(data.record || null);
       await loadTokens();
-      toast.success('MCP-токен создан.');
+      toast.success('MCP-токен создан. Старые токены отозваны.');
     } catch (nextError) {
       setError(nextError.message || 'Не удалось создать MCP токен.');
     } finally {
       setCreating(false);
-    }
-  }
-
-  async function revokeToken(tokenId) {
-    if (!window.confirm('После отзыва клешня больше не сможет обращаться к Bullgram MCP.')) return;
-    try {
-      setRevokingId(String(tokenId));
-      setError('');
-      await apiRequest(`/api/mcp/tokens/${tokenId}/revoke`, {
-        accessToken,
-        method: 'POST',
-        body: { reason: 'revoked_from_ui' }
-      });
-      await loadTokens();
-      if (String(lastCreatedRecord?.id || '') === String(tokenId)) {
-        setLastCreatedToken('');
-        setLastCreatedRecord(null);
-        setTestResult(null);
-      }
-      toast.success('Токен отозван.');
-    } catch (nextError) {
-      setError(nextError.message || 'Не удалось отозвать MCP токен.');
-    } finally {
-      setRevokingId('');
     }
   }
 
@@ -393,76 +369,6 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
               <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
             </CardContent>
           ) : null}
-        </Card>
-
-        {/* Tokens table */}
-        <Card className="border-slate-200/70 bg-white shadow-sm">
-          <CardHeader className="px-6 pt-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Все MCP-токены</CardTitle>
-                <p className="mt-1 text-sm text-slate-500">Потерял устройство — отзови токен и выдай новый.</p>
-              </div>
-              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => loadTokens()} disabled={Boolean(revokingId)}>
-                <RefreshCcw className="h-4 w-4" /> Обновить
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <div className="overflow-x-auto -mx-6 px-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Название</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Hint</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Создан</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Последний вход</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
-                    <th className="py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Действие</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeTokens.length ? activeTokens.map((token) => (
-                    <tr key={token.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3 pr-4 font-medium text-slate-900">{token.label || 'OpenClaw'}</td>
-                      <td className="py-3 pr-4 font-mono text-xs text-slate-700">{token.token_hint || maskToken(token.token_prefix)}</td>
-                      <td className="py-3 pr-4 text-slate-500">{formatWhen(token.created_at)}</td>
-                      <td className="py-3 pr-4">
-                        <div className="text-slate-700">{formatWhen(token.last_used_at)}</div>
-                        {token.last_used_ip ? <div className="font-mono text-xs text-slate-400">{token.last_used_ip}</div> : null}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Badge variant="outline" className={token.revoked_at ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}>
-                          {token.revoked_at ? 'Отозван' : 'Активен'}
-                        </Badge>
-                      </td>
-                      <td className="py-3 text-right">
-                        {token.revoked_at ? (
-                          <span className="text-xs text-slate-400">—</span>
-                        ) : (
-                          <Button variant="ghost" size="sm" className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50" type="button" onClick={() => revokeToken(token.id)} disabled={revokingId === String(token.id)} title="Отозвать">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan="6" className="py-12 text-center">
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
-                            <ShieldCheck className="w-6 h-6 text-slate-400" />
-                          </div>
-                          <p className="text-sm text-slate-500 font-semibold">Активных токенов нет</p>
-                          <p className="mt-1 text-xs text-slate-400">Создай новый токен выше — отозванные больше не работают.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
         </Card>
 
         <RecentCallsTable source="mcp" />
