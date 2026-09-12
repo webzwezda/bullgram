@@ -46,6 +46,7 @@ function StatusBadge({ status }) {
 export function RecentCallsTable({ source }) {
   const { accessToken } = useAuth();
   const [state, setState] = useState({ loading: true, error: '', entries: [] });
+  const [visibleCount, setVisibleCount] = useState(5);
 
   async function load() {
     if (!accessToken) return;
@@ -73,6 +74,8 @@ export function RecentCallsTable({ source }) {
 
   const hasUserbot = state.entries.some((row) => row.userbot_id);
   const hasError = state.entries.some((row) => row.error_message);
+  const shown = state.entries.slice(0, visibleCount);
+  const hiddenCount = state.entries.length - shown.length;
 
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
@@ -105,7 +108,7 @@ export function RecentCallsTable({ source }) {
                 </tr>
               </thead>
               <tbody>
-                {state.entries.length ? state.entries.map((row) => (
+                {shown.length ? shown.map((row) => (
                   <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="py-3 pr-4 whitespace-nowrap text-xs text-slate-700">{formatTime(row.started_at)}</td>
                     <td className="py-3 pr-4 font-mono text-xs text-slate-900">{row.operation_name}</td>
@@ -126,6 +129,16 @@ export function RecentCallsTable({ source }) {
                     </td>
                   </tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+          {hiddenCount > 0 ? (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setVisibleCount((v) => v + 5)}>
+                Показать ещё ({hiddenCount})
+              </Button>
+            </div>
+          ) : null}
               </tbody>
             </table>
           </div>
