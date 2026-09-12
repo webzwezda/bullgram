@@ -249,14 +249,14 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                   </p>
                 </div>
               </div>
-              <Button asChild variant="outline" size="sm" className="h-9 rounded-xl">
-                <a href="/app/integrations">Все API-ключи</a>
-              </Button>
+              {lastCreatedRecord ? (
+                <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Активен</Badge>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent className="space-y-4 px-6 pb-6">
-            <div className="flex gap-3 items-end">
-              <label className="flex flex-col gap-1.5 flex-1 max-w-xs">
+            <div className="flex flex-wrap gap-3 items-end">
+              <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-slate-500">Название</span>
                 <Input className="h-9 bg-slate-50" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="OpenClaw на ноутбуке" />
               </label>
@@ -266,13 +266,11 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
             </div>
 
             {lastCreatedToken ? (
-              <div className="space-y-3">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-slate-500">Новый токен</span>
-                  <CopyInput value={lastCreatedToken} monospace />
-                </label>
-                <p className="text-xs text-slate-400">Если потеряешь ключ, открой /app/integrations и скопируй повторно.</p>
-              </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-slate-500">Новый токен</span>
+                <CopyInput value={lastCreatedToken} monospace />
+                <span className="text-xs text-slate-400">Скопируй сейчас — позже токен уже не показывается. Потерял: отзови в таблице ниже и выдай новый.</span>
+              </label>
             ) : null}
           </CardContent>
         </Card>
