@@ -316,7 +316,8 @@ export function OpsRail() {
                 Pro-оплаты без выдачи: {state.summary.proFulfillmentPending}
               </h3>
               <p className="text-xs text-amber-800 leading-relaxed mt-1">
-                На витрине нет свободного бандла или перенос упал. Добавь бандл на витрину или проверь shop_purchases.
+                На витрине нет свободного бандла или перенос упал. Добавь бандл на витрину или{' '}
+                <Link to="/app/shop-receipts" className="font-bold underline">проверь заказы в магазине</Link>.
               </p>
             </div>
           </div>

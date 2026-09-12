@@ -69,3 +69,10 @@ html.home-scroll-snap {
     scroll-padding-top: 4.5rem;
   }
 }
+
+/* Mobile Safari: full-screen sections follow the visible viewport height. */
+@supports (min-height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}

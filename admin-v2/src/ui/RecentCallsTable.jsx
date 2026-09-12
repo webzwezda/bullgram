@@ -71,6 +71,9 @@ export function RecentCallsTable({ source }) {
       ? 'Журнал вызовов через REST API — внешние скрипты, интеграции, автоматизация.'
       : 'Журнал вызовов ключами этого токена.';
 
+  const hasUserbot = state.entries.some((row) => row.userbot_id);
+  const hasError = state.entries.some((row) => row.error_message);
+
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
       <CardHeader className="px-6 pt-6">
@@ -95,10 +98,10 @@ export function RecentCallsTable({ source }) {
                   <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Время</th>
                   <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Операция</th>
                   <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Latency</th>
-                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Userbot</th>
+                  <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Задержка</th>
+                  {hasUserbot ? <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Userbot</th> : null}
                   <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">IP</th>
-                  <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Ошибка</th>
+                  {hasError ? <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Ошибка</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -108,15 +111,17 @@ export function RecentCallsTable({ source }) {
                     <td className="py-3 pr-4 font-mono text-xs text-slate-900">{row.operation_name}</td>
                     <td className="py-3 pr-4"><StatusBadge status={row.status} /></td>
                     <td className="py-3 pr-4 font-mono text-xs text-slate-700">{formatLatency(row.latency_ms)}</td>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.userbot_id ? String(row.userbot_id).slice(0, 8) + '…' : '—'}</td>
+                    {hasUserbot ? <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.userbot_id ? String(row.userbot_id).slice(0, 8) + '…' : '—'}</td> : null}
                     <td className="py-3 pr-4 font-mono text-xs text-slate-500">{row.request_ip || '—'}</td>
-                    <td className="py-3 text-xs text-slate-500 max-w-md truncate" title={row.error_message || ''}>
-                      {row.error_message || '—'}
-                    </td>
+                    {hasError ? (
+                      <td className="py-3 text-xs text-slate-500 max-w-md truncate" title={row.error_message || ''}>
+                        {row.error_message || '—'}
+                      </td>
+                    ) : null}
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="7" className="py-12 text-center text-sm text-slate-500">
+                    <td colSpan={hasUserbot && hasError ? 7 : 5} className="py-12 text-center text-sm text-slate-500">
                       Нет вызовов по этому источнику
                     </td>
                   </tr>

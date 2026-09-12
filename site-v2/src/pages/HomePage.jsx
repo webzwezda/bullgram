@@ -204,7 +204,7 @@ function PlanCard({ plan, children }) {
       <ul className="mb-8 space-y-3">
         {plan.features.map((feature) => (
           <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-            <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${plan.highlighted ? 'text-blue-600' : 'text-emerald-500'}`} strokeWidth={2.5} />
+                    <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 text-emerald-500`} strokeWidth={2.5} />
             <span>{feature}</span>
           </li>
         ))}

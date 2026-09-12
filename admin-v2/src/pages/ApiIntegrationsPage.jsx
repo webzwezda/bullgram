@@ -84,6 +84,41 @@ function scopesText(scopes = []) {
   return scopes.length ? scopes.join(', ') : 'без scopes';
 }
 
+function rightsLabel(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'право';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'права';
+  return 'прав';
+}
+
+function scopesSummary(scopes = []) {
+  if (!scopes.length) return 'без прав';
+  const domainLabels = { userbot: 'юзерботы', autopost: 'автопостинг', proxy: 'прокси' };
+  const domains = [...new Set(scopes.map((s) => s.split(':')[1]).filter((d) => domainLabels[d]))];
+  const subject = domains.length ? domains.map((d) => domainLabels[d]).join(', ') : 'интеграции';
+  return `${subject} (${scopes.length} ${rightsLabel(scopes.length)})`;
+}
+
+function formatRelative(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) return 'только что';
+  if (minutes < 60) return `${minutes} мин. назад`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ч. назад`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} дн. назад`;
+  return null;
+}
+
+function formatIp(value) {
+  if (!value) return null;
+  return String(value).replace('::ffff:', '');
+}
+
 function CopyInput({ value, monospace, placeholder }) {
   const [copied, setCopied] = useState(false);
   function handleCopy() {
@@ -121,13 +156,20 @@ function IntegrationCard({
   onReveal,
   onCopy,
   onReissue,
-  onRevoke
+  onRevoke,
+  onHideSecret
 }) {
   const meta = PURPOSES[purpose];
   const Icon = meta.icon;
   const hasToken = Boolean(token);
   const canShow = hasToken && !token.revoked_at && token.can_reveal;
   const canReissue = hasToken && !token.revoked_at;
+
+  useEffect(() => {
+    if (!secret || !onHideSecret || !token?.id) return;
+    const timer = setTimeout(() => onHideSecret(token.id), 60000);
+    return () => clearTimeout(timer);
+  }, [secret, token?.id, onHideSecret]);
 
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
@@ -154,16 +196,18 @@ function IntegrationCard({
             </label>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold text-slate-400">Права</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">{scopesText(token.scopes)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-semibold text-slate-400">Последний вход</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">{formatWhen(token.last_used_at)}</div>
+                <div className="mt-1 text-sm font-medium text-slate-900" title={formatWhen(token.last_used_at)}>
+                  {formatRelative(token.last_used_at) || formatWhen(token.last_used_at)}
+                </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-xs font-semibold text-slate-400">Создан</div>
                 <div className="mt-1 text-sm font-medium text-slate-900">{formatWhen(token.created_at)}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" title={scopesText(token.scopes)}>
+                <div className="text-xs font-semibold text-slate-400">Права</div>
+                <div className="mt-1 text-sm font-medium text-slate-900">Полный доступ: {scopesSummary(token.scopes)}</div>
               </div>
             </div>
           </div>
@@ -222,7 +266,7 @@ function UsageCard({ usage, tier }) {
           </div>
           <div>
             <div className="text-sm font-bold text-slate-900">Запросы API и MCP — безлимит</div>
-            <div className="text-xs text-slate-500 mt-0.5">Тариф {tier === 'admin' ? 'админа' : 'Pro'} не ограничивает количество запросов.</div>
+            <div className="text-xs text-slate-500 mt-0.5">{tier === 'trial' ? 'Лимит тарифа Trial.' : 'Тариф Pro не ограничивает количество запросов.'}</div>
           </div>
         </CardContent>
       </Card>
@@ -340,6 +384,15 @@ export function ApiIntegrationsPage() {
     }
   }
 
+  function hideSecret(tokenId) {
+    setSecrets((prev) => {
+      if (!(tokenId in prev)) return prev;
+      const next = { ...prev };
+      delete next[tokenId];
+      return next;
+    });
+  }
+
   const activeApiToken = useMemo(() => {
     return state.tokens.find((t) => t.purpose === 'api' && !t.revoked_at) || null;
   }, [state.tokens]);
@@ -396,7 +449,7 @@ export function ApiIntegrationsPage() {
   }
 
   async function reissueToken(token) {
-    if (!window.confirm('Старый ключ сразу перестанет работать. Внешних скриптах нужно будет вставить новый.')) return;
+    if (!window.confirm('Перевыпустить ключ? Старый ключ перестанет работать сразу: все скрипты и n8n на этом ключе сломаются, пока не вставишь новый. Отменить это нельзя.')) return;
     setBusyId(token.id);
     try {
       const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/reissue`, {
@@ -417,7 +470,7 @@ export function ApiIntegrationsPage() {
   }
 
   async function revokeToken(token) {
-    if (!window.confirm('После отзыва эта интеграция больше не сможет обращаться к Bullgram.')) return;
+    if (!window.confirm('Отозвать ключ? Интеграция сразу потеряет доступ к Bullgram. Отменить это нельзя.')) return;
     setBusyId(token.id);
     try {
       await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/revoke`, {
@@ -456,6 +509,7 @@ export function ApiIntegrationsPage() {
           onCopy={copyToken}
           onReissue={reissueToken}
           onRevoke={revokeToken}
+          onHideSecret={hideSecret}
         />
         <UsageCard usage={usage} tier={usageTier} />
       </div>
@@ -558,25 +612,27 @@ export function ApiIntegrationsPage() {
                 {visibleTokens.length ? visibleTokens.map((token) => (
                   <tr key={token.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                     <td className="py-3 pr-4">
-                      <div className="font-medium text-slate-900">{purposeTitle(token.purpose)}</div>
-                      <div className="text-xs text-slate-400">{formatWhen(token.created_at)}</div>
+                      {token.label && token.label !== purposeTitle(token.purpose) ? (
+                        <div className="font-medium text-slate-900">{purposeTitle(token.purpose)}</div>
+                      ) : (
+                        <div className="text-slate-400">—</div>
+                      )}
                     </td>
-                    <td className="py-3 pr-4">
-                      <div className="font-medium text-slate-900">{token.label || purposeTitle(token.purpose)}</div>
+                    <td className="py-3 pr-4 text-slate-500" title={scopesText(token.scopes)}>
+                      {token.scopes?.length ? `${token.scopes.length} ${rightsLabel(token.scopes.length)}` : '—'}
                     </td>
-                    <td className="py-3 pr-4 text-slate-500">{scopesText(token.scopes)}</td>
                     <td className="py-3 pr-4">
                       <span className="font-mono text-xs text-slate-700">
                         {secrets[token.id] ? maskSecret(secrets[token.id]) : (token.token_hint || '—')}
                       </span>
                     </td>
                     <td className="py-3 pr-4">
-                      <div className="text-slate-700">{formatWhen(token.last_used_at)}</div>
-                      {token.last_used_ip ? <div className="font-mono text-xs text-slate-400">{token.last_used_ip}</div> : null}
+                      <div className="text-slate-700">{formatRelative(token.last_used_at) || formatWhen(token.last_used_at)}</div>
+                      {formatIp(token.last_used_ip) ? <div className="font-mono text-xs text-slate-400">{formatIp(token.last_used_ip)}</div> : null}
                     </td>
                     <td className="py-3 pr-4">{statusBadge(token)}</td>
                     <td className="py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="flex items-center justify-end gap-1.5">
                         {token.can_reveal && !token.revoked_at ? (
                           <Button variant="ghost" size="sm" className="h-8 px-2" type="button" onClick={() => copyToken(token)} disabled={Boolean(busyId)} title="Копировать">
                             <Copy className="h-4 w-4" />
@@ -588,7 +644,7 @@ export function ApiIntegrationsPage() {
                           </Button>
                         ) : null}
                         {!token.revoked_at ? (
-                          <Button variant="ghost" size="sm" className="h-8 px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50" type="button" onClick={() => revokeToken(token)} disabled={Boolean(busyId)} title="Отозвать">
+                          <Button variant="ghost" size="sm" className="ml-1 h-8 px-2 text-rose-600 ring-1 ring-inset ring-rose-200 hover:text-rose-700 hover:bg-rose-50" type="button" onClick={() => revokeToken(token)} disabled={Boolean(busyId)} title="Отозвать">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         ) : null}
