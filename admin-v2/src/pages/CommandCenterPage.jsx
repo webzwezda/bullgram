@@ -39,10 +39,6 @@ const SHOWCASE = [
 export function CommandCenterPage() {
   return (
     <section className="page page--flush">
-      <div className="page__header">
-        <h1>Командный центр</h1>
-        <p>Всё управление Bullgram в одном окне.</p>
-      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {SHOWCASE.map((item) => {
           const Icon = item.icon;
