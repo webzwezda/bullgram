@@ -292,6 +292,7 @@ function N8nFlowMock() {
 export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
+  const navigate = useNavigate();
   const { hash } = useLocation();
   const [stars, setStars] = useState(null);
 
@@ -380,22 +381,22 @@ export function HomePage() {
             <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой аккаунт — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта, при помощи <span className="text-slate-800 font-bold">AI-Hermes или n8n</span>.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto z-10">
-            <a
-              href="/docs/quick-start/"
-              className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
+          <div className="flex flex-col items-center gap-3 w-full sm:w-auto z-10">
+            <button
+              type="button"
+              onClick={() => (user ? navigate('/app/userbots') : login('/app/userbots'))}
+              className="group relative inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
             >
-              Quick Start
+              Купить готового юзербота
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </a>
+            </button>
             <a
               href="/api/external/v1/docs#description/introduction"
               target="_blank"
               rel="noreferrer"
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-8 py-4 text-base font-bold !text-white transition-all hover:bg-slate-800 hover:shadow-[0_8px_30px_rgba(15,23,42,0.24)] hover:-translate-y-0.5 w-full sm:w-auto"
+              className="text-sm font-semibold text-slate-500 underline-offset-4 transition-colors hover:text-slate-800 hover:underline"
             >
-              API и MCP
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              REST API и Bullgram MCP — для интеграций
             </a>
           </div>
 
@@ -438,7 +439,7 @@ export function HomePage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Людям с инвалидностью — предоставим тариф Normal:{' '}
+              Людям с инвалидностью — предоставим специальный тариф:{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
                 заявка на оформление.
               </a>
