@@ -411,14 +411,13 @@ export function HomePage() {
             <div className="lg:col-span-3">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Готовый юзербот под твои задачи
+                Готовый юзербот
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-                Живой Telegram-аккаунт, который берёт на себя рутину: посты, приглашения,
-                контроль чатов. Настраиваем мы. Тебе остаётся только пользоваться.
+                Живой Telegram-аккаунт, которым можно управлять через AI-Agents или n8n
               </p>
               <ul className="mt-6 space-y-3">
-                {['рассылки и приглашения от твоего имени', 'мониторинг групп и чатов 24/7', 'выделенный прокси включён в стоимость'].map((feature) => (
+                {['Администрирование ваших групп', 'Мониторинг чужих групп и чатов', 'Участие в рассылках'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
                     <span>{feature}</span>
