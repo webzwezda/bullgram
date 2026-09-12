@@ -430,13 +430,6 @@ export function HomePage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Тариф — это доступ к кабинету.{' '}
-              <a href="/app/userbots" className="font-semibold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
-                Готовые юзерботы
-              </a>{' '}
-              покупаются отдельно и приходят готовыми к работе.
-            </p>
-            <p className="mt-4 text-center text-sm font-medium leading-6 text-slate-500">
               Людям с инвалидностью — предоставим специальный тариф:{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
                 заявка на оформление.
