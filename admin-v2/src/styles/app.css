@@ -342,6 +342,13 @@ a {
   margin-top: 24px;
 }
 
+/* Legacy .grid above leaks margin-top and auto-fit columns into shadcn
+   CardHeaders (they also carry the "grid" class). Neutralize the leak. */
+[data-slot='card-header'] {
+  margin-top: 0;
+  grid-template-columns: none;
+}
+
 
 .grid--double {
   grid-template-columns: repeat(2, minmax(0, 1fr));
