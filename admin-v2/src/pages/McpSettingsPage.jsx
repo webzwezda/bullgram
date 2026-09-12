@@ -76,6 +76,7 @@ export function McpSettingsPage() {
   const [lastCreatedToken, setLastCreatedToken] = useState('');
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  const [promptOpen, setPromptOpen] = useState(false);
 
   async function loadTokens() {
     if (!accessToken) return;
@@ -363,21 +364,28 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
         {/* Agent prompt */}
         <Card className="border-slate-200/70 bg-white shadow-sm">
           <CardHeader className="px-6 pt-6">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
-                <MessageSquare className="w-6 h-6" />
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Промпт для клешни</CardTitle>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                    Скопируй один промпт и отправь в OpenClaw — он сам поправит свой конфиг.
+                  </p>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Промпт для клешни</CardTitle>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                  Скопируй один промпт и отправь в OpenClaw — он сам поправит свой конфиг.
-                </p>
-              </div>
+              <Button variant="outline" size="sm" className="h-9 rounded-xl shrink-0" onClick={() => setPromptOpen((v) => !v)}>
+                {promptOpen ? 'Скрыть' : 'Показать'}
+              </Button>
             </div>
           </CardHeader>
-          <CardContent className="px-6 pb-6">
-            <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
-          </CardContent>
+          {promptOpen ? (
+            <CardContent className="px-6 pb-6">
+              <CodeBlock label="Готовый промпт" value={agentSetupPrompt} />
+            </CardContent>
+          ) : null}
         </Card>
 
         {/* Tokens table */}
@@ -407,7 +415,7 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                   </tr>
                 </thead>
                 <tbody>
-                  {tokens.length ? tokens.map((token) => (
+                  {activeTokens.length ? activeTokens.map((token) => (
                     <tr key={token.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                       <td className="py-3 pr-4 font-medium text-slate-900">{token.label || 'OpenClaw'}</td>
                       <td className="py-3 pr-4 font-mono text-xs text-slate-700">{token.token_hint || maskToken(token.token_prefix)}</td>
@@ -438,8 +446,8 @@ ${tokenForSetup}`, [mcpServerSnippet, tokenForSetup]);
                           <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3">
                             <ShieldCheck className="w-6 h-6 text-slate-400" />
                           </div>
-                          <p className="text-sm text-slate-500 font-semibold">Пока нет MCP-токенов</p>
-                          <p className="mt-1 text-xs text-slate-400">Создай первый токен выше и проверь подключение.</p>
+                          <p className="text-sm text-slate-500 font-semibold">Активных токенов нет</p>
+                          <p className="mt-1 text-xs text-slate-400">Создай новый токен выше — отозванные больше не работают.</p>
                         </div>
                       </td>
                     </tr>
