@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Braces, Check, Copy, KeyRound, RefreshCcw } from 'lucide-react';
+import { Braces, BookOpen, Check, Copy, KeyRound, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -91,14 +91,6 @@ function IntegrationCard({
             <div>
               <CardTitle className="text-lg font-bold tracking-tight text-slate-900">{meta.title}</CardTitle>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{meta.description}</p>
-              <a
-                href="https://bullgram.xyz/api/external/v1/docs"
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                Справочник по API
-              </a>
             </div>
           </div>
           {statusBadge(token)}
@@ -150,6 +142,7 @@ export function ApiIntegrationsPage() {
   });
   const [secrets, setSecrets] = useState({});
   const [busyId, setBusyId] = useState('');
+  const [docsOpen, setDocsOpen] = useState(false);
 
   async function loadTokens({ silent = false } = {}) {
     if (!accessToken) return;
@@ -266,6 +259,46 @@ export function ApiIntegrationsPage() {
           onHideSecret={hideSecret}
         />
       </div>
+
+      <Card className="border-slate-200/70 bg-white shadow-sm mt-6">
+        <CardHeader className="px-6 pt-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20 shrink-0">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <CardTitle className="text-lg font-bold tracking-tight text-slate-900">Справочник по API</CardTitle>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                  Все эндпоинты, параметры и примеры запросов. Работает с Bearer-токеном из карточки выше.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setDocsOpen((v) => !v)}>
+                {docsOpen ? 'Скрыть' : 'Показать'}
+              </Button>
+              <a
+                href="https://bullgram.xyz/api/external/v1/docs"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+              >
+                Открыть в новой вкладке
+              </a>
+            </div>
+          </div>
+        </CardHeader>
+        {docsOpen ? (
+          <CardContent className="px-6 pb-6">
+            <iframe
+              src="/api/external/v1/docs"
+              title="Справочник по API"
+              className="h-[720px] w-full rounded-xl border border-slate-200"
+            />
+          </CardContent>
+        ) : null}
+      </Card>
 
       <div className="mt-6">
         <RecentCallsTable source="rest" />
