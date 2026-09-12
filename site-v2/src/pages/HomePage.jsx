@@ -383,7 +383,7 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-            className="group relative z-10 mt-12 inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 sm:w-auto"
+            className="group relative z-10 inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 sm:w-auto"
           >
             Купить готового юзербота
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
