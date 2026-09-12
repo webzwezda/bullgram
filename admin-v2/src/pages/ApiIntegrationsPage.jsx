@@ -21,51 +21,10 @@ const PURPOSES = {
   }
 };
 
-function formatWhen(value) {
-  if (!value) return 'Еще не использовался';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Дата неизвестна';
-  return date.toLocaleString('ru-RU');
-}
-
-function formatRelative(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
-  if (minutes < 1) return 'только что';
-  if (minutes < 60) return `${minutes} мин. назад`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ч. назад`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} дн. назад`;
-  return null;
-}
-
 function statusBadge(token) {
   if (!token) return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Нет ключа</Badge>;
   if (token.revoked_at) return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Отозван</Badge>;
   return <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200">Активен</Badge>;
-}
-
-function scopesText(scopes = []) {
-  return scopes.length ? scopes.join(', ') : 'без scopes';
-}
-
-function rightsLabel(count) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'право';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'права';
-  return 'прав';
-}
-
-function scopesSummary(scopes = []) {
-  if (!scopes.length) return 'без прав';
-  const domainLabels = { userbot: 'юзерботы', autopost: 'автопостинг', proxy: 'прокси' };
-  const domains = [...new Set(scopes.map((s) => s.split(':')[1]).filter((d) => domainLabels[d]))];
-  const subject = domains.length ? domains.map((d) => domainLabels[d]).join(', ') : 'интеграции';
-  return `${subject} (${scopes.length} ${rightsLabel(scopes.length)})`;
 }
 
 function CopyInput({ value, monospace, placeholder }) {
@@ -137,28 +96,10 @@ function IntegrationCard({
       </CardHeader>
       <CardContent className="space-y-4 px-6 pb-6">
         {hasToken ? (
-          <div className="space-y-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold text-slate-500">Ключ</span>
-              <CopyInput value={secret || ''} monospace placeholder={secret === undefined ? 'Нажми «Показать», чтобы увидеть ключ' : '—'} />
-            </label>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold text-slate-400">Последний вход</div>
-                <div className="mt-1 text-sm font-medium text-slate-900" title={formatWhen(token.last_used_at)}>
-                  {formatRelative(token.last_used_at) || formatWhen(token.last_used_at)}
-                </div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <div className="text-xs font-semibold text-slate-400">Создан</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">{formatWhen(token.created_at)}</div>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" title={scopesText(token.scopes)}>
-                <div className="text-xs font-semibold text-slate-400">Права</div>
-                <div className="mt-1 text-sm font-medium text-slate-900">Полный доступ: {scopesSummary(token.scopes)}</div>
-              </div>
-            </div>
-          </div>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-500">Ключ</span>
+            <CopyInput value={secret || ''} monospace placeholder={secret === undefined ? 'Нажми «Показать», чтобы увидеть ключ' : '—'} />
+          </label>
         ) : (
           <p className="text-sm text-slate-500">Ключ еще не выпускался.</p>
         )}
