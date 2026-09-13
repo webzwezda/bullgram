@@ -36,10 +36,6 @@ function maskInvite(value) {
   return `${t.slice(0, idx + 7)}${'•'.repeat(8)}`;
 }
 
-function postingTimesFor(n) {
-  return n === 1 ? ['10:00'] : n === 2 ? ['10:00', '18:00'] : ['08:00', '14:00', '20:00'];
-}
-
 const AUTOPOST_POST_CURL = `curl -X POST \\
 https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 -H "Authorization: Bearer brapi_..." \\
@@ -251,7 +247,7 @@ export function QuickStartPage() {
 
     setSavingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
-      const sortedPostingTimes = [...(config.postingTimes || ['10:00'])].sort();
+      const sortedPostingTimes = [...new Set(config.postingTimes || ['10:00'])].sort();
       const sortedSuggestionTimes = [...(config.suggestionPostingTimes || ['12:00'])].sort();
 
       await patchChannel(createdBot.id, config.id, {
@@ -427,11 +423,12 @@ export function QuickStartPage() {
     setChannelConfigs(prev => {
       const ch = prev[channelId];
       const currentTimes = ch.postingTimes || ['10:00'];
+      const freeSlot = ['12:00', '15:00', '18:00', '09:00', '21:00', '06:00'].find(t => !currentTimes.includes(t)) || '00:00';
       return {
         ...prev,
         [channelId]: {
           ...ch,
-          postingTimes: [...currentTimes, '12:00']
+          postingTimes: [...currentTimes, freeSlot]
         }
       };
     });
@@ -523,6 +520,7 @@ export function QuickStartPage() {
   // Определяем шаги онбординга
   const hasAdmin = admins.length > 0;
   const hasChannels = channels.length > 0;
+  const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
 
   return (
     <section className="page page--flush space-y-6">
@@ -538,7 +536,7 @@ export function QuickStartPage() {
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
                   {selectedBotId !== 'new'
-                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${postingTimesFor(channels.length).length}`
+                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0), 0)}`
                     : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
                 </p>
               </div>
@@ -948,6 +946,9 @@ export function QuickStartPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
+                          {!TIMEZONES.includes(config.timezone) && config.timezone ? (
+                            <SelectItem value={config.timezone}>{config.timezone}</SelectItem>
+                          ) : null}
                           <SelectItem value="Europe/Moscow" className="rounded-lg">Europe/Moscow (МСК, UTC+3)</SelectItem>
                           <SelectItem value="Europe/Kaliningrad" className="rounded-lg">Europe/Kaliningrad (MSK-1, UTC+2)</SelectItem>
                           <SelectItem value="Europe/Samara" className="rounded-lg">Europe/Samara (MSK+1, UTC+4)</SelectItem>
@@ -1235,8 +1236,7 @@ export function QuickStartPage() {
                       <Input
                         readOnly
                         value={inviteRevealed ? inviteLink : maskInvite(inviteLink)}
-                        onClick={handleCopyInvite}
-                        className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm cursor-pointer pr-20"
+                          className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm pr-20"
                       />
                       <button
                         type="button"
