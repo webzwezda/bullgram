@@ -1371,7 +1371,8 @@ async function loadOperationalUserbot(supabase, ownerId, userbotId = null, optio
             return { userbot: null, error: getDeadProxyMessage() };
         }
         try {
-            const service = new UserbotService(supabase, 4, "014b35b6184100b085b0d0572f9b5103");
+            // api_id/api_hash подставляет конструктор UserbotService из дефолтного отпечатка.
+            const service = new UserbotService(supabase);
             const failover = await service.tryAutoFailoverUserbot(userbot);
             if (failover.switched) {
                 return { userbot: failover.account, error: null };
@@ -1392,9 +1393,8 @@ async function loadOperationalUserbot(supabase, ownerId, userbotId = null, optio
 export default function (supabase) {
     const router = express.Router();
 
-    const apiId = 4;
-    const apiHash = "014b35b6184100b085b0d0572f9b5103";
-    const userbotService = new UserbotService(supabase, apiId, apiHash);
+    // api_id/api_hash подставляет конструктор UserbotService из дефолтного отпечатка.
+    const userbotService = new UserbotService(supabase);
     const managedProxyService = new ManagedProxyService();
 
     // ==========================================
@@ -3337,7 +3337,7 @@ export default function (supabase) {
                                 const matchedBot = myBots.find(b => String(b.tg_account_id) === String(admin.id));
                                 if (matchedBot) {
                                     const chatIdStr = String(dialog.id);
-                                    await supabase.from('channels').upsert({
+                                    const channelPayload = {
                                         owner_id: req.user.id,
                                         bot_id: matchedBot.id,
                                         tg_chat_id: chatIdStr,
@@ -3346,8 +3346,29 @@ export default function (supabase) {
                                         username: String(dialog.entity?.username || '').trim().replace(/^@/, '') || null,
                                         visibility: dialog.entity?.username ? 'public' : 'private',
                                         last_visibility_check_at: new Date().toISOString()
-                                    }, { onConflict: 'tg_chat_id' });
-                                    if (!syncResults.find(r => r.chat_id === chatIdStr)) syncResults.push({ chat_id: chatIdStr, chat_name: dialog.title, bot_name: matchedBot.tg_username });
+                                    };
+
+                                    // channels.tg_chat_id глобально уникален на всех тенантов.
+                                    // Guard тенантный: свою строку (в т.ч. мерж-строку того же
+                                    // владельца) вставляем/обновляем, чужую (другой owner_id)
+                                    // не крадём.
+                                    const { data: existingChannel } = await supabase
+                                        .from('channels')
+                                        .select('id, owner_id')
+                                        .eq('tg_chat_id', chatIdStr)
+                                        .maybeSingle();
+
+                                    let synced = true;
+                                    if (!existingChannel) {
+                                        await supabase.from('channels').insert(channelPayload);
+                                    } else if (existingChannel.owner_id === req.user.id) {
+                                        await supabase.from('channels').update(channelPayload).eq('id', existingChannel.id);
+                                    } else {
+                                        console.warn(`[sync-channels] Канал ${chatIdStr} принадлежит другому владельцу (${existingChannel.owner_id}), пропуск для бота ${matchedBot.id}`);
+                                        synced = false;
+                                    }
+
+                                    if (synced && !syncResults.find(r => r.chat_id === chatIdStr)) syncResults.push({ chat_id: chatIdStr, chat_name: dialog.title, bot_name: matchedBot.tg_username });
                                 }
                             }
                         } catch (e) {}

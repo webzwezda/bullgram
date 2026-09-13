@@ -17,7 +17,6 @@ export function useOfficialBotsController({
     botToken: '',
     botKind: 'sales'
   });
-  const [botAdminDrafts, setBotAdminDrafts] = useState({});
   // 'new' = sentinel для "создание нового бота" в верхнем селекторе (как в /app/autopost).
   // '' = ещё не инициализировано, ниже подставится первое значение.
   const [selectedOfficialBotId, setSelectedOfficialBotId] = useState('');
@@ -169,35 +168,6 @@ export function useOfficialBotsController({
     }
   }
 
-  async function saveBotAdmin(account) {
-    const accountId = String(account?.id || '');
-    if (!accountId) return;
-
-    const adminTgId = String(
-      Object.prototype.hasOwnProperty.call(botAdminDrafts, accountId)
-        ? botAdminDrafts[accountId]
-        : account.admin_tg_id || ''
-    ).trim();
-
-    setState((prev) => ({ ...prev, savingBotAdminId: accountId }));
-    try {
-      await apiRequest('/api/official-bot/admin', {
-        accessToken,
-        method: 'POST',
-        body: {
-          account_id: account.id,
-          admin_tg_id: adminTgId
-        }
-      });
-      await reloadAccounts();
-      showUiMessage(adminTgId ? 'Telegram ID админа бота сохранен.' : 'Telegram ID админа у бота очищен.', 'success');
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    } finally {
-      setState((prev) => ({ ...prev, savingBotAdminId: '' }));
-    }
-  }
-
   async function refreshOfficialBotWebhookStatus(account) {
     const accountId = String(account?.id || '');
     if (!accountId) return;
@@ -277,7 +247,6 @@ export function useOfficialBotsController({
   return {
     addOfficialBot,
     addingBotAdmin,
-    botAdminDrafts,
     botAdmins,
     botAdminsLoading,
     botForm,
@@ -291,10 +260,8 @@ export function useOfficialBotsController({
     refreshOfficialBotWebhookStatus,
     regeneratingInvite,
     reregisterWebhook,
-    saveBotAdmin,
     selectedOfficialBot,
     selectedOfficialBotId,
-    setBotAdminDrafts,
     setBotForm,
     setNewAdminTgId,
     setSelectedOfficialBotId

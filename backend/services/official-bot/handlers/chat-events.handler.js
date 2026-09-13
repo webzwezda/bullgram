@@ -43,27 +43,54 @@ export function registerChatEventHandlers(bot, { service, botId }) {
             const ownerId = await service.getBotOwner(botId);
             if (!ownerId) return;
 
-            const { error } = await service.supabase.from('channels').upsert(
-                {
+            // channels.tg_chat_id глобально уникален на всех тенантов. Guard тенантный:
+            // свою строку (в т.ч. мерж-строку с autopost-ботом того же владельца)
+            // вставляем/обновляем — payload проставит bot_id, соседние фичевые
+            // колонки не тронет. Чужую (другой owner_id) не крадём.
+            const { data: existingChannel, error: selectError } = await service.supabase
+                .from('channels')
+                .select('id, owner_id')
+                .eq('tg_chat_id', chat.id)
+                .maybeSingle();
+            if (selectError) {
+                console.error(`[chat-events] channels.select failed for chat ${chat.id}:`, selectError.message);
+                throw new Error(`channels.select failed: ${selectError.message}`);
+            }
+
+            if (existingChannel && existingChannel.owner_id !== ownerId) {
+                console.warn(`[chat-events] chat ${chat.id} принадлежит другому владельцу (${existingChannel.owner_id}), пропуск привязки для бота ${botId}`);
+            } else {
+                const channelPayload = {
                     owner_id: ownerId,
                     bot_id: botId,
                     tg_chat_id: chat.id,
                     title: chat.title || String(chat.id),
                     chat_type: chat.type || 'channel',
                     ...buildChannelVisibilityPayload(chat)
-                },
-                { onConflict: 'tg_chat_id' }
-            );
-            if (error) {
-                console.error(`[chat-events] channels.upsert failed for chat ${chat.id}:`, error.message);
-                throw new Error(`channels.upsert failed: ${error.message}`);
-            }
+                };
 
-            await autoAssignChannelToContour({ service, botId, chat });
+                const { error } = existingChannel
+                    ? await service.supabase.from('channels').update(channelPayload).eq('id', existingChannel.id)
+                    : await service.supabase.from('channels').insert(channelPayload);
+                if (error) {
+                    console.error(`[chat-events] channels insert/update failed for chat ${chat.id}:`, error.message);
+                    throw new Error(`channels insert/update failed: ${error.message}`);
+                }
+
+                await autoAssignChannelToContour({ service, botId, chat });
+            }
         } else if (newStatus === 'left' || newStatus === 'kicked') {
-            const { error } = await service.supabase.from('channels').delete().eq('tg_chat_id', chat.id);
+            // Строка может быть мерж-строкой того же владельца (в ней живёт
+            // autopost_bot_id) и на неё ссылается история подписок, поэтому
+            // не удаляем её, а отвязываем только своего бота — симметрично
+            // leave-ветке autopost-хендлера.
+            const { error } = await service.supabase
+                .from('channels')
+                .update({ bot_id: null })
+                .eq('tg_chat_id', chat.id)
+                .eq('bot_id', botId);
             if (error) {
-                console.error(`[chat-events] channels.delete failed for chat ${chat.id}:`, error.message);
+                console.error(`[chat-events] channels detach failed for chat ${chat.id}:`, error.message);
             }
         }
     });
@@ -72,7 +99,7 @@ export function registerChatEventHandlers(bot, { service, botId }) {
         try {
             const chatId = ctx.chatJoinRequest.chat.id;
             const tgUserId = ctx.chatJoinRequest.from.id;
-            const channel = await service.getChannelByChatId(chatId);
+            const channel = await service.getChannelByChatId(chatId, botId);
 
             if (!channel) {
                 await ctx.telegram.declineChatJoinRequest(chatId, tgUserId).catch(() => {});

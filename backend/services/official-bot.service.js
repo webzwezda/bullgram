@@ -738,12 +738,17 @@ export class OfficialBotService {
         return data?.owner_id || null;
     }
 
-    async getChannelByChatId(chatId) {
-        const { data } = await this.supabase
+    async getChannelByChatId(chatId, botId = null) {
+        // channels.tg_chat_id глобально уникален на всех тенантов: без bot_id
+        // можно получить чужую строку. С botId ищем только строку этого бота.
+        let query = this.supabase
             .from('channels')
             .select('*')
-            .eq('tg_chat_id', chatId)
-            .single();
+            .eq('tg_chat_id', chatId);
+        if (botId) {
+            query = query.eq('bot_id', botId);
+        }
+        const { data } = await query.maybeSingle();
 
         return data || null;
     }

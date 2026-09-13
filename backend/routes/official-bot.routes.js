@@ -1,5 +1,5 @@
 import express from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { Telegraf } from 'telegraf';
 import { OfficialBotService } from '../services/official-bot.service.js';
 import {
@@ -199,7 +199,15 @@ export default function (supabase) {
                 throw accountError;
             }
 
-            if (!account?.webhook_secret || account.webhook_secret !== secret) {
+            // Сравнение секрета — constant-time: защита от timing-атак.
+            // timingSafeEqual бросает на разной длине буферов, поэтому длину сверяем заранее.
+            const expectedSecret = String(account?.webhook_secret || '');
+            const providedSecret = String(secret || '');
+            const secretMatches = expectedSecret.length > 0
+                && expectedSecret.length === providedSecret.length
+                && timingSafeEqual(Buffer.from(expectedSecret), Buffer.from(providedSecret));
+
+            if (!secretMatches) {
                 return res.status(404).json({ error: 'Webhook not found.' });
             }
 
@@ -482,50 +490,6 @@ export default function (supabase) {
         }
     });
 
-    router.post('/admin', authenticateUser, async (req, res) => {
-        const { account_id, admin_tg_id } = req.body;
-        if (!account_id) return res.status(400).json({ error: 'Не передан бот для обновления админа' });
-
-        try {
-            const normalizedAdminTgId = String(admin_tg_id || '').trim() || null;
-
-            const { data: account, error: accountError } = await supabase
-                .from('tg_accounts')
-                .select('id, session_data')
-                .eq('id', account_id)
-                .eq('owner_id', req.user.id)
-                .eq('account_type', 'bot')
-                .single();
-
-            if (accountError || !account) {
-                return res.status(404).json({ error: 'Бот не найден' });
-            }
-
-            const botToken = account.session_data ? decrypt(account.session_data) : '';
-            const adminTgUsername = await resolveBotAdminUsername(botToken, normalizedAdminTgId);
-
-            const { error: updateError } = await supabase
-                .from('tg_accounts')
-                .update({
-                    admin_tg_id: normalizedAdminTgId,
-                    admin_tg_username: normalizedAdminTgId ? adminTgUsername : null
-                })
-                .eq('id', account.id)
-                .eq('owner_id', req.user.id);
-
-            if (updateError) throw updateError;
-
-            res.json({
-                success: true,
-                admin_tg_id: normalizedAdminTgId,
-                admin_tg_username: normalizedAdminTgId ? adminTgUsername : null
-            });
-        } catch (error) {
-            console.error('Ошибка обновления admin_tg_id бота:', error.message);
-            res.status(500).json({ error: 'Не получилось обновить Telegram ID админа бота' });
-        }
-    });
-
     router.post('/role', authenticateUser, async (req, res) => {
         const { account_id, bot_role } = req.body;
         if (!account_id) return res.status(400).json({ error: 'Не передан бот для смены роли' });
@@ -633,16 +597,6 @@ export default function (supabase) {
         }
     });
 
-    router.post('/contours/rights', authenticateUser, async (req, res) => {
-        try {
-            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
-            const data = await salesContourService.getBotChatRights(req.user.id, req.body || {}, botApi);
-            res.json({ success: true, ...data });
-        } catch (error) {
-            return sendOfficialBotError(res, error, 'Не получилось проверить права бота в Telegram');
-        }
-    });
-
     router.post('/contours/check-rights', authenticateUser, async (req, res) => {
         try {
             const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
@@ -653,24 +607,12 @@ export default function (supabase) {
         }
     });
 
-    router.post('/contours/prepare-userbot', authenticateUser, async (req, res) => {
-        try {
-            const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
-            const data = await salesContourService.prepareSelectedUserbotAdmin(req.user.id, req.body || {}, botApi);
-            res.json({ success: true, ...data });
-        } catch (error) {
-            return sendOfficialBotError(res, error, 'Не получилось подготовить юзербота');
-        }
-    });
-
     router.post('/contours/join-all', authenticateUser, async (req, res) => {
         try {
-            console.log('[join-all] started for user:', req.user?.id, 'bot_id:', req.body?.bot_id);
             const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
             const { UserbotService } = await import('../services/userbot.service.js');
-            const userbotService = new UserbotService(supabase, 4, '014b35b6184100b085b0d0572f9b5103');
+            const userbotService = new UserbotService(supabase);
             const data = await salesContourService.joinUserbotToAllTargets(req.user.id, req.body || {}, botApi, userbotService);
-            console.log('[join-all] completed:', data?.summary);
             res.json({ success: true, ...data });
         } catch (error) {
             console.error('[join-all] FAILED:', error);
@@ -707,7 +649,7 @@ export default function (supabase) {
                 .eq('id', channelId)
                 .eq('owner_id', req.user.id)
                 .select('id, owner_id, bot_id, tg_chat_id, title, chat_type, username, visibility, last_visibility_check_at, created_at')
-                .single();
+                .maybeSingle();
 
             if (error) throw error;
             if (!data) {

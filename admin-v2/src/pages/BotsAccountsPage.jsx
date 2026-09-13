@@ -114,7 +114,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
   const {
     addOfficialBot,
     addingBotAdmin,
-    botAdminDrafts,
     botAdmins,
     botAdminsLoading,
     botForm,
@@ -128,10 +127,8 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     refreshOfficialBotWebhookStatus,
     regeneratingInvite,
     reregisterWebhook,
-    saveBotAdmin,
     selectedOfficialBot,
     selectedOfficialBotId,
-    setBotAdminDrafts,
     setBotForm,
     setNewAdminTgId,
     setSelectedOfficialBotId
@@ -310,9 +307,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     selectedOfficialBotId,
     setSelectedOfficialBotId,
     officialBots,
-    botAdminDrafts,
-    setBotAdminDrafts,
-    saveBotAdmin,
     refreshOfficialBotWebhookStatus,
     reregisterWebhook,
     channelsByBotId,

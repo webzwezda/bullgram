@@ -4,8 +4,10 @@ import { decrypt } from '../utils/crypto.js';
 import { UserbotService } from './userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 
-const TELEGRAM_API_ID = 4;
-const TELEGRAM_API_HASH = '014b35b6184100b085b0d0572f9b5103';
+// api_id/api_hash берутся из env (TG_API_ID/TG_API_HASH из .env.example); без env
+// конструктор UserbotService подставляет дефолтный отпечаток — поведение прежнее.
+const TELEGRAM_API_ID = Number(process.env.TG_API_ID) || null;
+const TELEGRAM_API_HASH = process.env.TG_API_HASH || null;
 const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
 const RECONCILIATION_DISCOVERY_LIMIT = 80;

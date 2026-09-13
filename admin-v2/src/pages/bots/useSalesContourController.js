@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
+
+const JOIN_ALL_CONFIRM_TEXT = 'Юзербот вступит в площадки контура и получит в них права админа. Telegram может не дать вступить без приглашения — тогда площадка не подключится, и её нужно будет добавить вручную. Это занимает до минуты. Продолжить?';
 
 function normalizeBotKind(value) {
   return value === 'template' ? 'template' : 'sales';
@@ -288,37 +290,6 @@ function resolveRightsByTarget(entry) {
   }, {});
 }
 
-function normalizePrepareResult(payload, fallbackTarget, fallbackUserbotId) {
-  const root = extractResponseRoot(payload);
-
-  return {
-    target: normalizeContourTarget(readFirstValue(root, ['target', 'chat_target']) || fallbackTarget),
-    status: normalizeStatusKey(readFirstValue(root, ['status', 'prepare_status', 'result_status'])),
-    inviteLink: String(readFirstValue(root, ['invite_link', 'inviteLink', 'join_link', 'joinLink']) || '').trim(),
-    warnings: dedupeStrings(collectApiWarnings(root)),
-    message: String(readFirstValue(root, ['message', 'text', 'detail']) || '').trim(),
-    userbotId: toId(readFirstValue(root, ['selected_userbot_id', 'selectedUserbotId', 'userbot_id', 'userbotId']) || fallbackUserbotId)
-  };
-}
-
-function responseIncludesRights(payload) {
-  const root = extractResponseRoot(payload);
-  return Boolean(
-    root?.rights
-      || root?.permissions
-      || root?.admin_rights
-      || root?.adminRights
-      || readFirstValue(root, ['can_invite_users', 'canInviteUsers']) !== undefined
-      || readFirstValue(root, ['can_promote_members', 'canPromoteMembers']) !== undefined
-      || readFirstValue(root, ['can_manage_chat', 'canManageChat']) !== undefined
-      || readFirstValue(root, ['admin_status', 'adminStatus']) !== undefined
-  );
-}
-
-function isPreparationSuccessStatus(status) {
-  return ['prepared', 'promoted', 'ready', 'already_admin', 'already_prepared'].includes(normalizeStatusKey(status));
-}
-
 function pickSingleOption(currentValue, options, excludeId) {
   if (currentValue) return currentValue;
   const available = (Array.isArray(options) ? options : []).filter((option) => {
@@ -390,8 +361,6 @@ export function useSalesContourController({
   const [botRightsTarget, setBotRightsTarget] = useState('paid_channel');
   const [botRightsByKey, setBotRightsByKey] = useState({});
   const [checkingRightsKey, setCheckingRightsKey] = useState('');
-  const [prepareResultByKey, setPrepareResultByKey] = useState({});
-  const [preparingUserbotKey, setPreparingUserbotKey] = useState('');
 
   const selectedBotId = toId(selectedOfficialBot?.id);
   const selectedBotKind = normalizeBotKind(selectedOfficialBot?.bot_kind);
@@ -481,7 +450,6 @@ export function useSalesContourController({
 
   const normalizedRightsTarget = normalizeContourTarget(botRightsTarget);
   const rightsKey = `${selectedBotId}:${normalizedRightsTarget}`;
-  const prepareKey = `${selectedBotId}:paid_channel`;
   const botRightsResult = botRightsByKey[rightsKey] || null;
   const targetFieldByKey = {
     public_channel: 'publicChannelId',
@@ -502,13 +470,6 @@ export function useSalesContourController({
   const checkingBotRightsTarget = checkingRightsKey.startsWith(`${selectedBotId}:`)
     ? checkingRightsKey.slice(`${selectedBotId}:`.length)
     : '';
-  const userbotPrepareResult = (() => {
-    const result = prepareResultByKey[prepareKey] || null;
-    if (result?.userbotId && toId(result.userbotId) !== toId(draft.selectedUserbotId)) {
-      return null;
-    }
-    return result;
-  })();
 
   useEffect(() => {
     if (!selectedBotId || dirtyBotIds[selectedBotId]) return;
@@ -726,73 +687,10 @@ export function useSalesContourController({
     }
   }
 
-  async function prepareUserbotAdmin() {
-    if (!selectedOfficialBot?.id) return;
-    const normalizedTarget = 'paid_channel';
-
-    if (dirtyBotIds[selectedBotId]) {
-      return;
-    }
-    if (draft.userbotMode !== 'single' || !draft.selectedUserbotId) {
-      return;
-    }
-    if (!draft.paidChannelId) {
-      return;
-    }
-
-    setPreparingUserbotKey(prepareKey);
-
-    try {
-      const result = await apiRequest('/api/official-bot/contours/prepare-userbot', {
-        accessToken,
-        method: 'POST',
-        body: {
-          bot_id: selectedOfficialBot.id,
-          target: normalizedTarget
-        }
-      });
-
-      const normalizedResult = normalizePrepareResult(result, normalizedTarget, draft.selectedUserbotId);
-
-      setPrepareResultByKey((prev) => ({
-        ...prev,
-        [prepareKey]: normalizedResult
-      }));
-
-      if (responseIncludesRights(result)) {
-        setBotRightsByKey((prev) => ({
-          ...prev,
-          [`${selectedBotId}:${normalizedResult.target}`]: normalizeRightsResult(result, normalizedTarget)
-        }));
-      }
-
-      if (normalizedResult.status === 'needs_join') {
-
-      } else if (isPreparationSuccessStatus(normalizedResult.status)) {
-        reloadAccounts().catch(() => null);
-
-      } else {
-
-      }
-    } catch (error) {
-      setPrepareResultByKey((prev) => ({
-        ...prev,
-        [prepareKey]: {
-          target: normalizedTarget,
-          status: 'error',
-          inviteLink: '',
-          warnings: [],
-          message: error.message,
-          userbotId: toId(draft.selectedUserbotId)
-        }
-      }));
-    } finally {
-      setPreparingUserbotKey('');
-    }
-  }
-
   const [userbotActiveMap, setUserbotActiveMap] = useState({});
   const [togglingUserbotId, setTogglingUserbotId] = useState('');
+  const [joinAllPending, setJoinAllPending] = useState(false);
+  const joinAllInFlightRef = useRef(false);
 
   useEffect(() => {
     const rawBindings = contourEntry?.userbot_bindings || [];
@@ -804,7 +702,6 @@ export function useSalesContourController({
   }, [contourEntry]);
 
   async function toggleUserbotActive(userbotId, isActive) {
-    console.log('[toggleUserbotActive]', { userbotId, isActive, selectedBotId: selectedOfficialBot?.id, togglingUserbotId });
     if (!selectedOfficialBot?.id || togglingUserbotId) return;
     setTogglingUserbotId(String(userbotId));
     setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: isActive }));
@@ -833,7 +730,12 @@ export function useSalesContourController({
 
   function triggerJoinAll() {
     const botId = selectedOfficialBot?.id;
-    if (!botId) return;
+    // In-flight guard: join-all на бэке исполняется 20-30 сек, повторные клики стакать нельзя.
+    if (!botId || joinAllInFlightRef.current) return;
+    if (!window.confirm(JOIN_ALL_CONFIRM_TEXT)) return;
+
+    joinAllInFlightRef.current = true;
+    setJoinAllPending(true);
     apiRequest('/api/official-bot/contours/join-all', {
       accessToken,
       method: 'POST',
@@ -845,6 +747,9 @@ export function useSalesContourController({
     }).catch((err) => {
       console.error('join-all failed:', err?.message);
       toast.error(err?.message || 'Ошибка вступления в группы');
+    }).finally(() => {
+      joinAllInFlightRef.current = false;
+      setJoinAllPending(false);
     });
   }
 
@@ -859,9 +764,8 @@ export function useSalesContourController({
     contourWarnings,
     draft,
     isVisible: !!selectedBotId,
+    joinAllPending,
     paidChannelOptions,
-    prepareUserbotAdmin,
-    preparingUserbot: preparingUserbotKey === prepareKey,
     publicChatOptions,
     paidChatOptions,
     publicChannelOptions,
@@ -883,7 +787,6 @@ export function useSalesContourController({
       }
     },
     setUserbotMode,
-    userbotPrepareResult,
     userbotOptions,
     userbotActiveMap,
     toggleUserbotActive,

@@ -19,7 +19,19 @@ export function registerChatMemberHandler(bot, service, botId) {
                     .single();
 
                 if (botData?.owner_id) {
-                    await supabase.from('channels').upsert({
+                    // channels.tg_chat_id глобально уникален на всех тенантов. Guard
+                    // тенантный: свою строку (в т.ч. мерж-строку с official-ботом того
+                    // же владельца) вставляем/обновляем — payload проставит
+                    // autopost_bot_id, соседние фичевые колонки не тронет. Чужую
+                    // (другой owner_id) не крадём.
+                    const { data: existingChannel, error: selectError } = await supabase
+                        .from('channels')
+                        .select('id, owner_id')
+                        .eq('tg_chat_id', chat.id)
+                        .maybeSingle();
+                    if (selectError) throw selectError;
+
+                    const channelPayload = {
                         owner_id: botData.owner_id,
                         autopost_bot_id: botId,
                         tg_chat_id: chat.id,
@@ -28,16 +40,32 @@ export function registerChatMemberHandler(bot, service, botId) {
                         username: chat.username || null,
                         visibility: chat.username ? 'public' : 'private',
                         last_visibility_check_at: new Date().toISOString()
-                    }, { onConflict: 'tg_chat_id' });
-                    console.log(`[Autopost] Канал ${chat.title || chat.id} привязан к боту ${botId}`);
+                    };
 
-                    const adminTgIds = botData.admin_tg_ids || [];
-                    for (const adminId of adminTgIds) {
-                        try {
-                            const keyboard = await getAdminKeyboard(botId, adminId, supabase);
-                            await ctx.telegram.sendMessage(adminId, `✅ Канал/группа "${chat.title || chat.id}" успешно привязана к автопостеру!`, keyboard);
-                        } catch (e) {
-                            console.error(`Failed to notify admin ${adminId} about channel addition:`, e.message);
+                    let bound = false;
+                    if (!existingChannel) {
+                        const { error } = await supabase.from('channels').insert(channelPayload);
+                        if (error) throw error;
+                        bound = true;
+                    } else if (existingChannel.owner_id === botData.owner_id) {
+                        const { error } = await supabase.from('channels').update(channelPayload).eq('id', existingChannel.id);
+                        if (error) throw error;
+                        bound = true;
+                    } else {
+                        console.warn(`[Autopost] Канал ${chat.id} принадлежит другому владельцу (${existingChannel.owner_id}), пропуск привязки для бота ${botId}`);
+                    }
+
+                    if (bound) {
+                        console.log(`[Autopost] Канал ${chat.title || chat.id} привязан к боту ${botId}`);
+
+                        const adminTgIds = botData.admin_tg_ids || [];
+                        for (const adminId of adminTgIds) {
+                            try {
+                                const keyboard = await getAdminKeyboard(botId, adminId, supabase);
+                                await ctx.telegram.sendMessage(adminId, `✅ Канал/группа "${chat.title || chat.id}" успешно привязана к автопостеру!`, keyboard);
+                            } catch (e) {
+                                console.error(`Failed to notify admin ${adminId} about channel addition:`, e.message);
+                            }
                         }
                     }
                 }

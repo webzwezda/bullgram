@@ -423,6 +423,7 @@ function UserbotsSection({
   const savingContour = salesContourSectionProps?.savingContour;
   const userbotOptions = salesContourSectionProps?.userbotOptions || [];
   const selectedIds = draft.selectedUserbotIds || [];
+  const joinAllPending = salesContourSectionProps?.joinAllPending;
   const [adding, setAdding] = useState(false);
 
   if (!salesContourSectionProps?.isVisible) return null;
@@ -485,6 +486,7 @@ function UserbotsSection({
               <Button
                 size="sm"
                 onClick={() => setAdding(true)}
+                disabled={joinAllPending}
                 className="bg-indigo-600 hover:bg-indigo-700 h-11 rounded-xl text-xs px-4 shadow-sm font-bold"
               >
                 <Plus className="w-4 h-4 mr-1.5" />
@@ -497,7 +499,7 @@ function UserbotsSection({
 
       {adding && availableOptions.length > 0 ? (
         <div className="px-5 sm:px-6 py-4 border-y border-slate-100 bg-slate-50/50 flex items-center gap-3">
-          <Select onValueChange={(value) => { if (value) handleAdd(value); }}>
+          <Select disabled={joinAllPending} onValueChange={(value) => { if (value) handleAdd(value); }}>
             <SelectTrigger className="flex-1 w-full bg-white rounded-xl border-slate-200 data-[size=default]:h-11 shadow-sm">
               <SelectValue placeholder="Выберите доступного юзербота" />
             </SelectTrigger>
@@ -545,8 +547,9 @@ function UserbotsSection({
                       role="switch"
                       aria-checked={isActive}
                       onClick={() => salesContourSectionProps?.toggleUserbotActive?.(option.id, !isActive)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
-                        isToggling ? 'opacity-50 pointer-events-none' : ''
+                      disabled={isToggling || joinAllPending}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed ${
+                        isToggling || joinAllPending ? 'opacity-50 pointer-events-none' : ''
                       } ${isActive ? 'bg-indigo-600' : 'bg-slate-200'}`}
                     >
                       <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${isActive ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -569,6 +572,13 @@ function UserbotsSection({
           })}
         </div>
       )}
+
+      {joinAllPending ? (
+        <div className="px-5 sm:px-6 py-3 text-xs font-bold text-indigo-500 flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          Вступаю в площадки контура... Это занимает до минуты.
+        </div>
+      ) : null}
 
       {savingContour ? (
         <div className="px-5 sm:px-6 py-3 text-xs font-bold text-indigo-500 flex items-center gap-2">

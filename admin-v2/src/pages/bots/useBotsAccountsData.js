@@ -6,7 +6,6 @@ const INITIAL_STATE = {
   loading: true,
   refreshing: false,
   savingBot: false,
-  savingBotAdminId: '',
   savingBotKindId: '',
   savingContourBotId: '',
   checkingAccountId: '',
