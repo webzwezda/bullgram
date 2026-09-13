@@ -682,9 +682,6 @@ export function QuickStartPage() {
                   </button>
                 ) : null}
               </div>
-              {selectedBotId !== 'new' ? (
-                <p className="text-xs text-slate-500 mt-1.5">Токен скрыт. Нужен снова — возьми в @BotFather или перевыпусти там же.</p>
-              ) : null}
             </div>
             <div className="flex gap-2 w-full md:w-auto">
               {selectedBotId === 'new' ? (
