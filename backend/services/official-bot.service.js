@@ -175,7 +175,8 @@ export class OfficialBotService {
     }
 
     sortTariffPaymentVariants(variants = []) {
-        const currencyOrder = { TON: 1, RUB: 2, USDT: 3 };
+        // RUB убран из валют продукта: в меню попадают только активные тарифы (TON/USDT), порядок TON → USDT сохранён
+        const currencyOrder = { TON: 1, USDT: 2 };
         return [...variants].sort((left, right) => {
             const leftCurrency = String(left.currency || '').toUpperCase();
             const rightCurrency = String(right.currency || '').toUpperCase();
@@ -237,14 +238,8 @@ export class OfficialBotService {
             .join(' / ');
     }
 
-    getTariffCurrencyIcon(currency) {
-        return String(currency || '').toUpperCase() === 'RUB' ? '💳' : '💎';
-    }
-
-    getTariffGroupIcon(group) {
-        const currencies = new Set((group?.variants || []).map((variant) => String(variant.currency || '').toUpperCase()));
-        if (currencies.has('TON') && currencies.has('RUB')) return '💎💳';
-        return this.getTariffCurrencyIcon(group?.lead?.currency);
+    getTariffGroupIcon() {
+        return '💎';
     }
 
     getTariffCategory(tariff) {
@@ -1725,10 +1720,13 @@ export class OfficialBotService {
             const rewardAmount = ['TON', 'USDT'].includes(currency)
                 ? Number(rewardAmountRaw.toFixed(4))
                 : Number(rewardAmountRaw.toFixed(2));
-            const clientDiscountAmount = Math.max(0, Number((rewardBaseAmount - paidAmount).toFixed(currency === 'RUB' ? 2 : 4)));
+            // decimals для скидки клиента: RUB-ветка (toFixed(2)) удалена — новые RUB-награды заблокированы whitelist'ом ниже,
+            // TON/USDT считают в 4 знаках как раньше
+            const clientDiscountAmount = Math.max(0, Number((rewardBaseAmount - paidAmount).toFixed(4)));
 
             if (rewardAmount <= 0) return null;
-            if (!['RUB', 'TON', 'USDT'].includes(currency)) return null;
+            // Новые RUB-награды заблокированы (продуктовое решение: валюты TON/USDT); исторические RUB-события читаются в referral.routes.js как легаси-данные
+            if (!['TON', 'USDT'].includes(currency)) return null;
 
             const convertedReward = await convertAmountToTon(this.supabase, rewardAmount, currency);
             if (!convertedReward?.amountTon) {

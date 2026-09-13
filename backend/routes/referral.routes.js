@@ -61,8 +61,8 @@ export default function referralRoutes(supabase) {
     const officialBotService = new OfficialBotService(supabase);
 
     function normalizeCurrencyAmount(currency, amount) {
-        const decimals = currency === 'RUB' ? 2 : 6;
-        return Number(Number(amount || 0).toFixed(decimals));
+        // Новые RUB-выплаты заблокированы (продукт живёт на TON/USDT), точность единa — 6 знаков; легаси-RUB-балансы тут не пишутся
+        return Number(Number(amount || 0).toFixed(6));
     }
 
     function buildReferralPayoutMemo(payoutRequestId) {
@@ -752,8 +752,8 @@ export default function referralRoutes(supabase) {
             return { error: 'Не передан Telegram ID партнера', status: 400 };
         }
 
-        if (!['RUB', 'TON', 'USDT'].includes(normalizedCurrency)) {
-            return { error: 'Выплату можно отметить только в RUB, TON или USDT', status: 400 };
+        if (!['TON', 'USDT'].includes(normalizedCurrency)) {
+            return { error: 'Выплату можно отметить только в TON или USDT', status: 400 };
         }
 
         if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
@@ -794,11 +794,8 @@ export default function referralRoutes(supabase) {
             return { error: 'Партнер не найден', status: 404 };
         }
 
-        const balanceField = normalizedCurrency === 'RUB'
-            ? 'balance_rub'
-            : normalizedCurrency === 'TON'
-                ? 'balance_ton'
-                : 'balance_usdt';
+        // Новые RUB-выплаты заблокированы; balance_rub остаётся только для чтения легаси-балансов на дашборде
+        const balanceField = normalizedCurrency === 'TON' ? 'balance_ton' : 'balance_usdt';
         const currentBalance = Number(profile[balanceField] || 0);
         const normalizedAmount = normalizeCurrencyAmount(normalizedCurrency, amountNumber);
         let activePayoutRequest = null;

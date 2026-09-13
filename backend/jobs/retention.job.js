@@ -1,5 +1,7 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+// Хелперы доставки переехали в общий util (единственный источник; до этого дублировались здесь и в abandoned-cart.job.js)
+import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
 
 function isUserbotRetentionDmEnabled() {
     return String(process.env.USERBOT_RETENTION_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -7,21 +9,6 @@ function isUserbotRetentionDmEnabled() {
 
 function isOperationalUserbot(account) {
     return String(account?.runtime_status || '').trim().toLowerCase() !== 'pending_activation';
-}
-
-// Классификация ошибки отправки ботом: parse-кандидат (400 / can't parse) ретраится plain-text'ом, блокировка — только 403 / blocked|kicked|forbidden|deactivated
-function classifyBotSendError(err) {
-    const text = [err?.message, err?.description, err?.response?.description].filter(Boolean).join(' ');
-    const code = Number(err?.code || err?.response?.error_code || 0);
-    if (/can't parse/i.test(text)) return 'parse';
-    if (code === 403 || /blocked|kicked|forbidden|deactivated/i.test(text)) return 'blocked';
-    if (code === 400) return 'parse';
-    return 'transient';
-}
-
-// Счищаем markdown-декор перед отправкой без parse_mode
-function stripMarkdownDecor(text) {
-    return String(text || '').replace(/[*_`\[\]]/g, '');
 }
 
 /**
@@ -79,31 +66,6 @@ export const startRetention = (supabase, getBotFunction) => {
             });
         } catch (logErr) {
             console.error('[Напоминание] Не записали access_event:', logErr?.message || logErr);
-        }
-    }
-
-    // Отправка ботом: parse-ошибку Markdown ретраим тем же текстом без декора и без parse_mode, это тоже считается доставкой ботом
-    async function deliverViaBot(bot, tgUserId, text, options) {
-        try {
-            await bot.telegram.sendMessage(tgUserId, text, options);
-            return { status: 'delivered', plainUsed: false };
-        } catch (err) {
-            const kind = classifyBotSendError(err);
-            if (kind !== 'parse') {
-                return { status: kind, plainUsed: false, error: err };
-            }
-            const plainOptions = options.reply_markup ? { reply_markup: options.reply_markup } : {};
-            try {
-                await bot.telegram.sendMessage(tgUserId, stripMarkdownDecor(text), plainOptions);
-                return { status: 'delivered', plainUsed: true };
-            } catch (plainErr) {
-                const plainKind = classifyBotSendError(plainErr);
-                return {
-                    status: plainKind === 'blocked' ? 'blocked' : (plainKind === 'transient' ? 'transient' : 'undeliverable'),
-                    plainUsed: true,
-                    error: plainErr
-                };
-            }
         }
     }
 

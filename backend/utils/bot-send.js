@@ -1,6 +1,5 @@
-// Общие хелперы доставки официальным ботом для дожимов (abandoned / browse follow-up).
-// Источник: backend/jobs/retention.job.js (:22-104) — скопировано один-в-один,
-// сам retention.job.js на util сознательно не переведён (свежий код, не трогаем).
+// Общие хелперы доставки официальным ботом для дожимов (abandoned / browse follow-up / retention).
+// Единственный источник — retention.job.js и abandoned-cart.job.js импортируют отсюда, копий больше нет.
 
 // Классификация ошибки отправки ботом: parse-кандидат (400 / can't parse) ретраится plain-text'ом, блокировка — только 403 / blocked|kicked|forbidden|deactivated
 export function classifyBotSendError(err) {

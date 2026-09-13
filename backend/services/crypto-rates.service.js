@@ -33,13 +33,19 @@ function getRateMaxAgeMs() {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RATE_MAX_AGE_MS;
 }
 
+// РЕШЕНИЕ по TON/RUB (трассировка 2026-09-14): единственный читатель RUB-квоты был convertAmountToTon()
+// в processReferralReward (official-bot.service.js), а после блокировки новых RUB-наград валюты там только
+// TON/USDT. Сырых чтений crypto_exchange_rates с quote_currency='RUB' в бэкенде нет, а легаси-RUB-инвойсы
+// и награды рендерятся из собственных снапшотов сумм без обращения к живому курсу.
+// => RUB-квоту из CoinGecko больше не запрашиваем; старые TON/RUB-строки в crypto_exchange_rates остаются
+// в базе как легаси-данные, ничего их не читает.
 export async function fetchTonExchangeRates() {
     const apiBase = getCoinGeckoApiBase();
     const tonId = String(process.env.COINGECKO_TON_ID || DEFAULT_TON_COINGECKO_ID).trim();
     const { data } = await axios.get(`${apiBase}/simple/price`, {
         params: {
             ids: tonId,
-            vs_currencies: 'rub,usd',
+            vs_currencies: 'usd',
             include_last_updated_at: true,
             precision: 'full'
         },
@@ -48,24 +54,12 @@ export async function fetchTonExchangeRates() {
     });
 
     const row = data?.[tonId];
-    const rubRate = numberOrNull(row?.rub);
     const usdRate = numberOrNull(row?.usd);
     const fetchedAt = row?.last_updated_at
         ? new Date(Number(row.last_updated_at) * 1000).toISOString()
         : new Date().toISOString();
 
     const rates = [];
-    if (rubRate) {
-        rates.push({
-            base_currency: 'TON',
-            quote_currency: 'RUB',
-            rate: rubRate,
-            provider: DEFAULT_PROVIDER,
-            fetched_at: fetchedAt,
-            payload: { source: 'simple/price', coin_id: tonId, quote: 'rub', raw: row }
-        });
-    }
-
     if (usdRate) {
         rates.push({
             base_currency: 'TON',
@@ -78,7 +72,7 @@ export async function fetchTonExchangeRates() {
     }
 
     if (rates.length === 0) {
-        throw new Error('CoinGecko did not return TON/RUB or TON/USD rates');
+        throw new Error('CoinGecko did not return TON/USD rate');
     }
 
     return rates;

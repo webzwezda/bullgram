@@ -175,6 +175,30 @@ export const startAbandonedCart = (supabase, getBotFunction) => {
                         // не критично
                     }
 
+                    // Гонка «оплатил между выборкой и отправкой»: дешёвый ре-чек статуса прямо перед дожимом.
+                    // Счёт мог стать paid / awaiting_receipt / expired после выборки — дожимать скидкой такой счёт нельзя
+                    const { data: currentInvoice, error: recheckError } = await supabase
+                        .from('invoices')
+                        .select('status')
+                        .eq('id', invoice.id)
+                        .maybeSingle();
+
+                    if (recheckError) throw recheckError;
+
+                    if (!currentInvoice || currentInvoice.status !== 'pending') {
+                        const currentStatus = currentInvoice?.status || 'deleted';
+                        console.log(`[Брошенная корзина] Счёт ${invoice.id} сменил статус (${currentStatus}) между выборкой и отправкой, пропускаем дожим`);
+                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                            delivered_by: 'skipped',
+                            bot_id: channel.bot_id || null,
+                            tariff_id: invoice.tariff_id || null,
+                            reason: 'status_changed',
+                            status: currentStatus
+                        });
+                        await markReminded(invoice.id);
+                        continue;
+                    }
+
                     // Кнопка ведёт на abbuy_<tariff>: по клику создаётся СВЕЖИЙ счёт со скидкой, а не новый по полной цене
                     const result = await deliverViaBot(bot, invoice.tg_user_id, messageText, {
                         parse_mode: 'Markdown',
