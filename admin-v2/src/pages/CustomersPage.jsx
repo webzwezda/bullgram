@@ -199,6 +199,7 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                 <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Имя</th>
                 <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
                 <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
+                {!isPaid && <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Приватка</th>}
                 {isPaid && (
                   <>
                     <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Оплата</th>
@@ -239,6 +240,25 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                     {row.tg_user_id
                       ? <span className="font-mono text-xs text-slate-400">{row.tg_user_id}</span>
                       : <span className="text-slate-300">—</span>}
+                  </td>
+                );
+                // Для открытых групп: есть ли этот человек в платной приватке
+                const crmRow = crmMap.get(String(row.tg_user_id));
+                const privateCell = (
+                  <td className="px-6 py-4">
+                    {crmRow?.status === 'active' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Активна
+                      </span>
+                    ) : crmRow?.status === 'expired' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Истекла
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 text-sm">—</span>
+                    )}
                   </td>
                 );
                 if (isPaid) {
@@ -304,6 +324,7 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                     {nameCell}
                     {usernameCell}
                     {idCell}
+                    {privateCell}
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {row.tg_user_id && (
@@ -1332,6 +1353,15 @@ export function CustomersPage() {
     : null;
 
   const effectiveTab = isBotTab ? activeBotSubtab : activeTab;
+  // Счётчики по под-сегментам: показываем в полосе только непустые сегменты
+  // (+ активный) — иначе полоса превращается в 9 вкладок-призраков.
+  const subtabCounts = useMemo(() => Object.fromEntries(
+    BOT_SUBTABS.map((sub) => [sub.id, (rowsByTab[sub.id] || []).length])
+  ), [rowsByTab]);
+  const visibleBotSubtabs = useMemo(() => BOT_SUBTABS.filter(
+    (sub) => sub.id === activeBotSubtab || (subtabCounts[sub.id] || 0) > 0
+  ), [activeBotSubtab, subtabCounts]);
+
   const activeRows = useMemo(
     () => (rowsByTab[effectiveTab] || [])
       .filter((row) => !focusChannelId || String(row.channel_id || '') === String(focusChannelId))
@@ -2222,25 +2252,35 @@ export function CustomersPage() {
           />
         ) : (
         <>
-          {isBotTab && (
+          {isBotTab && visibleBotSubtabs.length > 0 && (
             <div className="relative mx-8 mt-4">
               <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
-                {BOT_SUBTABS.map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                      activeBotSubtab === sub.id
-                        ? 'bg-white text-indigo-600 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                    onClick={() => setBotSubtab(sub.id)}
-                  >
-                    {sub.label}
-                  </button>
-                ))}
+                {visibleBotSubtabs.map((sub) => {
+                  const count = subtabCounts[sub.id] || 0;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 ${
+                        activeBotSubtab === sub.id
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                      onClick={() => setBotSubtab(sub.id)}
+                    >
+                      {sub.label}
+                      {count > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${activeBotSubtab === sub.id ? 'bg-indigo-100 text-indigo-600' : 'bg-white text-slate-500'}`}>
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-2xl bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent" />
+              {visibleBotSubtabs.length > 4 && (
+                <div className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-2xl bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent" />
+              )}
             </div>
           )}
         <div className="overflow-hidden flex flex-col">

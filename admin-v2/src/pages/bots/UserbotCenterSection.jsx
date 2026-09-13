@@ -210,7 +210,9 @@ export function UserbotCenterSection({
   const [manualTgUserId, setManualTgUserId] = useState(initialThreadUserId || loadDraft('manual_tg'));
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
   const [manualDirectMessage, setManualDirectMessage] = useState(initialDraftMessage || loadDraft('manual_msg'));
-  const [activeTab, setActiveTab] = useState('profile');
+  // Прилетели с handoff «Написать» из CRM — открываем сразу вкладку групп/диалогов,
+  // а не профиль: иначе переход с экрана клиентов выглядит как бесполезная страница.
+  const [activeTab, setActiveTab] = useState(initialThreadUserId ? 'groups' : 'profile');
   const [chatHistory, setChatHistory] = useState(() => initialThreadUserId ? loadHistory(initialThreadUserId) : []);
   const [state, setState] = useState({
     loading: true,
