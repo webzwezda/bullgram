@@ -825,7 +825,9 @@ export function CustomersPage() {
   const { accessToken, user, profileRole } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const normalizedTab = normalizeCustomersTab(searchParams);
+  // Без tab в URL — дефолтимся на «Официальный бот»: иначе '' даёт isBotTab=false
+  // (нет под-сегментов, нет строк) и «эффективная» вкладка не матчится с под-сегментами.
+  const normalizedTab = normalizeCustomersTab(searchParams) || 'bot';
   const isAudienceTab = normalizedTab.startsWith('audience-');
   const isBotTab = normalizedTab === 'bot' || BOT_SUBTABS.some((s) => s.id === normalizedTab);
   const activeTab = TABS.some((tab) => tab.id === normalizedTab) ? normalizedTab
