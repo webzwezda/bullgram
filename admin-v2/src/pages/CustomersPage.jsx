@@ -404,7 +404,8 @@ export function CustomersPage() {
     channels: [],
     started: [],
     crm: [],
-    viewed: []
+    viewed: [],
+    invoiceCreated: []
   });
   const [audienceState, setAudienceState] = useState({
     loading: false,
