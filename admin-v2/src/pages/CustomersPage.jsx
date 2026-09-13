@@ -21,16 +21,24 @@ const TABS = [
   { id: 'audience-public-chat', label: 'Открытый чат', icon: MessageCircle }
 ];
 
+function plural(n, one, few, many) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
 const BOT_SUBTABS = [
-  { id: 'started', label: 'Нажал старт' },
-  { id: 'viewed', label: 'Смотрели тарифы' },
-  { id: 'abandoned', label: 'Не смогли оплатить' },
-  { id: 'customers-active', label: 'Активный доступ' },
-  { id: 'customers-expired', label: 'Доступ закончился' },
-  { id: 'expired-in-group', label: 'Сгорели, но сидят' },
-  { id: 'paid-orders', label: 'Оплаченные' },
-  { id: 'removed-admin', label: 'Удален админом' },
-  { id: 'access', label: 'Не смог войти' }
+  { id: 'started', label: 'Нажал старт', empty: { title: 'Никто ещё не нажал /start', text: 'Здесь появятся все, кто начал бота.' } },
+  { id: 'viewed', label: 'Смотрели тарифы', empty: { title: 'Просмотров тарифов нет', text: 'Здесь появятся клиенты, открывшие тарифы в боте.' } },
+  { id: 'abandoned', label: 'Не смогли оплатить', empty: { title: 'Брошенных оплат нет', text: 'Здесь появятся те, кто не завершил оплату.' } },
+  { id: 'customers-active', label: 'Активный доступ', empty: { title: 'Активных подписок нет', text: 'Здесь появятся клиенты с оплаченным доступом.' } },
+  { id: 'customers-expired', label: 'Доступ закончился', empty: { title: 'Истёкших подписок нет', text: 'Здесь появятся клиенты с закончившимся доступом.' } },
+  { id: 'expired-in-group', label: 'Сгорели, но сидят', empty: { title: 'Никто лишний не сидит', text: 'Все с истёкшей подпиской уже кикнуты.' } },
+  { id: 'paid-orders', label: 'Оплаченные', empty: { title: 'Оплаченных заказов нет', text: 'Здесь появятся подтверждённые оплаты.' } },
+  { id: 'removed-admin', label: 'Удален админом', empty: { title: 'Никого не удаляли', text: 'Здесь появятся удалённые вручную участники.' } },
+  { id: 'access', label: 'Не смог войти', empty: { title: 'Таких клиентов нет', text: 'Здесь появятся те, кто оплатил, но не подтвердил вход.' } }
 ];
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
@@ -108,7 +116,7 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
           <Users className="w-8 h-8" />
         </div>
         <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Группа не подключена</h4>
-        <p className="text-slate-500 font-medium text-sm">Добавьте эту группу в контуре продаж на странице Бот-отец</p>
+        <p className="text-slate-500 font-medium text-sm">Добавьте эту группу в контуре продаж на экране «Бот продаж»</p>
       </div>
     );
   }
@@ -140,7 +148,7 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
         <div>
           <h3 className="text-xl font-black text-slate-900">{target.channelTitle || TABS.find(t => t.id === `audience-${targetType}`)?.label || 'Группа'}</h3>
           <div className="text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
-            <span>{target.totalMembers} участников</span>
+            <span>{target.totalMembers} {plural(target.totalMembers, 'участник', 'участника', 'участников')}</span>
             {isPaid && paidCount > 0 && <span className="text-emerald-600">{paidCount} оплачено</span>}
             {isPaid && expiredCount > 0 && <span className="text-amber-600">{expiredCount} просрочено</span>}
             {isPaid && freeCount > 0 && <span className="text-red-500">{freeCount} без оплаты</span>}
@@ -188,7 +196,9 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-100">
-                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
+                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Имя</th>
+                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
+                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
                 {isPaid && (
                   <>
                     <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Оплата</th>
@@ -212,19 +222,23 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                   id: row.crm?.id || null,
                   _crmSubscription: !!row.crm?.id
                 };
-                const clientCell = (
+                const nameCell = (
                   <td className="px-6 py-4">
-                    <div className="min-w-0">
-                        <div className="font-black text-slate-900 text-sm truncate">
-                          {row.display_name || row.first_name || (row.username ? `@${row.username}` : 'Неизвестный')}
-                        </div>
-                        {row.tg_user_id && (
-                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">ID: {row.tg_user_id}</div>
-                        )}
-                        {row.username && (
-                          <div className="text-xs font-semibold text-slate-500 truncate">@{row.username}</div>
-                        )}
-                      </div>
+                    <div className="font-black text-slate-900 text-sm truncate">
+                      {row.display_name || row.first_name || (row.username ? `@${row.username}` : 'Неизвестный')}
+                    </div>
+                  </td>
+                );
+                const usernameCell = (
+                  <td className="px-6 py-4 hidden md:table-cell">
+                    {row.username ? <span className="text-xs font-semibold text-slate-500">@{row.username}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                );
+                const idCell = (
+                  <td className="px-6 py-4 hidden lg:table-cell">
+                    {row.tg_user_id
+                      ? <span className="font-mono text-xs text-slate-400">{row.tg_user_id}</span>
+                      : <span className="text-slate-300">—</span>}
                   </td>
                 );
                 if (isPaid) {
@@ -238,7 +252,9 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                   const dot = ps === 'paid' ? 'bg-emerald-500' : ps === 'expired' ? 'bg-amber-500' : 'bg-red-500';
                   return (
                     <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
-                      {clientCell}
+                      {nameCell}
+                      {usernameCell}
+                      {idCell}
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg ${statusStyles}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
@@ -273,7 +289,7 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                           </div>
                           {row.tg_user_id && (
                             <>
-                              <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
+                              <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                                 <Send className="w-3.5 h-3.5" />
                               </button>
                             </>
@@ -285,12 +301,14 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
                 }
                 return (
                   <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
-                    {clientCell}
+                    {nameCell}
+                    {usernameCell}
+                    {idCell}
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         {row.tg_user_id && (
                           <>
-                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать">
+                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                               <Send className="w-3.5 h-3.5" />
                             </button>
                           </>
@@ -325,7 +343,7 @@ function getReconciliationUserbotStatusMeta(userbot) {
   if (userbot?.availability_status === 'pending_activation') {
     return {
       title: 'Этот аккаунт сейчас в safe mode',
-      body: userbot.availability_reason || 'Сначала выведи аккаунт из safe mode и только потом используй его для контура.',
+      body: userbot.availability_reason || 'Сначала выведите аккаунт из safe mode и только потом используйте его для контура.',
       toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
     };
   }
@@ -333,7 +351,7 @@ function getReconciliationUserbotStatusMeta(userbot) {
   if (userbot?.availability_status === 'reserved_in_shop') {
     return {
       title: 'Этот аккаунт сейчас занят в shop',
-      body: userbot.availability_reason || 'Выберите другой аккаунт или освободи этот из shop.',
+      body: userbot.availability_reason || 'Выберите другой аккаунт или освободите этот из shop.',
       toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
     };
   }
@@ -341,14 +359,14 @@ function getReconciliationUserbotStatusMeta(userbot) {
   if (userbot?.availability_status === 'proxy_dead') {
     return {
       title: 'У этого аккаунта мертвый прокси',
-      body: userbot.availability_reason || 'Почини прокси или выбери другой аккаунт.',
+      body: userbot.availability_reason || 'Почините прокси или выберите другой аккаунт.',
       toneClass: 'bg-rose-50 border-rose-100 text-rose-700'
     };
   }
 
   return {
     title: 'Аккаунт боевой',
-    body: 'Можно использовать для ручной проверки и синка в contour.',
+    body: 'Можно использовать для ручной проверки и синка в контуре.',
     toneClass: 'bg-emerald-50 border-emerald-100 text-emerald-700'
   };
 }
@@ -362,13 +380,7 @@ function formatWhen(value) {
 }
 
 function getInvoiceStatus(inv) {
-  const createdAt = new Date(inv.created_at).getTime();
-  const ageHours = (Date.now() - createdAt) / (1000 * 60 * 60);
-
   if (inv.status === 'awaiting_receipt') return 'Ждет чек';
-  if (inv.reminded) return 'Счет без оплаты';
-  if (ageHours < 2) return 'Счет без оплаты';
-  if (ageHours < 24) return 'Счет без оплаты';
   return 'Счет без оплаты';
 }
 
@@ -2049,7 +2061,6 @@ export function CustomersPage() {
   return (
     <section className="page page--flush space-y-6">
       {/* Main Content Card */}
-      {/* Main Content Card */}
       <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
 
         {state.error && (
@@ -2061,20 +2072,21 @@ export function CustomersPage() {
 
         {/* Metrics Section */}
         <section className="p-6 md:p-8 border-b border-slate-100">
-          {/* Metrics Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+          {/* Funnel Grid. [display:grid] вместо grid — legacy .grid из app.css перебивает Tailwind-колонки */}
+          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Воронка клиентов</div>
+          <div className="[display:grid] grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {[
               { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', tab: 'customers-active' },
               { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', tab: 'customers-expired' },
               { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', tab: 'access' },
               { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', tab: 'viewed' },
-              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-blue-500' : 'text-slate-400', tab: 'abandoned' },
+              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-indigo-500' : 'text-slate-400', tab: 'abandoned' },
             ].map((item, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => setBotSubtab(item.tab)}
-                className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
+                className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
@@ -2086,22 +2098,25 @@ export function CustomersPage() {
           </div>
 
           {selectedBotId ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-              {[
-                { label: 'Выручка TON', value: botAnalytics.data ? formatTon(botAnalytics.data.revenueTON) : '—', hint: 'За всё время' },
-                { label: 'MRR TON', value: botAnalytics.data ? formatTon(botAnalytics.data.mrrTON) : '—', hint: 'За 30 дней' },
-                { label: 'Конверсия', value: botAnalytics.data ? `${botAnalytics.data.conversion}%` : '—', hint: 'В оплату' },
-                { label: 'Churn', value: botAnalytics.data ? `${botAnalytics.data.churnRate}%` : '—', hint: 'Отток за 30 дней' }
-              ].map((item, idx) => (
-                <div key={idx} className="bg-white border border-slate-100 p-6 rounded-3xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+            <>
+              <div className="text-xs font-black uppercase tracking-widest text-slate-400 mt-6 mb-3">Деньги</div>
+              <div className="[display:grid] grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: 'Выручка TON', value: botAnalytics.data ? formatTon(botAnalytics.data.revenueTON) : '—', hint: botAnalytics.data && Number(botAnalytics.data.revenueTON) > 0 ? 'За всё время' : 'Платежей пока нет' },
+                  { label: 'MRR TON', value: botAnalytics.data ? formatTon(botAnalytics.data.mrrTON) : '—', hint: botAnalytics.data && Number(botAnalytics.data.mrrTON) > 0 ? 'За 30 дней' : 'Платежей пока нет' },
+                  { label: 'Конверсия', value: botAnalytics.data ? `${botAnalytics.data.conversion}%` : '—', hint: 'В оплату' },
+                  { label: 'Churn', value: botAnalytics.data ? `${botAnalytics.data.churnRate}%` : '—', hint: 'Отток за 30 дней' }
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-white border border-slate-100 border-l-4 border-l-indigo-400 p-6 rounded-2xl">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                    </div>
+                    <div className="text-3xl font-black tracking-tighter text-slate-900 tabular-nums">{item.value}</div>
+                    {item.hint ? <div className="text-xs text-slate-400 font-medium mt-1">{item.hint}</div> : null}
                   </div>
-                  <div className="text-3xl font-black tracking-tighter text-slate-900">{item.value}</div>
-                  {item.hint ? <div className="text-xs text-slate-400 font-medium mt-1">{item.hint}</div> : null}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           ) : null}
         </section>
 
@@ -2133,6 +2148,7 @@ export function CustomersPage() {
                 <button
                   key={tab.id}
                   type="button"
+                  title={isDisabled ? 'Группа не в контуре продаж — подключите её на экране «Бот продаж»' : undefined}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
                     isActive
                       ? 'border-indigo-600 text-indigo-600'
@@ -2159,17 +2175,17 @@ export function CustomersPage() {
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full">
               <input
-                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
+                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск по TG ID, @username, тарифу..."
+                placeholder={activeTab.startsWith('audience-') ? 'Поиск по TG ID, @username…' : 'Поиск по TG ID, @username, тарифу…'}
               />
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
             </div>
             <div className="w-full md:w-[280px] shrink-0">
               <select
-                className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm text-sm"
+                className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                 value={selectedBotId}
                 onChange={(event) => {
                   const next = new URLSearchParams(window.location.search);
@@ -2212,7 +2228,7 @@ export function CustomersPage() {
                   type="button"
                   className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
                     activeBotSubtab === sub.id
-                      ? 'bg-white text-blue-600 shadow-sm'
+                      ? 'bg-white text-indigo-600 shadow-sm'
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                   onClick={() => setBotSubtab(sub.id)}
@@ -2267,7 +2283,7 @@ export function CustomersPage() {
                 </div>
               ) : null}
               <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
-                {activeRows.length} записей
+                {activeRows.length} {plural(activeRows.length, 'запись', 'записи', 'записей')}
               </span>
             </div>
           </div>
@@ -2297,13 +2313,22 @@ export function CustomersPage() {
               <p className="text-slate-500 font-medium text-sm">Либо ничего не продано, либо фильтр слишком узкий.</p>
             </div>
           ) : activeRows.length === 0 ? (
-            <div className="p-16 text-center flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
-                <FileText className="w-8 h-8" />
-              </div>
-              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Ничего не найдено</h4>
-              <p className="text-slate-500 font-medium text-sm">Попробуйте изменить фильтры или поиск</p>
-            </div>
+            (() => {
+              const searching = search.trim().length > 0;
+              const subMeta = BOT_SUBTABS.find((s) => s.id === (effectiveTab || activeBotSubtab));
+              const emptyMeta = searching || !subMeta?.empty
+                ? { title: 'Ничего не найдено', text: 'Попробуйте изменить фильтры или поиск' }
+                : subMeta.empty;
+              return (
+                <div className="p-16 text-center flex flex-col items-center">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+                    <FileText className="w-8 h-8" />
+                  </div>
+                  <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">{emptyMeta.title}</h4>
+                  <p className="text-slate-500 font-medium text-sm">{emptyMeta.text}</p>
+                </div>
+              );
+            })()
           ) : (
             <>
               <div className="overflow-x-auto">
