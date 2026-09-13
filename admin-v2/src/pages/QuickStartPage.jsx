@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink, Code, FileText, Key } from 'lucide-react';
+import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink, Code, FileText, Key, Eye, EyeOff, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -43,6 +43,8 @@ export function QuickStartPage() {
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [inviteLink, setInviteLink] = useState('');
+  const [tokenRevealed, setTokenRevealed] = useState(false);
+  const [inviteRevealed, setInviteRevealed] = useState(false);
   
   // Modals & Action loading states
   const [initing, setIniting] = useState(false);
@@ -87,6 +89,8 @@ export function QuickStartPage() {
   // При выборе существующего бота — загрузить его настройки
   useEffect(() => {
     if (selectedBotId === 'new') {
+      setTokenRevealed(false);
+      setInviteRevealed(false);
       setBotToken('');
       setChannels([]);
       setAdmins([]);
@@ -100,6 +104,8 @@ export function QuickStartPage() {
     const bot = existingBots.find((b) => b.id === selectedBotId);
     if (!bot) return;
 
+    setTokenRevealed(false);
+    setInviteRevealed(false);
     setBotToken(bot.bot_token || '');
     setCreatedBot({ id: bot.id, bot_username: bot.username });
 
@@ -510,13 +516,15 @@ export function QuickStartPage() {
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex flex-row items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0 animate-pulse">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
                 <Zap className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Бот Автопостинга</h2>
+                <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
-                  Подключите Telegram-бота для автоматического постинга и приема предложений
+                  {selectedBotId !== 'new'
+                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${postingTimes.length}`
+                    : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
                 </p>
               </div>
             </div>
@@ -525,7 +533,7 @@ export function QuickStartPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
+                <SelectItem value="new" className="rounded-lg"><Plus className="h-4 w-4 inline mr-1 -mt-0.5" />Подключить нового</SelectItem>
                 {existingBots.map((b) => (
                   <SelectItem key={b.id} value={b.id} className="rounded-lg">
                     @{b.username || 'Telegram Bot'}
@@ -539,14 +547,29 @@ export function QuickStartPage() {
           <div className="flex flex-col md:flex-row items-end gap-4">
             <div className="flex-1 w-full">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Токен бота</label>
-              <Input
-                value={botToken}
-                onChange={selectedBotId === 'new' ? (e) => setBotToken(e.target.value) : undefined}
-                readOnly={selectedBotId !== 'new'}
-                placeholder="123456:ABC-DEF..."
-                spellCheck="false"
-                className="font-mono bg-white h-11 rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500"
-              />
+              <div className="relative">
+                <Input
+                  value={selectedBotId === 'new' ? botToken : (tokenRevealed ? botToken : maskBotToken(botToken))}
+                  onChange={selectedBotId === 'new' ? (e) => setBotToken(e.target.value) : undefined}
+                  readOnly={selectedBotId !== 'new'}
+                  placeholder="123456:ABC-DEF..."
+                  spellCheck="false"
+                  className={`font-mono h-11 rounded-xl border-slate-200 shadow-sm focus-visible:ring-indigo-500 pr-20 ${selectedBotId !== 'new' ? 'bg-slate-50 text-slate-500' : 'bg-white'}`}
+                />
+                {selectedBotId !== 'new' && botToken ? (
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
+                    onClick={() => setTokenRevealed((v) => !v)}
+                    title={tokenRevealed ? 'Скрыть токен' : 'Показать токен'}
+                  >
+                    {tokenRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                ) : null}
+              </div>
+              {selectedBotId !== 'new' ? (
+                <p className="text-xs text-slate-500 mt-1.5">Токен скрыт. Нужен снова — возьми в @BotFather или перевыпусти там же.</p>
+              ) : null}
             </div>
             <div className="flex gap-2 w-full md:w-auto">
               {selectedBotId === 'new' ? (
@@ -678,7 +701,7 @@ export function QuickStartPage() {
               <li>Бот автоматически поймает добавление и покажет канал на этой странице.</li>
             </ol>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-semibold">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
             <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
             Ожидание добавления в каналы...
           </div>
@@ -714,14 +737,13 @@ export function QuickStartPage() {
                         }`}>
                           <Icon className="w-5 h-5" />
                         </div>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                           {visibilityLabel}
                         </span>
                       </div>
                       <div>
                         <h4 className="font-bold text-sm text-slate-900 truncate">{ch.title || 'Новый канал'}</h4>
-                        <p className="text-xs text-slate-400 font-semibold mt-1 truncate">
+                        <p className="text-xs text-slate-500 font-semibold mt-1 truncate">
                           {ch.username ? `@${ch.username}` : (isPublic ? 'Открытая лента' : 'Платный доступ')}
                         </p>
                       </div>
@@ -790,7 +812,7 @@ export function QuickStartPage() {
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-lg font-bold text-slate-900 truncate">{config.title}</h3>
-                        <p className="text-xs font-semibold text-slate-400">Настройки публикации и предложки для этого канала</p>
+                        <p className="text-xs font-semibold text-slate-500">Настройки публикации и предложки для этого канала</p>
                       </div>
                       <div className="ml-auto flex gap-2 shrink-0">
                         <Button
@@ -858,7 +880,7 @@ export function QuickStartPage() {
                         <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций (основная очередь)
                         </label>
-                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                           Настройте точное время автоматической выкладки постов из очереди.
                         </span>
                       </div>
@@ -866,7 +888,7 @@ export function QuickStartPage() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
                         {(config.postingTimes || ['10:00']).map((time, idx) => (
                           <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 p-2.5 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
-                            <span className="text-[10px] font-bold text-slate-400 font-mono w-5 text-center">#{idx + 1}</span>
+                            <span className="text-[10px] font-bold text-slate-500 font-mono w-5 text-center">#{idx + 1}</span>
                             <input
                               type="time"
                               value={time}
@@ -887,7 +909,7 @@ export function QuickStartPage() {
                         <Button
                           variant="outline"
                           onClick={() => handleAddPostingTime(tab)}
-                          className="h-10 rounded-xl border-dashed text-slate-650 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                          className="h-10 rounded-xl border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
                         >
                           <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
                         </Button>
@@ -924,7 +946,7 @@ export function QuickStartPage() {
                           <SelectItem value="UTC" className="rounded-lg">UTC (Всемирное время)</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                      <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
                         По умолчанию используется часовой пояс вашего браузера.
                       </p>
                     </div>
@@ -935,7 +957,7 @@ export function QuickStartPage() {
                     <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
                       <div className="space-y-1">
                         <label className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
-                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                           Добавляет под каждым публикуемым постом кнопку со ссылкой на бота для сбора предложений.
                         </span>
                       </div>
@@ -958,7 +980,7 @@ export function QuickStartPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">
                           <label className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
-                          <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                             Бот будет ставить выбранную реакцию под каждый новый пост сразу после публикации.
                           </span>
                         </div>
@@ -1012,7 +1034,7 @@ export function QuickStartPage() {
                     <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3.5 transition-all">
                       <div className="space-y-1">
                         <label className="text-sm font-bold text-slate-800 block">Лимит предложений в сутки</label>
-                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                           Максимальное количество предложений от одного пользователя за последние 24 часа. Укажите «0» для отключения ограничений.
                         </span>
                       </div>
@@ -1031,7 +1053,7 @@ export function QuickStartPage() {
                             }));
                           }}
                         />
-                        <span className="text-xs text-slate-400 font-semibold">постов / 24 часа</span>
+                        <span className="text-xs text-slate-500 font-semibold">предложений / 24 часа</span>
                       </div>
                     </div>
 
@@ -1039,7 +1061,7 @@ export function QuickStartPage() {
                     <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
                       <div className="space-y-1">
                         <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
-                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                           Если включено, контент от пользователей в предложке будет автоматически публиковаться без ручной модерации.
                         </span>
                       </div>
@@ -1064,7 +1086,7 @@ export function QuickStartPage() {
                           <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                             <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
                           </label>
-                          <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                             Отдельное расписание для автопринятых предложений от подписчиков.
                           </span>
                         </div>
@@ -1072,7 +1094,7 @@ export function QuickStartPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
                           {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
                             <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 p-2.5 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
-                              <span className="text-[10px] font-bold text-slate-400 font-mono w-5 text-center">#{idx + 1}</span>
+                              <span className="text-[10px] font-bold text-slate-500 font-mono w-5 text-center">#{idx + 1}</span>
                               <input
                                 type="time"
                                 value={time}
@@ -1093,7 +1115,7 @@ export function QuickStartPage() {
                           <Button
                             variant="outline"
                             onClick={() => handleAddSuggestionTime(tab)}
-                            className="h-10 rounded-xl border-dashed text-slate-650 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                            className="h-10 rounded-xl border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
                           >
                             <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
                           </Button>
@@ -1109,7 +1131,7 @@ export function QuickStartPage() {
                         <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                           <Layout className="w-3.5 h-3.5 text-indigo-500" /> Кнопки под каждым постом
                         </label>
-                        <span className="text-xs text-slate-400 font-semibold leading-relaxed block">
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                           Бот будет автоматически прикреплять эти кнопки под сообщениями в канале.
                         </span>
                       </div>
@@ -1147,7 +1169,7 @@ export function QuickStartPage() {
                         <Button
                           variant="outline"
                           onClick={() => handleAddButton(tab)}
-                          className="h-11 px-4 rounded-xl border-dashed text-slate-650 border-slate-200 hover:bg-slate-50 hover:text-indigo-650 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                          className="h-11 px-4 rounded-xl border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
                         >
                           <Plus className="w-4 h-4 text-indigo-500" /> Добавить кнопку
                         </Button>
@@ -1182,7 +1204,7 @@ export function QuickStartPage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Администраторы бота</h3>
-                  <p className="text-xs font-semibold text-slate-400">Управляйте правами доступа и генерируйте приглашения</p>
+                  <p className="text-xs font-semibold text-slate-500">Управляйте правами доступа и генерируйте приглашения</p>
                 </div>
               </div>
             </div>
@@ -1193,17 +1215,55 @@ export function QuickStartPage() {
                 <div className="space-y-2 max-w-xl">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Пригласить администратора</label>
                   <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      value={inviteLink}
-                      onClick={handleCopyInvite}
-                      className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm cursor-pointer"
-                    />
+                    <div className="relative flex-1">
+                      <Input
+                        readOnly
+                        value={inviteRevealed ? inviteLink : maskInvite(inviteLink)}
+                        onClick={handleCopyInvite}
+                        className="font-mono bg-slate-50 h-11 rounded-xl border-slate-200 shadow-sm cursor-pointer pr-20"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
+                        onClick={() => setInviteRevealed((v) => !v)}
+                        title={inviteRevealed ? 'Скрыть ссылку' : 'Показать ссылку'}
+                      >
+                        {inviteRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                     <Button onClick={handleCopyInvite} className="h-11 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-0">
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
-                  <span className="text-xs text-slate-400 font-medium block">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-slate-500 font-medium block">
+                      Пользователь перейдет по ссылке в бота и автоматически получит доступ к администрированию.
+                    </span>
+                    {createdBot?.id ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs text-slate-500 hover:text-slate-800"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const data = await apiRequest(`/autopost/bots/${createdBot.id}/admins/regenerate-invite`, {
+                              accessToken,
+                              method: 'POST'
+                            });
+                            if (data.invite_link) setInviteLink(data.invite_link);
+                            setInviteRevealed(false);
+                            toast.success('Ссылка перевыпущена. Старая больше не работает.');
+                          } catch (err) {
+                            toast.error(err.message || 'Не удалось перевыпустить ссылку.');
+                          }
+                        }}
+                      >
+                        <RefreshCcw className="w-3.5 h-3.5 mr-1 inline" /> Перевыпустить
+                      </Button>
+                    ) : null}
+                  </div>
+                  <span className="text-xs text-slate-500 font-medium block">
                     Пользователь перейдет по ссылке в бота и автоматически получит доступ к администрированию постов и модерации.
                   </span>
                 </div>
@@ -1213,14 +1273,11 @@ export function QuickStartPage() {
               <div className="space-y-3">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Список админов ({admins.length})</label>
                 <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-w-md">
-                  {admins.map((adminId, idx) => {
-                    const isOwner = idx === 0;
+                  {admins.map((adminId) => {
                     return (
                       <div key={adminId} className="flex items-center justify-between p-3.5 bg-white text-sm font-semibold">
                         <span className="font-mono text-slate-700">{adminId}</span>
-                        {isOwner ? (
-                          <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">Владелец</span>
-                        ) : (
+                        {(
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1234,6 +1291,7 @@ export function QuickStartPage() {
                     );
                   })}
                 </div>
+                <p className="text-xs text-slate-500">Первый в списке — владелец бота: он добавляется автоматически при подключении.</p>
               </div>
 
               {/* Ручное добавление */}
