@@ -175,7 +175,7 @@ For ZCode work in this repo:
 - delegate scoped work to native ZCode subagents through the Agent tool:
   - `Explore` for read-only discovery, code tracing, and context gathering
   - `general-purpose` for scoped implementation slices, focused verification, and review passes
-- ZCode has no file-based custom agent definitions; use role-framed prompts instead (mapping below)
+- file-based ZCode subagents live at `~/.zcode/agents/*.md` (user scope; current set: `code-reviewer`, `design-critic`, `security-auditor`, `debugger`, `postgres-pro`, `deployment-engineer`, `test-engineer`, `mcp-developer`); there is no workspace-scope agent directory in the repo, so for anything not covered by a file-based agent use role-framed prompts (mapping below)
 - before starting non-trivial work, decide which slices go to subagents and which stay in the main session
 - when a task can be split into isolated slices, proactively assign those slices to subagents instead of keeping all implementation in the main session
 - the main ZCode session should spend most of its time on orchestration: scoping, task splitting, integration, conflict resolution, and final synthesis
@@ -222,6 +222,7 @@ Bullgram-specific delegation defaults:
 - use `frontend-developer` framing for most `admin-v2` and `site-v2` work
 - use `mcp-developer` framing for Bullgram MCP and `/app/claw`
 - use `reviewer` framing on nearly every risky change before final close-out
+- for close-out, pre-push, and on-demand reviews use the `code-reviewer` subagent (`~/.zcode/agents/code-reviewer.md`) for single-pass review, or the `code-review` skill (`.agents/skills/code-review/`) for full parallel multi-lens review — both instead of ad-hoc reviewer prompts
 - add `architect-reviewer` framing when touching cross-runtime flows or structural boundaries
 
 Bullgram workflow:

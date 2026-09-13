@@ -50,6 +50,10 @@ fl_orders_rows.csv
 /*.session
 /[0-9]*.json
 
+# Browser-verification screenshots and Playwright MCP session output (kept local)
+/*.png
+.playwright-mcp/
+
 # Claude Code internal (agent instructions, local skills/symlinks)
 .claude/
 .agents/
