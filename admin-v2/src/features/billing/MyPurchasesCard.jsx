@@ -60,7 +60,7 @@ export function MyPurchasesCard() {
           <p className="text-xs text-slate-500 mt-1">Прокси и аккаунты можно купить в разделе «Юзерботы».</p>
           <a
             href="/app/userbots"
-            className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
+            className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-800 transition-all"
           >
             Открыть юзерботы
           </a>

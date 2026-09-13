@@ -791,7 +791,7 @@ export function ProxyManagerPage() {
                       </div>
                     </div>
                     <a
-                      className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all"
+                      className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 !text-white text-xs font-bold hover:bg-blue-700 transition-all"
                       href="/app/billing?tab=purchases"
                       target="_blank"
                       rel="noreferrer"
