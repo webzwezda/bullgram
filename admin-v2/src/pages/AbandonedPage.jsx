@@ -525,7 +525,7 @@ export function AbandonedPage() {
             </div>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
-            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков <Link to="/app/broadcast" className="font-bold !text-indigo-600 hover:!text-indigo-700 hover:!underline">в рассылку</Link>.
+            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков <Link to="/broadcast" className="font-bold !text-indigo-600 hover:!text-indigo-700 hover:!underline">в рассылку</Link>.
           </p>
 
           {stale.length === 0 ? (
