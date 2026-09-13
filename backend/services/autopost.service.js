@@ -177,9 +177,10 @@ export class AutopostService {
             throw new Error('addPostItem requires at least one target channel');
         }
 
-        // Bug 7 fix: atomic sort_order. Было count+1, два одновременных добавления
-        // получали одинаковый sort_order и порядок очереди становился недетерминированным.
-        // Через max+1 в подзапросе гонка исчезает (PostgreSQL сериализует UPDATE/INSERT).
+        // sort_order НЕ атомарен: сначала select max(sort_order) по боту, затем insert
+        // с max+1. Между select и insert конкурирующая вставка может успеть пройти —
+        // тогда два поста получат одинаковый sort_order и порядок очереди станет
+        // недетерминированным. На практике окно гонки узкое, отдельной сериализации нет.
         const { data: maxRow } = await this.supabase
             .from('autopost_items')
             .select('sort_order')

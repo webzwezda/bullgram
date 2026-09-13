@@ -8,6 +8,21 @@ export default function autopostRoutes(supabase) {
     const service = new AutopostService(supabase);
     const router = Router();
 
+    // Owner-probe для бот-scoped маршрутов. RLS не защищает (сервер ходит с сервисным
+    // ключом), поэтому каждый маршрут обязан сам проверить владельца в коде — тот же
+    // паттерн, что в GET /bots/:botId/metrics: фильтр по owner_id + maybeSingle.
+    // Возвращает бота или null (не найден / чужой).
+    async function findOwnedBot(botId, ownerId) {
+        const { data: bot, error } = await supabase
+            .from('autopost_bots')
+            .select('id')
+            .eq('id', botId)
+            .eq('owner_id', ownerId)
+            .maybeSingle();
+        if (error) throw error;
+        return bot || null;
+    }
+
     // Все эндпоинты требуют авторизацию
     router.use(authenticateUser);
 
@@ -75,13 +90,15 @@ export default function autopostRoutes(supabase) {
                 }
             }
 
-            // Проверяем владельца
-            const { data: existing } = await supabase
+            // Проверяем владельца. maybeSingle: несуществующий бот → 404, чужой → 403.
+            const { data: existing, error: probeErr } = await supabase
                 .from('autopost_bots')
                 .select('owner_id')
                 .eq('id', req.params.botId)
-                .single();
-            if (!existing || existing.owner_id !== req.user.id) {
+                .maybeSingle();
+            if (probeErr) throw probeErr;
+            if (!existing) return res.status(404).json({ error: 'Бот не найден' });
+            if (existing.owner_id !== req.user.id) {
                 return res.status(403).json({ error: 'Нет доступа' });
             }
 
@@ -103,6 +120,9 @@ export default function autopostRoutes(supabase) {
     // Каналы, привязанные к боту
     router.get('/bots/:botId/channels', async (req, res) => {
         try {
+            if (!(await findOwnedBot(req.params.botId, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
             const channels = await service.getBotChannels(req.params.botId);
             res.json({ channels });
         } catch (err) {
@@ -289,25 +309,12 @@ export default function autopostRoutes(supabase) {
         }
     });
 
-    // Создать бота (legacy — полный набор полей; без валидации токена)
-    router.post('/bots', async (req, res) => {
-        try {
-            const { botToken, postsPerDay, postingTimes } = req.body;
-            const bot = await service.createBot({
-                ownerId: req.user.id,
-                botToken,
-                postsPerDay: postsPerDay || 1,
-                postingTimes: postingTimes || ['10:00']
-            });
-            res.json({ bot });
-        } catch (err) {
-            res.status(500).json({ error: err.message });
-        }
-    });
-
     // Статистика бота
     router.get('/bots/:botId/stats', async (req, res) => {
         try {
+            if (!(await findOwnedBot(req.params.botId, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
             const stats = await service.getStats(req.params.botId);
             res.json(stats);
         } catch (err) {
@@ -392,6 +399,9 @@ export default function autopostRoutes(supabase) {
     // Запустить планирование
     router.post('/bots/:botId/schedule', async (req, res) => {
         try {
+            if (!(await findOwnedBot(req.params.botId, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
             const count = await service.scheduleNextBatch(req.params.botId);
             res.json({ scheduled: count });
         } catch (err) {
@@ -427,6 +437,9 @@ export default function autopostRoutes(supabase) {
     // Список постов бота
     router.get('/bots/:botId/items', async (req, res) => {
         try {
+            if (!(await findOwnedBot(req.params.botId, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
             const { status } = req.query;
             let query = supabase
                 .from('autopost_items')
@@ -445,10 +458,25 @@ export default function autopostRoutes(supabase) {
     // Удалить пост из очереди
     router.delete('/items/:itemId', async (req, res) => {
         try {
+            // Сначала узнаём bot_id поста и проверяем владельца бота:
+            // сервисный ключ обходит RLS, поэтому проверка в коде обязательна.
+            const { data: item, error: itemErr } = await supabase
+                .from('autopost_items')
+                .select('id, bot_id')
+                .eq('id', req.params.itemId)
+                .maybeSingle();
+            if (itemErr) throw itemErr;
+            if (!item) return res.status(404).json({ error: 'Пост не найден' });
+
+            if (!(await findOwnedBot(item.bot_id, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа' });
+            }
+
             const { error } = await supabase
                 .from('autopost_items')
                 .delete()
-                .eq('id', req.params.itemId);
+                .eq('id', req.params.itemId)
+                .eq('bot_id', item.bot_id);
             if (error) throw error;
             res.json({ ok: true });
         } catch (err) {
@@ -534,12 +562,15 @@ export default function autopostRoutes(supabase) {
     // Удалить бота
     router.delete('/bots/:botId', async (req, res) => {
         try {
-            const { data: existing } = await supabase
+            // maybeSingle: несуществующий бот → 404, чужой → 403.
+            const { data: existing, error: probeErr } = await supabase
                 .from('autopost_bots')
                 .select('owner_id')
                 .eq('id', req.params.botId)
-                .single();
-            if (!existing || existing.owner_id !== req.user.id) {
+                .maybeSingle();
+            if (probeErr) throw probeErr;
+            if (!existing) return res.status(404).json({ error: 'Бот не найден' });
+            if (existing.owner_id !== req.user.id) {
                 return res.status(403).json({ error: 'Нет доступа' });
             }
             const { error } = await supabase

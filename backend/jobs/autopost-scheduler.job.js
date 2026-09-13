@@ -107,6 +107,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
                     .from('channels')
                     .select('id, buttons_config, suggest_button_enabled, seed_reaction_emoji')
                     .eq('tg_chat_id', targetChatId)
+                    .eq('autopost_bot_id', item.bot_id)
                     .maybeSingle();
 
                 await autopostService.publishItem(bot, item, channel, botData?.username);
@@ -126,7 +127,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
                 });
                 await supabase
                     .from('autopost_items')
-                    .update({ status: 'failed', error_message: String(sendErr.message || '').slice(0) })
+                    .update({ status: 'failed', error_message: String(sendErr.message || '').slice(0, 1000) })
                     .eq('id', item.id);
             }
         }
