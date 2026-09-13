@@ -12,6 +12,7 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import {
     fetchChannels,
     regenerateInvite,
+    fetchBotStats,
     fetchAdmins,
     initBot,
     patchChannel,
@@ -122,7 +123,10 @@ export function QuickStartPage() {
 
     loadChannels(bot.id);
     loadAdmins(bot.id);
-  }, [selectedBotId, existingBots]);
+    fetchBotStats(bot.id, accessToken)
+      .then((data) => setBotStats(data))
+      .catch(() => setBotStats(null));
+  }, [selectedBotId, existingBots, accessToken]);
 
   async function loadChannels(botId, { merge = false } = {}) {
     try {
@@ -248,7 +252,7 @@ export function QuickStartPage() {
     setSavingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
       const sortedPostingTimes = [...new Set(config.postingTimes || ['10:00'])].sort();
-      const sortedSuggestionTimes = [...(config.suggestionPostingTimes || ['12:00'])].sort();
+      const sortedSuggestionTimes = [...new Set(config.suggestionPostingTimes || ['12:00'])].sort();
 
       await patchChannel(createdBot.id, config.id, {
         auto_accept_suggestions: config.autoAccept,
@@ -472,11 +476,12 @@ export function QuickStartPage() {
     setChannelConfigs(prev => {
       const ch = prev[channelId];
       const currentTimes = ch.suggestionPostingTimes || ['12:00'];
+      const freeSlot = ['15:00', '18:00', '21:00', '09:00'].find(t => !currentTimes.includes(t)) || '00:00';
       return {
         ...prev,
         [channelId]: {
           ...ch,
-          suggestionPostingTimes: [...currentTimes, '12:00']
+          suggestionPostingTimes: [...currentTimes, freeSlot]
         }
       };
     });
@@ -518,8 +523,18 @@ export function QuickStartPage() {
   if (loading) return <LoadingState text="Загружаем автопостер..." />;
 
   // Определяем шаги онбординга
+  const [botStats, setBotStats] = useState(null);
   const hasAdmin = admins.length > 0;
   const hasChannels = channels.length > 0;
+  const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
+  const botPaused = selectedBot ? selectedBot.is_active === false : false;
+  const statusWord = botPaused ? 'На паузе' : 'Активен';
+  const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0), 0);
+  const statsPosted = botStats ? botStats.posted : null;
+  const nextScheduledAt = botStats?.nextScheduledAt ? new Date(botStats.nextScheduledAt) : null;
+  const nextScheduledLabel = nextScheduledAt
+    ? nextScheduledAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+    : null;
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
 
   return (
@@ -536,7 +551,7 @@ export function QuickStartPage() {
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
                   {selectedBotId !== 'new'
-                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0), 0)}`
+                    ? `${statusWord} · каналов: ${channels.length} · публикаций в день: ${totalDailyPosts}` + (statsPosted !== null ? ` · опубликовано: ${statsPosted}` : '') + (nextScheduledLabel ? ` · следующая: ${nextScheduledLabel}` : '')
                     : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
                 </p>
               </div>

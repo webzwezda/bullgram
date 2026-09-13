@@ -86,3 +86,7 @@ export function regenerateInvite(botId, token) {
         token
     });
 }
+
+export function fetchBotStats(botId, token) {
+    return request(`/api/autopost/bots/${botId}/stats`, { token });
+}
