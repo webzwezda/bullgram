@@ -92,7 +92,10 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
                         .eq('id', tariffId)
                         .maybeSingle();
 
-                    if (!error && tariff && tariff.is_active) {
+                    // Тариф должен принадлежать овнеру этого бота: иначе счёт ушёл бы на чужой кошелёк
+                    const isOwnTariff = Boolean(tariff) && String(tariff.owner_id) === String(ownerId);
+
+                    if (!error && isOwnTariff && tariff.is_active) {
                         const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
 
                         await service.logCustomerFunnelEvent({

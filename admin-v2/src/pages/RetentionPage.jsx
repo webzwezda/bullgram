@@ -8,9 +8,9 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const STANDARD_TEMPLATE = `⏰ **Привет!**
+const STANDARD_TEMPLATE = `⏰ *Привет!*
 
-Твой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.
+Твой доступ в закрытый канал «*{channel_name}*» закончится менее чем через 24 часа.
 
 Чтобы не потерять доступ, продли в один клик:
 👉 {renewal_link}
@@ -50,7 +50,7 @@ function formatExpiresIn(iso) {
 function deliveryBadge(deliveredBy = '', payload = {}) {
   switch (deliveredBy) {
     case 'bot':
-      return { text: `Бот${payload?.bot_id ? '' : ''}`, cls: 'bg-emerald-50 text-emerald-700', Icon: Bot };
+      return { text: 'Бот', cls: 'bg-emerald-50 text-emerald-700', Icon: Bot };
     case 'userbot':
       return { text: `Userbot${payload?.userbot_username ? ` @${payload.userbot_username}` : ''}`, cls: 'bg-blue-50 text-blue-700', Icon: Rocket };
     case 'failed':
@@ -143,6 +143,7 @@ export function RetentionPage() {
             .from('sales_bot_contours')
             .select('bot_id, userbot_mode, selected_userbot_id, selected_userbot_ids, public_channel_id, paid_channel_id, public_chat_id, paid_chat_id')
             .eq('bot_id', selectedBotId)
+            .eq('owner_id', user.id)
             .maybeSingle()
         ]);
 
@@ -183,6 +184,7 @@ export function RetentionPage() {
           return;
         }
 
+        const sinceIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
         const [{ data: subsData, error: subsError }, { data: eventsData, error: eventsError }] = await Promise.all([
           supabase
             .from('subscriptions')
@@ -193,9 +195,11 @@ export function RetentionPage() {
             .from('access_events')
             .select('id, created_at, channel_id, subscription_id, tg_user_id, payload')
             .eq('event_type', 'retention_reminder')
+            .eq('owner_id', user.id)
             .in('channel_id', channelIds)
+            .gte('created_at', sinceIso)
             .order('created_at', { ascending: false })
-            .limit(50)
+            .limit(500)
         ]);
 
         if (subsError) throw subsError;
@@ -316,7 +320,8 @@ export function RetentionPage() {
 
   const userbotWrappedPreview = useMemo(() => {
     if (!reminderDraft.trim()) return '';
-    return `🔔 **Системное уведомление!**\nМой бот не смог до тебя достучаться, пишу лично.\n\n${reminderDraft}`;
+    // Юзербот шлёт без parse_mode — markdown-декор в превью не показываем, как и в реальной отправке
+    return `🔔 Системное уведомление!\nМой бот не смог до тебя достучаться, пишу лично.\n\n${reminderDraft.replace(/[*_`\[\]]/g, '')}`;
   }, [reminderDraft]);
 
   const reminderDirty = reminderDraft !== reminderOriginal;
@@ -465,6 +470,8 @@ export function RetentionPage() {
               <div className="font-bold mb-1">Не привязан</div>
               <div className="text-xs text-amber-700">
                 Если бот заблокирован у подписчика, напоминание уйдёт в сбой. Привяжите userbot в настройках sales-бота.
+                Учтите: ЛС дойдёт, только если у юзербота есть общий чат с этим человеком (например, ваша админ-группа
+                воронки) — админ-права юзербота в этой группе повышают шансы доставки.
               </div>
             </div>
           ) : (
@@ -545,7 +552,7 @@ export function RetentionPage() {
             Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{renewal_link}`}</code> → ссылка на оплату тарифа (https://t.me/бот?start=buy_…), <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
           </div>
           <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
-            К тексту от бота автоматически добавляется inline-кнопка «💳 Продлить доступ». Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
+            Inline-кнопка «💳 Продлить доступ» добавляется к сообщению, когда доступна ссылка на оплату (привязан тариф продления); если ссылки нет — подписчик увидит обычное сообщение со ссылкой из тега. Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
           </div>
 
           <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">

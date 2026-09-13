@@ -9,6 +9,21 @@ function isOperationalUserbot(account) {
     return String(account?.runtime_status || '').trim().toLowerCase() !== 'pending_activation';
 }
 
+// Классификация ошибки отправки ботом: parse-кандидат (400 / can't parse) ретраится plain-text'ом, блокировка — только 403 / blocked|kicked|forbidden|deactivated
+function classifyBotSendError(err) {
+    const text = [err?.message, err?.description, err?.response?.description].filter(Boolean).join(' ');
+    const code = Number(err?.code || err?.response?.error_code || 0);
+    if (/can't parse/i.test(text)) return 'parse';
+    if (code === 403 || /blocked|kicked|forbidden|deactivated/i.test(text)) return 'blocked';
+    if (code === 400) return 'parse';
+    return 'transient';
+}
+
+// Счищаем markdown-декор перед отправкой без parse_mode
+function stripMarkdownDecor(text) {
+    return String(text || '').replace(/[*_`\[\]]/g, '');
+}
+
 /**
  * Cron-задача: Напоминания за 24 часа до окончания подписки
  * Запускается каждые 5 минут, проверяет подписки которые истекают через 24ч
@@ -39,236 +54,300 @@ export const startRetention = (supabase, getBotFunction) => {
         ) || null;
     }
 
+    // Политика маркировки: last_reminder_sent_at ставится только по финальному исходу — доставлено ботом/юзерботом или дефинитивный скип; транзиентные ошибки не маркируем, чтобы следующий тик повторил попытку
+    async function markReminderSent(subscriptionId) {
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({ last_reminder_sent_at: new Date().toISOString() })
+            .eq('id', subscriptionId);
+        if (error) {
+            // Не промаркировали — следующий тик отправит повторно, поэтому сбой должен быть виден в логах
+            console.error('[Напоминание] Не поставили last_reminder_sent_at:', error.message);
+        }
+    }
+
+    async function logReminderEvent(sub, ownerId, botId, payload) {
+        try {
+            await supabase.from('access_events').insert({
+                owner_id: ownerId,
+                channel_id: sub.channel_id || null,
+                subscription_id: sub.id,
+                tg_user_id: String(sub.tg_user_id),
+                event_source: 'retention',
+                event_type: 'retention_reminder',
+                payload
+            });
+        } catch (logErr) {
+            console.error('[Напоминание] Не записали access_event:', logErr?.message || logErr);
+        }
+    }
+
+    // Отправка ботом: parse-ошибку Markdown ретраим тем же текстом без декора и без parse_mode, это тоже считается доставкой ботом
+    async function deliverViaBot(bot, tgUserId, text, options) {
+        try {
+            await bot.telegram.sendMessage(tgUserId, text, options);
+            return { status: 'delivered', plainUsed: false };
+        } catch (err) {
+            const kind = classifyBotSendError(err);
+            if (kind !== 'parse') {
+                return { status: kind, plainUsed: false, error: err };
+            }
+            const plainOptions = options.reply_markup ? { reply_markup: options.reply_markup } : {};
+            try {
+                await bot.telegram.sendMessage(tgUserId, stripMarkdownDecor(text), plainOptions);
+                return { status: 'delivered', plainUsed: true };
+            } catch (plainErr) {
+                const plainKind = classifyBotSendError(plainErr);
+                return {
+                    status: plainKind === 'blocked' ? 'blocked' : (plainKind === 'transient' ? 'transient' : 'undeliverable'),
+                    plainUsed: true,
+                    error: plainErr
+                };
+            }
+        }
+    }
+
+    let running = false;
     setInterval(async () => {
-        const now = new Date();
-        // Ищем подписки, которые истекают в ближайшие 24 часа и напоминание для которых еще не отправлялось
-        const targetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+        // Предыдущий тик ещё не закончился — пропускаем
+        if (running) return;
+        running = true;
 
         try {
+            const now = new Date();
+            const nowIso = now.toISOString();
+            const targetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+            const reminderWindowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+            // Ищем подписки, которые истекают в ближайшие 24 часа и которым ещё не отправляли напоминание (или прошло больше суток)
             const { data: expiringSubs, error } = await supabase
                 .from('subscriptions')
-                .select(`id, tg_user_id, channel_id, channels ( owner_id, bot_id, title )`)
+                .select(`id, tg_user_id, channel_id, channels!inner ( owner_id, bot_id, title )`)
                 .eq('status', 'active')
-                .eq('expiry_reminder_sent', false)
-                .lt('expires_at', targetTime)
-                .gt('expires_at', now.toISOString())
+                .gt('expires_at', nowIso)
+                .lte('expires_at', targetTime)
+                .or(`last_reminder_sent_at.is.null,last_reminder_sent_at.lt.${reminderWindowStart}`)
                 .limit(100);
 
-            if (error || !expiringSubs || expiringSubs.length === 0) return;
+            if (error) {
+                console.error('[Напоминание] Ошибка выборки подписок:', error.message);
+                return;
+            }
+            if (!expiringSubs || expiringSubs.length === 0) return;
 
             for (const sub of expiringSubs) {
-                // Отмечаем как отправленное, чтобы избежать повторной обработки
-                await supabase
-                    .from('subscriptions')
-                    .update({ expiry_reminder_sent: true })
-                    .eq('id', sub.id);
-
-                const ownerId = sub.channels.owner_id;
-                const botId = sub.channels.bot_id;
-                const bot = getBotFunction(botId);
-
-                let sourceTariff = null;
-                let upsellTariff = null;
-                let lastPaidTariff = null;
                 try {
-                    const { data: recentInvoices } = await supabase
-                        .from('invoices')
-                        .select('id, tariff_id, paid_at, tariffs(id, title, is_trial, upsell_tariff_id, price, currency)')
-                        .eq('tg_user_id', sub.tg_user_id)
-                        .eq('status', 'paid')
-                        .order('paid_at', { ascending: false })
-                        .limit(20);
+                    // Гард: без канала дальше делать нечего (удалённые каналы не должны проходить из-за channels!inner)
+                    if (!sub.channels) continue;
 
-                    sourceTariff = (recentInvoices || []).find(invoice =>
-                        invoice.tariffs &&
-                        invoice.tariffs.is_trial
-                    )?.tariffs || null;
+                    const ownerId = sub.channels.owner_id;
+                    const botId = sub.channels.bot_id;
+                    const bot = getBotFunction(botId);
 
-                    lastPaidTariff = (recentInvoices || []).find(invoice =>
-                        invoice.tariffs && !invoice.tariffs.is_trial
-                    )?.tariffs || null;
-
-                    if (sourceTariff?.upsell_tariff_id) {
-                        const { data } = await supabase
-                            .from('tariffs')
-                            .select('id, title, price, currency')
-                            .eq('id', sourceTariff.upsell_tariff_id)
-                            .single();
-                        upsellTariff = data || null;
-                    }
-                } catch (e) {
-                    // Не валим удержание, если пробный сценарий не прочитался
-                }
-
-                // 1. Берем кастомный текст админа из базы
-                const { data: settings } = await supabase.from('payment_settings').select('reminder_text').eq('owner_id', ownerId).single();
-
-                // Дефолтный текст, если админ ничего не написал
-                const defaultText = sourceTariff?.is_trial && upsellTariff
-                    ? `⏳ **Пробник почти закончился**\n\nТвой доступ в «**{channel_name}**» скоро сгорит.\n\nЕсли хочешь остаться дальше, переходи в основной тариф:\n**{upsell_tariff_name}** — **{upsell_price} {upsell_currency}**\n\n👉 {renewal_link}`
-                    : `⏳ **Привет!**\n\nТвой доступ в закрытый канал «**{channel_name}**» закончится менее чем через 24 часа.\n\nЧтобы не потерять доступ, продли в один клик:\n👉 {renewal_link}\n\n_Если уже оплатил — просто проигнорируй это сообщение._`;
-
-                let rawText = (settings && settings.reminder_text) ? settings.reminder_text : defaultText;
-
-                // Определяем тариф для продления и строим deep-link
-                let renewalTariffId = null;
-                if (sourceTariff?.is_trial && upsellTariff) {
-                    renewalTariffId = upsellTariff.id;
-                } else if (lastPaidTariff?.id) {
-                    renewalTariffId = lastPaidTariff.id;
-                }
-
-                let botUsername = null;
-                try {
-                    if (bot?.botInfo?.username) {
-                        botUsername = bot.botInfo.username;
-                    } else if (bot) {
-                        const me = await bot.telegram.getMe();
-                        botUsername = me?.username || null;
-                    }
-                } catch (e) {
-                    // не критично
-                }
-
-                const renewalLink = botUsername
-                    ? (renewalTariffId
-                        ? `https://t.me/${botUsername}?start=buy_${renewalTariffId}`
-                        : `https://t.me/${botUsername}`)
-                    : '{renewal_link}';
-
-                // Меняем плейсхолдеры на реальные значения
-                const messageText = rawText
-                    .replaceAll('{channel_name}', sub.channels.title)
-                    .replaceAll('{upsell_tariff_name}', upsellTariff?.title || 'основной тариф')
-                    .replaceAll('{upsell_price}', upsellTariff?.price || '')
-                    .replaceAll('{upsell_currency}', upsellTariff?.currency || '')
-                    .replaceAll('{renewal_link}', renewalLink);
-
-                let sentByOfficialBot = false;
-
-                // 2. Пробуем отправить официальным ботом (с inline-кнопкой)
-                if (bot) {
+                    let sourceTariff = null;
+                    let upsellTariff = null;
+                    let lastPaidTariff = null;
                     try {
-                        const sendMessageOptions = { parse_mode: 'Markdown' };
-                        if (renewalTariffId && botUsername) {
-                            sendMessageOptions.reply_markup = {
-                                inline_keyboard: [[
-                                    { text: '💳 Продлить доступ', url: renewalLink }
-                                ]]
-                            };
+                        // Скоуп по владельцу: чужие инвойсы и тарифы не должны влиять на текст и deep-link
+                        const { data: recentInvoices } = await supabase
+                            .from('invoices')
+                            .select('id, tariff_id, paid_at, tariffs!inner(id, title, is_trial, upsell_tariff_id, price, currency)')
+                            .eq('tg_user_id', sub.tg_user_id)
+                            .eq('status', 'paid')
+                            .eq('tariffs.owner_id', ownerId)
+                            .order('paid_at', { ascending: false })
+                            .limit(20);
+
+                        sourceTariff = (recentInvoices || []).find(invoice =>
+                            invoice.tariffs &&
+                            invoice.tariffs.is_trial
+                        )?.tariffs || null;
+
+                        lastPaidTariff = (recentInvoices || []).find(invoice =>
+                            invoice.tariffs && !invoice.tariffs.is_trial
+                        )?.tariffs || null;
+
+                        if (sourceTariff?.upsell_tariff_id) {
+                            const { data } = await supabase
+                                .from('tariffs')
+                                .select('id, title, price, currency')
+                                .eq('id', sourceTariff.upsell_tariff_id)
+                                .eq('owner_id', ownerId)
+                                .maybeSingle();
+                            upsellTariff = data || null;
                         }
-                        await bot.telegram.sendMessage(sub.tg_user_id, messageText, sendMessageOptions);
-                        sentByOfficialBot = true;
-                        console.log(`[Напоминание] Успешно отправлено ботом юзеру ${sub.tg_user_id}`);
-                        try {
-                            await supabase.from('access_events').insert({
-                                owner_id: ownerId,
-                                channel_id: sub.channel_id || null,
-                                subscription_id: sub.id,
-                                tg_user_id: String(sub.tg_user_id),
-                                event_source: 'retention',
-                                event_type: 'retention_reminder',
-                                payload: {
-                                    delivered_by: 'bot',
-                                    bot_id: botId || null,
-                                    bot_username: botUsername,
-                                    message_text: messageText,
-                                    renewal_tariff_id: renewalTariffId,
-                                    renewal_link: renewalLink,
-                                    source_tariff_id: sourceTariff?.id || null,
-                                    upsell_tariff_id: upsellTariff?.id || null
-                                }
-                            });
-                        } catch (logErr) {
-                            console.error('[Напоминание] Не записали access_event (bot):', logErr?.message || logErr);
+                    } catch (e) {
+                        // Не валим удержание, если пробный сценарий не прочитался
+                    }
+
+                    // 1. Берем кастомный текст админа из базы
+                    const { data: settings } = await supabase.from('payment_settings').select('reminder_text').eq('owner_id', ownerId).single();
+
+                    // Дефолтный текст, если админ ничего не написал (жирный в legacy Markdown — одиночная *, двойная ** ломает parse_mode)
+                    const defaultText = sourceTariff?.is_trial && upsellTariff
+                        ? `⏳ *Пробник почти закончился*\n\nТвой доступ в «*{channel_name}*» скоро сгорит.\n\nЕсли хочешь остаться дальше, переходи в основной тариф:\n*{upsell_tariff_name}* — *{upsell_price} {upsell_currency}*\n\n👉 {renewal_link}`
+                        : `⏳ *Привет!*\n\nТвой доступ в закрытый канал «*{channel_name}*» закончится менее чем через 24 часа.\n\nЧтобы не потерять доступ, продли в один клик:\n👉 {renewal_link}\n\n_Если уже оплатил — просто проигнорируй это сообщение._`;
+
+                    let rawText = (settings && settings.reminder_text) ? settings.reminder_text : defaultText;
+
+                    // Определяем тариф для продления и строим deep-link
+                    let renewalTariffId = null;
+                    if (sourceTariff?.is_trial && upsellTariff) {
+                        renewalTariffId = upsellTariff.id;
+                    } else if (lastPaidTariff?.id) {
+                        renewalTariffId = lastPaidTariff.id;
+                    }
+
+                    let botUsername = null;
+                    try {
+                        if (bot?.botInfo?.username) {
+                            botUsername = bot.botInfo.username;
+                        } else if (bot) {
+                            const me = await bot.telegram.getMe();
+                            botUsername = me?.username || null;
                         }
-                    } catch (botErr) {
+                    } catch (e) {
+                        // не критично
+                    }
+
+                    let renewalLink = null;
+                    if (botUsername) {
+                        renewalLink = renewalTariffId
+                            ? `https://t.me/${botUsername}?start=buy_${renewalTariffId}`
+                            : `https://t.me/${botUsername}`;
+                    } else {
+                        // Нет юзернейма бота — убираем строку со ссылкой, чтобы не отправить литеральный {renewal_link}
+                        console.warn(`[Напоминание] botUsername недоступен, убираем ссылку на продление из текста (subscription ${sub.id})`);
+                        rawText = rawText
+                            .split('\n')
+                            .filter(line => !line.includes('{renewal_link}'))
+                            .join('\n')
+                            .replace(/\n{3,}/g, '\n\n')
+                            .trim();
+                    }
+
+                    // Меняем плейсхолдеры на реальные значения
+                    const messageText = rawText
+                        .replaceAll('{channel_name}', sub.channels.title)
+                        .replaceAll('{upsell_tariff_name}', upsellTariff?.title || 'основной тариф')
+                        .replaceAll('{upsell_price}', upsellTariff?.price || '')
+                        .replaceAll('{upsell_currency}', upsellTariff?.currency || '')
+                        .replaceAll('{renewal_link}', renewalLink || '');
+
+                    // 2. Пробуем отправить официальным ботом (с inline-кнопкой)
+                    const sendMessageOptions = { parse_mode: 'Markdown' };
+                    if (renewalTariffId && botUsername) {
+                        sendMessageOptions.reply_markup = {
+                            inline_keyboard: [[
+                                { text: '💳 Продлить доступ', url: renewalLink }
+                            ]]
+                        };
+                    }
+
+                    let botOutcome = 'no_bot';
+                    let botError = null;
+                    let plainUsed = false;
+                    if (bot) {
+                        const result = await deliverViaBot(bot, sub.tg_user_id, messageText, sendMessageOptions);
+                        botOutcome = result.status;
+                        botError = result.error || null;
+                        plainUsed = !!result.plainUsed;
+                    }
+
+                    if (botOutcome === 'delivered') {
+                        console.log(`[Напоминание] Успешно отправлено ботом юзеру ${sub.tg_user_id}${plainUsed ? ' (plain-text после parse-ошибки)' : ''}`);
+                        await logReminderEvent(sub, ownerId, botId, {
+                            delivered_by: 'bot',
+                            parse_fallback: plainUsed,
+                            bot_id: botId || null,
+                            bot_username: botUsername,
+                            message_text: plainUsed ? stripMarkdownDecor(messageText) : messageText,
+                            renewal_tariff_id: renewalTariffId,
+                            renewal_link: renewalLink,
+                            source_tariff_id: sourceTariff?.id || null,
+                            upsell_tariff_id: upsellTariff?.id || null
+                        });
+                    } else if (botOutcome === 'transient') {
+                        // Транзиентная ошибка бота (сеть/таймаут) — не маркируем, ретрай следующим тиком
+                        console.warn(`[Напоминание] Транзиентная ошибка бота для ${sub.tg_user_id}:`, botError?.message || botError);
+                    } else if (botOutcome === 'undeliverable') {
+                        // Текст не ушёл даже plain-text'ом — дефинитивный исход, маркируем
+                        console.warn(`[Напоминание] Не смогли доставить даже plain-text'ом для ${sub.tg_user_id}:`, botError?.message || botError);
+                        await logReminderEvent(sub, ownerId, botId, {
+                            delivered_by: 'failed',
+                            bot_id: botId || null,
+                            reason: 'plain_text_retry_failed',
+                            error: botError?.message || 'unknown'
+                        });
+                    } else if (botOutcome === 'blocked') {
                         console.log(`[Напоминание] Бот заблокирован. Будим Юзербота для ${sub.tg_user_id}...`);
                     }
-                }
 
-                // 3. Если бот забанен - пробиваем в личку через Юзербота только при явном env-флаге
-                if (!sentByOfficialBot) {
-                    try {
-                        if (!isUserbotRetentionDmEnabled()) {
-                            console.log(`[Напоминание] USERBOT_RETENTION_DM_ENABLED=false, пропускаем ЛС через юзербота для ${sub.tg_user_id}`);
-                            try {
-                                await supabase.from('access_events').insert({
-                                    owner_id: ownerId,
-                                    channel_id: sub.channel_id || null,
-                                    subscription_id: sub.id,
-                                    tg_user_id: String(sub.tg_user_id),
-                                    event_source: 'retention',
-                                    event_type: 'retention_reminder',
-                                    payload: {
-                                        delivered_by: 'skipped',
-                                        bot_id: botId || null,
-                                        reason: 'userbot_dm_disabled'
-                                    }
-                                });
-                            } catch (logErr) {
-                                console.error('[Напоминание] Не записали access_event (skipped):', logErr?.message || logErr);
-                            }
-                        } else {
-                            const userbot = await loadLatestUserbot(ownerId);
-                            if (userbot) {
-                                await userbotService.sendMessage(
-                                    userbot,
-                                    sub.tg_user_id.toString(),
-                                    `🔔 **Системное уведомление!**\nМой бот не смог до тебя достучаться, пишу лично.\n\n${messageText}`,
-                                    {
-                                        event_source: 'retention',
-                                        event_type: 'retention_reminder',
-                                        channel_id: sub.channel_id || null,
-                                        subscription_id: sub.id
-                                    }
-                                );
-                                console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
-                                try {
-                                    await supabase.from('access_events').insert({
-                                        owner_id: ownerId,
-                                        channel_id: sub.channel_id || null,
-                                        subscription_id: sub.id,
-                                        tg_user_id: String(sub.tg_user_id),
-                                        event_source: 'retention',
-                                        event_type: 'retention_reminder',
-                                        payload: {
-                                            delivered_by: 'userbot',
-                                            bot_id: botId || null,
-                                            userbot_id: userbot?.id || null,
-                                            userbot_username: userbot?.tg_username || null,
-                                            message_text: messageText,
-                                            source_tariff_id: sourceTariff?.id || null,
-                                            upsell_tariff_id: upsellTariff?.id || null
-                                        }
-                                    });
-                                } catch (logErr) {
-                                    console.error('[Напоминание] Не записали access_event (userbot):', logErr?.message || logErr);
-                                }
-                            }
-                        }
-                    } catch (ubErr) {
-                        console.error(`[Напоминание] Ошибка Юзербота:`, ubErr.message);
+                    if (botOutcome === 'delivered' || botOutcome === 'undeliverable') {
+                        await markReminderSent(sub.id);
+                        continue;
+                    }
+
+                    // 3. Юзербот-фолбэк: только при реальной блокировке бота (или если бота нет вовсе) и при явном env-флаге
+                    if (!bot || botOutcome === 'blocked') {
                         try {
-                            await supabase.from('access_events').insert({
-                                owner_id: ownerId,
-                                channel_id: sub.channel_id || null,
-                                subscription_id: sub.id,
-                                tg_user_id: String(sub.tg_user_id),
-                                event_source: 'retention',
-                                event_type: 'retention_reminder',
-                                payload: {
-                                    delivered_by: 'failed',
+                            if (!isUserbotRetentionDmEnabled()) {
+                                console.log(`[Напоминание] USERBOT_RETENTION_DM_ENABLED=false, пропускаем ЛС через юзербота для ${sub.tg_user_id}`);
+                                await logReminderEvent(sub, ownerId, botId, {
+                                    delivered_by: 'skipped',
                                     bot_id: botId || null,
-                                    error: ubErr?.message || 'unknown'
+                                    reason: bot ? 'userbot_dm_disabled' : 'no_bot_and_userbot_dm_disabled'
+                                });
+                                // Дефинитивный скип — маркируем, чтобы не обрабатывать подписку каждый тик
+                                await markReminderSent(sub.id);
+                            } else {
+                                const userbot = await loadLatestUserbot(ownerId);
+                                if (userbot) {
+                                    // Юзербот шлёт без parse_mode — сырые ** и _ ушли бы подписчику литералами
+                                    await userbotService.sendMessage(
+                                        userbot,
+                                        sub.tg_user_id.toString(),
+                                        `🔔 Системное уведомление!\nМой бот не смог до тебя достучаться, пишу лично.\n\n${stripMarkdownDecor(messageText)}`,
+                                        {
+                                            event_source: 'retention',
+                                            event_type: 'retention_reminder',
+                                            channel_id: sub.channel_id || null,
+                                            subscription_id: sub.id
+                                        }
+                                    );
+                                    console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
+                                    await logReminderEvent(sub, ownerId, botId, {
+                                        delivered_by: 'userbot',
+                                        bot_id: botId || null,
+                                        userbot_id: userbot?.id || null,
+                                        userbot_username: userbot?.tg_username || null,
+                                        message_text: messageText,
+                                        source_tariff_id: sourceTariff?.id || null,
+                                        upsell_tariff_id: upsellTariff?.id || null
+                                    });
+                                    await markReminderSent(sub.id);
+                                } else {
+                                    // Нет рабочего юзербота — не маркируем, попробуем в следующий тик
+                                    console.warn(`[Напоминание] Нет рабочего юзербота у owner ${ownerId}, откладываем напоминание для ${sub.tg_user_id}`);
                                 }
+                            }
+                        } catch (ubErr) {
+                            // Ошибка юзербота — транзиентная, не маркируем
+                            console.error(`[Напоминание] Ошибка Юзербота:`, ubErr.message);
+                            await logReminderEvent(sub, ownerId, botId, {
+                                delivered_by: 'failed',
+                                bot_id: botId || null,
+                                error: ubErr?.message || 'unknown'
                             });
-                        } catch (logErr) {
-                            console.error('[Напоминание] Не записали access_event (failed):', logErr?.message || logErr);
                         }
                     }
+                } catch (subErr) {
+                    // Ошибка одной подписки не должна ронять остаток батча
+                    console.error(`[Напоминание] Ошибка обработки подписки ${sub.id}:`, subErr?.message || subErr);
                 }
             }
-        } catch (err) { console.error('Ошибка в Cron-напоминаниях:', err.message); }
+        } catch (err) { console.error('Ошибка в Cron-напоминаниях:', err.message); } finally {
+            running = false;
+        }
     }, 5 * 60 * 1000);
 };
