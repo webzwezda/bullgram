@@ -63,6 +63,7 @@ export function QuickStartPage() {
   const [inviteRevealed, setInviteRevealed] = useState(false);
   const [revealedMcpToken, setRevealedMcpToken] = useState(false);
   const [pausing, setPausing] = useState(false);
+  const [confirmState, setConfirmState] = useState(null);
   
   // Modals & Action loading states
   const [initing, setIniting] = useState(false);
@@ -314,12 +315,18 @@ export function QuickStartPage() {
   }
 
   // Отвязать канал от автопостера (только в Bullgram, бот остаётся админом в Telegram)
-  async function handleUnlinkChannel(channelId) {
+  function askUnlinkChannel(channelId) {
     const cfg = channelConfigs[channelId];
     if (!cfg.id || !createdBot?.id) return;
-    if (!confirm(`Отвязать канал "${cfg.title}" от автопостера?\n\nБот останется админом в Telegram — вы сможете привязать канал заново без повторного добавления.`)) return;
+    askConfirm({
+      title: 'Отвязать канал',
+      description: `Канал «${cfg.title}» будет отвязан от автопостера. Бот останется админом в Telegram — канал можно привязать заново без повторного добавления.`,
+      actionLabel: 'Отвязать',
+      onConfirm: () => doUnlinkChannel(channelId)
+    });
+  }
 
-    setUnlinkingChannel(prev => ({ ...prev, [channelId]: true }));
+  async function doUnlinkChannel(channelId) {
     try {
       await unlinkChannel(createdBot.id, cfg.id, accessToken);
       toast.success(`Канал "${cfg.title}" отвязан`);
@@ -371,9 +378,17 @@ export function QuickStartPage() {
   }
 
   // Удалить администратора
-  async function handleRemoveAdmin(tgId) {
-    if (!createdBot?.id) return;
-    if (!confirm(`Удалить администратора ${tgId}?`)) return;
+  function askRemoveAdmin(tgId) {
+    askConfirm({
+      title: 'Удалить администратора',
+      description: `Администратор ${tgId} потеряет доступ к постам и модерации.`,
+      actionLabel: 'Удалить',
+      danger: true,
+      onConfirm: () => doRemoveAdmin(tgId)
+    });
+  }
+
+  async function doRemoveAdmin(tgId) {
     try {
       const data = await removeAdmin(createdBot.id, tgId, accessToken);
 
@@ -385,9 +400,17 @@ export function QuickStartPage() {
   }
 
   // Удалить бота
-  async function handleDelete() {
-    if (!createdBot?.id) return;
-    if (!confirm('Удалить бота и все связанные каналы/посты навсегда?')) return;
+  function askDelete() {
+    askConfirm({
+      title: 'Удалить бота',
+      description: 'Бот и все связанные каналы и посты будут удалены навсегда. Отменить это нельзя.',
+      actionLabel: 'Удалить навсегда',
+      danger: true,
+      onConfirm: () => doDelete()
+    });
+  }
+
+  async function doDelete() {
     try {
       await deleteBot(createdBot.id, accessToken);
 
@@ -570,7 +593,6 @@ export function QuickStartPage() {
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
   const botRunning = botMetrics?.bot?.isRunning;
-  const statusWord = botPaused ? 'На паузе' : (botRunning === false ? 'Запускается…' : 'Активен');
   const lastFailure = botMetrics?.lastFailure || null;
   const lastFailureDate = lastFailure ? new Date(lastFailure.updated_at) : null;
   const lastFailureLabel = lastFailureDate
@@ -584,6 +606,7 @@ export function QuickStartPage() {
     ? nextScheduledAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
     : null;
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
+  const statusWord = botPaused ? 'На паузе' : (botRunning === false ? 'Запускается…' : (hasFailure ? 'Работает' : 'Активен'));
 
   return (
     <section className="page page--flush space-y-6">
