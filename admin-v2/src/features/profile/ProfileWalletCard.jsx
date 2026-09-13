@@ -94,7 +94,7 @@ export function ProfileWalletCard() {
         <p className="text-sm text-slate-500 mt-0.5">
           Кошелёк, с которого ты платишь за тарифы Bullgram. Адрес запоминается при подключении — бери его отсюда для оплаты вручную.
           Это не касса: кошелёк для приёма оплат от твоих клиентов настраивается{' '}
-          <a href="/billing" className="text-indigo-600 hover:text-indigo-700 font-semibold underline decoration-indigo-200 hover:decoration-indigo-400">в Кассе → Реквизиты</a>.
+          <a href="/billing" className="link-action">в Кассе → Реквизиты</a>.
         </p>
       </div>
 

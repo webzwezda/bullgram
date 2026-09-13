@@ -30,6 +30,23 @@ a {
   text-decoration: none;
 }
 
+/*
+ * Ссылка-действие внутри Tailwind-карточек.
+ * Правило выше глушит цвет/подчёркивание всех ссылок, а unlayered-CSS
+ * перебивает слои Tailwind — поэтому явный цвет здесь, а не в утилитах.
+ */
+a.link-action {
+  color: #4f46e5;
+  text-decoration: underline;
+  text-decoration-color: #a5b4fc;
+  text-underline-offset: 2px;
+}
+
+a.link-action:hover {
+  color: #4338ca;
+  text-decoration-color: #6366f1;
+}
+
 .app-shell {
   min-height: 100vh;
   display: grid;

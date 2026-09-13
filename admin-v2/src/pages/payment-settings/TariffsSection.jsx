@@ -246,12 +246,7 @@ function MoneyDestinationNote({ wallet, loaded }) {
         <span>
           Кошелёк для приёма оплат ещё не указан — покупателям&nbsp;некуда платить.
           Задайте его в{' '}
-          <Link
-            to="/billing"
-            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
-          >
-            Кассе → Реквизиты
-          </Link>.
+          <Link to="/billing" className="link-action">Кассе → Реквизиты</Link>.
         </span>
       </div>
     );
@@ -272,19 +267,14 @@ function MoneyDestinationNote({ wallet, loaded }) {
           <button
             type="button"
             onClick={copyWallet}
-            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
+            className="link-action"
           >
             копировать
           </button>
         </span>
         <span className="block mt-0.5">
           Это не ваш кошелёк или хотите сменить?{' '}
-          <Link
-            to="/billing"
-            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
-          >
-            Проверьте реквизиты в Кассе
-          </Link>.
+          <Link to="/billing" className="link-action">Проверьте реквизиты в Кассе</Link>.
         </span>
       </div>
     </div>
