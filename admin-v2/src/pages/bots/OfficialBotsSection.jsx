@@ -153,7 +153,7 @@ function BotConfigSection({
               <p className="text-sm font-medium text-slate-500 mt-0.5">
                 {isNew
                   ? 'Получите токен у @BotFather и вставьте сюда.'
-                  : 'Конфигурация, тип и уведомления о продажах.'}
+                  : 'Тарифы, площадки и уведомления о продажах.'}
               </p>
             </div>
           </div>
@@ -164,7 +164,7 @@ function BotConfigSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="new" className="rounded-lg">➕ Подключить нового</SelectItem>
+                <SelectItem value="new" className="rounded-lg">➕ Новый бот</SelectItem>
                 {officialBots.map((account) => (
                   <SelectItem key={account.id} value={account.id} className="rounded-lg py-2.5">
                     <span className="font-medium text-slate-900">{botTitle(account)}</span>
@@ -208,7 +208,7 @@ function BotConfigSection({
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-base font-bold text-slate-900">Что это за бот</h3>
-              <p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-3xl">
+              <p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-2xl">
                 Бот продаж принимает оплату и сам выдаёт доступ: приглашает покупателя
                 в закрытый канал или чат, ведёт подписки и напоминания о продлении,
                 а вам присылает уведомления о каждой продаже. Настраивается один раз — дальше работает сам.
@@ -358,7 +358,7 @@ function BotAdminsSection({
         {/* Список текущих админов */}
         <div className="space-y-3">
           <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">
-            Администраторы ({admins.length})
+            Администраторы
           </label>
           {loading ? (
             <div className="space-y-2">
@@ -423,7 +423,8 @@ function BotAdminsSection({
             <Button
               onClick={handleAddBotAdmin}
               disabled={!newAdminTgId.trim() || addingBotAdmin}
-              className="h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
+              variant="outline"
+              className="h-11 px-5 rounded-xl text-slate-700 border-slate-200 bg-white hover:bg-slate-50 shadow-sm font-bold"
             >
               {addingBotAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               Добавить
@@ -682,8 +683,15 @@ function rightsSummary(result, selectedId) {
   return { tone: 'warning', title: 'Есть ограничения', text: result.message || '' };
 }
 
-function RightsBadges({ result, selectedId }) {
+function RightsBadges({ result, selectedId, hasOptions }) {
   if (!selectedId) {
+    if (!hasOptions) {
+      return (
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/50 px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
+          Площадок пока нет. Добавьте бота администратором в канал или чат — площадка появится в списке.
+        </div>
+      );
+    }
     return (
       <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/50 px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
         Укажите площадку, чтобы проверить права бота.
@@ -904,9 +912,13 @@ function ContourCard({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
             Подключен
           </span>
+        ) : options.length ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 shrink-0">
+            Не выбрано
+          </span>
         ) : (
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 shrink-0">
-            Ожидание
+            Нет площадки
           </span>
         )}
       </div>
@@ -951,6 +963,7 @@ function ContourCard({
               <button
                 type="button"
                 title="Обновить информацию из Telegram"
+                aria-label="Обновить информацию из Telegram"
                 onClick={() => refreshTelegramPlaceInfo?.(selectedTarget)}
                 disabled={isRefreshingSelected}
                 className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 shadow-sm transition-colors shrink-0"
@@ -1010,7 +1023,7 @@ function ContourCard({
         </div>
       ) : null}
 
-      <RightsBadges result={rights} selectedId={selectedId} />
+      <RightsBadges result={rights} selectedId={selectedId} hasOptions={options.length > 0} />
 
       {savingContour ? (
         <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 bg-indigo-50/50 p-2 rounded-lg border border-indigo-100/50">
