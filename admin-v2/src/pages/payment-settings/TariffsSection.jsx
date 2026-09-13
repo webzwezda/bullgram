@@ -224,22 +224,10 @@ function shortTonAddress(addr) {
 /**
  * Показывает, куда физически уйдут деньги от покупателя (payment_settings.ton_wallet),
  * чтобы владелец мог визуально сверить «свой ли кошелёк» до публикации тарифа.
+ * Данные тянутся один раз в TariffsSection и приходят пропсами — состояние кошелька
+ * также блокирует сабмит платного тарифа в CreateTariffPanel.
  */
-function MoneyDestinationNote() {
-  const { accessToken } = useAuth();
-  const [wallet, setWallet] = useState('');
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    let cancelled = false;
-    apiRequest('/api/payment-settings', { accessToken })
-      .then((data) => { if (!cancelled) setWallet(String(data?.settings?.ton_wallet || '')); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoaded(true); });
-    return () => { cancelled = true; };
-  }, [accessToken]);
-
+function MoneyDestinationNote({ wallet, loaded }) {
   if (!loaded) return null;
 
   async function copyWallet() {
@@ -253,24 +241,30 @@ function MoneyDestinationNote() {
 
   if (!wallet) {
     return (
-      <div className="flex items-start gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
-        <Wallet className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+      <div className="flex items-start gap-2 text-left text-xs font-medium text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
+        <Wallet className="w-4 h-4 mt-0.5 shrink-0" />
         <span>
-          Кошелёк для приёма оплат ещё не указан — покупателям некуда платить.
-          Задайте его в <Link to="/billing" className="underline decoration-amber-300 hover:decoration-amber-500">Кассе → Реквизиты</Link>.
+          Кошелёк для приёма оплат ещё не указан — покупателям&nbsp;некуда платить.
+          Задайте его в{' '}
+          <Link
+            to="/billing"
+            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
+          >
+            Кассе → Реквизиты
+          </Link>.
         </span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-start gap-2 text-[11px] font-bold text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
-      <Wallet className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+    <div className="flex items-start gap-2 text-left text-xs font-medium text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+      <Wallet className="w-4 h-4 mt-0.5 shrink-0 text-slate-400" />
       <div className="min-w-0">
         <span>
           Оплаты приходят на ваш кошелёк:{' '}
           <code
-            className="font-mono text-slate-900 select-all"
+            className="font-mono font-bold text-slate-900 select-all"
             title={wallet}
           >
             {shortTonAddress(wallet)}
@@ -278,13 +272,19 @@ function MoneyDestinationNote() {
           <button
             type="button"
             onClick={copyWallet}
-            className="ml-0.5 underline decoration-slate-300 hover:decoration-slate-500 text-slate-500 hover:text-slate-700"
+            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
           >
             копировать
           </button>
         </span>
-        <span className="block font-medium text-slate-500 mt-0.5">
-          Это не ваш кошелёк или хотите сменить? <Link to="/billing" className="text-indigo-600 hover:text-indigo-700 underline decoration-indigo-200 hover:decoration-indigo-400">Проверьте реквизиты в Кассе</Link>.
+        <span className="block mt-0.5">
+          Это не ваш кошелёк или хотите сменить?{' '}
+          <Link
+            to="/billing"
+            className="font-bold text-indigo-600 hover:text-indigo-700 underline decoration-indigo-300 hover:decoration-indigo-500"
+          >
+            Проверьте реквизиты в Кассе
+          </Link>.
         </span>
       </div>
     </div>
@@ -294,7 +294,8 @@ function MoneyDestinationNote() {
 /* ---------------- create dialog ---------------- */
 
 function CreateTariffPanel({
-  onClose, newTariff, setNewTariff, channels, onCreate, creating, bundleSupport
+  onClose, newTariff, setNewTariff, channels, onCreate, creating, bundleSupport,
+  destWallet, destLoaded
 }) {
   const [errors, setErrors] = useState({});
 
@@ -369,6 +370,11 @@ function CreateTariffPanel({
     if (!newTariff.title?.trim()) nextErrors.title = 'Укажи название тарифа';
     if (!isLifetime && (!newTariff.duration_days || Number(newTariff.duration_days) <= 0)) {
       nextErrors.duration_days = 'Укажи срок действия';
+    }
+    // Платный тариф без кошелька приёма — деньги физически некуда переводить.
+    if (!isFree && destLoaded && !destWallet) {
+      toast.error('Сначала задайте кошелёк для приёма оплат — Касса → Реквизиты');
+      return;
     }
     const hasAnyAccess = groupAccess.enabled || chatAccess.enabled || resourceAccess.enabled;
     if (!hasAnyAccess) nextErrors.access = 'Выбери хотя бы один метод выдачи';
@@ -656,14 +662,15 @@ function CreateTariffPanel({
             </div>
           )}
 
-          {!isFree && <MoneyDestinationNote />}
+          {!isFree && <MoneyDestinationNote wallet={destWallet} loaded={destLoaded} />}
         </div>
 
         <div className="flex justify-end pt-2">
           <Button
             type="button"
             onClick={handleCreate}
-            disabled={creating}
+            disabled={creating || (!isFree && destLoaded && !destWallet)}
+            title={(!isFree && destLoaded && !destWallet) ? 'Сначала задайте кошелёк для приёма оплат — Касса → Реквизиты' : undefined}
             className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200"
           >
             {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
@@ -677,7 +684,7 @@ function CreateTariffPanel({
 
 /* ---------------- empty state ---------------- */
 
-function EmptyState({ onCreate }) {
+function EmptyState({ onCreate, destWallet, destLoaded }) {
   return (
     <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
       <div className="p-10 text-center space-y-4">
@@ -696,7 +703,7 @@ function EmptyState({ onCreate }) {
           <Plus className="w-4 h-4 mr-2" /> Создать тариф
         </Button>
         <div className="max-w-md mx-auto pt-2">
-          <MoneyDestinationNote />
+          <MoneyDestinationNote wallet={destWallet} loaded={destLoaded} />
         </div>
       </div>
     </Card>
@@ -720,6 +727,21 @@ export function TariffsSection({
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [filterBotId, setFilterBotId] = useState('');
+
+  // Кошелёк приёма оплат — один фетч на экран: и для подсказки «куда идут деньги»,
+  // и для блокировки создания платного тарифа без кошелька.
+  const { accessToken } = useAuth();
+  const [destWallet, setDestWallet] = useState('');
+  const [destLoaded, setDestLoaded] = useState(false);
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    apiRequest('/api/payment-settings', { accessToken })
+      .then((data) => { if (!cancelled) setDestWallet(String(data?.settings?.ton_wallet || '')); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setDestLoaded(true); });
+    return () => { cancelled = true; };
+  }, [accessToken]);
 
   // Auto-select first bot if any exist (don't default to "All bots")
   useEffect(() => {
@@ -775,6 +797,8 @@ export function TariffsSection({
           onCreate={createTariff}
           creating={creating}
           bundleSupport={bundleSupport}
+          destWallet={destWallet}
+          destLoaded={destLoaded}
         />
       )}
 
@@ -851,7 +875,7 @@ export function TariffsSection({
           )}
         </Card>
       ) : (
-        <EmptyState onCreate={() => setCreateOpen(true)} />
+        <EmptyState onCreate={() => setCreateOpen(true)} destWallet={destWallet} destLoaded={destLoaded} />
       )}
     </section>
   );
