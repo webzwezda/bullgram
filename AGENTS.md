@@ -319,6 +319,39 @@ Core execution principles:
 - no laziness: find root causes and avoid temporary fixes
 - minimal impact: only change what is necessary and avoid introducing regressions
 
+## Available Skills
+
+Skills are instruction packs the main session loads through the Skill tool when a task matches their description (also callable as `/<name>`). They complement subagents: a subagent does isolated work in a fresh context, a skill injects a specialized procedure into the main session. Three scopes exist — workspace (`.agents/skills/` in this repo), user (`~/.zcode/skills/`), and official plugins — and all are available in every session.
+
+Workspace skills:
+
+- `code-review` (`.agents/skills/code-review/`): multi-lens parallel review — the main session validates the diff range, spawns independent read-only reviewer subagents (one per lens), and synthesizes one cited report. Use for full close-out review of large or risky diffs.
+- `modern-web-guidance` (`.agents/skills/modern-web-guidance/`): search over current web-platform best practices. Mandatory first step for any HTML/CSS or client-side JS work — run it before writing or reviewing frontend code.
+- `systematic-debugging` (`.agents/skills/systematic-debugging/`): four-phase root-cause procedure (investigate → pattern analysis → hypothesis testing → implementation). Read before forming any bug hypothesis; the `debugger` agent is wired to it.
+- `test-driven-development` (`.agents/skills/test-driven-development/`): red-green-refactor discipline with a companion `writing-good-tests.md`. The `test-engineer` agent is wired to it.
+- `security-and-hardening` (`.agents/skills/security-and-hardening/`): threat-model-first appsec methodology (STRIDE, abuse cases, OWASP Top 10 checklist in `references/`). The `security-auditor` agent is wired to it.
+- `shipping-and-launch` (`.agents/skills/shipping-and-launch/`): go/no-go release gates, staged rollout, rollback-plan template. The `deployment-engineer` agent is wired to it.
+- `supabase-postgres-best-practices` (`.agents/skills/supabase-postgres-best-practices/`): first-party Supabase rule library — 34 reference files (schema/query/lock/security) with incorrect-vs-correct SQL. Read the relevant rules before writing or reviewing migration SQL; the `postgres-pro` agent is wired to it.
+
+The five vendored skills above (installed 2026-09-13 from obra/superpowers, addyosmani/agent-skills, supabase/agent-skills — all MIT; see `_source.md` in each folder) are also wired into the matching file-based subagents in `~/.zcode/agents/` via `## Skills` sections. Subagents have no Skill tool: their wiring is "Read the SKILL.md and follow it".
+
+User-scope skills (`~/.zcode/skills/`) — a design-system suite, most useful for `admin-v2` and `site-v2` visual work:
+
+- generate: `brandkit`, `design-tokens`, `design-code`, `design-component`, `token-build`
+- evaluate: `design-review`, `design-qa`, `a11y-audit`, `performance`
+- direction: `apply-aesthetic`, `redesign`, `prototype`, `image-to-code`, `migrate-design-system`
+- upkeep: `figma-integration`, `governance`, `ux-writing`
+
+Plugin skills:
+
+- `browser-use` (`control-browser`, `web-gui-tester`): runtime checks of deployed site/admin per the browser doctrine above
+- `computer-use`: desktop control when a task leaves the browser
+- `document-skills` (`docx`, `pdf`, `pptx`, `xlsx`): document deliverables
+- `skill-creator`: create new skills or refine existing ones, including trigger wording
+- `zcode-guide` diagnostics (`diagnosing-skills`, `diagnosing-mcp`, `diagnosing-plugins`, `diagnosing-commands`, `diagnosing-hooks`, `zcode-configuration-guide`): first stop when a skill, MCP server, plugin, or slash command silently fails to load or trigger
+
+Standing rule: before hand-rolling a procedure, check whether a skill already covers it — if a task matches a skill's description, invoke the skill instead of improvising.
+
 ## ZCode Orchestration Contract
 
 This block is the standing orchestration contract for this repo.
