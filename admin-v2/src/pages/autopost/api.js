@@ -87,18 +87,10 @@ export function regenerateInvite(botId, token) {
     });
 }
 
-export function fetchBotStats(botId, token) {
-    return request(`/api/autopost/bots/${botId}/stats`, { token });
-}
-
 export function patchBot(botId, payload, token) {
     return request(`/api/autopost/bots/${botId}`, {
         method: 'PATCH',
         body: payload,
         token
     });
-}
-
-export function fetchBotMetrics(botId, token) {
-    return request(`/api/autopost/bots/${botId}/metrics`, { token });
 }

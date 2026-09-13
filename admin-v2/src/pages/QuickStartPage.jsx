@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -13,8 +13,6 @@ import {
     fetchChannels,
     patchBot,
     regenerateInvite,
-    fetchBotStats,
-    fetchBotMetrics,
     fetchAdmins,
     initBot,
     patchChannel,
@@ -57,15 +55,15 @@ export function QuickStartPage() {
   
   // Bot settings states
   const [existingBots, setExistingBots] = useState([]);
+  // Зеркало existingBots для эффекта выбора бота: эффект должен срабатывать
+  // только при смене выбранного бота, а не на каждое обновление списка.
+  const existingBotsRef = useRef([]);
   const [createdBot, setCreatedBot] = useState(null);
-  const [botStats, setBotStats] = useState(null);
-  const [botMetrics, setBotMetrics] = useState(null);
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [inviteLink, setInviteLink] = useState('');
   const [tokenRevealed, setTokenRevealed] = useState(false);
   const [inviteRevealed, setInviteRevealed] = useState(false);
-  const [revealedMcpToken, setRevealedMcpToken] = useState(false);
   const [pausing, setPausing] = useState(false);
   const [confirmState, setConfirmState] = useState(null);
   
@@ -97,6 +95,7 @@ export function QuickStartPage() {
         .select('*')
         .eq('owner_id', user.id)
         .order('created_at', { ascending: false });
+      existingBotsRef.current = data || [];
       setExistingBots(data || []);
     } catch (err) {
       toast.error(err.message);
@@ -109,7 +108,10 @@ export function QuickStartPage() {
     loadBots();
   }, [loadBots]);
 
-  // При выборе существующего бота — загрузить его настройки
+  // При выборе существующего бота — загрузить его настройки.
+  // Эффект зависим только от selectedBotId: список ботов читаем через ref,
+  // чтобы loadBots() посреди сессии (например, после паузы) не сбрасывал
+  // раскрытие токена/ссылки и не перезагружал каналы и админов.
   useEffect(() => {
     if (selectedBotId === 'new') {
       setTokenRevealed(false);
@@ -124,7 +126,7 @@ export function QuickStartPage() {
       return;
     }
 
-    const bot = existingBots.find((b) => b.id === selectedBotId);
+    const bot = existingBotsRef.current.find((b) => b.id === selectedBotId);
     if (!bot) return;
 
     setTokenRevealed(false);
@@ -134,13 +136,7 @@ export function QuickStartPage() {
 
     loadChannels(bot.id);
     loadAdmins(bot.id);
-    fetchBotStats(bot.id, accessToken)
-      .then((data) => setBotStats(data))
-      .catch(() => setBotStats(null));
-    fetchBotMetrics(bot.id, accessToken)
-      .then((data) => setBotMetrics(data))
-      .catch(() => setBotMetrics(null));
-  }, [selectedBotId, existingBots, accessToken]);
+  }, [selectedBotId]);
 
   async function loadChannels(botId, { merge = false } = {}) {
     try {
@@ -233,13 +229,12 @@ export function QuickStartPage() {
         { event: 'UPDATE', schema: 'public', table: 'autopost_bots', filter: `id=eq.${botId}` },
         () => { loadAdmins(botId); }
       )
+      // События autopost_items пока не требуют действий на странице,
+      // подписка оставлена на будущее.
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'autopost_items', filter: `bot_id=eq.${botId}` },
-        () => {
-          fetchBotStats(botId, accessToken).then((d) => setBotStats(d)).catch(() => {});
-          fetchBotMetrics(botId, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
-        }
+        () => {}
       )
       .subscribe();
 
@@ -247,15 +242,6 @@ export function QuickStartPage() {
       supabase.removeChannel(channel);
     };
   }, [createdBot?.id, selectedBotId, accessToken]);
-
-  // Живые метрики: обновляем раз в минуту, пока страница открыта.
-  useEffect(() => {
-    if (!createdBot?.id) return;
-    const interval = setInterval(() => {
-      fetchBotMetrics(createdBot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [createdBot?.id, accessToken]);
 
   // Подключение бота (валидация токена + создание)
   async function handleConnect() {
@@ -265,6 +251,7 @@ export function QuickStartPage() {
       const data = await initBot({ botToken: botToken.trim() }, accessToken);
 
       setCreatedBot({ id: data.bot.id, bot_username: data.bot.username });
+      existingBotsRef.current = [...existingBotsRef.current, data.bot];
       setExistingBots((prev) => [...prev, data.bot]);
       setSelectedBotId(data.bot.id);
       toast.success('Бот успешно инициализирован! Теперь активируйте его в Telegram.');
@@ -318,6 +305,30 @@ export function QuickStartPage() {
     }
   }
 
+  // Диалог подтверждения: askConfirm показывает модалку и возвращает Promise<boolean>.
+  // Кнопки модалки разрешают промис: подтверждение — true, отмена — false.
+  function askConfirm(state) {
+    return new Promise((resolve) => {
+      setConfirmState({ ...state, resolve });
+    });
+  }
+
+  function closeConfirm(result) {
+    if (!confirmState) return;
+    confirmState.resolve(result);
+    setConfirmState(null);
+  }
+
+  // Esc закрывает диалог как отмену
+  useEffect(() => {
+    if (!confirmState) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') closeConfirm(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmState]);
+
   // Отвязать канал от автопостера (только в Bullgram, бот остаётся админом в Telegram)
   function askUnlinkChannel(channelId) {
     const cfg = channelConfigs[channelId];
@@ -331,6 +342,8 @@ export function QuickStartPage() {
   }
 
   async function doUnlinkChannel(channelId) {
+    const cfg = channelConfigs[channelId];
+    if (!cfg.id || !createdBot?.id) return;
     try {
       await unlinkChannel(createdBot.id, cfg.id, accessToken);
       toast.success(`Канал "${cfg.title}" отвязан`);
@@ -418,6 +431,7 @@ export function QuickStartPage() {
     try {
       await deleteBot(createdBot.id, accessToken);
 
+      existingBotsRef.current = existingBotsRef.current.filter((b) => b.id !== createdBot.id);
       setExistingBots((prev) => prev.filter((b) => b.id !== createdBot.id));
       setSelectedBotId('new');
       toast.success('Бот удалён');
@@ -580,7 +594,6 @@ export function QuickStartPage() {
     try {
       await patchBot(createdBot.id, { is_active: !botPaused }, accessToken);
       await loadBots();
-      fetchBotMetrics(createdBot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
       toast.success(botPaused ? 'Бот возобновлён.' : 'Бот поставлен на паузу.');
     } catch (err) {
       toast.error(err.message || 'Не удалось изменить состояние бота.');
@@ -596,21 +609,7 @@ export function QuickStartPage() {
   const hasChannels = channels.length > 0;
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
-  const botRunning = botMetrics?.bot?.isRunning;
-  const lastFailure = botMetrics?.lastFailure || null;
-  const lastFailureDate = lastFailure ? new Date(lastFailure.updated_at) : null;
-  const lastFailureLabel = lastFailureDate
-    ? lastFailureDate.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : null;
-  const hasFailure = Boolean(botMetrics?.healthy === false) && Boolean(lastFailure);
-  const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0) + (c.autoAccept ? (c.suggestionPostingTimes?.length || 0) : 0), 0);
-  const statsPosted = botStats ? botStats.posted : null;
-  const nextScheduledAt = botStats?.nextScheduledAt ? new Date(botStats.nextScheduledAt) : null;
-  const nextScheduledLabel = nextScheduledAt
-    ? nextScheduledAt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-    : null;
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
-  const statusWord = botPaused ? 'На паузе' : (botRunning === false ? 'Запускается…' : (hasFailure ? 'Работает' : 'Активен'));
 
   return (
     <section className="page page--flush space-y-6">
@@ -1100,26 +1099,131 @@ export function QuickStartPage() {
 
                     <hr className="border-slate-100" />
 
-                    {/* Кнопка предложки под постами */}
-                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
+                    {/* Предложки от подписчиков — группируем все настройки предложки в одном блоке */}
+                    <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 sm:p-5 space-y-3">
                       <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
+                          <Inbox className="w-3.5 h-3.5" /> Предложки от подписчиков
+                        </label>
                         <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                          Добавляет под каждым публикуемым постом кнопку со ссылкой на бота для сбора предложений.
+                          Кнопка под постами, лимит, автопринятие и расписание — всё в одном месте.
                         </span>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={config.suggestButtonEnabled || false}
-                          onChange={(e) => setChannelConfigs(prev => ({
-                            ...prev,
-                            [tab]: { ...prev[tab], suggestButtonEnabled: e.target.checked }
-                          }))}
-                        />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
+
+                      {/* Кнопка предложки под постами */}
+                      <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
+                        <div className="space-y-1">
+                          <label className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
+                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
+                            Добавляет под каждым публикуемым постом кнопку со ссылкой на бота для сбора предложений.
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={config.suggestButtonEnabled || false}
+                            onChange={(e) => setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], suggestButtonEnabled: e.target.checked }
+                            }))}
+                          />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Суточный лимит предложений */}
+                      <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3.5 transition-all">
+                        <div className="space-y-1">
+                          <label className="text-sm font-bold text-slate-800 block">Лимит предложений в сутки</label>
+                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
+                            Максимальное количество предложений от одного пользователя за последние 24 часа. Укажите «0» для отключения ограничений.
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            className="w-24 px-3 py-1.5 text-sm font-bold text-center border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 bg-white"
+                            value={config.maxSuggestionsPerDay !== undefined ? config.maxSuggestionsPerDay : 5}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
+                              setChannelConfigs(prev => ({
+                                ...prev,
+                                [tab]: { ...prev[tab], maxSuggestionsPerDay: val }
+                              }));
+                            }}
+                          />
+                          <span className="text-xs text-slate-500 font-semibold">предложений / 24 часа</span>
+                        </div>
+                      </div>
+
+                      {/* Автопринятие предложений */}
+                      <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
+                        <div className="space-y-1">
+                          <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
+                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
+                            Если включено, контент от пользователей в предложке будет автоматически публиковаться без ручной модерации.
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={config.autoAccept}
+                            onChange={(e) => setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], autoAccept: e.target.checked }
+                            }))}
+                          />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      {/* Планировщик предложений (Показываем только если включен тумблер автопринятия) */}
+                      {config.autoAccept && (
+                        <div className="space-y-4 pt-3 border-t border-indigo-100 animate-fade-in">
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
+                            </label>
+                            <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
+                              Отдельное расписание для автопринятых предложений от подписчиков.
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+                            {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
+                              <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 p-2.5 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+                                <span className="text-[10px] font-bold text-slate-500 font-mono w-5 text-center">#{idx + 1}</span>
+                                <input
+                                  type="time"
+                                  value={time}
+                                  onChange={(e) => handleSuggestionTimeChange(tab, idx, e.target.value)}
+                                  className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full border-0 p-0 focus:ring-0 cursor-pointer"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRemoveSuggestionTime(tab, idx)}
+                                  className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+
+                            <Button
+                              variant="outline"
+                              onClick={() => handleAddSuggestionTime(tab)}
+                              className="h-10 rounded-xl border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Автореакция на посты */}
@@ -1186,99 +1290,6 @@ export function QuickStartPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Суточный лимит предложений */}
-                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3.5 transition-all">
-                      <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-800 block">Лимит предложений в сутки</label>
-                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                          Максимальное количество предложений от одного пользователя за последние 24 часа. Укажите «0» для отключения ограничений.
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="number"
-                          min="0"
-                          max="1000"
-                          className="w-24 px-3 py-1.5 text-sm font-bold text-center border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 bg-white"
-                          value={config.maxSuggestionsPerDay !== undefined ? config.maxSuggestionsPerDay : 5}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0);
-                            setChannelConfigs(prev => ({
-                              ...prev,
-                              [tab]: { ...prev[tab], maxSuggestionsPerDay: val }
-                            }));
-                          }}
-                        />
-                        <span className="text-xs text-slate-500 font-semibold">предложений / 24 часа</span>
-                      </div>
-                    </div>
-
-                    {/* Автопринятие предложений */}
-                    <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
-                      <div className="space-y-1">
-                        <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
-                        <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                          Если включено, контент от пользователей в предложке будет автоматически публиковаться без ручной модерации.
-                        </span>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={config.autoAccept}
-                          onChange={(e) => setChannelConfigs(prev => ({
-                            ...prev,
-                            [tab]: { ...prev[tab], autoAccept: e.target.checked }
-                          }))}
-                        />
-                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
-                    </div>
-
-                    {/* Планировщик предложений (Показываем только если включен тумблер автопринятия) */}
-                    {config.autoAccept && (
-                      <div className="space-y-4 pt-4 border-t border-slate-100 animate-fade-in">
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций предложенных постов
-                          </label>
-                          <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                            Отдельное расписание для автопринятых предложений от подписчиков.
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
-                          {(config.suggestionPostingTimes || ['12:00']).map((time, idx) => (
-                            <div key={idx} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100/70 p-2.5 rounded-xl border border-slate-200 transition-all focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
-                              <span className="text-[10px] font-bold text-slate-500 font-mono w-5 text-center">#{idx + 1}</span>
-                              <input
-                                type="time"
-                                value={time}
-                                onChange={(e) => handleSuggestionTimeChange(tab, idx, e.target.value)}
-                                className="bg-transparent text-xs font-bold text-slate-800 outline-none w-full border-0 p-0 focus:ring-0 cursor-pointer"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleRemoveSuggestionTime(tab, idx)}
-                                className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          ))}
-
-                          <Button
-                            variant="outline"
-                            onClick={() => handleAddSuggestionTime(tab)}
-                            className="h-10 rounded-xl border-dashed text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 font-semibold text-xs transition-all flex items-center justify-center gap-1.5"
-                          >
-                            <Plus className="w-3.5 h-3.5 text-indigo-500" /> Добавить время
-                          </Button>
-                        </div>
-                      </div>
-                    )}
 
                     <hr className="border-slate-100" />
 
@@ -1467,6 +1478,50 @@ export function QuickStartPage() {
               </div>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Диалог подтверждения опасных действий */}
+      {confirmState && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4"
+          onClick={() => closeConfirm(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${confirmState.danger ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-lg font-bold text-slate-900">{confirmState.title}</h3>
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed">{confirmState.description}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="h-10 px-4 rounded-xl font-semibold border-slate-200 text-slate-700"
+                onClick={() => closeConfirm(false)}
+              >
+                Отмена
+              </Button>
+              <Button
+                className={`h-10 px-4 rounded-xl font-bold text-white shadow-md ${confirmState.danger ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                onClick={() => {
+                  const action = confirmState.onConfirm;
+                  closeConfirm(true);
+                  if (action) action();
+                }}
+              >
+                {confirmState.actionLabel || 'Подтвердить'}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </section>
