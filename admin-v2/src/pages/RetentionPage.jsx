@@ -55,14 +55,6 @@ function pluralSubscribers(count) {
   return 'подписчиков';
 }
 
-function pluralReminders(count) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'напоминание';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'напоминания';
-  return 'напоминаний';
-}
-
 // Лёгкий рендер легаси-Telegram-markdown для превью: *жирный*, _курсив_, `код`.
 // Подставляем только {channel_name}; остальные теги оставляем как есть — их видит админ, не подписчик.
 function renderLegacyMarkdown(text, channelName) {
@@ -460,15 +452,6 @@ export function RetentionPage() {
         )}
 
         <section className="p-6 md:p-8 border-b border-slate-100">
-          <div className="mb-5">
-            <h1 className="text-2xl font-black tracking-tight text-slate-900">Удержание</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {stats.total > 0
-                ? `${stats.total} ${pluralReminders(stats.total)} за 7 дней`
-                : 'За 7 дней напоминаний не было — тихо'}
-            </p>
-          </div>
-
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <select
