@@ -22,7 +22,10 @@ export async function apiRequest(path, { accessToken, method = 'GET', body, sign
   }
 
   if (!response.ok || data?.error) {
-    throw new Error(data?.error || `HTTP ${response.status}`);
+    const error = new Error(data?.error || `HTTP ${response.status}`);
+    error.status = response.status;
+    error.code = data?.code || '';
+    throw error;
   }
 
   return data;

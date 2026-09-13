@@ -88,6 +88,42 @@ code-reviewer по диффу нашёл две проблемы, обе зак�
 - **PATCH userbot-active до confirm** — оставлено: «включён в ротацию, но не
   вступил» — валидное состояние, повторный тумблер дозапускает join-all.
 
+## Этап 2: join-all в фоне (отложенное из ревью)
+
+Задача: убрать 20–60 сек синхронного HTTP (риск 504 и параллельных прогонов).
+
+Дизайн:
+- Миграция `20260913121500` (применена): `sales_bot_contours` +
+  `join_all_status` (idle|running|done|error, default idle),
+  `join_all_result` (jsonb), `join_all_started_at` (timestamptz).
+- Статус живёт на строке контура: join-all требует сохранённый контур
+  (409 иначе), значит строка всегда существует на момент запуска.
+- POST /contours/join-all: синхронные preconditions (как сейчас) →
+  атомарный claim conditional update (running не перезапускается; протухший
+  running старше 10 мин можно перезапустить) → 202 → фон без await.
+- GET /contours/join-all/status: owner-scoped, отдаёт status/result;
+  running старше 10 мин трактуется как прерванный рестартом → error.
+- Фронт: confirm → POST 202 → поллинг раз в 3 сек (таймер в ref, cleanup
+  при unmount, предохранитель 10 мин) → done: toast summary + reload;
+  error: toast message; 409 already_running: перейти к поллингу.
+
+- [x] Бэкенд-слайс (startJoinAll + статус-роут + фон-обёртка)
+- [x] Фронтенд-слайс (поллинг)
+- [x] Ревью диффа (fix-first: 2×P1 + 4×P2, все закрыты)
+- [x] Валидация + пуш
+
+Правки по ревью (все закрыты оркестратором):
+1. P1: поллинг переживал unmount во время in-flight tick — добавлен
+   `joinAllPollCancelledRef`, проверка после каждого await в tick.
+2. P1: DDL миграции отсутствовал в репо — добавлен идемпотентный
+   `backend/sql/sales-contour-join-all-status.sql` (конвенция backend/sql/).
+3. P2: stale-flip возвращал error безусловно — теперь читает фактическую
+   строку после условного update (прогон мог завершиться между select и update).
+4. P2: терминальные записи фона guard'ятся по `join_all_started_at` —
+   зависший прогон не перезапишет статус нового запуска.
+5. P2: мёртвая ветка в 409-детекте фронта убрана (остался только `err?.code`).
+6. P2: чекбоксы/итоги плана — этот раздел.
+
 ## Итог (заполнить после работы)
 
 - Коммит: `0cba41f` — fix(sales-bot): tenant-guard на всех писателях channels,

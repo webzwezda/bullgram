@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
+import { fetchContourJoinAllStatus, startContourJoinAll } from '../../api/official-bot.js';
 
 const JOIN_ALL_CONFIRM_TEXT = 'Юзербот вступит в площадки контура и получит в них права админа. Telegram может не дать вступить без приглашения — тогда площадка не подключится, и её нужно будет добавить вручную. Это занимает до минуты. Продолжить?';
+const JOIN_ALL_POLL_INTERVAL_MS = 3000;
+const JOIN_ALL_POLL_TIMEOUT_MS = 10 * 60 * 1000;
+const JOIN_ALL_STALLED_TEXT = 'Вступление зависло, попробуй ещё раз';
+const JOIN_ALL_ERROR_TEXT = 'Ошибка вступления в группы';
 
 function normalizeBotKind(value) {
   return value === 'template' ? 'template' : 'sales';
@@ -691,6 +696,11 @@ export function useSalesContourController({
   const [togglingUserbotId, setTogglingUserbotId] = useState('');
   const [joinAllPending, setJoinAllPending] = useState(false);
   const joinAllInFlightRef = useRef(false);
+  const joinAllPollTimerRef = useRef(null);
+  const joinAllPollCancelledRef = useRef(false);
+
+  // При unmount во время фонового join-all гасим таймер поллинга; pending-стейт умрёт вместе с компонентом.
+  useEffect(() => () => stopJoinAllPolling(), []);
 
   useEffect(() => {
     const rawBindings = contourEntry?.userbot_bindings || [];
@@ -728,29 +738,90 @@ export function useSalesContourController({
     }
   }
 
+  function stopJoinAllPolling() {
+    // Cancelled-ref глушит и висящий в await fetch tick: без него unmount во время
+    // запроса планировал бы новый таймер уже после очистки, и поллинг жил до дедлайна.
+    joinAllPollCancelledRef.current = true;
+    if (joinAllPollTimerRef.current) {
+      clearTimeout(joinAllPollTimerRef.current);
+      joinAllPollTimerRef.current = null;
+    }
+  }
+
+  function resetJoinAllState() {
+    joinAllInFlightRef.current = false;
+    setJoinAllPending(false);
+  }
+
+  // Поллинг статуса фонового join-all: рекурсивный setTimeout, предохранитель по дедлайну.
+  // Одиночные сетевые сбои статуса не роняют процесс — ждём до дедлайна.
+  function pollJoinAllStatus(botId, deadline) {
+    joinAllPollCancelledRef.current = false;
+    const tick = async () => {
+      try {
+        const data = await fetchContourJoinAllStatus(accessToken, botId);
+        if (joinAllPollCancelledRef.current) return;
+        const status = String(data?.status || '').trim();
+
+        if (status === 'done') {
+          stopJoinAllPolling();
+          toast.success(data?.result?.summary || 'Готово');
+          reloadAccounts();
+          resetJoinAllState();
+          return;
+        }
+
+        if (status === 'error') {
+          stopJoinAllPolling();
+          toast.error(data?.result?.message || JOIN_ALL_ERROR_TEXT);
+          resetJoinAllState();
+          return;
+        }
+      } catch (err) {
+        console.error('join-all status poll failed:', err?.message);
+        if (joinAllPollCancelledRef.current) return;
+      }
+
+      if (Date.now() >= deadline) {
+        stopJoinAllPolling();
+        toast.error(JOIN_ALL_STALLED_TEXT);
+        resetJoinAllState();
+        return;
+      }
+
+      joinAllPollTimerRef.current = setTimeout(tick, JOIN_ALL_POLL_INTERVAL_MS);
+    };
+
+    tick();
+  }
+
   function triggerJoinAll() {
     const botId = selectedOfficialBot?.id;
-    // In-flight guard: join-all на бэке исполняется 20-30 сек, повторные клики стакать нельзя.
+    // In-flight guard: join-all исполняется в фоне, повторные клики и параллельный поллинг стакать нельзя.
     if (!botId || joinAllInFlightRef.current) return;
     if (!window.confirm(JOIN_ALL_CONFIRM_TEXT)) return;
 
     joinAllInFlightRef.current = true;
     setJoinAllPending(true);
-    apiRequest('/api/official-bot/contours/join-all', {
-      accessToken,
-      method: 'POST',
-      body: { bot_id: botId }
-    }).then((data) => {
-      const summary = data?.summary || 'Готово';
-      toast.success(summary);
-      reloadAccounts();
-    }).catch((err) => {
-      console.error('join-all failed:', err?.message);
-      toast.error(err?.message || 'Ошибка вступления в группы');
-    }).finally(() => {
-      joinAllInFlightRef.current = false;
-      setJoinAllPending(false);
-    });
+
+    startContourJoinAll(accessToken, botId)
+      .then(() => {
+        pollJoinAllStatus(botId, Date.now() + JOIN_ALL_POLL_TIMEOUT_MS);
+      })
+      .catch((err) => {
+        // 409 join_all_already_running — не ошибка: задача уже идёт (наш прошлый или чужой запуск), следим за ней.
+        const alreadyRunning = err?.code === 'join_all_already_running';
+
+        if (alreadyRunning) {
+          toast.info('Вступление уже идёт, следим за статусом');
+          pollJoinAllStatus(botId, Date.now() + JOIN_ALL_POLL_TIMEOUT_MS);
+          return;
+        }
+
+        console.error('join-all failed:', err?.message);
+        toast.error(err?.message || JOIN_ALL_ERROR_TEXT);
+        resetJoinAllState();
+      });
   }
 
   return {

@@ -612,11 +612,20 @@ export default function (supabase) {
             const botApi = await createSalesContourBotApi(req.user.id, req.body?.bot_id ?? req.body?.account_id);
             const { UserbotService } = await import('../services/userbot.service.js');
             const userbotService = new UserbotService(supabase);
-            const data = await salesContourService.joinUserbotToAllTargets(req.user.id, req.body || {}, botApi, userbotService);
-            res.json({ success: true, ...data });
+            await salesContourService.startJoinAll(req.user.id, req.body || {}, botApi, userbotService);
+            res.status(202).json({ success: true, status: 'running' });
         } catch (error) {
             console.error('[join-all] FAILED:', error);
             return sendOfficialBotError(res, error, 'Не получилось подключить юзербота ко всем площадкам');
+        }
+    });
+
+    router.get('/contours/join-all/status', authenticateUser, async (req, res) => {
+        try {
+            const data = await salesContourService.getJoinAllStatus(req.user.id, req.query || {});
+            res.json(data);
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось получить статус вступления в площадки');
         }
     });
 
