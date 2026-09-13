@@ -553,40 +553,12 @@ export function QuickStartPage() {
     try {
       await patchBot(createdBot.id, { is_active: !botPaused }, accessToken);
       await loadBots();
-      fetchBotMetrics(bot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
+      fetchBotMetrics(createdBot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
       toast.success(botPaused ? 'Бот возобновлён.' : 'Бот поставлен на паузу.');
     } catch (err) {
       toast.error(err.message || 'Не удалось изменить состояние бота.');
     } finally {
       setPausing(false);
-    }
-  }
-
-  async function testToken() {
-    const mcpToken = latestActive;
-    if (!mcpToken) {
-      setTestResult({ ok: false, text: 'Сначала выпусти MCP-токен.' });
-      return;
-    }
-    setTesting(true);
-    setError('');
-    try {
-      const secretData = await apiRequest(`/api/integrations/tokens/${mcpToken.id}/secret`, { accessToken });
-      const secret = secretData.token;
-      if (!secret) throw new Error('Секрет токена недоступен.');
-      const data = await apiRequest('/api/mcp/tokens/test', {
-        accessToken,
-        method: 'POST',
-        body: { token: secret }
-      });
-      setTestResult({
-        ok: true,
-        text: `MCP жив: ${data.proxy_total} proxy, ${data.userbot_total} userbot, tier ${data.product_tier}.`
-      });
-    } catch (nextError) {
-      setTestResult({ ok: false, text: nextError.message || 'Проверка не прошла.' });
-    } finally {
-      setTesting(false);
     }
   }
 
