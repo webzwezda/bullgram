@@ -725,15 +725,15 @@ export function QuickStartPage() {
                 <Bot className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-slate-900">Что это за бот</h3>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                <h3 className="text-base font-bold text-slate-900">Что это за бот</h3>
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
                   Telegram-бот, который ведёт ваши каналы за вас: сам публикует посты по расписанию,
                   принимает предложения от подписчиков и ставит реакции на новые посты.
                   Один бот может вести несколько каналов — всё управление здесь, на этом экране.
                 </p>
-                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {['Постинг по расписанию', 'Приём предложений', 'Автореакции и кнопки'].map(chip => (
-                    <span key={chip} className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-semibold">
+                    <span key={chip} className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-semibold">
                       {chip}
                     </span>
                   ))}
