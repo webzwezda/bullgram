@@ -1,10 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Package, Plus, Trash2, Clock, Bot as BotIcon,
   Users, MessageCircle, Link2, Loader2, Check, Infinity as InfinityIcon,
-  AlertCircle, Search
+  AlertCircle, Search, Wallet
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { apiRequest } from '../../api/client.js';
 import { Button } from '../../components/ui/button.jsx';
 import { Card } from '../../components/ui/card.jsx';
 import { Input } from '../../components/ui/input.jsx';
@@ -206,6 +209,83 @@ function TariffRow({ group, botsById, deleteTariff }) {
         >
           <Trash2 className="w-4 h-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- destination wallet ---------------- */
+
+function shortTonAddress(addr) {
+  const t = String(addr || '');
+  return t.length > 16 ? `${t.slice(0, 8)}…${t.slice(-6)}` : t;
+}
+
+/**
+ * Показывает, куда физически уйдут деньги от покупателя (payment_settings.ton_wallet),
+ * чтобы владелец мог визуально сверить «свой ли кошелёк» до публикации тарифа.
+ */
+function MoneyDestinationNote() {
+  const { accessToken } = useAuth();
+  const [wallet, setWallet] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    apiRequest('/api/payment-settings', { accessToken })
+      .then((data) => { if (!cancelled) setWallet(String(data?.settings?.ton_wallet || '')); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoaded(true); });
+    return () => { cancelled = true; };
+  }, [accessToken]);
+
+  if (!loaded) return null;
+
+  async function copyWallet() {
+    try {
+      await navigator.clipboard.writeText(wallet);
+      toast.success(`Кошелёк скопирован: ${shortTonAddress(wallet)}`);
+    } catch {
+      toast.error('Не удалось скопировать кошелёк');
+    }
+  }
+
+  if (!wallet) {
+    return (
+      <div className="flex items-start gap-2 text-[11px] font-bold text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200">
+        <Wallet className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>
+          Кошелёк для приёма оплат ещё не указан — покупателям некуда платить.
+          Задайте его в <Link to="/billing" className="underline decoration-amber-300 hover:decoration-amber-500">Кассе → Реквизиты</Link>.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2 text-[11px] font-bold text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+      <Wallet className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+      <div className="min-w-0">
+        <span>
+          Оплаты приходят на ваш кошелёк:{' '}
+          <code
+            className="font-mono text-slate-900 select-all"
+            title={wallet}
+          >
+            {shortTonAddress(wallet)}
+          </code>{' '}
+          <button
+            type="button"
+            onClick={copyWallet}
+            className="ml-0.5 underline decoration-slate-300 hover:decoration-slate-500 text-slate-500 hover:text-slate-700"
+          >
+            копировать
+          </button>
+        </span>
+        <span className="block font-medium text-slate-500 mt-0.5">
+          Это не ваш кошелёк или хотите сменить? <Link to="/billing" className="text-indigo-600 hover:text-indigo-700 underline decoration-indigo-200 hover:decoration-indigo-400">Проверьте реквизиты в Кассе</Link>.
+        </span>
       </div>
     </div>
   );
@@ -575,6 +655,8 @@ function CreateTariffPanel({
               <ErrorText>{errors.ton_price}</ErrorText>
             </div>
           )}
+
+          {!isFree && <MoneyDestinationNote />}
         </div>
 
         <div className="flex justify-end pt-2">
@@ -613,6 +695,9 @@ function EmptyState({ onCreate }) {
         >
           <Plus className="w-4 h-4 mr-2" /> Создать тариф
         </Button>
+        <div className="max-w-md mx-auto pt-2">
+          <MoneyDestinationNote />
+        </div>
       </div>
     </Card>
   );
