@@ -1259,7 +1259,7 @@ export function CustomersPage() {
                 <div className="flex justify-end">
                   <a
                     href="/app/broadcast"
-                    className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                    className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
                     Рассылка
