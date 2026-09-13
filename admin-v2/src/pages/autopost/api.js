@@ -98,3 +98,7 @@ export function patchBot(botId, payload, token) {
         token
     });
 }
+
+export function fetchBotMetrics(botId, token) {
+    return request(`/api/autopost/bots/${botId}/metrics`, { token });
+}

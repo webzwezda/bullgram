@@ -14,6 +14,7 @@ import {
     patchBot,
     regenerateInvite,
     fetchBotStats,
+    fetchBotMetrics,
     fetchAdmins,
     initBot,
     patchChannel,
@@ -54,6 +55,7 @@ export function QuickStartPage() {
   const [existingBots, setExistingBots] = useState([]);
   const [createdBot, setCreatedBot] = useState(null);
   const [botStats, setBotStats] = useState(null);
+  const [botMetrics, setBotMetrics] = useState(null);
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [inviteLink, setInviteLink] = useState('');
@@ -130,6 +132,9 @@ export function QuickStartPage() {
     fetchBotStats(bot.id, accessToken)
       .then((data) => setBotStats(data))
       .catch(() => setBotStats(null));
+    fetchBotMetrics(bot.id, accessToken)
+      .then((data) => setBotMetrics(data))
+      .catch(() => setBotMetrics(null));
   }, [selectedBotId, existingBots, accessToken]);
 
   async function loadChannels(botId, { merge = false } = {}) {
@@ -385,8 +390,9 @@ export function QuickStartPage() {
   // Копирование инвайт-ссылки в буфер обмена
   function handleCopyInvite() {
     if (!inviteLink) return;
-    navigator.clipboard.writeText(inviteLink);
-    toast.success('Ссылка скопирована в буфер обмена');
+    navigator.clipboard.writeText(inviteLink)
+      .then(() => toast.success('Ссылка скопирована в буфер обмена'))
+      .catch(() => toast.error('Не удалось скопировать ссылку.'));
   }
 
   // Изменение кнопок
@@ -578,7 +584,9 @@ export function QuickStartPage() {
   const hasChannels = channels.length > 0;
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
-  const statusWord = botPaused ? 'На паузе' : 'Активен';
+  const botRunning = botMetrics?.bot?.isRunning;
+  const statusWord = botPaused ? 'На паузе' : (botRunning === false ? 'Запускается…' : 'Активен');
+  const hasFailure = Boolean(botMetrics?.lastFailure);
   const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0) + (c.autoAccept ? (c.suggestionPostingTimes?.length || 0) : 0), 0);
   const statsPosted = botStats ? botStats.posted : null;
   const nextScheduledAt = botStats?.nextScheduledAt ? new Date(botStats.nextScheduledAt) : null;
@@ -600,9 +608,18 @@ export function QuickStartPage() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
-                  {selectedBotId !== 'new'
-                    ? `${statusWord} · каналов: ${channels.length} · публикаций в день: ${totalDailyPosts}` + (statsPosted !== null ? ` · опубликовано: ${statsPosted}` : '') + (nextScheduledLabel ? ` · следующая: ${nextScheduledLabel}` : '')
-                    : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
+                  {selectedBotId !== 'new' ? (
+                    <>
+                      {botPaused || hasFailure ? (
+                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold align-middle">
+                          {hasFailure ? 'Есть сбой' : 'На паузе'}
+                        </span>
+                      ) : null}
+                      {statusWord} · каналов: {channels.length} · публикаций в день: {totalDailyPosts}
+                      {statsPosted !== null ? ` · опубликовано: ${statsPosted}` : ''}
+                      {nextScheduledLabel ? ` · следующая: ${nextScheduledLabel}` : ''}
+                    </>
+                  ) : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
                 </p>
               </div>
             </div>
