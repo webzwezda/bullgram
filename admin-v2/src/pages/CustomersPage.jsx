@@ -1320,7 +1320,7 @@ export function CustomersPage() {
     bases: state.bases.map((row) => ({
       id: row.id,
       title: row.name,
-      status: `${row.stats?.total || 0} участников`,
+      status: `${row.stats?.total || 0} ${plural(row.stats?.total || 0, 'участник', 'участника', 'участников')}`,
       reason: row.description || 'База клиентов',
       href: '/app/customers?tab=bases'
     }))
@@ -1578,7 +1578,7 @@ export function CustomersPage() {
     const memberCount = getSourceMemberCount(source);
     const isLargeSource = isLargeReconciliationSource(source);
     const confirmationText = isLargeSource
-      ? `Источник «${sourceLabel}» выглядит большим${memberCount ? `: около ${memberCount} участников` : ''}.\n\nТакой синк лучше запускать только когда он реально нужен. Продолжить ручной синк именно сейчас?`
+      ? `Источник «${sourceLabel}» выглядит большим${memberCount ? `: около ${memberCount} ${plural(memberCount, 'участника', 'участников', 'участников')}` : ''}.\n\nТакой синк лучше запускать только когда он реально нужен. Продолжить ручной синк именно сейчас?`
       : `Синкнуть участников только из «${sourceLabel}» в связанные базы?`;
     const confirmed = window.confirm(confirmationText);
     if (!confirmed) return;
@@ -1678,7 +1678,7 @@ export function CustomersPage() {
         method: 'POST',
         body: { contourId: cid, targetType }
       });
-      toast.success(`Загружено ${result.synced_count} участников, из них ${result.active_count} активных`);
+      toast.success(`Загружено ${result.synced_count} ${plural(result.synced_count, 'участника', 'участников', 'участников')}, из них ${result.active_count} ${plural(result.active_count, 'активный', 'активных', 'активных')}`);
       await loadAudience();
     } catch (err) {
       toast.error(err.message || 'Ошибка обновления');
@@ -2223,21 +2223,24 @@ export function CustomersPage() {
         ) : (
         <>
           {isBotTab && (
-            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto mx-8 mt-4">
-              {BOT_SUBTABS.map((sub) => (
-                <button
-                  key={sub.id}
-                  type="button"
-                  className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
-                    activeBotSubtab === sub.id
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                  onClick={() => setBotSubtab(sub.id)}
-                >
-                  {sub.label}
-                </button>
-              ))}
+            <div className="relative mx-8 mt-4">
+              <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+                {BOT_SUBTABS.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                      activeBotSubtab === sub.id
+                        ? 'bg-white text-indigo-600 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                    onClick={() => setBotSubtab(sub.id)}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-2xl bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent" />
             </div>
           )}
         <div className="overflow-hidden flex flex-col">
@@ -2245,7 +2248,9 @@ export function CustomersPage() {
           {/* Table Header Area */}
           <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30">
             <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              {TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты'}
+              {isBotTab
+                ? (BOT_SUBTABS.find((sub) => sub.id === activeBotSubtab)?.label || 'Клиенты')
+                : (TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты')}
             </h3>
             <div className="flex items-center gap-3">
               {['customers-active', 'customers-expired', 'expired-in-group'].includes(effectiveTab) && activeRows.length > 0 ? (
@@ -2370,7 +2375,7 @@ export function CustomersPage() {
                                     {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
                                   </span>
                                   {row.attempts_count > 1 && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-wide shrink-0">
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wide shrink-0">
                                       {row.attempts_count} {row.attempts_count >= 2 && row.attempts_count <= 4 ? 'попытки' : 'попыток'}
                                     </span>
                                   )}
@@ -2474,7 +2479,7 @@ export function CustomersPage() {
                               ) : null}
                               {row.tg_user_id && (
                                 <>
-                                  <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать">
+                                  <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                                     <Send className="w-3.5 h-3.5" />
                                   </button>
                                 </>
