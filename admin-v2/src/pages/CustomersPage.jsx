@@ -45,7 +45,7 @@ const VIEWED_EVENT_LABELS = {
   bot_started: 'Нажал /start'
 };
 
-function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActionsRowId, setOpenActionsRowId }) {
+function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActionsRowId, setOpenActionsRowId, mutatingRowId }) {
   const navigate = useNavigate();
   if (!target) {
     return (
@@ -229,8 +229,9 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActi
                           <div className="relative" data-row-actions-root="true">
                             <button
                               type="button"
-                              className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm"
+                              className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                               onClick={() => setOpenActionsRowId((prev) => (prev === rowId ? null : rowId))}
+                              disabled={!!mutatingRowId}
                               title="Действия"
                             >
                               <MoreHorizontal className="w-3.5 h-3.5" />
@@ -241,7 +242,9 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActi
                                 <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
                                 <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
                                 <div className="border-t border-slate-100" />
-                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
+                                {actionRow._crmSubscription && (
+                                  <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -368,7 +371,7 @@ function normalizeCustomersTab(searchParams) {
   if (tab === 'customers' && segment === 'active') return 'customers-active';
   if (tab === 'customers' && segment === 'expired') return 'customers-expired';
   if (tab === 'customers') return 'customers-active';
-  if (tab === 'orders') return 'access';
+  if (tab === 'orders') return 'bot';
   if (tab === 'abandoned') return 'invoice-created';
   return tab;
 }
@@ -469,13 +472,15 @@ export function CustomersPage() {
   }, [accessToken, selectedBotId, setSearchParams]);
 
   const analyticsReqIdRef = useRef(0);
+  const audienceReqIdRef = useRef(0);
   const loadBotAnalytics = useCallback(async () => {
     if (!selectedBotId || !accessToken) {
       setBotAnalytics({ loading: false, error: '', data: null });
       return;
     }
     const reqId = ++analyticsReqIdRef.current;
-    if (!botAnalytics.data) setBotAnalytics((prev) => ({ ...prev, loading: true, error: '' }));
+    // Функциональная форма: не читаем стейт из замыкания (он может быть протухшим)
+    setBotAnalytics((prev) => (prev.data ? prev : { ...prev, loading: true, error: '' }));
     try {
       const data = await apiRequest(`/api/analytics?bot_id=${encodeURIComponent(selectedBotId)}&period=${encodeURIComponent(moneyPeriod)}`, { accessToken });
       if (reqId !== analyticsReqIdRef.current) return;
@@ -550,6 +555,7 @@ export function CustomersPage() {
       })),
     'customers-active': state.crm.filter((row) => row.status === 'active').map((row) => ({
       id: row.id,
+      _crmSubscription: true,
       tg_user_id: row.tg_user_id,
       channel_id: row.channel_id,
       tg_username: row.tg_username,
@@ -565,6 +571,7 @@ export function CustomersPage() {
     })),
     'customers-expired': state.crm.filter((row) => row.status === 'expired').map((row) => ({
       id: row.id,
+      _crmSubscription: true,
       tg_user_id: row.tg_user_id,
       channel_id: row.channel_id,
       tg_username: row.tg_username,
@@ -655,11 +662,14 @@ export function CustomersPage() {
   // Audience loading
   const loadAudience = useCallback(async () => {
     if (!accessToken) return;
+    // Защита от гонки: устаревший ответ не перезаписывает свежий (тот же паттерн, что в loadBotAnalytics)
+    const reqId = ++audienceReqIdRef.current;
     try {
       setAudienceState((prev) => ({ ...prev, loading: true, error: '' }));
       const params = new URLSearchParams();
       if (selectedBotId) params.set('contourId', selectedBotId);
       const data = await apiRequest(`/api/audience${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
+      if (reqId !== audienceReqIdRef.current) return;
       setAudienceState((prev) => ({
         ...prev,
         loading: false,
@@ -668,6 +678,7 @@ export function CustomersPage() {
         error: ''
       }));
     } catch (err) {
+      if (reqId !== audienceReqIdRef.current) return;
       setAudienceState((prev) => ({ ...prev, loading: false, error: err.message }));
     }
   }, [accessToken, selectedBotId]);
@@ -684,7 +695,8 @@ export function CustomersPage() {
         method: 'POST',
         body: { contourId: cid, targetType }
       });
-      toast.success(`Загружено ${result.synced_count} ${plural(result.synced_count, 'участника', 'участников', 'участников')}, из них ${result.active_count} ${plural(result.active_count, 'активный', 'активных', 'активных')}`);
+      // Бэкенд /api/audience/sync возвращает только synced_count
+      toast.success(`Загружено ${result.synced_count} ${plural(result.synced_count, 'участника', 'участников', 'участников')}`);
       await loadAudience();
     } catch (err) {
       toast.error(err.message || 'Ошибка обновления');
@@ -744,7 +756,8 @@ export function CustomersPage() {
       if (action === 'extend-5' || action === 'extend-30' || action === 'extend-forever') {
         const days = action === 'extend-5' ? 5 : action === 'extend-30' ? 30 : 'forever';
 
-        const hasCrmSub = row.id && (['customers-active', 'customers-expired'].includes(activeTab) || row._crmSubscription);
+        // CRM-действия только для строк-подписок (id = id подписки); funnel-строки осознанно идут в direct-access
+        const hasCrmSub = !!row.id && !!row._crmSubscription;
 
         if (hasCrmSub) {
           await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
@@ -792,7 +805,7 @@ export function CustomersPage() {
       }
 
       if (action === 'kick') {
-        if (!rowId) {
+        if (!rowId || !row._crmSubscription) {
           window.alert('Эту строку нельзя удалить из группы, потому что подписка еще не создана.');
           setMutatingRowId(null);
           return;
@@ -890,9 +903,11 @@ export function CustomersPage() {
                   {botAnalytics.data ? formatTon(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) : '—'}
                 </div>
                 <div className="text-xs text-slate-400 font-medium mt-1">
-                  {botAnalytics.data && Number(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) > 0
-                    ? (moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время')
-                    : 'Платежей пока нет'}
+                  {botAnalytics.error && !botAnalytics.data
+                    ? <span className="text-red-500">{botAnalytics.error}</span>
+                    : botAnalytics.data && Number(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) > 0
+                      ? (moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время')
+                      : 'Платежей пока нет'}
                 </div>
               </div>
             </>
@@ -968,12 +983,11 @@ export function CustomersPage() {
                 value={selectedBotId}
                 onChange={(event) => {
                   const next = new URLSearchParams(window.location.search);
-                  if (event.target.value) next.set('bot_id', event.target.value);
-                  else next.delete('bot_id');
+                  // Страница per-bot: мёртвый «Все боты» убрали, всегда фиксируем bot_id
+                  next.set('bot_id', event.target.value);
                   setSearchParams(next);
                 }}
               >
-                <option value="">Все боты</option>
                 {state.bots.map((bot) => (
                   <option key={bot.id} value={bot.id}>
                     {bot.label}{bot.status === 'deleted' ? ' • удален' : ''}
@@ -987,15 +1001,24 @@ export function CustomersPage() {
         {/* Data Table Card */}
         <div className="border-t border-slate-200/60">
         {isAudienceTab ? (
-          <AudienceTable
-            target={currentAudienceTarget}
-            syncingType={audienceState.syncingType}
-            onSync={syncAudience}
-            crmMap={crmMap}
-            onAction={runSubscriptionAction}
-            openActionsRowId={openActionsRowId}
-            setOpenActionsRowId={setOpenActionsRowId}
-          />
+          <>
+            {audienceState.error && (
+              <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                {audienceState.error}
+              </div>
+            )}
+            <AudienceTable
+              target={currentAudienceTarget}
+              syncingType={audienceState.syncingType}
+              onSync={syncAudience}
+              crmMap={crmMap}
+              onAction={runSubscriptionAction}
+              openActionsRowId={openActionsRowId}
+              setOpenActionsRowId={setOpenActionsRowId}
+              mutatingRowId={mutatingRowId}
+            />
+          </>
         ) : (
         <>
           {isBotTab && (
@@ -1174,7 +1197,7 @@ export function CustomersPage() {
                                         Выдать навсегда
                                       </button>
                                       <div className="border-t border-slate-100" />
-                                      {row.id ? (
+                                      {row.id && row._crmSubscription ? (
                                         <button
                                           type="button"
                                           className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"

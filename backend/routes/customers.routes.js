@@ -203,6 +203,15 @@ export default function customersRoutes(supabase) {
             const ownerId = req.user.id;
             const selectedBotId = normalizeUuidLike(req.query.bot_id);
 
+            // Фильтр по боту — в самом запросе, а не после выборки: иначе при
+            // выбранном боте лимит 150 съедается чужими событиями и под-вкладки
+            // показывают урезанные счётчики.
+            let funnelQuery = supabase
+                .from('customer_funnel_events')
+                .select('id, owner_id, bot_id, tg_user_id, tariff_id, event_type, source, referral_code, session_key, payload, created_at')
+                .eq('owner_id', ownerId);
+            if (selectedBotId) funnelQuery = funnelQuery.eq('bot_id', selectedBotId);
+
             const [
                 botsResp,
                 channelsResp,
@@ -230,10 +239,7 @@ export default function customersRoutes(supabase) {
                     .from('channel_audience_members')
                     .select('base_id, tg_user_id, username, display_name, first_name, last_name, last_seen_at, present_now, is_bot, source_channel_ids')
                     .eq('owner_id', ownerId),
-                supabase
-                    .from('customer_funnel_events')
-                    .select('id, owner_id, bot_id, tg_user_id, tariff_id, event_type, source, referral_code, session_key, payload, created_at')
-                    .eq('owner_id', ownerId)
+                funnelQuery
                     .order('created_at', { ascending: false })
                     .limit(150)
             ]);
@@ -246,6 +252,11 @@ export default function customersRoutes(supabase) {
             const allBots = botsResp.data || [];
             const allChannels = channelsResp.data || [];
             const allTariffs = tariffsResp.data || [];
+            // Ошибка funnel-выборки не роняет весь workbench (сегменты event-sourcing
+            // некритичны), но больше не глотается молча.
+            if (funnelResp.error) {
+                console.error('[customers workbench] funnel events query failed:', funnelResp.error);
+            }
             const allFunnelEvents = funnelResp.error ? [] : (funnelResp.data || []);
 
             const orphanBotIds = new Set([
