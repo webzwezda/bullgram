@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Eye, EyeOff, Loader2, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -11,6 +11,7 @@ import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import {
     fetchChannels,
+    patchBot,
     regenerateInvite,
     fetchBotStats,
     fetchAdmins,
@@ -58,6 +59,8 @@ export function QuickStartPage() {
   const [inviteLink, setInviteLink] = useState('');
   const [tokenRevealed, setTokenRevealed] = useState(false);
   const [inviteRevealed, setInviteRevealed] = useState(false);
+  const [revealedMcpToken, setRevealedMcpToken] = useState(false);
+  const [pausing, setPausing] = useState(false);
   
   // Modals & Action loading states
   const [initing, setIniting] = useState(false);
@@ -219,6 +222,11 @@ export function QuickStartPage() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'autopost_bots', filter: `id=eq.${botId}` },
         () => { loadAdmins(botId); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'autopost_items', filter: `bot_id=eq.${botId}` },
+        () => { fetchBotStats(botId, accessToken).then((d) => setBotStats(d)).catch(() => {}); }
       )
       .subscribe();
 
@@ -521,6 +529,48 @@ export function QuickStartPage() {
     });
   };
 
+  async function togglePause() {
+    if (!createdBot?.id) return;
+    setPausing(true);
+    try {
+      await patchBot(createdBot.id, { is_active: !botPaused }, accessToken);
+      await loadBots();
+      toast.success(botPaused ? 'Бот возобновлён.' : 'Бот поставлен на паузу.');
+    } catch (err) {
+      toast.error(err.message || 'Не удалось изменить состояние бота.');
+    } finally {
+      setPausing(false);
+    }
+  }
+
+  async function testToken() {
+    const mcpToken = latestActive;
+    if (!mcpToken) {
+      setTestResult({ ok: false, text: 'Сначала выпусти MCP-токен.' });
+      return;
+    }
+    setTesting(true);
+    setError('');
+    try {
+      const secretData = await apiRequest(`/api/integrations/tokens/${mcpToken.id}/secret`, { accessToken });
+      const secret = secretData.token;
+      if (!secret) throw new Error('Секрет токена недоступен.');
+      const data = await apiRequest('/api/mcp/tokens/test', {
+        accessToken,
+        method: 'POST',
+        body: { token: secret }
+      });
+      setTestResult({
+        ok: true,
+        text: `MCP жив: ${data.proxy_total} proxy, ${data.userbot_total} userbot, tier ${data.product_tier}.`
+      });
+    } catch (nextError) {
+      setTestResult({ ok: false, text: nextError.message || 'Проверка не прошла.' });
+    } finally {
+      setTesting(false);
+    }
+  }
+
   if (loading) return <LoadingState text="Загружаем автопостер..." />;
 
   // Определяем шаги онбординга
@@ -529,7 +579,7 @@ export function QuickStartPage() {
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
   const statusWord = botPaused ? 'На паузе' : 'Активен';
-  const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0), 0);
+  const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0) + (c.autoAccept ? (c.suggestionPostingTimes?.length || 0) : 0), 0);
   const statsPosted = botStats ? botStats.posted : null;
   const nextScheduledAt = botStats?.nextScheduledAt ? new Date(botStats.nextScheduledAt) : null;
   const nextScheduledLabel = nextScheduledAt
@@ -556,6 +606,20 @@ export function QuickStartPage() {
                 </p>
               </div>
             </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            {selectedBotId !== 'new' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-xl font-semibold"
+                type="button"
+                onClick={togglePause}
+                disabled={pausing}
+              >
+                {botPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                {botPaused ? 'Возобновить' : 'Пауза'}
+              </Button>
+            ) : null}
             <Select value={selectedBotId} onValueChange={setSelectedBotId}>
               <SelectTrigger className="h-10 w-[200px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
                 <SelectValue />
@@ -569,6 +633,7 @@ export function QuickStartPage() {
                 ))}
               </SelectContent>
             </Select>
+            </div>
           </div>
         </div>
         <div className="p-5 sm:p-6 space-y-4">
