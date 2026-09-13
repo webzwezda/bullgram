@@ -231,7 +231,10 @@ export function QuickStartPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'autopost_items', filter: `bot_id=eq.${botId}` },
-        () => { fetchBotStats(botId, accessToken).then((d) => setBotStats(d)).catch(() => {}); }
+        () => {
+          fetchBotStats(botId, accessToken).then((d) => setBotStats(d)).catch(() => {});
+          fetchBotMetrics(botId, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
+        }
       )
       .subscribe();
 
@@ -239,6 +242,15 @@ export function QuickStartPage() {
       supabase.removeChannel(channel);
     };
   }, [createdBot?.id, selectedBotId, accessToken]);
+
+  // Живые метрики: обновляем раз в минуту, пока страница открыта.
+  useEffect(() => {
+    if (!createdBot?.id) return;
+    const interval = setInterval(() => {
+      fetchBotMetrics(createdBot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [createdBot?.id, accessToken]);
 
   // Подключение бота (валидация токена + создание)
   async function handleConnect() {
@@ -541,6 +553,7 @@ export function QuickStartPage() {
     try {
       await patchBot(createdBot.id, { is_active: !botPaused }, accessToken);
       await loadBots();
+      fetchBotMetrics(bot.id, accessToken).then((d) => setBotMetrics(d)).catch(() => {});
       toast.success(botPaused ? 'Бот возобновлён.' : 'Бот поставлен на паузу.');
     } catch (err) {
       toast.error(err.message || 'Не удалось изменить состояние бота.');
@@ -586,7 +599,12 @@ export function QuickStartPage() {
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
   const botRunning = botMetrics?.bot?.isRunning;
   const statusWord = botPaused ? 'На паузе' : (botRunning === false ? 'Запускается…' : 'Активен');
-  const hasFailure = Boolean(botMetrics?.lastFailure);
+  const lastFailure = botMetrics?.lastFailure || null;
+  const lastFailureDate = lastFailure ? new Date(lastFailure.updated_at) : null;
+  const lastFailureLabel = lastFailureDate
+    ? lastFailureDate.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : null;
+  const hasFailure = Boolean(botMetrics?.healthy === false) && Boolean(lastFailure);
   const totalDailyPosts = Object.values(channelConfigs).reduce((sum, c) => sum + (c.postingTimes?.length || 0) + (c.autoAccept ? (c.suggestionPostingTimes?.length || 0) : 0), 0);
   const statsPosted = botStats ? botStats.posted : null;
   const nextScheduledAt = botStats?.nextScheduledAt ? new Date(botStats.nextScheduledAt) : null;
@@ -610,12 +628,17 @@ export function QuickStartPage() {
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
                   {selectedBotId !== 'new' ? (
                     <>
-                      {botPaused || hasFailure ? (
+                      {botPaused ? (
                         <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold align-middle">
-                          {hasFailure ? 'Есть сбой' : 'На паузе'}
+                          На паузе
                         </span>
                       ) : null}
-                      {statusWord} · каналов: {channels.length} · публикаций в день: {totalDailyPosts}
+                      {hasFailure && lastFailureLabel ? (
+                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold align-middle">
+                          Сбой · {lastFailureLabel}
+                        </span>
+                      ) : null}
+                      {botPaused ? '' : statusWord + ' · '}каналов: {channels.length} · публикаций в день: {totalDailyPosts}
                       {statsPosted !== null ? ` · опубликовано: ${statsPosted}` : ''}
                       {nextScheduledLabel ? ` · следующая: ${nextScheduledLabel}` : ''}
                     </>
