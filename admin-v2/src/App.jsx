@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
+import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { OpsRail } from './ui/OpsRail.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
@@ -199,6 +200,7 @@ export function App() {
       <div className="workspace-shell">
         <main className="main">
           <AuthGate>
+            <ErrorBoundary>
             <Suspense fallback={<LoadingState text="Грузим экран admin-v2..." />}>
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
@@ -242,6 +244,7 @@ export function App() {
                 <Route path="/profile" element={<ProfilePage />} />
               </Routes>
             </Suspense>
+            </ErrorBoundary>
           </AuthGate>
         </main>
 

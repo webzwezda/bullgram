@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Hash, Loader2, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, Layout, RefreshCw, Unlink, Code, FileText, Key, Eye, EyeOff, Bot } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Loader2, RefreshCcw, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Check, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -11,6 +11,7 @@ import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import {
     fetchChannels,
+    regenerateInvite,
     fetchAdmins,
     initBot,
     patchChannel,
@@ -20,6 +21,20 @@ import {
     removeAdmin,
     deleteBot
 } from './autopost/api.js';
+
+function maskBotToken(value) {
+  const t = String(value || '');
+  const idx = t.indexOf(':');
+  if (idx === -1) return '••••••••';
+  return `${t.slice(0, idx)}:${'•'.repeat(8)}${t.slice(-4)}`;
+}
+
+function maskInvite(value) {
+  const t = String(value || '');
+  const idx = t.indexOf('?start=');
+  if (idx === -1) return t;
+  return `${t.slice(0, idx + 7)}${'•'.repeat(8)}`;
+}
 
 function postingTimesFor(n) {
   return n === 1 ? ['10:00'] : n === 2 ? ['10:00', '18:00'] : ['08:00', '14:00', '20:00'];
@@ -523,7 +538,7 @@ export function QuickStartPage() {
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 <p className="text-sm font-medium text-slate-500 mt-0.5">
                   {selectedBotId !== 'new'
-                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${postingTimes.length}`
+                    ? `Активен · каналов: ${channels.length} · публикаций в день: ${postingTimesFor(channels.length).length}`
                     : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
                 </p>
               </div>
@@ -561,6 +576,7 @@ export function QuickStartPage() {
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
                     onClick={() => setTokenRevealed((v) => !v)}
+                    aria-label={tokenRevealed ? 'Скрыть токен' : 'Показать токен'}
                     title={tokenRevealed ? 'Скрыть токен' : 'Показать токен'}
                   >
                     {tokenRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1226,6 +1242,7 @@ export function QuickStartPage() {
                         type="button"
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 transition-colors"
                         onClick={() => setInviteRevealed((v) => !v)}
+                        aria-label={inviteRevealed ? 'Скрыть ссылку' : 'Показать ссылку'}
                         title={inviteRevealed ? 'Скрыть ссылку' : 'Показать ссылку'}
                       >
                         {inviteRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1247,10 +1264,7 @@ export function QuickStartPage() {
                         type="button"
                         onClick={async () => {
                           try {
-                            const data = await apiRequest(`/autopost/bots/${createdBot.id}/admins/regenerate-invite`, {
-                              accessToken,
-                              method: 'POST'
-                            });
+                            const data = await regenerateInvite(createdBot.id, accessToken);
                             if (data.invite_link) setInviteLink(data.invite_link);
                             setInviteRevealed(false);
                             toast.success('Ссылка перевыпущена. Старая больше не работает.');
@@ -1263,9 +1277,6 @@ export function QuickStartPage() {
                       </Button>
                     ) : null}
                   </div>
-                  <span className="text-xs text-slate-500 font-medium block">
-                    Пользователь перейдет по ссылке в бота и автоматически получит доступ к администрированию постов и модерации.
-                  </span>
                 </div>
               )}
 
