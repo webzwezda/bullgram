@@ -716,6 +716,34 @@ export function QuickStartPage() {
         </div>
       </Card>
 
+      {/* Что это за бот — показываем там же, где и API-блок, перед ним */}
+      {selectedBotId === 'new' && (
+        <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-white overflow-hidden rounded-2xl">
+          <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                <Bot className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-slate-900">Что это за бот</h3>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                  Telegram-бот, который ведёт ваши каналы за вас: сам публикует посты по расписанию,
+                  принимает предложения от подписчиков и ставит реакции на новые посты.
+                  Один бот может вести несколько каналов — всё управление здесь, на этом экране.
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                  {['Постинг по расписанию', 'Приём предложений', 'Автореакции и кнопки'].map(chip => (
+                    <span key={chip} className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-semibold">
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Заметка про API — показываем, когда в селекторе выбрано «создать нового» */}
       {selectedBotId === 'new' && (
         <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-white overflow-hidden rounded-2xl">
