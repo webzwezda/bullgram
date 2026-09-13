@@ -206,9 +206,9 @@ export function App() {
                 <Route path="/" element={<CommandCenterPage />} />
                 <Route path="/autopost" element={<QuickStartPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
-                <Route path="/crm" element={<Navigate to="/customers?tab=expired-in-group" replace />} />
-                <Route path="/orders" element={<Navigate to="/customers?tab=paid-orders" replace />} />
-                <Route path="/access" element={<Navigate to="/customers?tab=access" replace />} />
+                <Route path="/crm" element={<Navigate to="/customers" replace />} />
+                <Route path="/orders" element={<Navigate to="/customers" replace />} />
+                <Route path="/access" element={<Navigate to="/customers" replace />} />
                 <Route path="/bases" element={<BasesPage />} />
                 <Route path="/dossier" element={<Navigate to="/customers" replace />} />
                 <Route path="/userbots" element={<UserbotAccountsPage />} />

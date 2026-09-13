@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter, X, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, ShieldCheck, Users, Megaphone, MessageCircle } from 'lucide-react';
+import { Search, Filter, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, Users, Megaphone, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
-import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { StatCard } from '../ui/StatCard.jsx';
 import { toast } from 'sonner';
 
 function formatTon(amount) {
@@ -39,14 +37,6 @@ const BOT_SUBTABS = [
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
-const ABANDONED_STATUS_LABELS = {
-  awaiting_receipt: 'Ждет чек',
-  reminded: 'Уже дожат',
-  fresh: 'Счет без оплаты',
-  queued: 'Счет без оплаты',
-  stale: 'Счет без оплаты'
-};
-
 const VIEWED_EVENT_LABELS = {
   tariff_list_opened: 'Открыл тарифы',
   tariff_card_opened: 'Открыл тариф',
@@ -55,55 +45,7 @@ const VIEWED_EVENT_LABELS = {
   bot_started: 'Нажал /start'
 };
 
-const RECONCILIATION_ROLE_LABELS = {
-  public_funnel_group: 'Публичная группа',
-  public_chat: 'Публичный чат',
-  private_paid_group: 'Закрытая платная группа',
-  ignored: 'Не использовать'
-};
-
-const CUSTOMERS_TAB_LABELS = {
-  started: 'Нажал старт',
-  viewed: 'Смотрели тарифы',
-  abandoned: 'Не смогли оплатить',
-  'customers-active': 'Активный доступ',
-  'customers-expired': 'Доступ закончился',
-  'removed-admin': 'Удален админом',
-  access: 'Не смог войти'
-};
-
-const CANDIDATE_ROLE_FILTERS = [
-  { id: 'all', label: 'Все источники' },
-  { id: 'public_funnel_group', label: 'В публичной группе' },
-  { id: 'public_chat', label: 'В публичном чате' },
-  { id: 'private_paid_group', label: 'Уже в закрытой группе' }
-];
-
-const CANDIDATE_MATCH_FILTERS = [
-  { id: 'all', label: 'Все совпадения' },
-  { id: 'unmatched', label: 'Не сопоставлены' },
-  { id: 'matched', label: 'Похожи на учтенных' }
-];
-
-const CANDIDATE_PAYMENT_FILTERS = [
-  { id: 'all', label: 'Все статусы' },
-  { id: 'free_rider', label: 'Сидят внутри без оплаты' },
-  { id: 'expired_paid_inside', label: 'Платили раньше, но теперь внутри без доступа' },
-  { id: 'unpaid_lead', label: 'Счет без оплаты' },
-  { id: 'no_payment_history', label: 'Просто не оформлены' }
-];
-
-const LARGE_SOURCE_MEMBER_COUNT = 1000;
-
-const AUDIENCE_TAB_MAP = {
-  'audience-public-channel': 'public_channel',
-  'audience-paid-channel': 'paid_channel',
-  'audience-public-chat': 'public_chat',
-  'audience-paid-chat': 'paid_chat'
-};
-
-
-function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction, openActionsRowId, setOpenActionsRowId }) {
+function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActionsRowId, setOpenActionsRowId }) {
   const navigate = useNavigate();
   if (!target) {
     return (
@@ -348,59 +290,6 @@ function AudienceTable({ target, syncingType, onSync, loading, crmMap, onAction,
   );
 }
 
-function getReconciliationUserbotOptionLabel(userbot) {
-  const baseLabel = userbot.tg_username ? `@${userbot.tg_username}` : `Аккаунт ${userbot.tg_account_id || userbot.id}`;
-  if (userbot.availability_status === 'pending_activation') return `${baseLabel} • safe mode`;
-  if (userbot.availability_status === 'reserved_in_shop') return `${baseLabel} • занят в shop`;
-  if (userbot.availability_status === 'proxy_dead') return `${baseLabel} • мертвый прокси`;
-  return `${baseLabel} • боевой`;
-}
-
-function getReconciliationUserbotStatusMeta(userbot) {
-  if (userbot?.availability_status === 'pending_activation') {
-    return {
-      title: 'Этот аккаунт сейчас в safe mode',
-      body: userbot.availability_reason || 'Сначала выведите аккаунт из safe mode и только потом используйте его для контура.',
-      toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
-    };
-  }
-
-  if (userbot?.availability_status === 'reserved_in_shop') {
-    return {
-      title: 'Этот аккаунт сейчас занят в shop',
-      body: userbot.availability_reason || 'Выберите другой аккаунт или освободите этот из shop.',
-      toneClass: 'bg-amber-50 border-amber-100 text-amber-700'
-    };
-  }
-
-  if (userbot?.availability_status === 'proxy_dead') {
-    return {
-      title: 'У этого аккаунта мертвый прокси',
-      body: userbot.availability_reason || 'Почините прокси или выберите другой аккаунт.',
-      toneClass: 'bg-rose-50 border-rose-100 text-rose-700'
-    };
-  }
-
-  return {
-    title: 'Аккаунт боевой',
-    body: 'Можно использовать для ручной проверки и синка в контуре.',
-    toneClass: 'bg-emerald-50 border-emerald-100 text-emerald-700'
-  };
-}
-
-function formatWhen(value) {
-  if (!value) return '-';
-  return new Intl.DateTimeFormat('ru-RU', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  }).format(new Date(value));
-}
-
-function getInvoiceStatus(inv) {
-  if (inv.status === 'awaiting_receipt') return 'Ждет чек';
-  return 'Счет без оплаты';
-}
-
 function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = '', navigate = null) {
   if (!tgUserId) return;
   window.localStorage.setItem(USERBOT_CENTER_HANDOFF_KEY, JSON.stringify({
@@ -415,32 +304,6 @@ function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = ''
   } else {
     window.location.href = `/app${url}`;
   }
-}
-
-function openBroadcastManualSelection(rows = [], title = 'Клиенты: ручной хвост') {
-  const tgUserIds = Array.from(new Set(rows.map((row) => String(row.tg_user_id || '')).filter(Boolean)));
-  if (!tgUserIds.length) {
-    window.alert('В текущем хвосте нет TG ID.');
-    return;
-  }
-
-  window.localStorage.setItem('broadcast_manual_selection', JSON.stringify({
-    tg_user_ids: tgUserIds,
-    members: rows.map((row) => ({
-      tg_user_id: String(row.tg_user_id || ''),
-      label: sanitizeDemoLabel(row.label || row.title || row.channel_title || `TG ${row.tg_user_id}`)
-    })),
-    suggested_title: title,
-    suggested_message: 'Привет. Пишу по доступу в Bullgram. Если вопрос еще актуален, ответь одним сообщением.'
-  }));
-
-  window.location.href = '/app/broadcast';
-}
-
-function sanitizeDemoLabel(value) {
-  return String(value || '')
-    .replace(/^\[DEMO [^\]]+\]\s*/i, '')
-    .trim();
 }
 
 function rowMatches(row, search) {
@@ -463,84 +326,12 @@ function rowMatches(row, search) {
 
 function getClientDisplayName(row) {
   const fullName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
-  if (fullName) return sanitizeDemoLabel(fullName);
+  if (fullName) return fullName;
   return null;
-}
-
-function getClientInitial(row) {
-  const displayName = getClientDisplayName(row);
-  if (displayName) return displayName.charAt(0).toUpperCase();
-  if (row.tg_username) return row.tg_username.charAt(0).toUpperCase();
-  return '?';
 }
 
 function getViewedEventLabel(eventType) {
   return VIEWED_EVENT_LABELS[eventType] || eventType || 'Событие';
-}
-
-function getStartedReason() {
-  return 'Первое касание с ботом';
-}
-
-function getAbandonedReason(row) {
-  if (row.status === 'awaiting_receipt') return 'Клиент нажал «я оплатил», но чек еще не загрузил';
-  return 'Счет создан, оплаты пока нет';
-}
-
-function formatAttemptAmount(amount, currency) {
-  const value = Number(amount);
-  if (currency === 'TON') return `${value.toFixed(2)} TON`;
-  if (currency === 'USDT') return `${value.toFixed(2)} USDT`;
-  if (currency === 'RUB') return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(value)} ₽`;
-  return `${value} ${currency || ''}`.trim();
-}
-
-function formatAttemptTime(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  return `${day}.${month} ${hours}:${minutes}`;
-}
-
-function formatAttemptsReason(invoices) {
-  if (!invoices || !invoices.length) return '—';
-  if (invoices.length === 1) {
-    const inv = invoices[0];
-    const amtStr = formatAttemptAmount(inv.amount, inv.currency);
-    const timeStr = formatAttemptTime(inv.created_at);
-    const tariffStr = inv.tariffs?.title || inv.tariff_title || 'тариф';
-    
-    if (inv.status === 'awaiting_receipt') {
-      return `Нажал «я оплатил» для "${tariffStr}" на ${amtStr} (${timeStr}), но чек не загрузил.`;
-    }
-    return `Создал счет на "${tariffStr}" на ${amtStr} (${timeStr}), оплаты нет.`;
-  }
-
-  const latest = invoices[0];
-  const latestAmtStr = formatAttemptAmount(latest.amount, latest.currency);
-  const latestTimeStr = formatAttemptTime(latest.created_at);
-  const latestTariffStr = latest.tariffs?.title || latest.tariff_title || 'тариф';
-
-  const parts = [];
-  parts.push(`Всего попыток: ${invoices.length}.`);
-  parts.push(`Последняя: "${latestTariffStr}" на ${latestAmtStr} в ${latestTimeStr} (${latest.status === 'awaiting_receipt' ? 'нажал оплачено, без чека' : 'оплаты нет'}).`);
-
-  const prevAttempts = invoices.slice(1, 4).map((inv) => {
-    const amt = formatAttemptAmount(inv.amount, inv.currency);
-    const time = formatAttemptTime(inv.created_at);
-    const tariff = inv.tariffs?.title || inv.tariff_title || 'тариф';
-    return `"${tariff}" на ${amt} в ${time}`;
-  });
-
-  if (prevAttempts.length > 0) {
-    const ellipsis = invoices.length > 4 ? '...' : '';
-    parts.push(`Ранее: ${prevAttempts.join(', ')}${ellipsis}.`);
-  }
-
-  return parts.join(' ');
 }
 
 function getCustomerReason(row) {
@@ -555,254 +346,19 @@ function getCustomerReason(row) {
   return 'Доступ закончился';
 }
 
-function getAccessReason(row) {
-  if (row.status === 'expired') {
-    return row.access_source_label
-      ? `Доступ закончился, но человек все еще внутри • ${row.access_source_label}`
-      : 'Доступ закончился, но человек все еще внутри';
-  }
-  return row.access_source_label
-    ? `После выдачи доступа вход не подтвердился • ${row.access_source_label}`
-    : 'После выдачи доступа вход не подтвердился';
-}
-
-function getRemovedAdminReason(row) {
-  return row.reason || 'Админ вручную удалил человека из группы';
-}
-
 function appendAccessSource(reason, sourceLabel) {
   if (!sourceLabel) return reason;
   return `${reason} • ${sourceLabel}`;
 }
 
-function getContextDisplay(row, activeTab) {
-  const tariffTitle = sanitizeDemoLabel(row.title || '');
-  const channelTitle = sanitizeDemoLabel(row.channel_title || '');
-
-  if (activeTab === 'viewed' || activeTab === 'abandoned') {
-    return {
-      primary: tariffTitle ? `Тариф: ${tariffTitle}` : channelTitle ? `Канал: ${channelTitle}` : '—',
-      secondary: channelTitle ? `Канал: ${channelTitle}` : null
-    };
-  }
-
-  if (activeTab === 'customers-active' || activeTab === 'customers-expired' || activeTab === 'removed-admin' || activeTab === 'access') {
-    return {
-      primary: channelTitle ? `Канал: ${channelTitle}` : tariffTitle ? `Тариф: ${tariffTitle}` : '—',
-      secondary: null
-    };
-  }
-
-  if (activeTab === 'started') {
-    return {
-      primary: 'Первый вход в бота',
-      secondary: null
-    };
-  }
+function getContextDisplay(row) {
+  const tariffTitle = row.title || '';
+  const channelTitle = row.channel_title || '';
 
   return {
     primary: tariffTitle || channelTitle || '—',
     secondary: tariffTitle && channelTitle && tariffTitle !== channelTitle ? channelTitle : null
   };
-}
-
-function getCandidateStatusLabel(paymentStatus) {
-  if (paymentStatus === 'free_rider') return 'Сидит зайцем';
-  if (paymentStatus === 'expired_paid_inside') return 'Оплата сгорела, но человек внутри';
-  if (paymentStatus === 'unpaid_lead') return 'Счет без оплаты';
-  if (paymentStatus === 'expired_paid') return 'Раньше платил';
-  return 'Не оформлен';
-}
-
-function getCandidateReason(row) {
-  if (row.payment_status === 'free_rider') return 'Есть в платной группе, но активной оплаты нет';
-  if (row.payment_status === 'expired_paid_inside') return 'Раньше платил, срок сгорел, но человек все еще внутри';
-  if (row.payment_status === 'unpaid_lead') return 'Счет уже создавался, но до оплаты не дошло';
-  if (row.payment_status === 'expired_paid') return 'Оплата в истории была, но сейчас активного доступа нет';
-  return 'Человек найден в контуре, но в учтенную клиентскую базу еще не попал';
-}
-
-function getCandidateMatchingClass(state) {
-  if (state === 'removed_admin') return 'bg-rose-50 text-rose-700 border-rose-200';
-  if (state === 'paid_history') return 'bg-violet-50 text-violet-700 border-violet-200';
-  if (state === 'invoice_pending') return 'bg-amber-50 text-amber-700 border-amber-200';
-  if (state === 'started' || state === 'funnel_known') return 'bg-blue-50 text-blue-700 border-blue-200';
-  return 'bg-slate-100 text-slate-600 border-slate-200';
-}
-
-function getCustomersTabLabel(tabId) {
-  return CUSTOMERS_TAB_LABELS[tabId] || 'Учтенный сегмент';
-}
-
-function getMatchingOptionDisplay(option) {
-  const target = option?.target_label ? ` • ${sanitizeDemoLabel(option.target_label)}` : '';
-  return `${getCustomersTabLabel(option?.tab)}${target}`;
-}
-
-function getCandidateNextStep(row) {
-  if (row.matching_is_ambiguous) {
-    return {
-      label: 'Проверить вручную',
-      className: 'bg-amber-50 text-amber-700 border-amber-200'
-    };
-  }
-
-  if (row.matching_tab) {
-    return {
-      label: 'Связать с учтенным',
-      className: 'bg-blue-50 text-blue-700 border-blue-200'
-    };
-  }
-
-  if (row.source_role === 'private_paid_group' && row.present_now) {
-    return {
-      label: 'Перенести в учтенные',
-      className: 'bg-emerald-50 text-emerald-700 border-emerald-200'
-    };
-  }
-
-  if (row.payment_status === 'unpaid_lead') {
-    return {
-      label: 'Написать',
-      className: 'bg-amber-50 text-amber-700 border-amber-200'
-    };
-  }
-
-  if (row.payment_status === 'no_payment_history' && row.source_role !== 'private_paid_group') {
-    return {
-      label: 'Проверить вручную',
-      className: 'bg-slate-100 text-slate-600 border-slate-200'
-    };
-  }
-
-  return {
-    label: 'Решить вручную',
-    className: 'bg-slate-100 text-slate-600 border-slate-200'
-  };
-}
-
-function pickCandidateMatchingOption(row, { title = 'Выбери совпадение' } = {}) {
-  const options = Array.isArray(row?.matching_options) && row.matching_options.length
-    ? row.matching_options
-    : (row?.matching_tab ? [{
-        state: row.matching_state,
-        label: row.matching_label,
-        tab: row.matching_tab,
-        target_label: row.matching_target_label || '',
-        target_id: row.matching_target_id || ''
-      }] : []);
-
-  if (!options.length) return null;
-  if (options.length === 1) return options[0];
-
-  const list = options.map((option, index) => `${index + 1}. ${getMatchingOptionDisplay(option)}${option.label ? ` — ${option.label}` : ''}`).join('\n');
-  const raw = window.prompt(`${title}\n\n${list}\n\nВведи номер варианта.`, '1');
-  if (raw === null) return null;
-
-  const index = Number(raw);
-  if (!Number.isInteger(index) || index < 1 || index > options.length) {
-    window.alert('Нужно ввести номер одного из вариантов.');
-    return null;
-  }
-
-  return options[index - 1];
-}
-
-function parseReconciliationResolutionNote(note) {
-  const tokens = String(note || '')
-    .split('|')
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const meta = {
-    linkedTab: null,
-    linkedTargetId: null,
-    linkedTargetLabel: null,
-    comment: ''
-  };
-
-  const commentParts = [];
-  for (const token of tokens) {
-    if (token.startsWith('linked_tab:')) meta.linkedTab = token.slice('linked_tab:'.length).trim();
-    else if (token.startsWith('linked_target_id:')) meta.linkedTargetId = token.slice('linked_target_id:'.length).trim();
-    else if (token.startsWith('linked_target_label:')) meta.linkedTargetLabel = token.slice('linked_target_label:'.length).trim();
-    else commentParts.push(token);
-  }
-
-  meta.comment = commentParts.join(' • ');
-  return meta;
-}
-
-function getResolutionTypeLabel(type) {
-  if (type === 'linked_accounted') return 'Связан с учтенным';
-  if (type === 'ignore_candidate') return 'Не трогать';
-  return type || 'Решение';
-}
-
-function getSourceMemberCount(source) {
-  const numeric = Number(source?.member_count_snapshot);
-  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
-}
-
-function isLargeReconciliationSource(source) {
-  const memberCount = getSourceMemberCount(source);
-  return memberCount !== null && memberCount >= LARGE_SOURCE_MEMBER_COUNT;
-}
-
-function isSourceOnCooldown(source) {
-  if (!source?.cooldown_until) return false;
-  return new Date(source.cooldown_until).getTime() > Date.now();
-}
-
-function buildQueue({ abandoned, orders, access }) {
-  const items = [];
-
-  abandoned.forEach((row) => {
-    items.push({
-      id: `abandoned-${row.id}`,
-      source: 'Бросил счет',
-      priority: row.status === 'awaiting_receipt' ? 90 : 70,
-      tg_user_id: row.tg_user_id,
-      channel_id: row.channel_id,
-      title: row.tariffs?.title || 'Тариф',
-      status: getInvoiceStatus(row),
-      reason: row.status === 'awaiting_receipt' ? 'Ждет чек' : 'Не завершил оплату',
-      href: '/app/customers?tab=abandoned'
-    });
-  });
-
-  orders
-    .filter((row) => row.invoice_status === 'paid' && !row.joined)
-    .forEach((row) => {
-      items.push({
-        id: `order-${row.id || row.invoice_id}`,
-        source: 'Заказ',
-        priority: 100,
-        tg_user_id: row.tg_user_id,
-        channel_id: row.channel_id,
-        title: row.tariff_title,
-        channel_title: row.channel_title,
-        status: 'Вход не подтвержден',
-        reason: 'Оплата есть, Telegram-вход не подтвержден',
-        href: '/app/customers?tab=orders'
-      });
-    });
-
-  access.forEach((row) => {
-    items.push({
-      id: `access-${row.id}`,
-      source: 'Доступ',
-      priority: row.status === 'expired' ? 95 : 85,
-      tg_user_id: row.tg_user_id,
-      channel_id: row.channel_id,
-      channel_title: row.channel_title,
-      status: row.status === 'expired' ? 'Сгорел и висит' : 'Вход не подтвержден',
-      reason: row.last_access_event || row.access_note || 'Нужна проверка доступа',
-      href: '/app/customers?tab=access'
-    });
-  });
-
-  return items.sort((a, b) => b.priority - a.priority).slice(0, 100);
 }
 
 function normalizeCustomersTab(searchParams) {
@@ -817,31 +373,8 @@ function normalizeCustomersTab(searchParams) {
   return tab;
 }
 
-function getReconciliationRoleOptions(rawRoles = []) {
-  return rawRoles.map((role) => ({
-    id: String(role),
-    label: RECONCILIATION_ROLE_LABELS[String(role)] || String(role)
-  }));
-}
-
-function mapReconciliationDiscoveryStatus(row) {
-  if (row.error) return 'error';
-  if (row.admin_rights_status === 'admin') return row.is_configured ? 'success' : 'partial';
-  if (row.admin_rights_status === 'member') return 'partial';
-  return 'never';
-}
-
-function reconciliationStatusMeta(status) {
-  if (status === 'success' || status === 'ok') return { label: 'Готов', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-  if (status === 'partial' || status === 'needs_recheck' || status === 'queued') return { label: 'Нужно перепроверить', className: 'bg-amber-50 text-amber-700 border-amber-200' };
-  if (status === 'running') return { label: 'Сканируется', className: 'bg-blue-50 text-blue-700 border-blue-200' };
-  if (status === 'cooldown') return { label: 'На паузе', className: 'bg-violet-50 text-violet-700 border-violet-200' };
-  if (status === 'failed' || status === 'error') return { label: 'Ошибка', className: 'bg-rose-50 text-rose-700 border-rose-200' };
-  return { label: 'Ждет ручного скана', className: 'bg-slate-100 text-slate-600 border-slate-200' };
-}
-
 export function CustomersPage() {
-  const { accessToken, user, profileRole } = useAuth();
+  const { accessToken } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // Без tab в URL — дефолтимся на «Официальный бот»: иначе '' даёт isBotTab=false
@@ -861,61 +394,16 @@ export function CustomersPage() {
   const [limit, setLimit] = useState(80);
   const [openActionsRowId, setOpenActionsRowId] = useState(null);
   const [mutatingRowId, setMutatingRowId] = useState(null);
-  const [mutatingBulk, setMutatingBulk] = useState(false);
   const [botAnalytics, setBotAnalytics] = useState({ loading: false, error: '', data: null });
   const [moneyPeriod, setMoneyPeriod] = useState('all');
-  const [handoff, setHandoff] = useState({
-    abandonedFilter: '',
-    orderTgUserIds: []
-  });
-  const [reconciliation, setReconciliation] = useState({
-    loading: true,
-    discovering: false,
-    saving: false,
-    scanningSourceId: '',
-    syncingSourceId: '',
-    error: '',
-    scanStatuses: [],
-    selectedUserbotId: '',
-    userbots: [],
-    roles: [],
-    sources: [],
-    discovered: []
-  });
-  const [candidateState, setCandidateState] = useState({
-    loading: profileRole === 'admin',
-    error: '',
-    updatedAt: null,
-    summary: {
-      total: 0,
-      free_rider: 0,
-      unpaid_lead: 0,
-      expired_paid_inside: 0,
-      no_payment_history: 0
-    },
-    rows: [],
-    recentResolutions: []
-  });
-  const [candidateLimit, setCandidateLimit] = useState(120);
-  const [candidateFilters, setCandidateFilters] = useState({
-    sourceRole: 'all',
-    match: 'all',
-    payment: 'all'
-  });
   const [state, setState] = useState({
     loading: true,
-    refreshing: false,
     error: '',
     updatedAt: null,
     bots: [],
     channels: [],
     started: [],
-    abandoned: [],
     crm: [],
-    removedAdmin: [],
-    orders: [],
-    access: [],
-    bases: [],
     viewed: []
   });
   const [audienceState, setAudienceState] = useState({
@@ -926,132 +414,6 @@ export function CustomersPage() {
     error: ''
   });
 
-  const loadCandidates = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
-    if (!accessToken || profileRole !== 'admin') return;
-
-    if (!silent) {
-      setCandidateState((prev) => ({ ...prev, loading: true, error: '' }));
-    }
-
-    try {
-      const params = new URLSearchParams();
-      if (selectedBotId) params.set('bot_id', selectedBotId);
-      const data = await apiRequest(`/api/customers/reconciliation-candidates${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
-      if (shouldCancel()) return;
-
-      setCandidateState({
-        loading: false,
-        error: '',
-        updatedAt: data.updatedAt || new Date().toISOString(),
-        summary: data.summary || {
-          total: 0,
-          free_rider: 0,
-          unpaid_lead: 0,
-          expired_paid_inside: 0,
-          no_payment_history: 0
-        },
-        rows: data.candidates || [],
-        recentResolutions: data.recent_resolutions || []
-      });
-    } catch (error) {
-      if (shouldCancel()) return;
-      setCandidateState((prev) => ({
-        ...prev,
-        loading: false,
-        error: error.message
-      }));
-    }
-  }, [accessToken, profileRole, selectedBotId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadReconciliation() {
-      if (!accessToken || profileRole !== 'admin') return;
-
-      setReconciliation((prev) => ({ ...prev, loading: true, error: '' }));
-      try {
-        const params = new URLSearchParams();
-        if (selectedBotId) params.set('bot_id', selectedBotId);
-        const data = await apiRequest(`/api/customers/reconciliation-sources${params.toString() ? `?${params.toString()}` : ''}`, { accessToken });
-        if (cancelled) return;
-
-        setReconciliation((prev) => ({
-          ...prev,
-          loading: false,
-          error: '',
-          scanStatuses: data.scan_statuses || [],
-          selectedUserbotId: data.contour?.selected_userbot_id || data.userbots?.[0]?.id || '',
-          userbots: data.userbots || [],
-          roles: data.roles || [],
-          sources: data.contour?.sources || [],
-          discovered: prev.discovered.length ? prev.discovered : []
-        }));
-      } catch (error) {
-        if (cancelled) return;
-        setReconciliation((prev) => ({
-          ...prev,
-          loading: false,
-          error: error.message
-        }));
-      }
-    }
-
-    loadReconciliation();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, profileRole, selectedBotId]);
-
-  useEffect(() => {
-    try {
-      const rawOrdersSearch = window.localStorage.getItem('orders_search_preset');
-      const rawOrdersManualSelection = window.localStorage.getItem('orders_manual_selection');
-      const rawAbandonedPreset = window.localStorage.getItem('abandoned_filter_preset');
-      if (!rawOrdersSearch && !rawOrdersManualSelection && !rawAbandonedPreset) return;
-
-      const next = new URLSearchParams(window.location.search);
-
-      if (rawOrdersSearch) {
-        const preset = JSON.parse(rawOrdersSearch);
-        if (preset?.search) {
-          setSearch(String(preset.search));
-          next.set('tab', 'access');
-        }
-        window.localStorage.removeItem('orders_search_preset');
-      }
-
-      if (rawOrdersManualSelection) {
-        const preset = JSON.parse(rawOrdersManualSelection);
-        const ids = Array.isArray(preset?.tg_user_ids)
-          ? preset.tg_user_ids.map((id) => String(id)).filter(Boolean)
-          : [];
-        if (ids.length > 0) {
-          setHandoff((prev) => ({ ...prev, orderTgUserIds: ids }));
-          setSearch('');
-          next.set('tab', 'access');
-        }
-        window.localStorage.removeItem('orders_manual_selection');
-      }
-
-      if (rawAbandonedPreset) {
-        const preset = JSON.parse(rawAbandonedPreset);
-        if (preset?.filter) {
-          setHandoff((prev) => ({ ...prev, abandonedFilter: String(preset.filter) }));
-          next.set('tab', 'abandoned');
-        }
-        window.localStorage.removeItem('abandoned_filter_preset');
-      }
-
-      setSearchParams(next);
-    } catch (error) {
-      console.warn('Не удалось применить customer handoff preset:', error);
-      window.localStorage.removeItem('orders_search_preset');
-      window.localStorage.removeItem('orders_manual_selection');
-      window.localStorage.removeItem('abandoned_filter_preset');
-    }
-  }, [setSearchParams]);
-
   const loadCustomers = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
     if (!accessToken) return;
 
@@ -1059,7 +421,6 @@ export function CustomersPage() {
       setState((prev) => ({
         ...prev,
         loading: !prev.updatedAt,
-        refreshing: !!prev.updatedAt,
         error: ''
       }));
     }
@@ -1083,32 +444,23 @@ export function CustomersPage() {
 
       setState({
         loading: false,
-        refreshing: false,
         error: '',
         updatedAt: data.updatedAt || new Date().toISOString(),
         bots: botOptions,
         channels: data.channels || [],
         started: segments.startedContacts || [],
-        abandoned: segments.abandonedInvoices || [],
         crm: [
           ...(segments.activeCustomers || []),
           ...(segments.expiredCustomers || [])
         ],
-        removedAdmin: segments.removedByAdmin || [],
-        orders: segments.recentOrders || [],
-        access: [
-          ...(segments.needsAccessCheck || []),
-          ...(segments.inGroupLeaks || [])
-        ],
-        bases: segments.bases || [],
-        viewed: segments.viewedTariffs || []
+        viewed: segments.viewedTariffs || [],
+        invoiceCreated: segments.invoiceCreated || []
       });
     } catch (error) {
       if (!shouldCancel()) {
         setState((prev) => ({
           ...prev,
           loading: false,
-          refreshing: false,
           error: error.message
         }));
       }
@@ -1151,17 +503,6 @@ export function CustomersPage() {
     };
   }, [accessToken, loadCustomers, loadBotAnalytics]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    loadCandidates({ shouldCancel: () => cancelled });
-    const intervalId = window.setInterval(() => loadCandidates({ silent: true, shouldCancel: () => cancelled }), 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [loadCandidates]);
-
   const rowsByTab = useMemo(() => ({
     started: state.started.map((row) => ({
       id: row.id,
@@ -1171,43 +512,10 @@ export function CustomersPage() {
       first_name: row.first_name,
       last_name: row.last_name,
       status: row.status || 'Нажал /start',
-      reason: getStartedReason(),
+      reason: 'Первое касание с ботом',
       created_at: row.created_at,
       href: '/app/customers?tab=started'
     })),
-    abandoned: (() => {
-      const grouped = new Map();
-      for (const row of state.abandoned) {
-        const userId = row.tg_user_id ? String(row.tg_user_id) : `inv-${row.id}`;
-        const existing = grouped.get(userId) || [];
-        existing.push(row);
-        grouped.set(userId, existing);
-      }
-
-      return Array.from(grouped.values()).map((invoices) => {
-        invoices.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        const latest = invoices[0];
-        const attempts = invoices.length;
-        const reasonText = formatAttemptsReason(invoices);
-
-        return {
-          id: latest.id,
-          tg_user_id: latest.tg_user_id,
-          tg_username: latest.tg_username,
-          display_name: latest.display_name,
-          first_name: latest.first_name,
-          last_name: latest.last_name,
-          channel_id: latest.channel_id,
-          title: latest.tariffs?.title || latest.tariff_title || 'Тариф',
-          status: getInvoiceStatus(latest),
-          reason: reasonText,
-          abandoned_status: latest.abandoned_status,
-          created_at: latest.created_at,
-          attempts_count: attempts,
-          href: '/app/customers?tab=abandoned'
-        };
-      });
-    })(),
     viewed: state.viewed.map((row) => ({
       id: row.id,
       tg_user_id: row.tg_user_id,
@@ -1223,8 +531,7 @@ export function CustomersPage() {
       created_at: row.created_at,
       href: '/app/customers?tab=viewed'
     })),
-    'invoice-created': state.viewed
-      .filter((row) => row.event_type === 'invoice_created')
+    'invoice-created': state.invoiceCreated
       .map((row) => ({
         id: row.id,
         tg_user_id: row.tg_user_id,
@@ -1269,97 +576,6 @@ export function CustomersPage() {
       reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
       href: '/app/customers?tab=customers-expired'
-    })),
-    'expired-in-group': state.access.filter((row) => row.status === 'expired' && row.in_group === true).map((row) => ({
-      id: row.id,
-      tg_user_id: row.tg_user_id,
-      channel_id: row.channel_id,
-      tg_username: row.tg_username,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      channel_title: row.channel_title,
-      title: row.channel_title,
-      in_group: row.in_group,
-      access_source_label: row.access_source_label,
-      kick_attempts: row.kick_attempts,
-      kick_failed_reason: row.kick_failed_reason,
-      status: 'Сгорел, но сидит',
-      reason: appendAccessSource('Подписка истекла, но человек всё ещё в группе', row.access_source_label),
-      expires_at: row.expires_at,
-      href: '/app/customers?tab=expired-in-group'
-    })),
-    'paid-orders': state.orders
-      .filter((row) => row.invoice_status === 'paid')
-      .map((row) => {
-        const isReferral = Number(row.referral_discount_percent || 0) > 0 || Number(row.referral_reward_ton || 0) > 0;
-        const isTrial = !!row.is_trial;
-        const isBroken = !row.joined && !row.access_invite_status && !row.last_access_event;
-
-        let status = row.joined ? 'Оплачен, вошёл' : (isBroken ? 'Доступ мутный' : 'Ждём вход');
-        if (isTrial) status = `Пробник · ${status}`;
-        else if (isReferral) status = `Рефка · ${status}`;
-
-        const reasonParts = [];
-        if (row.tariff_title) reasonParts.push(row.tariff_title);
-        if (isReferral && Number(row.referral_reward_ton || 0) > 0) {
-          reasonParts.push(`${row.referral_reward_ton} TON · ${row.referral_reward_status || 'ждёт'}`);
-        } else if (isReferral && row.referral_referrer_tg_user_id) {
-          reasonParts.push(`TG ${row.referral_referrer_tg_user_id}`);
-        }
-        if (row.problem_reason) reasonParts.push(row.problem_reason);
-
-        return {
-          id: row.subscription_id || (`inv-${row.id}`),
-          tg_user_id: row.tg_user_id,
-          channel_id: row.channel_id,
-          channel_title: row.channel_title,
-          title: row.tariff_title,
-          status,
-          reason: reasonParts.join(' · ') || 'Оплаченный заказ',
-          expires_at: row.expires_at,
-          href: '/app/customers?tab=paid-orders'
-        };
-      }),
-    'removed-admin': state.removedAdmin.map((row) => ({
-      id: row.id,
-      tg_user_id: row.tg_user_id,
-      channel_id: row.channel_id,
-      tg_username: row.tg_username,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      channel_title: row.channel_title,
-      title: row.channel_title,
-      status: 'Удален админом',
-      reason: getRemovedAdminReason(row),
-      expires_at: row.expires_at,
-      href: '/app/customers?tab=removed-admin'
-    })),
-    access: state.access.map((row) => ({
-      id: row.id,
-      tg_user_id: row.tg_user_id,
-      tg_username: row.tg_username,
-      display_name: row.display_name,
-      first_name: row.first_name,
-      last_name: row.last_name,
-      channel_id: row.channel_id,
-      channel_title: row.channel_title,
-      in_group: row.in_group,
-      access_source_label: row.access_source_label,
-      kick_attempts: row.kick_attempts,
-      kick_failed_reason: row.kick_failed_reason,
-      status: row.status === 'expired' && row.in_group === true ? 'Доступ закончился, но человек внутри' : 'Вход не подтвержден',
-      reason: getAccessReason(row),
-      expires_at: row.expires_at,
-      href: '/app/customers?tab=access'
-    })),
-    bases: state.bases.map((row) => ({
-      id: row.id,
-      title: row.name,
-      status: `${row.stats?.total || 0} ${plural(row.stats?.total || 0, 'участник', 'участника', 'участников')}`,
-      reason: row.description || 'База клиентов',
-      href: '/app/customers?tab=bases'
     }))
   }), [state]);
 
@@ -1377,25 +593,15 @@ export function CustomersPage() {
   const activeRows = useMemo(
     () => (rowsByTab[effectiveTab] || [])
       .filter((row) => !focusChannelId || String(row.channel_id || '') === String(focusChannelId))
-      .filter((row) => effectiveTab !== 'abandoned' || !handoff.abandonedFilter || row.abandoned_status === handoff.abandonedFilter)
-      .filter((row) => effectiveTab !== 'access' || handoff.orderTgUserIds.length === 0 || handoff.orderTgUserIds.includes(String(row.tg_user_id || '')))
       .filter((row) => rowMatches(row, search)),
-    [effectiveTab, focusChannelId, handoff.abandonedFilter, handoff.orderTgUserIds, rowsByTab, search]
+    [effectiveTab, focusChannelId, rowsByTab, search]
   );
 
   const stats = useMemo(() => ({
     started: state.started.length,
-    viewed: state.viewed.length,
-    abandoned: new Set(state.abandoned.map((row) => row.tg_user_id ? String(row.tg_user_id) : `inv-${row.id}`)).size,
     activeCustomers: state.crm.filter((row) => row.status === 'active').length,
-    expiredCustomers: state.crm.filter((row) => row.status === 'expired').length,
-    removedAdmin: state.removedAdmin.length,
-    access: state.access.length
+    expiredCustomers: state.crm.filter((row) => row.status === 'expired').length
   }), [state]);
-  const selectedBot = useMemo(
-    () => state.bots.find((item) => String(item.id) === String(selectedBotId)) || null,
-    [state.bots, selectedBotId]
-  );
   const selectableChannels = useMemo(
     () => (state.channels || []).filter((channel) => !selectedBotId || String(channel.bot_id || '') === String(selectedBotId)),
     [state.channels, selectedBotId]
@@ -1430,252 +636,9 @@ export function CustomersPage() {
     [state.crm]
   );
 
-  const filteredCandidateRows = useMemo(
-    () => candidateState.rows.filter((row) => {
-      if (candidateFilters.sourceRole !== 'all' && row.source_role !== candidateFilters.sourceRole) {
-        return false;
-      }
-
-      if (candidateFilters.match === 'matched' && !row.matching_tab) {
-        return false;
-      }
-
-      if (candidateFilters.match === 'unmatched' && row.matching_tab) {
-        return false;
-      }
-
-      if (candidateFilters.payment !== 'all' && row.payment_status !== candidateFilters.payment) {
-        return false;
-      }
-
-      return rowMatches(row, search);
-    }),
-    [candidateFilters.match, candidateFilters.payment, candidateFilters.sourceRole, candidateState.rows, search]
-  );
-  const visibleCandidateRows = useMemo(
-    () => filteredCandidateRows.slice(0, candidateLimit),
-    [candidateLimit, filteredCandidateRows]
-  );
-  const savedSourceRoleMap = useMemo(
-    () => new Map((reconciliation.sources || []).map((row) => [String(row.chat_id), row.role])),
-    [reconciliation.sources]
-  );
-  const reconciliationRoleOptions = useMemo(
-    () => getReconciliationRoleOptions(reconciliation.roles),
-    [reconciliation.roles]
-  );
-
-  async function discoverReconciliationSources() {
-    if (!reconciliation.selectedUserbotId) {
-      window.alert('Сначала выбери юзербота для контура.');
-      return;
-    }
-
-      setReconciliation((prev) => ({ ...prev, discovering: true, error: '' }));
-    try {
-      const data = await apiRequest('/api/customers/reconciliation-sources/discover', {
-        accessToken,
-        method: 'POST',
-        body: { userbot_id: reconciliation.selectedUserbotId }
-      });
-      const discovered = (data.discovered_sources || []).map((row) => ({
-        ...row,
-        role: savedSourceRoleMap.get(String(row.chat_id)) || row.configured_role || 'ignored'
-      }));
-      setReconciliation((prev) => ({
-        ...prev,
-        discovering: false,
-        selectedUserbotId: data.selected_userbot_id || prev.selectedUserbotId,
-        userbots: data.userbots || prev.userbots,
-        discovered
-      }));
-    } catch (error) {
-      setReconciliation((prev) => ({
-        ...prev,
-        discovering: false,
-        error: error.message
-      }));
-    }
-  }
-
-  function updateDiscoveredRole(chatId, role) {
-    setReconciliation((prev) => ({
-      ...prev,
-      discovered: prev.discovered.map((row) => (
-        String(row.chat_id) === String(chatId)
-          ? { ...row, role }
-          : row
-      ))
-    }));
-  }
-
-  async function saveReconciliationContour() {
-    if (!reconciliation.selectedUserbotId) {
-      window.alert('Сначала выбери юзербота.');
-      return;
-    }
-
-    const activeSources = reconciliation.discovered
-      .filter((row) => row.role && row.role !== 'ignored')
-      .map((row) => {
-        const checkedAt = new Date().toISOString();
-        return {
-        chat_id: String(row.chat_id),
-        chat_type: row.telegram_type || row.chat_type || 'unknown',
-        title_snapshot: row.title || '',
-        username_snapshot: row.username || null,
-        role: row.role,
-        bot_id: row.already_bound_bot_id || row.linked_bot_id || selectedBotId || null,
-        is_active: true,
-        scan_enabled: true,
-        admin_verified: row.admin_rights_status === 'admin',
-        member_count_snapshot: row.member_count ?? null,
-        admin_rights_snapshot: {
-          status: row.admin_rights_status || 'unknown',
-          checked_at: checkedAt,
-          source: 'customers_manual_discovery'
-        },
-        visibility_snapshot: {
-          status: row.visibility_status || 'visible_now',
-          checked_at: checkedAt,
-          source: 'customers_manual_discovery'
-        }
-      };
-      });
-
-    setReconciliation((prev) => ({ ...prev, saving: true, error: '' }));
-    try {
-      const data = await apiRequest('/api/customers/reconciliation-sources', {
-        accessToken,
-        method: 'POST',
-        body: {
-          bot_id: selectedBotId,
-          userbot_id: reconciliation.selectedUserbotId,
-          sources: activeSources
-        }
-      });
-
-      setReconciliation((prev) => ({
-        ...prev,
-        saving: false,
-        selectedUserbotId: data.contour?.selected_userbot_id || prev.selectedUserbotId,
-        scanStatuses: data.scan_statuses || prev.scanStatuses,
-        roles: data.roles || prev.roles,
-        userbots: data.userbots || prev.userbots,
-        sources: data.contour?.sources || [],
-        discovered: prev.discovered.map((row) => {
-          const saved = (data.contour?.sources || []).find((source) => String(source.chat_id) === String(row.chat_id));
-          return saved ? { ...row, role: saved.role || row.role, is_configured: true } : row;
-        })
-      }));
-
-      await loadCandidates({ silent: true });
-
-      window.alert(`Контур сохранен. Источников в работе: ${data.contour?.summary?.active_sources ?? activeSources.length}.`);
-    } catch (error) {
-      setReconciliation((prev) => ({
-        ...prev,
-        saving: false,
-        error: error.message
-      }));
-    }
-  }
-
-  async function scanReconciliationSource(sourceId) {
-    if (!sourceId) return;
-
-    setReconciliation((prev) => ({
-      ...prev,
-      scanningSourceId: String(sourceId),
-      error: ''
-    }));
-    try {
-      const data = await apiRequest(`/api/customers/reconciliation-sources/${sourceId}/scan`, {
-        accessToken,
-        method: 'POST'
-      });
-
-      setReconciliation((prev) => ({
-        ...prev,
-        scanningSourceId: '',
-        scanStatuses: data.scan_statuses || prev.scanStatuses,
-        roles: data.roles || prev.roles,
-        userbots: data.userbots || prev.userbots,
-        selectedUserbotId: data.contour?.selected_userbot_id || prev.selectedUserbotId,
-        sources: data.contour?.sources || prev.sources
-      }));
-    } catch (error) {
-      setReconciliation((prev) => ({
-        ...prev,
-        scanningSourceId: '',
-        error: error.message
-      }));
-    }
-  }
-
-  async function syncReconciliationSourceMembers(source) {
-    if (!source?.id) return;
-
-    const sourceLabel = sanitizeDemoLabel(source.title_snapshot || source.already_bound_channel_title || source.chat_id);
-    const memberCount = getSourceMemberCount(source);
-    const isLargeSource = isLargeReconciliationSource(source);
-    const confirmationText = isLargeSource
-      ? `Источник «${sourceLabel}» выглядит большим${memberCount ? `: около ${memberCount} ${plural(memberCount, 'участника', 'участников', 'участников')}` : ''}.\n\nТакой синк лучше запускать только когда он реально нужен. Продолжить ручной синк именно сейчас?`
-      : `Синкнуть участников только из «${sourceLabel}» в связанные базы?`;
-    const confirmed = window.confirm(confirmationText);
-    if (!confirmed) return;
-
-    setReconciliation((prev) => ({
-      ...prev,
-      syncingSourceId: String(source.id),
-      error: ''
-    }));
-    try {
-      const data = await apiRequest(`/api/customers/reconciliation-sources/${source.id}/sync-members`, {
-        accessToken,
-        method: 'POST',
-        body: {
-          confirm_large_source: isLargeSource
-        }
-      });
-
-      setReconciliation((prev) => ({
-        ...prev,
-        syncingSourceId: '',
-        sources: prev.sources.map((row) => (
-          String(row.id) === String(source.id)
-            ? {
-                ...row,
-                last_scan_status: 'success',
-                last_scan_error: null,
-                last_scan_at: new Date().toISOString(),
-                cooldown_until: data.cooldown_until || row.cooldown_until,
-                next_scan_after: data.cooldown_until || row.next_scan_after
-              }
-            : row
-        ))
-      }));
-
-      await loadCandidates({ silent: true });
-
-      const delaySeconds = data.sync_pre_delay_ms ? Math.round(Number(data.sync_pre_delay_ms) / 1000) : null;
-      window.alert(`Синк завершен. Источник: ${data.scanned_channel_title || sourceLabel}. Участников подняли: ${data.synced_members || 0}.${delaySeconds ? ` Перед Telegram-запросом система ждала около ${delaySeconds} сек.` : ''} Источник поставлен на паузу до следующего ручного запуска.`);
-    } catch (error) {
-      setReconciliation((prev) => ({
-        ...prev,
-        syncingSourceId: '',
-        error: error.message
-      }));
-    }
-  }
-
   useEffect(() => {
     setOpenActionsRowId(null);
   }, [activeTab, search, focusChannelId, selectedBotId]);
-
-  useEffect(() => {
-    setCandidateLimit(120);
-  }, [candidateFilters.match, candidateFilters.payment, candidateFilters.sourceRole, search, selectedBotId]);
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -1765,7 +728,7 @@ export function CustomersPage() {
 
     const rowId = row.id ? String(row.id) : null;
     const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
-    const contextLabel = sanitizeDemoLabel(row.channel_title || row.title || '');
+    const contextLabel = row.channel_title || row.title || '';
 
     setOpenActionsRowId(null);
     setMutatingRowId(rowId);
@@ -1780,7 +743,7 @@ export function CustomersPage() {
       if (action === 'extend-5' || action === 'extend-30' || action === 'extend-forever') {
         const days = action === 'extend-5' ? 5 : action === 'extend-30' ? 30 : 'forever';
 
-        const hasCrmSub = row.id && (['customers-active', 'customers-expired', 'expired-in-group', 'removed-admin', 'access'].includes(activeTab) || row._crmSubscription);
+        const hasCrmSub = row.id && (['customers-active', 'customers-expired'].includes(activeTab) || row._crmSubscription);
 
         if (hasCrmSub) {
           await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
@@ -1859,243 +822,6 @@ export function CustomersPage() {
     } finally {
       setMutatingRowId(null);
     }
-  }
-
-  async function runBulkAction(rows, action) {
-    if (!rows || !rows.length) {
-      window.alert('В этом хвосте нет строк для действия.');
-      return;
-    }
-
-    const subscriptionIds = Array.from(new Set(rows.map((r) => r.id).filter(Boolean)));
-    if (!subscriptionIds.length) {
-      window.alert('В этом хвосте нет подписок для действия.');
-      return;
-    }
-
-    if (action === 'broadcast') {
-      openBroadcastManualSelection(rows, 'Customers: ручной хвост');
-      return;
-    }
-
-    const count = subscriptionIds.length;
-
-    if (action === 'extend-5' || action === 'extend-30') {
-      const days = action === 'extend-5' ? 5 : 30;
-      if (!window.confirm(`Продлить ${count} подписок на ${days} дней?`)) return;
-
-      setMutatingBulk(true);
-      try {
-        await apiRequest('/api/userbot/crm/subscribers/batch-add-days', {
-          accessToken,
-          method: 'POST',
-          body: { subscription_ids: subscriptionIds, days }
-        });
-        window.alert(`Продлили ${count} подписок на ${days} дней. Таблица обновится.`);
-        await loadCustomers();
-      } catch (error) {
-        window.alert(error.message);
-      } finally {
-        setMutatingBulk(false);
-      }
-      return;
-    }
-
-    if (action === 'kick') {
-      if (!window.confirm(`Кикнуть ${count} человек из группы?`)) return;
-
-      setMutatingBulk(true);
-      try {
-        const result = await apiRequest('/api/userbot/crm/subscribers/batch-kick', {
-          accessToken,
-          method: 'POST',
-          body: { subscription_ids: subscriptionIds, action_source: 'customers' }
-        });
-        window.alert(`Кик завершён. Кикнули: ${result.kicked || 0} из ${count}.`);
-        await loadCustomers();
-      } catch (error) {
-        window.alert(error.message);
-      } finally {
-        setMutatingBulk(false);
-      }
-    }
-  }
-
-  async function runCandidateImport(row, duration = 'forever') {
-    if (!canManageRow(row)) return;
-
-    const rowId = row.id ? String(row.id) : null;
-    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
-    const durationLabel = duration === 'forever' ? 'навсегда' : `${duration} дней`;
-
-    setOpenActionsRowId(null);
-    setMutatingRowId(rowId);
-
-    try {
-      const channelId = resolveActionChannelId(row);
-      if (!channelId) {
-        setMutatingRowId(null);
-        return;
-      }
-
-      const confirmed = window.confirm(`Перенести ${clientLabel} в учтенную базу и оформить доступ на ${durationLabel}?`);
-      if (!confirmed) {
-        setMutatingRowId(null);
-        return;
-      }
-
-      await apiRequest('/api/customers/reconciliation-candidates/import', {
-        accessToken,
-        method: 'POST',
-        body: {
-          source_id: row.source_id,
-          tg_user_id: String(row.tg_user_id),
-          channel_id: channelId,
-          duration_days: duration
-        }
-      });
-
-      setCandidateState((prev) => ({
-        ...prev,
-        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
-        summary: {
-          ...prev.summary,
-          total: Math.max(0, (prev.summary.total || 0) - 1),
-          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
-        }
-      }));
-
-      await loadCustomers();
-      window.alert(
-        duration === 'forever'
-          ? 'Кандидат перенесен в учтенную базу с бессрочным доступом. Если нужно, срок потом можно поправить вручную.'
-          : `Кандидат перенесен в учтенную базу и получил доступ на ${duration} дней.`
-      );
-    } catch (error) {
-      window.alert(error.message);
-    } finally {
-      setMutatingRowId(null);
-    }
-  }
-
-  async function resolveCandidate(row, resolutionType) {
-    if (!row?.source_id || !row?.tg_user_id) return;
-
-    const rowId = row.id ? String(row.id) : null;
-    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
-    const promptText = resolutionType === 'linked_accounted'
-      ? `Пометить ${clientLabel} как уже учтенного в Bullgram и убрать из нижней таблицы?`
-      : `Убрать ${clientLabel} из нижней таблицы как неактуального кандидата?`;
-
-    if (!window.confirm(promptText)) return;
-
-    setOpenActionsRowId(null);
-    setMutatingRowId(rowId);
-    try {
-      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
-        accessToken,
-        method: 'POST',
-        body: {
-          source_id: row.source_id,
-          tg_user_id: String(row.tg_user_id),
-          resolution_type: resolutionType
-        }
-      });
-
-      setCandidateState((prev) => ({
-        ...prev,
-        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
-        summary: {
-          ...prev.summary,
-          total: Math.max(0, (prev.summary.total || 0) - 1),
-          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
-        }
-      }));
-    } catch (error) {
-      window.alert(error.message);
-    } finally {
-      setMutatingRowId(null);
-    }
-  }
-
-  async function linkCandidateToAccounted(row) {
-    if (!row?.source_id || !row?.tg_user_id || !row?.matching_tab) return;
-
-    const selectedMatch = pickCandidateMatchingOption(row, { title: 'С каким учтенным сегментом связываем кандидата?' });
-    if (!selectedMatch) return;
-
-    const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
-    const targetLabel = getCustomersTabLabel(selectedMatch.tab);
-    const targetContext = selectedMatch.target_label ? `\nЦель: ${selectedMatch.target_label}` : '';
-    const operatorNote = window.prompt(
-      `Связать ${clientLabel} с сегментом «${targetLabel}»?${targetContext}\n\nЕсли нужно, оставь короткий комментарий для истории.`,
-      selectedMatch.label ? `Автоподсказка: ${selectedMatch.label}` : ''
-    );
-
-    if (operatorNote === null) return;
-
-    setOpenActionsRowId(null);
-    setMutatingRowId(String(row.id));
-    try {
-      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
-        accessToken,
-        method: 'POST',
-        body: {
-          source_id: row.source_id,
-          tg_user_id: String(row.tg_user_id),
-          resolution_type: 'linked_accounted',
-          linked_tab: selectedMatch.tab,
-          linked_target_label: selectedMatch.target_label || '',
-          linked_target_id: selectedMatch.target_id || '',
-          note: operatorNote.trim()
-        }
-      });
-
-      setCandidateState((prev) => ({
-        ...prev,
-        rows: prev.rows.filter((item) => String(item.id) !== String(row.id)),
-        summary: {
-          ...prev.summary,
-          total: Math.max(0, (prev.summary.total || 0) - 1),
-          [row.payment_status]: Math.max(0, (prev.summary[row.payment_status] || 0) - 1)
-        }
-      }));
-    } catch (error) {
-      window.alert(error.message);
-    } finally {
-      setMutatingRowId(null);
-    }
-  }
-
-  async function undoCandidateResolution(row) {
-    if (!row?.source_id || !row?.tg_user_id) return;
-
-    const confirmed = window.confirm(`Вернуть TG ${row.tg_user_id} обратно в нижнюю таблицу кандидатов?`);
-    if (!confirmed) return;
-
-    try {
-      await apiRequest('/api/customers/reconciliation-candidates/resolve', {
-        accessToken,
-        method: 'DELETE',
-        body: {
-          source_id: row.source_id,
-          tg_user_id: String(row.tg_user_id)
-        }
-      });
-
-      await loadCandidates({ silent: true });
-    } catch (error) {
-      window.alert(error.message);
-    }
-  }
-
-  function jumpToCandidateMatch(row) {
-    if (!row?.matching_tab || !row?.tg_user_id) return;
-    const selectedMatch = pickCandidateMatchingOption(row, { title: 'Какое совпадение открыть?' });
-    if (!selectedMatch) return;
-    setSearch(String(row.tg_user_id));
-    setTabState(selectedMatch.tab);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   if (state.loading) {
@@ -2262,9 +988,8 @@ export function CustomersPage() {
         {isAudienceTab ? (
           <AudienceTable
             target={currentAudienceTarget}
-            syncingType={audienceState.syncingState}
+            syncingType={audienceState.syncingType}
             onSync={syncAudience}
-            loading={audienceState.loading}
             crmMap={crmMap}
             onAction={runSubscriptionAction}
             openActionsRowId={openActionsRowId}
@@ -2350,15 +1075,11 @@ export function CustomersPage() {
                   <tbody className="divide-y divide-slate-50">
                     {activeRows.slice(0, limit).map((row) => {
                       const statusConfig = (() => {
-                        if (row.priority >= 90) return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: AlertCircle };
                         if (row.status === 'Доступ активен') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
-                        if (row.status === 'Удален админом') return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', icon: AlertCircle };
-                        if (row.status === 'Доступ закончился' || row.status === 'Доступ закончился, но человек внутри') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
-                        if (row.status === 'Доступ мутный' || row.status === 'Пробник · Доступ мутный' || row.status === 'Рефка · Доступ мутный') return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: AlertCircle };
-                        if (row.status === 'Оплачен, вошёл' || row.status === 'Пробник · Оплачен, вошёл' || row.status === 'Рефка · Оплачен, вошёл') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
+                        if (row.status === 'Доступ закончился') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
                         return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', icon: null };
                       })();
-                      const contextDisplay = getContextDisplay(row, activeTab);
+                      const contextDisplay = getContextDisplay(row);
 
                       const StatusIcon = statusConfig.icon;
 
@@ -2372,11 +1093,6 @@ export function CustomersPage() {
                                   <span>
                                     {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
                                   </span>
-                                  {row.attempts_count > 1 && (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-wide shrink-0">
-                                      {row.attempts_count} {row.attempts_count >= 2 && row.attempts_count <= 4 ? 'попытки' : 'попыток'}
-                                    </span>
-                                  )}
                                 </div>
                                 {row.tg_user_id ? (
                                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
@@ -2386,11 +1102,6 @@ export function CustomersPage() {
                                 {row.tg_username ? (
                                   <div className="text-xs font-semibold text-slate-500 truncate">
                                     @{row.tg_username}
-                                  </div>
-                                ) : null}
-                                {row.kick_attempts >= 5 ? (
-                                  <div className="mt-1 text-[11px] font-bold text-rose-600 leading-tight">
-                                    ⚠️ Превышен лимит попыток кика ({row.kick_attempts}/5){row.kick_failed_reason ? `. Ошибка: ${row.kick_failed_reason}` : ''}
                                   </div>
                                 ) : null}
                             </div>

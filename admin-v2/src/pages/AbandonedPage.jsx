@@ -344,15 +344,6 @@ export function AbandonedPage() {
     openApp('/app/broadcast');
   }
 
-  function pushToOrders(tgUserIds) {
-    if (!tgUserIds || tgUserIds.length === 0) return;
-    window.localStorage.setItem('orders_manual_selection', JSON.stringify({
-      source: 'admin_v2_abandoned',
-      tg_user_ids: tgUserIds
-    }));
-    openApp('/app/customers?tab=orders');
-  }
-
   if (loading && bots.length === 0) {
     return <LoadingState text="Грузим брошенные корзины..." />;
   }
@@ -504,13 +495,6 @@ export function AbandonedPage() {
               <span className="text-xs font-bold text-slate-400">{stale.length}</span>
               {staleTgIds.length > 0 ? (
                 <>
-                  <button
-                    type="button"
-                    className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                    onClick={() => pushToOrders(staleTgIds)}
-                  >
-                    Открыть в Заказах
-                  </button>
                   <button
                     type="button"
                     className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
