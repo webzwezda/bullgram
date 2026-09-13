@@ -22,7 +22,11 @@ function buildDisplayName(user) {
 }
 
 async function getParticipantsSafely(client, chatId) {
+    // Жёсткий кап: без него пагинация не ограничена и огромная группа держит
+    // HTTP-запрос (и GramJS-сессию) открытым неограниченно долго.
+    const maxParticipants = 2000;
     let participants = [];
+    let totalCount = null;
     let offset = 0;
     const limit = 100;
     while (true) {
@@ -30,14 +34,23 @@ async function getParticipantsSafely(client, chatId) {
         if (!chunk || chunk.length === 0) {
             break;
         }
+        // GramJS возвращает TotalList с полным числом участников группы
+        if (Number.isFinite(chunk.total)) totalCount = chunk.total;
         participants.push(...chunk);
         if (chunk.length < limit) {
+            break;
+        }
+        if (participants.length >= maxParticipants) {
             break;
         }
         offset += chunk.length;
         await new Promise(resolve => setTimeout(resolve, 300));
     }
-    return participants;
+    const truncated = totalCount != null ? totalCount > participants.length : participants.length >= maxParticipants;
+    if (truncated) {
+        console.warn(`[audience sync] ${chatId}: загружено ${participants.length} из ${totalCount ?? '?'} участников — список урезан лимитом ${maxParticipants}`);
+    }
+    return { participants, truncated, totalCount };
 }
 
 export default function audienceRoutes(supabase) {
@@ -296,7 +309,7 @@ export default function audienceRoutes(supabase) {
                     .eq('base_id', baseId)
                     .eq('owner_id', req.user.id);
 
-                const participants = await getParticipantsSafely(client, channel.tg_chat_id);
+                const { participants, truncated: participantsTruncated, totalCount } = await getParticipantsSafely(client, channel.tg_chat_id);
 
                 for (const p of participants || []) {
                     const tgUserId = String(p.id);
@@ -340,7 +353,9 @@ export default function audienceRoutes(supabase) {
 
             res.json({
                 success: true,
-                synced_count: upsertPayload.length
+                synced_count: upsertPayload.length,
+                truncated: participantsTruncated,
+                total_in_group: totalCount
             });
         } catch (error) {
             console.error('Ошибка синка аудитории:', error);

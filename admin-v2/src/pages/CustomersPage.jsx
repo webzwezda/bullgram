@@ -45,7 +45,24 @@ const VIEWED_EVENT_LABELS = {
   bot_started: 'Нажал /start'
 };
 
-function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActionsRowId, setOpenActionsRowId, mutatingRowId }) {
+// Нативный Popover API: light-dismiss, Esc и top-layer (не клиппится overflow'ом
+// таблицы) делает браузер; позиционирование — anchor через popovertarget-инвокер.
+const ROW_MENU_STYLE = {
+  inset: 'auto',
+  positionArea: 'block-end span-inline-start',
+  positionTryFallbacks: 'flip-block, flip-inline',
+  justifySelf: 'end',
+  alignSelf: 'start',
+  marginBlockStart: '8px'
+};
+
+function closeAllRowMenus() {
+  for (const el of document.querySelectorAll('[popover]')) {
+    try { el.hidePopover(); } catch { /* уже закрыт */ }
+  }
+}
+
+function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutatingRowId }) {
   const navigate = useNavigate();
   if (!target) {
     return (
@@ -226,26 +243,27 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, openActi
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <div className="relative" data-row-actions-root="true">
-                            <button
-                              type="button"
-                              className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                              onClick={() => setOpenActionsRowId((prev) => (prev === rowId ? null : rowId))}
-                              disabled={!!mutatingRowId}
-                              title="Действия"
-                            >
-                              <MoreHorizontal className="w-3.5 h-3.5" />
-                            </button>
-                            {openActionsRowId === rowId && (
-                              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
-                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-5'); }}>Продлить на 5 дней</button>
-                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
-                                <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
-                                <div className="border-t border-slate-100" />
-                                {actionRow._crmSubscription && (
-                                  <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { setOpenActionsRowId(null); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
-                                )}
-                              </div>
+                          <button
+                            type="button"
+                            className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                            popovertarget={`row-menu-aud-${targetType}-${rowId}`}
+                            disabled={!!mutatingRowId}
+                            title="Действия"
+                          >
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                          <div
+                            id={`row-menu-aud-${targetType}-${rowId}`}
+                            popover="auto"
+                            className="w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
+                            style={ROW_MENU_STYLE}
+                          >
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-5'); }}>Продлить на 5 дней</button>
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
+                            <div className="border-t border-slate-100" />
+                            {actionRow._crmSubscription && (
+                              <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
                             )}
                           </div>
                           {row.tg_user_id && (
@@ -395,7 +413,6 @@ export function CustomersPage() {
   const selectedBotId = searchParams.get('bot_id') || '';
   const [search, setSearch] = useState('');
   const [limit, setLimit] = useState(80);
-  const [openActionsRowId, setOpenActionsRowId] = useState(null);
   const [mutatingRowId, setMutatingRowId] = useState(null);
   const [botAnalytics, setBotAnalytics] = useState({ loading: false, error: '', data: null });
   const [moneyPeriod, setMoneyPeriod] = useState('all');
@@ -644,20 +661,13 @@ export function CustomersPage() {
     [state.crm]
   );
 
+  // Открытие/закрытие меню действий — нативный popover: light-dismiss и Esc
+  // обрабатывает браузер. Страховка на смену вкладки/бота: при back/forward
+  // строка может быть переиспользована React по совпавшему ключу, и открытое
+  // меню оказалось бы переанкорено на чужую строку.
   useEffect(() => {
-    setOpenActionsRowId(null);
-  }, [activeTab, search, focusChannelId, selectedBotId]);
-
-  useEffect(() => {
-    function handlePointerDown(event) {
-      if (!event.target.closest('[data-row-actions-root="true"]')) {
-        setOpenActionsRowId(null);
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    return () => window.removeEventListener('mousedown', handlePointerDown);
-  }, []);
+    closeAllRowMenus();
+  }, [activeTab, activeBotSubtab, focusChannelId, selectedBotId]);
 
   // Audience loading
   const loadAudience = useCallback(async () => {
@@ -695,8 +705,13 @@ export function CustomersPage() {
         method: 'POST',
         body: { contourId: cid, targetType }
       });
-      // Бэкенд /api/audience/sync возвращает только synced_count
-      toast.success(`Загружено ${result.synced_count} ${plural(result.synced_count, 'участника', 'участников', 'участников')}`);
+      // Бэкенд /api/audience/sync возвращает synced_count (+ truncated при урезании лимитом)
+      const countText = `Загружено ${result.synced_count} ${plural(result.synced_count, 'участника', 'участников', 'участников')}`;
+      if (result.truncated) {
+        toast.warning(`${countText} — в группе всего ${result.total_in_group}, выгрузка остановлена лимитом`);
+      } else {
+        toast.success(countText);
+      }
       await loadAudience();
     } catch (err) {
       toast.error(err.message || 'Ошибка обновления');
@@ -743,7 +758,7 @@ export function CustomersPage() {
     const clientLabel = getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : `TG ${row.tg_user_id}`);
     const contextLabel = row.channel_title || row.title || '';
 
-    setOpenActionsRowId(null);
+    closeAllRowMenus();
     setMutatingRowId(rowId);
 
     try {
@@ -1014,8 +1029,6 @@ export function CustomersPage() {
               onSync={syncAudience}
               crmMap={crmMap}
               onAction={runSubscriptionAction}
-              openActionsRowId={openActionsRowId}
-              setOpenActionsRowId={setOpenActionsRowId}
               mutatingRowId={mutatingRowId}
             />
           </>
@@ -1162,53 +1175,56 @@ export function CustomersPage() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
                               {canManageRow(row) ? (
-                                <div className="relative" data-row-actions-root="true">
+                                <>
                                   <button
                                     type="button"
                                     className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                                    onClick={() => setOpenActionsRowId((prev) => (prev === row.id ? null : row.id))}
+                                    popovertarget={`row-menu-${row.id}`}
                                     disabled={mutatingRowId === String(row.id)}
                                     title="Действия"
                                   >
                                     <MoreHorizontal className="w-3.5 h-3.5" />
                                   </button>
 
-                                  {openActionsRowId === row.id ? (
-                                    <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 z-20 overflow-hidden">
+                                  <div
+                                    id={`row-menu-${row.id}`}
+                                    popover="auto"
+                                    className="w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
+                                    style={ROW_MENU_STYLE}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      onClick={() => runSubscriptionAction(row, 'extend-5')}
+                                    >
+                                      Продлить на 5 дней
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      onClick={() => runSubscriptionAction(row, 'extend-30')}
+                                    >
+                                      Продлить на 30 дней
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      onClick={() => runSubscriptionAction(row, 'extend-forever')}
+                                    >
+                                      Выдать навсегда
+                                    </button>
+                                    <div className="border-t border-slate-100" />
+                                    {row.id && row._crmSubscription ? (
                                       <button
                                         type="button"
-                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                                        onClick={() => runSubscriptionAction(row, 'extend-5')}
+                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                                        onClick={() => runSubscriptionAction(row, 'kick')}
                                       >
-                                        Продлить на 5 дней
+                                        Удалить из группы
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                                        onClick={() => runSubscriptionAction(row, 'extend-30')}
-                                      >
-                                        Продлить на 30 дней
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                                        onClick={() => runSubscriptionAction(row, 'extend-forever')}
-                                      >
-                                        Выдать навсегда
-                                      </button>
-                                      <div className="border-t border-slate-100" />
-                                      {row.id && row._crmSubscription ? (
-                                        <button
-                                          type="button"
-                                          className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
-                                          onClick={() => runSubscriptionAction(row, 'kick')}
-                                        >
-                                          Удалить из группы
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  ) : null}
-                                </div>
+                                    ) : null}
+                                  </div>
+                                </>
                               ) : null}
                               {row.tg_user_id && (
                                 <>
