@@ -27,9 +27,10 @@
 - [x] Backend slice: retention.job.js (P0+P1×2+P2 guard+P3), start.handler.js (owner-чек `buy_`)
 - [x] Frontend slice: RetentionPage.jsx (owner-фильтры, предупреждение, P3 косметика/стats)
 - [x] Build + ревью диффа (code-reviewer: APPROVE, P2-P3 остатки внесены до коммита: SQL-файл по конвенции, чек ошибки markReminderSent, лог ошибки выборки, `**`→`*` в дефолт-шаблонах legacy Markdown, stripMarkdownDecor для raw-отправки юзерботом + честное превью на странице)
-- [ ] Push + CI депой
-- [ ] Миграция 2: дроп булева + RLS
-- [ ] Smoke + advisors
+- [x] Push + CI депой (079a01a, run 34766112392: build + pm2 reload + smoke ✓)
+- [x] Миграция 2 (`20260914130000`): дроп `expiry_reminder_sent` + RLS/политики на subscriptions (через channels), access_events, sales_bot_contours, payment_settings
+- [x] Smoke: /app/retention 200; advisors — 4 таблицы ушли из rls_disabled; expiring-подписок в окне сейчас нет (тик пустой, наблюдение за первым реальным тиком — по access_events)
+- [ ] Рантайм-наблюдение (нужен живой подписчик в 24ч-окне): напоминание ровно раз в цикл; `payload->>parse_fallback` на кастомных текстах; визуальная проверка страницы в реальном Chrome (browser doctrine)
 
 ## Ревью (после реализации)
 
