@@ -412,7 +412,8 @@ function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = ''
     draft_message: String(draftMessage || '').trim(),
     common_chat_id: String(commonChatId || '').trim()
   }));
-  const url = `/app/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`;
+  // У роутера basename="/app": navigate() ждёт путь БЕЗ префикса, иначе получится /app/app/...
+  const url = `/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`;
   if (navigate) {
     navigate(url);
   } else {

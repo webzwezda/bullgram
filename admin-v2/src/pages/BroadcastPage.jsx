@@ -664,7 +664,7 @@ export function BroadcastPage() {
                 <div className="mt-3">
                   <EmptyNote>
                     Пока нет ни одной базы.{' '}
-                    <Link to="/app/bases" className="text-indigo-600 font-bold hover:text-indigo-700">Создать базу</Link>
+                    <Link to="/bases" className="text-indigo-600 font-bold hover:text-indigo-700">Создать базу</Link>
                   </EmptyNote>
                 </div>
               ) : (
@@ -821,7 +821,7 @@ export function BroadcastPage() {
             {state.userbots.length === 0 ? (
               <EmptyNote>
                 Нет юзерботов.{' '}
-                <Link to="/app/userbots" className="text-indigo-600 font-bold hover:text-indigo-700">Подключить аккаунты</Link>
+                <Link to="/userbots" className="text-indigo-600 font-bold hover:text-indigo-700">Подключить аккаунты</Link>
               </EmptyNote>
             ) : (
               <div>

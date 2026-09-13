@@ -317,7 +317,7 @@ export function OpsRail() {
               </h3>
               <p className="text-xs text-amber-800 leading-relaxed mt-1">
                 На витрине нет свободного бандла или перенос упал. Добавь бандл на витрину или{' '}
-                <Link to="/app/shop-receipts" className="font-bold underline">проверь заказы в магазине</Link>.
+                <Link to="/shop-receipts" className="font-bold underline">проверь заказы в магазине</Link>.
               </p>
             </div>
           </div>
