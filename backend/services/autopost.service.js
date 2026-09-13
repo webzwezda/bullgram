@@ -333,12 +333,21 @@ export class AutopostService {
         // а не после DB-апдейта. Если setMessageReaction упадёт (нет прав),
         // пост всё равно считается опубликованным.
         if (channel?.seed_reaction_emoji && messageIds && messageIds.length > 0) {
+            // seed_reaction_emoji может содержать список через запятую (до 3 реакций)
+            const emojis = String(channel.seed_reaction_emoji).split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3);
             try {
-                await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], [
-                    { type: 'emoji', emoji: channel.seed_reaction_emoji }
-                ]);
+                await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0],
+                    emojis.map((emoji) => ({ type: 'emoji', emoji }))
+                );
             } catch (e) {
-                console.error('[Autopost] seed reaction failed (non-fatal):', e.message);
+                // Часть набора реакций могла не пройти — пробуем только первую
+                try {
+                    await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], [
+                        { type: 'emoji', emoji: emojis[0] }
+                    ]);
+                } catch (e2) {
+                    console.error('[Autopost] seed reaction failed (non-fatal):', e2.message);
+                }
             }
         }
 

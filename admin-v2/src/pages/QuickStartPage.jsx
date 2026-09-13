@@ -45,6 +45,10 @@ https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 -H "Content-Type: application/json" \\
 -d '{"target_channel_ids":["-100111","-100222"],"caption":"Hello","publish_now":true}'`;
 
+function parseReactionEmojis(value) {
+  return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
 export function QuickStartPage() {
   const { user, accessToken } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -1096,7 +1100,7 @@ export function QuickStartPage() {
                         <div className="space-y-1">
                           <label className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                            Бот будет ставить выбранную реакцию под каждый новый пост сразу после публикации.
+                            Бот будет ставить выбранные реакции под каждый новый пост сразу после публикации (до 3 шт.).
                           </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
@@ -1106,7 +1110,7 @@ export function QuickStartPage() {
                             checked={Boolean(config.seedReactionEmoji)}
                             onChange={(e) => setChannelConfigs(prev => ({
                               ...prev,
-                              [tab]: { ...prev[tab], seedReactionEmoji: e.target.checked ? (prev[tab].seedReactionEmoji || '❤️') : null }
+                              [tab]: { ...prev[tab], seedReactionEmoji: e.target.checked ? (prev[tab].seedReactionEmoji || '👍,👎') : null }
                             }))}
                           />
                           <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
@@ -1122,15 +1126,25 @@ export function QuickStartPage() {
                             { emoji: '🥰', label: 'Восхищение' },
                             { emoji: '🎉', label: 'Праздник' }
                           ].map(opt => {
-                            const active = config.seedReactionEmoji === opt.emoji;
+                            const activeReactions = parseReactionEmojis(config.seedReactionEmoji);
+                            const active = activeReactions.includes(opt.emoji);
                             return (
                               <button
                                 key={opt.emoji}
                                 type="button"
-                                onClick={() => setChannelConfigs(prev => ({
-                                  ...prev,
-                                  [tab]: { ...prev[tab], seedReactionEmoji: opt.emoji }
-                                }))}
+                                onClick={() => setChannelConfigs(prev => {
+                                  const cur = parseReactionEmojis(prev[tab].seedReactionEmoji);
+                                  let next;
+                                  if (cur.includes(opt.emoji)) {
+                                    next = cur.filter(x => x !== opt.emoji);
+                                  } else if (cur.length >= 3) {
+                                    toast.error('Максимум 3 реакции на пост');
+                                    return prev;
+                                  } else {
+                                    next = [...cur, opt.emoji];
+                                  }
+                                  return { ...prev, [tab]: { ...prev[tab], seedReactionEmoji: next.length ? next.join(',') : null } };
+                                })}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                                   active
                                     ? 'bg-indigo-600 text-white border-indigo-600'
