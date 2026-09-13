@@ -33,7 +33,6 @@ const BOT_SUBTABS = [
   { id: 'started', label: 'Нажал старт', empty: { title: 'Никто ещё не нажал /start', text: 'Здесь появятся все, кто начал бота.' } },
   { id: 'viewed', label: 'Смотрели тарифы', empty: { title: 'Просмотров тарифов нет', text: 'Здесь появятся клиенты, открывшие тарифы в боте.' } },
   { id: 'invoice-created', label: 'Создали счет', empty: { title: 'Счетов еще нет', text: 'Здесь появятся клиенты, дошедшие до создания счета.' } },
-  { id: 'abandoned', label: 'Не смогли оплатить', empty: { title: 'Брошенных оплат нет', text: 'Здесь появятся те, кто не завершил оплату.' } },
   { id: 'customers-active', label: 'Активный доступ', empty: { title: 'Активных подписок нет', text: 'Здесь появятся клиенты с оплаченным доступом.' } },
   { id: 'customers-expired', label: 'Доступ закончился', empty: { title: 'Истёкших подписок нет', text: 'Здесь появятся клиенты с закончившимся доступом.' } }
 ];
@@ -814,6 +813,7 @@ function normalizeCustomersTab(searchParams) {
   if (tab === 'customers' && segment === 'expired') return 'customers-expired';
   if (tab === 'customers') return 'customers-active';
   if (tab === 'orders') return 'access';
+  if (tab === 'abandoned') return 'invoice-created';
   return tab;
 }
 
