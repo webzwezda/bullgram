@@ -437,7 +437,7 @@ function CreateTariffPanel({
                         <div className="flex items-start gap-2 text-[11px] font-medium text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
                           <span>
-                            Создай приватный канал в Telegram, добавь этого бота админом с правом приглашать, затем привяжи канал выше в секции «Контур продаж» и обнови данные.
+                            Создайте приватный канал в Telegram, добавьте этого бота админом с правом приглашать, затем привяжите канал выше в секции «Контур продаж» и обновите данные.
                           </span>
                         </div>
                       </div>
@@ -604,7 +604,7 @@ function EmptyState({ onCreate }) {
         </div>
         <div className="max-w-md mx-auto space-y-1.5">
           <h3 className="font-bold text-lg text-slate-900">Пока нет тарифов</h3>
-          <p className="text-sm text-slate-500 font-medium">Создай первый тариф — он станет доступен для покупки через бота</p>
+          <p className="text-sm text-slate-500 font-medium">Создайте первый тариф — он станет доступен для покупки через бота</p>
         </div>
         <Button
           type="button"
