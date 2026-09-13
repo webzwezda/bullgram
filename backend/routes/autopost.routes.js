@@ -135,13 +135,21 @@ export default function autopostRoutes(supabase) {
             if (suggest_button_enabled !== undefined) updates.suggest_button_enabled = suggest_button_enabled;
             if (max_suggestions_per_day !== undefined) updates.max_suggestions_per_day = Number(max_suggestions_per_day);
             if (seed_reaction_emoji !== undefined) {
-                // null = выключить; иначе валидируем что это одиночный эмодзи и он есть в стандартном наборе Telegram.
+                // null = выключить. Иначе — до 3 эмодзи через запятую, каждый из стандартного набора Telegram.
                 const ALLOWED = ['❤️', '👍', '👎', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '💯', '💩', '🤣', '⚡'];
-                const val = seed_reaction_emoji === null ? null : String(seed_reaction_emoji).trim();
-                if (val !== null && !ALLOWED.includes(val)) {
-                    return res.status(400).json({ error: 'Недопустимый эмодзи. Разрешены: ' + ALLOWED.join(' ') });
+                if (seed_reaction_emoji === null) {
+                    updates.seed_reaction_emoji = null;
+                } else {
+                    const list = String(seed_reaction_emoji).split(',').map((x) => x.trim()).filter(Boolean);
+                    const bad = list.filter((x) => !ALLOWED.includes(x));
+                    if (!list.length || bad.length) {
+                        return res.status(400).json({ error: 'Недопустимый эмодзи. Разрешены: ' + ALLOWED.join(' ') });
+                    }
+                    if (list.length > 3) {
+                        return res.status(400).json({ error: 'Максимум 3 реакции' });
+                    }
+                    updates.seed_reaction_emoji = list.join(',');
                 }
-                updates.seed_reaction_emoji = val;
             }
             
             const { data: channel, error } = await supabase
