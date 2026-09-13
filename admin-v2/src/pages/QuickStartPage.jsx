@@ -52,6 +52,7 @@ export function QuickStartPage() {
   // Bot settings states
   const [existingBots, setExistingBots] = useState([]);
   const [createdBot, setCreatedBot] = useState(null);
+  const [botStats, setBotStats] = useState(null);
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [inviteLink, setInviteLink] = useState('');
@@ -523,7 +524,6 @@ export function QuickStartPage() {
   if (loading) return <LoadingState text="Загружаем автопостер..." />;
 
   // Определяем шаги онбординга
-  const [botStats, setBotStats] = useState(null);
   const hasAdmin = admins.length > 0;
   const hasChannels = channels.length > 0;
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
