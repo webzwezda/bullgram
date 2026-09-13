@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingCart, Send, Tag, Clock, AlertCircle, Ban, ChevronRight, Bot as BotIcon, Save, RotateCcw, Inbox } from 'lucide-react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -26,6 +26,31 @@ const TRIAL_TEMPLATE = `🧪 *Ты почти забрал пробник*
 Если хочешь быстро посмотреть, что внутри, просто вернись в бота и закончи оплату.
 
 👉 *Пробник нужен, чтобы быстро зайти и принять решение. Не тяни.*`;
+
+// Лёгкий рендер легаси-Telegram-markdown для превью: *жирный*, _курсив_, `код`.
+// Подставляем только {tariff_name} и {discount_percent}; {discount_price}/{old_price}/{currency}
+// оставляем как есть — цену без конкретного тарифа не знаем, админ видит теги.
+function renderLegacyMarkdown(text, discountPercent) {
+  if (!text || !text.trim()) return [];
+  const withSubs = text
+    .replace(/\{tariff_name\}/g, () => 'название тарифа')
+    .replace(/\{discount_percent\}/g, () => String(Number(discountPercent || 0)));
+  const parts = withSubs.split(/(\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)/g);
+  return parts
+    .filter((part) => part !== '')
+    .map((part, idx) => {
+      if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) {
+        return <strong key={idx}>{part.slice(1, -1)}</strong>;
+      }
+      if (part.length > 2 && part.startsWith('_') && part.endsWith('_')) {
+        return <em key={idx}>{part.slice(1, -1)}</em>;
+      }
+      if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+        return <code key={idx} className="rounded bg-slate-100 px-1 font-mono text-[0.9em]">{part.slice(1, -1)}</code>;
+      }
+      return <Fragment key={idx}>{part}</Fragment>;
+    });
+}
 
 function formatRelativeTime(iso) {
   if (!iso) return '—';
@@ -281,6 +306,8 @@ export function AbandonedPage() {
 
   const dirty = textDraft !== textOriginal || Number(discountDraft) !== Number(discountOriginal);
 
+  const previewNodes = renderLegacyMarkdown(textDraft, discountDraft);
+
   function insertStandardTemplate() {
     setTextDraft(STANDARD_TEMPLATE);
   }
@@ -417,8 +444,14 @@ export function AbandonedPage() {
                   </option>
                 ))}
               </select>
-              <div className="text-xs font-bold text-slate-500">
-                {queueLabel} в очереди · {staleLabel} требуют разбора
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-slate-900">Брошенные корзины</span>
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                  {queueLabel} в очереди
+                </span>
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                  {staleLabel} требуют разбора
+                </span>
               </div>
             </div>
           </div>
@@ -444,7 +477,7 @@ export function AbandonedPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-baseline justify-between mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               В окне автоматического дожима
             </h3>
             <span className="text-xs font-bold text-slate-400">{queueLabel}</span>
@@ -473,7 +506,7 @@ export function AbandonedPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               Требуют ручного разбора
             </h3>
             <div className="flex items-center gap-2">
@@ -492,7 +525,7 @@ export function AbandonedPage() {
             </div>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
-            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков в рассылку.
+            Счета старше 3 часов. Автоматический дожим для них уже не сработает. Передайте подписчиков <Link to="/app/broadcast" className="text-indigo-600 font-bold hover:underline">в рассылку</Link>.
           </p>
 
           {stale.length === 0 ? (
@@ -515,11 +548,11 @@ export function AbandonedPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               Что отправляется подписчикам
             </h3>
             <span className="text-[11px] text-slate-400 font-medium">
-              Сценарий <span className="font-bold text-slate-600">Брошенные корзины</span>
+              <span className="font-bold text-slate-600">Общий текст</span> для обоих сценариев
             </span>
           </div>
 
@@ -570,11 +603,29 @@ export function AbandonedPage() {
             placeholder="Текст, который бот отправит подписчику с брошенной корзиной."
           />
 
-          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+          <div className="mt-3 max-w-2xl text-xs text-slate-600 leading-relaxed">
             Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{tariff_name}`}</code> → название тарифа, <code className="px-1 bg-slate-100 rounded">{`{discount_percent}`}</code> → значение скидки, <code className="px-1 bg-slate-100 rounded">{`{discount_price}`}</code> → цена со скидкой, <code className="px-1 bg-slate-100 rounded">{`{old_price}`}</code> → исходная цена, <code className="px-1 bg-slate-100 rounded">{`{currency}`}</code> → валюта.
           </div>
-          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+          <div className="mt-2 max-w-2xl text-xs text-slate-600 leading-relaxed">
             Этот текст и скидка также применяются в сценарии <span className="font-medium">«Дожим после просмотра»</span> (напоминание после просмотра тарифа).
+          </div>
+
+          <div className="mt-6 p-4 rounded-2xl bg-emerald-50/40 border border-emerald-100">
+            <div className="flex items-center gap-2 mb-3">
+              <BotIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-sm font-bold text-slate-700">Так увидит подписчик (бот)</span>
+            </div>
+            <div className="p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+              {previewNodes.length > 0 ? previewNodes : '— пусто — редактируй текст выше —'}
+            </div>
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">
+                {Number(discountDraft) > 0 ? '💳 Вернуться и получить скидку' : '💳 Продолжить оплату'}
+              </span>
+              <div className="mt-1.5 text-[11px] text-slate-500">
+                Кнопка создаёт свежий счёт по цене из текста, живёт 15 минут
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-6">
@@ -610,7 +661,7 @@ export function AbandonedPage() {
 
         <div>
           <div className="px-6 md:px-8 pt-6 pb-3 flex items-baseline justify-between">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               История отправок
             </h3>
             <span className="text-xs font-bold text-slate-400">за последние ~7 дней</span>

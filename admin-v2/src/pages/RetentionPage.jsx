@@ -435,7 +435,7 @@ export function RetentionPage() {
   const selectedBotLabel = selectedBot?.custom_label || (selectedBot?.tg_username ? `@${selectedBot.tg_username}` : 'Без имени');
 
   const statCards = [
-    { label: 'Отправлено 7д', value: stats.total, color: 'text-slate-900', Icon: Send },
+    { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
     { label: 'Ботом', value: stats.byBot, color: stats.byBot > 0 ? 'text-emerald-600' : 'text-slate-400', Icon: Bot },
     { label: 'Userbot\'ом', value: stats.byUserbot, color: stats.byUserbot > 0 ? 'text-blue-600' : 'text-slate-400', Icon: Rocket },
     { label: 'Сбой / пропуск', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
@@ -492,7 +492,7 @@ export function RetentionPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-baseline justify-between mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               Помощник-юзербот
             </h3>
           </div>
@@ -553,7 +553,7 @@ export function RetentionPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               Что отправляется подписчикам
             </h3>
             <span className="text-[11px] text-slate-400 font-medium">
@@ -650,7 +650,7 @@ export function RetentionPage() {
 
         <section className="p-6 md:p-8 border-b border-slate-100">
           <div className="flex items-baseline justify-between mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               Истекают в ближайшие 24ч
             </h3>
             <span className="text-xs font-bold text-slate-400">{expiring.length}</span>
@@ -689,7 +689,7 @@ export function RetentionPage() {
 
         <div>
           <div className="px-6 md:px-8 pt-6 pb-3 flex items-baseline justify-between">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
               История отправок
             </h3>
             <span className="text-xs font-bold text-slate-400">за последние ~7 дней</span>
