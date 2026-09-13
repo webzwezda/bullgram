@@ -620,25 +620,11 @@ export function QuickStartPage() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">
-                  {selectedBotId !== 'new' ? (
-                    <>
-                      {botPaused ? (
-                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold align-middle">
-                          На паузе
-                        </span>
-                      ) : null}
-                      {hasFailure && lastFailureLabel ? (
-                        <span className="mr-2 inline-flex items-center px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold align-middle">
-                          Сбой · {lastFailureLabel}
-                        </span>
-                      ) : null}
-                      {botPaused ? '' : statusWord + ' · '}каналов: {channels.length} · публикаций в день: {totalDailyPosts}
-                      {statsPosted !== null ? ` · опубликовано: ${statsPosted}` : ''}
-                      {nextScheduledLabel ? ` · следующая: ${nextScheduledLabel}` : ''}
-                    </>
-                  ) : 'Подключите Telegram-бота для автоматического постинга и приема предложений'}
-                </p>
+                {selectedBotId === 'new' ? (
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">
+                    Подключите Telegram-бота для автоматического постинга и приема предложений
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
