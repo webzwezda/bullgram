@@ -58,6 +58,7 @@ export default function (supabase) {
 
             let revenueTON = 0;
             let revenueRUB = 0;
+            let revenuePeriodTON = 0;
             let paidInvoicesCount = 0;
             let pendingInvoicesCount = 0;
             let trialPendingInvoicesCount = 0;
@@ -151,6 +152,20 @@ export default function (supabase) {
                         if (inv.currency === 'TON') mrrTON += Number(inv.amount);
                         if (inv.currency === 'RUB' || inv.currency === 'STARS') mrrRUB += Number(inv.amount);
                     });
+
+                // Выручка за выбранный период (period=7|30|all) — для карточки денег в CRM
+                const periodParam = String(req.query.period || '').trim();
+                const periodDays = periodParam === '7' || periodParam === '30' ? Number(periodParam) : null;
+                if (periodDays === null) {
+                    revenuePeriodTON = revenueTON;
+                } else {
+                    const sinceTs = Date.now() - periodDays * 24 * 60 * 60 * 1000;
+                    myInvoices
+                        .filter(inv => inv.status === 'paid' && new Date(inv.created_at).getTime() >= sinceTs)
+                        .forEach(inv => {
+                            if (inv.currency === 'TON') revenuePeriodTON += Number(inv.amount);
+                        });
+                }
             }
 
             const [{ data: subscriptions, error: subsError }, { data: accessEvents, error: accessError }, { data: paymentEvents, error: paymentEventsError }] = await Promise.all([
@@ -223,6 +238,7 @@ export default function (supabase) {
                 activeSubscribers,
                 revenueTON,
                 revenueRUB,
+                revenuePeriodTON,
                 mrrTON,
                 mrrRUB,
                 conversion,

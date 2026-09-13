@@ -32,13 +32,10 @@ function plural(n, one, few, many) {
 const BOT_SUBTABS = [
   { id: 'started', label: 'Нажал старт', empty: { title: 'Никто ещё не нажал /start', text: 'Здесь появятся все, кто начал бота.' } },
   { id: 'viewed', label: 'Смотрели тарифы', empty: { title: 'Просмотров тарифов нет', text: 'Здесь появятся клиенты, открывшие тарифы в боте.' } },
+  { id: 'invoice-created', label: 'Создали счет', empty: { title: 'Счетов еще нет', text: 'Здесь появятся клиенты, дошедшие до создания счета.' } },
   { id: 'abandoned', label: 'Не смогли оплатить', empty: { title: 'Брошенных оплат нет', text: 'Здесь появятся те, кто не завершил оплату.' } },
   { id: 'customers-active', label: 'Активный доступ', empty: { title: 'Активных подписок нет', text: 'Здесь появятся клиенты с оплаченным доступом.' } },
-  { id: 'customers-expired', label: 'Доступ закончился', empty: { title: 'Истёкших подписок нет', text: 'Здесь появятся клиенты с закончившимся доступом.' } },
-  { id: 'expired-in-group', label: 'Сгорели, но сидят', empty: { title: 'Никто лишний не сидит', text: 'Все с истёкшей подпиской уже кикнуты.' } },
-  { id: 'paid-orders', label: 'Оплаченные', empty: { title: 'Оплаченных заказов нет', text: 'Здесь появятся подтверждённые оплаты.' } },
-  { id: 'removed-admin', label: 'Удален админом', empty: { title: 'Никого не удаляли', text: 'Здесь появятся удалённые вручную участники.' } },
-  { id: 'access', label: 'Не смог войти', empty: { title: 'Таких клиентов нет', text: 'Здесь появятся те, кто оплатил, но не подтвердил вход.' } }
+  { id: 'customers-expired', label: 'Доступ закончился', empty: { title: 'Истёкших подписок нет', text: 'Здесь появятся клиенты с закончившимся доступом.' } }
 ];
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
@@ -866,6 +863,7 @@ export function CustomersPage() {
   const [mutatingRowId, setMutatingRowId] = useState(null);
   const [mutatingBulk, setMutatingBulk] = useState(false);
   const [botAnalytics, setBotAnalytics] = useState({ loading: false, error: '', data: null });
+  const [moneyPeriod, setMoneyPeriod] = useState('all');
   const [handoff, setHandoff] = useState({
     abandonedFilter: '',
     orderTgUserIds: []
@@ -1126,14 +1124,14 @@ export function CustomersPage() {
     const reqId = ++analyticsReqIdRef.current;
     if (!botAnalytics.data) setBotAnalytics((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const data = await apiRequest(`/api/analytics?bot_id=${encodeURIComponent(selectedBotId)}`, { accessToken });
+      const data = await apiRequest(`/api/analytics?bot_id=${encodeURIComponent(selectedBotId)}&period=${encodeURIComponent(moneyPeriod)}`, { accessToken });
       if (reqId !== analyticsReqIdRef.current) return;
       setBotAnalytics({ loading: false, error: '', data });
     } catch (error) {
       if (reqId !== analyticsReqIdRef.current) return;
-      setBotAnalytics((prev) => ({ ...prev, loading: false, error: error.message || 'Ошибка аналитики' }));
+      setBotAnalytics((prev) => ({ loading: false, error: error.message || 'Ошибка аналитики', data: prev.data }));
     }
-  }, [accessToken, selectedBotId, botAnalytics.data]);
+  }, [accessToken, selectedBotId, moneyPeriod]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1225,6 +1223,23 @@ export function CustomersPage() {
       created_at: row.created_at,
       href: '/app/customers?tab=viewed'
     })),
+    'invoice-created': state.viewed
+      .filter((row) => row.event_type === 'invoice_created')
+      .map((row) => ({
+        id: row.id,
+        tg_user_id: row.tg_user_id,
+        tg_username: row.tg_username,
+        display_name: row.display_name,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        channel_id: row.channel_id,
+        title: row.tariff_title || 'Счет',
+        channel_title: row.channel_title || '',
+        status: 'Создал счет',
+        reason: 'Счет создан — ждем оплату',
+        created_at: row.created_at,
+        href: '/app/customers?tab=invoice-created'
+      })),
     'customers-active': state.crm.filter((row) => row.status === 'active').map((row) => ({
       id: row.id,
       tg_user_id: row.tg_user_id,
@@ -1354,14 +1369,10 @@ export function CustomersPage() {
     : null;
 
   const effectiveTab = isBotTab ? activeBotSubtab : activeTab;
-  // Счётчики по под-сегментам: показываем в полосе только непустые сегменты
-  // (+ активный) — иначе полоса превращается в 9 вкладок-призраков.
+  // Счётчики по под-сегментам для бейджей в полосе вкладок.
   const subtabCounts = useMemo(() => Object.fromEntries(
     BOT_SUBTABS.map((sub) => [sub.id, (rowsByTab[sub.id] || []).length])
   ), [rowsByTab]);
-  const visibleBotSubtabs = useMemo(() => BOT_SUBTABS.filter(
-    (sub) => sub.id === activeBotSubtab || (subtabCounts[sub.id] || 0) > 0
-  ), [activeBotSubtab, subtabCounts]);
 
   const activeRows = useMemo(
     () => (rowsByTab[effectiveTab] || [])
@@ -2105,49 +2116,57 @@ export function CustomersPage() {
 
         {/* Metrics Section */}
         <section className="p-6 md:p-8 border-b border-slate-100">
-          {/* Funnel Grid. [display:grid] вместо grid — legacy .grid из app.css перебивает Tailwind-колонки */}
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Воронка клиентов</div>
-          <div className="[display:grid] grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Фуннельные карточки. [display:grid] вместо grid — legacy .grid из app.css перебивает Tailwind-колонки */}
+          <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500', tab: 'customers-active' },
-              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400', tab: 'customers-expired' },
-              { label: 'Оплатили, но вход не подтвержден', value: stats.access, icon: Lock, color: stats.access > 0 ? 'text-purple-500' : 'text-slate-400', tab: 'access' },
-              { label: 'Смотрели тариф, но не создали счет', value: stats.viewed, icon: Eye, color: stats.viewed > 0 ? 'text-amber-500' : 'text-slate-400', tab: 'viewed' },
-              { label: 'Не смогли оплатить', value: stats.abandoned, icon: FileText, color: stats.abandoned > 0 ? 'text-indigo-500' : 'text-slate-400', tab: 'abandoned' },
+              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
+              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400' }
             ].map((item, idx) => (
-              <button
+              <div
                 key={idx}
-                type="button"
-                onClick={() => setBotSubtab(item.tab)}
-                className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl text-left transition-all hover:border-slate-200 hover:bg-slate-50"
+                className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl"
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
                   <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                 </div>
                 <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
-              </button>
+              </div>
             ))}
           </div>
 
           {selectedBotId ? (
             <>
-              <div className="text-xs font-black uppercase tracking-widest text-slate-400 mt-6 mb-3">Деньги</div>
-              <div className="[display:grid] grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { label: 'Выручка TON', value: botAnalytics.data ? formatTon(botAnalytics.data.revenueTON) : '—', hint: botAnalytics.data && Number(botAnalytics.data.revenueTON) > 0 ? 'За всё время' : 'Платежей пока нет' },
-                  { label: 'MRR TON', value: botAnalytics.data ? formatTon(botAnalytics.data.mrrTON) : '—', hint: botAnalytics.data && Number(botAnalytics.data.mrrTON) > 0 ? 'За 30 дней' : 'Платежей пока нет' },
-                  { label: 'Конверсия', value: botAnalytics.data ? `${botAnalytics.data.conversion}%` : '—', hint: 'В оплату' },
-                  { label: 'Churn', value: botAnalytics.data ? `${botAnalytics.data.churnRate}%` : '—', hint: 'Отток за 30 дней' }
-                ].map((item, idx) => (
-                  <div key={idx} className="bg-white border border-slate-100 border-l-4 border-l-indigo-400 p-6 rounded-2xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
-                    </div>
-                    <div className="text-3xl font-black tracking-tighter text-slate-900 tabular-nums">{item.value}</div>
-                    {item.hint ? <div className="text-xs text-slate-400 font-medium mt-1">{item.hint}</div> : null}
-                  </div>
-                ))}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 mb-3">
+                <div className="text-xs font-black uppercase tracking-widest text-slate-400">Выручка TON</div>
+                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                  {[
+                    { id: '7', label: '7 дней' },
+                    { id: '30', label: '30 дней' },
+                    { id: 'all', label: 'За всё время' }
+                  ].map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setMoneyPeriod(p.id)}
+                      className={`px-3 py-1.5 text-xs font-bold transition-colors ${
+                        moneyPeriod === p.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white border border-slate-100 border-l-4 border-l-indigo-400 p-6 rounded-2xl">
+                <div className="text-3xl font-black tracking-tighter text-slate-900 tabular-nums">
+                  {botAnalytics.data ? formatTon(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) : '—'}
+                </div>
+                <div className="text-xs text-slate-400 font-medium mt-1">
+                  {botAnalytics.data && Number(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) > 0
+                    ? (moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время')
+                    : 'Платежей пока нет'}
+                </div>
               </div>
             </>
           ) : null}
@@ -2253,10 +2272,10 @@ export function CustomersPage() {
           />
         ) : (
         <>
-          {isBotTab && visibleBotSubtabs.length > 0 && (
+          {isBotTab && (
             <div className="relative mx-8 mt-4">
               <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
-                {visibleBotSubtabs.map((sub) => {
+                {BOT_SUBTABS.map((sub) => {
                   const count = subtabCounts[sub.id] || 0;
                   return (
                     <button
@@ -2279,9 +2298,7 @@ export function CustomersPage() {
                   );
                 })}
               </div>
-              {visibleBotSubtabs.length > 4 && (
-                <div className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-2xl bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent" />
-              )}
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-2xl bg-gradient-to-l from-slate-100 via-slate-100/70 to-transparent" />
             </div>
           )}
         <div className="overflow-hidden flex flex-col">
@@ -2294,73 +2311,13 @@ export function CustomersPage() {
                 : (TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты')}
             </h3>
             <div className="flex items-center gap-3">
-              {['customers-active', 'customers-expired', 'expired-in-group'].includes(effectiveTab) && activeRows.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    onClick={() => runBulkAction(activeRows, 'extend-5')}
-                    disabled={mutatingBulk}
-                  >
-                    +5 дней
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    onClick={() => runBulkAction(activeRows, 'extend-30')}
-                    disabled={mutatingBulk}
-                  >
-                    +30 дней
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    onClick={() => runBulkAction(activeRows, 'kick')}
-                    disabled={mutatingBulk}
-                  >
-                    Кикнуть хвост
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    onClick={() => runBulkAction(activeRows, 'broadcast')}
-                    disabled={mutatingBulk}
-                  >
-                    → Рассылка
-                  </button>
-                </div>
-              ) : null}
               <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
                 {activeRows.length} {plural(activeRows.length, 'запись', 'записи', 'записей')}
               </span>
             </div>
           </div>
 
-          {activeTab === 'viewed' && activeRows.length === 0 ? (
-            <div className="p-16 text-center flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-400 shadow-inner mb-4 border border-amber-100">
-                <Eye className="w-8 h-8" />
-              </div>
-              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Просмотров пока нет</h4>
-              <p className="text-slate-500 font-medium text-sm max-w-sm mb-4">Включите параметр <code className="px-1.5 py-0.5 bg-slate-100 rounded text-amber-600">customer_funnel_events</code> в боте для отслеживания.</p>
-            </div>
-          ) : effectiveTab === 'expired-in-group' && activeRows.length === 0 ? (
-            <div className="p-16 text-center flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shadow-inner mb-4 border border-emerald-100">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Никто лишний не сидит</h4>
-              <p className="text-slate-500 font-medium text-sm">Все с истёкшей подпиской уже кикнуты.</p>
-            </div>
-          ) : effectiveTab === 'paid-orders' && activeRows.length === 0 ? (
-            <div className="p-16 text-center flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Оплаченных заказов нет</h4>
-              <p className="text-slate-500 font-medium text-sm">Либо ничего не продано, либо фильтр слишком узкий.</p>
-            </div>
-          ) : activeRows.length === 0 ? (
+          {activeRows.length === 0 ? (
             (() => {
               const searching = search.trim().length > 0;
               const subMeta = BOT_SUBTABS.find((s) => s.id === (effectiveTab || activeBotSubtab));
