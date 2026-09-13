@@ -63,20 +63,6 @@ function deliveryBadge(deliveredBy = '', payload = {}) {
   }
 }
 
-function downloadCsv(filename, header, rows) {
-  const escapeCell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
-  const csv = [header, ...rows].map((line) => line.map(escapeCell).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 function openApp(href) {
   if (!href) return;
   window.location.href = href;
@@ -415,27 +401,6 @@ export function AbandonedPage() {
                 {inWindow.length} в очереди · {stale.length} требуют разбора
               </div>
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
-              onClick={() => downloadCsv(
-                `abandoned-${selectedBotLabel}-${new Date().toISOString().slice(0, 10)}.csv`,
-                ['invoice_id', 'created_at', 'tg_user_id', 'tariff_title', 'is_trial', 'status', 'amount', 'currency', 'category'],
-                allPending.map((inv) => [
-                  inv.id,
-                  inv.created_at,
-                  inv.tg_user_id,
-                  inv.tariffs?.title || '',
-                  inv.tariffs?.is_trial ? 'yes' : 'no',
-                  inv.status || '',
-                  inv.amount,
-                  inv.currency,
-                  inWindow.includes(inv) ? 'in_window' : 'stale'
-                ])
-              )}
-            >
-              Выгрузить CSV
-            </button>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
