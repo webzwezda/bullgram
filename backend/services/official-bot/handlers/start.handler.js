@@ -189,4 +189,91 @@ export function registerStartHandlers(bot, { service, botId, sendMainMenu, creat
 
         await sendMainMenu(ctx);
     });
+
+    // Кнопка дожима брошенной корзины: по клику создаём СВЕЖИЙ счёт с abandon-скидкой,
+    // а не переиспользуем старый неоплачиваемый. Зеркало buy_ из tariff.handler.
+    bot.action(/^abbuy_(.+)$/, async (ctx) => {
+        const tariffId = ctx.match[1];
+        await ctx.answerCbQuery();
+
+        try {
+            const ownerId = await service.getBotOwner(botId);
+            if (!ownerId) return;
+
+            const { data: tariff } = await service.supabase
+                .from('tariffs')
+                .select('*')
+                .eq('id', tariffId)
+                .maybeSingle();
+
+            // Тариф должен принадлежать овнеру этого бота и быть активным: иначе счёт ушёл бы на чужой/мёртвый тариф
+            const isOwnTariff = Boolean(tariff) && tariff.is_active && String(tariff.owner_id) === String(ownerId);
+            if (!isOwnTariff) {
+                await ctx.reply('❌ Этот тариф или цифровой товар сейчас недоступен.');
+                return sendMainMenu(ctx);
+            }
+
+            // Abandoned-контекст: у этого юзера есть инвойс по этому тарифу, получивший дожим,
+            // не оплаченный и созданный за последние 24ч. Без контекста — обычный buy_-флоу по полной цене.
+            const oneDayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: abandonedContext } = await service.supabase
+                .from('invoices')
+                .select('id')
+                .eq('tg_user_id', ctx.from.id)
+                .eq('tariff_id', tariff.id)
+                .eq('reminded', true)
+                .neq('status', 'paid')
+                .gte('created_at', oneDayAgoIso)
+                .limit(1)
+                .maybeSingle();
+
+            // Скидка дожима из payment_settings овнера; итоговый процент createInvoiceForTariff
+            // считает как max(referral, browse, extra) с клэмпом 0..99
+            let extraDiscountPercent = 0;
+            if (abandonedContext) {
+                const { data: settings } = await service.supabase
+                    .from('payment_settings')
+                    .select('abandoned_discount_percent')
+                    .eq('owner_id', ownerId)
+                    .maybeSingle();
+                extraDiscountPercent = Number(settings?.abandoned_discount_percent || 0);
+            }
+
+            const referralAttribution = await service.getActiveReferralAttribution(ownerId, ctx.from.id);
+            await service.logCustomerFunnelEvent({
+                ownerId,
+                botId,
+                tgUserId: ctx.from.id,
+                tariffId: tariff.id,
+                eventType: 'payment_method_selected',
+                referralCode: referralAttribution?.referral_code || null,
+                sessionKey: service.buildCustomerFunnelSessionKey({
+                    botId,
+                    tgUserId: ctx.from.id,
+                    eventType: 'payment_method_selected',
+                    tariffId: tariff.id
+                }),
+                payload: {
+                    callback: 'abbuy',
+                    source: abandonedContext ? 'abandoned_cart' : 'no_abandoned_context',
+                    extra_discount_percent: abandonedContext ? extraDiscountPercent : 0,
+                    currency: tariff.currency
+                }
+            });
+
+            const result = await createInvoiceForTariff(
+                ctx,
+                tariff,
+                abandonedContext ? { extraDiscountPercent } : {}
+            );
+            // Free tariffs return { invoice } — activate immediately (как в buy_).
+            // Paid tariffs return undefined — cron auto-detect handles activation.
+            if (result?.invoice) {
+                return service.activateSubscription(bot, result.invoice);
+            }
+            return null;
+        } catch (err) {
+            console.error('Ошибка abbuy (свежий счёт со скидкой из брошенной корзины):', err);
+        }
+    });
 }

@@ -184,7 +184,8 @@ export function createMenuBuilders({ service, botId }) {
         return { invoice };
     };
 
-    const createInvoiceForTariff = async (ctx, tariff) => {
+    // extraDiscountPercent (опционально) — скидка дожимов (abbuy из брошенной корзины); участвует в max(referral, browse, extra), существующие вызовы с двумя аргументами не затронуты
+    const createInvoiceForTariff = async (ctx, tariff, { extraDiscountPercent } = {}) => {
         try {
             // Free tariff: skip QR/invoice, create a paid 0-amount invoice immediately.
             if (Number(tariff.price || 0) === 0) {
@@ -207,7 +208,9 @@ export function createMenuBuilders({ service, botId }) {
             const referralAttribution = await service.getActiveReferralAttribution(tariff.owner_id, userId);
             const referralDiscountPercent = Number(referralAttribution?.client_discount_percent_snapshot || 0);
             const browseDiscountPercent = await service.getBrowseFollowupDiscount(tariff.owner_id, userId);
-            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent);
+            // Клэмп extra 0..99: админ мог вписать 150 в abandoned_discount_percent — без клэмпа уехали бы в отрицательную цену
+            const extraDiscount = Math.min(99, Math.max(0, Math.round(Number(extraDiscountPercent) || 0)));
+            const activeDiscountPercent = Math.max(referralDiscountPercent, browseDiscountPercent, extraDiscount);
             const originalAmount = Number(tariff.price || 0);
             const invoiceAmount = service.formatDiscountedAmount(originalAmount, tariff.currency, activeDiscountPercent);
 

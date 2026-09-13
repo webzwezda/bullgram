@@ -9,22 +9,23 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
 
-const STANDARD_TEMPLATE = `🛒 **Привет!**
+// Синхронизировано с дефолтом бэкенд-джобы брошенных корзин (одинарная * разметка)
+const STANDARD_TEMPLATE = `🛒 *Привет!*
 
-Я заметил, что ты хотел купить «**{tariff_name}**», но остановился.
+Я заметил, что ты хотел купить «*{tariff_name}*», но остановился.
 
-🎁 Только сейчас я даю тебе **скидку {discount_percent}%**!
-Новая цена: **{discount_price} {currency}** (вместо {old_price} {currency}).
+🎁 Только сейчас я даю тебе *скидку {discount_percent}%*!
+Новая цена: *{discount_price} {currency}* (вместо {old_price} {currency}).
 
-👉 *Жми кнопку ниже, чтобы забрать доступ со скидкой.*`;
+👉 *Жми кнопку ниже, чтобы забрать доступ!*`;
 
-const TRIAL_TEMPLATE = `🧪 **Ты почти забрал пробник**
+const TRIAL_TEMPLATE = `🧪 *Ты почти забрал пробник*
 
-Ты нажал на «**{tariff_name}**», но не завершил оплату.
+Я увидел, что ты хотел зайти через «*{tariff_name}*», но не добил оплату.
 
-Если хочешь быстро посмотреть, что внутри — просто вернись в бота и забери пробный доступ.
+Если хочешь быстро посмотреть, что внутри, просто вернись в бота и закончи оплату.
 
-👉 *Пробник нужен как быстрый вход. Не тяни, пока интерес горячий.*`;
+👉 *Пробник нужен, чтобы быстро зайти и принять решение. Не тяни.*`;
 
 function formatRelativeTime(iso) {
   if (!iso) return '—';
@@ -85,6 +86,7 @@ export function AbandonedPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [discountError, setDiscountError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedEventId, setExpandedEventId] = useState(null);
@@ -159,6 +161,7 @@ export function AbandonedPage() {
           return;
         }
 
+        const sinceIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
         const [{ data: invoicesData, error: invoicesError }, { data: eventsData, error: eventsError }] = await Promise.all([
           supabase
             .from('invoices')
@@ -167,14 +170,15 @@ export function AbandonedPage() {
             .in('status', ['pending', 'awaiting_receipt'])
             .eq('reminded', false)
             .order('created_at', { ascending: false })
-            .limit(200),
+            .limit(500),
           supabase
             .from('access_events')
             .select('id, created_at, channel_id, invoice_id, tg_user_id, payload')
-            .eq('event_type', 'abandoned_reminder')
-            .in('channel_id', channelIds)
+            .in('event_type', ['abandoned_reminder', 'browse_reminder'])
+            .eq('owner_id', user.id)
+            .gte('created_at', sinceIso)
             .order('created_at', { ascending: false })
-            .limit(50)
+            .limit(500)
         ]);
 
         if (invoicesError) throw invoicesError;
@@ -191,7 +195,9 @@ export function AbandonedPage() {
         const staleList = [];
         allInvoices.forEach((inv) => {
           const createdTs = new Date(inv.created_at).getTime();
-          if (createdTs <= twoHoursAgoTs && createdTs >= threeHoursAgoTs) {
+          // В очереди — только то, что джоба реально отправляет: pending в окне 2-3ч.
+          // awaiting_receipt джоба пропускает (клиент уже в оплате) — это «требуют разбора».
+          if (inv.status === 'pending' && createdTs <= twoHoursAgoTs && createdTs >= threeHoursAgoTs) {
             inWindowList.push(inv);
           } else if (createdTs < threeHoursAgoTs) {
             staleList.push(inv);
@@ -256,11 +262,14 @@ export function AbandonedPage() {
     const sevenDaysAgo = Date.now() - SEVEN_DAYS_MS;
     const recent = events.filter((e) => new Date(e.created_at).getTime() >= sevenDaysAgo);
     const withDiscount = recent.filter((e) => Number(e.payload?.discount_percent || 0) > 0).length;
-    const failed = recent.filter((e) => ['failed', 'skipped'].includes(e.payload?.delivered_by)).length;
+    const failed = recent.filter((e) => e.payload?.delivered_by === 'failed').length;
+    const skipped = recent.filter((e) => e.payload?.delivered_by === 'skipped').length;
     return {
       total: recent.length,
       withDiscount,
-      failed
+      failed,
+      skipped,
+      problems: failed + skipped
     };
   }, [events]);
 
@@ -288,6 +297,13 @@ export function AbandonedPage() {
 
   async function saveSettings() {
     if (!user?.id) return;
+    // Паритет с бэкендом: скидка клэмпится в 0-99, на фронте валидируем и не сохраняем вне диапазона
+    const discountValue = Number(discountDraft || 0);
+    if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue > 99) {
+      setDiscountError('Скидка — число от 0 до 99');
+      return;
+    }
+    setDiscountError('');
     setSaving(true);
     setSaveError('');
     setSavedAt(false);
@@ -366,11 +382,15 @@ export function AbandonedPage() {
   const allPendingTgIds = Array.from(new Set(allPending.map((inv) => String(inv.tg_user_id || '')).filter(Boolean)));
   const staleTgIds = Array.from(new Set(stale.map((inv) => String(inv.tg_user_id || '')).filter(Boolean)));
 
+  // Выборка инвойсов ограничена лимитом 500: если счётчик упёрся в лимит — показываем «500+»
+  const queueLabel = inWindow.length >= 500 ? '500+' : inWindow.length;
+  const staleLabel = stale.length >= 500 ? '500+' : stale.length;
+
   const statCards = [
     { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
     { label: 'Со скидкой', value: stats.withDiscount, color: stats.withDiscount > 0 ? 'text-emerald-600' : 'text-slate-400', Icon: Tag },
-    { label: 'В очереди отправки', value: inWindow.length, color: inWindow.length > 0 ? 'text-amber-600' : 'text-slate-400', Icon: Clock },
-    { label: 'Не доставлено', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
+    { label: 'В очереди отправки', value: queueLabel, color: inWindow.length > 0 ? 'text-amber-600' : 'text-slate-400', Icon: Clock },
+    { label: 'Сбой / пропуск', value: stats.problems, color: stats.problems > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
   ];
 
   return (
@@ -398,7 +418,7 @@ export function AbandonedPage() {
                 ))}
               </select>
               <div className="text-xs font-bold text-slate-500">
-                {inWindow.length} в очереди · {stale.length} требуют разбора
+                {queueLabel} в очереди · {staleLabel} требуют разбора
               </div>
             </div>
           </div>
@@ -427,10 +447,10 @@ export function AbandonedPage() {
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">
               В окне автоматического дожима
             </h3>
-            <span className="text-xs font-bold text-slate-400">{inWindow.length}</span>
+            <span className="text-xs font-bold text-slate-400">{queueLabel}</span>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed mb-4 max-w-2xl">
-            Счета возрастом 2-3 часа без напоминания. Получат сообщение в ближайший запуск cron (каждые 15 минут).
+            Счета возрастом 2-3 часа без напоминания. Получат сообщение автоматически, раз в 15 минут.
           </p>
 
           {inWindow.length === 0 ? (
@@ -457,7 +477,7 @@ export function AbandonedPage() {
               Требуют ручного разбора
             </h3>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400">{stale.length}</span>
+              <span className="text-xs font-bold text-slate-400">{staleLabel}</span>
               {staleTgIds.length > 0 ? (
                 <>
                   <button
@@ -499,23 +519,31 @@ export function AbandonedPage() {
               Что отправляется подписчикам
             </h3>
             <span className="text-[11px] text-slate-400 font-medium">
-              Сценарий <span className="font-bold text-slate-600">abandoned-cart</span>
+              Сценарий <span className="font-bold text-slate-600">Брошенные корзины</span>
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 mb-4">
-            <div className="flex items-center gap-2">
-              <Tag className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="text-sm font-bold text-slate-700">Скидка</span>
-              <input
-                type="number"
-                min="0"
-                max="99"
-                value={discountDraft}
-                onChange={(event) => setDiscountDraft(Number(event.target.value || 0))}
-                className="w-20 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400"
-              />
-              <span className="text-sm font-bold text-slate-500">%</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span className="text-sm font-bold text-slate-700">Скидка</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="99"
+                  value={discountDraft}
+                  onChange={(event) => {
+                    setDiscountDraft(Number(event.target.value || 0));
+                    setDiscountError('');
+                  }}
+                  className={`w-20 px-3 py-1.5 rounded-lg bg-white border text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 ${discountError ? 'border-rose-300' : 'border-slate-200'}`}
+                />
+                <span className="text-sm font-bold text-slate-500">%</span>
+              </div>
+              {discountError ? (
+                <div className="text-[11px] font-bold text-rose-600 mt-1">{discountError}</div>
+              ) : null}
             </div>
             <div className="ml-auto flex gap-1.5">
               <button
@@ -546,7 +574,7 @@ export function AbandonedPage() {
             Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{tariff_name}`}</code> → название тарифа, <code className="px-1 bg-slate-100 rounded">{`{discount_percent}`}</code> → значение скидки, <code className="px-1 bg-slate-100 rounded">{`{discount_price}`}</code> → цена со скидкой, <code className="px-1 bg-slate-100 rounded">{`{old_price}`}</code> → исходная цена, <code className="px-1 bg-slate-100 rounded">{`{currency}`}</code> → валюта.
           </div>
           <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
-            Этот текст и скидка также применяются в сценарии <span className="font-medium">browse-followup</span> (напоминание после просмотра тарифа).
+            Этот текст и скидка также применяются в сценарии <span className="font-medium">«Дожим после просмотра»</span> (напоминание после просмотра тарифа).
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-6">
@@ -595,7 +623,7 @@ export function AbandonedPage() {
               </div>
               <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">История пуста</h4>
               <p className="text-slate-500 font-medium text-sm max-w-md">
-                Отправленных напоминаний пока нет. Записи появятся здесь автоматически после первого срабатывания cron-задачи «Брошенные корзины» для бота {selectedBotLabel}.
+                Отправленных напоминаний пока нет. Записи появятся здесь автоматически после первой отправки «Брошенные корзины» для бота {selectedBotLabel}.
               </p>
             </div>
           ) : (
