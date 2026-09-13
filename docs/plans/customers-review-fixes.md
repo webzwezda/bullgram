@@ -48,6 +48,28 @@
 - Осталось после деплоя (browser doctrine + Supabase MCP): тост синка, гонка при смене бота, «Продлить» с под-вкладки (access_note/access_source в БД), `?tab=orders`, ошибка в карточке выручки.
 - Не пушено: пуш = автодеплой в прод, ждём явной команды.
 
+## Вторая партия (2026-09-14): P2-12 + часть P2-11
+Контекст: пользователь подтвердил продолжение («действуй»). Сделано:
+- **Контролируемый тест P1-3 на проде**: «Продлить на 5 дней» на подписке 8414225338 →
+  `expires_at` = now+5d, `access_note` не тронут, новых access_events ноль ⇒ сетевой путь
+  `batch-add-days` подтверждён; тест откачен (expires_at обратно в NULL, условный WHERE).
+- **P2-12 popover-миграция** (по modern-web-guidance, гайды resilient-context-menus +
+  declarative-dialog-popover-control): меню действий обеих таблиц на нативном Popover API
+  (`popovertarget` + `popover="auto"`), позиционирование anchor-ом через inline style
+  (`position-area: block-end span-inline-start`, justify-self: end, align-self: start,
+  `position-try-fallbacks: flip-block, flip-inline`). Удалены: state openActionsRowId,
+  global mousedown-эффект; добавлены closeAllRowMenus() и страховочный эффект закрытия
+  на смену вкладки/бота (риск переанкорки при back/forward). Полифилл осознанно не
+  тащим: админка — десктопный Chrome (policy).
+- **P2-11 (частично)**: кап 2000 на while(true)-пагинацию getParticipantsSafely; точный
+  детект через GramJS TotalList.total (не chunk-count — нет ложного warn на ровно 2000);
+  ответ синка отдаёт truncated/total_in_group, тост предупреждает оператора об урезании.
+- Ревью code-reviewer сабагентом: **approve** (позиционирование и флипы проверены
+  эмпирически в headless Chrome, UA-стили сбиты полностью, id поповеров коллизий не имеют);
+  оба его P2 (truncated-флаг, страховочный эффект) закрыты до коммита.
+- Остаток P2-11 (безлимитная выгрузка members в workbench/audience GET, N+1) — отдельная
+  архитектурная задача, сознательно не тронута.
+
 ## Runtime-проверка на проде (2026-09-13, после деплоя 34761175104)
 Деплой: CI зелёный, smoke check ok. Проверено в реальном Chrome (Playwright extension):
 - ✅ авто-редирект на `bot_id`, в селекте один бот без «Все боты», под-вкладки с бейджами
