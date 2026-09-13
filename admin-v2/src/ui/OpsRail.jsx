@@ -87,11 +87,11 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h4 className={`text-sm font-bold truncate transition-colors ${isDone ? 'text-slate-400 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
+                    <h4 className={`text-sm font-bold line-clamp-2 transition-colors ${isDone ? 'text-emerald-700 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
                       {step.title}
                     </h4>
                   </div>
-                  <p className={`text-xs mt-0.5 truncate transition-colors ${isDone ? 'text-slate-300' : 'text-slate-500 group-hover:text-slate-600'}`}>
+                  <p className={`text-xs mt-0.5 line-clamp-2 transition-colors ${isDone ? 'text-slate-500' : 'text-slate-500 group-hover:text-slate-600'}`}>
                     {step.hint}
                   </p>
                 </div>

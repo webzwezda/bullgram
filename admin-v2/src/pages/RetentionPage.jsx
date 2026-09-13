@@ -47,6 +47,44 @@ function formatExpiresIn(iso) {
   return `истекает через ${mins} мин`;
 }
 
+function pluralSubscribers(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'подписчик';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'подписчика';
+  return 'подписчиков';
+}
+
+function pluralReminders(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'напоминание';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'напоминания';
+  return 'напоминаний';
+}
+
+// Лёгкий рендер легаси-Telegram-markdown для превью: *жирный*, _курсив_, `код`.
+// Подставляем только {channel_name}; остальные теги оставляем как есть — их видит админ, не подписчик.
+function renderLegacyMarkdown(text, channelName) {
+  if (!text || !text.trim()) return [];
+  const withChannel = text.replace(/\{channel_name\}/g, () => channelName || 'название канала');
+  const parts = withChannel.split(/(\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)/g);
+  return parts
+    .filter((part) => part !== '')
+    .map((part, idx) => {
+      if (part.length > 2 && part.startsWith('*') && part.endsWith('*')) {
+        return <strong key={idx}>{part.slice(1, -1)}</strong>;
+      }
+      if (part.length > 2 && part.startsWith('_') && part.endsWith('_')) {
+        return <em key={idx}>{part.slice(1, -1)}</em>;
+      }
+      if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
+        return <code key={idx} className="rounded bg-slate-100 px-1 font-mono text-[0.9em]">{part.slice(1, -1)}</code>;
+      }
+      return <Fragment key={idx}>{part}</Fragment>;
+    });
+}
+
 function deliveryBadge(deliveredBy = '', payload = {}) {
   switch (deliveredBy) {
     case 'bot':
@@ -326,6 +364,8 @@ export function RetentionPage() {
 
   const reminderDirty = reminderDraft !== reminderOriginal;
 
+  const botPreviewNodes = renderLegacyMarkdown(reminderDraft, previewChannelName);
+
   function insertStandardTemplate() {
     setReminderDraft(STANDARD_TEMPLATE);
   }
@@ -420,6 +460,15 @@ export function RetentionPage() {
         )}
 
         <section className="p-6 md:p-8 border-b border-slate-100">
+          <div className="mb-5">
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">Удержание</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {stats.total > 0
+                ? `${stats.total} ${pluralReminders(stats.total)} за 7 дней`
+                : 'За 7 дней напоминаний не было — тихо'}
+            </p>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <select
@@ -433,9 +482,9 @@ export function RetentionPage() {
                   </option>
                 ))}
               </select>
-              <div className="text-xs font-bold text-slate-500">
-                {activeSubsCount} активн.
-              </div>
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                {activeSubsCount} {pluralSubscribers(activeSubsCount)}
+              </span>
             </div>
           </div>
 
@@ -445,9 +494,9 @@ export function RetentionPage() {
               return (
                 <div
                   key={idx}
-                  className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl"
+                  className="bg-slate-50/50 border border-slate-100 p-5 rounded-2xl"
                 >
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.label}</span>
                     <Icon className={`w-5 h-5 ${card.color} opacity-70`} />
                   </div>
@@ -512,6 +561,9 @@ export function RetentionPage() {
                   </div>
                 );
               })}
+              <p className="text-xs text-slate-500 leading-relaxed">
+                ЛС дойдёт, только если у юзербота есть общий чат с этим человеком (например, админ-группа воронки) — админ-права юзербота в этой группе повышают шансы доставки.
+              </p>
             </div>
           )}
         </section>
@@ -548,11 +600,27 @@ export function RetentionPage() {
             placeholder="Текст, который бот отправит подписчику за 24ч до истечения подписки."
           />
 
-          <div className="mt-3 text-[11px] text-slate-400 leading-relaxed">
+          <div className="mt-3 max-w-2xl text-xs text-slate-500 leading-relaxed">
             Теги автоматически заменятся при отправке: <code className="px-1 bg-slate-100 rounded">{`{channel_name}`}</code> → название канала, <code className="px-1 bg-slate-100 rounded">{`{renewal_link}`}</code> → ссылка на оплату тарифа (https://t.me/бот?start=buy_…), <code className="px-1 bg-slate-100 rounded">{`{upsell_tariff_name}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_price}`}</code>, <code className="px-1 bg-slate-100 rounded">{`{upsell_currency}`}</code> — для пробников с привязанным апселл-тарифом.
           </div>
-          <div className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+          <div className="mt-2 max-w-2xl text-xs text-slate-500 leading-relaxed">
             Inline-кнопка «💳 Продлить доступ» добавляется к сообщению, когда доступна ссылка на оплату (привязан тариф продления); если ссылки нет — подписчик увидит обычное сообщение со ссылкой из тега. Userbot кнопки отправить не может — поэтому важно, чтобы ссылка была прямо в тексте (через тег {`{renewal_link}`}).
+          </div>
+
+          <div className="mt-6 p-4 rounded-2xl bg-emerald-50/40 border border-emerald-100">
+            <div className="flex items-center gap-2 mb-3">
+              <Bot className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-sm font-bold text-slate-700">Так увидит подписчик (бот)</span>
+            </div>
+            <div className="p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+              {botPreviewNodes.length > 0 ? botPreviewNodes : '— пусто — редактируй текст выше —'}
+            </div>
+            <div className="mt-3">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white">💳 Продлить доступ</span>
+              <div className="mt-1.5 text-[11px] text-slate-500">
+                Кнопка добавляется, когда доступна ссылка на оплату (привязан тариф продления)
+              </div>
+            </div>
           </div>
 
           <div className="mt-6 p-4 rounded-2xl bg-blue-50/40 border border-blue-100">
@@ -651,7 +719,7 @@ export function RetentionPage() {
               </div>
               <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Еще ничего не отправлено</h4>
               <p className="text-slate-500 font-medium text-sm max-w-md">
-                Первое напоминание появится здесь, когда у подписчика бота {selectedBotLabel} будет <span className="font-bold">expires_at</span> в ближайшие 24 часа.
+                Первое напоминание появится здесь, когда у кого-то из подписчиков бота {selectedBotLabel} до конца доступа останется <span className="font-bold">меньше суток</span>.
               </p>
             </div>
           ) : (

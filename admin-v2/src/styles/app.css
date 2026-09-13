@@ -352,20 +352,10 @@ a.link-action:hover {
   font-weight: 700;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin-top: 24px;
-}
-
-/* Legacy .grid above leaks margin-top and auto-fit columns into shadcn
-   CardHeaders (they also carry the "grid" class). Neutralize the leak. */
-[data-slot='card-header'] {
-  margin-top: 0;
-  grid-template-columns: none;
-}
-
+/* Легаси-правило `.grid { display:grid; auto-fit 260px; gap:16px; margin-top:24px }` удалено 2026-09-14:
+   оно жило вне @layer и перебивало Tailwind-утилиты (grid-cols-*, gap-*) на произвольных ширинах —
+   сетки рендерились не тем числом колонок (см. docs/plans/2026-09-14-retention-review-backlog.md).
+   Не возвращай голый `.grid` в этот файл — display:grid для класса `grid` даёт сам Tailwind. */
 
 .grid--double {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2360,9 +2350,7 @@ a.link-action:hover {
   }
 
   .payment-summary-grid,
-  .mcp-layout,
-  .grid,
-  .grid--double {
+  .mcp-layout {
     grid-template-columns: 1fr;
   }
 
