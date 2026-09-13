@@ -712,7 +712,7 @@ export function QuickStartPage() {
               ) : (
                 <Button
                   variant="ghost"
-                  onClick={handleDelete}
+                  onClick={askDelete}
                   className="h-11 px-4 rounded-xl text-rose-600 hover:bg-rose-50 font-bold border border-rose-100 w-full md:w-auto"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
@@ -959,7 +959,7 @@ export function QuickStartPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleUnlinkChannel(tab)}
+                          onClick={() => askUnlinkChannel(tab)}
                           disabled={refreshingChannel[tab] || unlinkingChannel[tab] || savingChannel[tab]}
                           className="text-xs h-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 hover:border-rose-200"
                         >
@@ -1407,7 +1407,7 @@ export function QuickStartPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRemoveAdmin(adminId)}
+                            onClick={() => askRemoveAdmin(adminId)}
                             className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 h-8 rounded-lg"
                           >
                             Удалить
