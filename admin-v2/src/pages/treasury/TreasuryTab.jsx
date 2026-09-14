@@ -74,7 +74,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
     { label: 'Возвраты', value: buckets.adminReserveLiabilityTon },
     { label: 'Комиссии сети', value: buckets.networkFeeReserveTon },
     { label: 'Ожидают оплаты', value: buckets.pendingPaymentTon },
-    { label: 'По учету доступно', value: summary.accountingAvailableTon },
+    { label: 'По учёту доступно', value: summary.accountingAvailableTon },
     { label: 'По кошельку доступно', value: summary.walletAvailableTon }
   ];
 
@@ -107,7 +107,9 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">
                 Баланс кошелька, резервы и выводы TON.{' '}
-                {summary.walletCheckedAt ? `Обновлено: ${formatTime(summary.walletCheckedAt)}` : 'Кошелёк недоступен.'}
+                {summary.walletCheckedAt
+                  ? `Обновлено: ${formatTime(summary.walletCheckedAt)}`
+                  : 'Кошелёк не синхронизирован — нажми «Обновить» через пару минут.'}
               </p>
             </div>
             <Button variant="outline" size="sm" className="text-xs h-9 rounded-xl shrink-0" onClick={onReload} disabled={loading || withdrawing}>
@@ -119,7 +121,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
 
         <CardContent className="p-5 sm:p-6 space-y-4">
           {error ? (
-            <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800 shadow-sm">
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700 shadow-sm">
               {error}
             </div>
           ) : null}
@@ -140,7 +142,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   title="На кошельке"
                   value={summary.walletBalanceTon}
                   hint={walletSynced ? 'Реальный TON-баланс.' : 'Баланс недоступен.'}
-                  hintClasses={walletSynced ? 'text-slate-500' : 'text-amber-600 font-medium'}
+                  hintClasses={walletSynced ? 'text-slate-500' : 'text-amber-700 font-medium'}
                 />
                 <TreasuryStatCard
                   icon={ArrowDownToLine}
@@ -189,7 +191,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="treasury-wallet" className="text-sm font-medium text-slate-700 mb-1.5 block">
-                        TON-кошелек
+                        TON-кошелёк
                       </label>
                       <Input
                         id="treasury-wallet"
@@ -217,9 +219,9 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                         aria-invalid={overLimit || undefined}
                       />
                       <p id="treasury-fee-hint" className="text-xs text-slate-500 mt-1.5">
-                        Комиссия сети: {formatTon(NETWORK_FEE_TON)} TON · Останется:{' '}
-                        {overLimit ? (
-                          <span className="font-medium text-red-700">—</span>
+                        Комиссия сети ≈ {formatTon(NETWORK_FEE_TON)} TON · Останется доступно:{' '}
+                        {overLimit || form.amount_ton === '' ? (
+                          '—'
                         ) : (
                           <span className={remainingTon < 0 ? 'font-medium text-red-700' : ''}>
                             {formatTon(remainingTon)} TON
@@ -250,13 +252,13 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                       type="submit"
                       className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
                       disabled={withdrawing || availableTon <= 0 || !walletSynced || overLimit}
-                      title={!walletSynced ? 'Кошелёк синхронизируется, подожди немного' : undefined}
+                      title={!walletSynced ? 'Кошелёк не синхронизирован — нажми «Обновить» через пару минут' : undefined}
                     >
                       <Send className="w-4 h-4 mr-1.5" />
                       {withdrawing ? 'Создаем...' : 'Запросить вывод'}
                     </Button>
                     {!walletSynced ? (
-                      <p className="text-xs text-slate-500 text-center">Кошелёк синхронизируется, подожди немного.</p>
+                      <p className="text-xs text-slate-500 text-center">Кошелёк не синхронизирован — нажми «Обновить» через пару минут.</p>
                     ) : null}
                   </div>
                 </form>
