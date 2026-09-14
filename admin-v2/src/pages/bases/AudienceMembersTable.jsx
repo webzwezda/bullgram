@@ -10,10 +10,10 @@ function ChannelList({ cov, presentNow }) {
           В: {cov.present.join(', ')}
         </div>
       ) : (
-        <div className="text-slate-400">Нигде не найден</div>
+        <div className="text-slate-500">Нигде не найден</div>
       )}
       {cov.missingTotal > 0 ? (
-        <div className="text-slate-400">
+        <div className="text-slate-500">
           Нет в: {cov.missing.join(', ')}
         </div>
       ) : null}
@@ -86,10 +86,10 @@ export function AudienceMembersTable({ members, onCopyToBase, addToBaseDisabled 
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/50">
-            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
-            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Деньги</th>
-            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Покрытие</th>
-            <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400">В базу</th>
+            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Кто</th>
+            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Деньги</th>
+            <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Покрытие</th>
+            <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-500">В базу</th>
           </tr>
         </thead>
         <tbody>

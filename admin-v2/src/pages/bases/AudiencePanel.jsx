@@ -57,7 +57,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
         }
       } catch (err) {
         if (cancelled || reqId !== metaReqRef.current) return;
-        setMetaError(err.message || 'Ошибка загрузки аудитии');
+        setMetaError(err.message || 'Ошибка загрузки аудитории');
       } finally {
         if (!cancelled && reqId === metaReqRef.current) setMetaLoading(false);
       }
@@ -115,8 +115,11 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
       try {
         const data = await apiRequest(`/api/channel-audiences/${activeBaseId}/members`, { accessToken });
         if (cancelled || reqId !== membersReqRef.current) return;
+        const summary = { ...(data.summary || {}) };
+        // total_count — настоящая длина базы; summary.total считается по выборке (лимит 1000)
+        if (typeof data.total_count === 'number') summary.total = data.total_count;
         setMembers(data.members || []);
-        setMemberSummary(data.summary || {});
+        setMemberSummary(summary);
         setMembersError('');
       } catch (err) {
         if (cancelled || reqId !== membersReqRef.current) return;
@@ -168,10 +171,24 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
         method: 'POST',
         body: { userbot_id: selectedUserbotId }
       });
+      // Новые поля бэкенда читаем защитно: до деплоя бэкенда их просто нет.
+      // synced_count = сколько людей подняли, synced = сколько каналов опросили без ошибок.
+      const failedChannels = Array.isArray(data.failed_channels) ? data.failed_channels : [];
+
       const refreshed = await apiRequest(`/api/channel-audiences/${activeBaseId}/members`, { accessToken });
+      const summary = { ...(refreshed.summary || {}) };
+      if (typeof refreshed.total_count === 'number') summary.total = refreshed.total_count;
       setMembers(refreshed.members || []);
-      setMemberSummary(refreshed.summary || {});
-      toast.success(`Подняли ${data.synced_count || 0} человек из ${data.scanned_channels || 0} каналов`);
+      setMemberSummary(summary);
+
+      if (failedChannels.length > 0) {
+        toast.warning(`Синк прошёл частично: ${failedChannels.length} канал(ов) с ошибками — статусы присутствия этих участников не обновлены`);
+      } else {
+        toast.success(`Подняли ${data.synced_count || 0} человек из ${data.scanned_channels || 0} каналов`);
+      }
+      if (data.truncated) {
+        toast('Показаны первые 5000 участников канала', { duration: 5000 });
+      }
     } catch (err) {
       toast.error(err.message || 'Синк не удался');
     } finally {
@@ -256,7 +273,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
           <p className="text-slate-500 font-medium text-sm mb-6 max-w-md">
             Создайте бота, чтобы собирать аудиторию из его каналов и групп и работать с сегментами.
           </p>
-          <a href="/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+          <a href="/app/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
             Создать бота <ChevronRight className="w-4 h-4" />
           </a>
         </div>
@@ -283,7 +300,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
       <section className="p-6 md:p-8 border-b border-slate-100">
         <div className="flex items-center gap-2 mb-4">
           <Users className="w-5 h-5 text-slate-500" />
-          <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Аудитория бота</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Аудитория бота</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -301,7 +318,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
       </section>
 
       <section className="p-6 md:p-8 border-b border-slate-100">
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Каналы и группы</h3>
+        <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4">Каналы и группы</h3>
         {channelsForBot.length === 0 ? (
           <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
             У этого бота пока нет каналов. Создайте канал на странице «Бот продаж».
@@ -340,7 +357,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {statCards.map((card, idx) => (
                   <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
-                    <div className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">{card.label}</div>
+                    <div className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">{card.label}</div>
                     <div className={`text-3xl font-black tracking-tighter ${card.color}`}>{card.value}</div>
                   </div>
                 ))}
@@ -349,10 +366,10 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
 
             <section className="p-6 md:p-8 border-b border-slate-100">
               <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Участники канала</h3>
-                <span className="text-xs font-bold text-slate-400">
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Участники канала</h3>
+                <span className="text-xs font-bold text-slate-500">
                   {filteredMembers.length} показываем
-                  {members.length > filteredMembers.length ? ` · ${members.length} всего` : ''}
+                  {(memberSummary.total || members.length) > filteredMembers.length ? ` · ${memberSummary.total || members.length} всего` : ''}
                 </span>
               </div>
 
@@ -398,7 +415,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
             </section>
 
             <section className="p-6 md:p-8">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Синк из групп через юзербота</h3>
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4">Синк из групп через юзербота</h3>
               {userbots.length === 0 ? (
                 <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-800">
                   <div className="font-bold mb-1">Нет подключённого юзербота</div>

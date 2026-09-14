@@ -3,14 +3,34 @@ import { authenticateUser } from '../middlewares/auth.middleware.js';
 
 const VALID_SOURCES = new Set(['manual', 'copied', 'imported']);
 
+// Валидный tg_user_id — число-строка (Telegram ID) или @username (опционально без @).
+// Всё остальное — мусор из вставки, в базу его не берём.
+const TG_ID_PATTERN = /^\d+$/;
+const TG_USERNAME_PATTERN = /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/;
+
 function cleanEntry(entry) {
-    const tgUserId = String(entry?.tg_user_id || '').trim();
-    if (!tgUserId) return null;
+    const rawTgUserId = String(entry?.tg_user_id || '').trim();
+    if (!rawTgUserId) return null;
+    const isUsername = TG_USERNAME_PATTERN.test(rawTgUserId);
+    if (!TG_ID_PATTERN.test(rawTgUserId) && !isUsername) return null;
+    // Канонизируем юзернейм с @ и в нижнем регистре, чтобы «ivan», «@ivan» и «@Ivan» не плодили дубли.
+    const tgUserId = isUsername
+        ? `@${rawTgUserId.replace(/^@/, '').toLowerCase()}`
+        : rawTgUserId;
     const username = String(entry?.username || '').trim().replace(/^@+/, '');
     const displayName = String(entry?.display_name || '').trim();
     const sourceRaw = String(entry?.source || '').trim();
     const source = VALID_SOURCES.has(sourceRaw) ? sourceRaw : 'manual';
     return { tg_user_id: tgUserId, username, display_name: displayName, source };
+}
+
+// Экранируем спецсимволы парсера PostgREST внутри значения для .or().
+// Запятая и скобки режут условие на куски: «Смирнов, Иван» без экранирования
+// превращается в два битых фильтра, «Иванов (старый)» — в мусорное вложенное выражение.
+// Бэкслеши PostgREST в unquoted-значениях не поддерживает (проверено живьём, PGRST100),
+// работает только двойное кавычкирование значения: ilike."%...%".
+function escapePostgrestOr(value) {
+    return `"%${String(value).replace(/"/g, '\\"')}%"`;
 }
 
 export default function clientBasesRoutes(supabase) {
@@ -163,7 +183,7 @@ export default function clientBasesRoutes(supabase) {
                 .range(offset, offset + limit - 1);
 
             if (search) {
-                const like = `%${search}%`;
+                const like = escapePostgrestOr(search);
                 query = query.or(`display_name.ilike.${like},username.ilike.${like},tg_user_id.ilike.${like}`);
             }
 
@@ -368,6 +388,12 @@ export default function clientBasesRoutes(supabase) {
             if (!base) return res.status(404).json({ error: 'База не найдена' });
 
             const rawEntries = Array.isArray(req.body.entries) ? req.body.entries : [];
+
+            // Кап на размер пачки: без него одна вставка может положить и запрос, и PostgREST.
+            if (rawEntries.length > 5000) {
+                return res.status(400).json({ error: 'Слишком много записей за раз — до 5000' });
+            }
+
             const cleanedEntries = rawEntries
                 .map(cleanEntry)
                 .filter(Boolean);
@@ -417,7 +443,9 @@ export default function clientBasesRoutes(supabase) {
             res.json({
                 received: rawEntries.length,
                 inserted: dedupedIds.length - existingIds.size,
-                updated: existingIds.size
+                updated: existingIds.size,
+                // Мусорные записи (не ID и не @username) молча пропустили — говорим сколько.
+                skipped: rawEntries.length - cleanedEntries.length
             });
         } catch (error) {
             console.error('Ошибка добавления членов в базу клиентов:', error);
@@ -431,7 +459,7 @@ export default function clientBasesRoutes(supabase) {
             const base = await loadOwnedBase(req.user.id, baseId);
             if (!base) return res.status(404).json({ error: 'База не найдена' });
 
-            const { data, error } = await supabase
+            const { count, error } = await supabase
                 .from('client_base_members')
                 .delete({ count: 'exact' })
                 .eq('id', memberId)
@@ -440,8 +468,9 @@ export default function clientBasesRoutes(supabase) {
 
             if (error) throw error;
 
-            const removed = Array.isArray(data) ? data.length : 0;
-            if (removed === 0) {
+            // Без .select() PostgREST возвращает data=null, поэтому считаем по count —
+            // при { count: 'exact' } он приходит честно даже без строк в data.
+            if ((count ?? 0) === 0) {
                 return res.status(404).json({ error: 'Член базы не найден' });
             }
 

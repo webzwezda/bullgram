@@ -682,12 +682,12 @@ export function AbandonedPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Время</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Подписчик</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Канал</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Сумма</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Доставлено</th>
-                    <th className="px-6 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400">Текст</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Время</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Подписчик</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Канал</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Сумма</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Доставлено</th>
+                    <th className="px-6 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-500">Текст</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -9,6 +9,7 @@ import { ClientBaseEditor } from './ClientBaseEditor.jsx';
 import { ManualAddDialog } from './ManualAddDialog.jsx';
 
 const BUFFER_STORAGE_KEY = 'bases_new_buffer_v1';
+const PENDING_BASE_STORAGE_KEY = 'bases_new_pending_base_v1';
 
 function loadBuffer() {
   try {
@@ -27,6 +28,26 @@ function saveBuffer(items) {
   }
 }
 
+// F5 в состоянии «дозалить» не должен терять созданную базу — иначе останется
+// осиротевшая пустая база, а повтор «Сохранить» наделает дубль.
+function loadPendingBaseId() {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_BASE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingBaseId(id) {
+  try {
+    if (id) window.sessionStorage.setItem(PENDING_BASE_STORAGE_KEY, JSON.stringify(id));
+    else window.sessionStorage.removeItem(PENDING_BASE_STORAGE_KEY);
+  } catch {
+    // best-effort
+  }
+}
+
 export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBaseId, addToBaseRequest, onConsumeAddRequest }) {
   const [bases, setBases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +58,14 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
   const [draftDescription, setDraftDescription] = useState('');
   const [buffer, setBuffer] = useState(loadBuffer);
   const [saving, setSaving] = useState(false);
+  // id базы, которая создалась, но залить в неё корзину не вышло.
+  // Пока стоит — корзина сохраняется, кнопка «Сохранить базу» доливает в эту базу, а не создаёт дубль.
+  const [pendingBaseId, setPendingBaseIdState] = useState(loadPendingBaseId);
+
+  function setPendingBaseId(id) {
+    setPendingBaseIdState(id);
+    savePendingBaseId(id);
+  }
 
   // Bump to trigger editor refetch
   const [editorRefreshTick, setEditorRefreshTick] = useState(0);
@@ -138,6 +167,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
   function selectBase(id) {
     onChangeActiveBaseId(id);
     setMode(id ? 'existing' : 'new');
+    setPendingBaseId(null);
   }
 
   function startNew() {
@@ -145,6 +175,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
     setMode('new');
     setDraftName('');
     setDraftDescription('');
+    setPendingBaseId(null);
   }
 
   function pushToBuffer(member) {
@@ -276,14 +307,36 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
           display_name: e.display_name || '',
           source: e.source || 'manual'
         })));
-        toast.success(`База создана, добавлено ${result?.inserted || 0} · обновлено ${result?.updated || 0}`);
+        toast.success(`База создана, добавлено ${result?.inserted || 0} · обновлено ${result?.updated || 0}${result?.skipped ? ` · пропущено (мусорный id) ${result.skipped}` : ''}`);
         finalizeNewBase(createdId);
       } catch (memberErr) {
-        toast.error(`База создана, но добавить людей не вышло: ${memberErr.message || ''}`);
-        finalizeNewBase(createdId);
+        // База уже создана — её оставляем. Корзину и sessionStorage НЕ чистим,
+        // чтобы админ мог повторить заливку без потери собранного списка.
+        toast.error(`Базу создали, но людей залить не вышло: ${memberErr.message || ''}. Список остался в корзине — жми «Дозалить в созданную базу».`);
+        setPendingBaseId(createdId);
+        fetchClientBases(accessToken).then((data) => setBases(data.bases || [])).catch(() => {});
       }
     } catch (err) {
       toast.error(err.message || 'Не удалось создать базу');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function retryPendingBase() {
+    if (!pendingBaseId || buffer.length === 0) return;
+    setSaving(true);
+    try {
+      const result = await addClientBaseMembers(accessToken, pendingBaseId, buffer.map((e) => ({
+        tg_user_id: e.tg_user_id,
+        username: e.username || '',
+        display_name: e.display_name || '',
+        source: e.source || 'manual'
+      })));
+      toast.success(`Долили в базу: ${result?.inserted || 0} · обновлено ${result?.updated || 0}${result?.skipped ? ` · пропущено (мусорный id) ${result.skipped}` : ''}`);
+      finalizeNewBase(pendingBaseId);
+    } catch (err) {
+      toast.error(err.message || 'Опять не вышло. Корзина на месте — попробуй ещё раз');
     } finally {
       setSaving(false);
     }
@@ -294,6 +347,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
     saveBuffer([]);
     setDraftName('');
     setDraftDescription('');
+    setPendingBaseId(null);
     fetchClientBases(accessToken).then((data) => {
       const list = data.bases || [];
       setBases(list);
@@ -307,6 +361,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
 
   function handleBaseDeleted() {
     onChangeActiveBaseId(null);
+    setPendingBaseId(null);
     fetchClientBases(accessToken).then((data) => {
       const list = data.bases || [];
       setBases(list);
@@ -359,7 +414,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
       <div className="p-6 md:p-8 border-b border-slate-100">
         <div className="flex items-center gap-2 mb-3">
           <Database className="w-5 h-5 text-slate-500" />
-          <h2 className="text-sm font-black uppercase tracking-widest text-slate-400">Базы клиентов</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Базы клиентов</h2>
         </div>
         <p className="text-sm text-slate-600 max-w-2xl">
           Кураторские списки для точечных рассылок и дожима. Собирайте из аудитории бота кнопкой «В базу» сверху или вбивайте руки.
@@ -473,13 +528,19 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
             </button>
             <button
               type="button"
-              onClick={saveNewBase}
-              disabled={saving || !draftName.trim()}
+              onClick={pendingBaseId ? retryPendingBase : saveNewBase}
+              disabled={saving || (pendingBaseId ? buffer.length === 0 : !draftName.trim())}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-auto"
             >
-              {saving ? 'Сохраняем…' : 'Сохранить базу'}
+              {saving ? 'Сохраняем…' : pendingBaseId ? 'Дозалить в созданную базу' : 'Сохранить базу'}
             </button>
           </div>
+
+          {pendingBaseId ? (
+            <div className="mb-4 p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs text-amber-800">
+              Базу создали, но залить в неё людей не вышло. Корзина цела — жми «Дозалить в созданную базу»: повтор не создаст дубль базы.
+            </div>
+          ) : null}
 
           {buffer.length === 0 ? (
             <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
@@ -490,9 +551,9 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Источник</th>
-                    <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400"></th>
+                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Кто</th>
+                    <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Источник</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-500"></th>
                   </tr>
                 </thead>
                 <tbody>

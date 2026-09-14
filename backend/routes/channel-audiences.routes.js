@@ -71,10 +71,22 @@ export default function channelAudiencesRoutes(supabase) {
         try {
             const ownerId = req.user.id;
             const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
-            const [{ data: bases, error: basesError }, { data: channels, error: channelsError }, { data: baseChannels, error: baseChannelsError }, { data: members, error: membersError }, { data: userbots, error: userbotsError }, { data: bots, error: botsError }] = await Promise.all([
-                supabase.from('channel_audiences').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
+
+            // Сначала свои базы: у channel_audience_channels нет owner_id,
+            // поэтому без фильтра по base_id выборка тянула привязки чужих баз.
+            const { data: bases, error: basesError } = await supabase
+                .from('channel_audiences')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .order('created_at', { ascending: false });
+            if (basesError) throw basesError;
+            const ownerBaseIds = (bases || []).map(base => base.id);
+
+            const [{ data: channels, error: channelsError }, { data: baseChannels, error: baseChannelsError }, { data: members, error: membersError }, { data: userbots, error: userbotsError }, { data: bots, error: botsError }] = await Promise.all([
                 supabase.from('channels').select('id, title, tg_chat_id, bot_id').eq('owner_id', ownerId).order('created_at', { ascending: false }),
-                supabase.from('channel_audience_channels').select('base_id, channel_id'),
+                ownerBaseIds.length > 0
+                    ? supabase.from('channel_audience_channels').select('base_id, channel_id').in('base_id', ownerBaseIds)
+                    : Promise.resolve({ data: [], error: null }),
                 supabase.from('channel_audience_members').select('base_id, present_now, is_bot')
                     .eq('owner_id', ownerId),
                 supabase
@@ -92,7 +104,6 @@ export default function channelAudiencesRoutes(supabase) {
                     .order('created_at', { ascending: true })
             ]);
 
-            if (basesError) throw basesError;
             if (channelsError) throw channelsError;
             if (baseChannelsError && !(baseChannelsError.message || '').includes('channel_audience_channels')) throw baseChannelsError;
             if (membersError && !(membersError.message || '').includes('channel_audience_members')) throw membersError;
@@ -256,9 +267,11 @@ export default function channelAudiencesRoutes(supabase) {
             const base = await loadOwnedBase(req.user.id, baseId);
             if (!base) return res.status(404).json({ error: 'База не найдена' });
 
-            const { data: members, error } = await supabase
+            // count:'exact' поверх limit: считаем весь отфильтрованный набор,
+            // чтобы честно сказать, что выдача обрезана лимитом 1000.
+            const { data: members, error, count: totalCount } = await supabase
                 .from('channel_audience_members')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .eq('owner_id', req.user.id)
                 .eq('base_id', baseId)
                 .order('channels_count', { ascending: false })
@@ -289,7 +302,7 @@ export default function channelAudiencesRoutes(supabase) {
 
             const linkedTariffIds = (linkedTariffs || []).map(tariff => tariff.id);
 
-            const [{ data: subscriptions, error: subscriptionsError }, { data: invoices, error: invoicesError }] = await Promise.all([
+            const [{ data: subscriptions, error: subscriptionsError }, { data: invoices, error: invoicesError, count: invoicesCount }] = await Promise.all([
                 linkedChannelIds.length > 0
                     ? supabase
                         .from('subscriptions')
@@ -299,11 +312,11 @@ export default function channelAudiencesRoutes(supabase) {
                 linkedTariffIds.length > 0
                     ? supabase
                         .from('invoices')
-                        .select('tg_user_id, status, created_at, paid_at')
+                        .select('tg_user_id, status, created_at, paid_at', { count: 'exact' })
                         .in('tariff_id', linkedTariffIds)
                         .order('created_at', { ascending: false })
                         .limit(5000)
-                    : Promise.resolve({ data: [], error: null })
+                    : Promise.resolve({ data: [], error: null, count: 0 })
             ]);
 
             if (subscriptionsError) throw subscriptionsError;
@@ -419,7 +432,14 @@ export default function channelAudiencesRoutes(supabase) {
                 free_riders: 0
             });
 
-            res.json({ success: true, members: hydratedMembers, summary });
+            res.json({
+                success: true,
+                members: hydratedMembers,
+                summary,
+                total_count: totalCount || 0,
+                truncated: (totalCount || 0) > hydratedMembers.length,
+                payments_truncated: (invoicesCount || 0) > (invoices || []).length
+            });
         } catch (error) {
             console.error('Ошибка загрузки участников базы:', error);
             res.status(500).json({ error: 'Ошибка загрузки участников базы' });
@@ -454,17 +474,23 @@ export default function channelAudiencesRoutes(supabase) {
 
             const client = await userbotService.createAuthorizedClient(userbot, 1);
             const aggregatedMembers = new Map();
+            // Каналы, опрошенные без ошибок: только их членов можно честно пометить absent.
+            // Члены каналов, которые не опросились, остаются со своим старым present_now.
+            const polledChannelIds = [];
+            const failedChannels = [];
+            let truncated = false;
 
             try {
-                await supabase
-                    .from('channel_audience_members')
-                    .update({ present_now: false, updated_at: new Date().toISOString() })
-                    .eq('base_id', baseId)
-                    .eq('owner_id', req.user.id);
-
                 for (const channel of linkedChannels) {
                     try {
                         const participants = await client.getParticipants(channel.tg_chat_id, { limit: 5000 });
+
+                        // GramJS возвращает TotalList с .total (общий count из ответа Telegram).
+                        // Если total больше собранного — часть участников не влезла в лимит 5000.
+                        const totalParticipants = Number(participants?.total ?? 0);
+                        if (totalParticipants > (participants?.length || 0)) {
+                            truncated = true;
+                        }
 
                         await upsertPeerCacheBatch(supabase, (participants || [])
                             .filter(participant => participant?.accessHash != null)
@@ -511,13 +537,43 @@ export default function channelAudiencesRoutes(supabase) {
 
                             aggregatedMembers.set(tgUserId, existing);
                         }
+
+                        polledChannelIds.push(channel.id);
                     } catch (channelError) {
                         console.error(`Ошибка чтения участников ${channel.title}:`, channelError.message);
+                        failedChannels.push({
+                            channel_id: channel.id,
+                            chat_id: channel.tg_chat_id || null,
+                            error: String(channelError?.message || channelError)
+                        });
                     }
                 }
             } finally {
                 await client.disconnect();
             }
+
+            // present_now выставляем по факту опроса, а не заранее:
+            // найден сейчас — true (upsert ниже), замечен раньше в опрошенных каналах,
+            // но сейчас не найден — false. Члены неопросённых каналов не трогаем.
+            const { data: existingMembers, error: existingMembersError } = await supabase
+                .from('channel_audience_members')
+                .select('id, tg_user_id, source_channel_ids')
+                .eq('base_id', baseId)
+                .eq('owner_id', req.user.id);
+            if (existingMembersError) throw existingMembersError;
+
+            const foundIds = new Set(aggregatedMembers.keys());
+            const polledIds = new Set(polledChannelIds);
+            const absentMemberIds = (existingMembers || [])
+                .filter(member => {
+                    const sourceIds = Array.isArray(member.source_channel_ids) ? member.source_channel_ids : [];
+                    // false ставим только когда опрошены ВСЕ каналы, где член мог быть:
+                    // если хоть один его канал упал — присутствие неизвестно, не трогаем
+                    return sourceIds.length > 0
+                        && sourceIds.every(cid => polledIds.has(cid))
+                        && !foundIds.has(String(member.tg_user_id));
+                })
+                .map(member => member.id);
 
             const upsertPayload = Array.from(aggregatedMembers.values());
             if (upsertPayload.length > 0) {
@@ -525,6 +581,15 @@ export default function channelAudiencesRoutes(supabase) {
                     .from('channel_audience_members')
                     .upsert(upsertPayload, { onConflict: 'base_id,tg_user_id' });
                 if (upsertError) throw upsertError;
+            }
+
+            if (absentMemberIds.length > 0) {
+                const { error: absentError } = await supabase
+                    .from('channel_audience_members')
+                    .update({ present_now: false, updated_at: new Date().toISOString() })
+                    .in('id', absentMemberIds)
+                    .eq('owner_id', req.user.id);
+                if (absentError) throw absentError;
             }
 
             await supabase
@@ -536,74 +601,15 @@ export default function channelAudiencesRoutes(supabase) {
             res.json({
                 success: true,
                 synced_count: upsertPayload.length,
-                scanned_channels: linkedChannels.length
+                scanned_channels: linkedChannels.length,
+                // Новое: сколько каналов опросили без ошибок, какие упали и не обрезан ли лимит.
+                synced: polledChannelIds.length,
+                failed_channels: failedChannels,
+                truncated
             });
         } catch (error) {
             console.error('Ошибка синка базы клиентов:', error);
             res.status(500).json({ error: 'Ошибка синка базы клиентов' });
-        }
-    });
-
-    router.post('/:id/actions/import-subscriptions', authenticateUser, async (req, res) => {
-        try {
-            const baseId = req.params.id;
-            const base = await loadOwnedBase(req.user.id, baseId);
-            if (!base) return res.status(404).json({ error: 'База не найдена' });
-
-            const tgUserIds = Array.isArray(req.body.tg_user_ids)
-                ? req.body.tg_user_ids.map(value => String(value)).filter(Boolean)
-                : [];
-            const channelId = req.body.channel_id;
-            const days = req.body.days || '30';
-
-            if (tgUserIds.length === 0) {
-                return res.status(400).json({ error: 'Ты никого не выбрал. Без людей импортировать нечего.' });
-            }
-
-            if (!channelId) {
-                return res.status(400).json({ error: 'Выбери канал, куда закидывать людей в CRM' });
-            }
-
-            const { data: channel, error: channelError } = await supabase
-                .from('channels')
-                .select('id, title')
-                .eq('id', channelId)
-                .eq('owner_id', req.user.id)
-                .single();
-
-            if (channelError || !channel) {
-                return res.status(404).json({ error: 'Канал не найден или не принадлежит тебе' });
-            }
-
-            let expiresAt = null;
-            if (days !== 'forever') {
-                const date = new Date();
-                date.setDate(date.getDate() + parseInt(days, 10));
-                expiresAt = date.toISOString();
-            }
-
-            const uniqueUserIds = Array.from(new Set(tgUserIds));
-            const upsertData = uniqueUserIds.map(tgUserId => ({
-                tg_user_id: tgUserId,
-                channel_id: channel.id,
-                status: 'active',
-                expires_at: expiresAt
-            }));
-
-            const { error: upsertError } = await supabase
-                .from('subscriptions')
-                .upsert(upsertData, { onConflict: 'tg_user_id,channel_id' });
-
-            if (upsertError) throw upsertError;
-
-            res.json({
-                success: true,
-                imported_count: uniqueUserIds.length,
-                channel_title: channel.title
-            });
-        } catch (error) {
-            console.error('Ошибка массового импорта из базы в CRM:', error);
-            res.status(500).json({ error: 'Ошибка массового импорта из базы в CRM' });
         }
     });
 

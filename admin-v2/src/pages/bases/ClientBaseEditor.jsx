@@ -161,12 +161,19 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
       setTotal((prev) => Math.max(0, prev - 1));
       toast.success('Удалён из базы');
     } catch (err) {
-      // Rollback
-      setMembers((prev) => [...prev, snapshot]);
-      if (String(err?.message || '').includes('404') || String(err?.message || '').includes('не найден')) {
-        toast.error('База или член были удалены');
+      const message = String(err?.message || '');
+      if (err?.status === 404 && message.includes('Член базы не найден')) {
+        // Настоящий 404 по члену: его уже нет в базе — это не ошибка.
+        // Из списка не возвращаем (на сервере его нет), из редактора базы не выкидываем.
+        setTotal((prev) => Math.max(0, prev - 1));
+        toast('Уже удалено', { duration: 2000 });
+      } else if (err?.status === 404 && message.includes('База не найдена')) {
+        // База исчезла целиком — выходим из редактора.
+        toast.error('База была удалена');
         onDeleted?.();
       } else {
+        // Rollback
+        setMembers((prev) => [...prev, snapshot]);
         toast.error(err.message || 'Не удалось удалить из базы');
       }
     }
@@ -274,10 +281,10 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
-                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Кто</th>
-                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Деньги</th>
-                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-400">Где есть</th>
-                <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-400"></th>
+                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Кто</th>
+                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Деньги</th>
+                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-slate-500">Где есть</th>
+                <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-slate-500"></th>
               </tr>
             </thead>
             <tbody>
@@ -314,10 +321,10 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
                           В: {cov.present.join(', ')}
                         </div>
                       ) : (
-                        <div className="text-xs text-slate-400">Нигде не найден</div>
+                        <div className="text-xs text-slate-500">Нигде не найден</div>
                       )}
                       {cov.missingTotal > 0 ? (
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-slate-500">
                           Нет в: {cov.missing.join(', ')}
                         </div>
                       ) : null}
