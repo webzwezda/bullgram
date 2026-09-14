@@ -91,7 +91,10 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
                       {step.title}
                     </h4>
                   </div>
-                  <p className={`text-xs mt-0.5 line-clamp-2 transition-colors ${isDone ? 'text-slate-500' : 'text-slate-500 group-hover:text-slate-600'}`}>
+                  <p
+                    className={`text-xs mt-0.5 line-clamp-2 transition-colors ${isDone ? 'text-slate-500' : 'text-slate-500 group-hover:text-slate-600'}`}
+                    title={step.hint}
+                  >
                     {step.hint}
                   </p>
                 </div>

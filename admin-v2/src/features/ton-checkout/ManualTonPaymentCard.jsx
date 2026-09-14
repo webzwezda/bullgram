@@ -63,7 +63,7 @@ function RequisiteRow({ label, value, copyValue }) {
       className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition-colors"
       onClick={copy}
     >
-      <span className="w-14 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+      <span className="w-14 shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</span>
       <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-slate-700">{value}</span>
       <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
         copied ? 'text-emerald-600' : 'text-slate-300 group-hover:text-slate-500'
@@ -123,7 +123,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
                 alt={effectiveQrView === 'ton' ? 'QR для перевода TON' : 'QR для Trust Wallet'}
               />
             </div>
-            <p className="text-[11px] text-slate-400 text-center">Отсканируй камерой кошелька</p>
+            <p className="text-[11px] text-slate-500 text-center">Отсканируй камерой кошелька</p>
           </div>
         ) : null}
 
@@ -136,7 +136,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
 
           {links.length ? (
             <div className="px-4 py-3 space-y-2">
-              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Или открыть в кошельке</div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-500">Или открыть в кошельке</div>
               <div className="grid grid-cols-2 gap-2">
                 {links.map((link) => (
                   <a
@@ -168,11 +168,11 @@ export function ManualTonPaymentCard({ purchase, checking = false, onCheck }) {
                 </>
               ) : 'Проверить оплату'}
             </button>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <ShieldCheck className="size-3 text-emerald-500 shrink-0" />
               Переводи ровно сумму с этим memo — иначе платёж не зачтётся
             </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <Loader2 className="size-3 animate-spin shrink-0" />
               Статус проверяется автоматически каждые 15 секунд
             </span>

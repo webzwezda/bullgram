@@ -149,7 +149,7 @@ function IntegrationCard({
             <Button
               variant="outline"
               size="sm"
-              className={`h-9 rounded-xl ${reissueArmed ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800' : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'}`}
+              className={`h-9 rounded-xl ${reissueArmed ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800' : 'text-amber-700 hover:text-amber-700 hover:bg-amber-50'}`}
               type="button"
               onClick={handleReissueClick}
               disabled={busy}

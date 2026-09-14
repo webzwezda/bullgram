@@ -86,7 +86,7 @@ export function PlatformTierUpgradeCard() {
           <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 mb-2" />
           <p className="text-base font-bold text-emerald-700">Pro активен</p>
           {proEndsAt ? (
-            <p className="text-sm text-emerald-700/80 mt-1">Действует до {formatEndsAt(proEndsAt)}</p>
+            <p className="text-sm font-semibold text-emerald-800 mt-1">Действует до {formatEndsAt(proEndsAt)}</p>
           ) : null}
         </div>
       ) : (

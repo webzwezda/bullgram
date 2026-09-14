@@ -127,14 +127,14 @@ export function ProfileTelegramCard() {
         />
 
         {verified ? (
-          <p className="text-xs text-emerald-600 font-bold">
+          <p className="text-xs text-emerald-700 font-bold">
             {tgUsername ? `Привязан: @${tgUsername}` : 'Привязан через Telegram-логин'}
           </p>
         ) : null}
       </div>
 
       {toast ? (
-        <p className={`text-xs ${toast.kind === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+        <p className={`text-xs ${toast.kind === 'success' ? 'text-emerald-700' : 'text-rose-600'}`}>
           {toast.text}
         </p>
       ) : null}

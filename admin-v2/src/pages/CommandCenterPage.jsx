@@ -10,10 +10,11 @@ export function CommandCenterPage() {
           </div>
           <div>
             <div className="text-lg font-bold tracking-tight text-slate-900">
-              Юзерботы
+              Command Center — заготовка
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Заготовка: здесь будет управление юзерботами — выпуск, прокси, рассылки и мониторинг.
+              Сводный экран в работе. Управление юзерботами уже живёт в разделе{' '}
+              <a href="/app/userbots" className="font-semibold text-indigo-600 hover:text-indigo-700">Юзерботы</a>.
             </p>
           </div>
         </div>

@@ -313,7 +313,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
                     className={`h-9 rounded-xl text-xs font-bold transition-all ${
                       armedReissue
                         ? 'bg-red-600 text-white border border-red-600 hover:bg-red-700'
-                        : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border border-amber-200'
+                        : 'text-amber-700 hover:text-amber-700 hover:bg-amber-50 border border-amber-200'
                     }`}
                     type="button"
                     disabled={creating || testing}
@@ -327,7 +327,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
                       }
                     }}
                   >
-                    <RefreshCcw className="h-4 w-4" /> {armedReissue ? 'Старые токены отзовутся. Точно?' : 'Перевыпустить'}
+                    <RefreshCcw className="h-4 w-4" /> {armedReissue ? 'Точно перевыпустить?' : 'Перевыпустить'}
                   </Button>
                 </>
               ) : (

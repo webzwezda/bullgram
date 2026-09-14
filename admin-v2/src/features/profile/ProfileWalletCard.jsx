@@ -122,7 +122,7 @@ export function ProfileWalletCard() {
                 <button
                   type="button"
                   onClick={open}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold transition-all"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-sm font-bold transition-all"
                 >
                   <Wallet className="w-4 h-4" />
                   Подключить кошелёк
@@ -155,7 +155,7 @@ export function ProfileWalletCard() {
           <button
             type="button"
             onClick={open}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-sm font-bold transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-sm font-bold transition-all"
           >
             <Wallet className="w-4 h-4" />
             Подключить TON-кошелёк
