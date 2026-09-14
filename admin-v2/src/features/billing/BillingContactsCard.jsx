@@ -71,8 +71,8 @@ export function BillingContactsCard() {
     <div className="space-y-7">
       <div>
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Реквизиты кассы</h3>
-        <p className="text-sm text-slate-500 mt-0.5">
-          TON-кошелёк, на который приходят оплаты по счетам sales-бота.
+        <p className="text-sm text-slate-500 mt-0.5 max-w-[60ch]">
+          TON-кошелёк, на который приходят оплаты по счетам бота продаж.
           Лоты витрины shop принимаются на кошелёк сайта — здесь его менять не нужно.
         </p>
       </div>
@@ -113,7 +113,7 @@ export function BillingContactsCard() {
       </div>
 
       {toast ? (
-        <p className={`text-xs ${toast.kind === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+        <p className={`text-xs ${toast.kind === 'success' ? 'text-emerald-700' : 'text-rose-600'}`}>
           {toast.text}
         </p>
       ) : null}

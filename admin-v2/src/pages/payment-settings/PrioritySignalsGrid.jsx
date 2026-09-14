@@ -19,7 +19,8 @@ export function PrioritySignalsGrid({ signals }) {
           >
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${tone.dot}`} />
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+              {/* slate-600: slate-500 на red-50 даёт 4.35:1 — ниже AA для 11px */}
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-600">
                 {tone.label}
               </span>
             </div>

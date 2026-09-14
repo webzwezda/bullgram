@@ -9,10 +9,10 @@ function formatWhen(value) {
 
 function statusBadge(status) {
   const map = {
-    awaiting_receipt: { label: 'Ждет проверки', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    awaiting_receipt: { label: 'Ждёт проверки', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
     wait_admin: { label: 'Ждёт админа', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
     paid: { label: 'Подтверждено', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-    pending: { label: 'Ждет оплату', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+    pending: { label: 'Ждёт оплату', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
     rejected: { label: 'Отклонено', cls: 'bg-red-50 text-red-700 border-red-200' },
     expired: { label: 'Истекло', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
   };
@@ -84,13 +84,13 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
   return (
     <div className={plain ? "space-y-5" : "bg-white border border-slate-200/60 rounded-3xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] space-y-5"}>
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/20 shrink-0">
+        <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 shrink-0">
           <Coins className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-bold text-slate-900">Оплаты за крипту</h3>
+          <h3 className="text-lg font-black tracking-tight text-slate-900">Оплаты за крипту</h3>
           <p className="text-sm text-slate-500 mt-0.5">
-            TON-оплаты за подписки.
+            Ручные TON-переводы и чеки по подпискам.
           </p>
         </div>
         {tonEvents.length > 0 ? (
@@ -106,7 +106,13 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
       </div>
 
       {!tonEvents.length ? (
-        <p className="text-sm text-slate-500 py-2">Пока нет TON-оплат за подписки.</p>
+        <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center">
+          <Coins className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+          <p className="text-sm font-bold text-slate-700">TON-оплат пока нет</p>
+          <p className="text-xs text-slate-500 mt-1">
+            Здесь появятся переводы и чеки после первых оплат подписок.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {tonEvents.map((ev) => (
