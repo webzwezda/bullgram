@@ -59,12 +59,13 @@ export function StatusBadge({ tone = 'default', children }) {
 }
 
 export function StatTile({ label, value, tone = 'default', hint }) {
+  // 700-тона на цветных 50-фонах: 600-е не проходят AA даже для крупного значения
   const valueColor = tone === 'ok' || tone === 'success'
-    ? 'text-emerald-600'
+    ? 'text-emerald-700'
     : tone === 'warning'
-      ? 'text-amber-600'
+      ? 'text-amber-700'
       : tone === 'danger' || tone === 'error'
-        ? 'text-rose-600'
+        ? 'text-red-700'
         : 'text-slate-900';
   return (
     <div className={`p-4 rounded-2xl border ${tone === 'warning' ? 'border-amber-200 bg-amber-50/40' : tone === 'danger' ? 'border-rose-200 bg-rose-50/40' : tone === 'ok' ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-white'}`}>

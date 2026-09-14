@@ -57,7 +57,7 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             {completed} / {total}
           </span>
         </div>

@@ -654,22 +654,32 @@ export function BroadcastPage() {
         <Card>
           <Section>
             <SectionTitle icon={Users}>База</SectionTitle>
-            <div className="grid grid--flush grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                className={`${inputCls} ${titleEmpty ? '!border-rose-300 focus:!border-rose-400' : ''}`}
-                type="text"
-                value={form.title}
-                onChange={(e) => setField('title', e.target.value)}
-                placeholder="Название рассылки — обязательно"
-              />
-              <select className={inputCls} value={form.base} onChange={(e) => setField('base', e.target.value)}>
-                <option value="">Выбери базу</option>
-                {baseOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.name}{opt.count !== null ? ` • ${opt.count} чел.` : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Название</div>
+                <input
+                  className={`${inputCls} ${titleEmpty ? '!border-rose-300 focus:!border-rose-400' : ''}`}
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setField('title', e.target.value)}
+                  placeholder="Название рассылки — обязательно"
+                />
+              </div>
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1.5">База</div>
+                <select
+                  className={`${inputCls} ${form.base === '' ? 'text-slate-400' : ''}`}
+                  value={form.base}
+                  onChange={(e) => setField('base', e.target.value)}
+                >
+                  <option value="" className="text-slate-400">Выбери базу</option>
+                  {baseOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.name}{opt.count !== null ? ` • ${opt.count} чел.` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             {!baseSelected ? (
               state.clientBases.length === 0 && (manual.tg_user_ids || []).length === 0 ? (
@@ -684,6 +694,16 @@ export function BroadcastPage() {
                   Базы создаются руками на странице «Базы». Ручная выборка передаётся из CRM и брошенных корзин.
                 </div>
               )
+            ) : null}
+            {!baseSelected ? (
+              <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+                <div className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-3">Что дальше</div>
+                <ol className="space-y-2.5 text-sm text-slate-600 font-medium">
+                  <li className="flex gap-2.5"><span className="text-slate-900 font-black">2.</span> Юзерботы — проверим готовность: кто может доставить сообщение (общий чат, права админа).</li>
+                  <li className="flex gap-2.5"><span className="text-slate-900 font-black">3.</span> Шаблоны — что напишем: приветственное сообщение от имени юзербота.</li>
+                  <li className="flex gap-2.5"><span className="text-slate-900 font-black">4.</span> Отправка — рассылка встанет в очередь и уйдёт по одному с паузами, чтобы не поймать бан.</li>
+                </ol>
+              </div>
             ) : null}
             {form.base.startsWith('client:') ? (
               members.loading ? (
@@ -1048,14 +1068,19 @@ export function BroadcastPage() {
       ) : null}
 
       {nextAction ? (
-        <button
-          type="button"
-          disabled={nextAction.disabled}
-          onClick={nextAction.onClick}
-          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-indigo-600 !text-white text-sm font-black hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {nextAction.busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Запускаем...</> : nextAction.label}
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={nextAction.disabled}
+            onClick={nextAction.onClick}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-indigo-600 !text-white text-sm font-black hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {nextAction.busy ? <><Loader2 className="w-4 h-4 animate-spin" /> Запускаем...</> : nextAction.label}
+          </button>
+          {nextAction.disabled && step === 'base' ? (
+            <p className="text-xs text-slate-500 font-medium text-center">Выбери базу и укажи название — кнопка разблокируется.</p>
+          ) : null}
+        </>
       ) : null}
 
     </section>
