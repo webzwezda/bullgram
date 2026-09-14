@@ -112,14 +112,17 @@ export function BroadcastPage() {
   const [preparation, setPreparation] = useState(null);
   const [preparing, setPreparing] = useState(false);
   const [sending, setSending] = useState(false);
-  const [members, setMembers] = useState({ rows: [], total: 0, loading: false });
+  const [members, setMembers] = useState({ rows: [], total: 0, loading: false, error: '' });
+  const [membersReloadKey, setMembersReloadKey] = useState(0);
   const [groupsText, setGroupsText] = useState('');
   const [pendingGroups, setPendingGroups] = useState([]);
   const [addingGroups, setAddingGroups] = useState(false);
+  const [broadcastFlags, setBroadcastFlags] = useState({ userbot_broadcast_enabled: false });
   const pollRef = useRef(null);
   const memberIndexRef = useRef(new Map());
 
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
+  const broadcastEnabled = broadcastFlags.userbot_broadcast_enabled !== false;
 
   const clientSelectionActive = form.base.startsWith('client:') && (selectedIds || []).length > 0;
   const audienceType = form.base === 'manual' || clientSelectionActive
@@ -214,6 +217,7 @@ export function BroadcastPage() {
           clientBases: clientBases.bases || [],
           userbots
         }));
+        setBroadcastFlags(preparations.flags || {});
 
         setPoolIds((prev) => (prev.length ? prev : (userbots[0] ? [userbots[0].id] : [])));
 
@@ -283,12 +287,12 @@ export function BroadcastPage() {
   // Состав выбранной базы (постранично)
   useEffect(() => {
     if (!accessToken || !form.base.startsWith('client:')) {
-      setMembers({ rows: [], total: 0, loading: false });
+      setMembers({ rows: [], total: 0, loading: false, error: '' });
       return;
     }
     let cancelled = false;
     async function loadMembers() {
-      setMembers((prev) => ({ ...prev, loading: true }));
+      setMembers((prev) => ({ ...prev, loading: true, error: '' }));
       try {
         const data = await fetchClientBaseMembers(accessToken, form.base.slice('client:'.length), {
           limit: MEMBERS_PAGE_SIZE,
@@ -299,11 +303,11 @@ export function BroadcastPage() {
           for (const row of rows) {
             memberIndexRef.current.set(String(row.tg_user_id), row);
           }
-          setMembers({ rows, total: data.summary?.total || 0, loading: false });
+          setMembers({ rows, total: data.summary?.total || 0, loading: false, error: '' });
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setMembers({ rows: [], total: 0, loading: false });
+          setMembers({ rows: [], total: 0, loading: false, error: error.message });
         }
       }
     }
@@ -311,7 +315,7 @@ export function BroadcastPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, form.base, membersPage]);
+  }, [accessToken, form.base, membersPage, membersReloadKey]);
 
   // Смена базы сбрасывает отметки получателей и страницу
   useEffect(() => {
@@ -528,14 +532,16 @@ export function BroadcastPage() {
       toast.error('База или юзерботы изменились — запусти подготовку заново.');
       return;
     }
+    const prepStats = preparation.stats || {};
+    const reachableCount = (prepStats.confirmed || 0) + (prepStats.probable || 0);
     const confirmed = window.confirm(
-      'Рассылка пойдёт от выбранных юзерботов. Telegram может ограничить аккаунты, если получатели на них жалуются. Запускаем?'
+      `Допишемся по ЛС: ${reachableCount} получателей. Рассылка пойдёт от выбранных юзерботов. Telegram может ограничить аккаунты, если получатели на них жалуются. Запускаем?`
     );
     if (!confirmed) return;
 
     setSending(true);
     try {
-      await apiRequest('/api/broadcast/send', {
+      const data = await apiRequest('/api/broadcast/send', {
         accessToken,
         method: 'POST',
         body: {
@@ -552,8 +558,13 @@ export function BroadcastPage() {
           manual_confirmed_userbot_risk: true
         }
       });
-      toast.success('Рассылка запущена.');
-      navigate('/broadcast/history');
+      const queuedCount = Number(data.queued_count);
+      toast.success(
+        Number.isFinite(queuedCount)
+          ? `Рассылка поставлена в очередь: ${queuedCount} получателей`
+          : 'Рассылка поставлена в очередь'
+      );
+      navigate(data.campaign?.id ? `/broadcast/history?campaign=${encodeURIComponent(data.campaign.id)}` : '/broadcast/history');
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -581,6 +592,7 @@ export function BroadcastPage() {
           : '';
   const sendDisabled = sending || titleEmpty || messageEmpty || !baseSelected || poolIds.length === 0
     || !planRules.canSendBroadcasts
+    || !broadcastEnabled
     || Boolean(preparationBlocking);
   const stepIndex = STEPS.findIndex((item) => item.id === step);
   let nextAction = null;
@@ -619,12 +631,12 @@ export function BroadcastPage() {
                       className={`flex items-center justify-center w-9 h-9 rounded-full text-xs font-black transition-all ${
                         done || current
                           ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-white border border-slate-200 text-slate-400'
+                          : 'bg-white border border-slate-200 text-slate-500'
                       } ${current ? 'ring-4 ring-indigo-100' : ''} ${locked && !current ? 'opacity-40' : ''}`}
                     >
                       {done ? <Check className="w-4 h-4" /> : i + 1}
                     </span>
-                    <span className={`text-[11px] font-bold whitespace-nowrap ${current ? 'text-indigo-700' : done ? 'text-slate-600' : 'text-slate-400'}`}>
+                    <span className={`text-[11px] font-bold whitespace-nowrap ${current ? 'text-indigo-700' : done ? 'text-slate-600' : 'text-slate-500'}`}>
                       {item.label}
                     </span>
                   </button>
@@ -676,6 +688,17 @@ export function BroadcastPage() {
             {form.base.startsWith('client:') ? (
               members.loading ? (
                 <div className="mt-4"><EmptyNote>Грузим состав базы...</EmptyNote></div>
+              ) : members.error ? (
+                <div className="mt-4">
+                  <ErrorNote>Не удалось загрузить состав базы: {members.error}</ErrorNote>
+                  <button
+                    type="button"
+                    className={`${btnGhost} mt-3`}
+                    onClick={() => setMembersReloadKey((key) => key + 1)}
+                  >
+                    Повторить
+                  </button>
+                </div>
               ) : (
                 <div className="mt-4">
                   <div className="flex items-center justify-between gap-3">
@@ -752,7 +775,7 @@ export function BroadcastPage() {
                               {cov.presentTotal > 0 ? (
                                 <div className="text-xs text-slate-700">В: {cov.present.join(', ')}</div>
                               ) : (
-                                <div className="text-xs text-slate-400">Нигде не найден</div>
+                                <div className="text-xs text-slate-500">Нигде не найден</div>
                               )}
                             </Td>
                           </Tr>
@@ -796,6 +819,17 @@ export function BroadcastPage() {
         </Card>
       ) : null}
 
+      {step === 'base' && !broadcastEnabled ? (
+        <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200">
+          <div className="text-sm font-black text-amber-700">
+            Рассылка через юзерботов выключена на сервере (USERBOT_BROADCAST_ENABLED).
+          </div>
+          <div className="mt-1 text-sm text-amber-700 font-medium">
+            Попроси владельца включить флаг. Отправка не пройдёт, так что подготовку можно не гонять.
+          </div>
+        </div>
+      ) : null}
+
       {!planRules.canSendBroadcasts ? (
         <>
           <PlanBanner
@@ -826,7 +860,7 @@ export function BroadcastPage() {
             ) : (
               <div>
               <div className="flex items-center justify-between gap-3 mb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Выбрано: {poolIds.length} из {eligibleUserbots.length}
                 </span>
                 {eligibleUserbots.length > 0 ? (
@@ -957,7 +991,7 @@ export function BroadcastPage() {
             <Section>
               <SectionTitle icon={MessageSquare}>Сообщение</SectionTitle>
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400">Шаблоны</span>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">Шаблоны</span>
                 {BROADCAST_TEMPLATES.map((template) => (
                   <button
                     key={template.label}
@@ -979,6 +1013,11 @@ export function BroadcastPage() {
               {preparationBlocking ? (
                 <div className="mt-3 text-sm text-amber-700 font-medium">
                   {preparationBlocking}
+                </div>
+              ) : null}
+              {!broadcastEnabled ? (
+                <div className="mt-3 text-sm text-amber-700 font-medium">
+                  Рассылка выключена на сервере (USERBOT_BROADCAST_ENABLED) — попроси владельца включить флаг, кнопка отправки заблокирована.
                 </div>
               ) : null}
               {titleEmpty ? (

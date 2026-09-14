@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, Loader2, ExternalLink, CheckCheck } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
 import { supabase } from '../../lib/supabase.js';
+import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { Card, Section, SectionTitle, EmptyNote, ErrorNote, TableShell, Th, Td, Tr, btnPrimary, btnAccent, btnGhost } from './ui.jsx';
 
 function formatWhen(value) {
@@ -23,8 +24,12 @@ function minutesAgo(ts) {
 }
 
 export function CampaignReplies({ accessToken, userbots, campaign }) {
+  const { user } = useAuth();
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(false);
   const [state, setState] = useState({ phase: 'idle', progress: '', replies: [], errors: [], lastScanAt: null, filter: 'unread' });
+  // Защита от гонок: скан, запущенный до смены рассылки, не должен переписать свежий стейт
+  // (тот же паттерн reqId, что в loadCustomers на CustomersPage)
+  const scanReqIdRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,8 +42,9 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
     return () => { cancelled = true; };
   }, []);
 
-  // сменили рассылку — сбрасываем прошлый скан
+  // сменили рассылку — сбрасываем прошлый скан и отменяем его результаты
   useEffect(() => {
+    scanReqIdRef.current += 1;
     setState({ phase: 'idle', progress: '', replies: [], errors: [], lastScanAt: null, filter: 'unread' });
   }, [campaign?.id]);
 
@@ -50,6 +56,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
         .from('broadcast_deliveries')
         .select('tg_user_id')
         .eq('campaign_id', campaignId)
+        .eq('owner_id', user?.id || '')
         .eq('delivery_status', 'sent')
         .range(from, from + 999);
       if (error || !data || data.length === 0) break;
@@ -62,6 +69,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
 
   async function checkReplies() {
     if (!campaign?.id) return;
+    const reqId = ++scanReqIdRef.current;
     const eligible = (userbots || []).filter((row) =>
       row.runtime_status !== 'pending_activation' && !(row.proxy_id && row.proxies?.is_working === false));
     const senderIds = (campaign.meta?.sender_userbot_ids || []).map(String);
@@ -70,10 +78,12 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
       .filter(Boolean);
 
     if (targets.length === 0) {
+      if (reqId !== scanReqIdRef.current) return;
       setState((prev) => ({ ...prev, phase: 'idle', progress: '', errors: ['У этой рассылки нет живых юзерботов-отправителей — ответы проверять не у кого.'] }));
       return;
     }
 
+    if (reqId !== scanReqIdRef.current) return;
     setState((prev) => ({ ...prev, phase: 'scanning', progress: 'Готовим скан...', errors: [] }));
     const replies = [];
     const errors = [];
@@ -86,6 +96,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
     }
 
     for (let i = 0; i < targets.length; i++) {
+      if (reqId !== scanReqIdRef.current) return;
       const target = targets[i];
       setState((prev) => ({ ...prev, progress: `Сканируем @${target.tg_username || 'юзербот'} (${i + 1}/${targets.length})...` }));
       try {
@@ -112,6 +123,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
     });
     uniqueReplies.sort((a, b) => String(b.last_message_at || '').localeCompare(String(a.last_message_at || '')));
 
+    if (reqId !== scanReqIdRef.current) return;
     setState((prev) => ({ ...prev, phase: 'done', progress: '', replies: uniqueReplies, errors, lastScanAt: Date.now() }));
   }
 
@@ -168,8 +180,12 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
               Сканируем диалоги юзерботов, отправлявших эту рассылку. По умолчанию показываем только непрочитанные —
               прочитал в TG Web или пометил здесь, лид уходит из списка.
             </div>
+            <div className="mt-2 text-sm text-slate-500 font-medium">
+              Юзербот напишет в ЛС, только если знает человека или состоит с ним в общем чате
+              (например, твоя админ-группа воронки); холодные рассылки по ID не дойдут.
+            </div>
             {state.lastScanAt ? (
-              <div className="mt-2 text-xs text-slate-400 font-bold">Последняя проверка: {minutesAgo(state.lastScanAt)} мин назад</div>
+              <div className="mt-2 text-xs text-slate-600 font-bold">Последняя проверка: {minutesAgo(state.lastScanAt)} мин назад</div>
             ) : null}
 
             {telegramWebEnabled && senderTargets.length > 0 ? (
@@ -246,7 +262,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
                             </Td>
                             <Td>
                               <div className="text-xs text-slate-700 font-medium max-w-[280px] truncate">{reply.last_message_preview || '—'}</div>
-                              <div className="text-xs text-slate-400 font-medium mt-1">{formatWhen(reply.last_message_at)}</div>
+                              <div className="text-xs text-slate-500 font-medium mt-1">{formatWhen(reply.last_message_at)}</div>
                             </Td>
                             <Td>
                               <div className="text-xs font-black text-slate-700">@{reply.userbot_name}</div>
@@ -278,7 +294,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
                       </tbody>
                     </TableShell>
                     {!telegramWebEnabled ? (
-                      <div className="mt-3 text-xs text-slate-400 font-medium">
+                      <div className="mt-3 text-xs text-slate-500 font-medium">
                         Telegram Web выключен — включи веб-доступ на странице юзерботов, чтобы отвечать прямо отсюда.
                       </div>
                     ) : null}

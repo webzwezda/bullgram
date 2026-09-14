@@ -2,15 +2,30 @@ import { useEffect, useState } from 'react';
 import { Loader2, Radar, AlertTriangle, Check } from 'lucide-react';
 import { Card, Section, SectionTitle, StatusBadge } from './ui.jsx';
 
-const STATUS_LABELS = {
+// Общий словарь статусов: и для подготовки, и для кампаний рассылки
+export const STATUS_LABELS = {
+  // статусы подготовки
   pending: 'В очереди',
   scanning: 'Сканируем диалоги',
   joining: 'Вступаем в группы',
   recomputing: 'Пересчитываем покрытие',
   ready: 'Готово',
+  // статусы кампании (плюс legacy 'sent' в старых записях)
+  queued: 'В очереди',
+  sending: 'Отправляется',
+  completed: 'Завершена',
+  completed_with_errors: 'Завершена с ошибками',
   failed: 'Ошибка',
-  cancelled: 'Отменено'
+  cancelled: 'Отменена',
+  sent: 'Отправлена'
 };
+
+export function campaignStatusTone(status) {
+  if (status === 'completed' || status === 'sent') return 'ok';
+  if (status === 'sending' || status === 'completed_with_errors') return 'warning';
+  if (status === 'failed') return 'danger';
+  return 'default';
+}
 
 function fmtDuration(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -111,7 +126,7 @@ export function PreparationRunner({ preparation, onCancel, children }) {
                 <div className="h-full w-full bg-indigo-400/70 animate-pulse rounded-full" />
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 font-medium">
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 font-medium">
               <span>в работе {fmtDuration(elapsedSeconds)}</span>
               {secondsSinceUpdate != null ? <span>· обновление {fmtDuration(secondsSinceUpdate)} назад</span> : null}
             </div>

@@ -1,28 +1,16 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
-import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
-import { classifyTelegramError } from '../utils/telegram-error-events.js';
 import { ensureBroadcastAllowed } from '../utils/product-tier.js';
+// Общая логика доставки рассылок живёт в сервисе: матрица подготовки нужна здесь (валидация /send),
+// отправка одному получателю — крон-джобе broadcast-delivery
+import {
+    loadPreparationMatrix,
+    senderTypeUsesUserbot
+} from '../services/broadcast-delivery.service.js';
 
 function isUserbotBroadcastEnabled() {
     return String(process.env.USERBOT_BROADCAST_ENABLED || '').trim().toLowerCase() === 'true';
-}
-
-function senderTypeUsesUserbot(senderType = '') {
-    return [
-        'userbot_only',
-        'official_then_userbot',
-        'userbot_pool_round_robin',
-        'official_then_userbot_pool'
-    ].includes(String(senderType || '').trim());
-}
-
-function senderTypeUsesUserbotPool(senderType = '') {
-    return [
-        'userbot_pool_round_robin',
-        'official_then_userbot_pool'
-    ].includes(String(senderType || '').trim());
 }
 
 function dedupeAudience(rows = []) {
@@ -39,17 +27,8 @@ function buildAudienceKey(tgUserId, channelId) {
     return `${tgUserId}:${channelId || 'global'}`;
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export default function(supabase, getBotById) {
+export default function(supabase) {
     const router = express.Router();
-    const userbotService = new UserbotService(
-        supabase,
-        process.env.TG_API_ID,
-        process.env.TG_API_HASH
-    );
 
     async function loadOwnerContext(ownerId) {
         const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
@@ -429,94 +408,6 @@ export default function(supabase, getBotById) {
         return [];
     }
 
-    async function sendViaUserbotPool(userbots, startIndex, tgUserId, messageText, options = {}) {
-        if (!userbots || userbots.length === 0) {
-            throw new Error('Нет доступных юзерботов для отправки');
-        }
-
-        let lastError = null;
-
-        for (let offset = 0; offset < userbots.length; offset++) {
-            const userbot = userbots[(startIndex + offset) % userbots.length];
-
-            try {
-                await userbotService.sendMessage(userbot, tgUserId, messageText, {
-                    event_source: 'broadcast',
-                    event_type: 'broadcast_delivery',
-                    ...options
-                });
-                return userbot;
-            } catch (error) {
-                lastError = error;
-            }
-        }
-
-        throw lastError || new Error('Ни один юзербот из пула не смог доставить сообщение');
-    }
-
-    async function loadPreparationMatrix(ownerId, preparationId) {
-        const { data: preparation } = await supabase
-            .from('broadcast_preparations')
-            .select('id, status, userbot_ids')
-            .eq('id', preparationId)
-            .eq('owner_id', ownerId)
-            .maybeSingle();
-
-        if (!preparation) throw new Error('Подготовка не найдена');
-        if (preparation.status !== 'ready') throw new Error('Подготовка еще не завершена — дождись статуса «готово»');
-
-        const items = [];
-        let from = 0;
-        while (true) {
-            const { data } = await supabase
-                .from('broadcast_preparation_items')
-                .select('tg_user_id, reachable_by')
-                .eq('preparation_id', preparationId)
-                .range(from, from + 999)
-                .order('id', { ascending: true });
-            if (!data || data.length === 0) break;
-            items.push(...data);
-            if (data.length < 1000) break;
-            from += 1000;
-        }
-
-        const matrix = new Map();
-        for (const item of items) {
-            const touchpoints = Array.isArray(item.reachable_by) ? item.reachable_by : [];
-            touchpoints.sort((a, b) => Number(b.confirmed) - Number(a.confirmed));
-            matrix.set(String(item.tg_user_id), touchpoints);
-        }
-        return matrix;
-    }
-
-    async function recordDmOutcomes(ownerId, sentIds, blockedByUser) {
-        for (let i = 0; i < sentIds.length; i += 500) {
-            await supabase
-                .from('channel_audience_members')
-                .update({ dm_last_sent_at: new Date().toISOString() })
-                .eq('owner_id', ownerId)
-                .in('tg_user_id', sentIds.slice(i, i + 500));
-        }
-
-        for (const [tgUserId, errorText] of Object.entries(blockedByUser)) {
-            const { data: current } = await supabase
-                .from('channel_audience_members')
-                .select('dm_failed_count')
-                .eq('owner_id', ownerId)
-                .eq('tg_user_id', tgUserId)
-                .limit(1);
-            await supabase
-                .from('channel_audience_members')
-                .update({
-                    dm_blocked: true,
-                    dm_last_error: String(errorText || '').slice(0, 300),
-                    dm_failed_count: (current?.[0]?.dm_failed_count || 0) + 1
-                })
-                .eq('owner_id', ownerId)
-                .eq('tg_user_id', tgUserId);
-        }
-    }
-
     router.get('/campaigns', authenticateUser, async (req, res) => {
         try {
             const [{ data: campaigns, error }, { data: failures, error: failuresError }] = await Promise.all([
@@ -539,12 +430,14 @@ export default function(supabase, getBotById) {
             if (failuresError) throw failuresError;
 
             const campaignIds = (campaigns || []).map(campaign => campaign.id);
+            // pending-строки (mark-and-queue) — ещё не доставки: без фильтра они падали бы в failed-статистику отправителей
             const { data: deliveries, error: deliveriesError } = campaignIds.length > 0
                 ? await supabase
                     .from('broadcast_deliveries')
                     .select('campaign_id, delivery_status, meta')
                     .eq('owner_id', req.user.id)
                     .in('campaign_id', campaignIds)
+                    .neq('delivery_status', 'pending')
                 : { data: [], error: null };
 
             if (deliveriesError) throw deliveriesError;
@@ -688,7 +581,7 @@ export default function(supabase, getBotById) {
             let preparationMatrix = null;
             let skippedUnreachableCount = 0;
             if (preparation_id && senderTypeUsesUserbot(normalizedSenderType)) {
-                preparationMatrix = await loadPreparationMatrix(req.user.id, preparation_id);
+                preparationMatrix = await loadPreparationMatrix(supabase, req.user.id, preparation_id);
                 const routed = audience.filter(row => preparationMatrix.has(String(row.tg_user_id)));
                 skippedUnreachableCount = audience.length - routed.length;
                 if (skippedUnreachableCount > 0 && skip_unreachable === false) {
@@ -703,6 +596,21 @@ export default function(supabase, getBotById) {
                 audience.push(...routed);
             }
 
+            // Guard: у владельца не должно быть двух рассылок одновременно, иначе job доставит
+            // обе аудитории с пересечением. Проверяем перед самой вставкой, чтобы окно гонки было минимальным.
+            const { data: activeCampaign } = await supabase
+                .from('broadcast_campaigns')
+                .select('id')
+                .eq('owner_id', req.user.id)
+                .in('status', ['queued', 'sending'])
+                .limit(1)
+                .maybeSingle();
+            if (activeCampaign) {
+                return res.status(409).json({ error: 'Уже идёт рассылка — дождись завершения' });
+            }
+
+            // Mark-and-queue: кампания только создаётся как 'queued', доставки — upfront как 'pending'.
+            // Фактическую отправку делает крон-джоба backend/jobs/broadcast-delivery.job.js
             const { data: campaign, error: campaignError } = await supabase
                 .from('broadcast_campaigns')
                 .insert({
@@ -711,7 +619,7 @@ export default function(supabase, getBotById) {
                     audience_type,
                     channel_id: channel_id || null,
                     message_text,
-                    status: 'sending',
+                    status: 'queued',
                     meta: {
                         base_id: base_id || null,
                         base_filter: base_filter || 'all_members',
@@ -719,10 +627,16 @@ export default function(supabase, getBotById) {
                         manual_named_total: Array.isArray(manual_members) ? manual_members.length : 0,
                         sender_type: normalizedSenderType,
                         sender_userbot_id: selectedUserbot?.id || null,
-                        sender_username: selectedUserbot?.tg_username || null,
+                        sender_username: selectedUserbot?.tg_username || selectedUserbot?.tg_account_id || null,
                         sender_userbot_ids: selectedUserbots.map(userbot => userbot.id),
                         sender_usernames: selectedUserbots.map(userbot => userbot.tg_username || userbot.tg_account_id),
-                        delay_ms: normalizedDelayMs
+                        delay_ms: normalizedDelayMs,
+                        total: audience.length,
+                        sent: 0,
+                        failed: 0,
+                        preparation_id: preparation_id || null,
+                        skipped_unreachable: skippedUnreachableCount,
+                        queued_at: new Date().toISOString()
                     }
                 })
                 .select()
@@ -730,150 +644,64 @@ export default function(supabase, getBotById) {
 
             if (campaignError) throw campaignError;
 
-            let sentCount = 0;
-            let failedCount = 0;
-            const dmSentIds = [];
-            const dmBlockedByUser = {};
-
-            for (let index = 0; index < audience.length; index++) {
-                const row = audience[index];
+            // Все доставки ставим в очередь сразу: job потом разберёт их по одной.
+            // Метаданные доставки фиксируем в момент постановки — sender-фолбэки нужны статистике GET /campaigns,
+            // фактического sender'а джоба допишет в meta после доставки.
+            const deliveryRows = audience.map(row => {
                 const channel = channelMap.get(row.channel_id);
-                const bot = row.bot_id ? getBotById(row.bot_id) : null;
-                let deliveryStatus = 'failed';
-                let errorText = null;
-                let deliveredAt = null;
-                let actualSenderUserbot = null;
-                const canUseOfficialBot = normalizedSenderType === 'official_only' ||
-                    normalizedSenderType === 'official_then_userbot' ||
-                    normalizedSenderType === 'official_then_userbot_pool';
-                const canFallbackToUserbot = normalizedSenderType === 'official_then_userbot' ||
-                    normalizedSenderType === 'official_then_userbot_pool';
-                const canUseOnlyUserbot = normalizedSenderType === 'userbot_only' ||
-                    normalizedSenderType === 'userbot_pool_round_robin';
-
-                try {
-                    if (canUseOfficialBot && bot) {
-                        await bot.telegram.sendMessage(row.tg_user_id, message_text, { parse_mode: 'Markdown' });
-                        deliveryStatus = 'sent';
-                        deliveredAt = new Date().toISOString();
-                        sentCount++;
-                    } else {
-                        throw new Error(
-                            canUseOnlyUserbot
-                                ? 'Выбран режим отправки только юзерботами'
-                                : 'Официальный бот недоступен'
-                        );
-                    }
-                } catch (botError) {
-                    try {
-                        if (!canFallbackToUserbot && !canUseOnlyUserbot) {
-                            throw botError;
-                        }
-                        if (selectedUserbots.length === 0) throw botError;
-
-                        let pool = senderTypeUsesUserbotPool(normalizedSenderType)
-                            ? [...selectedUserbots]
-                            : [selectedUserbot].filter(Boolean);
-                        let startIndex = senderTypeUsesUserbotPool(normalizedSenderType) ? index % selectedUserbots.length : 0;
-                        let commonChatId = null;
-
-                        if (preparationMatrix) {
-                            const touchpoints = preparationMatrix.get(String(row.tg_user_id)) || [];
-                            const selectedIds = new Set(selectedUserbots.map(userbot => String(userbot.id)));
-                            const preferred = touchpoints.find(tp => selectedIds.has(String(tp.userbot_id)));
-                            if (preferred) {
-                                const preferredUserbot = selectedUserbots.find(userbot => String(userbot.id) === String(preferred.userbot_id));
-                                if (preferredUserbot) {
-                                    pool = [preferredUserbot, ...pool.filter(userbot => String(userbot.id) !== String(preferred.userbot_id))];
-                                    startIndex = 0;
-                                }
-                                if (preferred.via === 'shared_chat' && preferred.chat_id) {
-                                    commonChatId = preferred.chat_id;
-                                }
-                            }
-                        }
-
-                        actualSenderUserbot = await sendViaUserbotPool(
-                            pool,
-                            startIndex,
-                            row.tg_user_id,
-                            message_text,
-                            {
-                                campaign_id: campaign.id,
-                                channel_id: row.channel_id || null,
-                                ...(commonChatId ? { common_chat_id: commonChatId } : {})
-                            }
-                        );
-                        deliveryStatus = 'sent';
-                        deliveredAt = new Date().toISOString();
-                        sentCount++;
-                        dmSentIds.push(String(row.tg_user_id));
-                    } catch (userbotError) {
-                        failedCount++;
-                        errorText = userbotError.message || botError.message || 'Не удалось доставить сообщение';
-                        const classification = classifyTelegramError(userbotError);
-                        if (['privacy_restricted', 'user_blocked', 'peer_invalid'].includes(classification.restriction_kind)) {
-                            dmBlockedByUser[String(row.tg_user_id)] = errorText;
-                        }
-                    }
-                }
-
-                await supabase.from('broadcast_deliveries').insert({
+                return {
                     campaign_id: campaign.id,
                     owner_id: req.user.id,
                     channel_id: row.channel_id || null,
                     tg_user_id: row.tg_user_id,
-                    delivery_status: deliveryStatus,
-                    error_text: errorText,
-                    delivered_at: deliveredAt,
+                    delivery_status: 'pending',
+                    error_text: null,
+                    delivered_at: null,
                     meta: {
                         source_type: row.source_type,
                         source_id: row.source_id,
                         channel_title: channel?.title || row.channel_title,
+                        bot_id: row.bot_id || null,
                         sender_type: normalizedSenderType,
-                        sender_userbot_id: actualSenderUserbot?.id || selectedUserbot?.id || null,
-                        sender_username: actualSenderUserbot?.tg_username || actualSenderUserbot?.tg_account_id || selectedUserbot?.tg_username || selectedUserbot?.tg_account_id || null,
+                        sender_userbot_id: selectedUserbot?.id || null,
+                        sender_username: selectedUserbot?.tg_username || selectedUserbot?.tg_account_id || null,
                         sender_userbot_ids: selectedUserbots.map(userbot => userbot.id),
                         delay_ms: normalizedDelayMs
                     }
-                });
-
-                if (normalizedDelayMs > 0 && index < audience.length - 1) {
-                    await sleep(normalizedDelayMs);
-                }
-            }
-
-            await recordDmOutcomes(req.user.id, dmSentIds, dmBlockedByUser).catch(error => {
-                console.error('Ошибка записи DM-исходов:', error?.message || error);
+                };
             });
 
-            await supabase
-                .from('broadcast_campaigns')
-                .update({
-                    status: failedCount > 0 ? 'completed_with_errors' : 'sent',
-                    sent_at: new Date().toISOString(),
-                    meta: {
-                        ...(campaign.meta || {}),
-                        sender_type: normalizedSenderType,
-                        sender_userbot_id: selectedUserbot?.id || null,
-                        sender_username: selectedUserbot?.tg_username || null,
-                        sender_userbot_ids: selectedUserbots.map(userbot => userbot.id),
-                        sender_usernames: selectedUserbots.map(userbot => userbot.tg_username || userbot.tg_account_id),
-                        delay_ms: normalizedDelayMs,
-                        total: audience.length,
-                        sent: sentCount,
-                        failed: failedCount,
-                        preparation_id: preparation_id || null,
-                        skipped_unreachable: skippedUnreachableCount
-                    }
-                })
-                .eq('id', campaign.id);
+            try {
+                for (let from = 0; from < deliveryRows.length; from += 500) {
+                    const { error: insertError } = await supabase
+                        .from('broadcast_deliveries')
+                        .insert(deliveryRows.slice(from, from + 500));
+                    if (insertError) throw insertError;
+                }
+            } catch (insertError) {
+                console.error('Ошибка постановки доставок в очередь:', insertError);
+                // Оставлять 'queued' нельзя — owner навсегда упрётся в 409-guard.
+                // Guard по статусу: джоба могла уже claim'нуть кампанию в 'sending' —
+                // её не затаптываем.
+                await supabase
+                    .from('broadcast_campaigns')
+                    .update({
+                        status: 'failed',
+                        meta: {
+                            ...(campaign.meta || {}),
+                            queue_error: String(insertError.message || 'Не удалось поставить рассылку в очередь')
+                        }
+                    })
+                    .eq('id', campaign.id)
+                    .eq('status', 'queued');
+                throw insertError;
+            }
 
             res.json({
                 success: true,
                 campaign_id: campaign.id,
-                sent_count: sentCount,
-                failed_count: failedCount,
+                campaign,
+                queued_count: deliveryRows.length,
                 skipped_unreachable_count: skippedUnreachableCount
             });
         } catch (error) {

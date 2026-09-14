@@ -66,6 +66,7 @@ import { startInvoiceAutoDetect } from './jobs/invoice-auto-detect.job.js';
 import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.js';
 import { startBillingActivationRecovery } from './jobs/billing-activation-recovery.job.js';
 import { startShopPurchaseExpiry } from './jobs/shop-purchase-expiry.job.js';
+import { startBroadcastDeliveryJob } from './jobs/broadcast-delivery.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -175,7 +176,7 @@ app.use('/api/official-bot', officialBotRoutes(supabase));
 app.use('/api/autopost', autopostRoutes(supabase));
 app.use('/api/analytics', analyticsRoutes(supabase)); // <-- НОВОЕ: Подключение роута аналитики
 app.use('/api/access', accessRoutes(supabase));
-app.use('/api/broadcast', broadcastRoutes(supabase, getBotById));
+app.use('/api/broadcast', broadcastRoutes(supabase));
 app.use('/api/broadcast', broadcastPreparationRoutes(supabase));
 app.use('/api/payment', paymentRoutes(supabase, getBotById));
 app.use('/api/billing', billingRoutes(supabase));
@@ -381,4 +382,6 @@ httpServer.listen(PORT, async () => {
     startPublicInvoicesCleanup(supabase);
     startBillingActivationRecovery(supabase);
     startShopPurchaseExpiry(supabase);
+    // Доставка массовых рассылок вынесена из POST /send в фоновую джобу (mark-and-queue)
+    startBroadcastDeliveryJob(supabase, getBotById);
 });

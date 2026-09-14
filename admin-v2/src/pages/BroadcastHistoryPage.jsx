@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ListChecks, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { CampaignDetail } from './broadcast/CampaignDetail.jsx';
+import { STATUS_LABELS, campaignStatusTone } from './broadcast/PreparationRunner.jsx';
 import {
   Card, Section, SectionTitle, EmptyNote, ErrorNote, StatusBadge, StatTile,
   TableShell, Th, Td, Tr, btnGhost
@@ -98,6 +99,22 @@ export function BroadcastHistoryPage() {
     );
   }
 
+  // Тихий рефреш списка для авто-опроса активной кампании (queued/sending) и кнопки «Обновить»
+  const refreshCampaigns = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const data = await apiRequest('/api/broadcast/campaigns', { accessToken });
+      setState((prev) => ({
+        ...prev,
+        error: '',
+        campaigns: data.campaigns || [],
+        summary: data.summary || prev.summary
+      }));
+    } catch {
+      // тихий рефреш — сбой фонового опроса не должен ломать экран
+    }
+  }, [accessToken]);
+
   // битый deep-link (?campaign= нет в списке) — возвращаемся к списку
   useEffect(() => {
     if (!state.loading && activeCampaignId && !state.campaigns.some((row) => row.id === activeCampaignId)) {
@@ -120,6 +137,7 @@ export function BroadcastHistoryPage() {
           userbots={state.userbots}
           campaign={activeCampaign}
           onBack={() => openCampaign(null)}
+          onRefresh={refreshCampaigns}
         />
       </section>
     );
@@ -182,8 +200,8 @@ export function BroadcastHistoryPage() {
                     <Td><div className="text-xs text-slate-600 font-medium">{sendersLabel(campaign)}</div></Td>
                     <Td><div className="text-xs text-slate-600 font-bold whitespace-nowrap">{deliveredLabel(campaign)}</div></Td>
                     <Td>
-                      <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
-                        {campaign.status}
+                      <StatusBadge tone={campaignStatusTone(campaign.status)}>
+                        {STATUS_LABELS[campaign.status] || campaign.status}
                       </StatusBadge>
                     </Td>
                     <Td right>

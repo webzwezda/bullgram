@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, ChevronRight, ChevronDown } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
-import { TableShell, Th, Td, Tr, btnGhost } from './ui.jsx';
+import { TableShell, Th, Td, Tr, ErrorNote, btnGhost } from './ui.jsx';
 
 const PAGE_SIZE = 25;
 
@@ -20,16 +20,16 @@ function viaBadge(member) {
 }
 
 function MemberToggleList({ accessToken, preparationId, filter, label, updatedAnchor }) {
-  const [state, setState] = useState({ members: [], total: 0, offset: 0, loading: false });
+  const [state, setState] = useState({ members: [], total: 0, offset: 0, loading: false, error: '' });
   const [open, setOpen] = useState(false);
 
   const load = useCallback(async (offset) => {
-    setState((prev) => ({ ...prev, loading: true }));
+    setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
       const data = await apiRequest(`/api/broadcast/preparations/${preparationId}/members?filter=${filter}&limit=${PAGE_SIZE}&offset=${offset}`, { accessToken });
-      setState({ members: data.members || [], total: data.total || 0, offset, loading: false });
-    } catch {
-      setState((prev) => ({ ...prev, loading: false }));
+      setState({ members: data.members || [], total: data.total || 0, offset, loading: false, error: '' });
+    } catch (error) {
+      setState((prev) => ({ ...prev, loading: false, error: error.message || 'Не удалось загрузить список' }));
     }
   }, [accessToken, preparationId, filter]);
 
@@ -81,8 +81,16 @@ function MemberToggleList({ accessToken, preparationId, filter, label, updatedAn
           </div>
         </div>
       ) : null}
-      {open && !state.loading && state.total === 0 ? (
-        <div className="mt-2 text-xs text-slate-400 font-medium">Список пуст.</div>
+      {open && state.error ? (
+        <div className="mt-2">
+          <ErrorNote>{state.error}</ErrorNote>
+          <button type="button" className={`${btnGhost} mt-2`} disabled={state.loading} onClick={() => load(state.offset)}>
+            Повторить
+          </button>
+        </div>
+      ) : null}
+      {open && !state.error && !state.loading && state.total === 0 ? (
+        <div className="mt-2 text-xs text-slate-500 font-medium">Список пуст.</div>
       ) : null}
     </div>
   );
@@ -101,7 +109,7 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, busy }
     <div className="mt-6 pt-5 border-t border-slate-100">
       <div className="flex items-center gap-2 mb-4">
         <RefreshCw className="w-4 h-4 text-slate-400" />
-        <div className="text-xs font-black uppercase tracking-widest text-slate-400">Готовность</div>
+        <div className="text-xs font-black uppercase tracking-widest text-slate-500">Готовность</div>
       </div>
       {coverageReady ? (
         <>
@@ -117,7 +125,7 @@ export function ReadinessDashboard({ accessToken, preparation, onRecheck, busy }
               ) : null}
             </div>
             {unreachableCount === 0 ? (
-              <div className="mt-2 text-xs text-slate-400 font-medium">База покрыта целиком.</div>
+              <div className="mt-2 text-xs text-slate-500 font-medium">База покрыта целиком.</div>
             ) : null}
           </div>
           <MemberToggleList

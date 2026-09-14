@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase.js';
+import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { CampaignReplies } from './CampaignReplies.jsx';
+import { STATUS_LABELS, campaignStatusTone } from './PreparationRunner.jsx';
 import {
   Card, Section, SectionTitle, EmptyNote, StatusBadge, StatTile,
   TableShell, Th, Td, Tr, btnGhost
@@ -12,6 +14,8 @@ const AUDIENCE_LABELS = {
   channel_audience_members: 'База по каналам',
   manual_list: 'Ручная выборка'
 };
+
+const CAMPAIGN_ACTIVE_STATUSES = new Set(['queued', 'sending']);
 
 const FAILURES_PAGE = 25;
 
@@ -36,28 +40,37 @@ function campaignCounts(campaign) {
   return { sent, failed, total };
 }
 
-export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
+export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefresh }) {
+  const { user } = useAuth();
   const meta = campaign.meta || {};
   const counts = campaignCounts(campaign);
   const senderStats = Array.isArray(meta.sender_stats) ? meta.sender_stats : [];
   const senderNames = (meta.sender_usernames || []).map((name) => `@${name}`);
+  const skippedUnreachable = Number(meta.skipped_unreachable || 0);
+  const campaignActive = CAMPAIGN_ACTIVE_STATUSES.has(campaign.status);
 
   const [failures, setFailures] = useState({ open: false, loading: false, rows: [], total: null, page: 0 });
+  // Защита от гонок: ответ по прошлой кампании/странице не перезапишет свежий (паттерн reqId из CustomersPage)
+  const failuresReqIdRef = useRef(0);
 
   useEffect(() => {
+    failuresReqIdRef.current += 1;
     setFailures({ open: false, loading: false, rows: [], total: null, page: 0 });
   }, [campaign.id]);
 
   async function loadFailures(page) {
+    const reqId = ++failuresReqIdRef.current;
     setFailures((prev) => ({ ...prev, loading: true }));
     const from = page * FAILURES_PAGE;
     const { data, count, error } = await supabase
       .from('broadcast_deliveries')
       .select('tg_user_id, error_text, created_at', { count: 'exact' })
       .eq('campaign_id', campaign.id)
+      .eq('owner_id', user?.id || '')
       .eq('delivery_status', 'failed')
       .order('created_at', { ascending: false })
       .range(from, from + FAILURES_PAGE - 1);
+    if (reqId !== failuresReqIdRef.current) return;
     if (error) {
       setFailures((prev) => ({ ...prev, loading: false }));
       return;
@@ -71,6 +84,16 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
     }));
   }
 
+  // Кампания выполняется в фоне — опрашиваем список, пока идёт отправка
+  useEffect(() => {
+    if (!campaignActive || typeof onRefresh !== 'function') return undefined;
+    const timer = window.setInterval(() => onRefresh(), 15000);
+    return () => window.clearInterval(timer);
+  }, [campaignActive, onRefresh, campaign.id]);
+
+  const progressDone = (counts.sent || 0) + (counts.failed || 0);
+  const progressPct = counts.total > 0 ? Math.min(100, Math.round((progressDone / counts.total) * 100)) : null;
+
   const failuresKnown = counts.failed != null ? counts.failed : null;
 
   return (
@@ -81,6 +104,12 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
         <StatTile label="Всего получателей" value={counts.total ?? '—'} />
       </div>
 
+      {skippedUnreachable > 0 ? (
+        <div className="text-sm font-bold text-amber-700">
+          Пропущены (недостижимые): {skippedUnreachable}
+        </div>
+      ) : null}
+
       <Card>
         <Section>
           <button type="button" className={`${btnGhost} mb-4`} onClick={onBack}>
@@ -88,13 +117,35 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack }) {
           </button>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-black text-slate-900">{campaign.title}</h1>
-            <StatusBadge tone={campaign.status === 'sent' ? 'ok' : campaign.status === 'completed_with_errors' ? 'warning' : 'default'}>
-              {campaign.status}
+            <StatusBadge tone={campaignStatusTone(campaign.status)}>
+              {STATUS_LABELS[campaign.status] || campaign.status}
             </StatusBadge>
+            {typeof onRefresh === 'function' ? (
+              <button type="button" className={`${btnGhost} !px-3 !py-1.5`} onClick={onRefresh}>
+                <RefreshCw className="w-4 h-4" /> Обновить
+              </button>
+            ) : null}
           </div>
           <div className="mt-1.5 text-xs text-slate-500 font-medium">
             {formatWhen(campaign.created_at)} · {AUDIENCE_LABELS[campaign.audience_type] || campaign.audience_type}
           </div>
+          {campaignActive ? (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-slate-500">
+                  Отправлено {counts.sent ?? 0}{(counts.failed || 0) > 0 ? ` · ошибок ${counts.failed}` : ''} из {counts.total ?? '—'}
+                </span>
+                {progressPct != null ? <span className="text-xs font-black text-indigo-600">{progressPct}%</span> : null}
+              </div>
+              <div className="h-2 rounded-full bg-slate-200/70 overflow-hidden">
+                {progressPct != null ? (
+                  <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+                ) : (
+                  <div className="h-full w-full bg-indigo-400/70 animate-pulse rounded-full" />
+                )}
+              </div>
+            </div>
+          ) : null}
         </Section>
       </Card>
 
