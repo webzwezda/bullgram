@@ -1,6 +1,14 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 
+// «Таблицы нет» — единственная ошибка выборки, которую можно проглотить (код 42P01,
+// фолбэк для старых PostgREST-ответов — текст 'does not exist'). Остальное падает.
+function isUndefinedTableError(error) {
+    if (!error) return false;
+    if (error.code === '42P01') return true;
+    return String(error.message || '').includes('does not exist');
+}
+
 function buildTrialMap(invoices = [], channelIds = []) {
     const latestTrialMap = new Map();
 
@@ -50,11 +58,31 @@ export default function (supabase) {
                 if (!subError) activeSubscribers = count || 0;
             }
 
-            // 3. Вычисляем выручку, конверсию и воронку неоплат
-            const { data: invoices, error: invError } = await supabase
-                .from('invoices')
-                .select('*, tariffs(channel_id, title, is_trial, trial_label)')
-                .order('created_at', { ascending: false });
+            // 3. Вычисляем выручку, конверсию и воронку неоплат.
+            // Owner-scoped: сначала тарифы админа по его каналам, затем инвойсы
+            // фильтруются в самом запросе через .in('tariff_id', ...) + tariffs!inner
+            // (никаких фулл-сканов всех инвойсов проекта).
+            let tariffIds = [];
+            if (channelIds.length > 0) {
+                const { data: ownerTariffs, error: ownerTariffsError } = await supabase
+                    .from('tariffs')
+                    .select('id')
+                    .eq('owner_id', userId)
+                    .in('channel_id', channelIds);
+                if (ownerTariffsError) throw ownerTariffsError;
+                tariffIds = (ownerTariffs || []).map(tariff => tariff.id);
+            }
+
+            let invoices = [];
+            if (tariffIds.length > 0) {
+                const { data: ownerInvoices, error: invError } = await supabase
+                    .from('invoices')
+                    .select('*, tariffs!inner(channel_id, title, is_trial, trial_label)')
+                    .in('tariff_id', tariffIds)
+                    .order('created_at', { ascending: false });
+                if (invError) throw invError;
+                invoices = ownerInvoices || [];
+            }
 
             let revenueTON = 0;
             let revenueRUB = 0;
@@ -72,11 +100,10 @@ export default function (supabase) {
             let recentInvoices = [];
             let recentPendingInvoices = [];
 
-            if (invoices && !invError) {
-                // Оставляем только те счета, которые относятся к каналам нашего админа
-                const myInvoices = invoices.filter(inv => 
-                    inv.tariffs && channelIds.includes(inv.tariffs.channel_id)
-                );
+            if (invoices.length > 0) {
+                // Инвойсы уже owner-scoped запросом выше (tariff_id в тарифах админа,
+                // tariffs!inner гарантирует наличие тарифа) — JS-фильтр не нужен.
+                const myInvoices = invoices;
 
                 myInvoices.forEach(inv => {
                     if (inv.status === 'paid') {
@@ -189,7 +216,14 @@ export default function (supabase) {
 
             if (subsError) throw subsError;
             if (accessError) throw accessError;
-            if (paymentEventsError && !(paymentEventsError.message || '').includes('payment_events')) throw paymentEventsError;
+            if (paymentEventsError) {
+                // Проглатываем только «таблицы нет», остальное падает в catch роута
+                if (isUndefinedTableError(paymentEventsError)) {
+                    console.error('[analytics] payment_events недоступна:', paymentEventsError.message || paymentEventsError);
+                } else {
+                    throw paymentEventsError;
+                }
+            }
 
             const now = Date.now();
             const monthAgoTs = now - (30 * 24 * 60 * 60 * 1000);

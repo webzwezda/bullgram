@@ -26,6 +26,28 @@ function emptyListResult() {
     return Promise.resolve({ data: [], error: null });
 }
 
+// «Таблицы нет» — единственная ошибка выборки, которую можно проглотить (код 42P01,
+// фолбэк для старых PostgREST-ответов — текст 'does not exist'). Остальное падает.
+function isUndefinedTableError(error) {
+    if (!error) return false;
+    if (error.code === '42P01') return true;
+    return String(error.message || '').includes('does not exist');
+}
+
+// Аддитивные капы для фронта: честно сообщает, где сработал лимит выборки.
+// count берется из count:'exact' на том же запросе; если count не пришел —
+// truncated:false, total:null.
+function buildLimitCap(resp, limit) {
+    const total = typeof resp?.count === 'number' ? resp.count : null;
+    const rows = Array.isArray(resp?.data) ? resp.data.length : 0;
+
+    return {
+        limit,
+        total,
+        truncated: total === null ? false : total > rows
+    };
+}
+
 function buildPersonDisplayName(profile = {}) {
     const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
     if (fullName) return fullName;
@@ -208,7 +230,7 @@ export default function customersRoutes(supabase) {
             // показывают урезанные счётчики.
             let funnelQuery = supabase
                 .from('customer_funnel_events')
-                .select('id, owner_id, bot_id, tg_user_id, tariff_id, event_type, source, referral_code, session_key, payload, created_at')
+                .select('id, owner_id, bot_id, tg_user_id, tariff_id, event_type, source, referral_code, session_key, payload, created_at', { count: 'exact' })
                 .eq('owner_id', ownerId);
             if (selectedBotId) funnelQuery = funnelQuery.eq('bot_id', selectedBotId);
 
@@ -237,8 +259,11 @@ export default function customersRoutes(supabase) {
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('channel_audience_members')
-                    .select('base_id, tg_user_id, username, display_name, first_name, last_name, last_seen_at, present_now, is_bot, source_channel_ids')
-                    .eq('owner_id', ownerId),
+                    // Только колонки, которые реально читаются ниже (профили + presence).
+                    // Лимит 5000 — верхняя граница выборки аудитории на админа.
+                    .select('tg_user_id, username, display_name, first_name, last_name, last_seen_at, present_now, source_channel_ids')
+                    .eq('owner_id', ownerId)
+                    .limit(5000),
                 funnelQuery
                     .order('created_at', { ascending: false })
                     .limit(150)
@@ -247,7 +272,14 @@ export default function customersRoutes(supabase) {
             if (botsResp.error) throw botsResp.error;
             if (channelsResp.error) throw channelsResp.error;
             if (tariffsResp.error) throw tariffsResp.error;
-            if (baseMembersResp.error && !(baseMembersResp.error.message || '').includes('channel_audience_members')) throw baseMembersResp.error;
+            if (baseMembersResp.error) {
+                // Проглатываем только «таблицы нет», остальное падает в catch роута
+                if (isUndefinedTableError(baseMembersResp.error)) {
+                    console.error('[customers workbench] channel_audience_members недоступна:', baseMembersResp.error.message || baseMembersResp.error);
+                } else {
+                    throw baseMembersResp.error;
+                }
+            }
 
             const allBots = botsResp.data || [];
             const allChannels = channelsResp.data || [];
@@ -305,7 +337,9 @@ export default function customersRoutes(supabase) {
                 tariffIds.length > 0
                     ? supabase
                         .from('invoices')
-                        .select('*')
+                        // Только колонки дедупа viewed↔invoices ниже; invoices целиком
+                        // в ответ workbench не попадают.
+                        .select('tg_user_id, tariff_id, created_at', { count: 'exact' })
                         .in('tariff_id', tariffIds)
                         .order('created_at', { ascending: false })
                         .limit(250)
@@ -313,14 +347,15 @@ export default function customersRoutes(supabase) {
                 channelIds.length > 0
                     ? supabase
                         .from('subscriptions')
-                        .select('id, tg_user_id, tg_username, channel_id, status, expires_at, last_join_request_at, last_join_approved_at, last_access_event, access_note, created_at')
+                        .select('id, tg_user_id, tg_username, channel_id, status, expires_at, last_join_request_at, last_join_approved_at, last_access_event, access_note, created_at', { count: 'exact' })
                         .in('channel_id', channelIds)
                         .order('created_at', { ascending: false })
                         .limit(1000)
                     : emptyListResult(),
                 supabase
                     .from('access_events')
-                    .select('*')
+                    // Только то, что читают latestBy + detectAccessSource ниже.
+                    .select('subscription_id, event_source, payload, created_at')
                     .eq('owner_id', ownerId)
                     .order('created_at', { ascending: false })
                     .limit(250)
@@ -328,7 +363,20 @@ export default function customersRoutes(supabase) {
 
             if (invoicesResp.error) throw invoicesResp.error;
             if (subscriptionsResp.error) throw subscriptionsResp.error;
-            if (accessEventsResp.error && !(accessEventsResp.error.message || '').includes('access_events')) throw accessEventsResp.error;
+            if (accessEventsResp.error) {
+                // Проглатываем только «таблицы нет», остальное падает в catch роута
+                if (isUndefinedTableError(accessEventsResp.error)) {
+                    console.error('[customers workbench] access_events недоступна:', accessEventsResp.error.message || accessEventsResp.error);
+                } else {
+                    throw accessEventsResp.error;
+                }
+            }
+
+            const caps = {
+                funnel: buildLimitCap(funnelResp, 150),
+                invoices: buildLimitCap(invoicesResp, 250),
+                subscriptions: buildLimitCap(subscriptionsResp, 1000)
+            };
 
             const invoices = invoicesResp.data || [];
             const subscriptions = subscriptionsResp.data || [];
@@ -488,7 +536,8 @@ export default function customersRoutes(supabase) {
                 updatedAt: new Date().toISOString(),
                 bots: botOptions,
                 segments,
-                channels
+                channels,
+                caps
             });
         } catch (error) {
             console.error('Ошибка customers workbench:', error);

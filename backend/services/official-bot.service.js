@@ -46,6 +46,23 @@ export class OfficialBotService {
         }
     }
 
+    computeExtendedExpiresAt(sub, durationDays) {
+        if (Number(durationDays) <= 0) return null;
+
+        const now = new Date();
+        let baseDate = new Date();
+
+        if (sub && sub.expires_at) {
+            const currentExp = new Date(sub.expires_at);
+            if (currentExp > now) {
+                baseDate = currentExp;
+            }
+        }
+
+        baseDate.setDate(baseDate.getDate() + Number(durationDays));
+        return baseDate.toISOString();
+    }
+
     async upsertSubscriptionForChannel(tgUserId, channelId, durationDays) {
         const { data: existingSub } = await this.supabase
             .from('subscriptions')
@@ -55,31 +72,74 @@ export class OfficialBotService {
             .single();
 
         let newExpiresAt = null;
-        if (Number(durationDays) > 0) {
-            const now = new Date();
-            let baseDate = new Date();
+        let subscriptionId = existingSub?.id || null;
 
-            if (existingSub && existingSub.expires_at) {
-                const currentExp = new Date(existingSub.expires_at);
-                if (currentExp > now) {
-                    baseDate = currentExp;
+        if (existingSub) {
+            // Оптимистический гард от TOCTOU: expires_at читаем и пишем по очереди,
+            // поэтому обновляем только если оно не изменилось с момента чтения.
+            // Конфликт — перечитываем подписку, пересчитываем и повторяем (макс. 2 ретрая).
+            let current = existingSub;
+            let applied = false;
+
+            for (let attempt = 0; attempt < 3 && !applied; attempt++) {
+                newExpiresAt = this.computeExtendedExpiresAt(current, durationDays);
+
+                let updateQuery = this.supabase
+                    .from('subscriptions')
+                    .update({
+                        expires_at: newExpiresAt,
+                        status: 'active'
+                    })
+                    .eq('id', current.id);
+                updateQuery = current.expires_at == null
+                    ? updateQuery.is('expires_at', null)
+                    : updateQuery.eq('expires_at', current.expires_at);
+
+                const { data: updatedRows, error: updateError } = await updateQuery.select('id');
+                if (updateError) throw updateError;
+
+                if ((updatedRows || []).length > 0) {
+                    applied = true;
+                } else {
+                    const { data: rereadSub, error: rereadError } = await this.supabase
+                        .from('subscriptions')
+                        .select('*')
+                        .eq('tg_user_id', tgUserId)
+                        .eq('channel_id', channelId)
+                        .single();
+                    if (rereadError) throw rereadError;
+                    if (!rereadSub) break;
+                    current = rereadSub;
                 }
             }
 
-            baseDate.setDate(baseDate.getDate() + Number(durationDays));
-            newExpiresAt = baseDate.toISOString();
-        }
+            if (!applied) {
+                // Деньги уже уплачены (платёжный путь) — покупатель должен получить
+                // доступ, поэтому после исчерпания ретраев делаем финальную запись
+                // без гарда. В худшем случае теряется параллельное продление (не
+                // двойное), ошибка логируется для ручной компенсации.
+                const fallbackExpiresAt = this.computeExtendedExpiresAt(current, durationDays);
+                const { error: fallbackError } = await this.supabase
+                    .from('subscriptions')
+                    .update({
+                        expires_at: fallbackExpiresAt,
+                        status: 'active'
+                    })
+                    .eq('id', current.id);
+                if (fallbackError) throw fallbackError;
+                newExpiresAt = fallbackExpiresAt;
+                console.error('upsertSubscriptionForChannel: исчерпаны ретраи TOCTOU-гарда, применён фолбэк без гарда', {
+                    tgUserId,
+                    channelId,
+                    durationDays,
+                    expires_at: fallbackExpiresAt
+                });
+            }
 
-        let subscriptionId = existingSub?.id || null;
-        if (existingSub) {
-            await this.supabase
-                .from('subscriptions')
-                .update({
-                    expires_at: newExpiresAt,
-                    status: 'active'
-                })
-                .eq('id', existingSub.id);
+            subscriptionId = current.id;
         } else {
+            newExpiresAt = this.computeExtendedExpiresAt(null, durationDays);
+
             const { data: createdSub } = await this.supabase
                 .from('subscriptions')
                 .insert({

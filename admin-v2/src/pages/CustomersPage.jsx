@@ -37,6 +37,16 @@ const BOT_SUBTABS = [
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
+// caps из ответа workbench: какой ключ капа относится к какой под-вкладке бота.
+// Все бот-воронки (start/viewed/invoice_created) — funnel-события; клиенты — подписки.
+const CAPS_KEY_BY_SUBTAB = {
+  started: 'funnel',
+  viewed: 'funnel',
+  'invoice-created': 'funnel',
+  'customers-active': 'subscriptions',
+  'customers-expired': 'subscriptions'
+};
+
 const VIEWED_EVENT_LABELS = {
   tariff_list_opened: 'Открыл тарифы',
   tariff_card_opened: 'Открыл тариф',
@@ -151,17 +161,17 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-100">
-                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Имя</th>
-                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
-                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
-                {!isPaid && <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Приватка</th>}
+                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Имя</th>
+                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
+                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
+                {!isPaid && <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Приватка</th>}
                 {isPaid && (
                   <>
-                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Оплата</th>
-                    <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Доступ до</th>
+                    <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Оплата</th>
+                    <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Доступ до</th>
                   </>
                 )}
-                <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
+                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -193,7 +203,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                 const idCell = (
                   <td className="px-6 py-4 hidden lg:table-cell">
                     {row.tg_user_id
-                      ? <span className="font-mono text-xs text-slate-400">{row.tg_user_id}</span>
+                      ? <span className="font-mono text-xs text-slate-500">{row.tg_user_id}</span>
                       : <span className="text-slate-300">—</span>}
                   </td>
                 );
@@ -425,7 +435,8 @@ export function CustomersPage() {
     started: [],
     crm: [],
     viewed: [],
-    invoiceCreated: []
+    invoiceCreated: [],
+    caps: null
   });
   const [audienceState, setAudienceState] = useState({
     loading: false,
@@ -435,8 +446,13 @@ export function CustomersPage() {
     error: ''
   });
 
+  // Защита от гонки: ответ поллинга, пришедший позже свежей загрузки (например,
+  // после действия над строкой), не должен перезаписывать свежий стейт —
+  // тот же паттерн, что в loadBotAnalytics и loadAudience
+  const customersReqIdRef = useRef(0);
   const loadCustomers = useCallback(async ({ silent = false, shouldCancel = () => false } = {}) => {
     if (!accessToken) return;
+    const reqId = ++customersReqIdRef.current;
 
     if (!silent) {
       setState((prev) => ({
@@ -453,6 +469,7 @@ export function CustomersPage() {
       const segments = data.segments || {};
 
       if (shouldCancel()) return;
+      if (reqId !== customersReqIdRef.current) return;
 
       const botOptions = data.bots || [];
       const activeBotOptions = botOptions.filter((item) => item.status !== 'deleted');
@@ -475,16 +492,16 @@ export function CustomersPage() {
           ...(segments.expiredCustomers || [])
         ],
         viewed: segments.viewedTariffs || [],
-        invoiceCreated: segments.invoiceCreated || []
+        invoiceCreated: segments.invoiceCreated || [],
+        caps: data.caps || null
       });
     } catch (error) {
-      if (!shouldCancel()) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: error.message
-        }));
-      }
+      if (shouldCancel() || reqId !== customersReqIdRef.current) return;
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: error.message
+      }));
     }
   }, [accessToken, selectedBotId, setSearchParams]);
 
@@ -621,6 +638,15 @@ export function CustomersPage() {
       .filter((row) => rowMatches(row, search)),
     [effectiveTab, focusChannelId, rowsByTab, search]
   );
+
+  // Честные капы: если бэкенд прислал caps — выборка упёрлась в лимит и все счётчики
+  // нижняя граница («+»). Для отфильтрованного вида (поиск/канал) капы не применяем:
+  // total посчитан без фильтра, подпись начинала бы врать.
+  const isRowViewFiltered = search.trim().length > 0 || !!focusChannelId;
+  const activeCaps = !isRowViewFiltered && state.caps
+    ? (state.caps[CAPS_KEY_BY_SUBTAB[effectiveTab]] || null)
+    : null;
+  const subscriptionCaps = state.caps?.subscriptions || null;
 
   const stats = useMemo(() => ({
     started: state.started.length,
@@ -875,17 +901,22 @@ export function CustomersPage() {
           <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
-              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-red-500' : 'text-slate-400' }
+              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-slate-900' : 'text-slate-500' }
             ].map((item, idx) => (
               <div
                 key={idx}
                 className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-500">{item.label}</span>
                   <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                 </div>
-                <div className={`text-3xl font-black tracking-tighter ${item.color}`}>{item.value}</div>
+                <div
+                  className={`text-3xl font-black tracking-tighter ${item.color}`}
+                  title={subscriptionCaps?.truncated ? `Показаны последние ${subscriptionCaps.limit} ${plural(subscriptionCaps.limit, 'запись', 'записи', 'записей')}` : undefined}
+                >
+                  {item.value}{subscriptionCaps?.truncated ? '+' : ''}
+                </div>
               </div>
             ))}
           </div>
@@ -893,7 +924,7 @@ export function CustomersPage() {
           {selectedBotId ? (
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 mb-3">
-                <div className="text-xs font-black uppercase tracking-widest text-slate-400">Выручка TON</div>
+                <div className="text-xs font-black uppercase tracking-widest text-slate-500">Выручка TON</div>
                 <div className="flex rounded-xl border border-slate-200 overflow-hidden">
                   {[
                     { id: '7', label: '7 дней' },
@@ -917,12 +948,12 @@ export function CustomersPage() {
                 <div className="text-3xl font-black tracking-tighter text-slate-900 tabular-nums">
                   {botAnalytics.data ? formatTon(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) : '—'}
                 </div>
-                <div className="text-xs text-slate-400 font-medium mt-1">
+                <div className="text-xs font-medium mt-1">
                   {botAnalytics.error && !botAnalytics.data
                     ? <span className="text-red-500">{botAnalytics.error}</span>
                     : botAnalytics.data && Number(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) > 0
-                      ? (moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время')
-                      : 'Платежей пока нет'}
+                      ? <span className="text-slate-500">{moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время'}</span>
+                      : <span className="text-slate-900">За период платежей нет</span>}
                 </div>
               </div>
             </>
@@ -1039,6 +1070,7 @@ export function CustomersPage() {
               <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
                 {BOT_SUBTABS.map((sub) => {
                   const count = subtabCounts[sub.id] || 0;
+                  const subCap = state.caps ? (state.caps[CAPS_KEY_BY_SUBTAB[sub.id]] || null) : null;
                   return (
                     <button
                       key={sub.id}
@@ -1052,8 +1084,11 @@ export function CustomersPage() {
                     >
                       {sub.label}
                       {count > 0 && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${activeBotSubtab === sub.id ? 'bg-indigo-100 text-indigo-600' : 'bg-white text-slate-500'}`}>
-                          {count}
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-md ${activeBotSubtab === sub.id ? 'bg-indigo-100 text-indigo-600' : 'bg-white text-slate-500'}`}
+                          title={subCap?.truncated ? `Показаны последние ${subCap.limit} ${plural(subCap.limit, 'запись', 'записи', 'записей')}` : undefined}
+                        >
+                          {subCap?.truncated ? `${count}+` : count}
                         </span>
                       )}
                     </button>
@@ -1074,7 +1109,12 @@ export function CustomersPage() {
             </h3>
             <div className="flex items-center gap-3">
               <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
-                {activeRows.length} {plural(activeRows.length, 'запись', 'записи', 'записей')}
+                {/* total из caps — размер всего среза таблицы, а вкладка показывает
+                    подмножество (статусы, дедуп по контактам), поэтому честная
+                    нижняя граница — «N+ показанных», не total */}
+                {activeCaps?.truncated
+                  ? `${activeRows.length}+ ${plural(activeRows.length, 'запись', 'записи', 'записей')} · показаны последние ${activeCaps.limit}`
+                  : `${activeRows.length} ${plural(activeRows.length, 'запись', 'записи', 'записей')}`}
               </span>
             </div>
           </div>
@@ -1102,11 +1142,11 @@ export function CustomersPage() {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Клиент</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden md:table-cell">Тариф / канал</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px]">Статус</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
-                      <th className="px-6 py-4 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Действия</th>
+                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Клиент</th>
+                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden md:table-cell">Тариф / канал</th>
+                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Статус</th>
+                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
+                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] text-right">Действия</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -1132,7 +1172,7 @@ export function CustomersPage() {
                                   </span>
                                 </div>
                                 {row.tg_user_id ? (
-                                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
                                     ID: {row.tg_user_id}
                                   </div>
                                 ) : null}

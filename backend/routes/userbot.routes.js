@@ -4144,12 +4144,28 @@ export default function (supabase) {
         } catch (error) { res.status(500).json({ error: 'Внутренняя ошибка' }); }
     });
 
+    const MAX_EXTENSION_DAYS = 3650;
+
+    // 'forever' или целое число дней 1..3650; иначе null (и роут вернет 400,
+    // а не 500 от parseInt('abc') -> NaN -> Invalid Date).
+    function parseExtensionDays(days) {
+        if (days === 'forever') return 'forever';
+        const num = Number(days);
+        if (!Number.isInteger(num) || num < 1 || num > MAX_EXTENSION_DAYS) return null;
+        return num;
+    }
+
     router.post('/crm/subscribers/batch-add-days', authenticateUser, async (req, res) => {
         const subscriptionIds = Array.isArray(req.body?.subscription_ids) ? req.body.subscription_ids.map(String) : [];
         const { days } = req.body || {};
 
         if (subscriptionIds.length === 0) {
             return res.status(400).json({ error: 'Не переданы подписки для продления' });
+        }
+
+        const daysNum = parseExtensionDays(days);
+        if (daysNum === null) {
+            return res.status(400).json({ error: `days должен быть целым числом от 1 до ${MAX_EXTENSION_DAYS} или строкой "forever"` });
         }
 
         try {
@@ -4179,66 +4195,113 @@ export default function (supabase) {
             }
 
             let updated = 0;
+            let conflicts = 0;
+            let failed = 0;
 
             for (const sub of allowedSubscriptions) {
-                let newExpiresAt = null;
-                if (days !== 'forever') {
-                    const now = new Date();
-                    let baseDate = new Date();
-                    if (sub.status === 'active' && sub.expires_at) {
-                        const currentExp = new Date(sub.expires_at);
-                        if (currentExp > now) baseDate = currentExp;
-                    }
-                    baseDate.setDate(baseDate.getDate() + parseInt(days));
-                    newExpiresAt = baseDate.toISOString();
-                }
+                let current = sub;
+                let applied = false;
+                let kickedRestore = false;
 
-                const updates = {
-                    expires_at: newExpiresAt,
-                    status: 'active'
-                };
-
-                if (sub.last_access_event === 'kicked') {
-                    updates.last_access_event = 'manual_restore';
-                    updates.access_note = days === 'forever'
-                        ? 'Доступ восстановлен вручную из админки навсегда'
-                        : `Доступ восстановлен вручную из админки на ${parseInt(days)} дней`;
-                }
-
-                const { error: updateError } = await supabase
-                    .from('subscriptions')
-                    .update(updates)
-                    .eq('id', sub.id);
-
-                if (!updateError) {
-                    if (sub.last_access_event === 'kicked') {
-                        await supabase.from('access_events').insert({
-                            owner_id: req.user.id,
-                            channel_id: sub.channel_id,
-                            subscription_id: sub.id,
-                            invoice_id: null,
-                            invite_id: null,
-                            tg_user_id: String(sub.tg_user_id),
-                            event_type: 'restored',
-                            event_source: 'manual_restore',
-                            payload: {
-                                days: days === 'forever' ? 'forever' : parseInt(days),
-                                source: 'admin_extend',
-                                note: days === 'forever'
-                                    ? 'Доступ восстановлен вручную из админки навсегда'
-                                    : `Доступ восстановлен вручную из админки на ${parseInt(days)} дней`
-                            }
-                        });
+                // Оптимистический гард от TOCTOU: read-modify-write expires_at без
+                // гарда теряет параллельные продления. Апдейт проходит только если
+                // expires_at не изменился с момента чтения; конфликт — перечитываем
+                // подписку, пересчитываем и повторяем (максимум 2 ретрая).
+                for (let attempt = 0; attempt < 3 && !applied; attempt++) {
+                    let newExpiresAt = null;
+                    if (daysNum !== 'forever') {
+                        const now = new Date();
+                        let baseDate = new Date();
+                        if (current.status === 'active' && current.expires_at) {
+                            const currentExp = new Date(current.expires_at);
+                            if (currentExp > now) baseDate = currentExp;
+                        }
+                        baseDate.setDate(baseDate.getDate() + daysNum);
+                        newExpiresAt = baseDate.toISOString();
                     }
 
-                    updated += 1;
+                    const updates = {
+                        expires_at: newExpiresAt,
+                        status: 'active'
+                    };
+
+                    if (current.last_access_event === 'kicked') {
+                        updates.last_access_event = 'manual_restore';
+                        updates.access_note = daysNum === 'forever'
+                            ? 'Доступ восстановлен вручную из админки навсегда'
+                            : `Доступ восстановлен вручную из админки на ${daysNum} дней`;
+                    }
+
+                    let guardedQuery = supabase.from('subscriptions').update(updates).eq('id', sub.id);
+                    guardedQuery = current.expires_at == null
+                        ? guardedQuery.is('expires_at', null)
+                        : guardedQuery.eq('expires_at', current.expires_at);
+
+                    const { data: updatedRows, error: updateError } = await guardedQuery.select('id');
+
+                    // Ошибка одной строки не роняет batch: часть подписок уже
+                    // продлена, остальные должны получить попытку. Считаем в failed.
+                    if (updateError) {
+                        failed += 1;
+                        console.error('batch-add-days: сбой обновления подписки', sub.id, updateError.message || updateError);
+                        break;
+                    }
+
+                    if ((updatedRows || []).length > 0) {
+                        applied = true;
+                        // Событие restored пишем по состоянию применённой итерации,
+                        // а не по первоначально прочитанной подписке
+                        kickedRestore = current.last_access_event === 'kicked';
+                    } else {
+                        const { data: rereadSub, error: rereadError } = await supabase
+                            .from('subscriptions')
+                            .select('*')
+                            .eq('id', sub.id)
+                            .single();
+                        if (rereadError) {
+                            failed += 1;
+                            console.error('batch-add-days: сбой перечитывания подписки', sub.id, rereadError.message || rereadError);
+                            break;
+                        }
+                        if (!rereadSub) break;
+                        current = rereadSub;
+                    }
                 }
+
+                if (!applied) {
+                    conflicts += 1;
+                    continue;
+                }
+
+                if (kickedRestore) {
+                    await supabase.from('access_events').insert({
+                        owner_id: req.user.id,
+                        channel_id: sub.channel_id,
+                        subscription_id: sub.id,
+                        invoice_id: null,
+                        invite_id: null,
+                        tg_user_id: String(sub.tg_user_id),
+                        event_type: 'restored',
+                        event_source: 'manual_restore',
+                        payload: {
+                            days: daysNum === 'forever' ? 'forever' : daysNum,
+                            source: 'admin_extend',
+                            note: daysNum === 'forever'
+                                ? 'Доступ восстановлен вручную из админки навсегда'
+                                : `Доступ восстановлен вручную из админки на ${daysNum} дней`
+                        }
+                    });
+                }
+
+                updated += 1;
             }
 
             res.json({
                 success: true,
                 requested: subscriptionIds.length,
-                updated
+                updated,
+                conflicts,
+                failed
             });
         } catch (error) {
             console.error('Ошибка batch-add-days:', error);
