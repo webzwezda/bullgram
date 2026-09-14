@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Database, Plus, X, AlertCircle } from 'lucide-react';
+import { Database, Plus, X, AlertCircle, Users } from 'lucide-react';
 import {
   fetchClientBases, createClientBase, addClientBaseMembers
 } from '../../api/client-bases.js';
@@ -48,7 +48,7 @@ function savePendingBaseId(id) {
   }
 }
 
-export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBaseId, addToBaseRequest, onConsumeAddRequest }) {
+export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBaseId, addToBaseRequest, onConsumeAddRequest, onTargetChange }) {
   const [bases, setBases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -90,23 +90,16 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
         if (cancelled) return;
         const list = data.bases || [];
         setBases(list);
+        // Без ?base остаёмся без выбора — никакого телепорта в первую базу.
+        // Владелец сам выбирает базу в списке или создаёт новую.
         if (!activeBaseId) {
-          if (list.length > 0) {
-            onChangeActiveBaseId(list[0].id);
-            setMode('existing');
-          } else {
-            setMode('new');
-          }
+          setMode('existing');
         } else {
           const stillExists = list.find((b) => String(b.id) === String(activeBaseId));
           if (!stillExists) {
-            if (list.length > 0) {
-              onChangeActiveBaseId(list[0].id);
-              setMode('existing');
-            } else {
-              onChangeActiveBaseId(null);
-              setMode('new');
-            }
+            // Выбранная база исчезла (удалена) — нейтральное состояние, без автовыбора первой.
+            onChangeActiveBaseId(null);
+            setMode('existing');
           } else {
             setMode('existing');
           }
@@ -154,6 +147,8 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
       pushToBuffer(member);
       onConsumeAddRequest?.();
     } else {
+      // mode 'existing', но база не выбрана (нейтральное состояние) — не молчим.
+      toast('Сначала выберите базу в карточке «Базы клиентов» — или создайте новую');
       onConsumeAddRequest?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,6 +158,22 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
     () => bases.find((b) => String(b.id) === String(activeBaseId)) || null,
     [bases, activeBaseId]
   );
+
+  // Куда сейчас попадёт кнопка «В базу» из таблицы аудитории — сообщаем наверх
+  // для чипа «Куда попадёт», чтобы адресат кнопки был виден всегда.
+  useEffect(() => {
+    if (mode === 'new') {
+      onTargetChange?.('Корзина новой базы');
+      return;
+    }
+    if (mode === 'existing' && activeBaseId) {
+      const base = bases.find((b) => String(b.id) === String(activeBaseId));
+      onTargetChange?.(base ? `База «${base.name}»` : null);
+      return;
+    }
+    onTargetChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, activeBaseId, bases]);
 
   function selectBase(id) {
     onChangeActiveBaseId(id);
@@ -367,18 +378,11 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
   }
 
   function handleBaseDeleted() {
+    // Базу удалили — уходим в нейтральное состояние, без автовыбора первой оставшейся.
     onChangeActiveBaseId(null);
+    setMode('existing');
     setPendingBaseId(null);
-    fetchClientBases(accessToken).then((data) => {
-      const list = data.bases || [];
-      setBases(list);
-      if (list.length > 0) {
-        onChangeActiveBaseId(list[0].id);
-        setMode('existing');
-      } else {
-        setMode('new');
-      }
-    }).catch(() => {});
+    fetchClientBases(accessToken).then((data) => setBases(data.bases || [])).catch(() => {});
   }
 
   function handleBaseRenamed(id, patch) {
@@ -424,7 +428,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
           <h2 className="text-sm font-black uppercase tracking-widest text-slate-700">Базы клиентов</h2>
         </div>
         <p className="text-sm text-slate-600 max-w-2xl">
-          Кураторские списки для точечных рассылок и дожима. Собирайте из аудитории бота кнопкой «В базу» сверху или забивайте ID руками.
+          Кураторские списки для точечных рассылок и дожима. Кнопка „В базу“ кладёт человека туда, куда указывает чип „Куда попадёт“ в таблице аудитории.
         </p>
       </div>
 
@@ -517,7 +521,21 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
             onRenamed={handleBaseRenamed}
             onPushToBroadcast={pushToBroadcast}
           />
-        ) : null
+        ) : (
+          <div className="p-16 text-center space-y-3 flex flex-col items-center">
+            <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+              <Users className="w-8 h-8" />
+            </div>
+            <p className="text-slate-500 font-bold tracking-tight">Выберите базу из списка или создайте новую</p>
+            <button
+              type="button"
+              onClick={startNew}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Создать базу
+            </button>
+          </div>
+        )
       ) : (
         <div className="p-6 md:p-8">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">

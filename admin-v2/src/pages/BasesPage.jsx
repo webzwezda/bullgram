@@ -11,6 +11,12 @@ export function BasesPage() {
   const activeBaseId = searchParams.get('base') || '';
 
   const [addToBaseRequest, setAddToBaseRequest] = useState(null);
+  // Куда сейчас попадёт кнопка «В базу» из таблицы аудитории (чип «Куда попадёт»).
+  const [targetLabel, setTargetLabel] = useState(null);
+
+  const handleTargetChange = useCallback((label) => {
+    setTargetLabel(label);
+  }, []);
 
   const setActiveBaseId = useCallback((id) => {
     const next = new URLSearchParams(searchParams);
@@ -32,6 +38,7 @@ export function BasesPage() {
       <AudiencePanel
         accessToken={accessToken}
         onAddToBase={handleAddToBase}
+        targetLabel={targetLabel}
       />
       <ClientBasesPanel
         accessToken={accessToken}
@@ -39,6 +46,7 @@ export function BasesPage() {
         onChangeActiveBaseId={setActiveBaseId}
         addToBaseRequest={addToBaseRequest}
         onConsumeAddRequest={consumeAddRequest}
+        onTargetChange={handleTargetChange}
       />
     </section>
   );

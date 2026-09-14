@@ -14,7 +14,7 @@ function needsUserbotRecovery(message = '') {
     || value.includes('auth_key_unregistered');
 }
 
-export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
+export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, targetLabel }) {
   const [bots, setBots] = useState([]);
   const [channels, setChannels] = useState([]);
   const [bases, setBases] = useState([]);
@@ -367,10 +367,17 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
             <section className="p-6 md:p-8 border-b border-slate-100">
               <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
                 <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Участники канала</h3>
-                <span className="text-xs font-bold text-slate-500">
-                  {filteredMembers.length} показываем
-                  {(memberSummary.total || members.length) > filteredMembers.length ? ` · ${memberSummary.total || members.length} всего` : ''}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {targetLabel ? (
+                    <span className="inline-flex items-center bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1 text-[11px] font-bold">
+                      Куда попадёт «В базу»: {targetLabel}
+                    </span>
+                  ) : null}
+                  <span className="text-xs font-bold text-slate-500">
+                    {filteredMembers.length} показываем
+                    {(memberSummary.total || members.length) > filteredMembers.length ? ` · ${memberSummary.total || members.length} всего` : ''}
+                  </span>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-1.5 mb-4">
