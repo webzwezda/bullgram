@@ -900,7 +900,7 @@ export function CustomersPage() {
           {/* Фуннельные карточки. [display:grid] вместо grid — legacy .grid из app.css перебивает Tailwind-колонки */}
           <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-500' },
+              { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-600' },
               { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-slate-900' : 'text-slate-500' }
             ].map((item, idx) => (
               <div
@@ -993,7 +993,7 @@ export function CustomersPage() {
                     isActive
                       ? 'border-indigo-600 text-indigo-600'
                       : isDisabled
-                        ? 'border-transparent text-slate-300 cursor-not-allowed'
+                        ? 'border-transparent text-slate-500 opacity-50 cursor-not-allowed'
                         : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                   }`}
                   onClick={() => !isDisabled && setTabState(tab.id)}
@@ -1078,7 +1078,7 @@ export function CustomersPage() {
                       className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 ${
                         activeBotSubtab === sub.id
                           ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                          : 'text-slate-600 hover:text-slate-700'
                       }`}
                       onClick={() => setBotSubtab(sub.id)}
                     >
@@ -1206,7 +1206,7 @@ export function CustomersPage() {
 
                           {/* Reason Col */}
                           <td className="px-6 py-4 hidden lg:table-cell">
-                            <div className="text-slate-600 font-medium text-sm truncate max-w-xs" title={row.reason || ''}>
+                            <div className="text-slate-600 font-medium text-sm line-clamp-2" title={row.reason || ''}>
                               {row.reason || '—'}
                             </div>
                           </td>
