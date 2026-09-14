@@ -99,13 +99,13 @@ export function RecentCallsTable({ source }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Время</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Операция</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Статус</th>
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Задержка</th>
-                    {hasUserbot ? <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Userbot</th> : null}
-                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">IP</th>
-                    {hasError ? <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Ошибка</th> : null}
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Время</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Операция</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Статус</th>
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Задержка</th>
+                    {hasUserbot ? <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Userbot</th> : null}
+                    <th className="py-3 pr-4 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">IP</th>
+                    {hasError ? <th className="py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ошибка</th> : null}
                   </tr>
                 </thead>
                 <tbody>

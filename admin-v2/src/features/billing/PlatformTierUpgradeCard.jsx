@@ -132,7 +132,7 @@ export function PlatformTierUpgradeCard() {
                 onPaid={handlePaid}
                 onError={(err) => setError(err?.message || 'Ошибка оплаты')}
               />
-              <p className="text-[11px] text-slate-400 mt-2">
+              <p className="text-[11px] text-slate-600 mt-2">
                 Memo: <code className="font-mono">{order.memo}</code> · истекает {formatEndsAt(order.expires_at)}
               </p>
             </div>

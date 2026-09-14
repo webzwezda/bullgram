@@ -29,11 +29,16 @@ function statusBadge(token) {
 
 function CopyInput({ value, monospace, placeholder }) {
   const [copied, setCopied] = useState(false);
-  function handleCopy() {
+  async function handleCopy() {
     if (!value) return;
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.error('Clipboard write failed:', err);
+      toast.error('Не удалось скопировать — выдели значение и скопируй вручную.');
+    }
   }
   return (
     <div className="relative">
@@ -46,7 +51,7 @@ function CopyInput({ value, monospace, placeholder }) {
       {value ? (
         <button
           type="button"
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           onClick={handleCopy}
           title="Копировать"
         >
@@ -73,12 +78,30 @@ function IntegrationCard({
   const hasToken = Boolean(token);
   const canShow = hasToken && !token.revoked_at && token.can_reveal;
   const canReissue = hasToken && !token.revoked_at;
+  const [reissueArmed, setReissueArmed] = useState(false);
 
   useEffect(() => {
     if (!secret || !onHideSecret || !token?.id) return;
     const timer = setTimeout(() => onHideSecret(token.id), 60000);
     return () => clearTimeout(timer);
   }, [secret, token?.id, onHideSecret]);
+
+  // Двухшаговое подтверждение перевыпуска: первый клик armит кнопку на 4с,
+  // второй — запускает перевыпуск.
+  useEffect(() => {
+    if (!reissueArmed) return undefined;
+    const timer = setTimeout(() => setReissueArmed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [reissueArmed]);
+
+  function handleReissueClick() {
+    if (!reissueArmed) {
+      setReissueArmed(true);
+      return;
+    }
+    setReissueArmed(false);
+    onReissue(token);
+  }
 
   return (
     <Card className="border-slate-200/70 bg-white shadow-sm">
@@ -123,11 +146,24 @@ function IntegrationCard({
             </Button>
           ) : null}
           {canReissue ? (
-            <Button variant="outline" size="sm" className="h-9 rounded-xl text-amber-600 hover:text-amber-700 hover:bg-amber-50" type="button" onClick={() => onReissue(token)} disabled={busy}>
-              <RefreshCcw className="h-4 w-4" /> Перевыпустить
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-9 rounded-xl ${reissueArmed ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800' : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'}`}
+              type="button"
+              onClick={handleReissueClick}
+              disabled={busy}
+            >
+              <RefreshCcw className="h-4 w-4" /> {reissueArmed ? 'Точно перевыпустить?' : 'Перевыпустить'}
             </Button>
           ) : null}
         </div>
+
+        {canReissue && reissueArmed ? (
+          <p className="text-xs leading-5 text-rose-600 max-w-2xl">
+            Перевыпустить ключ? Старый ключ перестанет работать сразу: все скрипты и n8n на этом ключе сломаются, пока не вставишь новый. Отменить это нельзя.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -191,8 +227,13 @@ export function ApiIntegrationsPage() {
   async function copyToken(token) {
     const secret = await revealToken(token);
     if (!secret) return;
-    await navigator.clipboard.writeText(secret);
-    toast.success('Ключ скопирован.');
+    try {
+      await navigator.clipboard.writeText(secret);
+      toast.success('Ключ скопирован.');
+    } catch (err) {
+      console.error('Clipboard write failed:', err);
+      toast.error('Не удалось скопировать — нажми «Показать» и скопируй вручную.');
+    }
   }
 
   async function createToken(purpose) {
@@ -220,7 +261,6 @@ export function ApiIntegrationsPage() {
   }
 
   async function reissueToken(token) {
-    if (!window.confirm('Перевыпустить ключ? Старый ключ перестанет работать сразу: все скрипты и n8n на этом ключе сломаются, пока не вставишь новый. Отменить это нельзя.')) return;
     setBusyId(token.id);
     try {
       const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(token.id)}/reissue`, {

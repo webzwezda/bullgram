@@ -113,8 +113,8 @@ export function ProfileIdentityCard() {
       {identities ? (
         <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-xs font-black uppercase tracking-wider text-slate-400">Способы входа</div>
-            <p className="text-xs text-slate-400">Два способа — запасной вход, если один заблокируют</p>
+            <div className="text-xs font-black uppercase tracking-wider text-slate-500">Способы входа</div>
+            <p className="text-xs text-slate-500">Два способа — запасной вход, если один заблокируют</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {hasGoogle ? (
@@ -127,13 +127,13 @@ export function ProfileIdentityCard() {
                     type="button"
                     onClick={handleUnlinkGoogle}
                     disabled={unlinkingGoogle}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-slate-400 hover:text-rose-600 text-xs font-bold transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 text-slate-500 hover:text-rose-600 text-xs font-bold transition-all disabled:opacity-50"
                   >
                     {unlinkingGoogle ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                     Отвязать Google
                   </button>
                 ) : (
-                  <span className="text-xs text-slate-400 font-bold">единственный способ входа — не удалить</span>
+                  <span className="text-xs text-slate-500 font-bold">единственный способ входа — не удалить</span>
                 )}
               </>
             ) : (
@@ -152,7 +152,7 @@ export function ProfileIdentityCard() {
                 Telegram подключён
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-400 text-xs font-bold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 text-xs font-bold">
                 Telegram не привязан — кнопка ниже
               </span>
             )}

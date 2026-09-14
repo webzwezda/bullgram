@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTonAddress, useTonWallet, useTonConnectModal, useTonConnectUI } from '@tonconnect/ui-react';
 import { toast } from 'sonner';
 import { Copy, Loader2, Wallet, X } from 'lucide-react';
@@ -94,7 +95,7 @@ export function ProfileWalletCard() {
         <p className="text-sm text-slate-500 mt-0.5">
           Кошелёк, с которого ты платишь за тарифы Bullgram. Адрес запоминается при подключении — бери его отсюда для оплаты вручную.
           Это не касса: кошелёк для приёма оплат от твоих клиентов настраивается{' '}
-          <a href="/billing" className="link-action">в Кассе → Реквизиты</a>.
+          <Link to="/billing" className="link-action">в Кассе → Реквизиты</Link>.
         </p>
       </div>
 
@@ -142,7 +143,7 @@ export function ProfileWalletCard() {
                   type="button"
                   onClick={forget}
                   disabled={forgetting}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-400 hover:text-rose-600 text-sm font-bold transition-all disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-500 hover:text-rose-600 text-sm font-bold transition-all disabled:opacity-50"
                 >
                   {forgetting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   Забыть адрес

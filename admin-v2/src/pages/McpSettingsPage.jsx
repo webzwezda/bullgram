@@ -12,31 +12,30 @@ import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { RecentCallsTable } from '../ui/RecentCallsTable.jsx';
 
-function maskToken(value) {
-  const token = String(value || '').trim();
-  if (!token) return '';
-  if (token.length <= 18) return token;
-  return `${token.slice(0, 16)}...${token.slice(-6)}`;
-}
-
-function CopyInput({ value, monospace }) {
+function CopyInput({ value, monospace, placeholder }) {
   const [copied, setCopied] = useState(false);
-  function handleCopy() {
+  async function handleCopy() {
     if (!value) return;
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      console.error('Clipboard write failed:', err);
+      toast.error('Не удалось скопировать — выдели значение и скопируй вручную.');
+    }
   }
   return (
     <div className="relative">
       <Input
         className={`h-9 bg-slate-50 pr-10 ${monospace ? 'font-mono text-xs' : 'text-sm font-medium text-slate-900'}`}
-        value={value || '—'}
+        value={value || ''}
+        placeholder={placeholder || '—'}
         readOnly
       />
       <button
         type="button"
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
         onClick={handleCopy}
         title="Копировать"
       >
@@ -67,17 +66,23 @@ export function McpSettingsPage() {
   const [lastCreatedToken, setLastCreatedToken] = useState('');
   const [lastCreatedRecord, setLastCreatedRecord] = useState(null);
   const [testResult, setTestResult] = useState(null);
-  const [promptOpen, setPromptOpen] = useState(true);
   const [manualOpen, setManualOpen] = useState(false);
   const [activeSecret, setActiveSecret] = useState('');
   const [revealed, setRevealed] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  // Инлайн-подтверждение перевыпуска: первый клик вооружает, второй — выполняет
+  const [armedReissue, setArmedReissue] = useState(false);
 
+  // Авто-хайд затрагивает и revealed, и только что созданный токен:
+  // полный секрет не должен жить в DOM дольше 60 секунд ни в одном месте
   useEffect(() => {
-    if (!revealed) return;
-    const timer = setTimeout(() => setRevealed(false), 60000);
+    if (!revealed && !lastCreatedToken) return;
+    const timer = setTimeout(() => {
+      setRevealed(false);
+      setLastCreatedToken('');
+    }, 60000);
     return () => clearTimeout(timer);
-  }, [revealed]);
+  }, [revealed, lastCreatedToken]);
 
   async function loadTokens() {
     if (!accessToken) return;
@@ -110,8 +115,16 @@ export function McpSettingsPage() {
     return [...activeTokens].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
   }, [activeTokens]);
 
-  async function ensureActiveSecret() {
-    if (activeSecret) return activeSecret;
+  // Смена активного токена (ревокация извне, перевыпуск) инвалидирует показанный секрет
+  useEffect(() => {
+    setActiveSecret('');
+    setRevealed(false);
+    setLastCreatedToken('');
+  }, [latestActive?.id]);
+
+  // Секрет тянется с бэкенда только по явному действию юзера («Показать» /
+  // «Скопировать» / «Проверить») — никаких авто-фетчей при монтировании.
+  async function revealActiveSecret() {
     if (!latestActive?.id) return '';
     setRevealing(true);
     try {
@@ -120,34 +133,22 @@ export function McpSettingsPage() {
       if (secret) setActiveSecret(secret);
       return secret;
     } catch (e) {
-      toast.error(e.message || 'Не удалось получить токен.');
-      return '';
-    } finally {
-      setRevealing(false);
-    }
-  }
-
-  useEffect(() => {
-    if (latestActive?.id) ensureActiveSecret();
-  }, [accessToken, latestActive?.id]);
-
-  async function revealActiveSecret() {
-    if (revealedSecret) return revealedSecret;
-    if (!latestActive?.id) return '';
-    setRevealing(true);
-    try {
-      const data = await apiRequest(`/api/integrations/tokens/${encodeURIComponent(latestActive.id)}/secret`, { accessToken });
-      const secret = data.token || '';
-      if (secret) setRevealedSecret(secret);
-      return secret;
-    } catch (e) {
       toast.error(e.message || 'Не удалось показать токен.');
       return '';
     } finally {
       setRevealing(false);
     }
   }
-  const tokenForSetup = lastCreatedToken || activeSecret || '${BULLGRAM_MCP_TOKEN}';
+
+  async function handleRevealClick() {
+    const secret = await revealActiveSecret();
+    if (secret) setRevealed(true);
+  }
+
+  // Секрет попадает в подсказки/копирование только если юзер его прямо
+  // открыл («Показать») или только что выпустил. Иначе — плейсхолдер.
+  const setupTokenValue = lastCreatedToken || (revealed ? activeSecret : '');
+  const tokenForSetup = setupTokenValue || '${BULLGRAM_MCP_TOKEN}';
 
   const mcpServersSnippet = useMemo(() => `{
   "mcpServers": {
@@ -183,27 +184,42 @@ MCP token:
 ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
 
   async function createToken() {
+    // Подтверждение — двухшаговой кнопкой перевыпуска (armed-паттерн),
+    // не window.confirm
+    const previousIds = activeTokens.map((t) => String(t.id));
     try {
       setCreating(true);
       setError('');
       setTestResult(null);
-      const previousIds = activeTokens.map((t) => String(t.id));
       const data = await apiRequest('/api/mcp/tokens', {
         accessToken,
         method: 'POST',
         body: { label: 'MCP-токен' }
       });
+      let revokeFailures = 0;
       for (const id of previousIds) {
-        await apiRequest(`/api/mcp/tokens/${id}/revoke`, {
-          accessToken,
-          method: 'POST',
-          body: { reason: 'replaced_by_new_token' }
-        }).catch(() => {});
+        try {
+          await apiRequest(`/api/mcp/tokens/${id}/revoke`, {
+            accessToken,
+            method: 'POST',
+            body: { reason: 'replaced_by_new_token' }
+          });
+        } catch {
+          revokeFailures += 1;
+        }
       }
       setLastCreatedToken(data.token || '');
       setLastCreatedRecord(data.record || null);
+      // Старый секрет отозван — сбрасываем кэш и «Показать»,
+      // чтобы следующий показ выдал уже новый токен.
+      setActiveSecret('');
+      setRevealed(false);
       await loadTokens();
-      toast.success('MCP-токен создан. Старые токены отозваны.');
+      if (revokeFailures > 0) {
+        toast.warning(`MCP-токен создан, но ${revokeFailures} старых отозвать не удалось — отзови вручную на этой странице.`);
+      } else {
+        toast.success('MCP-токен создан. Старые токены отозваны.');
+      }
     } catch (nextError) {
       setError(nextError.message || 'Не удалось создать MCP токен.');
     } finally {
@@ -219,7 +235,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
     setTesting(true);
     setError('');
     try {
-      const token = lastCreatedToken || (await ensureActiveSecret());
+      const token = lastCreatedToken || (await revealActiveSecret());
       const data = await apiRequest('/api/mcp/tokens/test', {
         accessToken,
         method: 'POST',
@@ -269,20 +285,49 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-semibold text-slate-500">Токен</span>
               <div className="h-9 rounded-lg border border-input bg-slate-50 px-2.5 flex items-center font-mono text-xs text-slate-700">
-                {(revealed && activeSecret) ? activeSecret : (latestActive ? (latestActive.token_hint || maskToken(latestActive.token_prefix)) : '') || 'Выпусти токен — он покажется один раз'}
+                {(revealed && activeSecret) ? activeSecret : (latestActive ? '•••• (нажми «Показать»)' : 'Выпусти токен — он появится здесь после выпуска')}
               </div>
             </label>
             <div className="flex flex-wrap gap-2">
               {latestActive ? (
                 <>
-                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={() => setRevealed(true)} disabled={revealing || testing}>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={handleRevealClick} disabled={revealing || testing}>
                     <KeyRound className="h-4 w-4" /> Показать
                   </Button>
-                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => { const s = await ensureActiveSecret(); if (s) { await navigator.clipboard.writeText(s); toast.success('Токен скопирован.'); } }} disabled={revealing || testing}>
+                  <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={async () => {
+                    const s = await revealActiveSecret();
+                    if (!s) return;
+                    try {
+                      await navigator.clipboard.writeText(s);
+                      toast.success('Токен скопирован.');
+                    } catch (err) {
+                      console.error('Clipboard write failed:', err);
+                      toast.error('Не удалось скопировать — нажми «Показать» и скопируй вручную.');
+                    }
+                  }} disabled={revealing || testing}>
                     <Copy className="h-4 w-4" /> Скопировать
                   </Button>
-                  <Button variant="outline" size="sm" className="h-9 rounded-xl text-amber-600 hover:text-amber-700 hover:bg-amber-50" type="button" onClick={createToken} disabled={creating || testing}>
-                    <RefreshCcw className="h-4 w-4" /> Перевыпустить
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`h-9 rounded-xl text-xs font-bold transition-all ${
+                      armedReissue
+                        ? 'bg-red-600 text-white border border-red-600 hover:bg-red-700'
+                        : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50 border border-amber-200'
+                    }`}
+                    type="button"
+                    disabled={creating || testing}
+                    onClick={() => {
+                      if (armedReissue) {
+                        setArmedReissue(false);
+                        createToken();
+                      } else {
+                        setArmedReissue(true);
+                        setTimeout(() => setArmedReissue(false), 5000);
+                      }
+                    }}
+                  >
+                    <RefreshCcw className="h-4 w-4" /> {armedReissue ? 'Старые токены отзовутся. Точно?' : 'Перевыпустить'}
                   </Button>
                 </>
               ) : (
@@ -296,7 +341,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
               <label className="flex flex-col gap-1.5">
                 <span className="text-xs font-semibold text-slate-500">Новый токен</span>
                 <CopyInput value={lastCreatedToken} monospace />
-                <span className="text-xs text-slate-400">Скопируй сейчас — позже токен уже не показывается. Нужен новый: «Перевыпустить» отзовёт старый сам.</span>
+                <span className="text-xs text-slate-500">Скопируй токен — он показывается только по нажатию «Показать». Нужен новый: «Перевыпустить» отзовёт старый сам.</span>
               </label>
             ) : null}
           </CardContent>
@@ -358,7 +403,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
                   <p className="text-sm text-slate-500 mb-2 ml-9">Нужна секция mcpServers в конфиге твоего клиента.</p>
                   <div className="ml-9 grid gap-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
-                      <span className="text-xs font-semibold text-slate-400 w-14 shrink-0">Секция</span>
+                      <span className="text-xs font-semibold text-slate-500 w-14 shrink-0">Секция</span>
                       <code className="font-mono text-xs text-slate-700 break-all">mcpServers</code>
                     </div>
                   </div>
@@ -371,7 +416,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
               </div>
 
               <div className="border-t border-slate-100 pt-4 space-y-3">
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Быстрые значения</div>
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Быстрые значения</div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs font-semibold text-slate-500">MCP endpoint</span>
@@ -379,7 +424,7 @@ ${tokenForSetup}`, [mcpServersSnippet, tokenForSetup]);
                   </label>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-xs font-semibold text-slate-500">Token</span>
-                    <CopyInput value={tokenForSetup} monospace />
+                    <CopyInput value={setupTokenValue} monospace placeholder="•••• (нажми «Показать»)" />
                   </label>
                 </div>
               </div>
