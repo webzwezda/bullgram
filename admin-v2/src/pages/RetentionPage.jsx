@@ -436,9 +436,9 @@ export function RetentionPage() {
 
   const statCards = [
     { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
-    { label: 'Ботом', value: stats.byBot, color: stats.byBot > 0 ? 'text-emerald-600' : 'text-slate-400', Icon: Bot },
-    { label: 'Userbot\'ом', value: stats.byUserbot, color: stats.byUserbot > 0 ? 'text-blue-600' : 'text-slate-400', Icon: Rocket },
-    { label: 'Сбой / пропуск', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
+    { label: 'Ботом', value: stats.byBot, color: stats.byBot > 0 ? 'text-emerald-600' : 'text-slate-500', Icon: Bot },
+    { label: 'Userbot\'ом', value: stats.byUserbot, color: stats.byUserbot > 0 ? 'text-blue-600' : 'text-slate-500', Icon: Rocket },
+    { label: 'Сбой / пропуск', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-500', Icon: AlertCircle }
   ];
 
   return (
@@ -595,7 +595,7 @@ export function RetentionPage() {
               <Bot className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span className="text-sm font-bold text-slate-700">Так увидит подписчик (бот)</span>
             </div>
-            <div className="p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+            <div className="p-3 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap max-h-72 overflow-y-auto">
               {botPreviewNodes.length > 0 ? botPreviewNodes : '— пусто — редактируй текст выше —'}
             </div>
             <div className="mt-3">

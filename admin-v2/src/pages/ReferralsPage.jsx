@@ -453,6 +453,11 @@ export function ReferralsPage() {
   const [payoutForm, setPayoutForm] = useState({ amount: '', txHash: '', networkFee: '', note: '' });
   const [payoutFormErrors, setPayoutFormErrors] = useState({});
 
+  // Инлайн-форма возврата депозита вместо цепочки window.prompt/confirm.
+  const [refundPanel, setRefundPanel] = useState(null); // { kind: 'request' | 'sent' | 'cancel' | 'auto' }
+  const [refundForm, setRefundForm] = useState({ amount: '', wallet: '', txHash: '', note: '' });
+  const [refundFormErrors, setRefundFormErrors] = useState({});
+
   useEffect(() => {
     let cancelled = false;
 
@@ -676,10 +681,18 @@ export function ReferralsPage() {
     }));
   }
 
-  async function requestReserveRefund() {
+  function resetRefundFormState() {
+    setRefundForm({ amount: '', wallet: '', txHash: '', note: '' });
+    setRefundFormErrors({});
+  }
+
+  function closeRefundPanel() {
+    setRefundPanel(null);
+    resetRefundFormState();
+  }
+
+  function openRefundRequestForm() {
     const refundableTon = Number(state.reserve?.refundableTon || 0);
-    const grossRefundableTon = Number(state.reserve?.grossRefundableTon || 0);
-    const refundNetworkFeeTon = Number(state.reserve?.refundNetworkFeeTon || 0);
     if (!state.reserve?.canRequestRefund) {
       window.alert('Депозит еще в локе. Возврат доступен после 30 дней.');
       return;
@@ -688,22 +701,51 @@ export function ReferralsPage() {
       window.alert('Свободного резерва для возврата нет после комиссии сети.');
       return;
     }
-    const defaultRefundWallet = state.reserve?.defaultRefundWallet || state.reserve?.refundWallet || '';
-    const automaticRefund = !!state.support?.automaticRefundSender;
-    const confirmed = window.confirm(
-      defaultRefundWallet
-        ? `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)} на кошелек из Кассы → Оплаты от подписчиков (/app/billing)?\n\nДепозит: ${formatTon(grossRefundableTon)}\nКомиссия сети: ${formatTon(refundNetworkFeeTon)}\nК получению: ${formatTon(refundableTon)}\n\n${defaultRefundWallet}`
-        : `${automaticRefund ? 'Запросить и отправить' : 'Запросить'} возврат ${formatTon(refundableTon)}? Новые партнеры будут на паузе.`
-    );
-    if (!confirmed) return;
-    const rawWallet = defaultRefundWallet || window.prompt('TON-кошелек, куда вернуть свободный резерв:', state.reserve?.refundWallet || '');
-    if (rawWallet === null) return;
-    const refundWallet = String(rawWallet || '').trim();
-    if (!refundWallet) {
-      window.alert('Нужен TON-кошелек для возврата. Укажи его в Кассе на табе «Оплаты от подписчиков» (/app/billing).');
+    setRefundPanel({ kind: 'request' });
+    setRefundForm({
+      amount: String(refundableTon),
+      wallet: state.reserve?.defaultRefundWallet || state.reserve?.refundWallet || '',
+      txHash: '',
+      note: ''
+    });
+    setRefundFormErrors({});
+  }
+
+  function openRefundSentForm() {
+    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
+    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0) {
+      window.alert('Нет активного запроса на возврат.');
       return;
     }
-    const note = window.prompt('Комментарий к возврату:', '') || '';
+    setRefundPanel({ kind: 'sent' });
+    setRefundForm({ amount: String(requestedTon), wallet: '', txHash: '', note: '' });
+    setRefundFormErrors({});
+  }
+
+  function openRefundCancelForm() {
+    if (state.reserve?.status !== 'refund_requested') {
+      window.alert('Активной заявки на возврат нет.');
+      return;
+    }
+    setRefundPanel({ kind: 'cancel' });
+    setRefundForm({ amount: String(state.reserve?.refundRequestedTon || ''), wallet: '', txHash: '', note: '' });
+    setRefundFormErrors({});
+  }
+
+  function openRefundAutoForm() {
+    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
+    const refundWallet = state.reserve?.refundWallet || '';
+    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0 || !refundWallet) {
+      window.alert('Нет активного запроса на возврат с TON-кошельком.');
+      return;
+    }
+    setRefundPanel({ kind: 'auto' });
+    setRefundForm({ amount: String(requestedTon), wallet: refundWallet, txHash: '', note: '' });
+    setRefundFormErrors({});
+  }
+
+  async function requestReserveRefund({ refundWallet, note }) {
+    const automaticRefund = !!state.support?.automaticRefundSender;
 
     setState((prev) => ({ ...prev, refunding: true, error: '' }));
     try {
@@ -722,6 +764,7 @@ export function ReferralsPage() {
         });
       }
       await refreshReferralState({ refunding: false });
+      closeRefundPanel();
     } catch (error) {
       await refreshReferralState({ refunding: false }).catch(() => {
         setState((prev) => ({ ...prev, refunding: false }));
@@ -730,48 +773,63 @@ export function ReferralsPage() {
     }
   }
 
-  async function markReserveRefundSent() {
-    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
-    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0) {
-      window.alert('Нет активного запроса на возврат.');
+  async function submitRefundRequestForm() {
+    if (refundPanel?.kind !== 'request') return;
+    const refundWallet = String(refundForm.wallet || '').trim();
+    const errors = {};
+    if (!refundWallet) {
+      errors.wallet = 'Нужен TON-кошелек для возврата. Укажи его в Кассе на табе «Оплаты от подписчиков» (/app/billing).';
+    }
+    if (Object.keys(errors).length > 0) {
+      setRefundFormErrors(errors);
       return;
     }
-    const rawTxHash = window.prompt('Tx hash TON-возврата:', '');
-    if (rawTxHash === null) return;
-    const chainTxHash = rawTxHash.trim();
-    if (!chainTxHash) {
-      window.alert('Нужен tx hash.');
-      return;
-    }
-    const note = window.prompt('Комментарий к отправленному возврату:', '') || '';
+    await requestReserveRefund({ refundWallet, note: String(refundForm.note || '').trim() });
+  }
 
+  async function markReserveRefundSent({ amountTon, chainTxHash, note }) {
     setState((prev) => ({ ...prev, refunding: true, error: '' }));
     try {
       await apiRequest('/api/referrals/reserve/refund-sent', {
         accessToken,
         method: 'POST',
         body: {
-          amount_ton: requestedTon,
+          amount_ton: amountTon,
           chain_tx_hash: chainTxHash,
           note
         }
       });
       await refreshReferralState({ refunding: false });
+      closeRefundPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, refunding: false }));
       window.alert(error.message);
     }
   }
 
-  async function cancelReserveRefund() {
-    if (state.reserve?.status !== 'refund_requested') {
-      window.alert('Активной заявки на возврат нет.');
+  async function submitRefundSentForm() {
+    if (refundPanel?.kind !== 'sent') return;
+    const refundableTon = Number(state.reserve?.refundableTon || 0);
+    const amount = Number(String(refundForm.amount || '').replace(',', '.'));
+    const chainTxHash = String(refundForm.txHash || '').trim();
+
+    const errors = {};
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.amount = 'Сумма должна быть больше нуля.';
+    } else if (refundableTon > 0 && amount > refundableTon) {
+      errors.amount = `К возврату сейчас только ${formatTon(refundableTon)} после комиссии сети.`;
+    }
+    if (!chainTxHash) {
+      errors.txHash = 'Нужен tx hash TON-возврата.';
+    }
+    if (Object.keys(errors).length > 0) {
+      setRefundFormErrors(errors);
       return;
     }
-    const confirmed = window.confirm('Отменить текущую заявку на возврат? После этого можно создать новую на актуальную сумму.');
-    if (!confirmed) return;
-    const note = window.prompt('Комментарий к отмене:', '') || '';
+    await markReserveRefundSent({ amountTon: amount, chainTxHash, note: String(refundForm.note || '').trim() });
+  }
 
+  async function cancelReserveRefund({ note }) {
     setState((prev) => ({ ...prev, refunding: true, error: '' }));
     try {
       await apiRequest('/api/referrals/reserve/refund-cancel', {
@@ -780,22 +838,19 @@ export function ReferralsPage() {
         body: { note }
       });
       await refreshReferralState({ refunding: false });
+      closeRefundPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, refunding: false }));
       window.alert(error.message);
     }
   }
 
-  async function sendReserveRefundAutomatically() {
-    const requestedTon = Number(state.reserve?.refundRequestedTon || 0);
-    const refundWallet = state.reserve?.refundWallet || '';
-    if (state.reserve?.status !== 'refund_requested' || requestedTon <= 0 || !refundWallet) {
-      window.alert('Нет активного запроса на возврат с TON-кошельком.');
-      return;
-    }
-    const confirmed = window.confirm(`Автоматически отправить ${formatTon(requestedTon)} на ${refundWallet}?`);
-    if (!confirmed) return;
+  async function submitRefundCancelForm() {
+    if (refundPanel?.kind !== 'cancel') return;
+    await cancelReserveRefund({ note: String(refundForm.note || '').trim() });
+  }
 
+  async function sendReserveRefundAutomatically() {
     setState((prev) => ({ ...prev, refunding: true, error: '' }));
     try {
       await apiRequest('/api/referrals/reserve/refund-send-auto', {
@@ -803,6 +858,7 @@ export function ReferralsPage() {
         method: 'POST'
       });
       await refreshReferralState({ refunding: false });
+      closeRefundPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, refunding: false }));
       window.alert(error.message);
@@ -1199,6 +1255,166 @@ export function ReferralsPage() {
     );
   }
 
+  // Инлайн-панель возврата депозита — раскрывается под кнопками в блоке «Возврат депозита».
+  function renderRefundPanel() {
+    if (!refundPanel) return null;
+    const reserve = state.reserve || {};
+    const refundableTon = Number(reserve.refundableTon || 0);
+    const grossRefundableTon = Number(reserve.grossRefundableTon || 0);
+    const refundNetworkFeeTon = Number(reserve.refundNetworkFeeTon || 0);
+    const requestedTon = Number(reserve.refundRequestedTon || 0);
+    const defaultRefundWallet = reserve.defaultRefundWallet || '';
+    const automaticRefund = !!state.support?.automaticRefundSender;
+
+    const actionButtons = (confirmLabel, onConfirm) => (
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-md shadow-slate-900/20 hover:bg-slate-800 transition-all disabled:opacity-50"
+          onClick={onConfirm}
+          disabled={state.refunding}
+        >
+          {state.refunding ? 'Секунду...' : confirmLabel}
+        </button>
+        <button
+          type="button"
+          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+          onClick={closeRefundPanel}
+          disabled={state.refunding}
+        >
+          Отмена
+        </button>
+      </div>
+    );
+
+    if (refundPanel.kind === 'request') {
+      return (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+              {automaticRefund ? 'Запросить и отправить возврат' : 'Запросить возврат депозита'}
+            </div>
+            <div className="text-xs font-bold text-slate-500">К получению: {formatTon(refundableTon)} TON</div>
+          </div>
+          <div className="text-xs font-bold text-slate-500">
+            Депозит {formatTon(grossRefundableTon)} · комиссия сети {formatTon(refundNetworkFeeTon)} · к получению {formatTon(refundableTon)}
+            {!automaticRefund && ' · Новые партнеры будут на паузе, пока возврат не закрыт.'}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block space-y-1.5 sm:col-span-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {defaultRefundWallet ? 'TON-кошелек возврата — из Кассы (/app/billing)' : 'TON-кошелек, куда вернуть свободный резерв'}
+              </span>
+              <input
+                type="text"
+                className={`${payoutFieldClass} font-mono${defaultRefundWallet ? ' opacity-70' : ''}`}
+                value={refundForm.wallet}
+                readOnly={!!defaultRefundWallet}
+                onChange={(event) => setRefundForm((prev) => ({ ...prev, wallet: event.target.value }))}
+              />
+              {refundFormErrors.wallet && <span className="block text-xs font-bold text-rose-600">{refundFormErrors.wallet}</span>}
+              {defaultRefundWallet && !refundFormErrors.wallet && (
+                <span className="block text-xs font-medium text-slate-500">
+                  Кошелек берется из Кассы → Оплаты от подписчиков (/app/billing). Сменить его можно там.
+                </span>
+              )}
+            </label>
+            <label className="block space-y-1.5 sm:col-span-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Комментарий к возврату — опционально</span>
+              <input
+                type="text"
+                className={payoutFieldClass}
+                value={refundForm.note}
+                onChange={(event) => setRefundForm((prev) => ({ ...prev, note: event.target.value }))}
+              />
+            </label>
+          </div>
+          {actionButtons('Подтвердить возврат', submitRefundRequestForm)}
+        </div>
+      );
+    }
+
+    if (refundPanel.kind === 'sent') {
+      return (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Возврат отправлен вручную</div>
+            <div className="text-xs font-bold text-slate-500">Заявка: {formatTon(requestedTon)} TON</div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Сумма, TON</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={payoutFieldClass}
+                value={refundForm.amount}
+                onChange={(event) => setRefundForm((prev) => ({ ...prev, amount: event.target.value }))}
+              />
+              {refundFormErrors.amount && <span className="block text-xs font-bold text-rose-600">{refundFormErrors.amount}</span>}
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tx hash TON-возврата</span>
+              <input
+                type="text"
+                className={`${payoutFieldClass} font-mono`}
+                value={refundForm.txHash}
+                onChange={(event) => setRefundForm((prev) => ({ ...prev, txHash: event.target.value }))}
+              />
+              {refundFormErrors.txHash && <span className="block text-xs font-bold text-rose-600">{refundFormErrors.txHash}</span>}
+            </label>
+            <label className="block space-y-1.5 sm:col-span-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Комментарий к отправленному возврату — опционально</span>
+              <input
+                type="text"
+                className={payoutFieldClass}
+                value={refundForm.note}
+                onChange={(event) => setRefundForm((prev) => ({ ...prev, note: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div className="text-xs font-bold text-slate-500 truncate">
+            Возврат {refundForm.amount || 0} TON · tx {refundForm.txHash ? shortTxHash(refundForm.txHash) : '—'}
+          </div>
+          {actionButtons('Подтвердить отправку', submitRefundSentForm)}
+        </div>
+      );
+    }
+
+    if (refundPanel.kind === 'cancel') {
+      return (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Отменить заявку на возврат</div>
+          <div className="text-sm font-bold text-slate-800">
+            Отменить заявку на {formatTon(requestedTon)}? После этого можно создать новую на актуальную сумму.
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Комментарий к отмене — опционально</span>
+            <input
+              type="text"
+              className={payoutFieldClass}
+              value={refundForm.note}
+              onChange={(event) => setRefundForm((prev) => ({ ...prev, note: event.target.value }))}
+            />
+          </label>
+          {actionButtons('Отменить заявку', submitRefundCancelForm)}
+        </div>
+      );
+    }
+
+    // refundPanel.kind === 'auto'
+    return (
+      <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 space-y-4">
+        <div className="text-[11px] font-black uppercase tracking-widest text-blue-700">Авто TON</div>
+        <div className="text-sm font-bold text-slate-800">
+          Автоматически отправить {formatTon(requestedTon)} на TON-кошелек {refundForm.wallet}?
+        </div>
+        {actionButtons('Отправить автоматически', sendReserveRefundAutomatically)}
+      </div>
+    );
+  }
+
   const dmCenterRef = useRef(null);
 
   // Тот же источник юзербот-данных, что и в центре юзерботов (UserbotCenterSection):
@@ -1290,7 +1506,7 @@ export function ReferralsPage() {
       <section className="page page--flush">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         </div>
-        <div className="p-4 bg-red-50 text-red-600 rounded-2xl border border-red-100 font-medium">{state.error}</div>
+        <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 font-medium">{state.error}</div>
       </section>
     );
   }
@@ -1305,14 +1521,12 @@ export function ReferralsPage() {
           {/* STEP 1: RESERVE FUND */}
           <section className="space-y-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-blue-600/20">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center text-sm font-black shadow-md shadow-blue-600/20">
                   1
                 </div>
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Резервный фонд</h2>
-                  <p className="text-slate-500 font-medium text-sm">TON-резерв для автоматических и защищенных выплат</p>
-                </div>
+                <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500">Резервный фонд</h2>
+                <p className="text-slate-500 font-medium text-xs">TON-резерв для автоматических и защищенных выплат</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -1383,37 +1597,46 @@ export function ReferralsPage() {
                   </p>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {state.reserve?.status === 'refund_requested' ? (
                     <>
                       {state.support?.automaticRefundSender && (
                         <button
                           className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all disabled:opacity-50"
-                          onClick={sendReserveRefundAutomatically}
+                          onClick={openRefundAutoForm}
                           disabled={state.refunding}
                         >
-                          {state.refunding ? 'Отправляем...' : 'Авто TON'}
+                          Авто TON
                         </button>
                       )}
                       <button
-                        className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 rounded-xl font-bold text-sm hover:bg-orange-50 transition-all disabled:opacity-50"
-                        onClick={cancelReserveRefund}
+                        className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+                        onClick={openRefundSentForm}
                         disabled={state.refunding}
                       >
-                        {state.refunding ? 'Отменяем...' : 'Отменить заявку'}
+                        Отметить отправленным
+                      </button>
+                      <button
+                        className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 rounded-xl font-bold text-sm hover:bg-orange-50 transition-all disabled:opacity-50"
+                        onClick={openRefundCancelForm}
+                        disabled={state.refunding}
+                      >
+                        Отменить заявку
                       </button>
                     </>
                   ) : (
                     <button
                       className="px-6 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-30"
-                      onClick={requestReserveRefund}
+                      onClick={openRefundRequestForm}
                       disabled={state.refunding || !state.reserve?.canRequestRefund || Number(state.reserve?.refundableTon || 0) <= 0}
                     >
-                      {state.refunding ? 'Запрашиваем...' : 'Запросить возврат'}
+                      Запросить возврат
                     </button>
                   )}
                 </div>
               </div>
+
+              {refundPanel ? renderRefundPanel() : null}
 
               {state.reserve?.refundLast && (
                 <div className="bg-white border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
@@ -1437,7 +1660,7 @@ export function ReferralsPage() {
                       </div>
                     )}
                     {state.reserve.refundLast.error && (
-                      <div className="text-xs font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
+                      <div className="text-xs font-bold text-red-700 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100">
                         {state.reserve.refundLast.error}
                       </div>
                     )}
@@ -1451,14 +1674,12 @@ export function ReferralsPage() {
 
           {/* STEP 2: SETTINGS */}
           <section className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-indigo-600/20">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-sm font-black shadow-md shadow-indigo-600/20">
                 2
               </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Настройки партнерки</h2>
-                <p className="text-slate-500 font-medium text-sm">Управление экономикой и активация</p>
-              </div>
+              <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500">Настройки партнерки</h2>
+              <p className="text-slate-500 font-medium text-xs">Управление экономикой и активация</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
@@ -1524,14 +1745,12 @@ export function ReferralsPage() {
             <>
               <div className="h-px bg-slate-100" />
               <section className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-amber-500/20">
-                    <Activity className="w-6 h-6" />
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm font-black shadow-md shadow-amber-500/20">
+                    <Activity className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Уведомления</h2>
-                    <p className="text-slate-500 font-medium text-sm">Требует вашего внимания</p>
-                  </div>
+                  <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-500">Уведомления</h2>
+                  <p className="text-slate-500 font-medium text-xs">Требует вашего внимания</p>
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1545,7 +1764,7 @@ export function ReferralsPage() {
                       }`}
                     >
                       <div className={`text-[10px] font-black uppercase tracking-widest ${
-                        signal.tone === 'danger' ? 'text-red-600' : 'text-amber-700'
+                        signal.tone === 'danger' ? 'text-red-700' : 'text-amber-700'
                       }`}>{signal.title}</div>
                       <div className="text-sm font-bold text-slate-800 leading-snug">{signal.text}</div>
                     </div>
@@ -1585,12 +1804,12 @@ export function ReferralsPage() {
         {/* PENDING PAYOUTS */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col border-amber-200/60 shadow-amber-500/5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-8 gap-4 border-b border-slate-100 bg-slate-50/30">
-            <div className="space-y-1">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                <CreditCard className="w-6 h-6 text-amber-500" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-amber-500" />
                 Заявки на выплату
               </h3>
-              <p className="text-sm text-slate-500 font-medium">Очередь выплат для ручной или автоматической отправки</p>
+              <p className="text-xs text-slate-500 font-medium">Очередь выплат для ручной или автоматической отправки</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
@@ -1750,8 +1969,8 @@ export function ReferralsPage() {
           {/* PARTNERS TABLE */}
           <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                <Users className="w-6 h-6 text-blue-500" />
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Users className="w-4 h-4 text-blue-500" />
                 Партнеры и баланс
               </h3>
               <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
@@ -1858,8 +2077,8 @@ export function ReferralsPage() {
           {/* EVENTS TABLE */}
           <div className="order-3 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                <Activity className="w-6 h-6 text-purple-500" />
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-purple-500" />
                 История начислений
               </h3>
               <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
@@ -1922,8 +2141,8 @@ export function ReferralsPage() {
           {/* LEADS TABLE (FULL WIDTH) */}
           <div className="order-2 bg-white rounded-[2.5rem] border border-slate-200 shadow-xl shadow-slate-200/40 overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/30">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                <Users className="w-6 h-6 text-emerald-500" />
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Users className="w-4 h-4 text-emerald-500" />
                 Лиды
               </h3>
               <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${

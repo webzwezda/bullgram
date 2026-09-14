@@ -415,9 +415,9 @@ export function AbandonedPage() {
 
   const statCards = [
     { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
-    { label: 'Со скидкой', value: stats.withDiscount, color: stats.withDiscount > 0 ? 'text-emerald-600' : 'text-slate-400', Icon: Tag },
-    { label: 'В очереди отправки', value: queueLabel, color: inWindow.length > 0 ? 'text-amber-600' : 'text-slate-400', Icon: Clock },
-    { label: 'Сбой / пропуск', value: stats.problems, color: stats.problems > 0 ? 'text-rose-600' : 'text-slate-400', Icon: AlertCircle }
+    { label: 'Со скидкой', value: stats.withDiscount, color: stats.withDiscount > 0 ? 'text-emerald-600' : 'text-slate-500', Icon: Tag },
+    { label: 'В очереди отправки', value: queueLabel, color: inWindow.length > 0 ? 'text-amber-600' : 'text-slate-500', Icon: Clock },
+    { label: 'Сбой / пропуск', value: stats.problems, color: stats.problems > 0 ? 'text-rose-600' : 'text-slate-500', Icon: AlertCircle }
   ];
 
   return (
