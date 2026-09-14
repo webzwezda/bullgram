@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowRight,
   Bot,
   CheckCircle2,
+  ChevronDown,
   Copy,
   CreditCard,
   ExternalLink,
@@ -11,6 +12,7 @@ import {
   QrCode,
   Users,
   Wallet,
+  XCircle,
   Zap
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
@@ -142,6 +144,18 @@ function shortTxHash(value) {
   const hash = String(value || '').trim();
   if (hash.length <= 22) return hash;
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+}
+
+function TableEmptyState({ icon: Icon, title, hint }) {
+  return (
+    <div className="p-20 text-center space-y-3 flex flex-col items-center">
+      <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
+        <Icon className="w-8 h-8" />
+      </div>
+      <p className="text-slate-500 font-bold tracking-tight">{title}</p>
+      {hint && <p className="text-sm text-slate-400 font-medium max-w-sm">{hint}</p>}
+    </div>
+  );
 }
 
 function PayoutChainDetails({ row }) {
@@ -347,7 +361,7 @@ function DepositTransferBox({ reserve }) {
         </div>
         
         <p className="text-base text-slate-600 font-medium mb-8 leading-relaxed max-w-md">
-          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}</strong>.
+          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}.</strong>
         </p>
 
         <div className="mb-6 flex w-full flex-col gap-2">
@@ -431,6 +445,13 @@ export function ReferralsPage() {
     updatedAt: null
   });
   const canEnableReferrals = !!state.reserve?.canEnableReferrals || profileRole === 'admin';
+  const availableReserveTon = Number(state.reserve?.availableReserveTon || 0);
+  const adminDebtTon = Number(state.reserve?.adminDebtTon || 0);
+
+  // Инлайн-форма выплаты вместо цепочки window.prompt: какая панель раскрыта и ее поля.
+  const [payoutPanel, setPayoutPanel] = useState(null);
+  const [payoutForm, setPayoutForm] = useState({ amount: '', txHash: '', networkFee: '', note: '' });
+  const [payoutFormErrors, setPayoutFormErrors] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -604,7 +625,7 @@ export function ReferralsPage() {
       signals.push({
         tone: 'warning',
         title: 'Партнерка выключена',
-        text: 'Включите настройки, чтобы пользователи видели партнерку в боте'
+        text: 'Включите настройки, чтобы пользователи видели партнерку в боте.'
       });
     }
     const totalOutstanding = Number(state.summary.outstandingRub || 0) + Number(state.summary.outstandingTon || 0) + Number(state.summary.outstandingUsdt || 0);
@@ -788,62 +809,45 @@ export function ReferralsPage() {
     }
   }
 
-  async function markPayout(row, currency) {
+  function resetPayoutFormState() {
+    setPayoutForm({ amount: '', txHash: '', networkFee: '', note: '' });
+    setPayoutFormErrors({});
+  }
+
+  function closePayoutPanel() {
+    setPayoutPanel(null);
+    resetPayoutFormState();
+  }
+
+  function openPayoutForm(row, currency) {
     const normalizedCurrency = String(currency || '').toUpperCase();
     const balanceField = normalizedCurrency === 'TON' ? 'balance_ton' : 'balance_usdt';
     const currentBalance = Number(row?.[balanceField] || 0);
+    if (currentBalance <= 0) {
+      window.alert(`У партнера нет баланса в ${normalizedCurrency}.`);
+      return;
+    }
     const pendingTon = Number(row?.pending_payout_ton || 0);
     const hasPendingTonRequest = normalizedCurrency === 'TON' && pendingTon > 0 && row?.pending_payout_id;
+    setPayoutPanel({ kind: 'payout', row, currency: normalizedCurrency });
+    setPayoutForm({
+      amount: String(hasPendingTonRequest ? pendingTon : currentBalance),
+      txHash: payoutTxHash(row) || '',
+      networkFee: String(payoutNetworkFeeTon(row) ?? '0'),
+      note: ''
+    });
+    setPayoutFormErrors({});
+  }
 
+  async function markPayout(row, currency, form) {
+    const normalizedCurrency = String(currency || '').toUpperCase();
+    const balanceField = normalizedCurrency === 'TON' ? 'balance_ton' : 'balance_usdt';
+    const currentBalance = Number(row?.[balanceField] || 0);
     if (currentBalance <= 0) {
       window.alert(`У партнера нет баланса в ${normalizedCurrency}.`);
       return;
     }
 
-    const defaultAmount = hasPendingTonRequest ? pendingTon : currentBalance;
-    const promptLines = [
-      `Сколько выплатить ${row.display_name || row.username || row.tg_user_id}?`,
-      `Баланс: ${currentBalance} ${normalizedCurrency}`
-    ];
-    if (hasPendingTonRequest) {
-      promptLines.push(`Активная заявка: ${pendingTon} TON`);
-      promptLines.push('Для заявки нужно закрыть ровно эту сумму.');
-    }
-
-    const rawAmount = window.prompt(
-      promptLines.join('\n'),
-      String(defaultAmount)
-    );
-
-    if (rawAmount === null) return;
-    const amount = Number(String(rawAmount).replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert('Сумма должна быть больше нуля.');
-      return;
-    }
-
-    let chainTxHash = null;
-    let networkFeeTon = null;
-
-    if (normalizedCurrency === 'TON' && hasPendingTonRequest) {
-      const rawTxHash = window.prompt('Tx hash TON-перевода (если его нет — оставь пустым):', payoutTxHash(row) || '');
-      if (rawTxHash === null) return;
-
-      const defaultNetworkFee = payoutNetworkFeeTon(row) ?? '0';
-      const rawNetworkFee = window.prompt('Комиссия сети в TON:', String(defaultNetworkFee));
-      if (rawNetworkFee === null) return;
-
-      const parsedNetworkFee = Number(String(rawNetworkFee || '0').replace(',', '.'));
-      if (!Number.isFinite(parsedNetworkFee) || parsedNetworkFee < 0) {
-        window.alert('Комиссия сети должна быть числом не меньше нуля.');
-        return;
-      }
-
-      chainTxHash = rawTxHash.trim() || null;
-      networkFeeTon = parsedNetworkFee;
-    }
-
-    const note = window.prompt('Примечание (карта, кошелек, дата):', '') || '';
     setState((prev) => ({ ...prev, payouting: true }));
     try {
       await apiRequest('/api/referrals/payout', {
@@ -852,11 +856,11 @@ export function ReferralsPage() {
         body: {
           tg_user_id: row.tg_user_id,
           currency: normalizedCurrency,
-          amount,
-          note,
-          chain_tx_hash: chainTxHash,
-          network_fee_ton: networkFeeTon,
-          payout_request_id: hasPendingTonRequest ? row.pending_payout_id : null
+          amount: form.amount,
+          note: form.note || '',
+          chain_tx_hash: form.chainTxHash || null,
+          network_fee_ton: form.networkFeeTon ?? null,
+          payout_request_id: form.payoutRequestId || null
         }
       });
       const data = await apiRequest('/api/referrals', { accessToken });
@@ -874,28 +878,80 @@ export function ReferralsPage() {
         economics: data.economics || prev.economics,
         updatedAt: new Date().toISOString()
       }));
+      closePayoutPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, payouting: false }));
       window.alert(error.message);
     }
   }
 
-  async function updatePayoutRequest(row, nextStatus) {
+  async function submitPayoutForm() {
+    if (payoutPanel?.kind !== 'payout') return;
+    const { row, currency: normalizedCurrency } = payoutPanel;
+    const balanceField = normalizedCurrency === 'TON' ? 'balance_ton' : 'balance_usdt';
+    const currentBalance = Number(row?.[balanceField] || 0);
+    const pendingTon = Number(row?.pending_payout_ton || 0);
+    const hasPendingTonRequest = normalizedCurrency === 'TON' && pendingTon > 0 && row?.pending_payout_id;
+
+    const amount = Number(String(payoutForm.amount || '').replace(',', '.'));
+    const errors = {};
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.amount = 'Сумма должна быть больше нуля.';
+    } else if (hasPendingTonRequest && amount !== pendingTon) {
+      errors.amount = `Активная заявка — закрой ровно ${pendingTon} TON.`;
+    } else if (currentBalance > 0 && amount > currentBalance) {
+      errors.amount = `На балансе только ${currentBalance} ${normalizedCurrency}.`;
+    }
+
+    // tx hash и комиссия сети бэкенд принимает только при закрытии TON-заявки.
+    let chainTxHash = null;
+    let networkFeeTon = null;
+    if (hasPendingTonRequest) {
+      chainTxHash = String(payoutForm.txHash || '').trim();
+      if (!chainTxHash) {
+        errors.txHash = 'Нужен tx hash TON-перевода.';
+      }
+      const rawFee = String(payoutForm.networkFee || '').trim();
+      if (rawFee) {
+        const parsedFee = Number(rawFee.replace(',', '.'));
+        if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+          errors.networkFee = 'Комиссия должна быть числом не меньше нуля.';
+        } else {
+          networkFeeTon = parsedFee;
+        }
+      } else {
+        networkFeeTon = 0;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPayoutFormErrors(errors);
+      return;
+    }
+
+    await markPayout(row, normalizedCurrency, {
+      amount,
+      note: String(payoutForm.note || '').trim(),
+      chainTxHash,
+      networkFeeTon,
+      payoutRequestId: hasPendingTonRequest ? row.pending_payout_id : null
+    });
+  }
+
+  function openPayoutNoteForm(row, nextStatus) {
     if (!row?.pending_payout_id) {
       window.alert('У партнера нет активной заявки.');
       return;
     }
+    setPayoutPanel({ kind: 'note', row, status: nextStatus });
+    resetPayoutFormState();
+  }
 
-    const actionLabel = nextStatus === 'failed'
-      ? 'ошибку выплаты'
-      : nextStatus === 'cancelled'
-        ? 'отклонение выплаты'
-        : nextStatus === 'sending'
-          ? 'начало отправки'
-          : 'перевод заявки в очередь';
-    const note = ['queued', 'sending'].includes(nextStatus)
-      ? ''
-      : window.prompt(`Комментарий про ${actionLabel}:`, '') || '';
+  async function updatePayoutRequest(row, nextStatus, note = '') {
+    if (!row?.pending_payout_id) {
+      window.alert('У партнера нет активной заявки.');
+      return;
+    }
 
     setState((prev) => ({ ...prev, payouting: true }));
     try {
@@ -923,10 +979,30 @@ export function ReferralsPage() {
         economics: data.economics || prev.economics,
         updatedAt: new Date().toISOString()
       }));
+      closePayoutPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, payouting: false }));
       window.alert(error.message);
     }
+  }
+
+  async function submitPayoutNoteForm() {
+    if (payoutPanel?.kind !== 'note') return;
+    await updatePayoutRequest(payoutPanel.row, payoutPanel.status, String(payoutForm.note || '').trim());
+  }
+
+  function openAutoSendConfirm(row) {
+    if (!row?.pending_payout_id) {
+      window.alert('У партнера нет активной заявки.');
+      return;
+    }
+    const maxAutoPayoutTon = Number(state.support?.automaticPayoutSenderMaxAmountTon || 0);
+    if (maxAutoPayoutTon > 0 && Number(row.pending_payout_ton || 0) > maxAutoPayoutTon) {
+      window.alert(`Авто TON сейчас ограничен ${formatTon(maxAutoPayoutTon)} за одну заявку. Эту выплату нужно закрыть вручную.`);
+      return;
+    }
+    setPayoutPanel({ kind: 'auto', row });
+    resetPayoutFormState();
   }
 
   async function sendPayoutAutomatically(row) {
@@ -940,9 +1016,6 @@ export function ReferralsPage() {
       window.alert(`Авто TON сейчас ограничен ${formatTon(maxAutoPayoutTon)} за одну заявку. Эту выплату нужно закрыть вручную.`);
       return;
     }
-
-    const confirmed = window.confirm(`Автоматически отправить ${formatTon(row.pending_payout_ton)} на TON-кошелек партнера?`);
-    if (!confirmed) return;
 
     setState((prev) => ({ ...prev, payouting: true }));
     try {
@@ -968,10 +1041,162 @@ export function ReferralsPage() {
         economics: data.economics || prev.economics,
         updatedAt: new Date().toISOString()
       }));
+      closePayoutPanel();
     } catch (error) {
       setState((prev) => ({ ...prev, payouting: false }));
       window.alert(error.message);
     }
+  }
+
+  async function submitAutoSend() {
+    if (payoutPanel?.kind !== 'auto') return;
+    await sendPayoutAutomatically(payoutPanel.row);
+  }
+
+  function payoutPanelForRow(row) {
+    if (!payoutPanel || !row) return null;
+    const matches = payoutPanel.kind === 'payout'
+      ? payoutPanel.row.tg_user_id === row.tg_user_id
+      : payoutPanel.row.pending_payout_id === row.pending_payout_id;
+    return matches ? payoutPanel : null;
+  }
+
+  const payoutFieldClass = 'w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all';
+
+  function renderPayoutPanel(panel) {
+    const panelRow = panel.row;
+    const partnerName = panelRow.display_name || panelRow.username || panelRow.tg_user_id;
+
+    const actionButtons = (confirmLabel, onConfirm) => (
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold text-sm shadow-md shadow-slate-900/20 hover:bg-slate-800 transition-all disabled:opacity-50"
+          onClick={onConfirm}
+          disabled={state.payouting}
+        >
+          {state.payouting ? 'Секунду...' : confirmLabel}
+        </button>
+        <button
+          type="button"
+          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+          onClick={closePayoutPanel}
+          disabled={state.payouting}
+        >
+          Отмена
+        </button>
+      </div>
+    );
+
+    if (panel.kind === 'payout') {
+      const balanceField = panel.currency === 'TON' ? 'balance_ton' : 'balance_usdt';
+      const currentBalance = Number(panelRow?.[balanceField] || 0);
+      const pendingTon = Number(panelRow?.pending_payout_ton || 0);
+      const hasPendingTonRequest = panel.currency === 'TON' && pendingTon > 0 && panelRow?.pending_payout_id;
+      return (
+        <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Выплата партнеру</div>
+            <div className="text-xs font-bold text-slate-500">Баланс: {currentBalance} {panel.currency}</div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Сумма, {panel.currency}</span>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={payoutFieldClass}
+                value={payoutForm.amount}
+                onChange={(event) => setPayoutForm((prev) => ({ ...prev, amount: event.target.value }))}
+              />
+              {hasPendingTonRequest && !payoutFormErrors.amount && (
+                <span className="block text-xs font-medium text-slate-500">Активная заявка: закрой ровно {pendingTon} TON.</span>
+              )}
+              {payoutFormErrors.amount && <span className="block text-xs font-bold text-rose-600">{payoutFormErrors.amount}</span>}
+            </label>
+            {hasPendingTonRequest && (
+              <label className="block space-y-1.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Комиссия сети, TON — опционально</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  className={payoutFieldClass}
+                  value={payoutForm.networkFee}
+                  onChange={(event) => setPayoutForm((prev) => ({ ...prev, networkFee: event.target.value }))}
+                />
+                {payoutFormErrors.networkFee && <span className="block text-xs font-bold text-rose-600">{payoutFormErrors.networkFee}</span>}
+              </label>
+            )}
+            {hasPendingTonRequest && (
+              <label className="block space-y-1.5 sm:col-span-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tx hash TON-перевода</span>
+                <input
+                  type="text"
+                  className={`${payoutFieldClass} font-mono`}
+                  value={payoutForm.txHash}
+                  onChange={(event) => setPayoutForm((prev) => ({ ...prev, txHash: event.target.value }))}
+                />
+                {payoutFormErrors.txHash && <span className="block text-xs font-bold text-rose-600">{payoutFormErrors.txHash}</span>}
+              </label>
+            )}
+            <label className="block space-y-1.5 sm:col-span-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Примечание (карта, кошелек, дата) — опционально</span>
+              <input
+                type="text"
+                className={payoutFieldClass}
+                value={payoutForm.note}
+                onChange={(event) => setPayoutForm((prev) => ({ ...prev, note: event.target.value }))}
+              />
+            </label>
+          </div>
+          <div
+            className="text-xs font-bold text-slate-500 truncate"
+            title={`Партнёр ${partnerName} · сумма ${payoutForm.amount || 0} ${panel.currency} · hash ${payoutForm.txHash || '—'}`}
+          >
+            Партнёр {partnerName} · сумма {payoutForm.amount || 0} {panel.currency} · hash {payoutForm.txHash ? shortTxHash(payoutForm.txHash) : '—'}
+          </div>
+          {actionButtons('Подтвердить выплату', submitPayoutForm)}
+        </div>
+      );
+    }
+
+    if (panel.kind === 'note') {
+      const isFail = panel.status === 'failed';
+      return (
+        <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-5 space-y-4">
+          <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+            {isFail ? 'Отметить ошибку выплаты' : 'Отклонить заявку на выплату'}
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Комментарий</span>
+            <input
+              type="text"
+              className={payoutFieldClass}
+              value={payoutForm.note}
+              onChange={(event) => setPayoutForm((prev) => ({ ...prev, note: event.target.value }))}
+            />
+          </label>
+          <div className="text-xs font-bold text-slate-500 truncate">
+            Партнёр {partnerName} · заявка {formatTon(panelRow.pending_payout_ton)}
+          </div>
+          {actionButtons(isFail ? 'Подтвердить ошибку' : 'Подтвердить отклонение', submitPayoutNoteForm)}
+        </div>
+      );
+    }
+
+    // panel.kind === 'auto'
+    return (
+      <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-5 space-y-4">
+        <div className="text-[11px] font-black uppercase tracking-widest text-blue-700">Авто-выплата TON</div>
+        <div className="text-sm font-bold text-slate-800">
+          Отправить {formatTon(panelRow.pending_payout_ton)} на TON-кошелек партнера автоматически?
+        </div>
+        <div className="text-xs font-bold text-slate-500 truncate">Партнёр {partnerName}</div>
+        {actionButtons('Отправить автоматически', submitAutoSend)}
+      </div>
+    );
   }
 
   const dmCenterRef = useRef(null);
@@ -1090,15 +1315,23 @@ export function ReferralsPage() {
                 </div>
               </div>
 
-              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-sm border ${
-                state.reserve?.canEnableReferrals 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                  : 'bg-amber-50 text-amber-700 border-amber-100'
-              }`}>
-                <div className={`w-2 h-2 rounded-full animate-pulse ${
-                  state.reserve?.canEnableReferrals ? 'bg-emerald-500' : 'bg-amber-500'
-                }`} />
-                {state.reserve?.statusLabel || (state.reserve?.canEnableReferrals ? 'Резерв готов' : 'Резерв не готов')}
+              <div className="flex items-center gap-2">
+                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-sm border ${
+                  state.settings?.referral_enabled
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    state.settings?.referral_enabled ? 'bg-emerald-500' : 'bg-slate-400'
+                  }`} />
+                  {state.settings?.referral_enabled ? 'Партнёрка включена' : 'Партнёрка выключена'}
+                </div>
+                {!state.reserve?.canEnableReferrals && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold shadow-sm border bg-amber-50 text-amber-700 border-amber-100">
+                    <div className="w-2 h-2 rounded-full animate-pulse bg-amber-500" />
+                    {state.reserve?.statusLabel || 'Нужен депозит'}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1107,15 +1340,15 @@ export function ReferralsPage() {
               {[
                 { label: 'Минимум', value: formatTon(state.reserve?.minimumDepositTon || state.economics?.minimumDepositTon || 100), icon: Lock, color: 'text-slate-400' },
                 { label: 'Пополнено', value: formatTon(state.reserve?.fundedReserveTon ?? state.reserve?.totalDepositedTon), icon: Wallet, color: 'text-blue-500' },
-                { label: 'Доступно', value: formatTon(state.reserve?.availableReserveTon), icon: Activity, color: 'text-emerald-500' },
-                { label: 'Долг админа', value: formatTon(state.reserve?.adminDebtTon), icon: Zap, color: Number(state.reserve?.adminDebtTon || 0) > 0 ? 'text-red-500' : 'text-slate-400' },
+                { label: 'Доступно', value: formatTon(state.reserve?.availableReserveTon), icon: Activity, color: availableReserveTon > 0 ? 'text-emerald-500' : 'text-slate-400', valueColor: availableReserveTon > 0 ? 'text-emerald-600' : 'text-slate-900' },
+                { label: 'Долг админа', value: formatTon(state.reserve?.adminDebtTon), icon: Zap, color: adminDebtTon > 0 ? 'text-rose-500' : 'text-slate-400', valueColor: adminDebtTon > 0 ? 'text-rose-600' : 'text-slate-900' },
               ].map((item, idx) => (
                 <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.label}</span>
                     <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                   </div>
-                  <div className={`text-3xl font-black tracking-tighter ${item.color.includes('emerald') ? 'text-emerald-600' : 'text-slate-900'}`}>
+                  <div className={`text-3xl font-black tracking-tighter ${item.valueColor}`}>
                     {item.value}
                   </div>
                 </div>
@@ -1232,17 +1465,17 @@ export function ReferralsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-xs font-black uppercase tracking-widest text-slate-400 ml-1">Статус программы</label>
-                  <select
-                    className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
-                    value={settingsDraft.referral_enabled ? 'yes' : 'no'}
-                    onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
-                  >
-                    <option value="no">Выключена</option>
-                    <option value="yes" disabled={!canEnableReferrals}>Включена</option>
-                  </select>
-                  {profileRole === 'admin' && !state.reserve?.canEnableReferrals ? (
-                    <p className="text-xs font-semibold text-amber-600 ml-1">Admin может включить без 100 TON.</p>
-                  ) : null}
+                  <div className="relative">
+                    <select
+                      className="w-full pl-4 pr-11 py-3.5 bg-white border border-slate-300 rounded-2xl text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                      value={settingsDraft.referral_enabled ? 'yes' : 'no'}
+                      onChange={(event) => setSettingsDraft((prev) => ({ ...prev, referral_enabled: event.target.value === 'yes' }))}
+                    >
+                      <option value="no">Выключена</option>
+                      <option value="yes" disabled={!canEnableReferrals}>Включена</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -1312,7 +1545,7 @@ export function ReferralsPage() {
                       }`}
                     >
                       <div className={`text-[10px] font-black uppercase tracking-widest ${
-                        signal.tone === 'danger' ? 'text-red-600' : 'text-amber-600'
+                        signal.tone === 'danger' ? 'text-red-600' : 'text-amber-700'
                       }`}>{signal.title}</div>
                       <div className="text-sm font-bold text-slate-800 leading-snug">{signal.text}</div>
                     </div>
@@ -1360,19 +1593,22 @@ export function ReferralsPage() {
               <p className="text-sm text-slate-500 font-medium">Очередь выплат для ручной или автоматической отправки</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-4 py-1.5 bg-amber-100 text-amber-700 rounded-xl text-xs font-black uppercase tracking-wider border border-amber-200">
+              <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                state.pendingPayouts.length > 0
+                  ? 'bg-amber-100 text-amber-700 border-amber-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
                 {state.pendingPayouts.length} активных
               </span>
             </div>
           </div>
 
           {state.pendingPayouts.length === 0 ? (
-            <div className="p-20 text-center space-y-4 flex flex-col items-center">
-              <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
-                <CreditCard className="w-8 h-8" />
-              </div>
-              <p className="text-slate-500 font-bold tracking-tight">Активных заявок на выплату нет</p>
-            </div>
+            <TableEmptyState
+              icon={CreditCard}
+              title="Активных заявок на выплату нет"
+              hint="Заявка появится здесь, когда партнер запросит выплату или накопит баланс."
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -1396,9 +1632,11 @@ export function ReferralsPage() {
                     const canMarkSent = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canFail = ['requested', 'queued', 'sending'].includes(payoutStatus);
                     const canCancel = ['requested', 'queued'].includes(payoutStatus);
+                    const panel = payoutPanelForRow(row);
 
                     return (
-                      <tr key={row.pending_payout_id || row.tg_user_id} className="hover:bg-slate-50/50 transition-colors group">
+                      <Fragment key={row.pending_payout_id || row.tg_user_id}>
+                        <tr className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-8 py-6">
                           <div className="font-black text-slate-900 text-base mb-0.5">{row.display_name || row.username || row.tg_user_id}</div>
                           <div className="text-xs text-slate-500 font-bold">ID: {row.tg_user_id}</div>
@@ -1422,14 +1660,25 @@ export function ReferralsPage() {
                           </div>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <div className="flex justify-end gap-2 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-2 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 focus-visible:translate-x-0 transition-opacity">
                             {canAutoSend && (
                               <button
                                 className="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-700"
-                                onClick={() => sendPayoutAutomatically(row)}
+                                onClick={() => openAutoSendConfirm(row)}
                                 disabled={state.payouting}
                               >
                                 Авто TON
+                              </button>
+                            )}
+                            {canMarkSent && (
+                              <button
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold text-xs shadow-sm hover:bg-emerald-700 transition-all"
+                                onClick={() => openPayoutForm(row, 'TON')}
+                                disabled={state.payouting}
+                                title="Отметить TON-выплату отправленной"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Выплата TON
                               </button>
                             )}
                             <div className="flex items-center gap-1">
@@ -1438,25 +1687,28 @@ export function ReferralsPage() {
                                   <Activity className="w-4 h-4" />
                                 </button>
                               )}
-                              {canMarkSent && (
-                                <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" onClick={() => markPayout(row, 'TON')} title="Отправлено">
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </button>
-                              )}
                               {canFail && (
-                                <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" onClick={() => updatePayoutRequest(row, 'failed')} title="Ошибка">
+                                <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all" onClick={() => openPayoutNoteForm(row, 'failed')} title="Ошибка">
                                   <Zap className="w-4 h-4" />
                                 </button>
                               )}
                               {canCancel && (
-                                <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" onClick={() => updatePayoutRequest(row, 'cancelled')} title="Отклонить">
-                                  <Lock className="w-4 h-4" />
+                                <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" onClick={() => openPayoutNoteForm(row, 'cancelled')} title="Отклонить">
+                                  <XCircle className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
                           </div>
                         </td>
-                      </tr>
+                        </tr>
+                        {panel && (
+                          <tr>
+                            <td colSpan={4} className="px-8 pb-6">
+                              {renderPayoutPanel(panel)}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -1502,13 +1754,21 @@ export function ReferralsPage() {
                 <Users className="w-6 h-6 text-blue-500" />
                 Партнеры и баланс
               </h3>
-              <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-xl text-xs font-black uppercase tracking-wider border border-blue-100">
+              <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                filteredPartners.length > 0
+                  ? 'bg-blue-50 text-blue-700 border-blue-100'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
                 {filteredPartners.length} показано
               </span>
             </div>
 
             {filteredPartners.length === 0 ? (
-              <div className="p-20 text-center text-slate-500 font-bold">Никого не найдено</div>
+              <TableEmptyState
+                icon={Users}
+                title="Никого не найдено"
+                hint="Партнёры появятся здесь после первой конвертации атрибуции."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -1523,8 +1783,10 @@ export function ReferralsPage() {
                   <tbody className="divide-y divide-slate-50">
                     {filteredPartners.map((row) => {
                       const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
+                      const panel = payoutPanelForRow(row);
                       return (
-                        <tr key={row.tg_user_id} className="hover:bg-slate-50/50 transition-colors group">
+                        <Fragment key={row.tg_user_id}>
+                          <tr className="hover:bg-slate-50/50 transition-colors group">
                           <td className="px-8 py-6">
                             <div className="font-black text-slate-900 text-base mb-0.5">{row.display_name || row.username || row.tg_user_id}</div>
                             <div className="flex items-center gap-2 mb-2">
@@ -1556,25 +1818,34 @@ export function ReferralsPage() {
                           </td>
                           <td className="px-8 py-6">
                             <div className={`text-base font-black tracking-tight ${hasBalance ? 'text-slate-900' : 'text-slate-500'}`}>
-                              {row.balance_rub || 0} RUB
+                              {formatTon(row.balance_ton)}
                             </div>
-                            <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                              {row.balance_ton || 0} TON • {row.balance_usdt || 0} USDT
-                            </div>
+                            {Number(row.balance_usdt || 0) > 0 && (
+                              <div className="text-xs font-bold text-slate-600 mt-0.5">{row.balance_usdt} USDT</div>
+                            )}
+                            <div className="text-xs text-slate-500 mt-0.5">{row.balance_rub || 0} RUB</div>
                           </td>
                           <td className="px-8 py-6 text-right">
-                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 focus-visible:translate-x-0 transition-opacity">
                               <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" onClick={() => sendMessagePrompt(row)} title="Написать">
                                 <Bot className="w-4 h-4" />
                               </button>
                               {hasBalance && (
-                                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => markPayout(row, 'TON')} title="Выплатить">
+                                <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" onClick={() => openPayoutForm(row, 'TON')} title="Выплатить TON">
                                   <CreditCard className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
                           </td>
                         </tr>
+                        {panel && (
+                          <tr>
+                            <td colSpan={4} className="px-8 pb-6">
+                              {renderPayoutPanel(panel)}
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -1590,13 +1861,21 @@ export function ReferralsPage() {
                 <Activity className="w-6 h-6 text-purple-500" />
                 История начислений
               </h3>
-              <span className="px-4 py-1.5 bg-purple-50 text-purple-700 rounded-xl text-xs font-black uppercase tracking-wider border border-purple-100">
+              <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                filteredEvents.length > 0
+                  ? 'bg-purple-50 text-purple-700 border-purple-100'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
                 {filteredEvents.length} записей
               </span>
             </div>
 
             {filteredEvents.length === 0 ? (
-              <div className="p-20 text-center text-slate-500 font-bold">Событий нет</div>
+              <TableEmptyState
+                icon={Activity}
+                title="Событий нет"
+                hint="События — после первых начислений."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -1646,13 +1925,21 @@ export function ReferralsPage() {
                 <Users className="w-6 h-6 text-emerald-500" />
                 Лиды
               </h3>
-              <span className="px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-wider border border-emerald-100">
+              <span className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border ${
+                filteredLeads.length > 0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
                 {filteredLeads.length} показано
               </span>
             </div>
 
             {filteredLeads.length === 0 ? (
-              <div className="p-20 text-center text-slate-500 font-bold">Лидов не найдено</div>
+              <TableEmptyState
+                icon={Users}
+                title="Лидов не найдено"
+                hint="Лиды — после перехода по реферальной ссылке."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
