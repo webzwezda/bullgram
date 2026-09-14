@@ -22,12 +22,15 @@ export function TreasuryPage() {
   async function handleSubmitWithdrawal(payload) {
     setWithdrawing(true);
     try {
+      // Комиссию сети считает сервер (NETWORK_FEE_TON), клиентом не передаётся
       const data = await apiRequest('/api/project-admin/treasury/withdrawals', {
         accessToken,
         method: 'POST',
-        body: { ...payload, network_fee_ton: 0.05 }
+        body: payload
       });
-      if (data.treasury) treasury.setData(data.treasury);
+      // POST отвечает pre-call summary — берём авторитетный GET
+      // (reqId-гард в useTreasuryData защищает от гонки)
+      await treasury.reload();
       toast.success('Заявка на вывод создана');
       return true;
     } catch (error) {

@@ -12,6 +12,13 @@ export function formatTon(value) {
   return Number(value || 0).toFixed(4);
 }
 
+// Для ДОСТУПНОГО лимита: округление ВНИЗ до 4 знаков. Серверный лимит — 6 знаков,
+// обычный toFixed(4) округляет вверх, и заявка на показанный максимум отклоняется.
+export function formatTonFloor(value) {
+  const v = Number(value || 0);
+  return (Math.floor(v * 1e4) / 1e4).toFixed(4);
+}
+
 // --- Initial form states ---
 
 export const TONE_COLORS = {

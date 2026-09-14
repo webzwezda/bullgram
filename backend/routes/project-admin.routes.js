@@ -34,6 +34,21 @@ function sumRows(rows, field = 'amount_ton') {
     return roundTon((rows || []).reduce((sum, row) => sum + numberOrZero(row?.[field]), 0));
 }
 
+// Серверная константа комиссии сети для MVP-вывода из казны (ручная отправка).
+// Клиентское network_fee_ton не принимаем: отрицательное значение уменьшало бы
+// totalDebitTon и отравляло ledger. Когда появится автоматизация отправки,
+// брать фактическую комиссию из результата sendTonFromReserve.
+const NETWORK_FEE_TON = 0.05;
+
+// «Таблицы нет» — единственная ошибка выборки, которую можно деградировать нулями
+// (код 42P01, фолбэк для старых PostgREST-ответов — текст 'does not exist').
+// Остальное пробрасывается: экран денег fail-closed, лимит не рисуется по частичным данным.
+function isUndefinedTableError(error) {
+    if (!error) return false;
+    if (error.code === '42P01') return true;
+    return String(error.message || '').includes('does not exist');
+}
+
 async function loadAdminOwnerIds(supabase) {
     const { data, error } = await supabase
         .from('profiles')
@@ -80,18 +95,15 @@ async function loadShopRevenue(supabase, adminOwnerIds) {
         .limit(2000);
 
     if (error) {
-        const message = error.message || '';
-        if (message.includes('shop_purchases')) {
-            return {
-                paidTon: 0,
-                pendingTon: 0,
-                paidCount: 0,
-                pendingCount: 0,
-                paidByCategory: emptyCategorySums(),
-                pendingByCategory: emptyCategorySums()
-            };
-        }
-        throw error;
+        if (!isUndefinedTableError(error)) throw error;
+        return {
+            paidTon: 0,
+            pendingTon: 0,
+            paidCount: 0,
+            pendingCount: 0,
+            paidByCategory: emptyCategorySums(),
+            pendingByCategory: emptyCategorySums()
+        };
     }
 
     const paid = (data || []).filter((row) => row.status === 'paid');
@@ -146,11 +158,8 @@ async function loadTierRevenue(supabase) {
         .limit(1000);
 
     if (error) {
-        const message = error.message || '';
-        if (message.includes('billing_orders')) {
-            return { tierPaidTon: 0, paidCount: 0 };
-        }
-        throw error;
+        if (!isUndefinedTableError(error)) throw error;
+        return { tierPaidTon: 0, paidCount: 0 };
     }
 
     const cutoffMs = tierRevenueCutoffMs();
@@ -174,15 +183,12 @@ async function loadReferralTreasury(supabase) {
         .limit(5000);
 
     if (ledgerError) {
-        const message = ledgerError.message || '';
-        if (message.includes('referral_reserve_ledger')) {
-            return {
-                bullgramFeeTon: 0,
-                networkFeeTon: 0,
-                partnerObligationTon: 0
-            };
-        }
-        throw ledgerError;
+        if (!isUndefinedTableError(ledgerError)) throw ledgerError;
+        return {
+            bullgramFeeTon: 0,
+            networkFeeTon: 0,
+            partnerObligationTon: 0
+        };
     }
 
     const summary = (ledgerRows || []).reduce((acc, row) => {
@@ -215,8 +221,7 @@ async function loadPartnerLiability(supabase) {
         .limit(5000);
 
     if (profilesError) {
-        const message = profilesError.message || '';
-        if (!message.includes('referral_profiles')) throw profilesError;
+        if (!isUndefinedTableError(profilesError)) throw profilesError;
     }
 
     const { data: payouts, error: payoutsError } = await supabase
@@ -226,8 +231,7 @@ async function loadPartnerLiability(supabase) {
         .limit(5000);
 
     if (payoutsError) {
-        const message = payoutsError.message || '';
-        if (!message.includes('referral_partner_payouts')) throw payoutsError;
+        if (!isUndefinedTableError(payoutsError)) throw payoutsError;
     }
 
     return {
@@ -243,15 +247,12 @@ async function loadReserveLiability(supabase) {
         .limit(5000);
 
     if (error) {
-        const message = error.message || '';
-        if (message.includes('referral_reserve_accounts')) {
-            return {
-                availableReserveTon: 0,
-                reservedObligationsTon: 0,
-                adminDebtTon: 0
-            };
-        }
-        throw error;
+        if (!isUndefinedTableError(error)) throw error;
+        return {
+            availableReserveTon: 0,
+            reservedObligationsTon: 0,
+            adminDebtTon: 0
+        };
     }
 
     return {
@@ -261,19 +262,20 @@ async function loadReserveLiability(supabase) {
     };
 }
 
+// Нижняя граница честнее полного count (прецедент «N+» из customers): сообщаем фронту,
+// что список обрезан, когда вернулся полный лимит.
+const WITHDRAWALS_LIST_LIMIT = 50;
+
 async function loadWithdrawals(supabase) {
     const { data, error } = await supabase
         .from('project_treasury_withdrawals')
         .select('*')
         .order('requested_at', { ascending: false })
-        .limit(50);
+        .limit(WITHDRAWALS_LIST_LIMIT);
 
     if (error) {
-        const message = error.message || '';
-        if (message.includes('project_treasury_withdrawals')) {
-            return [];
-        }
-        throw error;
+        if (!isUndefinedTableError(error)) throw error;
+        return [];
     }
 
     return data || [];
@@ -380,7 +382,8 @@ async function buildTreasurySummary(supabase) {
             pendingShopPurchases: shop.pendingCount,
             paidTierOrders: tier.paidCount
         },
-        withdrawals
+        withdrawals,
+        withdrawalsTruncated: withdrawals.length >= WITHDRAWALS_LIST_LIMIT
     };
 }
 
@@ -399,9 +402,8 @@ export default function projectAdminRoutes(supabase) {
 
     router.post('/treasury/withdrawals', authenticateUser, requireProjectAdmin, async (req, res) => {
         const amountTon = roundTon(req.body?.amount_ton);
-        const networkFeeTon = roundTon(req.body?.network_fee_ton || 0.05);
         const toWallet = normalizeTonWallet(req.body?.to_wallet);
-        const note = String(req.body?.note || '').trim();
+        const note = String(req.body?.note || '').trim().slice(0, 500);
 
         if (!looksLikeTonWallet(toWallet)) {
             return res.status(400).json({ error: 'Укажи корректный TON-кошелек для вывода.' });
@@ -414,38 +416,39 @@ export default function projectAdminRoutes(supabase) {
         try {
             const treasury = await buildTreasurySummary(supabase);
             const availableTon = numberOrZero(treasury.summary.availableToWithdrawTon);
-            const totalDebitTon = roundTon(amountTon + networkFeeTon);
+            const pendingTonSeen = numberOrZero(treasury.summary.pendingWithdrawalsTon);
 
-            if (totalDebitTon > availableTon) {
-                return res.status(400).json({
-                    error: `Можно запросить максимум ${availableTon} TON с учетом комиссии сети.`
-                });
-            }
-
-            const { data, error } = await supabase
-                .from('project_treasury_withdrawals')
-                .insert({
-                    requested_by: req.user.id,
-                    to_wallet: toWallet,
-                    amount_ton: amountTon,
-                    network_fee_ton: networkFeeTon,
-                    status: 'requested',
-                    payload: {
-                        note: note || null,
-                        available_ton_before: availableTon,
-                        total_debit_ton: totalDebitTon,
-                        source: 'project_admin_treasury_mvp'
-                    }
-                })
-                .select('*')
-                .single();
+            // Проверка лимита и вставка атомарны внутри RPC (advisory-блокировка):
+            // параллельные POST не могут оба пройти по одному и тому же available.
+            // p_available_ton уже очищен от pending (см. buildTreasurySummary), поэтому
+            // RPC сравнивает ПРИРОСТ pending (текущий − seen) + дебет новой заявки.
+            const { data, error } = await supabase.rpc('create_project_treasury_withdrawal', {
+                p_available_ton: availableTon,
+                p_pending_ton_seen: pendingTonSeen,
+                p_amount_ton: amountTon,
+                p_fee_ton: NETWORK_FEE_TON,
+                p_wallet_address: toWallet,
+                p_note: note,
+                p_requested_by: req.user.id
+            });
 
             if (error) throw error;
 
+            const result = data || {};
+            if (result.ok === false) {
+                if (result.reason === 'insufficient') {
+                    return res.status(400).json({ error: 'Недостаточно доступных средств.' });
+                }
+                if (result.reason === 'invalid_amount') {
+                    return res.status(400).json({ error: 'Сумма вывода должна быть больше нуля.' });
+                }
+                return res.status(400).json({ error: 'Не удалось создать заявку на вывод.' });
+            }
+
             res.json({
                 success: true,
-                withdrawal: data,
-                treasury: await buildTreasurySummary(supabase)
+                withdrawal: result.withdrawal,
+                treasury
             });
         } catch (error) {
             console.error('Ошибка создания project treasury withdrawal:', error);

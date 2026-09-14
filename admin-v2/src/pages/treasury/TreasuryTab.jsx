@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   Landmark, Wallet, ArrowDownToLine, ShieldCheck, Clock, RefreshCw, Send
 } from 'lucide-react';
@@ -7,18 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { formatTon, formatWhen, TONE_COLORS } from './treasury.utils.js';
+import { formatTon, formatTonFloor, formatWhen, TONE_COLORS } from './treasury.utils.js';
 
 const NETWORK_FEE_TON = 0.05;
 
+// Реальный статус заявки один — 'requested': отправка TON выполняется вручную
+// вне системы, и никакой другой статус кодом не ставится.
 const WITHDRAWAL_STATUS = {
-  requested: { label: 'Запрошена', tone: 'warning' },
-  queued: { label: 'В очереди', tone: 'warning' },
-  sending: { label: 'Отправляется', tone: 'warning' },
-  sent: { label: 'Отправлена', tone: 'success' },
-  confirmed: { label: 'Подтверждена', tone: 'success' },
-  failed: { label: 'Ошибка', tone: 'error' },
-  cancelled: { label: 'Отменена', tone: 'default' }
+  requested: { label: 'Запрошена', tone: 'warning' }
 };
 
 function StatusBadge({ tone, children }) {
@@ -34,7 +30,7 @@ function formatTime(value) {
   return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
-function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintClasses = 'text-slate-400' }) {
+function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintClasses = 'text-slate-500', formatValue = formatTon }) {
   return (
     <div className="bg-white rounded-2xl ring-1 ring-slate-200/50 shadow-sm p-5">
       <div className="flex items-center gap-3 mb-3">
@@ -43,7 +39,7 @@ function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintCla
         </div>
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</span>
       </div>
-      <div className="text-2xl font-bold text-slate-900">{formatTon(value)} TON</div>
+      <div className="text-2xl font-bold text-slate-900">{formatValue(value)} TON</div>
       <div className={`text-xs mt-1 ${hintClasses}`}>{hint}</div>
     </div>
   );
@@ -58,10 +54,12 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
   const withdrawals = data?.withdrawals || [];
   const walletSynced = summary.walletStatus === 'synced';
   const availableTon = Number(summary.availableToWithdrawTon || 0);
+  const withdrawalsTruncated = Boolean(data?.withdrawalsTruncated);
 
-  const afterWithdrawalTon = useMemo(() => (
-    Math.max(0, availableTon - Number(form.amount_ton || 0) - NETWORK_FEE_TON)
-  ), [availableTon, form.amount_ton]);
+  const amountNum = Number(form.amount_ton || 0);
+  const remainingTon = availableTon - amountNum - NETWORK_FEE_TON;
+  // Перебор считаем только когда сумма введена: пустая форма — это ещё не заявка.
+  const overLimit = form.amount_ton !== '' && remainingTon < 0;
 
   const bucketRows = [
     { label: 'Доход сайта', value: buckets.platformRevenueTon },
@@ -104,11 +102,12 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Казна проекта
                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-0 text-xs rounded-full px-2">
-                  {withdrawals.length}
+                  {withdrawalsTruncated ? '50+' : withdrawals.length}
                 </Badge>
               </h2>
               <p className="text-sm text-slate-500 mt-0.5">
-                Баланс кошелька, резервы и выводы TON. Обновлено: {formatTime(summary.walletCheckedAt)}
+                Баланс кошелька, резервы и выводы TON.{' '}
+                {summary.walletCheckedAt ? `Обновлено: ${formatTime(summary.walletCheckedAt)}` : 'Кошелёк недоступен.'}
               </p>
             </div>
             <Button variant="outline" size="sm" className="text-xs h-9 rounded-xl shrink-0" onClick={onReload} disabled={loading || withdrawing}>
@@ -141,13 +140,14 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   title="На кошельке"
                   value={summary.walletBalanceTon}
                   hint={walletSynced ? 'Реальный TON-баланс.' : 'Баланс недоступен.'}
-                  hintClasses={walletSynced ? 'text-slate-400' : 'text-amber-600 font-medium'}
+                  hintClasses={walletSynced ? 'text-slate-500' : 'text-amber-600 font-medium'}
                 />
                 <TreasuryStatCard
                   icon={ArrowDownToLine}
                   iconClasses="bg-emerald-100 text-emerald-600"
                   title="Можно вывести"
                   value={summary.availableToWithdrawTon}
+                  formatValue={formatTonFloor}
                   hint="Лимит по кошельку и учету."
                 />
                 <TreasuryStatCard
@@ -170,7 +170,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                 <div className="rounded-2xl ring-1 ring-slate-200/60 bg-white shadow-sm p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-slate-900">Деньги</h3>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-600">
                       Продавцов: {counters.adminOwners || 0} • Оплачено: {counters.paidShopPurchases || 0} • В ожидании: {counters.pendingShopPurchases || 0} • Тарифов: {counters.paidTierOrders || 0}
                     </span>
                   </div>
@@ -206,6 +206,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                       <Input
                         id="treasury-amount"
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         step="0.000001"
                         className="h-11 rounded-xl bg-white border-slate-200 text-sm shadow-sm"
@@ -213,10 +214,23 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                         value={form.amount_ton}
                         onChange={(e) => setForm((prev) => ({ ...prev, amount_ton: e.target.value }))}
                         aria-describedby="treasury-fee-hint"
+                        aria-invalid={overLimit || undefined}
                       />
-                      <p id="treasury-fee-hint" className="text-xs text-slate-400 mt-1.5">
-                        Комиссия сети: {formatTon(NETWORK_FEE_TON)} TON · Останется: {formatTon(afterWithdrawalTon)} TON
+                      <p id="treasury-fee-hint" className="text-xs text-slate-500 mt-1.5">
+                        Комиссия сети: {formatTon(NETWORK_FEE_TON)} TON · Останется:{' '}
+                        {overLimit ? (
+                          <span className="font-medium text-red-700">—</span>
+                        ) : (
+                          <span className={remainingTon < 0 ? 'font-medium text-red-700' : ''}>
+                            {formatTon(remainingTon)} TON
+                          </span>
+                        )}
                       </p>
+                      {overLimit ? (
+                        <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">
+                          Сумма с комиссией превышает доступный лимит — максимум {formatTonFloor(Math.max(0, availableTon - NETWORK_FEE_TON))} TON.
+                        </p>
+                      ) : null}
                     </div>
                     <div>
                       <label htmlFor="treasury-note" className="text-sm font-medium text-slate-700 mb-1.5 block">
@@ -227,6 +241,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                         className="rounded-xl bg-white border-slate-200 text-sm shadow-sm min-h-[80px]"
                         placeholder="Заметка"
                         rows={3}
+                        maxLength={500}
                         value={form.note}
                         onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
                       />
@@ -234,11 +249,15 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                     <Button
                       type="submit"
                       className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
-                      disabled={withdrawing || availableTon <= 0 || !walletSynced}
+                      disabled={withdrawing || availableTon <= 0 || !walletSynced || overLimit}
+                      title={!walletSynced ? 'Кошелёк синхронизируется, подожди немного' : undefined}
                     >
                       <Send className="w-4 h-4 mr-1.5" />
                       {withdrawing ? 'Создаем...' : 'Запросить вывод'}
                     </Button>
+                    {!walletSynced ? (
+                      <p className="text-xs text-slate-500 text-center">Кошелёк синхронизируется, подожди немного.</p>
+                    ) : null}
                   </div>
                 </form>
               </div>
@@ -249,7 +268,12 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
 
       <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl bg-white overflow-hidden">
         <CardContent className="p-5 sm:p-6 space-y-3">
-          <h3 className="font-bold text-slate-900">Последние заявки на вывод</h3>
+          <div>
+            <h3 className="font-bold text-slate-900">Последние заявки на вывод</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Отправка выполняется вручную; отметка об отправке появится после выплаты.
+            </p>
+          </div>
           {withdrawals.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
@@ -260,7 +284,8 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
           ) : (
             <div className="space-y-2">
               {withdrawals.map((row) => {
-                const status = WITHDRAWAL_STATUS[row.status] || { label: 'Запрошена', tone: 'warning' };
+                // Честный фолбэк: показываем реальный статус из БД, а не маскируем под «Запрошена»
+                const status = WITHDRAWAL_STATUS[row.status] || { label: row.status || '—', tone: 'default' };
                 return (
                   <div key={row.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:bg-slate-50/50 transition-colors">
                     <div className="min-w-0 flex-1">
@@ -269,7 +294,10 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                         <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                       </div>
                       <div className="text-xs text-slate-500 mt-1 font-mono truncate">{row.to_wallet}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">
+                      {row.payload?.note ? (
+                        <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">{row.payload.note}</div>
+                      ) : null}
+                      <div className="text-xs text-slate-600 mt-0.5">
                         {formatWhen(row.requested_at)}
                         {row.chain_tx_hash ? ` • Tx: ${row.chain_tx_hash}` : ''}
                       </div>
