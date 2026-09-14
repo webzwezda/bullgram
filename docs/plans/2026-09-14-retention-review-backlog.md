@@ -255,3 +255,15 @@ code-reviewer: REQUEST_CHANGES — 3×P1: (1) DELETE бота не гасил po
 Дизайн-критика: REJECT (3 major) → фиксы (c5774c8): пикер ботов скрыт при нуле ботов (выглядел как обрезанная CTA «Подключить новог|»), w-240 при наличии; мера строк max-w-[70ch] ×3; API-карточка свёрнута в disclosure «Интеграции и API» (инженерный контент не между админом и токеном — правило онбординга); disabled-CTA без аффорданса нажатия (shadow-none/slate); ё. Итог: чистый прод-рендер, 0 ошибок; minors (focus trap модалки, безымянные time-инпуты/корзины) — residual.
 
 Residual: focus trap модалки; time-инпуты/иконочные корзины без имён (подключённое состояние); FLOOD_WAIT на ручной публикации → failed (осознанно); первый живой прогон claim/recovery смотреть по логам scheduler (post_published/publish_flood_wait/item_claim_lost).
+
+## Финальная пачка закрыта: /api + /mcp + /profile + Command Center (волна 16, коммиты 8ac5415 + 0f92f8d)
+
+code-reviewer: REQUEST_CHANGES — 4×P1: (1) MCP-токен автоматаatically фетчился и рендерился в 3 местах при загрузке страницы («показ один раз» — декорация: re-revealable на бэке); (2) мёртвый секретный код с несуществующими revealedSecret/setRevealedSecret (ReferenceError при вызове; eslint в admin-v2 нет — build молчит); (3) ревокации глотали ошибки → врущий success-тост «Старые токены отозваны»; (4) `<a href="/billing">` в ProfileWalletCard выбивал админа на публичный сайт (basename /app). P2: честность копи токена, AA slate-400 ×7 файлов, window.confirm → inline, profile.routes try/catch (unhandled rejection), copy try/catch.
+
+Закрыто (8ac5415): MCP-секрет только по явному «Показать», все места рендера под revealed (плейсхолдер/литерал ${BULLGRAM_MCP_TOKEN}), createToken сбрасывает revealed+кэш; ревокации честные (warning при частичном успехе + confirm); Link вместо a; try/catch профиль-роутов; AA-каскад; copy try/catch. Ревью диффа дожало: lastCreatedToken жил в DOM вечно вне 60с-хайда → включён в тот же таймер; инвалидация показанного секрета при смене активного токена; маскирование PATCH/init-ответов + харднинг maskBotToken; getStats считает sending; инлайн-подтверждение перевыпуска вместо confirm (единый паттерн с /api); post_now reject при posted/sending; comment Express 4→5 исправлен.
+
+Проверено по живой БД: product_tier только 'pro' (легаси-ветка normal мёртвая, рассинхрона нет). Verified на проде: plaintext-токена в DOM при загрузке нет (0 вхождений brapi_), 0 console errors.
+
+Дизайн-критика: REJECT (1 blocker + 5 major) → фиксы (0f92f8d): CTA кошелька sky-500 2.65:1 → slate-900 (как «Сохранить»); «Действует до»/«Привязан» emerald-700/800; «Перевыпустить» amber-700 (обе страницы); Command Center — честная заглушка «Command Center — заготовка» с линком на /userbots; OpsRail line-clamp title; ManualTonPaymentCard AA.
+
+Residual (решения владельца / на потом): Command Center стаб на «/» — оставить как есть (теперь честно подписан) или построить/редиректнуть на /userbots; платформенный кошелёк в shop vs AGENTS.md «seller's own wallet»; focus trap модалок; nested креды прокси в userbot-эндпоинтах; watermark иконки рейла; авто-сохранение контура при открытии /sales-bot.
