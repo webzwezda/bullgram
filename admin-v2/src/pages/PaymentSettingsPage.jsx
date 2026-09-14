@@ -9,6 +9,7 @@ import { CryptoPurchasesSection } from './payment-settings/CryptoPurchasesSectio
 import { BillingContactsCard } from '../features/billing/BillingContactsCard.jsx';
 import { MyPurchasesCard } from '../features/billing/MyPurchasesCard.jsx';
 import { usePaymentSettingsDerivedState } from './payment-settings/usePaymentSettingsDerivedState.js';
+import { isMissingTableError } from './payment-settings/payment-settings.constants.js';
 
 const BILLING_TABS = [
   { id: 'purchases', label: 'Оплаты от подписчиков', icon: Coins },
@@ -77,15 +78,22 @@ export function PaymentSettingsPage() {
         ]);
 
         if (officialBotsError) throw officialBotsError;
-        if (paymentEventsError && !(paymentEventsError.message || '').includes('payment_events')) {
-          throw paymentEventsError;
+        // Тихо глотаем только «таблицы ещё нет» (легитимный feature-flag);
+        // ошибки RLS/прав показываем админу, иначе журнал молча останется пустым.
+        if (paymentEventsError) {
+          if (isMissingTableError(paymentEventsError)) {
+            console.error('Таблица payment_events недоступна:', paymentEventsError.message);
+          } else {
+            throw paymentEventsError;
+          }
         }
 
+        // Без фильтра is_active: в журнал должны попадать чеки и активных, и отключённых
+        // тарифов (изоляция владельца теперь на RLS).
         const tariffsResult = await supabase
           .from('tariffs')
           .select('*, channels(title)')
           .eq('owner_id', user.id)
-          .eq('is_active', true)
           .order('created_at', { ascending: false });
 
         if (tariffsResult.error) throw tariffsResult.error;
@@ -101,8 +109,12 @@ export function PaymentSettingsPage() {
             .order('created_at', { ascending: false })
             .limit(200);
 
-          if (invoicesResult.error && !(invoicesResult.error.message || '').includes('invoices')) {
-            throw invoicesResult.error;
+          if (invoicesResult.error) {
+            if (isMissingTableError(invoicesResult.error)) {
+              console.error('Таблица invoices недоступна:', invoicesResult.error.message);
+            } else {
+              throw invoicesResult.error;
+            }
           }
           invoicesData = invoicesResult.data || [];
         }

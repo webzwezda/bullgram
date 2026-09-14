@@ -107,7 +107,8 @@ function ErrorText({ children }) {
 
 function priceBadgeClass(currency) {
   if (currency === 'TON') return 'bg-slate-900 text-white border-0';
-  if (currency === 'RUB') return 'bg-emerald-600 text-white border-0';
+  // Легаси-RUB цены — исторические данные, тон амбера отличает их от актуальных TON-цен.
+  if (currency === 'RUB') return 'bg-amber-50 text-amber-700 border border-amber-200';
   return 'bg-slate-100 text-slate-700 border border-slate-200';
 }
 
@@ -175,7 +176,7 @@ function TariffRow({ group, botsById, deleteTariff }) {
               />
             ))}
             {!hasGroup && bundleItems.length === 0 && (
-              <span className="text-[11px] text-slate-400 italic font-medium">Только базовая выдача</span>
+              <span className="text-[11px] text-slate-500 italic font-medium">Только базовая выдача</span>
             )}
           </div>
         </div>
@@ -190,7 +191,7 @@ function TariffRow({ group, botsById, deleteTariff }) {
               <span
                 key={variant.id}
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-black ${
-                  isFreeVariant ? 'bg-emerald-600 text-white border-0' : priceBadgeClass(variant.currency)
+                  isFreeVariant ? 'bg-emerald-700 text-white border-0' : priceBadgeClass(variant.currency)
                 }`}
               >
                 {isFreeVariant ? 'Бесплатно' : `${variant.price} ${currencyGlyph(variant.currency)}`}
@@ -201,11 +202,12 @@ function TariffRow({ group, botsById, deleteTariff }) {
         <button
           type="button"
           onClick={() => {
-            if (!window.confirm(`Удалить тариф «${tariff.title}»? Все варианты оплаты будут удалены.`)) return;
+            // Это soft-delete (is_active=false): тариф скрывается с витрины, но чеки и статистика остаются.
+            if (!window.confirm(`Отключить тариф «${tariff.title}»? Его перестанут видеть покупатели.`)) return;
             deleteTariff(group.tariffIds);
           }}
           className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-300 shrink-0 transition-colors"
-          title="Удалить тариф"
+          title="Отключить тариф"
         >
           <Trash2 className="w-4 h-4" />
         </button>
@@ -765,9 +767,11 @@ export function TariffsSection({
     const q = search.trim().toLowerCase();
     return tariffGroups.filter((group) => {
       if (q && !String(group.lead?.title || '').toLowerCase().includes(q)) return false;
+      // При активном фильтре по боту показываем только точные совпадения:
+      // тарифы без привязки к боту (bot_id=null) видны только в режиме «Все боты».
       if (filterBotId) {
         const botId = String(group.lead?.bot_id || '');
-        if (botId && botId !== filterBotId) return false;
+        if (botId !== filterBotId) return false;
       }
       return true;
     });
@@ -809,7 +813,7 @@ export function TariffsSection({
                   </Badge>
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
-                  {filterBotId ? 'Отфильтровано по выбранному боту' : 'Доступны для покупки через бота'}
+                  {filterBotId ? 'Показаны только тарифы выбранного бота' : 'Доступны для покупки через бота'}
                 </p>
               </div>
             </div>

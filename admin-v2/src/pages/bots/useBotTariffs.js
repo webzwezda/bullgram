@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase.js';
+import { isMissingTableError } from '../payment-settings/payment-settings.constants.js';
 
 export function useBotTariffs({ ownerId, botId }) {
   const [state, setState] = useState({
@@ -38,7 +39,10 @@ export function useBotTariffs({ ownerId, botId }) {
       let bundleItems = [];
       let bundleSupport = true;
       if (bundleResult.error) {
-        if ((bundleResult.error.message || '').includes('tariff_bundle_items')) {
+        // Тихо глотаем только «таблицы ещё нет» (bundle-пакеты не активированы);
+        // ошибки RLS/прав — наверх, чтобы не прятать проблему за пустым списком пакетов.
+        if (isMissingTableError(bundleResult.error)) {
+          console.error('Таблица tariff_bundle_items недоступна:', bundleResult.error.message);
           bundleSupport = false;
         } else {
           throw bundleResult.error;

@@ -51,9 +51,12 @@ export default function paymentRoutes(supabase, getBotById) {
 
             if (error) throw error;
 
+            // Секрет не отдаём в браузер — только факт его наличия.
+            const { billing_webhook_secret: webhookSecret, ...safeSettings } = data || {};
+
             res.json({
                 success: true,
-                settings: data || {},
+                settings: { ...safeSettings, webhook_secret_set: Boolean(webhookSecret) },
                 webhook_url: `${publicAppOrigin}/api/payment/webhook/generic`
             });
         } catch (error) {
@@ -131,10 +134,20 @@ export default function paymentRoutes(supabase, getBotById) {
                 .eq('owner_id', ownerId)
                 .single();
 
+            // Секрет принимаем и из header, и из query. Query-вариант оставлен
+            // сознательно: часть провайдеров касс умеет бить только по готовому
+            // GET-URL с параметрами и не может прислать произвольный заголовок.
             const providedSecret = req.headers['x-bullgram-webhook-secret'] || req.query.secret;
             const expectedSecret = paymentSettings?.billing_webhook_secret;
 
-            if (expectedSecret && String(providedSecret || '') !== String(expectedSecret)) {
+            // Fail-closed: без настроенного секрета вебхук не принимаем вовсе —
+            // иначе знание memo счёта было бы достаточно, чтобы «оплатить» его.
+            if (!expectedSecret) {
+                console.error(`[payment-webhook] Webhook кассы не настроен: у владельца ${ownerId} не задан billing_webhook_secret (provider=${provider})`);
+                return res.status(403).json({ error: 'Webhook кассы не настроен: задайте секрет в Кассе' });
+            }
+
+            if (String(providedSecret || '') !== String(expectedSecret)) {
                 await supabase.from('payment_events').insert({
                     owner_id: ownerId,
                     invoice_id: invoice.id,
@@ -182,15 +195,47 @@ export default function paymentRoutes(supabase, getBotById) {
                 return res.status(409).json({ error: 'Официальный бот для тарифа не запущен' });
             }
 
-            await supabase
+            // Атомарно забираем счёт в обработку: обновление пройдёт только пока
+            // он не оплачен. Закрывает гонку параллельных вебхуков —
+            // activateSubscription вызовет лишь тот запрос, который реально обновил строку.
+            const { data: claimedInvoice, error: claimError } = await supabase
                 .from('invoices')
                 .update({
                     status: 'paid',
                     paid_at: new Date().toISOString()
                 })
-                .eq('id', invoice.id);
+                .eq('id', invoice.id)
+                .neq('status', 'paid')
+                .select('id');
 
-            await officialBotService.activateSubscription(bot, invoice);
+            if (claimError) throw claimError;
+
+            if (!claimedInvoice || claimedInvoice.length === 0) {
+                return res.json({ success: true, ignored: true, reason: 'already_paid', already_paid: true });
+            }
+
+            // Активация может упасть уже после того, как счёт помечен paid:
+            // ретрай провайдера получит already_paid и активацию не повторит.
+            // Оставляем видимый след в журнале кассы, чтобы админ дошёл вручную.
+            try {
+                await officialBotService.activateSubscription(bot, invoice);
+            } catch (activationError) {
+                console.error('Webhook: активация подписки упала после оплаты:', activationError);
+                await supabase.from('payment_events').insert({
+                    owner_id: ownerId,
+                    invoice_id: invoice.id,
+                    provider,
+                    external_payment_id: event.externalPaymentId || null,
+                    event_type: 'activation_failed',
+                    status: 'wait_admin',
+                    payload: {
+                        amount: event.amount,
+                        currency: event.currency,
+                        error: String(activationError?.message || activationError).slice(0, 500)
+                    }
+                });
+                return res.status(500).json({ error: 'Оплата принята, активация подписки не удалась — требуется ручная выдача' });
+            }
 
             await supabase.from('payment_events').insert({
                 owner_id: ownerId,

@@ -7,13 +7,14 @@ import { useTariffsController } from '../payment-settings/useTariffsController.j
 import { DEFAULT_NEW_TARIFF } from '../payment-settings/payment-settings.constants.js';
 
 export function BotTariffsSection({ selectedBot, ownerId, channels }) {
-  const { tariffs, bundleItems, bundleSupport, loading } = useBotTariffs({
+  const { tariffs, bundleItems, bundleSupport, loading, reload } = useBotTariffs({
     ownerId,
     botId: selectedBot?.id
   });
 
   const {
     createTariff,
+    creating,
     deleteTariff,
     getTariffBundleItems,
     newTariff,
@@ -22,7 +23,8 @@ export function BotTariffsSection({ selectedBot, ownerId, channels }) {
     bundleItems,
     bundleSupport,
     tariffs,
-    userId: ownerId
+    userId: ownerId,
+    onChanged: reload
   });
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export function BotTariffsSection({ selectedBot, ownerId, channels }) {
       bundleSupport={bundleSupport}
       channels={channels}
       createTariff={createTariff}
+      creating={creating}
       deleteTariff={deleteTariff}
       getTariffBundleItems={getTariffBundleItems}
       newTariff={newTariff}

@@ -154,6 +154,15 @@ Callback URL для Robokassa:
 - Success URL: `https://bullgram.xyz/api/billing/robokassa/success`
 - Fail URL: `https://bullgram.xyz/api/billing/robokassa/fail`
 
+### Webhook кассы (`/api/payment/webhook/:provider`)
+
+Вебхук платёжного провайдера админа (касса из «Кассы» /billing). Контракт:
+
+- **Fail-closed**: если у админа не задан `billing_webhook_secret` в `payment_settings`, любой запрос получает `403` — проверять нечего, активация без секрета невозможна. Настрой секрет в Кассе до включения провайдера.
+- Секрет передаётся в header `x-webhook-secret` **или** в query (`?secret=...`) — query-вариант оставлен для провайдеров, умеющих только GET-URL; он попадает в access-логи прокси (осознанный компромисс).
+- Повторная обработка оплаченного счёта идемпотентна (`already_paid`), активация подписки выполняется один раз — claim через условный UPDATE.
+- Если оплата принята, но активация подписки упала — в `payment_events` пишется `activation_failed` (status `wait_admin`), а вебхук отвечает 500: выдачу придётся доделать вручную из админки.
+
 ### Pro fulfillment: выдача бандла из Shop при оплате Pro
 
 Когда заказ `Bullgram Pro` становится `paid`, рядом с активацией тарифа (`activateProForOrder`) запускается

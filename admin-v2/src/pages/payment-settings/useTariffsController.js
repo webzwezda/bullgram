@@ -7,10 +7,22 @@ export function useTariffsController({
   bundleItems,
   bundleSupport,
   tariffs,
-  userId
+  userId,
+  onChanged
 }) {
   const [newTariff, setNewTariff] = useState(DEFAULT_NEW_TARIFF);
   const [bundleDrafts, setBundleDrafts] = useState({});
+  const [creating, setCreating] = useState(false);
+
+  // Мутация уже применилась в БД — падение refresh не должно врать
+  // «Не удалось создать/отключить»
+  async function refreshList() {
+    try {
+      await refreshList();
+    } catch (error) {
+      console.error('Не удалось обновить список тарифов:', error);
+    }
+  }
 
   function ensureBundleDraft(tariffId) {
     setBundleDrafts((prev) => {
@@ -33,7 +45,7 @@ export function useTariffsController({
   }
 
   async function createTariff() {
-    if (!userId) return;
+    if (!userId || creating) return;
     const accessMethods = newTariff.access_methods || {};
     const groupAccess = accessMethods.group || { enabled: true };
     const chatAccess = accessMethods.chat || { enabled: false, channel_id: '' };
@@ -83,6 +95,7 @@ export function useTariffsController({
       return;
     }
 
+    setCreating(true);
     try {
       const payloads = paymentMethods.map((method) => ({
         owner_id: userId,
@@ -132,30 +145,33 @@ export function useTariffsController({
       }
 
       setNewTariff(DEFAULT_NEW_TARIFF);
+      await refreshList();
       toast.success('Тариф создан.');
-      window.location.reload();
     } catch (error) {
-      toast.error(error.message);
+      console.error('Не удалось создать тариф:', error);
+      toast.error('Не удалось создать тариф');
+    } finally {
+      setCreating(false);
     }
   }
 
   async function deleteTariff(idOrIds) {
+    if (!userId) return;
     const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
     try {
-      const { error } = await supabase.from('tariffs').update({ is_active: false }).in('id', ids);
+      // Soft-delete: is_active=false, строка и история чеков остаются. Defense-in-depth
+      // поверх RLS — фильтр по owner_id и на клиенте.
+      const { error } = await supabase
+        .from('tariffs')
+        .update({ is_active: false })
+        .in('id', ids)
+        .eq('owner_id', userId);
       if (error) throw error;
-      toast('Тариф убран. Старые чеки и статистика остаются.', {
-        action: {
-          label: 'Вернуть',
-          onClick: async () => {
-            await supabase.from('tariffs').update({ is_active: true }).in('id', ids);
-            window.location.reload();
-          }
-        }
-      });
-      window.location.reload();
+      await refreshList();
+      toast('Тариф отключён. Чеки и статистика остаются в журнале.');
     } catch (err) {
-      toast.error(err.message);
+      console.error('Не удалось отключить тариф:', err);
+      toast.error('Не удалось отключить тариф');
     }
   }
 
@@ -203,29 +219,48 @@ export function useTariffsController({
 
       const { error } = await supabase.from('tariff_bundle_items').insert(payloads);
       if (error) throw error;
-      window.location.reload();
+      await refreshList();
     } catch (err) {
-      toast.error(err.message);
+      console.error('Не удалось добавить вариант в пакет:', err);
+      toast.error('Не удалось добавить вариант в пакет');
     }
   }
 
   async function deleteBundleItem(itemIdOrIds) {
+    if (!userId) return;
     const itemIds = Array.isArray(itemIdOrIds) ? itemIdOrIds : [itemIdOrIds];
     try {
-      const { error } = await supabase.from('tariff_bundle_items').update({ is_active: false }).in('id', itemIds);
+      const { error } = await supabase
+        .from('tariff_bundle_items')
+        .update({ is_active: false })
+        .in('id', itemIds)
+        .eq('owner_id', userId);
       if (error) throw error;
+      // Undo теперь живой: тост не убивается синхронным reload,
+      // реактивация и refresh происходят по клику
       toast('Элемент убран из пакета.', {
         action: {
           label: 'Вернуть',
           onClick: async () => {
-            await supabase.from('tariff_bundle_items').update({ is_active: true }).in('id', itemIds);
-            window.location.reload();
+            try {
+              const { error: undoError } = await supabase
+                .from('tariff_bundle_items')
+                .update({ is_active: true })
+                .in('id', itemIds)
+                .eq('owner_id', userId);
+              if (undoError) throw undoError;
+              await refreshList();
+            } catch (undoErr) {
+              console.error('Не удалось вернуть элемент в пакет:', undoErr);
+              toast.error('Не удалось вернуть элемент');
+            }
           }
         }
       });
-      window.location.reload();
+      await refreshList();
     } catch (err) {
-      toast.error(err.message);
+      console.error('Не удалось удалить вариант пакета:', err);
+      toast.error('Не удалось удалить вариант пакета');
     }
   }
 
@@ -233,6 +268,7 @@ export function useTariffsController({
     addBundleItem,
     bundleDrafts,
     createTariff,
+    creating,
     deleteBundleItem,
     deleteTariff,
     ensureBundleDraft,

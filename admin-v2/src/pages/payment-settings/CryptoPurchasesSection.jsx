@@ -10,22 +10,38 @@ function formatWhen(value) {
 function statusBadge(status) {
   const map = {
     awaiting_receipt: { label: 'Ждет проверки', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    wait_admin: { label: 'Ждёт админа', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
     paid: { label: 'Подтверждено', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
     pending: { label: 'Ждет оплату', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
-    expired: { label: 'Истекло', cls: 'bg-slate-100 text-slate-400 border-slate-200' }
+    rejected: { label: 'Отклонено', cls: 'bg-red-50 text-red-700 border-red-200' },
+    expired: { label: 'Истекло', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
   };
   const entry = map[status] || { label: status || '—', cls: 'bg-slate-100 text-slate-600 border-slate-200' };
   return <Badge variant="outline" className={entry.cls}>{entry.label}</Badge>;
 }
 
+// Реальный словарь event_type из бэкенда: logPaymentEvent (official-bot) пишет
+// ton_manual_confirmed / ton_manual_check / admin_approved / admin_rejected /
+// receipt_uploaded / free_activated / invoice_created; webhook (payment.routes)
+// — invoice_completed / webhook_received / webhook_test / rejected_secret.
+// В журнале покупок — жизненный цикл оплаты; служебные и «бесплатные» типы не показываем.
+const PURCHASE_EVENT_TYPES = new Set([
+  'ton_manual_confirmed',
+  'ton_manual_check',
+  'admin_approved',
+  'admin_rejected',
+  'receipt_uploaded',
+  'invoice_completed',
+  'activation_failed'
+]);
+
 export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Map(), tariffs = [], plain = false }) {
   const tonEvents = useMemo(() => {
     return paymentEvents
       .filter((ev) => {
-        // Only show final resolved actions in crypto log (approved, confirmed, rejected, expired),
-        // filtering out intermediate draft creation events.
-        const isResolvedEventType = ['payment_confirmed', 'admin_approved', 'admin_rejected', 'expired'].includes(ev.event_type);
-        if (!isResolvedEventType) return false;
+        // Только жизненный цикл покупки крипты — реальные event_type бэкенда,
+        // не промежуточное создание счёта и служебные события.
+        if (!PURCHASE_EVENT_TYPES.has(ev.event_type)) return false;
 
         const inv = invoiceMap.get(ev.invoice_id);
         const currency = inv?.currency || ev.payload?.currency;
@@ -45,11 +61,23 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
         };
       })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      // Ручной TON-чек пишет два paid-события на инвойс (ton_manual_check + ton_manual_confirmed);
+      // журнал и бейдж показывают одну строку на оплату — свежайшее событие по инвойсу
+      // (массив уже отсортирован свежие-сверху, dedupe хранит первое вхождение).
+      .reduce((deduped, ev) => {
+        const key = ev.invoice_id || ev.id;
+        if (!deduped.some((seen) => (seen.invoice_id || seen.id) === key)) deduped.push(ev);
+        return deduped;
+      }, [])
       .slice(0, 20);
   }, [paymentEvents, invoiceMap, tariffs]);
 
-  const totalTon = useMemo(
-    () => tonEvents.reduce((s, ev) => s + Number(ev.tonAmount), 0),
+  // В бейдже показываем сумму только состоявшихся платежей из последних N событий журнала,
+  // а не всех отображаемых строк (среди них есть rejected/pending).
+  const paidTotal = useMemo(
+    () => tonEvents
+      .filter((ev) => ev.status === 'paid')
+      .reduce((s, ev) => s + Number(ev.tonAmount), 0),
     [tonEvents]
   );
 
@@ -66,9 +94,14 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
           </p>
         </div>
         {tonEvents.length > 0 ? (
-          <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 shrink-0">
-            {totalTon.toFixed(2)} TON
-          </Badge>
+          <div className="text-right shrink-0">
+            <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">
+              {paidTotal.toFixed(2)} TON
+            </Badge>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {tonEvents.length === 1 ? 'по последнему событию' : `по последним ${tonEvents.length} событиям`}
+            </div>
+          </div>
         ) : null}
       </div>
 
@@ -80,7 +113,7 @@ export function CryptoPurchasesSection({ paymentEvents = [], invoiceMap = new Ma
             <div key={ev.id} className="flex items-center gap-3 text-sm py-2 border-b border-slate-100 last:border-0">
               <div className="flex-1 min-w-0">
                 <span className="font-medium text-slate-900 truncate block">{ev.tariffTitle}</span>
-                <span className="text-xs text-slate-400">{formatWhen(ev.created_at)}{ev.channelTitle ? ` · ${ev.channelTitle}` : ''}</span>
+                <span className="text-xs text-slate-500">{formatWhen(ev.created_at)}{ev.channelTitle ? ` · ${ev.channelTitle}` : ''}</span>
               </div>
               <span className="font-medium text-slate-900 shrink-0">{ev.tonAmount} TON</span>
               {statusBadge(ev.status)}
