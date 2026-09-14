@@ -141,7 +141,7 @@ export function App() {
         <nav className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1" style={{ scrollbarWidth: 'none' }}>
           {navSections.map((section) => (
             <div key={section.title} className="flex flex-col gap-1.5">
-              <div className="px-3 text-[11px] font-bold tracking-wider uppercase text-slate-400 mb-1">
+              <div className="px-3 text-[11px] font-bold tracking-wider uppercase text-slate-500 mb-1">
                 {section.title}
               </div>
               <div className="flex flex-col gap-0.5">
@@ -171,7 +171,7 @@ export function App() {
           ))}
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <a href="/" className="transition-colors hover:text-slate-700">
               На сайт
             </a>

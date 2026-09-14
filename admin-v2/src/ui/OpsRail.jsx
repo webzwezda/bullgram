@@ -270,7 +270,7 @@ export function OpsRail() {
             <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
               {currentPlan.title}
             </span>
-            <span className="text-[10px] text-slate-400 mt-1 font-medium">{currentPlan.hint}</span>
+            <span className="text-[10px] text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
           </div>
         </div>
 

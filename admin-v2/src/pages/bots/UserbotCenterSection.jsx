@@ -329,7 +329,8 @@ export function UserbotCenterSection({
       setAuthorizationsState({
         loading: false,
         error: '',
-        rows: data.authorizations || []
+        rows: data.authorizations || [],
+        loaded: true
       });
     } catch (error) {
       setAuthorizationsState({
@@ -1683,7 +1684,8 @@ export function UserbotCenterSection({
               <button
                 className="h-10 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 text-[13px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
                 onClick={resetOtherSessions}
-                disabled={actionState.resettingAuthorizations || !selectedLiveUserbotId}
+                disabled={actionState.resettingAuthorizations || !selectedLiveUserbotId || !authorizationsState.loaded}
+                title={authorizationsState.loaded ? undefined : 'Сначала покажи сессии — увидишь, кого разлогиниваешь'}
               >
                 {actionState.resettingAuthorizations ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

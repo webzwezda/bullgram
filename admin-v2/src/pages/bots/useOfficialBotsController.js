@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
 
 export function useOfficialBotsController({
@@ -24,15 +24,22 @@ export function useOfficialBotsController({
   const [addingBotAdmin, setAddingBotAdmin] = useState(false);
   const [newAdminTgId, setNewAdminTgId] = useState('');
   const [regeneratingInvite, setRegeneratingInvite] = useState(false);
+  // Видели ли мы уже непустой список ботов — отличает инициализацию от явного выбора «нового»
+  const sawBotsRef = useRef(false);
 
   const officialBots = useMemo(() => {
     return (accounts || []).filter((account) => account.account_type === 'bot' && (account.bot_role || 'sales') !== 'ops');
   }, [accounts]);
 
   useEffect(() => {
+    // 'new' в предыдущий прогон означает «юзер выбрал нового» ТОЛЬКО если боты
+    // уже были в списке. Инициализационный прогон (accounts ещё не пришли) тоже
+    // ставит 'new' — иначе страница навсегда застревает на «Подключение бота»,
+    // даже когда у админа есть живой бот (маунт → [] → 'new' → guard держит).
+    const hadBots = sawBotsRef.current;
+    sawBotsRef.current = officialBots.length > 0;
     setSelectedOfficialBotId((prev) => {
-      // Если юзер явно выбрал "создать нового" — не сбрасываем выбор при reloads.
-      if (prev === 'new') return 'new';
+      if (prev === 'new' && hadBots) return 'new';
       // Уже выбранный бот всё ещё валиден — оставляем.
       if (prev && officialBots.some((account) => String(account.id) === String(prev))) {
         return prev;
