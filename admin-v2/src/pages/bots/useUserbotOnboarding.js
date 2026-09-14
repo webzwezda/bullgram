@@ -144,6 +144,14 @@ export function useUserbotOnboarding({
           showUiMessage('Аккаунт подключен через QR.', 'success');
           await reloadAccounts();
         }
+        if (result.status === 'failed') {
+          stopQrPolling();
+          updateOnboarding({
+            qrStatus: result.error || 'QR-вход не прошел. Сгенерируй QR заново.',
+            qrStatusTone: 'error'
+          });
+          showUiMessage(result.error || 'QR-вход не прошел. Сгенерируй QR заново.', 'error');
+        }
       } catch (error) {
         if (String(error.message).includes('404')) {
           stopQrPolling();

@@ -43,13 +43,27 @@ function SegmentedControl({ options, value, onChange }) {
   );
 }
 
+// Статичная карта тонов: Tailwind не видит классы, собранные интерполяцией
+// `border-${colorClass}-300`, поэтому все варианты перечислены здесь буквально.
+const FILE_BOX_TONES = {
+  indigo: {
+    box: 'border-indigo-300 bg-indigo-50/30',
+    icon: 'bg-indigo-100 text-indigo-600'
+  },
+  slate: {
+    box: 'border-slate-300 bg-slate-50/30',
+    icon: 'bg-slate-100 text-slate-600'
+  }
+};
+
 function FileUploadBox({ label, fileName, acceptedTypes, onChange, icon: Icon, colorClass }) {
   const isUploaded = !!fileName;
+  const tone = FILE_BOX_TONES[colorClass] || FILE_BOX_TONES.slate;
 
   return (
     <label className={`relative flex w-full items-center gap-4 rounded-2xl border-2 border-dashed px-5 py-4 text-left transition-all duration-200 cursor-pointer group bg-white ${
       isUploaded
-        ? `border-${colorClass}-300 bg-${colorClass}-50/30`
+        ? tone.box
         : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50/50'
     }`}>
       <input
@@ -60,7 +74,7 @@ function FileUploadBox({ label, fileName, acceptedTypes, onChange, icon: Icon, c
       />
       <div className={`flex size-12 shrink-0 items-center justify-center rounded-xl shadow-sm transition-colors ${
         isUploaded
-          ? `bg-${colorClass}-100 text-${colorClass}-600`
+          ? tone.icon
           : 'bg-white border border-slate-200 text-slate-400 group-hover:text-indigo-500'
       }`}>
         {isUploaded ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}

@@ -15,7 +15,7 @@ export function UserbotSaleComposer({
       </div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <label className="block md:col-span-2">
-          <span className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-400">Название лота</span>
+          <span className="mb-2 block text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">Название лота</span>
           <input
             className="h-11 w-full rounded-[14px] border border-slate-200 bg-white px-4 text-[14px] text-slate-900 outline-none transition focus:border-blue-500"
             value={saleComposer.title}
@@ -23,7 +23,7 @@ export function UserbotSaleComposer({
           />
         </label>
         <div className="md:col-span-2">
-          <div className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-400">Цена и оплата</div>
+          <div className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">Цена и оплата</div>
           <div className="grid gap-3">
             <div className="rounded-[18px] border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-4">

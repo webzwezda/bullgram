@@ -1523,13 +1523,22 @@ export default function shopRoutes(supabase) {
             if (userbotIds.length > 0) {
                 const { data: rows, error } = await supabase
                     .from('tg_accounts')
-                    .select('id, proxy_id')
+                    .select('id, proxy_id, runtime_status')
                     .eq('owner_id', ownerId)
                     .eq('account_type', 'userbot')
                     .in('id', userbotIds);
                 if (error) throw error;
                 if ((rows || []).length !== userbotIds.length) {
                     return res.status(400).json({ error: 'В лоте есть чужие или несуществующие юзерботы' });
+                }
+
+                // Мёртвые сессии тоже нельзя продавать: покупатель получит
+                // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted)
+                const blockedUserbot = (rows || []).find(row =>
+                    ['restricted', 'pending_activation', 'expired', 'dead_proxy'].includes(String(row.runtime_status || '').trim().toLowerCase())
+                );
+                if (blockedUserbot) {
+                    return res.status(400).json({ error: 'Юзербот заблокирован, не активирован или недееспособен — публикация невозможна' });
                 }
 
                 const sharedUserbot = (rows || []).find(row => row.proxy_id && proxyHasMultipleUserbots(proxyUsageMap, row.proxy_id));

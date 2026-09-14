@@ -266,7 +266,7 @@ export function UserbotStorefrontSection({
                       <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
                         <ShieldCheck className="size-3.5 mr-1 text-slate-400" /> Proxy
                       </Badge>
-                      <span className="text-[11px] text-slate-400 ml-1">Доступно: {bundleSlot.items.length} шт.</span>
+                      <span className="text-[11px] text-slate-500 ml-1">Доступно: {bundleSlot.items.length} шт.</span>
                     </div>
                   </div>
 
@@ -377,7 +377,7 @@ export function UserbotStorefrontSection({
                           ) : null}
                         </div>
                         {quantity > 1 ? (
-                          <div className="text-[11px] text-slate-400 mt-0.5">
+                          <div className="text-[11px] text-slate-500 mt-0.5">
                             ≈ {(bundleTotalTon / quantity).toFixed(2)} TON/шт.
                           </div>
                         ) : null}

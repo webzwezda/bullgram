@@ -428,6 +428,23 @@ export default function (supabase) {
                 ? Array.from(new Set([Number(normalizedAdminTgId)].filter((n) => !isNaN(n))))
                 : [];
 
+            // Существующий бот: читаем строку до upsert, чтобы при конфликте
+            // (owner_id, tg_account_id) не затереть данные повторным добавлением:
+            // admin_tg_ids мержим, а webhook-секрет/режим через upsert вообще не трогаем.
+            const { data: existingAccount } = await supabase
+                .from('tg_accounts')
+                .select('id, admin_tg_id, admin_tg_username, admin_tg_ids')
+                .eq('owner_id', req.user.id)
+                .eq('account_type', 'bot')
+                .eq('tg_account_id', botInfo.id.toString())
+                .maybeSingle();
+
+            const existingAdminIds = (Array.isArray(existingAccount?.admin_tg_ids) ? existingAccount.admin_tg_ids : [])
+                .map(Number)
+                .filter((n) => !isNaN(n));
+            // Мерж: создатель (seed) первым, затем ранее добавленные админы, без дублей.
+            const mergedAdminIds = Array.from(new Set([...seedAdminIds, ...existingAdminIds]));
+
             const { data: insertedAccount, error } = await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
                 account_type: 'bot',
@@ -436,9 +453,9 @@ export default function (supabase) {
                 session_data: encryptedToken,
                 bot_role: normalizedRole,
                 bot_kind: normalizedKind,
-                admin_tg_id: normalizedAdminTgId,
-                admin_tg_username: adminTgUsername,
-                admin_tg_ids: seedAdminIds
+                admin_tg_id: normalizedAdminTgId || existingAccount?.admin_tg_id || null,
+                admin_tg_username: adminTgUsername || existingAccount?.admin_tg_username || null,
+                admin_tg_ids: mergedAdminIds
             }, { onConflict: 'owner_id, tg_account_id' }).select().single();
 
             if (error) throw error;
@@ -449,6 +466,10 @@ export default function (supabase) {
                 // template — не запускаем runtime
             } else if (isLocalDevelopment()) {
                 officialBotService.startBot(insertedAccount.id, botToken, botInfo.username, normalizedRole);
+            } else if (existingAccount) {
+                // Существующий бот: webhook уже зарегистрирован в Telegram — не ротируем
+                // секрет и не сбрасываем webhook-режим/статус, просто поднимаем runtime заново.
+                officialBotService.startWebhookBot(insertedAccount.id, botToken, botInfo.username, normalizedRole);
             } else {
                 const secret = generateOfficialBotWebhookSecret();
                 const webhookUrl = buildOfficialBotWebhookUrl(insertedAccount.id, secret);
@@ -994,7 +1015,8 @@ export default function (supabase) {
             const { error: detachTariffsError } = await supabase
                 .from('tariffs')
                 .update({ bot_id: null })
-                .eq('bot_id', account.id);
+                .eq('bot_id', account.id)
+                .eq('owner_id', req.user.id);
             if (detachTariffsError) throw detachTariffsError;
 
             // 4) Удаляем сам аккаунт. Cascade почистит sales_bot_contours, channels,

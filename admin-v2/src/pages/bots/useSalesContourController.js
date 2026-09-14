@@ -9,10 +9,6 @@ const JOIN_ALL_POLL_TIMEOUT_MS = 10 * 60 * 1000;
 const JOIN_ALL_STALLED_TEXT = 'Вступление зависло, попробуй ещё раз';
 const JOIN_ALL_ERROR_TEXT = 'Ошибка вступления в группы';
 
-function normalizeBotKind(value) {
-  return value === 'template' ? 'template' : 'sales';
-}
-
 function normalizeUserbotMode(value) {
   return value === 'single' || value === 'pool' ? value : 'none';
 }
@@ -214,21 +210,6 @@ function resolveUserbotOptions({ entry, fallbackUserbots, payload }) {
   return dedupeOptions(rawOptions.map(normalizeUserbotOption).filter(Boolean));
 }
 
-function resolveWarnings(entry) {
-  const contour = getContourConfig(entry);
-  const warnings = [
-    ...asArray(entry?.warnings),
-    ...asArray(entry?.readiness?.warnings),
-    ...asArray(contour?.warnings),
-    ...asArray(contour?.readiness?.warnings)
-  ];
-
-  return warnings
-    .map((item) => (typeof item === 'string' ? item : item?.message || item?.text || ''))
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
-}
-
 function extractResponseRoot(payload) {
   return readFirstObject(payload, ['result', 'data', 'payload']) || payload || {};
 }
@@ -368,7 +349,6 @@ export function useSalesContourController({
   const [checkingRightsKey, setCheckingRightsKey] = useState('');
 
   const selectedBotId = toId(selectedOfficialBot?.id);
-  const selectedBotKind = normalizeBotKind(selectedOfficialBot?.bot_kind);
 
   const fallbackChannels = useMemo(() => {
     if (!selectedBotId) return [];
@@ -412,7 +392,6 @@ export function useSalesContourController({
     });
   }, [contourEntry, fallbackUserbots, officialBotContoursPayload]);
 
-  const contourWarnings = useMemo(() => resolveWarnings(contourEntry), [contourEntry]);
   const cachedRightsByTarget = useMemo(() => resolveRightsByTarget(contourEntry), [contourEntry]);
 
   const draft = draftsByBotId[selectedBotId] || {
@@ -454,8 +433,6 @@ export function useSalesContourController({
   }, [draft.publicChatId, rawChatOptions]);
 
   const normalizedRightsTarget = normalizeContourTarget(botRightsTarget);
-  const rightsKey = `${selectedBotId}:${normalizedRightsTarget}`;
-  const botRightsResult = botRightsByKey[rightsKey] || null;
   const targetFieldByKey = {
     public_channel: 'publicChannelId',
     public_chat: 'publicChatId',
@@ -573,15 +550,6 @@ export function useSalesContourController({
     return nextDraft;
   }
 
-  function setUserbotMode(mode) {
-    const nextMode = normalizeUserbotMode(mode);
-    updateDraft({
-      userbotMode: nextMode,
-      selectedUserbotId: nextMode === 'single' ? draft.selectedUserbotId : '',
-      selectedUserbotIds: nextMode === 'pool' ? draft.selectedUserbotIds : []
-    });
-  }
-
   async function saveContour(contourDraft = draft, options = {}) {
     if (!selectedOfficialBot?.id) return;
 
@@ -646,6 +614,7 @@ export function useSalesContourController({
 
     const normalizedTarget = normalizeContourTarget(target);
     if (dirtyBotIds[selectedBotId]) {
+      toast.warning('Сначала сохрани изменения контура');
       return;
     }
     const targetFieldByKey = {
@@ -825,14 +794,10 @@ export function useSalesContourController({
   }
 
   return {
-    botRightsResult,
     botRightsByTarget,
-    botRightsTarget: normalizedRightsTarget,
     checkBotRights,
-    checkingBotRights: checkingRightsKey === rightsKey,
     checkingBotRightsTarget,
     contourError: officialBotContoursError,
-    contourWarnings,
     draft,
     isVisible: !!selectedBotId,
     joinAllPending,
@@ -840,10 +805,7 @@ export function useSalesContourController({
     publicChatOptions,
     paidChatOptions,
     publicChannelOptions,
-    saveContour,
     savingContour: String(state?.savingContourBotId || '') === selectedBotId,
-    selectedBotKind,
-    setBotRightsTarget,
     async setFieldValue(fieldOrPatch, value, options = {}) {
       const patch = typeof fieldOrPatch === 'object' && fieldOrPatch !== null
         ? { ...fieldOrPatch }
@@ -857,7 +819,6 @@ export function useSalesContourController({
         return await saveContour(nextDraft, { auto: true });
       }
     },
-    setUserbotMode,
     userbotOptions,
     userbotActiveMap,
     toggleUserbotActive,

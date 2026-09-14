@@ -12,7 +12,6 @@ import { apiRequest } from '../../api/client.js';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
-import { StatCard } from '../../ui/StatCard.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
 import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
 
@@ -137,7 +136,7 @@ export function UserbotCenterSection({
   }, [location.search]);
   const { accessToken, profilePlan } = useAuth();
   const [initialHandoff] = useState(() => consumeUserbotCenterHandoff());
-  const handoffLoadDoneRef = useRef(false);
+  const handoffLoadedBotRef = useRef('');
   const initialParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialThreadUserId = String(initialParams.get('tg_user_id') || initialHandoff?.tg_user_id || '').trim();
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
@@ -252,7 +251,17 @@ export function UserbotCenterSection({
   const [labelAccountId, setLabelAccountId] = useState('');
   const [labelSaving, setLabelSaving] = useState(false);
 
+  // Гард от гонок: ответ старого запроса (бот переключили / запустили более свежий reload)
+  // не должен перезаписывать центр — тот же reqId-паттерн, что в CustomersPage.loadCustomers.
+  const centerReqIdRef = useRef(0);
+  const selectedBotIdRef = useRef(selectedLiveUserbotId);
+  useEffect(() => {
+    selectedBotIdRef.current = selectedLiveUserbotId;
+  }, [selectedLiveUserbotId]);
+
   function applyCenterData(nextData, preferredUserbotId = selectedLiveUserbotId, preferredThreadUserId = threadUserId) {
+    // Ответ чужого бота (запрос ушел до переключения) — игнорируем, диалоги выбранного бота не трогаем.
+    if (String(preferredUserbotId || '') !== String(selectedBotIdRef.current || '')) return;
     const nextConversations = nextData.conversations || [];
     const nextThreadUserId = nextConversations.some((item) => String(item.tg_user_id) === String(preferredThreadUserId))
       ? String(preferredThreadUserId)
@@ -276,7 +285,7 @@ export function UserbotCenterSection({
   }
 
   async function reloadCenter({ silent = false, preferredThreadUserId = threadUserId, scan = true } = {}) {
-    const trackScanWait = scan && !silent;
+    const reqId = ++centerReqIdRef.current;
     if (!silent) {
       setState((prev) => ({
         ...prev,
@@ -285,10 +294,6 @@ export function UserbotCenterSection({
         error: ''
       }));
     }
-    if (trackScanWait) {
-      setScanStartedAt(Date.now());
-      setScanElapsedSeconds(0);
-    }
 
     const params = new URLSearchParams();
     if (selectedLiveUserbotId) params.set('userbot_id', selectedLiveUserbotId);
@@ -296,9 +301,11 @@ export function UserbotCenterSection({
     const query = params.toString() ? `?${params.toString()}` : '';
     try {
       const nextData = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
+      if (reqId !== centerReqIdRef.current) return null;
       applyCenterData(nextData, selectedLiveUserbotId, preferredThreadUserId);
       return nextData;
     } catch (error) {
+      if (reqId !== centerReqIdRef.current) return null;
       setState((prev) => ({
         ...prev,
         loading: false,
@@ -306,10 +313,6 @@ export function UserbotCenterSection({
         error: error.message
       }));
       throw error;
-    } finally {
-      if (trackScanWait) {
-        setScanStartedAt(null);
-      }
     }
   }
 
@@ -436,7 +439,9 @@ export function UserbotCenterSection({
     let cancelled = false;
 
     async function loadCenter() {
-      if (initialHandoff && handoffLoadDoneRef.current) return;
+      // После handoff-загрузки не дергаем центр повторно для того же бота,
+      // но смена бота обязана перезагрузить центр — иначе остаются чужие диалоги.
+      if (initialHandoff && handoffLoadedBotRef.current === String(selectedLiveUserbotId || '')) return;
 
       setState((prev) => ({
         ...prev,
@@ -445,17 +450,18 @@ export function UserbotCenterSection({
         error: ''
       }));
 
+      const reqId = ++centerReqIdRef.current;
       try {
         const params = new URLSearchParams();
         if (selectedLiveUserbotId) params.set('userbot_id', selectedLiveUserbotId);
         if (initialThreadUserId && !initialHandoff) params.set('scan', 'true');
         const query = params.toString() ? `?${params.toString()}` : '';
         const data = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
-        if (cancelled) return;
+        if (cancelled || reqId !== centerReqIdRef.current) return;
         applyCenterData(data, selectedLiveUserbotId, threadUserId || initialThreadUserId);
-        if (initialHandoff) handoffLoadDoneRef.current = true;
+        if (initialHandoff) handoffLoadedBotRef.current = String(selectedLiveUserbotId || '');
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || reqId !== centerReqIdRef.current) return;
         setState({
           loading: false,
           refreshing: false,
@@ -687,7 +693,9 @@ export function UserbotCenterSection({
           } : prev.data.summary
         } : prev.data
       }));
-      reloadCenter({ silent: true, preferredThreadUserId: threadUserId }).catch(() => {});
+      // Легкая перезагрузка кэша без живого скана: unread уже обновлен локально,
+      // а полный getDialogs+админ-чеки на каждое «прочитано» — лишний груз.
+      reloadCenter({ silent: true, preferredThreadUserId: threadUserId, scan: false }).catch(() => {});
     } catch (error) {
       toast.error(`Не получилось отметить диалог как прочитанный: ${error.message}`);
     } finally {
@@ -1113,7 +1121,7 @@ export function UserbotCenterSection({
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-medium text-slate-500">Описание</label>
-                    <span className="text-[11px] text-slate-400">{selectedDraftAbout.length}/70</span>
+                    <span className="text-[11px] text-slate-600">{selectedDraftAbout.length}/70</span>
                   </div>
                   <textarea
                     className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
@@ -1191,7 +1199,7 @@ export function UserbotCenterSection({
                   <div className="flex items-center justify-between">
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Автозамена прокси</label>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Переезд при падении основного</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Переезд при падении основного</p>
                     </div>
                     <ModernSwitch
                       checked={!!binding?.allow_proxy_failover}
@@ -1616,7 +1624,7 @@ export function UserbotCenterSection({
                   </div>
                   <div className="min-w-0 flex-1">
                     <h4 className="font-bold text-sm text-slate-900">{tab.title}</h4>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{tab.subtitle}</p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">{tab.subtitle}</p>
                   </div>
                 </button>
               );
@@ -1741,7 +1749,7 @@ export function UserbotCenterSection({
                           <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
                           <td className="px-4 py-3 text-right">
                             {item.current ? (
-                              <span className="text-xs text-slate-400 font-medium">нельзя</span>
+                              <span className="text-xs text-slate-500 font-medium">нельзя</span>
                             ) : (
                               <button
                                 type="button"

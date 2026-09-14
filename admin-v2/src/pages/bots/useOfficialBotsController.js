@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
 
-function normalizeBotKind(value) {
-  return value === 'template' ? 'template' : 'sales';
-}
-
 export function useOfficialBotsController({
   accessToken,
   accounts,
@@ -222,7 +218,7 @@ export function useOfficialBotsController({
     if (!accountId) return;
 
     const username = account?.tg_username ? ` @${account.tg_username}` : '';
-    if (!window.confirm(`Удалить бота продаж${username}? Отвяжутся тарифты, каналы, контуры и webhook. Действие необратимо.`)) return;
+    if (!window.confirm(`Удалить бота продаж${username}? Отвяжутся тарифы, каналы, контуры и webhook. Действие необратимо.`)) return;
 
     setState((prev) => ({ ...prev, deletingBotId: accountId }));
     try {

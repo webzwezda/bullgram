@@ -21,6 +21,9 @@ import { getPeerFromCache } from '../utils/peer-cache.js';
 
 const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 
+// Брошенный QR держит подключённый клиент. Чистим такие сессии при каждом qr-start/qr-status.
+const QR_SESSION_TTL_MS = 20 * 60 * 1000;
+
 const DEFAULT_FINGERPRINT = Object.freeze({
     api_id: 4,
     api_hash: '014b35b6184100b085b0d0572f9b5103',
@@ -1081,7 +1084,8 @@ export class UserbotService {
             proxyData,
             fingerprint,
             authState: 'pending',
-            authError: null
+            authError: null,
+            createdAt: Date.now()
         };
 
         // Создаем Promise который резолвится когда QR код будет готов
@@ -1173,6 +1177,27 @@ export class UserbotService {
     getQRStatus(userId) {
         if (!this.qrSessions.has(userId)) return { status: 'not_found' };
         return { status: 'pending' };
+    }
+
+    /**
+     * Чистит брошенные QR-сессии старше TTL: иначе они держат подключённый клиент бессрочно.
+     * Вызывается при каждом qr-start и qr-status. Ошибки disconnect глотаем.
+     */
+    async sweepStaleQrSessions(maxAgeMs = QR_SESSION_TTL_MS) {
+        const now = Date.now();
+        for (const [userId, sessionData] of this.qrSessions.entries()) {
+            const startedAt = Number(sessionData?.createdAt || 0);
+            if (!startedAt || (now - startedAt) < maxAgeMs) continue;
+
+            this.qrSessions.delete(userId);
+            if (sessionData?.client) {
+                try {
+                    await sessionData.client.disconnect();
+                } catch (error) {
+                    console.warn('[QR-SWEEP] Не удалось отключить брошенный QR-клиент:', error?.message || error);
+                }
+            }
+        }
     }
 
     async checkPresence(userbot, channels) {

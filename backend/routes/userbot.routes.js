@@ -2218,81 +2218,89 @@ export default function (supabase) {
             const client = new TelegramClient(new StringSession(sessionString), fingerprint.api_id, fingerprint.api_hash, clientConfig);
             userbotService.prepareServiceClient(client);
             userbotService._forceManagedIpv6Dc(client, proxyData);
-            await userbotService.connectWithProxyFallback(client, proxyData);
+            try {
+                await userbotService.connectWithProxyFallback(client, proxyData);
 
-            const me = await client.getMe();
-            let existingAccountId = null;
+                const me = await client.getMe();
+                let existingAccountId = null;
 
-            const { data: existingAccount } = await supabase
-                .from('tg_accounts')
-                .select('id')
-                .eq('owner_id', req.user.id)
-                .eq('account_type', 'userbot')
-                .eq('tg_account_id', me.id.toString())
-                .maybeSingle();
+                const { data: existingAccount } = await supabase
+                    .from('tg_accounts')
+                    .select('id')
+                    .eq('owner_id', req.user.id)
+                    .eq('account_type', 'userbot')
+                    .eq('tg_account_id', me.id.toString())
+                    .maybeSingle();
 
-            existingAccountId = existingAccount?.id || null;
-            await enforceUserbotQuota({
-                supabase,
-                ownerId: req.user.id,
-                profile: req.profile,
-                ignoreAccountId: existingAccountId
-            });
-            await ensureUserbotNotOwnedByAnotherAdmin(supabase, req.user.id, me.id.toString(), existingAccountId);
-            await ensureExclusiveProxyAssignment(supabase, req.user.id, proxy_id, existingAccountId);
+                existingAccountId = existingAccount?.id || null;
+                await enforceUserbotQuota({
+                    supabase,
+                    ownerId: req.user.id,
+                    profile: req.profile,
+                    ignoreAccountId: existingAccountId
+                });
+                await ensureUserbotNotOwnedByAnotherAdmin(supabase, req.user.id, me.id.toString(), existingAccountId);
+                await ensureExclusiveProxyAssignment(supabase, req.user.id, proxy_id, existingAccountId);
 
-            await supabase.from('tg_accounts').upsert({
-                owner_id: req.user.id,
-                account_type: 'userbot',
-                ...buildTelegramProfilePatch(me),
-                session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'session_import')),
-                proxy_id: proxyData ? proxyData.proxy_id : null,
-                runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
-                runtime_error: FRESH_IMPORT_RUNTIME_REASON,
-                allow_proxy_failover: false,
-                failover_proxy_ids: []
-            }, { onConflict: 'owner_id, tg_account_id' }).select('id').single();
+                await supabase.from('tg_accounts').upsert({
+                    owner_id: req.user.id,
+                    account_type: 'userbot',
+                    ...buildTelegramProfilePatch(me),
+                    session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'session_import')),
+                    proxy_id: proxyData ? proxyData.proxy_id : null,
+                    runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
+                    runtime_error: FRESH_IMPORT_RUNTIME_REASON,
+                    allow_proxy_failover: false,
+                    failover_proxy_ids: []
+                }, { onConflict: 'owner_id, tg_account_id' }).select('id').single();
 
-            const { data: savedAccount } = await supabase
-                .from('tg_accounts')
-                .select('id')
-                .eq('owner_id', req.user.id)
-                .eq('account_type', 'userbot')
-                .eq('tg_account_id', me.id.toString())
-                .maybeSingle();
+                const { data: savedAccount } = await supabase
+                    .from('tg_accounts')
+                    .select('id')
+                    .eq('owner_id', req.user.id)
+                    .eq('account_type', 'userbot')
+                    .eq('tg_account_id', me.id.toString())
+                    .maybeSingle();
 
-            if (savedAccount?.id) {
-                try {
-                    if (shouldStoreRecoverySource(req.body?.save_recovery_source)) {
-                        await userbotService.saveRecoverySource({
-                            accountId: savedAccount.id,
-                            ownerId: req.user.id,
-                            tgAccountId: me.id.toString(),
-                            sessionFilePath: sessionFile.path,
-                            sessionOriginalName: sessionFile.originalname,
-                            jsonFilePath: jsonFile?.path || null,
-                            jsonOriginalName: jsonFile?.originalname || null,
-                            fingerprint
-                        });
+                if (savedAccount?.id) {
+                    try {
+                        if (shouldStoreRecoverySource(req.body?.save_recovery_source)) {
+                            await userbotService.saveRecoverySource({
+                                accountId: savedAccount.id,
+                                ownerId: req.user.id,
+                                tgAccountId: me.id.toString(),
+                                sessionFilePath: sessionFile.path,
+                                sessionOriginalName: sessionFile.originalname,
+                                jsonFilePath: jsonFile?.path || null,
+                                jsonOriginalName: jsonFile?.originalname || null,
+                                fingerprint
+                            });
+                        }
+                    } catch (restoreError) {
+                        if (!isMissingRecoveryTable(restoreError)) {
+                            throw restoreError;
+                        }
                     }
-                } catch (restoreError) {
-                    if (!isMissingRecoveryTable(restoreError)) {
-                        throw restoreError;
+                }
+
+                cleanupUploadedFiles(uploadedFiles);
+
+                res.json({
+                    success: true,
+                    username: me.username || me.firstName,
+                    runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
+                    runtime_reason: FRESH_IMPORT_RUNTIME_REASON,
+                    recovery_source_saved: shouldStoreRecoverySource(req.body?.save_recovery_source)
+                });
+            } finally {
+                if (client) {
+                    try {
+                        await client.disconnect();
+                    } catch {
+                        // no-op
                     }
                 }
             }
-
-            await client.disconnect();
-
-            cleanupUploadedFiles(uploadedFiles);
-
-            res.json({
-                success: true,
-                username: me.username || me.firstName,
-                runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
-                runtime_reason: FRESH_IMPORT_RUNTIME_REASON,
-                recovery_source_saved: shouldStoreRecoverySource(req.body?.save_recovery_source)
-            });
 
         } catch (error) {
             cleanupUploadedFiles(uploadedFiles);
@@ -2317,6 +2325,8 @@ export default function (supabase) {
 
     router.post('/qr-start', authenticateUser, async (req, res) => {
         try {
+            await userbotService.sweepStaleQrSessions();
+
             const { proxy_id, fingerprint_profile_id, custom_fingerprint, save_as_preset } = req.body;
             const normalizedCustomFingerprint = custom_fingerprint ? normalizeFingerprintPayload(custom_fingerprint) : null;
 
@@ -2390,10 +2400,18 @@ export default function (supabase) {
     });
 
     router.get('/qr-status', authenticateUser, async (req, res) => {
+        await userbotService.sweepStaleQrSessions();
+
         const sessionData = userbotService.qrSessions.get(req.user.id);
         if (!sessionData) return res.status(404).json({ status: 'not_found' });
 
         try {
+            if (sessionData.authState === 'failed') {
+                return res.json({
+                    status: 'failed',
+                    error: sessionData.authError || 'QR-вход не прошел. Сгенерируй QR заново.'
+                });
+            }
             if (sessionData.authState !== 'authorized') {
                 return res.json({ status: 'pending' });
             }
@@ -3620,21 +3638,19 @@ export default function (supabase) {
                     continue;
                 }
 
+                let candidateClient = null;
                 try {
-                    const candidateClient = await userbotService.createAuthorizedClient(candidate, 1);
+                    candidateClient = await userbotService.createAuthorizedClient(candidate, 1);
                     const health = await userbotService.inspectAccountHealth(candidateClient, {
                         userbotId: candidate.id
                     });
-                    if (health.status !== 'online') {
-                        runtimeStates.set(String(candidate.id), health);
-                        await candidateClient.disconnect();
-                        continue;
-                    }
-
                     runtimeStates.set(String(candidate.id), health);
-                    userbot = candidate;
-                    client = candidateClient;
-                    break;
+                    if (health.status === 'online') {
+                        userbot = candidate;
+                        client = candidateClient;
+                        candidateClient = null;
+                        break;
+                    }
                 } catch (error) {
                     const status = isExpiredUserbotSessionError(error) ? 'expired' : 'error';
                     runtimeStates.set(String(candidate.id), {
@@ -3643,6 +3659,14 @@ export default function (supabase) {
                             ? 'Сессия юзербота сдохла. Нужно переподключить аккаунт.'
                             : (error?.message || 'Юзербот сейчас не отвечает.')
                     });
+                } finally {
+                    if (candidateClient) {
+                        try {
+                            await candidateClient.disconnect();
+                        } catch (disconnectError) {
+                            console.warn('[USERBOT_CENTER] Не удалось отключить кандидата:', disconnectError?.message || disconnectError);
+                        }
+                    }
                 }
             }
 

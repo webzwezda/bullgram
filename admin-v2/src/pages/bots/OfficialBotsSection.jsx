@@ -8,10 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BotTariffsSection } from './BotTariffsSection.jsx';
 
-function normalizeBotKind(value) {
-  return value === 'template' ? 'template' : 'sales';
-}
-
 function botTitle(account) {
   return `@${account?.tg_username || `bot-${String(account?.tg_account_id || account?.id || '')}`}`;
 }
@@ -25,37 +21,35 @@ function webhookStatusMeta(account) {
   const status = String(account?.webhook_status || '').trim().toLowerCase();
   if (mode !== 'webhook') {
     return {
+      tone: 'neutral',
       title: 'Тестовый режим',
       text: 'Бот работает через сервер в тестовом режиме.',
-      className: 'border-amber-200 bg-amber-50 text-amber-700',
-      dot: '#f59e0b',
-      showAction: false
+      dot: '#94a3b8'
     };
   }
   if (status === 'error' || account?.runtime_error) {
     return {
+      tone: 'error',
       title: 'Ошибка подключения',
       text: account?.runtime_error || 'Telegram не смог подключить бота.',
-      className: 'border-rose-200 bg-rose-50 text-rose-700',
-      dot: '#ef4444',
-      showAction: false
+      dot: '#ef4444'
     };
   }
   if (status === 'receiving') {
     return {
+      tone: 'ok',
       title: 'Бот получает сообщения',
       text: 'Telegram уже отправлял сообщения боту.',
-      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-      dot: '#10b981',
-      showAction: false
+      dot: '#10b981'
     };
   }
   return {
-    title: 'Бот подключён',
-    text: 'Бот работает и принимает сообщения.',
-    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    dot: '#10b981',
-    showAction: true
+    tone: 'neutral',
+    title: 'Webhook включён',
+    text: account?.last_update_at
+      ? 'Webhook включён; апдейты уже приходили.'
+      : 'Webhook включён; апдейтов ещё не было.',
+    dot: '#94a3b8'
   };
 }
 
@@ -253,7 +247,9 @@ function BotAdminsSection({
     if (!inviteLink || !canCopy) return;
     try {
       await navigator.clipboard.writeText(inviteLink);
-    } catch (_) {}
+    } catch (_) {
+      toast.error('Не удалось скопировать');
+    }
   }
 
   return (
@@ -464,7 +460,9 @@ function UserbotsSection({
         selectedUserbotIds: next,
         selectedUserbotId: '',
         userbotMode: nextMode
-      }, null, { autoSave: true });
+      }, null, { autoSave: true }).catch((error) => {
+        console.error('Failed to remove userbot from contour:', error);
+      });
     }
   }
 
@@ -554,7 +552,7 @@ function UserbotsSection({
                     >
                       <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${isActive ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
-                    <span className={`text-xs font-bold ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>Участвует в ротации</span>
+                    <span className={`text-xs font-bold ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>Участвует в ротации</span>
                   </div>
                 </div>
                 <Button
@@ -601,9 +599,55 @@ function BotRuntimeSection({
   const accountId = String(selectedOfficialBot.id || '');
   const isBusy = state.webhookRuntimeActionId === accountId;
   const statusMeta = webhookStatusMeta(selectedOfficialBot);
-  const isError = statusMeta.title === 'Ошибка подключения';
+  const isError = statusMeta.tone === 'error';
 
-  if (!isError) return null;
+  const checkWebhookButton = (
+    <Button
+      variant="outline"
+      className={`h-11 rounded-xl font-bold shadow-sm w-full sm:w-auto ${
+        isError
+          ? 'border-rose-200 text-rose-700 bg-white hover:bg-rose-100 hover:text-rose-800'
+          : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-100'
+      }`}
+      onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
+      disabled={isBusy}
+    >
+      {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+      Проверить webhook
+    </Button>
+  );
+
+  // Нейтральные состояния (polling / enabled / receiving) показываем всегда —
+  // компактным slate-блоком с постоянным доступом к «Проверить webhook».
+  if (!isError) {
+    return (
+      <Card className="border-0 shadow-sm ring-1 ring-slate-200/60 bg-slate-50 rounded-2xl overflow-hidden mb-6">
+        <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta.dot }} />
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-slate-900">{statusMeta.title}</div>
+              <div className="text-xs font-medium text-slate-500 mt-0.5">{statusMeta.text}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            {checkWebhookButton}
+            {selectedOfficialBot?.webhook_mode === 'webhook' ? (
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl font-bold shadow-sm w-full sm:w-auto border-slate-200 text-slate-700 bg-white hover:bg-slate-100"
+                onClick={() => reregisterWebhook?.(selectedOfficialBot)}
+                disabled={isBusy || !reregisterWebhook}
+              >
+                {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                Переподключить webhook
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-0 shadow-sm ring-1 ring-rose-200/50 bg-rose-50 rounded-2xl overflow-hidden mb-6">
@@ -619,15 +663,7 @@ function BotRuntimeSection({
             </div>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              className="h-11 rounded-xl border-rose-200 text-rose-700 bg-white hover:bg-rose-100 hover:text-rose-800 font-bold shadow-sm w-full sm:w-auto"
-              onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
-              disabled={isBusy}
-            >
-              {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              Проверить webhook
-            </Button>
+            {checkWebhookButton}
             <Button
               className="h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm shadow-indigo-200 w-full sm:w-auto"
               onClick={() => reregisterWebhook?.(selectedOfficialBot)}
@@ -690,7 +726,7 @@ function RightsBadges({ result, selectedId, hasOptions }) {
 
   if (!result) {
     return (
-      <div className="text-[11px] text-slate-400 italic">
+      <div className="text-[11px] text-slate-500 italic">
         Права ещё не проверялись — нажмите «Проверить права».
       </div>
     );
@@ -735,7 +771,7 @@ function RightsBadges({ result, selectedId, hasOptions }) {
         </span>
       ))}
       {okCount > 0 ? (
-        <span className="text-[10px] font-medium text-slate-400 ml-1">+ {okCount} ок</span>
+        <span className="text-[10px] font-medium text-slate-500 ml-1">+ {okCount} ок</span>
       ) : null}
       {result?.warnings?.length ? (
         <span className="basis-full text-xs font-bold text-rose-600 mt-1">{result.warnings[0]}</span>
@@ -918,9 +954,11 @@ function ContourCard({
             value={selectedId}
             onValueChange={(value) => {
               if (config.oppositeField && value && String(draft[config.oppositeField] || '') === String(value)) {
-                setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField });
+                setFieldValue(config.field, value, { autoSave: true, oppositeField: config.oppositeField })
+                  .catch((error) => console.error('Failed to save contour:', error));
               } else {
-                setFieldValue(config.field, value, { autoSave: true });
+                setFieldValue(config.field, value, { autoSave: true })
+                  .catch((error) => console.error('Failed to save contour:', error));
               }
             }}
             disabled={!options.length}
