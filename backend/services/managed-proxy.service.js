@@ -6,6 +6,16 @@ import crypto from 'crypto';
 
 const execFileAsync = promisify(execFile);
 
+// state.json — общий файл: два параллельных provision/release читают состояние
+// до чужого saveState и теряют записи. Все мутирующие операции над файлом
+// гоняем через один process-level мьютекс (promise-очередь).
+let stateOpChain = Promise.resolve();
+function withStateLock(fn) {
+  const run = stateOpChain.then(fn);
+  stateOpChain = run.then(() => {}, () => {});
+  return run;
+}
+
 const STATE_DIR = '/var/lib/bullgram/managed-proxies';
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 const CONFIG_FILE = path.join(STATE_DIR, '3proxy.cfg');
@@ -44,7 +54,11 @@ function loadState() {
 
 function saveState(state) {
   ensureStateDir();
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  // Атомарная запись: читатели вне лока (getStateSummary/getRuntimeHealth) не должны
+  // увидеть порванный JSON посреди записи
+  const tmpFile = `${STATE_FILE}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2));
+  fs.renameSync(tmpFile, STATE_FILE);
 }
 
 function saveStateWithBackup(state) {
@@ -320,6 +334,10 @@ export class ManagedProxyService {
   // Конфиг 3proxy общий на все прокси, поэтому контейнер перезапускается целиком.
   // Батч поднимает N прокси с одним saveState и одним рестартом.
   async provisionManagedProxyBatch({ count, inventoryGroup }) {
+    return withStateLock(() => this.provisionManagedProxyBatchUnlocked({ count, inventoryGroup }));
+  }
+
+  async provisionManagedProxyBatchUnlocked({ count, inventoryGroup }) {
     const state = loadState();
     state.publicHost = await detectPublicHost();
     state.ipv6Prefix = state.ipv6Prefix || await detectIpv6Prefix();
@@ -360,11 +378,16 @@ export class ManagedProxyService {
   }
 
   async provisionManagedProxy({ name, inventoryGroup }) {
-    const [provisioned] = await this.provisionManagedProxyBatch({ count: 1, inventoryGroup });
+    // Мутация state — только под локом, как и все остальные публичные мутаторы
+    const [provisioned] = await withStateLock(() => this.provisionManagedProxyBatchUnlocked({ count: 1, inventoryGroup }));
     return { name, ...provisioned };
   }
 
   async releaseManagedProxyBatch({ records }) {
+    return withStateLock(() => this.releaseManagedProxyBatchUnlocked({ records }));
+  }
+
+  async releaseManagedProxyBatchUnlocked({ records }) {
     const wanted = new Set((records || []).map((record) => Number(record.port)).filter(Boolean));
     const state = loadState();
     const removed = [];
@@ -391,6 +414,10 @@ export class ManagedProxyService {
   }
 
   async releaseManagedProxy({ host, port, username }) {
+    return withStateLock(() => this.releaseManagedProxyUnlocked({ host, port, username }));
+  }
+
+  async releaseManagedProxyUnlocked({ host, port, username }) {
     const state = loadState();
     const index = state.proxies.findIndex((proxy) =>
       Number(proxy.port) === Number(port) &&
@@ -411,6 +438,10 @@ export class ManagedProxyService {
   }
 
   async restoreRuntimeFromState() {
+    return withStateLock(() => this.restoreRuntimeFromStateUnlocked());
+  }
+
+  async restoreRuntimeFromStateUnlocked() {
     const state = loadState();
     state.publicHost = await detectPublicHost();
     saveState(state);
@@ -485,6 +516,10 @@ export class ManagedProxyService {
   }
 
   async reconcileRuntimeFromDatabase(supabase, options = {}) {
+    return withStateLock(() => this.reconcileRuntimeFromDatabaseUnlocked(supabase, options));
+  }
+
+  async reconcileRuntimeFromDatabaseUnlocked(supabase, options = {}) {
     if (!supabase) {
       throw new Error('Supabase client is required for managed proxy reconciliation.');
     }

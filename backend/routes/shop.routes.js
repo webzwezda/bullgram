@@ -647,6 +647,11 @@ function proxyHasMultipleUserbots(usageMap, proxyId) {
     return (usageMap.get(String(proxyId)) || []).length > 1;
 }
 
+// Правило 1:1 — прокси с живым юзерботом продавать нельзя вообще.
+function proxyHasUserbot(usageMap, proxyId) {
+    return (usageMap.get(String(proxyId)) || []).length > 0;
+}
+
 async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = null, enforceSellerOwnerId = null, senderWallet = null } = {}) {
     if (!purchase) {
         return {
@@ -1514,9 +1519,9 @@ export default function shopRoutes(supabase) {
                     return res.status(400).json({ error: 'В лоте есть чужие или несуществующие прокси' });
                 }
 
-                const sharedProxy = proxyIds.find(proxyId => proxyHasMultipleUserbots(proxyUsageMap, proxyId));
-                if (sharedProxy) {
-                    return res.status(400).json({ error: 'Прокси, на котором сидит больше одного юзербота, нельзя выставлять на продажу.' });
+                const listedProxy = proxyIds.find(proxyId => proxyHasUserbot(proxyUsageMap, proxyId));
+                if (listedProxy) {
+                    return res.status(400).json({ error: 'На прокси есть живой юзербот — нельзя выставлять на продажу.' });
                 }
             }
 
@@ -1751,8 +1756,8 @@ export default function shopRoutes(supabase) {
             for (const proxy of candidates) {
                 if ((proxy.inventory_group || 'shop_sale') !== 'shop_sale') {
                     errors.push({ proxy_id: proxy.id, error: 'Прокси не в группе «На продажу»' });
-                } else if (proxyHasMultipleUserbots(proxyUsageMap, proxy.id)) {
-                    errors.push({ proxy_id: proxy.id, error: 'На прокси сидит больше одного юзербота' });
+                } else if (proxyHasUserbot(proxyUsageMap, proxy.id)) {
+                    errors.push({ proxy_id: proxy.id, error: 'На прокси есть живой юзербот' });
                 } else {
                     shopSaleCandidates.push(proxy);
                 }

@@ -473,9 +473,33 @@ function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Стабильный маркер «прокси ещё не прошёл фоновую проверку». Живёт в
+// last_check_error до завершения фоновой проверки; фронт больше не должен
+// парсить текст — используем его только внутри isManagedProxyPending.
+const MANAGED_PROXY_PENDING_MARKER = 'фоновую проверку Telegram';
+
 function buildManagedProxyPendingMessage() {
-    return 'Сервер поднимает прокси и гоняет фоновую проверку Telegram. Подожди немного и обнови список.';
+    return `Сервер поднимает прокси и гоняет ${MANAGED_PROXY_PENDING_MARKER}. Подожди немного и обнови список.`;
 }
+
+function isManagedProxyPending(proxy) {
+    return (proxy.provision_source || 'manual_free') === 'manual_admin'
+        && proxy.is_working == null
+        && String(proxy.last_check_error || '').includes(MANAGED_PROXY_PENDING_MARKER);
+}
+
+// Креды прокси не отдаем в API даже админу: маскированный username сохраняет
+// опознавательный префикс (mp_* для managed), password не отдаем совсем.
+function maskCredential(value) {
+    const raw = String(value || '');
+    if (!raw) return null;
+    if (raw.length <= 4) return '***';
+    return `${raw.slice(0, 3)}***`;
+}
+
+// Лёгкий кулдаун ручной проверки прокси: Map «userId:proxyId -> timestamp».
+const PROXY_CHECK_COOLDOWN_MS = 10 * 1000;
+const proxyCheckCooldown = new Map();
 
 function normalizeManagedBatchCount(value) {
     const parsed = Number.parseInt(value, 10);
@@ -1447,12 +1471,14 @@ export default function (supabase) {
                     : (provisionSource === 'manual_admin' ? DEFAULT_ADMIN_PROXY_GROUP : null);
                 return {
                     ...proxy,
-                    username: req.profile?.role === 'admin' ? (proxy.username || null) : null,
-                    password: req.profile?.role === 'admin' ? (proxy.password || null) : null,
+                    username: maskCredential(proxy.username),
+                    password: null,
+                    has_password: !!proxy.password,
                     provision_source: provisionSource,
                     inventory_group: inventoryGroup,
                     userbot_count: linkedUserbots.length,
                     is_safe_single_use: linkedUserbots.length <= 1,
+                    is_pending: isManagedProxyPending(proxy),
                     linked_userbots: linkedUserbots
                 };
             });
@@ -1675,6 +1701,17 @@ export default function (supabase) {
                 proxyData.inventory_group = normalizedInventoryGroup;
             }
 
+            const { data: duplicateProxy } = await supabase
+                .from('proxies')
+                .select('id')
+                .eq('owner_id', req.user.id)
+                .eq('host', parsed.host)
+                .eq('port', parsed.port)
+                .maybeSingle();
+            if (duplicateProxy) {
+                return res.status(400).json({ error: 'Такой прокси уже добавлен' });
+            }
+
             const { data: inserted, error } = await supabase
                 .from('proxies')
                 .insert([proxyData])
@@ -1690,6 +1727,9 @@ export default function (supabase) {
                 message: 'Proxy сохранён из вставленного текста.'
             });
         } catch (error) {
+            if (error?.code === '23505' || String(error?.message || '').includes('duplicate key')) {
+                return res.status(400).json({ error: 'Такой прокси уже добавлен' });
+            }
             const message = error?.message || 'Не удалось импортировать proxy.';
             const statusCode = message.includes('Trial') ? 403 : 400;
             res.status(statusCode).json({ error: message });
@@ -1853,12 +1893,23 @@ export default function (supabase) {
                     return res.status(404).json({ error: 'Прокси не найден.' });
                 }
 
+                // GET отдаёт креды маскированными (username маскирован, password нет),
+                // поэтому пустой или замаскированный username и пустой password в апдейте
+                // означают «оставить как есть», а не «затереть» — иначе правка формы или
+                // перенос в группу стирает настоящие креды прокси.
+                const incomingUsername = String(username || '').trim();
+                const incomingPassword = String(password || '');
+                const keepUsername = !incomingUsername || incomingUsername === maskCredential(existingProxy.username);
+                const keepPassword = !incomingPassword;
+                const nextUsername = keepUsername ? (existingProxy.username || null) : incomingUsername;
+                const nextPassword = keepPassword ? (existingProxy.password || null) : incomingPassword;
+
                 const updatePayload = {
                     name: String(name || '').trim(),
                     host: normalizedHost,
                     port: normalizedPort,
-                    username: username || null,
-                    password: password || null
+                    username: nextUsername,
+                    password: nextPassword
                 };
 
                 if (inventoryGroupSupported && isAdmin) {
@@ -1868,8 +1919,8 @@ export default function (supabase) {
                 const connectionChanged =
                     String(existingProxy.host || '') !== String(normalizedHost || '') ||
                     Number(existingProxy.port || 0) !== Number(normalizedPort || 0) ||
-                    String(existingProxy.username || '') !== String(username || '') ||
-                    String(existingProxy.password || '') !== String(password || '');
+                    String(existingProxy.username || '') !== String(nextUsername || '') ||
+                    String(existingProxy.password || '') !== String(nextPassword || '');
 
                 if (connectionChanged) {
                     updatePayload.is_working = null;
@@ -1888,6 +1939,17 @@ export default function (supabase) {
                     .eq('id', id)
                     .eq('owner_id', req.user.id);
             } else {
+                const { data: duplicateProxy } = await supabase
+                    .from('proxies')
+                    .select('id')
+                    .eq('owner_id', req.user.id)
+                    .eq('host', normalizedHost)
+                    .eq('port', normalizedPort)
+                    .maybeSingle();
+                if (duplicateProxy) {
+                    return res.status(400).json({ error: 'Такой прокси уже добавлен' });
+                }
+
                 const proxyData = {
                     owner_id: req.user.id,
                     name: String(name || '').trim(),
@@ -1917,6 +1979,9 @@ export default function (supabase) {
             if (result.error) throw result.error;
             res.json({ success: true });
         } catch (error) {
+            if (error?.code === '23505' || String(error?.message || '').includes('duplicate key')) {
+                return res.status(400).json({ error: 'Такой прокси уже добавлен' });
+            }
             const message = error?.message || 'Не удалось сохранить прокси.';
             const statusCode = (
                 message.includes('trial proxy') ||
@@ -1984,6 +2049,19 @@ export default function (supabase) {
                 return res.json({ success: true, returned_to_trial_pool: true });
             }
 
+            // FK tg_accounts.proxy_id -> proxies ON DELETE SET NULL молча отвяжет
+            // живого юзербота, поэтому перед удалением требуем ручную развязку.
+            const { count: linkedAccounts, error: linkedError } = await supabase
+                .from('tg_accounts')
+                .select('id', { count: 'exact', head: true })
+                .eq('owner_id', req.user.id)
+                .eq('proxy_id', req.params.id);
+
+            if (linkedError) throw linkedError;
+            if (Number(linkedAccounts || 0) > 0) {
+                return res.status(400).json({ error: 'Прокси использует юзербот — сначала перепривяжи или удали его' });
+            }
+
             const { error } = await supabase.from('proxies').delete().eq('id', req.params.id).eq('owner_id', req.user.id);
             if (error) throw error;
 
@@ -2016,6 +2094,19 @@ export default function (supabase) {
                 return res.status(400).json({ error: 'У этого прокси не сохранены host/port. Открой прокси, поправь данные и только потом запускай проверку.' });
             }
 
+            const cooldownKey = `${req.user.id}:${proxy.id}`;
+            const now = Date.now();
+            const lastCheckAt = proxyCheckCooldown.get(cooldownKey) || 0;
+            if (now - lastCheckAt < PROXY_CHECK_COOLDOWN_MS) {
+                return res.status(429).json({ error: 'Подожди немного перед повторной проверкой' });
+            }
+            if (proxyCheckCooldown.size > 1000) {
+                for (const [key, ts] of proxyCheckCooldown) {
+                    if (now - ts >= PROXY_CHECK_COOLDOWN_MS) proxyCheckCooldown.delete(key);
+                }
+            }
+            proxyCheckCooldown.set(cooldownKey, now);
+
             const result = await userbotService.checkProxy({
                 host: proxy.host,
                 port: proxy.port,
@@ -2047,9 +2138,7 @@ export default function (supabase) {
                     country: result.country,
                     countryCode: result.countryCode || null,
                     city: result.city,
-                    isp: result.isp,
-                    username: proxy.username,
-                    password: proxy.password
+                    isp: result.isp
                 });
             } else {
                 await supabase.from('proxies').update({

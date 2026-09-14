@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Globe, Server, Plus, ExternalLink, Filter, Loader2, Lock, Store, Check } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Globe, Plus, ExternalLink, Filter, Loader2, Lock, Store, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -46,6 +46,9 @@ function countryFlag(countryCode) {
 
 function proxyHealthMode(proxy) {
   if (proxy?.status === 'checking') return 'checking';
+  // Приоритет — аддитивный флаг бэкенда; подстрока в last_check_error оставлена
+  // как фолбэк для старых ответов без is_pending.
+  if (proxy?.is_pending === true) return 'warming_up';
   if (proxy?.is_working == null && (proxy?.last_check_error || '').includes('фоновую проверку Telegram')) return 'warming_up';
   if (proxy?.is_working !== true) return proxy?.is_working === false ? 'broken' : 'unchecked';
   if (!proxy?.last_check_ip && !proxy?.last_check_country && !proxy?.last_check_city) {
@@ -56,12 +59,16 @@ function proxyHealthMode(proxy) {
 
 function proxyBadge(proxy) {
   const mode = proxyHealthMode(proxy);
-  if (mode === 'checking') return { text: 'Проверяется', className: 'pill pill--warning' };
-  if (mode === 'warming_up') return { text: 'Поднимается', className: 'pill pill--warning' };
-  if (mode === 'telegram_only') return { text: 'Рабочий для Telegram', className: 'pill pill--ok' };
-  if (mode === 'full') return { text: 'Работает', className: 'pill pill--ok' };
-  if (mode === 'broken') return { text: 'Ошибка', className: 'pill pill--danger' };
-  return { text: 'Не проверен', className: 'pill' };
+  if (mode === 'checking') return { text: 'Проверяется', tone: 'warning' };
+  if (mode === 'warming_up') return { text: 'Поднимается', tone: 'warning' };
+  if (mode === 'telegram_only') return { text: 'Рабочий для Telegram', tone: 'ok' };
+  if (mode === 'full') return { text: 'Работает', tone: 'ok' };
+  if (mode === 'broken') return { text: 'Ошибка', tone: 'danger' };
+  return { text: 'Не проверен', tone: 'neutral' };
+}
+
+function proxyHasLiveUserbot(proxy) {
+  return Number(proxy?.userbot_count || 0) > 0;
 }
 
 function buildServerProxyName(existingNames = []) {
@@ -93,7 +100,6 @@ export function ProxyManagerPage() {
   const [filter, setFilter] = useState('all');
   const [selectedLane, setSelectedLane] = useState('self-use');
   const [formState, setFormState] = useState({
-    id: '',
     name: '',
     host: '',
     port: '1080',
@@ -101,6 +107,7 @@ export function ProxyManagerPage() {
     password: '',
     inventory_group: 'self_use'
   });
+  const [checkingIds, setCheckingIds] = useState(() => new Set());
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -111,6 +118,48 @@ export function ProxyManagerPage() {
     support: null,
     updatedAt: null
   });
+  // Защита от гонок по прецеденту CustomersPage: ответ поллинга, пришедший позже
+  // свежей загрузки (например, после действия над строкой), не должен
+  // перезаписывать свежий стейт.
+  const proxiesReqIdRef = useRef(0);
+
+  const reloadProxies = useCallback(async ({ silent = false } = {}) => {
+    if (!accessToken) return;
+    const reqId = ++proxiesReqIdRef.current;
+
+    if (!silent) {
+      setState((prev) => ({
+        ...prev,
+        loading: !prev.updatedAt,
+        refreshing: !!prev.updatedAt,
+        error: ''
+      }));
+    }
+
+    try {
+      const data = await apiRequest('/api/userbot/proxies', { accessToken });
+      if (reqId !== proxiesReqIdRef.current) return;
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        error: '',
+        proxies: data.proxies || [],
+        support: data.support || null,
+        updatedAt: new Date().toISOString()
+      }));
+    } catch (error) {
+      if (reqId !== proxiesReqIdRef.current) return;
+      // Ошибка одного фонового полла не должна стирать список — сохраняем
+      // предыдущие proxies/support и показываем только статус ошибки.
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        error: error.message
+      }));
+    }
+  }, [accessToken]);
   const [sellerItems, setSellerItems] = useState([]);
   const [bulkCount, setBulkCount] = useState('1');
   const [externalProxyMode, setExternalProxyMode] = useState(false);
@@ -124,40 +173,6 @@ export function ProxyManagerPage() {
     const mode = proxyHealthMode(proxy);
     return mode === 'checking' || mode === 'warming_up';
   });
-
-  const reloadProxies = useCallback(async ({ silent = false } = {}) => {
-    if (!accessToken) return;
-    if (!silent) {
-      setState((prev) => ({
-        ...prev,
-        loading: !prev.updatedAt,
-        refreshing: !!prev.updatedAt,
-        error: ''
-      }));
-    }
-
-    try {
-      const data = await apiRequest('/api/userbot/proxies', { accessToken });
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        refreshing: false,
-        error: '',
-        proxies: data.proxies || [],
-        support: data.support || null,
-        updatedAt: new Date().toISOString()
-      }));
-    } catch (error) {
-      setState({
-        loading: false,
-        refreshing: false,
-        error: error.message,
-        proxies: [],
-        support: null,
-        updatedAt: null
-      });
-    }
-  }, [accessToken]);
 
   const {
     buyQuantities,
@@ -307,8 +322,8 @@ export function ProxyManagerPage() {
 
   const canCreateManualProxy = !!state.support?.can_create_manual_proxy;
   const canEditProxy = state.support?.profile_role === 'admin';
-  const showQuotaLock = !formState.id && state.support?.profile_role !== 'admin' && !canCreateManualProxy;
-  const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
+  const showQuotaLock = state.support?.profile_role !== 'admin' && !canCreateManualProxy;
+  const isAdminCreate = state.support?.profile_role === 'admin';
   const serverProxyMode = isAdminCreate && !externalProxyMode;
   const serverBatchCount = Math.min(Math.max(Number.parseInt(bulkCount, 10) || 1, 1), 100);
   const proxyBuyLimit = useMemo(() => {
@@ -328,7 +343,6 @@ export function ProxyManagerPage() {
 
   useEffect(() => {
     if (state.support?.profile_role !== 'admin') return;
-    if (formState.id) return;
 
     setFormState((prev) => {
       if (prev.name.trim()) return prev;
@@ -341,17 +355,30 @@ export function ProxyManagerPage() {
         )
       };
     });
-  }, [formState.id, state.proxies, state.support?.profile_role]);
+  }, [state.proxies, state.support?.profile_role]);
 
   async function checkProxy(proxyId) {
+    const rowKey = String(proxyId);
+    if (checkingIds.has(rowKey)) return;
+
+    setCheckingIds((prev) => new Set(prev).add(rowKey));
+    setState((prev) => ({
+      ...prev,
+      proxies: prev.proxies.map((proxy) => (
+        proxy.id === proxyId ? { ...proxy, status: 'checking' } : proxy
+      ))
+    }));
+
     try {
-      setState((prev) => ({
-        ...prev,
-        proxies: prev.proxies.map((proxy) => (
-          proxy.id === proxyId ? { ...proxy, status: 'checking' } : proxy
-        ))
-      }));
       await apiRequest(`/api/userbot/proxies/check/${proxyId}`, { accessToken });
+    } catch (error) {
+      toast.error(error.message);
+    }
+
+    // Обновляем список независимо от результата проверки, чтобы строка не
+    // зависла в «Проверяется». Инвалидируем поллинг: наш рефреш свежее.
+    proxiesReqIdRef.current += 1;
+    try {
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
       setState((prev) => ({
         ...prev,
@@ -360,21 +387,28 @@ export function ProxyManagerPage() {
         updatedAt: new Date().toISOString()
       }));
     } catch (error) {
+      // Список обновить не удалось — снимаем локальный checking-статус строки,
+      // чтобы кнопка и бейдж не залипли.
       toast.error(error.message);
-      const data = await apiRequest('/api/userbot/proxies', { accessToken });
       setState((prev) => ({
         ...prev,
-        proxies: data.proxies || [],
-        support: data.support || prev.support,
-        updatedAt: new Date().toISOString()
+        proxies: prev.proxies.map((proxy) => (
+          proxy.id === proxyId && proxy.status === 'checking' ? { ...proxy, status: '' } : proxy
+        ))
       }));
+    } finally {
+      setCheckingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rowKey);
+        return next;
+      });
     }
   }
 
   async function saveProxy() {
     setState((prev) => ({ ...prev, saving: true, error: '' }));
     try {
-      const isAdminCreate = state.support?.profile_role === 'admin' && !formState.id;
+      const isAdminCreate = state.support?.profile_role === 'admin';
       const isServerBatch = isAdminCreate && !externalProxyMode;
       const forSale = formState.inventory_group === 'shop_sale';
       const salePrice = Number(raisePriceTon);
@@ -402,7 +436,6 @@ export function ProxyManagerPage() {
         accessToken,
         method: 'POST',
         body: {
-          id: formState.id || undefined,
           name: normalizedName,
           host: normalizedHost || undefined,
           port: Number.isInteger(normalizedPort) ? normalizedPort : undefined,
@@ -412,6 +445,7 @@ export function ProxyManagerPage() {
           count: isServerBatch ? serverBatchCount : undefined
         }
       });
+      proxiesReqIdRef.current += 1;
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
 
       let listedCount = 0;
@@ -436,7 +470,6 @@ export function ProxyManagerPage() {
       setExternalProxyMode(false);
       setRaisePriceTon('');
       setFormState({
-        id: '',
         name: '',
         host: '',
         port: '',
@@ -462,49 +495,22 @@ export function ProxyManagerPage() {
     }
   }
 
-  function editProxy(proxy) {
-    if (state.support?.profile_role === 'admin') {
-    } else if ((proxy.provision_source || 'manual_free') !== 'manual_owned') {
-      return;
-    }
-    setFormState({
-      id: proxy.id,
-      name: proxy.name || '',
-      host: proxy.host || '',
-      port: proxy.port ? String(proxy.port) : '',
-      username: proxy.username || '',
-      password: proxy.password || '',
-      inventory_group: proxy.inventory_group || 'shop_sale'
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function resetForm() {
-    setFormState({
-      id: '',
-      name: '',
-      host: '',
-      port: '',
-      username: '',
-      password: '',
-      inventory_group: 'self_use'
-    });
-  }
-
-  async function deleteProxy(proxyId) {
-    if (!window.confirm('Удалить прокси? Если он уже привязан к юзерботу, сначала перепривяжи аккаунт.')) {
+  async function deleteProxy(proxy) {
+    const userbotCount = Number(proxy.userbot_count || 0);
+    const confirmText = userbotCount > 0
+      ? `На этом прокси висит юзербот — удаление будет отклонено. Сначала перепривяжи аккаунт. Всё равно попробовать?`
+      : 'Удалить прокси? Если он уже привязан к юзерботу, сначала перепривяжи аккаунт.';
+    if (!window.confirm(confirmText)) {
       return;
     }
 
     try {
-      await apiRequest(`/api/userbot/proxies/${proxyId}`, {
+      await apiRequest(`/api/userbot/proxies/${proxy.id}`, {
         accessToken,
         method: 'DELETE'
       });
+      proxiesReqIdRef.current += 1;
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
-      if (String(formState.id) === String(proxyId)) {
-        resetForm();
-      }
       setState((prev) => ({
         ...prev,
         proxies: data.proxies || [],
@@ -523,6 +529,8 @@ export function ProxyManagerPage() {
 
     setState((prev) => ({ ...prev, movingProxyId: String(proxy.id), error: '' }));
     try {
+      // Креды из GET приходят замаскированными — в апдейт не отправляем,
+      // бэкенд держит «пустые = оставить как есть»
       await apiRequest('/api/userbot/proxies', {
         accessToken,
         method: 'POST',
@@ -531,11 +539,12 @@ export function ProxyManagerPage() {
           name: proxy.name,
           host: proxy.host,
           port: proxy.port,
-          username: proxy.username || null,
-          password: proxy.password || null,
+          username: '',
+          password: '',
           inventory_group: targetGroup
         }
       });
+      proxiesReqIdRef.current += 1;
       const data = await apiRequest('/api/userbot/proxies', { accessToken });
       setState((prev) => ({
         ...prev,
@@ -570,25 +579,35 @@ export function ProxyManagerPage() {
 
   function toggleAllSaleSelection() {
     setSaleSelection((prev) => {
-      const allSelected = saleProxies.length > 0 && saleProxies.every((proxy) => prev.has(String(proxy.id)));
+      // Прокси с живым юзерботом не выбираем: сервер всё равно отклонит листинг.
+      const listable = saleProxies.filter((proxy) => !proxyHasLiveUserbot(proxy));
+      const allSelected = listable.length > 0 && listable.every((proxy) => prev.has(String(proxy.id)));
       if (allSelected) return new Set();
-      return new Set(saleProxies.map((proxy) => String(proxy.id)));
+      return new Set(listable.map((proxy) => String(proxy.id)));
     });
   }
 
   async function listSelectedForSale() {
-    const ids = saleProxies
-      .filter((proxy) => saleSelection.has(String(proxy.id)))
-      .map((proxy) => proxy.id);
     const price = Number(salePriceTon);
+    const selected = saleProxies.filter((proxy) => saleSelection.has(String(proxy.id)));
+    const blocked = selected.filter(proxyHasLiveUserbot);
+    const ids = selected
+      .filter((proxy) => !proxyHasLiveUserbot(proxy))
+      .map((proxy) => proxy.id);
 
     if (!ids.length) {
-      toast.error('Сначала выбери прокси');
+      toast.error(blocked.length
+        ? 'Все выбранные прокси заняты юзерботами — выставить их на витрину нельзя'
+        : 'Сначала выбери прокси');
       return;
     }
     if (!(price > 0)) {
       toast.error('Укажи цену лота в TON');
       return;
+    }
+
+    for (const proxy of blocked) {
+      toast.error(`${proxy.name || `${proxy.host}:${proxy.port}`}: на нём висит юзербот — листинг будет отклонён`);
     }
 
     setListingSale(true);
@@ -617,8 +636,9 @@ export function ProxyManagerPage() {
   function ProxyTableSection() {
     const { items: visibleItems, isSold } = getVisibleProxies();
     const laneInfo = LANE_OPTIONS.find(l => l.id === selectedLane);
-    const selectedSaleCount = saleProxies.filter((proxy) => saleSelection.has(String(proxy.id))).length;
-    const allSaleSelected = saleProxies.length > 0 && selectedSaleCount === saleProxies.length;
+    const listableSaleProxies = saleProxies.filter((proxy) => !proxyHasLiveUserbot(proxy));
+    const selectedSaleCount = listableSaleProxies.filter((proxy) => saleSelection.has(String(proxy.id))).length;
+    const allSaleSelected = listableSaleProxies.length > 0 && selectedSaleCount === listableSaleProxies.length;
 
     const onSaleLane = selectedLane === 'on-sale' && isAdmin;
     const listingByProxyId = new Map();
@@ -768,7 +788,7 @@ export function ProxyManagerPage() {
             <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
               <Globe className="w-8 h-8" />
             </div>
-            <p className="text-slate-400 font-bold">
+            <p className="text-slate-500 font-bold">
               {isSold ? 'Проданных прокси пока нет' : 'Прокси с этим фильтром нет'}
             </p>
           </div>
@@ -782,7 +802,7 @@ export function ProxyManagerPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-1.5">
                         <div className="text-[15px] font-bold text-slate-900 truncate">{item.title}</div>
-                        <span className="shrink-0 text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">TON {formatTon(item.price_ton)}</span>
+                        <span className="shrink-0 text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">TON {formatTon(item.price_ton)}</span>
                       </div>
                       <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
                         <span>{proxyAssets.map((a) => a.label || 'Proxy').join(', ') || 'Proxy'}</span>
@@ -809,23 +829,24 @@ export function ProxyManagerPage() {
             {pageItems.map((proxy) => {
               const badge = proxyBadge(proxy);
               const mode = proxyHealthMode(proxy);
+              const proxyIsBusy = proxyHasLiveUserbot(proxy);
               const geo = proxy.last_check_country
                 ? `${countryFlag(proxy.last_check_country_code) ? `${countryFlag(proxy.last_check_country_code)} ` : ''}${proxy.last_check_country}${proxy.last_check_city ? `, ${proxy.last_check_city}` : ''}`
                 : mode === 'telegram_only'
                   ? 'Telegram only'
                   : '—';
-              const statusDotColor = badge.className === 'pill pill--ok'
+              const statusDotColor = badge.tone === 'ok'
                 ? 'bg-emerald-400'
-                : badge.className === 'pill pill--warning'
+                : badge.tone === 'warning'
                   ? 'bg-amber-400'
-                  : badge.className === 'pill pill--danger'
+                  : badge.tone === 'danger'
                     ? 'bg-red-400'
                     : 'bg-slate-300';
-              const statusBgColor = badge.className === 'pill pill--ok'
+              const statusBgColor = badge.tone === 'ok'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : badge.className === 'pill pill--warning'
+                : badge.tone === 'warning'
                   ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : badge.className === 'pill pill--danger'
+                  : badge.tone === 'danger'
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : 'bg-slate-50 text-slate-600 border-slate-200';
               const shopItems = selectedLane === 'on-sale'
@@ -843,6 +864,8 @@ export function ProxyManagerPage() {
                             type="checkbox"
                             className="w-4 h-4 accent-indigo-600 shrink-0"
                             checked={saleSelection.has(String(proxy.id))}
+                            disabled={proxyIsBusy}
+                            title={proxyIsBusy ? 'На прокси живой юзербот — выставить на витрину нельзя' : undefined}
                             onChange={() => toggleSaleSelection(proxy.id)}
                           />
                         ) : null}
@@ -863,33 +886,41 @@ export function ProxyManagerPage() {
                         {Number(proxy.userbot_count || 0) > 1 ? (
                           <span className="inline-flex px-2 py-0.5 rounded-md bg-red-50 text-red-600 border border-red-100 text-[10px] font-black uppercase">Shared</span>
                         ) : null}
+                        {selectedLane === 'on-sale' && proxyIsBusy ? (
+                          <span
+                            className="inline-flex px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-black uppercase"
+                            title="На прокси живой юзербот — витрина отклонит листинг"
+                          >
+                            Занят юзерботом
+                          </span>
+                        ) : null}
                       </div>
 
                       <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Адрес</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Адрес</span>
                           <span className="font-mono text-[13px] font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{proxy.host}:{proxy.port}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Гео</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Гео</span>
                           <span className="font-medium text-slate-700">{geo}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Нагрузка</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Нагрузка</span>
                           <span className={`font-bold ${Number(proxy.userbot_count || 0) > 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
                             {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Исходящий</span>
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Исходящий</span>
                           <span className="font-mono text-[13px] text-slate-700">{proxyEgressSummary(proxy)}</span>
                         </div>
                         {proxy.ipv6 ? (
-                          <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">IPv6</span>
+                          <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md">IPv6</span>
                         ) : null}
                       </div>
 
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-500">
                         Проверен: {formatWhen(proxy.last_checked_at)}
                       </div>
 
@@ -907,11 +938,12 @@ export function ProxyManagerPage() {
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
                       <button
-                        className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all"
+                        className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         type="button"
+                        disabled={checkingIds.has(String(proxy.id))}
                         onClick={() => checkProxy(proxy.id)}
                       >
-                        Проверить
+                        {checkingIds.has(String(proxy.id)) ? 'Проверяем...' : 'Проверить'}
                       </button>
                       {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
                         <select
@@ -928,7 +960,7 @@ export function ProxyManagerPage() {
                       <button
                         className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
                         type="button"
-                        onClick={() => deleteProxy(proxy.id)}
+                        onClick={() => deleteProxy(proxy)}
                       >
                         Удалить
                       </button>
@@ -1023,22 +1055,11 @@ export function ProxyManagerPage() {
                 <Plus className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-bold text-slate-900">
-                  {formState.id ? 'Редактировать прокси' : 'Добавить свой прокси'}
-                </h2>
+                <h2 className="text-xl font-bold text-slate-900">Добавить свой прокси</h2>
                 <p className="text-sm text-slate-500 font-medium mt-0.5">
-                  {formState.id ? 'Измени параметры своего прокси' : 'Укажи данные SOCKS5 прокси, который будешь использовать для юзербота'}
+                  Укажи данные SOCKS5 прокси, который будешь использовать для юзербота
                 </p>
               </div>
-              {formState.id ? (
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-all"
-                  onClick={resetForm}
-                >
-                  Отмена
-                </button>
-              ) : null}
             </div>
           </div>
 
@@ -1050,7 +1071,7 @@ export function ProxyManagerPage() {
             ) : (
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Название</label>
                   <input
                     className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
                     type="text"
@@ -1061,7 +1082,7 @@ export function ProxyManagerPage() {
                 </div>
 
                 <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-3">Подключение</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
@@ -1089,7 +1110,7 @@ export function ProxyManagerPage() {
                 </div>
 
                 <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Авторизация</div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-3">Авторизация</div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[13px] font-semibold text-slate-700">Username</label>
@@ -1105,7 +1126,8 @@ export function ProxyManagerPage() {
                       <label className="text-[13px] font-semibold text-slate-700">Password</label>
                       <input
                         className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                        type="text"
+                        type="password"
+                        autoComplete="new-password"
                         value={formState.password}
                         onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
                         placeholder="Если нужен"
@@ -1120,7 +1142,7 @@ export function ProxyManagerPage() {
                     onClick={saveProxy}
                     disabled={state.saving}
                   >
-                    {state.saving ? 'Сохраняем...' : (formState.id ? 'Сохранить изменения' : 'Добавить прокси')}
+                    {state.saving ? 'Сохраняем...' : 'Добавить прокси'}
                   </button>
                 </div>
               </div>
@@ -1180,7 +1202,7 @@ export function ProxyManagerPage() {
                 <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mx-auto mb-4">
                   <Globe className="w-8 h-8" />
                 </div>
-                <p className="text-slate-400 font-bold">Прокси с этим фильтром нет</p>
+                <p className="text-slate-500 font-bold">Прокси с этим фильтром нет</p>
               </div>
             ) : (
               filteredProxies.map((proxy) => {
@@ -1191,18 +1213,18 @@ export function ProxyManagerPage() {
                   : mode === 'telegram_only'
                     ? 'Telegram only'
                     : '—';
-                const statusDotColor = badge.className === 'pill pill--ok'
+                const statusDotColor = badge.tone === 'ok'
                   ? '#34d399'
-                  : badge.className === 'pill pill--warning'
+                  : badge.tone === 'warning'
                     ? '#fbbf24'
-                    : badge.className === 'pill pill--danger'
+                    : badge.tone === 'danger'
                       ? '#f87171'
                       : '#cbd5e1';
-                const statusBgColor = badge.className === 'pill pill--ok'
+                const statusBgColor = badge.tone === 'ok'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : badge.className === 'pill pill--warning'
+                  : badge.tone === 'warning'
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : badge.className === 'pill pill--danger'
+                    : badge.tone === 'danger'
                       ? 'bg-red-50 text-red-700 border-red-200'
                       : 'bg-slate-50 text-slate-600 border-slate-200';
 
@@ -1223,26 +1245,26 @@ export function ProxyManagerPage() {
 
                         <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Адрес</span>
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Адрес</span>
                             <span className="font-mono text-[13px] font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{proxy.host}:{proxy.port}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Гео</span>
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Гео</span>
                             <span className="font-medium text-slate-700">{geo}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Нагрузка</span>
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Нагрузка</span>
                             <span className={`font-bold ${Number(proxy.userbot_count || 0) > 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
                               {Number(proxy.userbot_count || 0) > 0 ? `${proxy.userbot_count} userbot` : 'Свободен'}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Исходящий</span>
+                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Исходящий</span>
                             <span className="font-mono text-[13px] text-slate-700">{proxyEgressSummary(proxy)}</span>
                           </div>
                         </div>
 
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-slate-500">
                           Проверен: {formatWhen(proxy.last_checked_at)}
                         </div>
 
@@ -1260,17 +1282,18 @@ export function ProxyManagerPage() {
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <button
-                          className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all"
+                          className="h-9 px-4 rounded-xl bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           type="button"
+                          disabled={checkingIds.has(String(proxy.id))}
                           onClick={() => checkProxy(proxy.id)}
                         >
-                          Проверить
+                          {checkingIds.has(String(proxy.id)) ? 'Проверяем...' : 'Проверить'}
                         </button>
                         {proxy.provision_source !== 'manual_admin' ? (
                             <button
                               className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
                               type="button"
-                              onClick={() => deleteProxy(proxy.id)}
+                              onClick={() => deleteProxy(proxy)}
                             >
                               Удалить
                             </button>
@@ -1290,23 +1313,17 @@ export function ProxyManagerPage() {
           <div className="p-6 md:p-8 border-b border-slate-100">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-                {formState.id ? <Server className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+                <Plus className="w-6 h-6" />
               </div>
               <div className="flex-1">
-                <h2 className="text-xl font-bold text-slate-900">
-                  {formState.id ? 'Редактировать прокси' : 'Поднять серверный прокси'}
-                </h2>
+                <h2 className="text-xl font-bold text-slate-900">Поднять серверный прокси</h2>
                 <p className="text-sm text-slate-500 font-medium mt-0.5">
-                  {formState.id
-                    ? 'Измени параметры прокси или перемести его в другую группу'
-                    : 'Создай новый прокси на сервере или добавь внешний'}
+                  Создай новый прокси на сервере или добавь внешний
                 </p>
               </div>
-              {!formState.id ? (
-                <div className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-semibold">
-                  {suggestedServerProxyName}
-                </div>
-              ) : null}
+              <div className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-sm font-semibold">
+                {suggestedServerProxyName}
+              </div>
             </div>
           </div>
 
@@ -1319,7 +1336,7 @@ export function ProxyManagerPage() {
 
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">Название</label>
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Название</label>
                 <input
                   className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
                   type="text"
@@ -1331,8 +1348,8 @@ export function ProxyManagerPage() {
 
               {state.support?.profile_role === 'admin' ? (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                    {formState.id ? 'Группа' : 'Зачем поднимаешь'}
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
+                    Зачем поднимаешь
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
@@ -1346,9 +1363,7 @@ export function ProxyManagerPage() {
                         value: 'shop_sale',
                         icon: Store,
                         title: 'На продажу в shop',
-                        text: formState.id
-                          ? 'Прокси уйдёт в группу продажи «На продаже».'
-                          : 'Сразу после подъёма встанет на витрину по твоей цене.'
+                        text: 'Сразу после подъёма встанет на витрину по твоей цене.'
                       }
                     ].map((option) => {
                       const selected = formState.inventory_group === option.value;
@@ -1438,7 +1453,7 @@ export function ProxyManagerPage() {
               ) : (
                 <>
                   <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Подключение</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-3">Подключение</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[13px] font-semibold text-slate-700">Host / IP</label>
@@ -1467,7 +1482,7 @@ export function ProxyManagerPage() {
                   </div>
 
                   <div className="rounded-[16px] bg-slate-50/50 p-4 border border-slate-100">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-3">Авторизация</div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500 mb-3">Авторизация</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[13px] font-semibold text-slate-700">Username</label>
@@ -1484,7 +1499,8 @@ export function ProxyManagerPage() {
                         <label className="text-[13px] font-semibold text-slate-700">Password</label>
                         <input
                           className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-white text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10"
-                          type="text"
+                          type="password"
+                          autoComplete="new-password"
                           value={formState.password}
                           onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
                           placeholder="Если нужен"
@@ -1516,22 +1532,12 @@ export function ProxyManagerPage() {
                 disabled={state.saving || showQuotaLock}
               >
                 {state.saving ? 'Сохраняем...'
-                  : formState.id ? 'Сохранить изменения'
                   : serverProxyMode
                     ? (formState.inventory_group === 'shop_sale'
                         ? `Поднять${serverBatchCount > 1 ? ` ${serverBatchCount}` : ''} и выставить на продажу`
                         : serverBatchCount > 1 ? `Поднять ${serverBatchCount} прокси на сервере` : 'Поднять прокси на сервере')
                   : 'Сохранить внешний прокси'}
               </button>
-
-              {formState.id ? (
-                <button
-                  className="h-11 px-5 rounded-[14px] border border-slate-200 text-slate-700 text-[14px] font-bold hover:bg-slate-50 transition"
-                  onClick={resetForm}
-                >
-                  Сбросить форму
-                </button>
-              ) : null}
             </div>
           </div>
         </div>
