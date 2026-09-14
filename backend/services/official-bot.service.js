@@ -1739,98 +1739,78 @@ export class OfficialBotService {
             const referrerProfile = await this.ensureReferralProfile(ownerId, attribution.referrer_tg_user_id);
             if (!referrerProfile) return null;
 
-            const previousBalanceTon = Number(referrerProfile.balance_ton || 0);
-            const updates = {
-                balance_ton: Number((previousBalanceTon + rewardTonAmount).toFixed(6)),
-                total_earned_ton: Number((Number(referrerProfile.total_earned_ton || 0) + rewardTonAmount).toFixed(6))
-            };
-
-            await this.supabase
-                .from('referral_profiles')
-                .update(updates)
-                .eq('id', referrerProfile.id);
-
-            const { data: rewardEvent, error: rewardEventError } = await this.supabase
-                .from('referral_events')
-                .insert({
-                    owner_id: ownerId,
-                    referrer_tg_user_id: String(attribution.referrer_tg_user_id),
-                    referred_tg_user_id: String(invoice.tg_user_id),
-                    invoice_id: invoice.id,
-                    tariff_id: tariff.id,
-                    event_type: 'reward_granted',
-                    status: 'completed',
-                    reward_amount: rewardTonAmount,
-                    reward_currency: 'TON',
-                    sale_original_amount: rewardBaseAmount,
-                    sale_original_currency: currency,
+            // Атомарное ядро начисления (SQL: backend/sql/referral-apply-reward.sql): маркер
+            // reward_granted по unique-индексу -> инкремент баланса -> ledger-обязательства ->
+            // converted_at. Либо все сразу, либо {granted:false} без единой записи — двойное
+            // начисление при гонке live-пути (activateSubscription) и settlement-retry невозможно.
+            const { data: rewardResult, error: rewardError } = await this.supabase.rpc('referral_apply_reward', {
+                p_owner_id: ownerId,
+                p_attribution_id: attribution.id,
+                p_referrer_profile_id: referrerProfile.id,
+                p_referrer_tg_user_id: String(attribution.referrer_tg_user_id),
+                p_referred_tg_user_id: String(invoice.tg_user_id),
+                p_invoice_id: invoice.id,
+                p_tariff_id: tariff.id,
+                p_reserve_account_id: reserve.id || null,
+                p_reserve_coverage_status: reserve.canAcceptNewPartners ? 'covered' : 'admin_debt',
+                p_reward_ton_amount: rewardTonAmount,
+                p_bullgram_fee_ton_amount: bullgramFeeTonAmount,
+                p_bullgram_fee_percent: economics.bullgramFeePercent,
+                p_reward_base_amount: rewardBaseAmount,
+                p_reward_amount: rewardAmount,
+                p_currency: currency,
+                p_client_discount_percent: clientDiscountPercent,
+                p_client_discount_amount: clientDiscountAmount,
+                p_exchange_rate_id: convertedReward.rate?.id || null,
+                p_payload: {
+                    tariff_title: tariff.title,
+                    reward_percent: rewardPercent,
                     client_discount_percent: clientDiscountPercent,
-                    client_discount_original_amount: clientDiscountAmount,
+                    paid_amount: paidAmount,
+                    bullgram_fee_percent: economics.bullgramFeePercent,
+                    bullgram_fee_ton_amount: bullgramFeeTonAmount,
                     reward_original_amount: rewardAmount,
                     reward_original_currency: currency,
                     reward_ton_amount: rewardTonAmount,
-                    bullgram_fee_ton_amount: bullgramFeeTonAmount,
-                    network_fee_ton_amount: 0,
-                    exchange_rate_id: convertedReward.rate?.id || null,
-                    reserve_account_id: reserve.id || null,
-                    reserve_coverage_status: reserve.canAcceptNewPartners ? 'covered' : 'admin_debt',
-                    payload: {
-                        tariff_title: tariff.title,
-                        reward_percent: rewardPercent,
-                        client_discount_percent: clientDiscountPercent,
-                        paid_amount: paidAmount,
-                        bullgram_fee_percent: economics.bullgramFeePercent,
-                        bullgram_fee_ton_amount: bullgramFeeTonAmount,
-                        reward_original_amount: rewardAmount,
-                        reward_original_currency: currency,
-                        reward_ton_amount: rewardTonAmount,
-                        exchange_rate: convertedReward.rate
-                            ? {
-                                id: convertedReward.rate.id || null,
-                                base_currency: convertedReward.rate.base_currency,
-                                quote_currency: convertedReward.rate.quote_currency,
-                                rate: convertedReward.rate.rate,
-                                provider: convertedReward.rate.provider,
-                                fetched_at: convertedReward.rate.fetched_at
-                            }
-                            : null
-                    }
-                })
-                .select('id')
-                .single();
+                    exchange_rate: convertedReward.rate
+                        ? {
+                            id: convertedReward.rate.id || null,
+                            base_currency: convertedReward.rate.base_currency,
+                            quote_currency: convertedReward.rate.quote_currency,
+                            rate: convertedReward.rate.rate,
+                            provider: convertedReward.rate.provider,
+                            fetched_at: convertedReward.rate.fetched_at
+                        }
+                        : null
+                }
+            });
 
-            if (rewardEventError) throw rewardEventError;
+            if (rewardError) throw rewardError;
+
+            if (rewardResult?.granted === false) {
+                // Награда по этому инвойсу уже начислена — тихо выходим, как и раньше при дедупе.
+                if ((rewardResult.reason || '') === 'duplicate') {
+                    // Легаси-хвост старого неатомарного кода: событие награды вставлено, а
+                    // converted_at остался null — settlement-retry будет гонять такую атрибуцию
+                    // вечно. Событие = маркер того, что награда по этому инвойсу реально
+                    // начислена, поэтому закрываем конверсию отдельным безопасным обновлением
+                    // (только если она все еще открыта — параллельный вызов уже мог закрыть).
+                    await this.supabase
+                        .from('referral_attributions')
+                        .update({
+                            converted_at: new Date().toISOString(),
+                            paid_invoice_id: invoice.id
+                        })
+                        .eq('id', attribution.id)
+                        .is('converted_at', null);
+                }
+                return null;
+            }
+
+            const previousBalanceTon = Number(Number(rewardResult?.previous_balance_ton || 0).toFixed(6));
+            const newBalanceTon = Number(Number(rewardResult?.new_balance_ton || 0).toFixed(6));
 
             if (reserve.id) {
-                await this.supabase
-                    .from('referral_reserve_ledger')
-                    .insert([
-                        {
-                            owner_id: ownerId,
-                            reserve_account_id: reserve.id,
-                            entry_type: 'reward_obligation_created',
-                            amount_ton: rewardTonAmount,
-                            direction: 'debit',
-                            related_referral_event_id: rewardEvent.id,
-                            payload: {
-                                invoice_id: invoice.id,
-                                referred_tg_user_id: String(invoice.tg_user_id),
-                                reward_original_amount: rewardAmount,
-                                reward_original_currency: currency,
-                                exchange_rate_id: convertedReward.rate?.id || null
-                            }
-                        },
-                        {
-                            owner_id: ownerId,
-                            reserve_account_id: reserve.id,
-                            entry_type: 'bullgram_fee_created',
-                            amount_ton: bullgramFeeTonAmount,
-                            direction: 'debit',
-                            related_referral_event_id: rewardEvent.id,
-                            payload: { invoice_id: invoice.id, fee_percent: economics.bullgramFeePercent }
-                        }
-                    ]);
-
                 const reconciled = await reconcileReferralReserveAccount(this.supabase, {
                     id: reserve.id,
                     owner_id: ownerId,
@@ -1858,14 +1838,6 @@ export class OfficialBotService {
                 }
             }
 
-            await this.supabase
-                .from('referral_attributions')
-                .update({
-                    converted_at: new Date().toISOString(),
-                    paid_invoice_id: invoice.id
-                })
-                .eq('id', attribution.id);
-
             if (bot?.telegram) {
                 await bot.telegram.sendMessage(
                     attribution.referrer_tg_user_id,
@@ -1874,8 +1846,8 @@ export class OfficialBotService {
             }
 
             const minPayoutTon = Number(economics.minPayoutTon || 5);
-            if (previousBalanceTon < minPayoutTon && Number(updates.balance_ton || 0) >= minPayoutTon) {
-                this.notifyReferralPayoutAvailable(ownerId, attribution.referrer_tg_user_id, updates.balance_ton).catch((notifyError) => {
+            if (previousBalanceTon < minPayoutTon && newBalanceTon >= minPayoutTon) {
+                this.notifyReferralPayoutAvailable(ownerId, attribution.referrer_tg_user_id, newBalanceTon).catch((notifyError) => {
                     console.error('Ошибка уведомления о доступной referral payout:', notifyError.message || notifyError);
                 });
             }
@@ -1886,6 +1858,11 @@ export class OfficialBotService {
                 rewardCurrency: 'TON'
             };
         } catch (error) {
+            // RPC не применен (миграцию прогнали после деплоя) — это сломанное начисление денег,
+            // а не «таблиц еще нет»; кричим в лог, чтобы не потерять под общим «referral_» глушителем.
+            if ((error.message || '').includes('referral_apply_reward')) {
+                console.error('RPC referral_apply_reward не найден — прогони backend/sql/referral-apply-reward.sql до деплоя:', error.message || error);
+            }
             if ((error.message || '').includes('referral_')) return null;
             console.error('Ошибка начисления рефералки:', error);
             return null;

@@ -1177,7 +1177,9 @@ export default function referralRoutes(supabase) {
                     .from('referral_profiles')
                     .select('*')
                     .eq('owner_id', ownerId)
-                    .order('created_at', { ascending: false }),
+                    .order('created_at', { ascending: false })
+                    // Полная пагинация справочников — отдельная задача, пока страховочный лимит.
+                    .limit(500),
                 supabase
                     .from('referral_attributions')
                     .select('*')
@@ -1193,7 +1195,9 @@ export default function referralRoutes(supabase) {
                 supabase
                     .from('referral_partner_payout_methods')
                     .select('*')
-                    .eq('owner_id', ownerId),
+                    .eq('owner_id', ownerId)
+                    // Полная пагинация справочников — отдельная задача, пока страховочный лимит.
+                    .limit(500),
                 supabase
                     .from('referral_partner_payouts')
                     .select('*')

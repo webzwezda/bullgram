@@ -2,7 +2,10 @@ import { OfficialBotService } from './official-bot.service.js';
 import { reconcileReferralReserveAccount, loadReferralReserveState } from './referral-reserve.service.js';
 import { getTonReserveSenderConfig, sendTonFromReserve } from './ton-reserve-sender.service.js';
 
-const ACTIVE_PAYOUT_STATUSES = ['requested', 'queued', 'sending'];
+// Отправлять можно только свежую заявку: 'queued' — легальная очередь batch-джобы.
+// Повтор из 'sending'/'sent' = риск двойной TON-выплаты, поэтому закрыт (P1-2 код-ревью).
+const PAYOUT_SEND_ALLOWED_STATUSES = ['requested', 'queued'];
+const PAYOUT_IN_FLIGHT_STATUSES = ['sending', 'sent'];
 const DEFAULT_MAX_AUTO_PAYOUT_TON = 25;
 
 function envNumber(name, fallback, options = {}) {
@@ -121,7 +124,12 @@ export async function sendReferralPayoutRequest(supabase, ownerId, payoutRequest
 
     if (requestError) throw requestError;
     if (!request) return { error: 'Заявка на выплату не найдена.', status: 404 };
-    if (!ACTIVE_PAYOUT_STATUSES.includes(String(request.status))) {
+    // 'sending' значит, что TON уже мог уйти в сеть, 'sent' — что выплата закрыта.
+    // Повторная отправка из них = двойная выплата, ждем подтверждения/ручной сверки.
+    if (PAYOUT_IN_FLIGHT_STATUSES.includes(String(request.status))) {
+        return { error: 'Выплата уже в пути, дождись подтверждения.', status: 409 };
+    }
+    if (!PAYOUT_SEND_ALLOWED_STATUSES.includes(String(request.status))) {
         return { error: `Заявка уже в статусе ${request.status}.`, status: 400 };
     }
     if (!request.ton_wallet) {
@@ -173,7 +181,9 @@ export async function sendReferralPayoutRequest(supabase, ownerId, payoutRequest
         })
         .eq('id', request.id)
         .eq('owner_id', ownerId)
-        .in('status', ACTIVE_PAYOUT_STATUSES)
+        // Claim только со 'requested'/'queued': параллельный вызов уже перевел заявку в
+        // 'sending' и больше не матчится — второй sendTonFromReserve не начнется.
+        .in('status', PAYOUT_SEND_ALLOWED_STATUSES)
         .select('*')
         .limit(1);
 

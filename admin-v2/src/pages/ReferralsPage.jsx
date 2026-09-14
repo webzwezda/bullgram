@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -790,11 +790,7 @@ export function ReferralsPage() {
 
   async function markPayout(row, currency) {
     const normalizedCurrency = String(currency || '').toUpperCase();
-    const balanceField = normalizedCurrency === 'RUB'
-      ? 'balance_rub'
-      : normalizedCurrency === 'TON'
-        ? 'balance_ton'
-        : 'balance_usdt';
+    const balanceField = normalizedCurrency === 'TON' ? 'balance_ton' : 'balance_usdt';
     const currentBalance = Number(row?.[balanceField] || 0);
     const pendingTon = Number(row?.pending_payout_ton || 0);
     const hasPendingTonRequest = normalizedCurrency === 'TON' && pendingTon > 0 && row?.pending_payout_id;
@@ -978,12 +974,68 @@ export function ReferralsPage() {
     }
   }
 
+  const dmCenterRef = useRef(null);
+
+  // Тот же источник юзербот-данных, что и в центре юзерботов (UserbotCenterSection):
+  // кэш ops-center без live-скана — юзерботы, общие чаты и известные диалоги.
+  async function loadUserbotCenterForDm() {
+    if (dmCenterRef.current) return dmCenterRef.current;
+    try {
+      const data = await apiRequest('/api/userbot/ops-center', { accessToken });
+      const payload = {
+        userbotId: String(data.selected_userbot_id || data.userbots?.[0]?.id || ''),
+        userbotLabel: data.selected_userbot_username || '',
+        groups: (data.groups || []).filter((group) => group.chat_id),
+        knownDialogIds: new Set((data.conversations || []).map((item) => String(item.tg_user_id)))
+      };
+      if (!payload.userbotId) {
+        window.alert('Нет рабочего юзербота, который напишет. Подключи и активируй юзербота в разделе «Юзерботы».');
+        return null;
+      }
+      dmCenterRef.current = payload;
+      return payload;
+    } catch (error) {
+      window.alert(`Юзербот недоступен: ${error.message}`);
+      return null;
+    }
+  }
+
   async function sendMessagePrompt(row) {
     if (!row?.tg_user_id) {
       window.alert('Нет Telegram ID.');
       return;
     }
-    const message = window.prompt(`Сообщение для ${row.display_name || row.username || row.tg_user_id}:`);
+
+    const center = await loadUserbotCenterForDm();
+    if (!center) return;
+
+    const partnerId = String(row.tg_user_id);
+    const partnerName = row.display_name || row.username || partnerId;
+    const userbotName = center.userbotLabel ? `@${center.userbotLabel}` : 'юзербот';
+    const deliveryWarning = 'ЛС через юзербота доходит, только если у него есть общий чат с этим человеком (например, админ-группа воронки). Админ-права юзербота в этой группе повышают шансы доставки.';
+
+    let commonChatId = '';
+    if (center.knownDialogIds.has(partnerId)) {
+      const confirmed = window.confirm(`Написать ${partnerName} через юзербота ${userbotName}?\n\nЮзербот уже знает этого человека — диалог есть.\n${deliveryWarning}`);
+      if (!confirmed) return;
+    } else if (center.groups.length > 0) {
+      const confirmed = window.confirm(`Написать ${partnerName} через юзербота ${userbotName}?\n\nОбщего чата не найдено — доставка не гарантирована.\n${deliveryWarning}\n\nДальше укажи общий чат вручную.`);
+      if (!confirmed) return;
+      const groupList = center.groups.map((group, idx) => `${idx + 1}. ${group.title || group.chat_id}`).join('\n');
+      const rawPick = window.prompt(`Общий чат с этим человеком — номер из списка юзербота:\n${groupList}`, '1');
+      if (rawPick === null) return;
+      const picked = center.groups[Number(String(rawPick).trim()) - 1];
+      if (!picked) {
+        window.alert('Такого номера нет в списке. Отправка отменена.');
+        return;
+      }
+      commonChatId = String(picked.chat_id);
+    } else {
+      window.alert(`Общего чата не найдено — доставка не гарантирована. Юзербот ${userbotName} не знает этого человека и не состоит с ним ни в одном чате — Telegram такое ЛС не пропустит. Добавь юзербота в общую группу с партнёром (админ-права повышают шансы) и попробуй снова.`);
+      return;
+    }
+
+    const message = window.prompt(`Сообщение для ${partnerName}:`);
     if (!message || !message.trim()) return;
 
     try {
@@ -991,8 +1043,11 @@ export function ReferralsPage() {
         accessToken,
         method: 'POST',
         body: {
-          tg_user_id: String(row.tg_user_id),
-          message: message.trim()
+          tg_user_id: partnerId,
+          message: message.trim(),
+          userbot_id: center.userbotId,
+          ...(commonChatId ? { common_chat_id: commonChatId } : { known_dialog: true }),
+          manual_confirmed: true
         }
       });
       window.alert('Отправлено.');
@@ -1316,7 +1371,7 @@ export function ReferralsPage() {
               <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-300">
                 <CreditCard className="w-8 h-8" />
               </div>
-              <p className="text-slate-400 font-bold tracking-tight">Активных заявок на выплату нет</p>
+              <p className="text-slate-500 font-bold tracking-tight">Активных заявок на выплату нет</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1332,6 +1387,7 @@ export function ReferralsPage() {
                 <tbody className="divide-y divide-slate-50">
                   {state.pendingPayouts.map((row) => {
                     const payoutStatus = row.pending_payout_status || 'requested';
+                    const payoutTone = payoutStatusTone(payoutStatus);
                     const canQueue = payoutStatus === 'requested';
                     const canStartSending = ['requested', 'queued'].includes(payoutStatus);
                     const maxAutoPayoutTon = Number(state.support?.automaticPayoutSenderMaxAmountTon || 0);
@@ -1345,7 +1401,7 @@ export function ReferralsPage() {
                       <tr key={row.pending_payout_id || row.tg_user_id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-8 py-6">
                           <div className="font-black text-slate-900 text-base mb-0.5">{row.display_name || row.username || row.tg_user_id}</div>
-                          <div className="text-xs text-slate-400 font-bold">ID: {row.tg_user_id}</div>
+                          <div className="text-xs text-slate-500 font-bold">ID: {row.tg_user_id}</div>
                         </td>
                         <td className="px-8 py-6">
                           <div className="font-mono text-[11px] text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 inline-block mb-2 max-w-[200px] truncate" title={row.pending_payout_wallet || row.payout_wallet}>
@@ -1357,8 +1413,9 @@ export function ReferralsPage() {
                         <td className="px-8 py-6">
                           <div className="text-lg font-black text-blue-600 mb-1">{formatTon(row.pending_payout_ton)}</div>
                           <div className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide border ${
-                            payoutStatusTone(payoutStatus) === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                            payoutStatusTone(payoutStatus) === 'warning' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                            payoutTone === 'sent' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                            payoutTone === 'failed' ? 'bg-red-50 text-red-700 border-red-100' :
+                            payoutTone === 'cancelled' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                             'bg-slate-100 text-slate-600 border-slate-200'
                           }`}>
                             {payoutStatusLabel(payoutStatus)}
@@ -1451,7 +1508,7 @@ export function ReferralsPage() {
             </div>
 
             {filteredPartners.length === 0 ? (
-              <div className="p-20 text-center text-slate-400 font-bold">Никого не найдено</div>
+              <div className="p-20 text-center text-slate-500 font-bold">Никого не найдено</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -1477,7 +1534,7 @@ export function ReferralsPage() {
                             </div>
                             <div className="flex flex-col gap-1">
                               {row.payout_wallet ? (
-                                <div className="text-[10px] font-mono text-slate-400 truncate max-w-[150px]">{row.payout_wallet}</div>
+                                <div className="text-xs font-mono text-slate-500 truncate max-w-[150px]">{row.payout_wallet}</div>
                               ) : (
                                 <div className="text-[10px] font-bold text-slate-300 italic uppercase">Кошелек не указан</div>
                               )}
@@ -1492,13 +1549,13 @@ export function ReferralsPage() {
                             <span className={`inline-flex w-10 h-10 items-center justify-center rounded-2xl font-black text-sm border shadow-sm ${
                               (row.total_referrals || 0) > 0 
                                 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
+                                : 'bg-slate-50 text-slate-500 border-slate-200'
                             }`}>
                               {row.total_referrals || 0}
                             </span>
                           </td>
                           <td className="px-8 py-6">
-                            <div className={`text-base font-black tracking-tight ${hasBalance ? 'text-slate-900' : 'text-slate-400'}`}>
+                            <div className={`text-base font-black tracking-tight ${hasBalance ? 'text-slate-900' : 'text-slate-500'}`}>
                               {row.balance_rub || 0} RUB
                             </div>
                             <div className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">
@@ -1539,7 +1596,7 @@ export function ReferralsPage() {
             </div>
 
             {filteredEvents.length === 0 ? (
-              <div className="p-20 text-center text-slate-400 font-bold">Событий нет</div>
+              <div className="p-20 text-center text-slate-500 font-bold">Событий нет</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -1595,7 +1652,7 @@ export function ReferralsPage() {
             </div>
 
             {filteredLeads.length === 0 ? (
-              <div className="p-20 text-center text-slate-400 font-bold">Лидов не найдено</div>
+              <div className="p-20 text-center text-slate-500 font-bold">Лидов не найдено</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">

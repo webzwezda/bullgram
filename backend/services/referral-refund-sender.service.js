@@ -122,6 +122,45 @@ export async function sendReferralReserveRefund(supabase, ownerId, options = {})
         throw error;
     }
 
+    // Деньги уже ушли в сеть — сначала терминальный статус + tx hash (кнопки возврата скрыты,
+    // повторная отправка невозможна), и только потом ledger-проводка и сверка (P1-2 код-ревью).
+    const completedPayload = {
+        ...(sendingAccount.payload || {}),
+        refund_sent: {
+            amount_ton: amountTon,
+            refund_wallet: refundWallet,
+            refund_memo: refundMemo,
+            chain_tx_hash: transfer.transferRef,
+            automatic_sender: true,
+            sent_at: transfer.sentAt
+        },
+        refund_auto_sender: {
+            ...(sendingAccount.payload?.refund_auto_sender || {}),
+            completed_at: new Date().toISOString(),
+            wallet_address: transfer.walletAddress,
+            seqno: transfer.seqno,
+            transfer_ref: transfer.transferRef
+        }
+    };
+
+    const { error: completedError } = await supabase
+        .from('referral_reserve_accounts')
+        .update({
+            status: 'refund_completed',
+            payload: completedPayload,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', account.id)
+        .eq('owner_id', ownerId)
+        .eq('status', 'refund_requested');
+
+    if (completedError) {
+        // Статус обязателен (иначе возможен повторный возврат), но деньги уже не вернуть —
+        // не роняем запрос, а кричим в логи для ручной сверки.
+        console.error('TON-возврат отправлен, но терминальный статус не сохранился:', completedError.message || completedError);
+    }
+
+    // Ledger идемпотентен по chain_tx_unique: при повторе с тем же tx получим 23505 и не задвоим.
     const { error: ledgerError } = await supabase
         .from('referral_reserve_ledger')
         .insert({
@@ -143,52 +182,42 @@ export async function sendReferralReserveRefund(supabase, ownerId, options = {})
             }
         });
 
-    if (ledgerError) {
-        await leaveRefundWithError(supabase, sendingAccount, ledgerError, transfer);
-        throw ledgerError;
+    if (ledgerError && ledgerError.code !== '23505' && !(ledgerError.message || '').includes('duplicate key')) {
+        // Статус уже терминальный, кнопки скрыты — падение ledger не возвращает refund_requested.
+        // Недостающую проводку закроет следующая сверка, ошибка остается в логах.
+        console.error('Ошибка записи admin_refund_sent в referral_reserve_ledger (статус уже терминальный):', ledgerError.message || ledgerError);
     }
 
-    const nextPayload = {
-        ...(sendingAccount.payload || {}),
-        refund_sent: {
-            amount_ton: amountTon,
-            refund_wallet: refundWallet,
-            refund_memo: refundMemo,
-            chain_tx_hash: transfer.transferRef,
-            automatic_sender: true,
-            sent_at: transfer.sentAt
-        },
-        refund_auto_sender: {
-            ...(sendingAccount.payload?.refund_auto_sender || {}),
-            completed_at: new Date().toISOString(),
-            wallet_address: transfer.walletAddress,
-            seqno: transfer.seqno,
-            transfer_ref: transfer.transferRef
-        }
-    };
-
-    const synced = await reconcileReferralReserveAccount(supabase, {
-        ...sendingAccount,
-        status: 'refund_completed',
-        payload: nextPayload
-    });
-
-    const { data: updatedRows, error: updateError } = await supabase
-        .from('referral_reserve_accounts')
-        .update({
+    let finalReserve = { ...sendingAccount, status: 'refund_completed', payload: completedPayload };
+    try {
+        const synced = await reconcileReferralReserveAccount(supabase, {
+            ...sendingAccount,
             status: 'refund_completed',
-            payload: nextPayload,
-            available_reserve_ton: synced.reserveAccount.available_reserve_ton,
-            reserved_obligations_ton: synced.reserveAccount.reserved_obligations_ton,
-            admin_debt_ton: synced.reserveAccount.admin_debt_ton,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', reserve.id)
-        .eq('owner_id', ownerId)
-        .select('*')
-        .limit(1);
+            payload: completedPayload
+        });
 
-    if (updateError) throw updateError;
+        const { data: updatedRows, error: updateError } = await supabase
+            .from('referral_reserve_accounts')
+            .update({
+                status: 'refund_completed',
+                payload: completedPayload,
+                available_reserve_ton: synced.reserveAccount.available_reserve_ton,
+                reserved_obligations_ton: synced.reserveAccount.reserved_obligations_ton,
+                admin_debt_ton: synced.reserveAccount.admin_debt_ton,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', reserve.id)
+            .eq('owner_id', ownerId)
+            .select('*')
+            .limit(1);
+
+        if (updateError) throw updateError;
+        finalReserve = updatedRows?.[0] || synced.reserveAccount;
+    } catch (reconcileError) {
+        // Возврат уже отправлен и зафиксирован — ошибка сверки не должна выглядеть как
+        // неудачная выплата и возвращать заявку в refund_requested.
+        console.error('Ошибка сверки резерва после auto refund (статус уже терминальный):', reconcileError.message || reconcileError);
+    }
 
     officialBotService.notifyReferralReserveRefund(
         ownerId,
@@ -202,7 +231,7 @@ export async function sendReferralReserveRefund(supabase, ownerId, options = {})
         success: true,
         amount_ton: amountTon,
         chain_tx_hash: transfer.transferRef,
-        reserve: updatedRows?.[0] || synced.reserveAccount
+        reserve: finalReserve
     };
 }
 

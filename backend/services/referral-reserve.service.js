@@ -76,30 +76,30 @@ function deriveStatus(account, computed) {
   return 'active';
 }
 
-function summarizeLedger(rows = []) {
-  return rows.reduce((acc, row) => {
-    const amount = numberOrZero(row.amount_ton);
-    const type = String(row.entry_type || '');
-    const direction = String(row.direction || '');
+// Суммы ledger считает Postgres (RPC referral_reserve_summary, SQL: backend/sql/referral-reserve-summary.sql)
+// одним проходом по всем строкам без лимитов — раньше summarizeLedger суммировал ограниченные
+// выборки (500/2000 строк) и резерв-математика молча врала при переполнении лимита.
+// Возвращает те же агрегаты, что раньше считал summarizeLedger (camelCase), + firstDepositAt как Date.
+async function loadLedgerSummary(supabase, ownerId) {
+  const { data, error } = await supabase.rpc('referral_reserve_summary', { p_owner_id: ownerId });
+  if (error) throw error;
 
-    if (type === 'deposit_confirmed' && direction === 'credit') {
-      acc.depositTon += amount;
-      const createdAt = validDateOrNull(row.created_at);
-      if (createdAt && (!acc.firstDepositAt || createdAt < acc.firstDepositAt)) {
-        acc.firstDepositAt = createdAt;
-      }
-    }
-    if (type === 'partner_payout_sent' && direction === 'debit') acc.partnerPayoutTon += amount;
-    if (type === 'admin_refund_sent' && direction === 'debit') acc.adminRefundTon += amount;
-    if (type === 'admin_refund_requested') acc.adminRefundRequestedTon += amount;
-    if (type === 'admin_refund_cancelled') acc.adminRefundCancelledTon += amount;
-    if (type === 'reward_obligation_created') acc.rewardObligationTon += amount;
-    if (type === 'bullgram_fee_created') acc.bullgramFeeTon += amount;
-    if (type === 'network_fee_reserved' && direction === 'credit') acc.networkFeeTon -= amount;
-    if (type === 'network_fee_reserved' && direction !== 'credit') acc.networkFeeTon += amount;
+  const summary = data || {};
+  return {
+    depositTon: numberOrZero(summary.deposit_ton),
+    partnerPayoutTon: numberOrZero(summary.partner_payout_ton),
+    adminRefundTon: numberOrZero(summary.admin_refund_ton),
+    adminRefundRequestedTon: numberOrZero(summary.admin_refund_requested_ton),
+    adminRefundCancelledTon: numberOrZero(summary.admin_refund_cancelled_ton),
+    rewardObligationTon: numberOrZero(summary.reward_obligation_ton),
+    bullgramFeeTon: numberOrZero(summary.bullgram_fee_ton),
+    networkFeeTon: numberOrZero(summary.network_fee_ton),
+    firstDepositAt: summary.first_deposit_at ? validDateOrNull(summary.first_deposit_at) : null
+  };
+}
 
-    return acc;
-  }, {
+function emptyLedgerSummary() {
+  return {
     depositTon: 0,
     partnerPayoutTon: 0,
     adminRefundTon: 0,
@@ -109,7 +109,7 @@ function summarizeLedger(rows = []) {
     bullgramFeeTon: 0,
     networkFeeTon: 0,
     firstDepositAt: null
-  });
+  };
 }
 
 export function getReferralEconomics() {
@@ -123,17 +123,9 @@ export function getReferralEconomics() {
 }
 
 export async function reconcileReferralReserveAccount(supabase, reserveAccount, options = {}) {
-  const { data: ledgerRows, error: ledgerError } = await supabase
-    .from('referral_reserve_ledger')
-    .select('entry_type, amount_ton, direction, created_at')
-    .eq('owner_id', reserveAccount.owner_id)
-    .eq('reserve_account_id', reserveAccount.id)
-    .limit(2000);
-
-  if (ledgerError) throw ledgerError;
+  const ledgerSummary = await loadLedgerSummary(supabase, reserveAccount.owner_id);
 
   const now = new Date();
-  const ledgerSummary = summarizeLedger(ledgerRows || []);
   const minimumDepositTon = numberOrZero(reserveAccount.minimum_deposit_ton || DEFAULT_MINIMUM_DEPOSIT_TON);
   const totalDepositedTon = roundTon(Math.max(numberOrZero(reserveAccount.total_deposited_ton), ledgerSummary.depositTon));
   const bullgramFeeTon = roundTon(Math.max(numberOrZero(reserveAccount.bullgram_fee_accrued_ton), ledgerSummary.bullgramFeeTon));
@@ -327,19 +319,10 @@ export async function loadReferralReserveState(supabase, ownerId, options = {}) 
   }
 
   const reserveAccountId = account?.id || null;
-  const { data: ledgerRows, error: ledgerError } = reserveAccountId
-    ? await supabase
-      .from('referral_reserve_ledger')
-      .select('entry_type, amount_ton, direction, created_at')
-      .eq('owner_id', ownerId)
-      .eq('reserve_account_id', reserveAccountId)
-      .order('created_at', { ascending: false })
-      .limit(500)
-    : { data: [], error: null };
-
-  if (ledgerError) throw ledgerError;
-
-  const ledgerSummary = summarizeLedger(ledgerRows || []);
+  // Без резерв-аккаунта ledger-строк у владельца нет (каскадный FK) — нули, как раньше с пустой выборкой.
+  const ledgerSummary = reserveAccountId
+    ? await loadLedgerSummary(supabase, ownerId)
+    : emptyLedgerSummary();
   const accountTotalDepositedTon = numberOrZero(account?.total_deposited_ton);
   const totalDepositedTon = roundTon(Math.max(accountTotalDepositedTon, ledgerSummary.depositTon));
   const bullgramFeeTon = roundTon(Math.max(numberOrZero(account?.bullgram_fee_accrued_ton), ledgerSummary.bullgramFeeTon));
