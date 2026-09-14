@@ -435,7 +435,7 @@ export function RetentionPage() {
   const selectedBotLabel = selectedBot?.custom_label || (selectedBot?.tg_username ? `@${selectedBot.tg_username}` : 'Без имени');
 
   const statCards = [
-    { label: 'Отправлено за 7 дней', value: stats.total, color: 'text-slate-900', Icon: Send },
+    { label: 'Отправлено за 7 дней', value: stats.total, color: stats.total > 0 ? 'text-slate-900' : 'text-slate-500', Icon: Send },
     { label: 'Ботом', value: stats.byBot, color: stats.byBot > 0 ? 'text-emerald-600' : 'text-slate-500', Icon: Bot },
     { label: 'Userbot\'ом', value: stats.byUserbot, color: stats.byUserbot > 0 ? 'text-blue-600' : 'text-slate-500', Icon: Rocket },
     { label: 'Сбой / пропуск', value: stats.failed, color: stats.failed > 0 ? 'text-rose-600' : 'text-slate-500', Icon: AlertCircle }
