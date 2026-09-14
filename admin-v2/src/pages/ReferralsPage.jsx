@@ -153,7 +153,7 @@ function TableEmptyState({ icon: Icon, title, hint }) {
         <Icon className="w-8 h-8" />
       </div>
       <p className="text-slate-500 font-bold tracking-tight">{title}</p>
-      {hint && <p className="text-sm text-slate-400 font-medium max-w-sm">{hint}</p>}
+      {hint && <p className="text-sm text-slate-500 font-medium max-w-sm">{hint}</p>}
     </div>
   );
 }
@@ -1111,7 +1111,7 @@ export function ReferralsPage() {
                 onChange={(event) => setPayoutForm((prev) => ({ ...prev, amount: event.target.value }))}
               />
               {hasPendingTonRequest && !payoutFormErrors.amount && (
-                <span className="block text-xs font-medium text-slate-500">Активная заявка: закрой ровно {pendingTon} TON.</span>
+                <span className="block text-xs font-medium text-slate-500">Активная заявка: закрой ровно <strong className="whitespace-nowrap">{pendingTon} TON.</strong></span>
               )}
               {payoutFormErrors.amount && <span className="block text-xs font-bold text-rose-600">{payoutFormErrors.amount}</span>}
             </label>
@@ -1767,7 +1767,7 @@ export function ReferralsPage() {
               <TableEmptyState
                 icon={Users}
                 title="Никого не найдено"
-                hint="Партнёры появятся здесь после первой конвертации атрибуции."
+                hint="Партнёры появятся здесь после первой оплаты по реферальной ссылке."
               />
             ) : (
               <div className="overflow-x-auto">
@@ -1782,7 +1782,8 @@ export function ReferralsPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {filteredPartners.map((row) => {
-                      const hasBalance = Number(row.balance_rub) > 0 || Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
+                      // RUB не выплачивается: кнопка выплаты только при реальных TON/USDT-балансах
+                      const hasBalance = Number(row.balance_ton) > 0 || Number(row.balance_usdt) > 0;
                       const panel = payoutPanelForRow(row);
                       return (
                         <Fragment key={row.tg_user_id}>
