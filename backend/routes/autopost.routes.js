@@ -26,16 +26,38 @@ export default function autopostRoutes(supabase) {
     // Все эндпоинты требуют авторизацию
     router.use(authenticateUser);
 
-    // Список ботов
+    // Список ботов. Секреты не отдаём: bot_token маскируется (token_masked),
+    // invite_secret заменяется на boolean-флаг. PATCH-флоу токен из списка
+    // не требует — сервер читает его из БД сам (startBot по bot_token из строки).
+    function maskBotToken(token) {
+        const t = String(token || '');
+        const idx = t.indexOf(':');
+        // Короткий/битый секрет не раскрываем даже хвостом
+        if (idx === -1 || idx < 4 || t.length < idx + 7) return '••••';
+        return `${t.slice(0, idx)}:…${t.slice(-3)}`;
+    }
+
+    // Единая санитизация бот-строки для ответов API: секреты не покидают сервер
+    function sanitizeBot(bot) {
+        if (!bot) return bot;
+        const { bot_token, invite_secret, ...rest } = bot;
+        return { ...rest, token_masked: maskBotToken(bot_token), has_invite_secret: Boolean(invite_secret) };
+    }
+
     router.get('/bots', async (req, res) => {
         try {
             const { data, error } = await supabase
                 .from('autopost_bots')
-                .select('*')
+                .select('id, owner_id, username, is_active, posts_per_day, posting_times, admin_tg_ids, active_modes, bot_token, invite_secret, created_at')
                 .eq('owner_id', req.user.id)
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            res.json({ bots: data });
+            const bots = (data || []).map(({ bot_token, invite_secret, ...rest }) => ({
+                ...rest,
+                token_masked: maskBotToken(bot_token),
+                has_invite_secret: Boolean(invite_secret)
+            }));
+            res.json({ bots });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -59,7 +81,7 @@ export default function autopostRoutes(supabase) {
                 botToken: botToken.trim(),
                 adminTgId: adminTgId || undefined
             });
-            res.json({ bot });
+            res.json({ bot: sanitizeBot(bot) });
         } catch (err) {
             console.error('[Autopost] Ошибка init:', err.message);
             if (err.message.includes('401') || err.message.includes('unauthorized')) {
@@ -111,7 +133,7 @@ export default function autopostRoutes(supabase) {
                 service.startBot(bot.id, bot.bot_token);
             }
             
-            res.json({ bot });
+            res.json({ bot: sanitizeBot(bot) });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -443,13 +465,14 @@ export default function autopostRoutes(supabase) {
             const { status } = req.query;
             let query = supabase
                 .from('autopost_items')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .eq('bot_id', req.params.botId)
-                .order('sort_order', { ascending: true });
+                .order('sort_order', { ascending: true })
+                .limit(500);
             if (status) query = query.eq('status', status);
-            const { data, error } = await query;
+            const { data, error, count } = await query;
             if (error) throw error;
-            res.json({ items: data });
+            res.json({ items: data, total: count ?? (data || []).length });
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
@@ -573,6 +596,10 @@ export default function autopostRoutes(supabase) {
             if (existing.owner_id !== req.user.id) {
                 return res.status(403).json({ error: 'Нет доступа' });
             }
+            // Останавливаем polling ДО удаления строки — иначе Telegraf-инстанс
+            // остаётся в реестре bot-lifecycle и отвечает юзерам ошибками до рестарта.
+            // stopBot идемпотентен: нет бота в Map — просто return.
+            service.stopBot(req.params.botId);
             const { error } = await supabase
                 .from('autopost_bots')
                 .delete()

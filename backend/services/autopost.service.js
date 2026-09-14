@@ -156,17 +156,6 @@ export class AutopostService {
         return data || [];
     }
 
-    async addItem(botId, { fileId, fileUniqueId, caption }) {
-        // Legacy compatibility
-        return this.addPostItem({
-            botId,
-            targetChannelId: null,
-            fileIds: fileId ? [fileId] : [],
-            caption,
-            status: 'queued'
-        });
-    }
-
     async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, suggestedByTgId = null }) {
         // Resolve target channels: array takes precedence over scalar; both can be passed.
         // Multi-target fan-out: one logical post → N item rows grouped by post_batch_id.
@@ -224,35 +213,6 @@ export class AutopostService {
 
     async scheduleNextBatch(botId, channelId = null, isSuggestion = null) {
         return scheduleNextBatchImpl(this.supabase, botId, channelId, isSuggestion);
-    }
-
-    async getDueItems() {
-        const now = new Date().toISOString();
-        const { data, error } = await this.supabase
-            .from('autopost_items')
-            .select('*, autopost_bots!inner(*)')
-            .eq('status', 'scheduled')
-            .lte('scheduled_at', now)
-            .order('scheduled_at', { ascending: true });
-        if (error) throw error;
-        return data || [];
-    }
-
-    async markPosted(itemId) {
-        await this.supabase
-            .from('autopost_items')
-            .update({ status: 'posted', posted_at: new Date().toISOString() })
-            .eq('id', itemId);
-    }
-
-    async markFailed(itemId, errorMessage = null) {
-        await this.supabase
-            .from('autopost_items')
-            .update({
-                status: 'failed',
-                error_message: errorMessage ? String(errorMessage).slice(0, 1000) : null
-            })
-            .eq('id', itemId);
     }
 
     async getStats(botId) {
@@ -324,7 +284,7 @@ export class AutopostService {
      * Боты не получают собственные message_reaction апдейты → это НЕ засчитывается
      * в reaction_total, счётчик остаётся чистым по реальным юзерам.
      */
-    async publishItem(bot, item, channel, botUsername) {
+    async publishItem(bot, item, channel, botUsername, { claimed = false } = {}) {
         const messageIds = await sendItemToChannel(bot.telegram, item.target_channel_id, item, {
             channel,
             botUsername
@@ -352,7 +312,11 @@ export class AutopostService {
             }
         }
 
-        await this.supabase
+        // claimed-путь (scheduler) финализирует только item, который ещё в 'sending':
+        // если статус уже изменился (recovery забрал, ручная правка) — апдейт не пройдёт
+        // и повторная отправка следующим тиком исключена. Ручные пути (post_now, MCP,
+        // предложка) публикуют из 'queued'/'editing' без claim — им guard не нужен.
+        const postedUpdate = this.supabase
             .from('autopost_items')
             .update({
                 status: 'posted',
@@ -361,6 +325,10 @@ export class AutopostService {
                 error_message: null
             })
             .eq('id', item.id);
+        const { error: postedError } = await (claimed
+            ? postedUpdate.eq('status', 'sending')
+            : postedUpdate);
+        if (postedError) console.error('[Autopost] mark posted failed:', postedError.message);
 
         return messageIds || [];
     }

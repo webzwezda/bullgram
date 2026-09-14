@@ -44,9 +44,12 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             .from('autopost_items')
             .select('*')
             .eq('id', itemId)
-            .single();
+            .eq('bot_id', botId)
+            .maybeSingle();
 
         if (!item) return ctx.answerCbQuery('Пост не найден');
+        if (item.status === 'posted') return ctx.answerCbQuery('Уже опубликован');
+        if (item.status === 'sending') return ctx.answerCbQuery('Уже отправляется');
 
         try {
             const { data: channel } = await supabase
@@ -92,7 +95,8 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             .from('autopost_items')
             .select('id, post_batch_id')
             .eq('id', itemId)
-            .single();
+            .eq('bot_id', botId)
+            .maybeSingle();
         if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
 
         const batchId = item.post_batch_id;
@@ -159,7 +163,8 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             .from('autopost_items')
             .select('*')
             .eq('id', itemId)
-            .single();
+            .eq('bot_id', botId)
+            .maybeSingle();
 
         if (!item) return ctx.answerCbQuery('Пост не найден');
 
@@ -199,7 +204,8 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
             .from('autopost_items')
             .select('post_batch_id')
             .eq('id', itemId)
-            .single();
+            .eq('bot_id', botId)
+            .maybeSingle();
         if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
 
         // Actionable siblings: queued/scheduled/editing. Posted/failed не трогаем —

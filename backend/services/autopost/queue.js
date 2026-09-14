@@ -152,7 +152,7 @@ export async function collapseQueue(supabase, botId, channelId) {
 export async function getStats(supabase, botId) {
     const { data, error } = await supabase.rpc('autopost_stats', { p_bot_id: botId });
     if (error) {
-        const counts = { queued: 0, scheduled: 0, posted: 0, failed: 0, suggested: 0, editing: 0 };
+        const counts = { queued: 0, scheduled: 0, sending: 0, posted: 0, failed: 0, suggested: 0, editing: 0 };
         const { data: rows } = await supabase
             .from('autopost_items')
             .select('status')
@@ -171,9 +171,17 @@ export async function getStats(supabase, botId) {
         return { ...counts, nextScheduledAt: nextScheduled?.scheduled_at || null };
     }
     const row = data?.[0] || {};
+    // RPC autopost_stats не знает про 'sending' — досчитываем его отдельно,
+    // иначе зависший in-flight item невидим ни в одной корзине
+    const { count: sendingCount } = await supabase
+        .from('autopost_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('bot_id', botId)
+        .eq('status', 'sending');
     return {
         queued: Number(row.queued || 0),
         scheduled: Number(row.scheduled || 0),
+        sending: Number(sendingCount || 0),
         posted: Number(row.posted || 0),
         failed: Number(row.failed || 0),
         suggested: Number(row.suggested || 0),

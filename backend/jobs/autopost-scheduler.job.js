@@ -4,6 +4,7 @@
  */
 
 import { log } from '../services/autopost/logger.js';
+import { getFloodWaitSeconds } from '../services/autopost/sender.js';
 
 export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopostService) => {
     // In-flight mutex по botId. Без него setInterval мог стартовать новый тик
@@ -110,7 +111,28 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
                     .eq('autopost_bot_id', item.bot_id)
                     .maybeSingle();
 
-                await autopostService.publishItem(bot, item, channel, botData?.username);
+                // Claim/lease (код-ревью P1): атомарно забираем item условным UPDATE.
+                // 0 строк → item уже забран другим воркером или изменён — пропускаем.
+                // Это закрывает дубли mark-after-send при краше/pm2 reload: item в
+                // 'sending' не матчится повторной выборкой 'scheduled'. updated_at
+                // бампится триггером set_updated_at — это timestamp лизинга для
+                // recovery зависших 'sending' (autopost-stuck-editing job).
+                const { data: claimed, error: claimErr } = await supabase
+                    .from('autopost_items')
+                    .update({ status: 'sending' })
+                    .eq('id', item.id)
+                    .eq('status', 'scheduled')
+                    .select('id');
+                if (claimErr) {
+                    log.error('scheduler', 'item_claim_failed', { botId: botConfig.id, itemId: item.id, err: claimErr.message });
+                    continue;
+                }
+                if (!claimed || claimed.length === 0) {
+                    log.warn('scheduler', 'item_claim_lost', { botId: botConfig.id, itemId: item.id });
+                    continue;
+                }
+
+                await autopostService.publishItem(bot, item, channel, botData?.username, { claimed: true });
 
                 log.info('scheduler', 'post_published', {
                     botId: botConfig.id,
@@ -119,16 +141,44 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
                     isSuggestion: Boolean(item.is_suggestion)
                 });
             } catch (sendErr) {
+                // FLOOD_WAIT (429) — не ошибка публикации: возвращаем item в
+                // 'scheduled' с scheduled_at = now + retry_after (минимум 5с),
+                // Telegram сам скажет, сколько ждать. Остальные ошибки — 'failed'.
+                const floodSeconds = getFloodWaitSeconds(sendErr);
+                if (floodSeconds > 0) {
+                    const retryAt = new Date(Date.now() + Math.max(floodSeconds, 5) * 1000).toISOString();
+                    log.warn('scheduler', 'publish_flood_wait', {
+                        botId: botConfig.id,
+                        itemId: item.id,
+                        channelId: String(item.target_channel_id),
+                        retryAfterSeconds: floodSeconds,
+                        retryAt
+                    });
+                    const { error: floodErr } = await supabase
+                        .from('autopost_items')
+                        .update({ status: 'scheduled', scheduled_at: retryAt })
+                        .eq('id', item.id)
+                        .eq('status', 'sending');
+                    if (floodErr) {
+                        log.error('scheduler', 'flood_reschedule_failed', { botId: botConfig.id, itemId: item.id, err: floodErr.message });
+                    }
+                    continue;
+                }
+
                 log.error('scheduler', 'publish_failed', {
                     botId: botConfig.id,
                     itemId: item.id,
                     channelId: String(item.target_channel_id),
                     err: sendErr.message
                 });
-                await supabase
+                const { error: failErr } = await supabase
                     .from('autopost_items')
                     .update({ status: 'failed', error_message: String(sendErr.message || '').slice(0, 1000) })
-                    .eq('id', item.id);
+                    .eq('id', item.id)
+                    .eq('status', 'sending');
+                if (failErr) {
+                    log.error('scheduler', 'mark_failed_failed', { botId: botConfig.id, itemId: item.id, err: failErr.message });
+                }
             }
         }
     }

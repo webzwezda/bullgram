@@ -31,6 +31,39 @@ function pickFileId(item) {
 }
 
 /**
+ * Fix 5 (код-ревью): распознаёт FLOOD_WAIT (429) от Telegram.
+ * Telegraf кладёт retry_after в err.response.parameters.retry_after.
+ * Возвращает количество секунд ожидания или 0, если ошибка не flood.
+ */
+export function getFloodWaitSeconds(err) {
+    if (!err) return 0;
+    const retryAfter = Number(err?.response?.parameters?.retry_after);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter;
+    const code = err?.response?.error_code ?? err?.code;
+    const msg = String(err?.message || '');
+    if (Number(code) === 429 || /too many requests|flood/i.test(msg)) {
+        const m = msg.match(/retry after (\d+)/i);
+        return m ? Number(m[1]) : 5;
+    }
+    return 0;
+}
+
+/**
+ * Fix 3 (код-ревью): Bot API не принимает reply_markup в sendMediaGroup, поэтому
+ * инлайн-кнопки канала навешиваются вторым шагом — editMessageReplyMarkup на
+ * первом сообщении альбома (кнопка растягивается на весь альбом). Ошибка edit
+ * не роняет отправку: пост уже в канале, логируем и возвращаем messageIds.
+ */
+async function applyAlbumReplyMarkup(telegramClient, targetChatId, messageIds, replyMarkup) {
+    if (!replyMarkup || !Array.isArray(messageIds) || messageIds.length === 0) return;
+    try {
+        await telegramClient.editMessageReplyMarkup(targetChatId, messageIds[0], undefined, replyMarkup);
+    } catch (e) {
+        console.error('[Autopost sender] Не удалось навесить кнопки на альбом (non-fatal):', e.message);
+    }
+}
+
+/**
  * Bug 8: Telegram выбрасывает 400 "can't parse entities" при любом незакрытом
  * Markdown-символе (_ * [ ` в подписях с URL вида https://t.me/_user).
  * Пробуем Markdown, при ошибке парса ретраим без parse_mode.
@@ -68,7 +101,9 @@ export async function sendItemToChannel(telegramClient, targetChatId, item, opti
 
         try {
             const messages = await telegramClient.sendMediaGroup(targetChatId, media);
-            return Array.isArray(messages) ? messages.map(m => m.message_id) : [];
+            const ids = Array.isArray(messages) ? messages.map(m => m.message_id) : [];
+            await applyAlbumReplyMarkup(telegramClient, targetChatId, ids, replyMarkup);
+            return ids;
         } catch (err) {
             const msg = String(err?.message || '');
             const isParseError = /can't parse entities|parse mode/i.test(msg) || err?.code === 400;
@@ -82,7 +117,9 @@ export async function sendItemToChannel(telegramClient, targetChatId, item, opti
                 return m;
             });
             const messages = await telegramClient.sendMediaGroup(targetChatId, fallbackMedia);
-            return Array.isArray(messages) ? messages.map(m => m.message_id) : [];
+            const ids = Array.isArray(messages) ? messages.map(m => m.message_id) : [];
+            await applyAlbumReplyMarkup(telegramClient, targetChatId, ids, replyMarkup);
+            return ids;
         }
     }
 

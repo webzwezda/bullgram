@@ -58,6 +58,12 @@ export function QuickStartPage() {
   // Зеркало existingBots для эффекта выбора бота: эффект должен срабатывать
   // только при смене выбранного бота, а не на каждое обновление списка.
   const existingBotsRef = useRef([]);
+  // Защита от гонки (прецедент CustomersPage): ответ loadChannels/loadAdmins,
+  // пришедший после переключения на другого бота, не должен перезаписать стейт
+  // чужими каналами/админами.
+  const loadChannelsReqIdRef = useRef(0);
+  const loadAdminsReqIdRef = useRef(0);
+  const confirmCancelRef = useRef(null);
   const [createdBot, setCreatedBot] = useState(null);
   const [channels, setChannels] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -136,11 +142,13 @@ export function QuickStartPage() {
 
     loadChannels(bot.id);
     loadAdmins(bot.id);
-  }, [selectedBotId]);
+  }, [selectedBotId, accessToken]);
 
   async function loadChannels(botId, { merge = false } = {}) {
+    const reqId = ++loadChannelsReqIdRef.current;
     try {
       const data = await fetchChannels(botId, accessToken);
+      if (reqId !== loadChannelsReqIdRef.current) return;
       if (!data.channels) return;
       setChannels(data.channels);
       if (merge) {
@@ -149,6 +157,7 @@ export function QuickStartPage() {
         applyChannelsToConfig(data.channels);
       }
     } catch (e) {
+      if (reqId !== loadChannelsReqIdRef.current) return;
       console.error(e);
     }
   }
@@ -200,13 +209,16 @@ export function QuickStartPage() {
   }
 
   async function loadAdmins(botId) {
+    const reqId = ++loadAdminsReqIdRef.current;
     try {
       const data = await fetchAdmins(botId, accessToken);
+      if (reqId !== loadAdminsReqIdRef.current) return;
       if (data.admin_tg_ids) {
         setAdmins(data.admin_tg_ids);
         setInviteLink(data.invite_link || '');
       }
     } catch (e) {
+      if (reqId !== loadAdminsReqIdRef.current) return;
       console.error(e);
     }
   }
@@ -319,9 +331,10 @@ export function QuickStartPage() {
     setConfirmState(null);
   }
 
-  // Esc закрывает диалог как отмену
+  // Esc закрывает диалог как отмену; заодно авто-фокус на «Отмена» при открытии
   useEffect(() => {
     if (!confirmState) return;
+    confirmCancelRef.current?.focus();
     const onKey = (e) => {
       if (e.key === 'Escape') closeConfirm(false);
     };
@@ -344,6 +357,7 @@ export function QuickStartPage() {
   async function doUnlinkChannel(channelId) {
     const cfg = channelConfigs[channelId];
     if (!cfg.id || !createdBot?.id) return;
+    setUnlinkingChannel(prev => ({ ...prev, [channelId]: true }));
     try {
       await unlinkChannel(createdBot.id, cfg.id, accessToken);
       toast.success(`Канал "${cfg.title}" отвязан`);
@@ -1024,7 +1038,7 @@ export function QuickStartPage() {
                           <Clock className="w-3.5 h-3.5 text-indigo-500" /> Время публикаций (основная очередь)
                         </label>
                         <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                          Настройте точное время автоматической выкладки постов из очереди.
+                          Посты публикуются автоматически — расписание с точностью до ±5 минут.
                         </span>
                       </div>
 
@@ -1113,7 +1127,7 @@ export function QuickStartPage() {
                       {/* Кнопка предложки под постами */}
                       <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
                         <div className="space-y-1">
-                          <label className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
+                          <label htmlFor={`suggest-btn-toggle-${tab}`} className="text-sm font-bold text-slate-800 block">Кнопка «Предложить новость» под постами</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                             Добавляет под каждым публикуемым постом кнопку со ссылкой на бота для сбора предложений.
                           </span>
@@ -1121,6 +1135,7 @@ export function QuickStartPage() {
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
                           <input
                             type="checkbox"
+                            id={`suggest-btn-toggle-${tab}`}
                             className="sr-only peer"
                             checked={config.suggestButtonEnabled || false}
                             onChange={(e) => setChannelConfigs(prev => ({
@@ -1162,7 +1177,7 @@ export function QuickStartPage() {
                       {/* Автопринятие предложений */}
                       <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-start justify-between gap-4 transition-all">
                         <div className="space-y-1">
-                          <label className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
+                          <label htmlFor={`auto-accept-toggle-${tab}`} className="text-sm font-bold text-slate-800 block">Автопринятие предложений</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                             Если включено, контент от пользователей в предложке будет автоматически публиковаться без ручной модерации.
                           </span>
@@ -1170,6 +1185,7 @@ export function QuickStartPage() {
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
                           <input
                             type="checkbox"
+                            id={`auto-accept-toggle-${tab}`}
                             className="sr-only peer"
                             checked={config.autoAccept}
                             onChange={(e) => setChannelConfigs(prev => ({
@@ -1230,7 +1246,7 @@ export function QuickStartPage() {
                     <div className="bg-slate-50/50 hover:bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3 transition-all">
                       <div className="flex items-start justify-between gap-4">
                         <div className="space-y-1">
-                          <label className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
+                          <label htmlFor={`seed-reaction-toggle-${tab}`} className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
                             Бот будет ставить выбранные реакции под каждый новый пост сразу после публикации (до 3 шт.).
                           </span>
@@ -1238,6 +1254,7 @@ export function QuickStartPage() {
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
                           <input
                             type="checkbox"
+                            id={`seed-reaction-toggle-${tab}`}
                             className="sr-only peer"
                             checked={Boolean(config.seedReactionEmoji)}
                             onChange={(e) => setChannelConfigs(prev => ({
@@ -1399,7 +1416,12 @@ export function QuickStartPage() {
                         {inviteRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
-                    <Button onClick={handleCopyInvite} className="h-11 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-0">
+                    <Button
+                      type="button"
+                      onClick={handleCopyInvite}
+                      aria-label="Скопировать инвайт-ссылку"
+                      className="h-11 px-4 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-0"
+                    >
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1490,6 +1512,7 @@ export function QuickStartPage() {
           <div
             role="dialog"
             aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
             className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1498,12 +1521,13 @@ export function QuickStartPage() {
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-bold text-slate-900">{confirmState.title}</h3>
+                <h3 id="confirm-dialog-title" className="text-lg font-bold text-slate-900">{confirmState.title}</h3>
                 <p className="text-sm text-slate-500 mt-1 leading-relaxed">{confirmState.description}</p>
               </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button
+                ref={confirmCancelRef}
                 variant="outline"
                 className="h-10 px-4 rounded-xl font-semibold border-slate-200 text-slate-700"
                 onClick={() => closeConfirm(false)}
