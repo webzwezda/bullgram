@@ -62,7 +62,7 @@ export function paymentBadge(payment_status) {
     case 'unpaid_lead':
       return { text: 'Жал, не оплатил', cls: 'bg-slate-100 text-slate-600' };
     default:
-      return { text: 'Нет истории', cls: 'bg-slate-100 text-slate-500' };
+      return { text: 'Нет истории', cls: 'bg-slate-100 text-slate-600' };
   }
 }
 

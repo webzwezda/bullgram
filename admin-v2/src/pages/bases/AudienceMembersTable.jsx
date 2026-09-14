@@ -18,7 +18,7 @@ function ChannelList({ cov, presentNow }) {
         </div>
       ) : null}
       {!presentNow && cov.presentTotal > 0 ? (
-        <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">
+        <div className="text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-0.5">
           сейчас не синкается
         </div>
       ) : null}
@@ -44,12 +44,14 @@ function AudienceMemberRow({ member, onCopyToBase, disabled }) {
         <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-black ${badge.cls}`}>
           {badge.text}
         </span>
-        <div className="text-xs text-slate-500 font-medium mt-1">
-          {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
-        </div>
+        {(member.active_subscription_count || 0) > 0 || (member.expired_subscription_count || 0) > 0 ? (
+          <div className="text-xs text-slate-500 font-medium mt-1">
+            {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
+          </div>
+        ) : null}
       </td>
       <td className="px-4 py-3">
-        <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
+        <div className="text-xs font-semibold text-slate-600 mb-1">
           {coverageLabel(member)}
         </div>
         <ChannelList cov={cov} presentNow={member.present_now} />

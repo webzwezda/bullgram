@@ -283,9 +283,9 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
 
   const statCards = [
     { label: 'Людей в базе', value: memberSummary.total || 0, color: 'text-slate-900' },
-    { label: 'Активно платят', value: memberSummary.active_paid || 0, color: (memberSummary.active_paid || 0) > 0 ? 'text-emerald-600' : 'text-slate-400' },
-    { label: 'Без подписки', value: memberSummary.free_riders || 0, color: (memberSummary.free_riders || 0) > 0 ? 'text-rose-600' : 'text-slate-400' },
-    { label: 'Неполное покрытие', value: coverageStats.partial, color: coverageStats.partial > 0 ? 'text-amber-600' : 'text-slate-400' }
+    { label: 'Активно платят', value: memberSummary.active_paid || 0, color: (memberSummary.active_paid || 0) > 0 ? 'text-emerald-600' : 'text-slate-500' },
+    { label: 'Без подписки', value: memberSummary.free_riders || 0, color: (memberSummary.free_riders || 0) > 0 ? 'text-rose-600' : 'text-slate-500' },
+    { label: 'Неполное покрытие', value: coverageStats.partial, color: coverageStats.partial > 0 ? 'text-amber-600' : 'text-slate-500' }
   ];
 
   return (
@@ -341,7 +341,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled }) {
                 >
                   <div className="text-sm font-black text-slate-900 truncate mb-1">{ch.title}</div>
                   <div className="text-xs text-slate-500 font-medium">
-                    {hasAudience ? `${count} людей` : 'База не создана'}
+                    {hasAudience ? `${count} чел.` : 'База не создана'}
                   </div>
                 </button>
               );

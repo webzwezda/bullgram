@@ -220,9 +220,9 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
   if (!base) return null;
 
   return (
-    <div className="p-6 md:p-8 border-t border-slate-100">
+    <div className="p-6 md:p-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">
+        <h3 className="text-sm font-black uppercase tracking-widest text-slate-700">
           {base.name}
         </h3>
         <span className="text-xs font-bold text-slate-500">
@@ -308,12 +308,14 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
                       <span className={`inline-flex px-2 py-1 rounded-md text-[11px] font-black ${badge.cls}`}>
                         {badge.text}
                       </span>
-                      <div className="text-xs text-slate-500 font-medium mt-1">
-                        {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
-                      </div>
+                      {(member.active_subscription_count || 0) > 0 || (member.expired_subscription_count || 0) > 0 ? (
+                        <div className="text-xs text-slate-500 font-medium mt-1">
+                          {member.active_subscription_count || 0} активн. · {member.expired_subscription_count || 0} истекш.
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-xs font-black uppercase tracking-wider text-slate-500 mb-1">
+                      <div className="text-xs font-semibold text-slate-600 mb-1">
                         {coverageLabel(member)}
                       </div>
                       {cov.presentTotal > 0 ? (
@@ -329,7 +331,7 @@ export function ClientBaseEditor({ accessToken, base, refreshTick = 0, onDeleted
                         </div>
                       ) : null}
                       {!member.present_now && cov.presentTotal > 0 ? (
-                        <div className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-0.5">
+                        <div className="text-[10px] text-amber-700 font-bold uppercase tracking-wider mt-0.5">
                           сейчас не синкается
                         </div>
                       ) : null}

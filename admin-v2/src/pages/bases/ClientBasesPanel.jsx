@@ -180,11 +180,15 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
 
   function pushToBuffer(member) {
     const tgId = String(member.tg_user_id);
+    // Дубликат проверяем по текущему стейту ВНЕ setState-апдейтера:
+    // тост из апдейтера задваивается в StrictMode, а дубликат не должен получать success.
+    if (buffer.some((entry) => String(entry.tg_user_id) === tgId)) {
+      toast(`Уже в корзине`, { duration: 2000 });
+      return;
+    }
     setBuffer((prev) => {
-      if (prev.some((entry) => String(entry.tg_user_id) === tgId)) {
-        toast(`Уже в корзине`, { duration: 2000 });
-        return prev;
-      }
+      // тихая защита от гонки, тостов внутри апдейтера больше нет
+      if (prev.some((entry) => String(entry.tg_user_id) === tgId)) return prev;
       return [
         ...prev,
         {
@@ -204,31 +208,34 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
   }
 
   function addBufferFromCsv(entries) {
-    setBuffer((prev) => {
-      const existing = new Set(prev.map((e) => String(e.tg_user_id)));
-      const additions = [];
-      let duplicates = 0;
-      for (const entry of entries) {
-        const key = String(entry.tg_user_id);
-        if (existing.has(key)) {
-          duplicates += 1;
-          continue;
-        }
-        existing.add(key);
-        additions.push({
-          tempId: generateTempId(),
-          tg_user_id: key,
-          username: entry.username || '',
-          display_name: entry.display_name || '',
-          source: 'manual'
-        });
+    // Тот же принцип: считаем добавления вне апдейтера, тосты — только снаружи.
+    const existing = new Set(buffer.map((e) => String(e.tg_user_id)));
+    const additions = [];
+    let duplicates = 0;
+    for (const entry of entries) {
+      const key = String(entry.tg_user_id);
+      if (existing.has(key)) {
+        duplicates += 1;
+        continue;
       }
-      if (duplicates > 0) {
-        toast(`Дубликатов в корзине пропущено: ${duplicates}`, { duration: 2500 });
-      }
+      existing.add(key);
+      additions.push({
+        tempId: generateTempId(),
+        tg_user_id: key,
+        username: entry.username || '',
+        display_name: entry.display_name || '',
+        source: 'manual'
+      });
+    }
+    if (additions.length > 0) {
+      setBuffer((prev) => [...prev, ...additions]);
+    }
+    if (duplicates > 0) {
+      toast(`Дубликатов в корзине пропущено: ${duplicates}`, { duration: 2500 });
+    }
+    if (additions.length > 0) {
       toast.success(`Добавлено в корзину: ${additions.length}`);
-      return [...prev, ...additions];
-    });
+    }
   }
 
   async function addMemberToExisting(member) {
@@ -414,10 +421,10 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
       <div className="p-6 md:p-8 border-b border-slate-100">
         <div className="flex items-center gap-2 mb-3">
           <Database className="w-5 h-5 text-slate-500" />
-          <h2 className="text-sm font-black uppercase tracking-widest text-slate-500">Базы клиентов</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-slate-700">Базы клиентов</h2>
         </div>
         <p className="text-sm text-slate-600 max-w-2xl">
-          Кураторские списки для точечных рассылок и дожима. Собирайте из аудитории бота кнопкой «В базу» сверху или вбивайте руки.
+          Кураторские списки для точечных рассылок и дожима. Собирайте из аудитории бота кнопкой «В базу» сверху или забивайте ID руками.
         </p>
       </div>
 
@@ -512,7 +519,7 @@ export function ClientBasesPanel({ accessToken, activeBaseId, onChangeActiveBase
           />
         ) : null
       ) : (
-        <div className="p-6 md:p-8 border-t border-slate-100">
+        <div className="p-6 md:p-8">
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Корзина</h3>
             <span className="text-xs font-bold text-slate-500">{buffer.length} в корзине</span>
