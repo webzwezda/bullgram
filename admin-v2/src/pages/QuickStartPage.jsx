@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -639,7 +639,7 @@ export function QuickStartPage() {
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 {selectedBotId === 'new' ? (
                   <p className="text-sm font-medium text-slate-500 mt-0.5">
-                    Подключите Telegram-бота для автоматического постинга и приема предложений
+                    Подключите Telegram-бота для автоматического постинга и приёма предложений
                   </p>
                 ) : null}
               </div>
@@ -658,19 +658,21 @@ export function QuickStartPage() {
                 {botPaused ? 'Возобновить' : 'Пауза'}
               </Button>
             ) : null}
-            <Select value={selectedBotId} onValueChange={setSelectedBotId}>
-              <SelectTrigger className="h-10 w-[200px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="new" className="rounded-lg"><Plus className="h-4 w-4 inline mr-1 -mt-0.5" />Подключить нового</SelectItem>
-                {existingBots.map((b) => (
-                  <SelectItem key={b.id} value={b.id} className="rounded-lg">
-                    @{b.username || 'Telegram Bot'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {existingBots.length > 0 ? (
+              <Select value={selectedBotId} onValueChange={setSelectedBotId}>
+                <SelectTrigger className="h-10 w-[240px] bg-white rounded-xl border-slate-200 shadow-sm text-sm font-semibold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="new" className="rounded-lg"><Plus className="h-4 w-4 inline mr-1 -mt-0.5" />Подключить нового</SelectItem>
+                  {existingBots.map((b) => (
+                    <SelectItem key={b.id} value={b.id} className="rounded-lg">
+                      @{b.username || 'Telegram Bot'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
             </div>
           </div>
         </div>
@@ -705,7 +707,7 @@ export function QuickStartPage() {
                 <Button
                   onClick={handleConnect}
                   disabled={!botToken.trim() || initing}
-                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 disabled:opacity-50 w-full md:w-auto"
+                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold disabled:shadow-none disabled:bg-slate-100 disabled:text-slate-400 w-full md:w-auto"
                 >
                   {initing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Инициализация...</> : 'Подключить'}
                 </Button>
@@ -739,7 +741,7 @@ export function QuickStartPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-bold text-slate-900">Что это за бот</h3>
-                <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                <p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-[70ch]">
                   Telegram-бот, который ведёт ваши каналы за вас: сам публикует посты по расписанию,
                   принимает предложения от подписчиков и ставит реакции на новые посты.
                   Один бот может вести несколько каналов — всё управление здесь, на этом экране.
@@ -757,17 +759,27 @@ export function QuickStartPage() {
         </Card>
       )}
 
-      {/* Заметка про API — показываем, когда в селекторе выбрано «создать нового» */}
+      {/* Заметка про API — показываем, когда в селекторе выбрано «создать нового».
+          Свёрнута по умолчанию: инженерный контент не должен стоять между админом и токеном */}
       {selectedBotId === 'new' && (
-        <Card className="p-0 gap-0 border-0 shadow-sm ring-1 ring-slate-200/60 bg-white overflow-hidden rounded-2xl">
-          <div className="p-5 sm:p-6 space-y-3">
+        <details className="group rounded-2xl shadow-sm ring-1 ring-slate-200/60 bg-white overflow-hidden">
+          <summary className="p-5 sm:p-6 cursor-pointer select-none flex items-center gap-3 list-none [&::-webkit-details-marker]:hidden">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+              <Code className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base font-bold text-slate-900">Интеграции и API</h3>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-[70ch]">
+                Публикация постов из n8n, Zapier или скриптов — для автоматизации. Разверните, если нужно.
+              </p>
+            </div>
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 space-y-3 border-t border-slate-100">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                <Code className="w-4 h-4" />
-              </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Публикация через API</h3>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed max-w-[70ch]">
                   Из n8n, Zapier или скриптов. Кнопки и автореакция наследуются из настроек канала.
                   Нужен токен <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">brapi_</code> со скоупом <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">api:autopost:write</code>.
                 </p>
@@ -779,7 +791,7 @@ export function QuickStartPage() {
               value={AUTOPOST_POST_CURL}
             />
 
-            <p className="text-xs text-slate-500 leading-relaxed">
+            <p className="text-xs text-slate-500 leading-relaxed max-w-[70ch]">
               Чтобы узнать <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">bot_id</code> и <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">target_channel_ids</code>:{' '}
               <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots</code>, затем{' '}
               <code className="font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">GET /autopost/bots/{'{bot_id}'}/channels</code>.
@@ -800,7 +812,7 @@ export function QuickStartPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </details>
       )}
 
       {/* Onboarding State: Ожидание администратора */}
