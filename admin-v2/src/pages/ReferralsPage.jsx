@@ -361,7 +361,7 @@ function DepositTransferBox({ reserve }) {
         </div>
         
         <p className="text-base text-slate-600 font-medium mb-8 leading-relaxed max-w-md">
-          Переведи ровно с этим memo. QR ставит сумму <strong className="text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}.</strong>
+          Переведи ровно с этим memo. QR ставит сумму <strong className="whitespace-nowrap text-slate-900 font-bold bg-slate-200/50 px-1.5 py-0.5 rounded-md">{suggestedAmount > 0 ? formatTon(suggestedAmount) : formatTon(reserve?.minimumDepositTon || 100)}.</strong>
         </p>
 
         <div className="mb-6 flex w-full flex-col gap-2">
