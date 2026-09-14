@@ -112,7 +112,7 @@ export function AdminLotsSection({ accessToken, types, title, emptyText, onChang
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
-                  <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+                  <span className="inline-flex items-center gap-1 font-bold text-slate-900">
                     <Tag className="w-3.5 h-3.5 text-slate-400" /> TON {Number(item.price_ton || 0)}
                   </span>
                   <span className="inline-flex items-center gap-1">

@@ -28,7 +28,7 @@ function proxyBatchTitleFor(count) {
 }
 
 function formatWhen(value) {
-  if (!value) return 'Еще не проверялся';
+  if (!value) return 'Ещё не проверялся';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Дата неизвестна';
   return date.toLocaleString('ru-RU');
@@ -43,6 +43,14 @@ function countryFlag(countryCode) {
     .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
     .join('');
 }
+
+// Цвет статус-точки по тону бейджа (hex — точки рисуются inline style'ем)
+const STATUS_DOT_HEX = {
+  ok: '#34d399',
+  warning: '#fbbf24',
+  danger: '#f87171',
+  default: '#cbd5e1'
+};
 
 function proxyHealthMode(proxy) {
   if (proxy?.status === 'checking') return 'checking';
@@ -108,6 +116,8 @@ export function ProxyManagerPage() {
     inventory_group: 'self_use'
   });
   const [checkingIds, setCheckingIds] = useState(() => new Set());
+  // Инлайн-подтверждение удаления: id прокси, у которого кнопка уже «Точно удалить?»
+  const [armedDeleteId, setArmedDeleteId] = useState('');
   const [state, setState] = useState({
     loading: true,
     refreshing: false,
@@ -495,12 +505,12 @@ export function ProxyManagerPage() {
     }
   }
 
+  // Инлайн-подтверждение вместо window.confirm: деструктивное действие
+  // говорит голосом приложения (первый клик — «Точно удалить?», второй — удаление)
   async function deleteProxy(proxy) {
     const userbotCount = Number(proxy.userbot_count || 0);
-    const confirmText = userbotCount > 0
-      ? `На этом прокси висит юзербот — удаление будет отклонено. Сначала перепривяжи аккаунт. Всё равно попробовать?`
-      : 'Удалить прокси? Если он уже привязан к юзерботу, сначала перепривяжи аккаунт.';
-    if (!window.confirm(confirmText)) {
+    if (userbotCount > 0) {
+      toast.error('На этом прокси висит юзербот — сначала перепривяжи аккаунт.');
       return;
     }
 
@@ -517,8 +527,11 @@ export function ProxyManagerPage() {
         support: data.support || prev.support,
         updatedAt: new Date().toISOString()
       }));
+      toast.success(`Прокси "${proxy.name}" удален.`);
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setArmedDeleteId('');
     }
   }
 
@@ -730,7 +743,7 @@ export function ProxyManagerPage() {
                   type="button"
                   className={`px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg border transition-all ${
                     saleStatusFilter === value
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
+                      ? 'bg-violet-600 border-violet-600 text-white'
                       : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
                   }`}
                   onClick={() => {
@@ -745,11 +758,11 @@ export function ProxyManagerPage() {
           ) : null}
 
           {selectedLane === 'on-sale' && isAdmin && saleProxies.length > 0 ? (
-            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 px-4 py-3">
+            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-violet-50/60 border border-violet-100 px-4 py-3">
               <label className="flex items-center gap-2 text-[13px] font-bold text-slate-700 cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 accent-indigo-600"
+                  className="w-4 h-4 accent-violet-600"
                   checked={allSaleSelected}
                   onChange={toggleAllSaleSelection}
                 />
@@ -761,7 +774,7 @@ export function ProxyManagerPage() {
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-[12px] font-bold text-slate-500">Цена/шт</span>
                 <input
-                  className="h-9 w-24 px-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 outline-none focus:border-indigo-400"
+                  className="h-9 w-24 px-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 outline-none focus:border-violet-400"
                   type="number"
                   min="0"
                   step="0.01"
@@ -771,7 +784,7 @@ export function ProxyManagerPage() {
                 />
                 <button
                   type="button"
-                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white text-[13px] font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 inline-flex items-center gap-2"
+                  className="h-9 px-4 rounded-xl bg-violet-600 text-white text-[13px] font-bold hover:bg-violet-700 transition-all disabled:opacity-50 inline-flex items-center gap-2"
                   disabled={listingSale || !selectedSaleCount || !(Number(salePriceTon) > 0)}
                   onClick={listSelectedForSale}
                 >
@@ -835,13 +848,6 @@ export function ProxyManagerPage() {
                 : mode === 'telegram_only'
                   ? 'Telegram only'
                   : '—';
-              const statusDotColor = badge.tone === 'ok'
-                ? 'bg-emerald-400'
-                : badge.tone === 'warning'
-                  ? 'bg-amber-400'
-                  : badge.tone === 'danger'
-                    ? 'bg-red-400'
-                    : 'bg-slate-300';
               const statusBgColor = badge.tone === 'ok'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : badge.tone === 'warning'
@@ -862,14 +868,14 @@ export function ProxyManagerPage() {
                         {selectedLane === 'on-sale' && isAdmin && shopItems.length === 0 ? (
                           <input
                             type="checkbox"
-                            className="w-4 h-4 accent-indigo-600 shrink-0"
+                            className="w-4 h-4 accent-violet-600 shrink-0"
                             checked={saleSelection.has(String(proxy.id))}
                             disabled={proxyIsBusy}
                             title={proxyIsBusy ? 'На прокси живой юзербот — выставить на витрину нельзя' : undefined}
                             onChange={() => toggleSaleSelection(proxy.id)}
                           />
                         ) : null}
-                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDotColor === 'bg-emerald-400' ? '#34d399' : statusDotColor === 'bg-amber-400' ? '#fbbf24' : statusDotColor === 'bg-red-400' ? '#f87171' : '#cbd5e1' }} />
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_DOT_HEX[badge.tone] || STATUS_DOT_HEX.default }} />
                         <div className="text-[15px] font-bold text-slate-900">{proxy.name}</div>
                         <span className={`inline-flex px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide border ${statusBgColor}`}>
                           {badge.text}
@@ -921,11 +927,11 @@ export function ProxyManagerPage() {
                       </div>
 
                       <div className="text-xs text-slate-500">
-                        Проверен: {formatWhen(proxy.last_checked_at)}
+                        Проверен: <span className="text-slate-700">{formatWhen(proxy.last_checked_at)}</span>
                       </div>
 
                       {proxy.last_check_error ? (
-                        <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                        <div className="text-xs text-red-700 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
                           {proxy.last_check_error}
                         </div>
                       ) : null}
@@ -948,6 +954,8 @@ export function ProxyManagerPage() {
                       {state.support?.profile_role === 'admin' && proxy.provision_source === 'manual_admin' ? (
                         <select
                           className="h-9 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 bg-white"
+                          aria-label={`Группа прокси «${proxy.name}»`}
+                          title="Переносит прокси в другую группу сразу"
                           value={proxy.inventory_group || 'shop_sale'}
                           disabled={state.movingProxyId === String(proxy.id)}
                           onChange={(event) => moveProxyToGroup(proxy, event.target.value)}
@@ -958,11 +966,15 @@ export function ProxyManagerPage() {
                         </select>
                       ) : null}
                       <button
-                        className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
+                        className={`h-9 px-4 rounded-xl text-[13px] font-bold transition-all ${
+                          armedDeleteId === String(proxy.id)
+                            ? 'bg-red-600 text-white hover:bg-red-700'
+                            : 'border border-red-200 text-red-600 hover:bg-red-50'
+                        }`}
                         type="button"
-                        onClick={() => deleteProxy(proxy)}
+                        onClick={() => (armedDeleteId === String(proxy.id) ? deleteProxy(proxy) : setArmedDeleteId(String(proxy.id)))}
                       >
-                        Удалить
+                        {armedDeleteId === String(proxy.id) ? 'Точно удалить?' : 'Удалить'}
                       </button>
                     </div>
                   </div>
@@ -1071,7 +1083,7 @@ export function ProxyManagerPage() {
             ) : (
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Название</label>
+                  <label className="text-[13px] font-semibold text-slate-700">Название</label>
                   <input
                     className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
                     type="text"
@@ -1119,7 +1131,7 @@ export function ProxyManagerPage() {
                         type="text"
                         value={formState.username}
                         onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-                        placeholder="Если нужен"
+                        placeholder="Необязательно"
                       />
                     </div>
                     <div className="space-y-1.5">
@@ -1130,7 +1142,7 @@ export function ProxyManagerPage() {
                         autoComplete="new-password"
                         value={formState.password}
                         onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                        placeholder="Если нужен"
+                        placeholder="Необязательно"
                       />
                     </div>
                   </div>
@@ -1213,13 +1225,6 @@ export function ProxyManagerPage() {
                   : mode === 'telegram_only'
                     ? 'Telegram only'
                     : '—';
-                const statusDotColor = badge.tone === 'ok'
-                  ? '#34d399'
-                  : badge.tone === 'warning'
-                    ? '#fbbf24'
-                    : badge.tone === 'danger'
-                      ? '#f87171'
-                      : '#cbd5e1';
                 const statusBgColor = badge.tone === 'ok'
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : badge.tone === 'warning'
@@ -1233,7 +1238,7 @@ export function ProxyManagerPage() {
                     <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0 space-y-2.5">
                         <div className="flex items-center gap-2.5 flex-wrap">
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusDotColor }} />
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_DOT_HEX[badge.tone] || STATUS_DOT_HEX.default }} />
                           <div className="text-[15px] font-bold text-slate-900">{proxy.name}</div>
                           <span className={`inline-flex px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wide border ${statusBgColor}`}>
                             {badge.text}
@@ -1265,11 +1270,11 @@ export function ProxyManagerPage() {
                         </div>
 
                         <div className="text-xs text-slate-500">
-                          Проверен: {formatWhen(proxy.last_checked_at)}
+                          Проверен: <span className="text-slate-700">{formatWhen(proxy.last_checked_at)}</span>
                         </div>
 
                         {proxy.last_check_error ? (
-                          <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                          <div className="text-xs text-red-700 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
                             {proxy.last_check_error}
                           </div>
                         ) : null}
@@ -1291,11 +1296,15 @@ export function ProxyManagerPage() {
                         </button>
                         {proxy.provision_source !== 'manual_admin' ? (
                             <button
-                              className="h-9 px-4 rounded-xl border border-red-200 text-red-600 text-[13px] font-bold hover:bg-red-50 transition-all"
+                              className={`h-9 px-4 rounded-xl text-[13px] font-bold transition-all ${
+                                armedDeleteId === String(proxy.id)
+                                  ? 'bg-red-600 text-white hover:bg-red-700'
+                                  : 'border border-red-200 text-red-600 hover:bg-red-50'
+                              }`}
                               type="button"
-                              onClick={() => deleteProxy(proxy)}
+                              onClick={() => (armedDeleteId === String(proxy.id) ? deleteProxy(proxy) : setArmedDeleteId(String(proxy.id)))}
                             >
-                              Удалить
+                              {armedDeleteId === String(proxy.id) ? 'Точно удалить?' : 'Удалить'}
                             </button>
                         ) : null}
                       </div>
@@ -1336,7 +1345,7 @@ export function ProxyManagerPage() {
 
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">Название</label>
+                <label className="text-[13px] font-semibold text-slate-700">Название</label>
                 <input
                   className="h-11 w-full px-4 rounded-[14px] border border-slate-200 bg-slate-50 text-[14px] font-medium text-slate-950 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-500/10 shadow-sm"
                   type="text"
@@ -1348,9 +1357,7 @@ export function ProxyManagerPage() {
 
               {state.support?.profile_role === 'admin' ? (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-500">
-                    Зачем поднимаешь
-                  </label>
+                  <label className="text-[13px] font-semibold text-slate-700">Зачем поднимаешь</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                       {
@@ -1375,17 +1382,17 @@ export function ProxyManagerPage() {
                           onClick={() => setFormState((prev) => ({ ...prev, inventory_group: option.value }))}
                           className={`relative text-left p-4 rounded-[16px] border-2 transition-all ${
                             selected
-                              ? 'border-indigo-500 bg-indigo-50/60'
+                              ? 'border-violet-500 bg-violet-50/60'
                               : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
                         >
                           {selected ? (
-                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-violet-600 flex items-center justify-center">
                               <Check className="w-3 h-3 text-white" strokeWidth={3} />
                             </span>
                           ) : null}
                           <div className="flex items-center gap-2.5 mb-1.5">
-                            <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${selected ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                            <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${selected ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-500'}`}>
                               <Icon className="w-[18px] h-[18px]" />
                             </span>
                             <span className="text-[14px] font-bold text-slate-900">{option.title}</span>
@@ -1491,7 +1498,7 @@ export function ProxyManagerPage() {
                           type="text"
                           value={formState.username}
                           onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-                          placeholder="Если нужен"
+                          placeholder="Необязательно"
                         />
                       </div>
 
@@ -1503,7 +1510,7 @@ export function ProxyManagerPage() {
                           autoComplete="new-password"
                           value={formState.password}
                           onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-                          placeholder="Если нужен"
+                          placeholder="Необязательно"
                         />
                       </div>
                     </div>
