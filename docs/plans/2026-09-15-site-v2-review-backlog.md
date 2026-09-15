@@ -63,7 +63,7 @@ meta description/OG; tailwind.css токен-слой мёртв (teal/cream) �
 | # | Поверхность | Статус |
 |---|---|---|
 | 1 | `/` HomePage + POST /api/billing/checkout/ton-connect | **done (ACCEPT)** |
-| 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | in progress |
+| 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | **done (ACCEPT)** |
 | 3 | `/create` + `/created/:id` + public-invoices бэкенд | pending |
 | 4 | `/access-request` + access-requests бэкенд | pending |
 | 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/LoginCard/UserProfileCard, api client, config, index.html (шрифты/OG) | pending |
@@ -114,3 +114,58 @@ proof-бит в нижней трети героя; порядок буллит�
 
 Коммиты волны: 179cb1d (бэклог), e00c24c (фиксы кода), + правки критики и hash-скролл
 (2 коммита), + финальные P3.
+
+### Волна 2 — `/pay/:purchaseId` (универсальная оплата) — ЗАКРЫТА, дизайн-критика ACCEPT
+
+Код-ревью: P0 нет, 5 P1. Ядро денег подтверждено: exact-memo + value ≥ expected против
+реального TonAPI, CAS claimPaid, UUID-иды, кошельки не перепутаны (биллинг → платформа,
+public invoices → кошелёк продавца).
+
+Моя находка сверх ревью (P0-уровня): `markExpired` безусловно писал `updated_at`, а в
+таблицах `invoices` и `public_invoices` этой колонки НЕТ (проверено по information_schema)
+→ все 3 вызова падали с PGRST204 (500 на путях истечения). Фикс кодом: колонка убрана из
+дефолт-патча (миграция не нужна — колонку никто не читает).
+
+P1-фиксы:
+1. Shop: просроченная покупка с пришедшими деньгами dead-end'илась в UI (бэкенд умеет
+   воскрешать) → кнопка «Проверить оплату» на ExpiredView для shop-kind.
+2. Billing: expiry проверялся ДО скана цепи → поздняя оплата не активировала Pro при
+   деньгах на платформенном кошельке. Переставлено по образцу shop: скан → claim →
+   только потом expired; оживление expired→pending CAS'ом перед claim.
+3. Billing success: вечный reload каждые 1.5с → заменён ограниченным поллингом
+   fulfillment_status (10 попыток, потом стабильный PaidView).
+4. Rate-limit по спуфабельному XFF + непачевые Map'ы → req.ip (trust proxy 1) + prune
+   в 4 route-файлах.
+5. GRAM→TON на /pay и в ManualTonPaymentCard (в момент отправки денег валюта звалась
+   двумя именами).
+
+P2: expired-ответ verify считался «ждём блокчейн» (65с ложного ожидания) → мгновенный
+throw «Счёт истёк»; stale purchaseKind при SPA-навигации /pay/a → /pay/b (reset по
+purchaseId); Math.random в shop-memo → crypto.randomBytes; студия: slate-500/11px,
+rose-700, таймер виден на мобиле; secret_payload не выбирается для неоплаченных счетов;
+ложное «paid» при гонке expiry заменено ре-фетчем статуса.
+
+Дизайн-критика (2 раунда): REJECT(таб «Перевод вручную» не был снят — клик по протухшему
+снапшоту; + ловушка: безымянный адрес покупателя под кнопкой читался как получатель;
+sky-600 кнопка 4.09:1 ниже AA) → фикс: клик по свежему снапшоту, метка «Ваш кошелёк:»,
+sky-700, таймер с title/aria и красной эскалацией <5 мин, строка «Memo уйдёт…», ты-голос,
+фолбэк копирования (execCommand) для вебвью Telegram. ACCEPT (оставленные P2 — «sprint
+polish»: контраст таб-лейблов, наезд метки КОШЕЛЁК, вес memo-варнинга) → дожаты тем же
+днём (sky-700/slate-600 табы, 72px метка, amber-50/900 memo-блок над кнопкой, sky-700
+кнопка проверки). Урок: vite build НЕ ловит неимпортированный компонент (AlertTriangle)
+— это runtime-краш; поймал живой проверкой вкладки после деплоя.
+
+Рантайм (прод, реальный Chrome): markExpired-фикс доказан живым curl'ом — истёкший
+«аудит»-счёт на verify-public даёт 200 {status:'expired'} (до фикса 500); public-view
+не отдаёт secret_payload на pending; оба таба /pay отрендерены и сняты, тест-данные
+«аудит» удалены. Компьютеру-запись экрана потеряла TCC-грант посреди сессии — оконный
+screencapture продолжал работать (владельцу: если попросят доступ к экрану — это
+ZCode Computer Use, решить самостоятельно).
+
+Отложено: фиат-якорь к сумме; units диплинков кошельков (Tonkeeper nano vs Trust decimal)
+нужна проверка на реальных устройствах; role="tab" без tabpanel/клавиатуры; ?kind= подсказка
+в pay_url против 4x перебора; PUBLIC_SITE_URL=.io в .env.example; executor onTransactionSent
+fired до подтверждения транзакции (косметика).
+
+Коммиты волны: 7c01769 (волна 2), a4877b3 (правки критики), 842ae87 (полировка после
+ACCEPT), docs.
