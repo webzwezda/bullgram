@@ -85,7 +85,7 @@ function RequisiteRow({ label, value, copyValue }) {
       <span className="w-[72px] shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-500">{label}</span>
       <span className={`min-w-0 flex-1 font-mono text-[12px] font-bold text-slate-700 ${copyFailed ? 'break-all' : 'truncate'}`}>{value}</span>
       <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
-        copied ? 'text-emerald-600' : copyFailed ? 'text-rose-700' : 'text-slate-300 group-hover:text-slate-500'
+        copied ? 'text-emerald-600' : copyFailed ? 'text-red-700' : 'text-slate-300 group-hover:text-slate-500'
       }`}>
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </span>
@@ -201,7 +201,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
 
           <div className="p-4 space-y-2">
             {error ? (
-              <p className="text-xs text-rose-700 text-center">{error}</p>
+              <p className="text-xs text-red-700 text-center">{error}</p>
             ) : null}
             <div className="rounded-lg bg-amber-50 px-3 py-2 flex items-start gap-1.5">
               <AlertTriangle className="size-3 text-amber-600 shrink-0 mt-0.5" />

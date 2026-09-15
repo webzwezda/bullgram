@@ -31,7 +31,7 @@ const VIEW_CHUNK_DELAY_MS = 300;
 function FieldError({ message }) {
   if (!message) return null;
   return (
-    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-rose-600">
+    <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-700">
       <AlertCircle className="w-3.5 h-3.5 shrink-0" />
       <span>{message}</span>
     </div>
@@ -176,7 +176,7 @@ export function CreateInvoicePage() {
     };
 
     const title = form.title.trim();
-    if (!title) check('title', 'Укажите название');
+    if (!title) check('title', 'Укажи название');
     else if (title.length > 120) check('title', 'До 120 символов');
 
     const amount = Number(form.amount_ton);
@@ -184,7 +184,7 @@ export function CreateInvoicePage() {
       check('amount_ton', 'От 0.01 до 10000 TON');
     }
 
-    if (!form.secret_payload) check('secret_payload', 'Укажите, что получит покупатель');
+    if (!form.secret_payload) check('secret_payload', 'Укажи, что получит покупатель');
     else if (form.secret_payload.length > 2000) check('secret_payload', 'До 2000 символов');
 
     if (form.description && form.description.length > 500) {
@@ -192,13 +192,13 @@ export function CreateInvoicePage() {
     }
 
     if (!form.seller_wallet.trim()) {
-      check('seller_wallet', 'Укажите TON-кошелёк');
+      check('seller_wallet', 'Укажи TON-кошелёк');
     } else if (!WALLET_RE.test(form.seller_wallet.trim())) {
       check('seller_wallet', 'Адрес кошелька должен быть 48 символов и начинаться с UQ, EQ или 0Q');
     }
 
     if (!form.seller_email.trim()) {
-      check('seller_email', 'Укажите email');
+      check('seller_email', 'Укажи email');
     } else if (!EMAIL_RE.test(form.seller_email.trim())) {
       check('seller_email', 'Неверный email');
     }
@@ -257,7 +257,7 @@ export function CreateInvoicePage() {
 
   const inputBase = 'w-full rounded-xl border bg-white px-3.5 h-12 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors';
   const inputClass = (key) => errors[key]
-    ? `${inputBase} border-rose-300 focus:border-rose-400`
+    ? `${inputBase} border-red-300 focus:border-red-400`
     : `${inputBase} border-slate-200 focus:border-slate-400`;
 
   return (
@@ -271,7 +271,7 @@ export function CreateInvoicePage() {
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-slate-900">Счёт на оплату в TON</h2>
               <p className="text-sm font-medium text-slate-500 mt-0.5">
-                Заполните условия — мы сгенерируем ссылку для покупателя.{' '}
+                Заполни условия — мы сгенерируем ссылку для покупателя.{' '}
                 <span className="inline-flex items-center gap-1 font-mono">
                   <Clock className="w-3 h-3" />
                   Действует 1.5 часа
@@ -303,7 +303,7 @@ export function CreateInvoicePage() {
                 maxLength={500}
                 rows={2}
                 aria-invalid={!!errors.description}
-                className={`mt-2 w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors ${errors.description ? 'border-rose-300' : 'border-slate-200 focus:border-slate-400'}`}
+                className={`mt-2 w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors ${errors.description ? 'border-red-300' : 'border-slate-200 focus:border-slate-400'}`}
               />
               <FieldError message={errors.description} />
             </div>
@@ -368,7 +368,7 @@ export function CreateInvoicePage() {
                 maxLength={2000}
                 rows={4}
                 aria-invalid={!!errors.secret_payload}
-                className={`w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors font-mono ${errors.secret_payload ? 'border-rose-300' : 'border-slate-200 focus:border-slate-400'}`}
+                className={`w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors font-mono ${errors.secret_payload ? 'border-red-300' : 'border-slate-200 focus:border-slate-400'}`}
               />
               <div className="flex items-center justify-between text-xs text-slate-500 mt-1.5">
                 <span>Текст увидят только после успешной оплаты.</span>
@@ -411,7 +411,7 @@ export function CreateInvoicePage() {
             </div>
 
             {submitError ? (
-              <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-sm text-rose-700">
+              <div className="rounded-xl bg-red-50 border border-red-200 px-3.5 py-3 text-sm text-red-700">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                   <span>{submitError}</span>
@@ -428,7 +428,7 @@ export function CreateInvoicePage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { icon: Send, title: 'Ссылка', text: 'Отправьте покупателю' },
+          { icon: Send, title: 'Ссылка', text: 'Отправь покупателю' },
           { icon: ShieldCheck, title: 'TON', text: 'Оплата напрямую вам' },
           { icon: CheckCircle2, title: 'Секрет', text: 'Покупатель видит текст' },
         ].map(({ icon: Icon, title, text }) => (
@@ -563,13 +563,13 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
         ) : (
           <>
             {error ? (
-              <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-sm text-rose-700 flex items-start gap-2">
+              <div className="rounded-xl bg-red-50 border border-red-200 px-3.5 py-3 text-sm text-red-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <div className="flex-1">{error}</div>
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-50 transition-colors"
                 >
                   <RefreshCw className="w-3 h-3" />
                   Повторить
@@ -589,7 +589,7 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
                 </div>
                 <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Создайте первый — он появится здесь. Неоплаченные счета исчезают из списка после истечения срока.
+                  Создай первый — он появится здесь. Неоплаченные счета исчезают из списка после истечения срока.
                 </p>
               </div>
             ) : null}

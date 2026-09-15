@@ -116,7 +116,7 @@ export function TonConnectPayButton({
           Ваш кошелёк: {address.slice(0, 4)}…{address.slice(-6)}
         </span>
       ) : null}
-      {error ? <span className="text-xs text-rose-700">{error}</span> : null}
+      {error ? <span className="text-xs text-red-700">{error}</span> : null}
       {recovery && !busy ? (
         <button
           type="button"

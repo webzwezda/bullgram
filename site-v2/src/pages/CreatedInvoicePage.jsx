@@ -149,7 +149,7 @@ export function CreatedInvoicePage() {
         <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
           <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
             <div className="flex flex-row items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-rose-600 flex items-center justify-center text-white shadow-md shadow-rose-500/20 shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-red-600 flex items-center justify-center text-white shadow-md shadow-red-500/20 shrink-0">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
@@ -187,14 +187,14 @@ export function CreatedInvoicePage() {
   return (
     <section className="space-y-6">
       {pollIssue ? (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 leading-relaxed flex items-start gap-2">
+        <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700 leading-relaxed flex items-start gap-2">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <p className="flex-1">Не удалось обновить статус — повторяем попытку</p>
           <button
             type="button"
             onClick={() => setPollIssue(false)}
             aria-label="Скрыть"
-            className="shrink-0 text-rose-700 hover:text-rose-900 transition-colors"
+            className="shrink-0 text-red-700 hover:text-red-900 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

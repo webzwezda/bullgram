@@ -34,8 +34,8 @@ const plans = [
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
     features: [
-      'безлимит по API и MCP',
       'уже готовый к работе тг-аккаунт',
+      'безлимит по API и MCP',
       'неограниченное количество ботов'
     ]
   }
@@ -110,7 +110,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
         onClick={() => login()}
         className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
       >
-        Войдите, чтобы оплатить
+        Войди, чтобы оплатить
         <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
       </button>
     );
@@ -132,7 +132,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
       if (!status) {
         setError('Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.');
       } else if (status >= 500) {
-        setError('Сервис оплаты недоступен. Напишите в поддержку.');
+        setError('Сервис оплаты недоступен. Напиши в поддержку.');
       } else {
         setError(e.message || 'Не удалось создать счёт');
       }
@@ -162,7 +162,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
         )}
       </button>
       {error ? (
-        <div className="flex items-start gap-1.5 text-xs text-rose-600">
+        <div className="flex items-start gap-1.5 text-xs text-red-700">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -437,7 +437,7 @@ export function HomePage() {
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
               Нужен особый тариф?{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
-                Напишите — оформим.
+                Напиши — оформим.
               </a>
             </p>
           </div>

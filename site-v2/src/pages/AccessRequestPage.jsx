@@ -126,7 +126,7 @@ export function AccessRequestPage() {
 
         <div>
           <label htmlFor="name" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Как вас зовут <span className="text-rose-700">*</span>
+            Как вас зовут <span className="text-red-700">*</span>
           </label>
           <input
             id="name"
@@ -143,7 +143,7 @@ export function AccessRequestPage() {
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
           {fieldErrors.name ? (
-            <p id="name-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
+            <p id="name-error" role="alert" className="mt-1.5 text-xs font-semibold text-red-700">
               {fieldErrors.name}
             </p>
           ) : null}
@@ -151,7 +151,7 @@ export function AccessRequestPage() {
 
         <div>
           <label htmlFor="contact" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Контакт для связи <span className="text-rose-700">*</span>
+            Контакт для связи <span className="text-red-700">*</span>
           </label>
           <input
             id="contact"
@@ -168,7 +168,7 @@ export function AccessRequestPage() {
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
           {fieldErrors.contact ? (
-            <p id="contact-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
+            <p id="contact-error" role="alert" className="mt-1.5 text-xs font-semibold text-red-700">
               {fieldErrors.contact}
             </p>
           ) : null}
@@ -204,7 +204,7 @@ export function AccessRequestPage() {
         </div>
 
         {error ? (
-          <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
             {error}
           </p>
         ) : null}
