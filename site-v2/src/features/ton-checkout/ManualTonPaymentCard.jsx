@@ -40,16 +40,38 @@ function buildWalletLinks(purchase) {
 
 function RequisiteRow({ label, value, copyValue }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   async function copy() {
     const target = copyValue || value;
     if (!target) return;
     try {
       await navigator.clipboard.writeText(target);
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+      return;
+    } catch {
+      // clipboard API недоступен (например, вебвью Telegram) — legacy-путь ниже
+    }
+    try {
+      const helper = document.createElement('textarea');
+      helper.value = target;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'fixed';
+      helper.style.opacity = '0';
+      document.body.appendChild(helper);
+      helper.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(helper);
+      if (!ok) throw new Error('copy rejected');
+      setCopyFailed(false);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard недоступен — значение видно целиком при фокусе
+      setCopied(false);
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 4000);
     }
   }
 
@@ -58,11 +80,12 @@ function RequisiteRow({ label, value, copyValue }) {
       type="button"
       className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition-colors"
       onClick={copy}
+      title={copyValue || value}
     >
       <span className="w-14 shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-500">{label}</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[12px] font-bold text-slate-700">{value}</span>
+      <span className={`min-w-0 flex-1 font-mono text-[12px] font-bold text-slate-700 ${copyFailed ? 'break-all' : 'truncate'}`}>{value}</span>
       <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
-        copied ? 'text-emerald-600' : 'text-slate-300 group-hover:text-slate-500'
+        copied ? 'text-emerald-600' : copyFailed ? 'text-rose-700' : 'text-slate-300 group-hover:text-slate-500'
       }`}>
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </span>

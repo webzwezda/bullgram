@@ -300,7 +300,15 @@ function PaymentView({
               </p>
             </div>
             {remaining ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600 shrink-0">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono shrink-0 ${
+                  remaining.split(':')[0] === '00' || (remaining.split(':').length === 2 && Number(remaining.split(':')[0]) < 5)
+                    ? 'bg-red-50 border-red-200 text-red-700'
+                    : 'bg-white border-slate-200 text-slate-600'
+                }`}
+                title="Срок оплаты счёта"
+                aria-label={`До конца оплаты счёта: ${remaining}`}
+              >
                 <Clock className="w-3.5 h-3.5" />
                 {remaining}
               </span>
@@ -334,7 +342,7 @@ function PaymentView({
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
                 <p>
                   Bullgram не гарантирует доставку товара — платформа только обеспечивает оплату.
-                  Проверяйте продавца перед оплатой.
+                  Проверь продавца перед оплатой.
                 </p>
               </div>
             </div>
@@ -346,7 +354,7 @@ function PaymentView({
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-orange-600" />
                 <div>
                   <div className="font-bold mb-0.5">Testnet — для тестирования</div>
-                  <p>Платёж тестовый, реальная ценность = 0. Убедитесь что ваш TonConnect подключён к testnet.</p>
+                  <p>Платёж тестовый, реальная ценность = 0. Убедись, что твой TonConnect подключён к testnet.</p>
                 </div>
               </div>
             </div>
@@ -377,21 +385,26 @@ function PaymentView({
             </div>
 
             {method === 'tonconnect' ? (
-              <TonConnectPayButton
-                fullWidth
-                amountTon={purchase.amount_ton}
-                amountNano={purchase.amount_nanoton}
-                merchantWallet={purchase.seller_wallet}
-                memo={purchase.memo}
-                network={purchase.network || 'mainnet'}
-                verifyEndpoint={verifyEndpoint}
-                buildVerifyBody={isPublicInvoice
-                  ? () => ({})
-                  : ({ senderWallet }) => ({ sender_wallet: senderWallet })}
-                onPaid={onPaid}
-                onError={onError}
-                onTransactionSent={onPaymentSent}
-              />
+              <>
+                <TonConnectPayButton
+                  fullWidth
+                  amountTon={purchase.amount_ton}
+                  amountNano={purchase.amount_nanoton}
+                  merchantWallet={purchase.seller_wallet}
+                  memo={purchase.memo}
+                  network={purchase.network || 'mainnet'}
+                  verifyEndpoint={verifyEndpoint}
+                  buildVerifyBody={isPublicInvoice
+                    ? () => ({})
+                    : ({ senderWallet }) => ({ sender_wallet: senderWallet })}
+                  onPaid={onPaid}
+                  onError={onError}
+                  onTransactionSent={onPaymentSent}
+                />
+                <p className="text-center text-[11px] text-slate-500">
+                  Memo уйдёт вместе с переводом автоматически — статус проверится сам.
+                </p>
+              </>
             ) : (
               <ManualTonPaymentCard
                 purchase={purchase}

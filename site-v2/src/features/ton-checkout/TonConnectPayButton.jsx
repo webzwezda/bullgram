@@ -49,7 +49,7 @@ export function TonConnectPayButton({
         <button
           type="button"
           onClick={() => tonConnectUI.openModal()}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-700 text-white font-bold text-sm shadow-md shadow-sky-700/20 hover:bg-sky-800 transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
         >
           <Wallet className="size-4" />
           Подключить TON-кошелёк
@@ -81,7 +81,7 @@ export function TonConnectPayButton({
           type="button"
           disabled={busy}
           onClick={() => verifyCurrent()}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-700 text-white font-bold text-sm shadow-md shadow-sky-700/20 hover:bg-sky-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
         >
           {busy ? (
             <>
@@ -97,7 +97,7 @@ export function TonConnectPayButton({
           type="button"
           disabled={disabled || busy || status === 'paid'}
           onClick={handlePay}
-          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-sm shadow-md shadow-sky-600/20 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-700 text-white font-bold text-sm shadow-md shadow-sky-700/20 hover:bg-sky-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${fullWidth ? 'w-full justify-center h-11' : ''}`}
         >
           {busy ? (
             <>
@@ -113,7 +113,7 @@ export function TonConnectPayButton({
       )}
       {address ? (
         <span className="text-[11px] text-slate-500 font-mono">
-          {address.slice(0, 4)}…{address.slice(-6)}
+          Ваш кошелёк: {address.slice(0, 4)}…{address.slice(-6)}
         </span>
       ) : null}
       {error ? <span className="text-xs text-rose-700">{error}</span> : null}
