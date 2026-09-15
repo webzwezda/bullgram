@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Генерат npm run tokens:build (design/tokens); палитры байт-равны дефолтам Tailwind. */
+@import "./tokens.css";
 
 @font-face {
   font-family: 'Manrope';

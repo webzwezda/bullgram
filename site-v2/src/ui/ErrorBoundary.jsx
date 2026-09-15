@@ -24,7 +24,7 @@ export class ErrorBoundary extends React.Component {
           <p className="text-sm text-slate-500 mb-5">Попробуй перезагрузить страницу — обычно это помогает.</p>
           <button
             type="button"
-            className="inline-flex items-center justify-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors"
+            className="inline-flex items-center justify-center px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl transition-colors"
             onClick={() => window.location.reload()}
           >
             Перезагрузить страницу

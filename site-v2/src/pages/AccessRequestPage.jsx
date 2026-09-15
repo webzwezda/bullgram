@@ -73,13 +73,13 @@ export function AccessRequestPage() {
           </p>
           <a
             href="/"
-            className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
           >
             Вернуться на главную
           </a>
           <p className="mt-4 text-sm font-medium text-slate-500">
             Если что-то не получилось —{' '}
-            <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
+            <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="font-bold text-indigo-600 underline decoration-2 underline-offset-2 hover:text-indigo-700">
               напишите нам в Telegram
             </a>
             , примем заявку вручную.
@@ -140,7 +140,7 @@ export function AccessRequestPage() {
             placeholder="Имя"
             aria-invalid={fieldErrors.name ? true : undefined}
             aria-describedby={fieldErrors.name ? 'name-error' : undefined}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
           />
           {fieldErrors.name ? (
             <p id="name-error" role="alert" className="mt-1.5 text-xs font-semibold text-red-700">
@@ -165,7 +165,7 @@ export function AccessRequestPage() {
             placeholder="Telegram @username или email"
             aria-invalid={fieldErrors.contact ? true : undefined}
             aria-describedby={fieldErrors.contact ? 'contact-error' : undefined}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
           />
           {fieldErrors.contact ? (
             <p id="contact-error" role="alert" className="mt-1.5 text-xs font-semibold text-red-700">
@@ -196,7 +196,7 @@ export function AccessRequestPage() {
             placeholder="Например: пользуюсь скринридером, нужен крупный шрифт, важна поддержка без спешки"
             aria-invalid={fieldErrors.note ? true : undefined}
             aria-describedby="note-hint"
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
           />
           <p id="note-hint" className="mt-1.5 text-xs font-medium text-slate-500">
             До 500 символов. Увидят только мы.
@@ -212,7 +212,7 @@ export function AccessRequestPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Send className="h-5 w-5" strokeWidth={2.5} />
           {submitting ? 'Отправляем…' : 'Отправить заявку'}

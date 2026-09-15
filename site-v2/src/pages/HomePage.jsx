@@ -108,7 +108,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
       <button
         type="button"
         onClick={() => login()}
-        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
       >
         Войди, чтобы оплатить
         <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -147,7 +147,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
         type="button"
         onClick={onCreate}
         disabled={creating}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {creating ? (
           <>
@@ -181,13 +181,13 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
 
 function PlanCard({ plan, children }) {
   const cardClass = plan.highlighted
-    ? 'relative flex flex-col rounded-lg border-2 border-blue-600 bg-white p-6 shadow-xl shadow-blue-600/10'
+    ? 'relative flex flex-col rounded-lg border-2 border-indigo-600 bg-white p-6 shadow-xl shadow-indigo-600/10'
     : 'relative flex flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm';
 
   return (
     <article className={cardClass}>
       {plan.highlighted ? (
-        <div className="absolute -top-4 left-6 rounded-lg bg-blue-600 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-white shadow-md">
+        <div className="absolute -top-4 left-6 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-white shadow-md">
           {plan.label}
         </div>
       ) : (
@@ -332,17 +332,17 @@ export function HomePage() {
             href="https://github.com/webzwezda/bullgram"
             target="_blank"
             rel="noreferrer"
-            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] transition-all hover:shadow-[0_2px_15px_-3px_rgba(6,81,237,0.2)] hover:border-blue-200"
+            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)] transition-all hover:shadow-[0_2px_15px_-3px_rgba(79,70,229,0.2)] hover:border-indigo-200"
             aria-label="Bullgram на GitHub — проект с открытым кодом"
           >
             <svg className="w-4 h-4 text-slate-900" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.91-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
             </svg>
-            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase group-hover:text-blue-600 transition-colors">
+            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase group-hover:text-indigo-600 transition-colors">
               Bullgram 2.0
             </span>
             <span className="w-1 h-1 rounded-full bg-slate-300" aria-hidden="true" />
-            <span className="text-[13px] font-bold tracking-wide text-slate-500 group-hover:text-blue-600 transition-colors">
+            <span className="text-[13px] font-bold tracking-wide text-slate-500 group-hover:text-indigo-600 transition-colors">
               Open Source
             </span>
             {stars !== null && stars > 0 ? (
@@ -357,7 +357,7 @@ export function HomePage() {
           </a>
 
           <span
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)]"
             title="Принимаем оплату только в криптовалюте — TON"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
@@ -382,7 +382,7 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-            className="group relative z-10 inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-blue-700 hover:shadow-[0_8px_30px_rgba(37,99,235,0.24)] hover:-translate-y-0.5 sm:w-auto"
+            className="group relative z-10 inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-indigo-700 hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5 sm:w-auto"
           >
             Купить готового юзербота
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -436,7 +436,7 @@ export function HomePage() {
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
               Нужен особый тариф?{' '}
-              <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
+              <a href="/access-request" className="font-bold text-indigo-600 underline decoration-2 underline-offset-2 hover:text-indigo-700">
                 Напиши — оформим.
               </a>
             </p>
@@ -468,7 +468,7 @@ export function HomePage() {
                 <button
                   type="button"
                   onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
                 >
                   Купить готового юзербота
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -523,7 +523,7 @@ export function HomePage() {
                 <button
                   type="button"
                   onClick={() => (user ? window.location.assign('/app/sales-bot') : login('/app/sales-bot'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
                 >
                   Подключить бота
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -548,7 +548,7 @@ export function HomePage() {
           </h2>
           <a
             href="/docs/quick-start/"
-            className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_12px_40px_rgba(37,99,235,0.28)]"
+            className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-indigo-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-[0_12px_40px_rgba(79,70,229,0.28)]"
           >
             Пройти Quick Start
             <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />

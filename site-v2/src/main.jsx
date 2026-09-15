@@ -11,8 +11,7 @@ async function bootstrap() {
     const [{ BrowserRouter }, { App }, { AuthProvider }] = await Promise.all([
       import('react-router-dom'),
       import('./App.jsx'),
-      import('./app/providers/AuthProvider.jsx'),
-      import('./styles/site.css')
+      import('./app/providers/AuthProvider.jsx')
     ]);
 
     root.render(
