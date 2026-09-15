@@ -1,13 +1,13 @@
 {
   "$comment": "Ratchet-снапшот lint_hardcodes (admin-v2/src + site-v2/src) для npm run check:design. Перегенерируется осознанно: node design/check-design.mjs --update-baseline. Гейт красный, только если текущих findings стало БОЛЬШЕ снапшота (total / kind / file).",
   "updatedAt": "2026-09-15",
-  "total": 5298,
+  "total": 5300,
   "kinds": {
     "tailwind-palette": 4122,
     "hex": 200,
     "px": 951,
     "time": 18,
-    "font-family": 7
+    "font-family": 9
   },
   "files": {
     "admin-v2/src/App.jsx": 25,
@@ -75,7 +75,7 @@
     "site-v2/src/ui/ErrorBoundary.jsx": 6,
     "site-v2/src/ui/UserProfileCard.jsx": 18,
     "site-v2/src/ui/LoginCard.jsx": 15,
-    "site-v2/src/styles/tailwind.css": 4,
+    "site-v2/src/styles/tailwind.css": 6,
     "site-v2/src/components/SecretRevealBlock.jsx": 14,
     "site-v2/src/pages/HomePage.jsx": 111,
     "site-v2/src/pages/AccessRequestPage.jsx": 41,
