@@ -66,7 +66,7 @@ meta description/OG; tailwind.css токен-слой мёртв (teal/cream) �
 | 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | **done (ACCEPT)** |
 | 3 | `/create` + `/created/:id` + public-invoices бэкенд | **done (ACCEPT)** |
 | 4 | `/access-request` + access-requests бэкенд | **done (ACCEPT)** |
-| 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/LoginCard/UserProfileCard, api client, config, index.html (шрифты/OG) | pending |
+| 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/LoginCard/UserProfileCard, api client, config, index.html (шрифты/OG) | **done (SEE ПРИМЕЧАНИЕ)** |
 | 6 | батч-рантайм: редиректы, 404, hero-контент против правила «ОДИН исход», финальная дизайн-прогонка | pending |
 
 ## Журнал
@@ -257,3 +257,44 @@ TG-уведомление в админский чат (теперь с тайм
 мигание лимитеров при деплое.
 
 Коммиты волны: fix(site+backend) волна 4 + fix(site) полировка после ACCEPT, docs.
+
+### Волна 5 — шелл и инфраструктура — ЗАКРЫТА (критика пропущена обоснованно, см. примечание)
+
+Код-ревью: fix-first, 3 P1. Уточнение разведки: SiteAuthGate был НЕ мёртв, а жил не на
+своём месте — оборачивал ветку редиректов (/shop /purchases /plan /quick-start *), из-за
+чего аноним на /plan упирался в логин-стену вместо редиректа, а редиректы стояли на
+времени бутстрапа сессии.
+
+P1-фиксы:
+1. Нигде не было ErrorBoundary; Suspense fallback={null}: протухший чанк после деплоя
+   (reset --hard меняет хэши) = белый экран. Сделаны: ErrorBoundary.jsx (карточка
+   «Перезагрузить страницу»), lazyRoute() с reload-once по sessionStorage-гарду
+   (повторный провал → ErrorBoundary, цикла нет), осмысленный спиннер, try/catch в
+   bootstrap().
+2. OAuth был в implicit flow (дефолт auth-js) — токен в URL-хэше при каждом возврате →
+   flowType: 'pkce' (существующие сессии валидны, влияет на новые логины).
+3. SEO/OG: заголовок «Bullgram Site v2» (стейджинг-звучание) и ноль мета-тегов →
+   продуктовой title/description + og:* + twitter:card=summary. og:image НЕ добавлен —
+   растрового ассета нет (нужно 1200×630 PNG/JPG — задача владельцу).
+
+P2/P3: LoginCard hover-overlay съедал лейбл (z-10 контенту), Telegram-кнопка sky-500
+2.77:1 → sky-700, молчаливые провалы профиля/биллинга → console.warn (fallback на
+trial сохранён), billing-эффект переведён с access_token на user.id (часовой
+TOKEN_REFRESHED больше не дёргает /orders/current), login()/logout() с try/catch и
+authError в LoginCard.
+
+Сознательно НЕ сделано (решение владельца): шрифты. Manrope объявлен в CSS, но
+@font-face нигде нет — сайт с самого начала рендерится системным стеком. Варианты:
+подключить Manrope (@font-face, файлы уже в public/), удалить мёртвые файлы
+(manrope-*.woff2, material-symbols 1.1MB, hero-mock.svg, dep @fontsource-variable/geist)
+или перейти на Geist. Смена типографики всего сайта = не автономное решение.
+Мёртвую половину site.css и components/ui/button.jsx — в волну 6 (Card живой, не
+удалять токены card/muted-foreground/foreground/background!).
+
+Рантайм: OG-теги подтверждены curl'ом на проде (title, og:title, twitter:card);
+PKCE подтверждён статически (в live-логин не тыкал — сессия владельца). Критика
+для волны 5 пропущена обоснованно: видимый дельта — LoginCard (виден только
+анониму), спиннер и error-карточка; шелл попадёт в финальную визуальную прогонку
+волны 6.
+
+Коммиты волны: fix(site) волна 5, docs.
