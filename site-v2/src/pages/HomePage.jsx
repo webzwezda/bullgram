@@ -260,14 +260,14 @@ function UserbotCardMock() {
 
 function PaywallBotMock() {
   const messages = [
-    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-600'],
-    ['Инвайт выдан', '@private_channel', 'text-sky-600'],
+    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-700'],
+    ['Инвайт выдан', '@private_channel', 'text-sky-700'],
     ['Подписка активна', 'до 14 мая', 'text-slate-900']
   ];
   return (
     <div className="rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
       <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/10 text-sm font-black text-sky-600">Б</span>
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/10 text-sm font-black text-sky-700">Б</span>
         <div>
           <div className="text-base font-black text-slate-900">бот paywall</div>
           <div className="text-xs font-semibold text-slate-500">подключён к @private_channel</div>
@@ -371,7 +371,7 @@ export function HomePage() {
           </div>
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
-            Юзерботы для Telegram <br className="hidden sm:block" />
+            Юзерботы для Telegram, <br className="hidden sm:block" />
             которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">работают с&nbsp;первого дня</span>
           </h1>
 
@@ -435,9 +435,9 @@ export function HomePage() {
               ))}
             </div>
             <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Людям с инвалидностью — предоставим специальный тариф:{' '}
+              Нужен особый тариф?{' '}
               <a href="/access-request" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
-                заявка на оформление.
+                Напишите — оформим.
               </a>
             </p>
           </div>
@@ -454,7 +454,7 @@ export function HomePage() {
                 Готовый юзербот
               </h2>
           <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-            Живой Telegram-аккаунт, которым можно управлять через AI-Agents или n8n
+            Живой Telegram-аккаунт, который берёт рутину на себя — а управлять им можно из AI-агентов или n8n
           </p>
               <ul className="mt-6 space-y-3">
                 {['Администрирование ваших групп', 'Мониторинг чужих групп и чатов', 'Участие в рассылках'].map((feature) => (
@@ -467,8 +467,16 @@ export function HomePage() {
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
+                  onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+                >
+                  Купить готового юзербота
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
                 >
                   REST API
                   <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -501,7 +509,7 @@ export function HomePage() {
               </h2>
               <p className="mt-4 text-base font-medium leading-7 text-slate-500">
                 Бот принимает оплату, выдаёт инвайт и следит за подписками.
-                Ты занимаешься контентом, доступом занимается бот.
+                Ты занимаешься контентом, а доступом занимается бот.
               </p>
               <ul className="mt-6 space-y-3">
                 {['автоматическая выдача доступа после оплаты', 'тарифы и подписки внутри бота', 'напоминания и удаление тех, кто не продлил'].map((feature) => (
@@ -542,9 +550,12 @@ export function HomePage() {
             href="/docs/quick-start/"
             className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-blue-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-[0_12px_40px_rgba(37,99,235,0.28)]"
           >
-            Quick Start
+            Пройти Quick Start
             <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
           </a>
+          <p className="mt-8 text-sm font-medium text-slate-500">
+            Оплата в TON · поддержка в Telegram
+          </p>
         </div>
       </ScreenSection>
 
