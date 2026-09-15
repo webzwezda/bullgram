@@ -1,6 +1,6 @@
 # Bullgram Design Tokens
 
-Единый источник дизайн-решений продукта (волна 1 плана единой дизайн-системы). Формат — [DTCG](https://design-tokens.github.io/community-group/format/) (`$type`/`$value`/`$description`, алиасы `{path}`).
+Единый источник дизайн-решений продукта (волна 1 плана единой дизайн-системы). Формат — [DTCG](https://design-tokens.github.io/community-group/format/) (`$type`/`$value`/`$description`, алиасы `{path}`). Версионирование и политика изменений — [design/CHANGELOG.md](design/CHANGELOG.md) (SemVer: значение примитива = MAJOR, новый токен = MINOR, доки = PATCH; компонент в канонический кит — при ≥2 использованиях).
 
 ## Архитектура: 3 тира
 
