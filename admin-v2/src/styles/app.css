@@ -1763,7 +1763,7 @@ a.link-action:hover {
 
 
 .table-mono {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-size: 12.5px;
 }
 
@@ -1842,7 +1842,7 @@ a.link-action:hover {
   border-radius: 14px;
   background: #0f172a;
   color: #e2e8f0;
-  font: 12px/1.7 'JetBrains Mono', ui-monospace, monospace;
+  font: 12px/1.7 var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1891,7 +1891,7 @@ a.link-action:hover {
 
 .mcp-inline-values__row code {
   color: var(--text);
-  font: 12px/1.6 'JetBrains Mono', ui-monospace, monospace;
+  font: 12px/1.6 var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   word-break: break-word;
 }
 

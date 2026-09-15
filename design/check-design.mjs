@@ -20,6 +20,11 @@
  *                  отсутствии шаг честно SKIPPED). Падение — только на
  *                  serious/critical. (axe_audit выходит 1 при любом violation,
  *                  поэтому решение принимается по распарсенному выводу.)
+ *   5. ui-sync   — design/ui-sync.mjs: общие UI-файлы admin-v2 ↔ site-v2
+ *                  (utils, button, input, badge, card) должны существовать
+ *                  в обоих приложениях и быть байт-в-байт равны (sha256).
+ *                  Отсутствие файла в любом приложении или расхождение хэшей —
+ *                  красный. При отсутствии самого скрипта шаг честно SKIPPED.
  *
  * Флаг --update-baseline: перезаписывает design/lint-baseline.json текущими
  * findings lint_hardcodes (осознанная операция при миграции на семантику).
@@ -37,6 +42,7 @@ const TOKENS_DIR = path.join(DESIGN_DIR, "tokens");
 const CONTRAST_SNAPSHOT_SCRIPT = path.join(DESIGN_DIR, "contrast-snapshot.mjs");
 const CONTRAST_JSON = "/tmp/bullgram-contrast.json";
 const HARNESS = path.join(DESIGN_DIR, "qa", "harness-studio-pairs.html");
+const UI_SYNC_SCRIPT = path.join(DESIGN_DIR, "ui-sync.mjs");
 const BASELINE_FILE = path.join(DESIGN_DIR, "lint-baseline.json");
 const LINT_TARGETS = ["admin-v2/src", "site-v2/src"];
 
@@ -285,6 +291,25 @@ function gateAxe() {
 }
 
 // ---------------------------------------------------------------------------
+// 5. ui-sync: общие UI-файлы admin-v2 <-> site-v2 байт-в-байт
+
+function gateUiSync() {
+  // По образцу гейта axe: нет скрипта — честный SKIPPED, а не молчаливый зелёный.
+  if (!existsSync(UI_SYNC_SCRIPT)) {
+    console.log("[--] ui-sync: design/ui-sync.mjs не найден — шаг пропущен");
+    return true;
+  }
+  const r = run("node", [UI_SYNC_SCRIPT]);
+  if (!r.ok) {
+    fail("ui-sync", `общие UI-файлы admin-v2/site-v2 разошлись (exit ${r.status}):\n${r.out.trim()}`);
+    return false;
+  }
+  const okLine = r.out.match(/PASS ui-sync[^\n]*/);
+  pass("ui-sync", okLine ? okLine[0].replace("PASS ui-sync — ", "") : "OK");
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 
 console.log("== check:design — гейты design-системы Bullgram ==\n");
 const results = {
@@ -292,6 +317,7 @@ const results = {
   contrast: gateContrast(),
   hardcodes: gateHardcodes(),
   axe: gateAxe(),
+  uiSync: gateUiSync(),
 };
 
 const red = Object.entries(results).filter(([, ok]) => !ok).map(([name]) => name);
@@ -304,6 +330,7 @@ if (updateBaseline) {
   console.log(`hardcodes  ${results.hardcodes ? "OK (ratchet)" : "FAIL (ratchet)"}`);
 }
 console.log(`axe        ${results.axe ? "OK" : "FAIL"}`);
+console.log(`ui-sync    ${results.uiSync ? "OK" : "FAIL"}`);
 if (red.length > 0) {
   console.error(`\nFAIL check:design — упавшие гейты: ${red.join(", ")}`);
   process.exit(1);
