@@ -20,7 +20,12 @@ ROOT="$(pwd)"
 #    из-за чего раньше молча пропускались шаги).
 echo "==> git fetch + reset --hard origin/main"
 git fetch --all --prune
-PREV_HEAD="$(git rev-parse HEAD)"
+# PREV_HEAD должен пережить re-exec: в проходе 2 HEAD уже после reset,
+# и без переноса через env diff был бы всегда пуст → npm install никогда не запускался.
+if [ -z "${DEPLOY_PREV_HEAD:-}" ]; then
+  export DEPLOY_PREV_HEAD="$(git rev-parse HEAD)"
+fi
+PREV_HEAD="$DEPLOY_PREV_HEAD"
 git reset --hard origin/main
 NEW_HEAD="$(git rev-parse HEAD)"
 echo "    $PREV_HEAD → $NEW_HEAD"
