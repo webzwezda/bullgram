@@ -16,41 +16,16 @@ function normalizeWebhookMode(value) {
   return String(value || 'polling').trim().toLowerCase() === 'webhook' ? 'webhook' : 'polling';
 }
 
-function webhookStatusMeta(account) {
+function webhookConnectionError(account) {
   const mode = normalizeWebhookMode(account?.webhook_mode);
   const status = String(account?.webhook_status || '').trim().toLowerCase();
-  if (mode !== 'webhook') {
+  if (mode === 'webhook' && (status === 'error' || account?.runtime_error)) {
     return {
-      tone: 'neutral',
-      title: 'Тестовый режим',
-      text: 'Бот работает через сервер в тестовом режиме.',
-      dot: '#94a3b8'
-    };
-  }
-  if (status === 'error' || account?.runtime_error) {
-    return {
-      tone: 'error',
       title: 'Ошибка подключения',
-      text: account?.runtime_error || 'Telegram не смог подключить бота.',
-      dot: '#ef4444'
+      text: account?.runtime_error || 'Telegram не смог подключить бота.'
     };
   }
-  if (status === 'receiving') {
-    return {
-      tone: 'ok',
-      title: 'Бот получает сообщения',
-      text: 'Telegram уже отправлял сообщения боту.',
-      dot: '#10b981'
-    };
-  }
-  return {
-    tone: 'neutral',
-    title: 'Webhook включён',
-    text: account?.last_update_at
-      ? 'Webhook включён; апдейты уже приходили.'
-      : 'Webhook включён; апдейтов ещё не было.',
-    dot: '#94a3b8'
-  };
+  return null;
 }
 
 function isChatPlace(target) {
@@ -598,31 +573,8 @@ function BotRuntimeSection({
 
   const accountId = String(selectedOfficialBot.id || '');
   const isBusy = state.webhookRuntimeActionId === accountId;
-  const statusMeta = webhookStatusMeta(selectedOfficialBot);
-  const isError = statusMeta.tone === 'error';
-
-  const checkWebhookButton = (
-    <Button
-      variant="outline"
-      className={`h-11 rounded-xl font-bold shadow-sm w-full sm:w-auto ${
-        isError
-          ? 'border-rose-200 text-rose-700 bg-white hover:bg-rose-100 hover:text-rose-800'
-          : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-100'
-      }`}
-      onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
-      disabled={isBusy}
-    >
-      {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-      Проверить webhook
-    </Button>
-  );
-
-  // ВАЖНО (решение владельца 2026-09-15): нейтральный webhook-статус-блок
-  // («Webhook включён; апдейты уже приходили») удалён — раньше всё работало
-  // без него, постоянная поверхность оказалась шумом. Статус рендерим ТОЛЬКО
-  // при ошибке подключения. Не воскрешать нейтральный блок; потребность
-  // «проверить вручную» закрывает кнопка «Проверить webhook» на error-карточке.
-  if (!isError) return null;
+  const errorMeta = webhookConnectionError(selectedOfficialBot);
+  if (!errorMeta) return null;
 
   return (
     <Card className="border-0 shadow-sm ring-1 ring-rose-200/50 bg-rose-50 rounded-2xl overflow-hidden mb-6">
@@ -633,12 +585,20 @@ function BotRuntimeSection({
               <AlertTriangle className="w-5 h-5 text-rose-500" />
             </div>
             <div>
-              <div className="text-base font-bold text-rose-900">{statusMeta.title}</div>
-              <div className="text-sm font-medium text-rose-700 mt-0.5">{statusMeta.text}</div>
+              <div className="text-base font-bold text-rose-900">{errorMeta.title}</div>
+              <div className="text-sm font-medium text-rose-700 mt-0.5">{errorMeta.text}</div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            {checkWebhookButton}
+            <Button
+              variant="outline"
+              className="h-11 rounded-xl font-bold shadow-sm w-full sm:w-auto border-rose-200 text-rose-700 bg-white hover:bg-rose-100 hover:text-rose-800"
+              onClick={() => refreshOfficialBotWebhookStatus(selectedOfficialBot)}
+              disabled={isBusy}
+            >
+              {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              Проверить webhook
+            </Button>
             <Button
               className="h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm shadow-indigo-200 w-full sm:w-auto"
               onClick={() => reregisterWebhook?.(selectedOfficialBot)}
