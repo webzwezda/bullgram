@@ -26,28 +26,28 @@ audience, broadcast...). Глобальная уникальность `tg_chat_
 
 ## Слайс бэкенд (backend-developer)
 
-- [ ] P0: guard в chat-events.handler.js + autopost chat-member.js + getChannelByChatId(botId)
-- [ ] 404 вместо 500: `assertOwnedSalesBot` (sales-contour.service.js:662) и
+- [x] P0: guard в chat-events.handler.js + autopost chat-member.js + getChannelByChatId(botId) — ✅ проверено 2026-09-16 (chat-events.handler.js:49-65 guard по owner_id + detach update({bot_id:null}).eq('bot_id') :89-91; autopost/handlers/chat-member.js:21-55,77; official-bot.service.js:796 getChannelByChatId(chatId, botId=null) → .eq('bot_id')+maybeSingle)
+- [x] 404 вместо 500: `assertOwnedSalesBot` (sales-contour.service.js:662) и
       PATCH /channels/:channelId (official-bot.routes.js:704) → `maybeSingle()` +
-      явный 404 по паттерну `loadOwnedOfficialBotAccount`
-- [ ] `loadFullUserbotAccount` (sales-contour.service.js:1127): `.eq('owner_id', ownerId)`
-- [ ] `loadUserbotBindings` (sales-contour.service.js:524): `.in('bot_id', ownedBotIds)`
-- [ ] `userbot_options` — один раз на верхнем уровне ответа getContoursOverview,
-      не в каждом боте (фронт читает через extractFirstArray(payload,...), форма совместима)
-- [ ] Мёртвые эндпоинты: DELETE `/contours/rights`, `/prepare-userbot`, `/admin`
-- [ ] Debug console.log: routes:668,673
-- [ ] Хардкод TG api_id/api_hash: official-bot.routes.js:671, userbot.routes.js:1374,
-      customer-reconciliation.service.js:7-8 → env/fallback конструктора
-- [ ] Webhook-секрет: `crypto.timingSafeEqual` (routes:202), с защитой от разной длины
+      явный 404 по паттерну `loadOwnedOfficialBotAccount` — ✅ проверено 2026-09-16 (assertOwnedSalesBot sales-contour.service.js:667 → SalesContourError 404 bot_not_found; PATCH official-bot.routes.js:667-689 owner-scoped update + maybeSingle + явный 404)
+- [x] `loadFullUserbotAccount` (sales-contour.service.js:1127): `.eq('owner_id', ownerId)` — ✅ проверено 2026-09-16 (sales-contour.service.js:1131-1136 .eq('owner_id', ownerId))
+- [x] `loadUserbotBindings` (sales-contour.service.js:524): `.in('bot_id', ownedBotIds)` — ✅ проверено 2026-09-16 (sales-contour.service.js:525-533 .in('bot_id', botIds); вызывается с owner-scoped loadOwnedOfficialBots :1241-1247)
+- [x] `userbot_options` — один раз на верхнем уровне ответа getContoursOverview,
+      не в каждом боте (фронт читает через extractFirstArray(payload,...), форма совместима) — ✅ проверено 2026-09-16 (sales-contour.service.js:1318 top-level `userbot_options: userbotState.options`; фронт useSalesContourController.js:206 extractFirstArray(payload, ['userbots','eligible_userbots','userbot_options']))
+- [x] Мёртвые эндпоинты: DELETE `/contours/rights`, `/prepare-userbot`, `/admin` — ✅ проверено 2026-09-16 (grep `/contours/rights|/prepare-userbot|'/admin'` в official-bot.routes.js = 0 вхождений; остались только живые DELETE channels/:channelId, /:accountId/admins/:tgId, /:accountId)
+- [x] Debug console.log: routes:668,673 — ✅ проверено 2026-09-16 (в роут-хендлерах console.log нет; оставшиеся official-bot.routes.js:1053,1091 — легитимный стартовый лог initAllBots, не ревью-строки)
+- [x] Хардкод TG api_id/api_hash: official-bot.routes.js:671, userbot.routes.js:1374,
+      customer-reconciliation.service.js:7-8 → env/fallback конструктора — ✅ проверено 2026-09-16 (official-bot.routes.js: 0 вхождений api_id/api_hash; userbot.routes.js:1398,1420 — делегирует конструктору UserbotService; customer-reconciliation.service.js удалён; оговорка: DEFAULT_FINGERPRINT-литерал в userbot.service.js:27-33 остался как централизованный дефолт-отпечаток конструктора, не env)
+- [x] Webhook-секрет: `crypto.timingSafeEqual` (routes:202), с защитой от разной длины — ✅ проверено 2026-09-16 (official-bot.routes.js:2 import, :202-208 length pre-check + timingSafeEqual, mismatch → 404)
 
 ## Слайс фронтенд (frontend-developer)
 
-- [ ] join-all: confirm-диалог с объяснением (юзербот вступит в площадки контура
+- [x] join-all: confirm-диалог с объяснением (юзербот вступит в площадки контура
       и получит админ-права; доставка зависит от Telegram) на обоих триггерах
-      (toggle ротации, добавление юзербота) + in-flight guard от двойного клика
-- [ ] Удалить мёртвый код: `prepareUserbotAdmin` (с пустыми ветками),
-      `saveBotAdmin`/`botAdminDrafts`, прокидывание в props
-- [ ] console.log в toggleUserbotActive
+      (toggle ротации, добавление юзербота) + in-flight guard от двойного клика — ✅ проверено 2026-09-16 (useSalesContourController.js:6 JOIN_ALL_CONFIRM_TEXT, :770-771 guard+confirm в triggerJoinAll; оба триггера через него — toggleUserbotActive :698 и handleAdd OfficialBotsSection.jsx:421)
+- [x] Удалить мёртвый код: `prepareUserbotAdmin` (с пустыми ветками),
+      `saveBotAdmin`/`botAdminDrafts`, прокидывание в props — ✅ проверено 2026-09-16 (grep prepareUserbotAdmin|saveBotAdmin|botAdminDrafts по admin-v2/src = 0 вхождений)
+- [x] console.log в toggleUserbotActive — ✅ проверено 2026-09-16 (useSalesContourController.js:683-706 — только console.error в catch :702; console.log 0 вхождений)
 
 ## Не делаем (осознанно)
 
@@ -64,7 +64,7 @@ audience, broadcast...). Глобальная уникальность `tg_chat_
 - [x] npm run build в admin-v2, node --check по тронутым бэкенд-файлам
 - [x] code-reviewer по диффу (раунд 1: fix-first, 2×P1 — см. «Правки по ревью»)
 - [x] Правки по ревью
-- [ ] коммит, пуш, CI, прод-проверка /app/sales-bot в браузере
+- [x] коммит, пуш, CI, прод-проверка /app/sales-bot в браузере — ✅ проверено 2026-09-16 (коммит 0cba41f в истории; «Итог» ниже фиксирует зелёный CI run 34755577423 и прод /app/sales-bot без ошибок консоли; последующие sales-bot-коммиты в истории подтверждают работу поверх)
 
 ## Правки по ревью (раунд 2)
 

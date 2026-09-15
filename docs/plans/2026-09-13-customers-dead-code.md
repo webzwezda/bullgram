@@ -52,14 +52,14 @@
 
 ## Слайсы
 
-- [ ] Фронт: CustomersPage.jsx (сегменты, ветки, хелперы, candidates-поллинг,
+- [x] Фронт: CustomersPage.jsx (сегменты, ветки, хелперы, candidates-поллинг,
       handoff, sanitizeDemoLabel, опечатка), App.jsx (редиректы), AbandonedPage.jsx
-      (pushToOrders), rmdir pages/customers
-- [ ] Бэк: customers.routes.js (роуты candidates/reconciliation/demo-seed, трим
-      workbench), удалить customer-reconciliation.service.js
-- [ ] Валидация: builds + кросс-греп удалённых полей
-- [ ] code-reviewer по диффу
-- [ ] Коммит, пуш, CI, прод
+      (pushToOrders), rmdir pages/customers — ✅ проверено 2026-09-16 (CustomersPage.jsx: 0 вхождений sanitizeDemoLabel/candidates/handoff-ключей orders_search_preset·abandoned_filter_preset·orders_manual_selection/manualAdminRemovedCustomers/мёртвых хелперов; 60s-интервал :534-537 остался только для workbench-воронки; App.jsx:209-211 /crm·/orders·/access → Navigate to /customers без tab; AbandonedPage.jsx: pushToOrders 0, pushToBroadcast жив :364; pages/customers/ не существует)
+- [x] Бэк: customers.routes.js (роуты candidates/reconciliation/demo-seed, трим
+      workbench), удалить customer-reconciliation.service.js — ✅ проверено 2026-09-16 (customers.routes.js — только POST /direct-access :121 и GET /workbench :223, grep candidates|reconciliation|demo-seed = 0; workbench-ответ :535-542 = {success, updatedAt, bots, segments, channels, caps} без summary/selectedBotId/abandonedInvoices/recentOrders/needsAccessCheck/inGroupLeaks/bases, presence-логика сохранена :386-401,459-461; customer-reconciliation.service.js удалён — 0 упоминаний в backend)
+- [x] Валидация: builds + кросс-греп удалённых полей — ✅ проверено 2026-09-16 (записано в «Итог» ниже: node --check + npm run build зелёные, grep 0 хвостов; кросс-греп перепроверен 2026-09-16 — 0 хвостов по всем ключам)
+- [x] code-reviewer по диффу — ✅ проверено 2026-09-16 (записано в «Итог»: verdict proceed, P0/P1 нет; правки после ревью — hasCrmSub, segments.invoiceCreated — вошли в код)
+- [x] Коммит, пуш, CI, прод — ✅ проверено 2026-09-16 (коммиты ca967a2 «чистка мёртвого кода» и хотфикс 2cb0009 в истории; «Итог» фиксирует прод-проверку: 0 ошибок консоли, воронка рендерится; follow-up customers-коммиты 0d3c05f, 483c91d поверх)
 
 ## Итог
 
