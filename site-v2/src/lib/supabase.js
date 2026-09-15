@@ -5,6 +5,7 @@ export const supabase = createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabase
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    flowType: 'pkce'
   }
 });

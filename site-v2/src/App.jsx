@@ -3,15 +3,34 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, FilePlus } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
-import { SiteAuthGate } from './ui/SiteAuthGate.jsx';
 import { UserProfileCard } from './ui/UserProfileCard.jsx';
 import { LoginCard } from './ui/LoginCard.jsx';
 
-const PayLayout = lazy(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
-const PayPage = lazy(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
-const CreateInvoicePage = lazy(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
-const CreatedInvoicePage = lazy(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
-const AccessRequestPage = lazy(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
+const ROUTE_CHUNK_RELOAD_KEY = 'bullgram:route-chunk-reloaded';
+
+function lazyRoute(loader) {
+  return lazy(() =>
+    loader()
+      .then((module) => {
+        sessionStorage.removeItem(ROUTE_CHUNK_RELOAD_KEY);
+        return module;
+      })
+      .catch((error) => {
+        if (!sessionStorage.getItem(ROUTE_CHUNK_RELOAD_KEY)) {
+          sessionStorage.setItem(ROUTE_CHUNK_RELOAD_KEY, '1');
+          window.location.reload();
+          return new Promise(() => {});
+        }
+        throw error;
+      })
+  );
+}
+
+const PayLayout = lazyRoute(() => import('./layouts/PayLayout.jsx').then((m) => ({ default: m.PayLayout })));
+const PayPage = lazyRoute(() => import('./pages/PayPage.jsx').then((m) => ({ default: m.PayPage })));
+const CreateInvoicePage = lazyRoute(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
+const CreatedInvoicePage = lazyRoute(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
+const AccessRequestPage = lazyRoute(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
 
 const navSections = [
   {
@@ -52,7 +71,13 @@ export function App() {
   }, [location.pathname]);
 
   const appRoutes = (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-[3px] border-slate-200 border-t-blue-600 animate-spin" />
+        </div>
+      }
+    >
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<Navigate to="/app/profile" replace />} />
@@ -173,11 +198,9 @@ export function App() {
         ) : (isPayRoute || isCreateRoute || isAccessRequestRoute) ? (
           appRoutes
         ) : (
-          <SiteAuthGate>
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm flex-1">
-              {appRoutes}
-            </div>
-          </SiteAuthGate>
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm flex-1">
+            {appRoutes}
+          </div>
         )}
       </main>
     </div>

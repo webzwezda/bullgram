@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
   const [proStartedAt, setProStartedAt] = useState(null);
   const [proEndsAt, setProEndsAt] = useState(null);
   const [billingOrder, setBillingOrder] = useState(null);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -81,6 +82,7 @@ export function AuthProvider({ children }) {
       }
 
       if (error) {
+        console.warn('Failed to load profile plan:', error);
         setProfileRole(null);
         setProfilePlan('trial');
         setTrialStartedAt(null);
@@ -128,7 +130,8 @@ export function AuthProvider({ children }) {
           setProStartedAt(billingData.profile.pro_started_at || null);
           setProEndsAt(billingData.profile.pro_ends_at || null);
         }
-      } catch {
+      } catch (error) {
+        console.warn('Failed to load current billing order:', error);
         if (!mounted) return;
         setBillingOrder(null);
       }
@@ -138,7 +141,7 @@ export function AuthProvider({ children }) {
     return () => {
       mounted = false;
     };
-  }, [session?.access_token]);
+  }, [session?.user?.id]);
 
   const value = useMemo(() => ({
     loading,
@@ -151,22 +154,36 @@ export function AuthProvider({ children }) {
     trialEndsAt,
     proStartedAt,
     proEndsAt,
+    authError,
+    clearAuthError: () => setAuthError(null),
     billingOrder,
     async login(targetPath = null, provider = 'google') {
+      setAuthError(null);
       const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
       const requestedPath = targetPath || currentPath;
       const url = new URL(requestedPath, window.location.origin);
       const redirectTo = url.origin === window.location.origin ? url.toString() : `${window.location.origin}/`;
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo }
-      });
+      try {
+        await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo }
+        });
+      } catch (error) {
+        console.warn('OAuth sign-in failed:', error);
+        setAuthError('Не удалось войти. Попробуй ещё раз');
+      }
     },
     async logout() {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.warn('Sign-out failed:', error);
+        setAuthError('Не удалось выйти. Попробуй ещё раз');
+        return;
+      }
       window.location.reload();
     }
-  }), [billingOrder, loading, proEndsAt, proStartedAt, profilePlan, profileRole, session, trialEndsAt, trialStartedAt]);
+  }), [authError, billingOrder, loading, proEndsAt, proStartedAt, profilePlan, profileRole, session, trialEndsAt, trialStartedAt]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
