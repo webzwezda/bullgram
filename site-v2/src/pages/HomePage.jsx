@@ -372,7 +372,7 @@ export function HomePage() {
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
             Юзерботы для Telegram, <br className="hidden sm:block" />
-            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">работают с&nbsp;первого дня</span>
+            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-500">работают с&nbsp;первого дня</span>
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-[44rem] leading-relaxed mb-10 tracking-tight">
