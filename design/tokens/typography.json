@@ -1,0 +1,79 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Типографика Bullgram — де-факто, ноль визуальных амбиций. Шкалы размеров/весов/интерлиньяжа/трекинга = дефолтная шкала Tailwind v4 (admin-v2/node_modules/tailwindcss/theme.css). Шрифтовые стеки — целевые единые стеки продукта (решение плана: Manrope в оба приложения): site-v2 уже на целевом sans-стеке, admin-v2 переходит в волне 4; mono-стек сходится волнами 4/6.",
+  "font": {
+    "family": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": ["Manrope", "Segoe UI", "system-ui", "sans-serif"],
+        "$description": "Основной шрифт продукта — весь UI обоих приложений. Это ЦЕЛЕВОЙ стек: site-v2 уже такой (src/styles/tailwind.css), admin-v2 сегодня — 'Manrope', 'Segoe UI' без system-ui в app.css и переходит сюда в волне 4."
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": ["JetBrains Mono", "ui-monospace", "monospace"],
+        "$description": "Монопространство: код, токены сессий, ID, сырые JSON. Целевой унифицированный стек: сегодня admin-v2 (app.css) — 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace, site-v2 — дефолтный font-mono Tailwind; сходятся на этом значении волнами 4/6."
+      }
+    },
+    "size": {
+      "$description": "Дефолтная шкала размеров Tailwind v4 (--text-*). В $description каждого размера — его дефолтный интерлиньяж из theme.css (--text-*--line-height).",
+      "xs": { "$type": "fontSize", "$value": "0.75rem", "$description": "12px; дефолтный интерлиньяж calc(1 / 0.75). Нижний предел для подписей." },
+      "sm": { "$type": "fontSize", "$value": "0.875rem", "$description": "14px; дефолтный интерлиньяж calc(1.25 / 0.875). Основной размер подписей и полей форм." },
+      "base": { "$type": "fontSize", "$value": "1rem", "$description": "16px; дефолтный интерлиньяж calc(1.5 / 1). Основной размер контента." },
+      "lg": { "$type": "fontSize", "$value": "1.125rem", "$description": "18px; дефолтный интерлиньяж calc(1.75 / 1.125)." },
+      "xl": { "$type": "fontSize", "$value": "1.25rem", "$description": "20px; дефолтный интерлиньяж calc(1.75 / 1.25)." },
+      "2xl": { "$type": "fontSize", "$value": "1.5rem", "$description": "24px; дефолтный интерлиньяж calc(2 / 1.5). Заголовки карточек и секций." },
+      "3xl": { "$type": "fontSize", "$value": "1.875rem", "$description": "30px; дефолтный интерлиньяж calc(2.25 / 1.875). Заголовки страниц." },
+      "4xl": { "$type": "fontSize", "$value": "2.25rem", "$description": "36px; дефолтный интерлиньяж calc(2.5 / 2.25)." },
+      "5xl": { "$type": "fontSize", "$value": "3rem", "$description": "48px; дефолтный интерлиньяж 1. Крупные числа дашбордов/героев." },
+      "6xl": { "$type": "fontSize", "$value": "3.75rem", "$description": "60px; дефолтный интерлиньяж 1." },
+      "7xl": { "$type": "fontSize", "$value": "4.5rem", "$description": "72px; дефолтный интерлиньяж 1." },
+      "8xl": { "$type": "fontSize", "$value": "6rem", "$description": "96px; дефолтный интерлиньяж 1." },
+      "9xl": { "$type": "fontSize", "$value": "8rem", "$description": "128px; дефолтный интерлиньяж 1." }
+    },
+    "sizeLineHeight": {
+      "$description": "Машинный слой дефолтных интерлиньяжей размеров (--text-*--line-height из theme.css) — нужен билду волны 2 для байт-равной генерации; значения эммитятся как есть. Каждое значение — пара к font.size.<step>.",
+      "xs": { "$type": "dimension", "$value": "calc(1 / 0.75)", "$description": "Пара к font.size.xs (calc(1 / 0.75))." },
+      "sm": { "$type": "dimension", "$value": "calc(1.25 / 0.875)", "$description": "Пара к font.size.sm." },
+      "base": { "$type": "dimension", "$value": "calc(1.5 / 1)", "$description": "Пара к font.size.base." },
+      "lg": { "$type": "dimension", "$value": "calc(1.75 / 1.125)", "$description": "Пара к font.size.lg." },
+      "xl": { "$type": "dimension", "$value": "calc(1.75 / 1.25)", "$description": "Пара к font.size.xl." },
+      "2xl": { "$type": "dimension", "$value": "calc(2 / 1.5)", "$description": "Пара к font.size.2xl." },
+      "3xl": { "$type": "dimension", "$value": "calc(2.25 / 1.875)", "$description": "Пара к font.size.3xl." },
+      "4xl": { "$type": "dimension", "$value": "calc(2.5 / 2.25)", "$description": "Пара к font.size.4xl." },
+      "5xl": { "$type": "number", "$value": 1, "$description": "Пара к font.size.5xl." },
+      "6xl": { "$type": "number", "$value": 1, "$description": "Пара к font.size.6xl." },
+      "7xl": { "$type": "number", "$value": 1, "$description": "Пара к font.size.7xl." },
+      "8xl": { "$type": "number", "$value": 1, "$description": "Пара к font.size.8xl." },
+      "9xl": { "$type": "number", "$value": 1, "$description": "Пара к font.size.9xl." }
+    },
+    "weight": {
+      "$description": "Дефолтная шкала весов Tailwind v4 (--font-weight-*).",
+      "thin": { "$type": "fontWeight", "$value": 100, "$description": "Thin — в продукте не используется, для полноты шкалы." },
+      "extralight": { "$type": "fontWeight", "$value": 200, "$description": "ExtraLight — в продукте не используется, для полноты шкалы." },
+      "light": { "$type": "fontWeight", "$value": 300, "$description": "Light — редкие крупные декоративные числа." },
+      "normal": { "$type": "fontWeight", "$value": 400, "$description": "Normal — основной вес контента." },
+      "medium": { "$type": "fontWeight", "$value": 500, "$description": "Medium — подписи полей, пункты, аккуратные акценты." },
+      "semibold": { "$type": "fontWeight", "$value": 600, "$description": "SemiBold — заголовки карточек, кнопки, ключевые числа." },
+      "bold": { "$type": "fontWeight", "$value": 700, "$description": "Bold — сильные акценты и заголовки." },
+      "extrabold": { "$type": "fontWeight", "$value": 800, "$description": "ExtraBold — крупные заголовки лендинга." },
+      "black": { "$type": "fontWeight", "$value": 900, "$description": "Black — максимум, только герой-типографика." }
+    }
+  },
+  "lineHeight": {
+    "$description": "Именованные интерлиньяжи Tailwind v4 (--leading-*), безразмерные числа. Дефолтные интерлиньяжи конкретных размеров перечислены в $description typography.font.size.*.",
+    "tight": { "$type": "number", "$value": 1.25, "$description": "Плотный — заголовки." },
+    "snug": { "$type": "number", "$value": 1.375, "$description": "Приталенный — заголовки и кнопки." },
+    "normal": { "$type": "number", "$value": 1.5, "$description": "Нормальный — основной текст." },
+    "relaxed": { "$type": "number", "$value": 1.625, "$description": "Свободный — длинные описания." },
+    "loose": { "$type": "number", "$value": 2, "$description": "Максимально свободный — редко, воздушные блоки." }
+  },
+  "letterSpacing": {
+    "$description": "Дефолтный трекинг Tailwind v4 (--tracking-*). widest — часть паттерна component.micro-label.",
+    "tighter": { "$type": "dimension", "$value": "-0.05em", "$description": "Плотнее — очень крупные заголовки." },
+    "tight": { "$type": "dimension", "$value": "-0.025em", "$description": "Плотный — крупные заголовки." },
+    "normal": { "$type": "dimension", "$value": "0em", "$description": "Без трекинга — весь основной текст." },
+    "wide": { "$type": "dimension", "$value": "0.025em", "$description": "Широкий — мелкие выделенные подписи." },
+    "wider": { "$type": "dimension", "$value": "0.05em", "$description": "Шире — капсовые лейблы." },
+    "widest": { "$type": "dimension", "$value": "0.1em", "$description": "Самый широкий — component.micro-label (uppercase 11px)." }
+  }
+}

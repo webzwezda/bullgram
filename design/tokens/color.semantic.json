@@ -1,0 +1,186 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Семантический слой цвета Bullgram — алиасы на примитивы из color.primitives.json. Это кодификация студийных правил продукта: контентный текст минимум slate-500; денежные нули тёмные; feedback-пары фон+текст; TON-акцент sky-700 (утверждённое решение — не менять). Компоненты ссылаются только на этот слой, никогда на примитивы напрямую.",
+  "text": {
+    "$description": "Чернила. Студийное правило: контентный текст — минимум slate-500 (floor на ink.muted); светлее можно только декоративное/необязательное (ink.faint).",
+    "ink": {
+      "strong": {
+        "$type": "color",
+        "$value": "{primitive.slate.900}",
+        "$description": "Самый тёмный текст: заголовки, ключевые числа, денежные суммы. Контраст на белом/slate-50 — максимальный."
+      },
+      "body": {
+        "$type": "color",
+        "$value": "{primitive.slate.700}",
+        "$description": "Основной текст контента: параграфы, ячейки таблиц, подписи полей."
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "{primitive.slate.500}",
+        "$description": "Приглушённый, но читаемый текст: хинты, вторичные подписи, микро-лейблы. ЭТО FLOOR контентного текста — светлее slate-500 контент делать нельзя (студийное правило «контентный текст минимум slate-500»)."
+      },
+      "faint": {
+        "$type": "color",
+        "$value": "{primitive.slate.400}",
+        "$description": "Только декоративное и необязательное: watermark-иконки, disabled-намёки. Ниже floor контентного текста — для чтения не предназначен."
+      }
+    }
+  },
+  "surface": {
+    "$description": "Поверхности. Уровни: page → card → raised; приглушённые заливки — subtle (slate-50) и второй уровень subtle-strong (slate-100).",
+    "page": {
+      "$type": "color",
+      "$value": "{primitive.slate.50}",
+        "$description": "Фон-подложка страницы/вьюпорта. Де-факто admin-v2 (slate-50-тона вокруг белых карточек); site-v2 держит тёплый фон #f7f7f2 — его судьба решается в волне 6 отдельно, этот токен ничего не меняет."
+    },
+    "card": {
+      "$type": "color",
+      "$value": "{primitive.white}",
+      "$description": "Основная поверхность карточки, панели, таблицы. Отделяется от page заливкой + ring-1, не тенью."
+    },
+    "raised": {
+      "$type": "color",
+      "$value": "{primitive.white}",
+      "$description": "Второй уровень над карточкой: дропдауны, поповеры, модалки. Заливка та же белая — уровень выражается тенью/ring, а не цветом."
+    },
+    "subtle": {
+      "$type": "color",
+      "$value": "{primitive.slate.50}",
+      "$description": "Первый уровень приглушённой заливки на белом: чипы, inner-секции, hover-фоны строк."
+    },
+    "subtle-strong": {
+      "$type": "color",
+      "$value": "{primitive.slate.100}",
+      "$description": "Второй уровень приглушённой заливки: selected-состояния, шапки таблиц, прижатые блоки."
+    }
+  },
+  "border": {
+    "$description": "Границы. Кит admin безтеневой: разделение поверхностей идёт ring-1/border, поэтому границы — главный разделитель.",
+    "default": {
+      "$type": "color",
+      "$value": "{primitive.slate.200}",
+      "$description": "Декоративные границы и разделители: линии в списках, обводка карточек."
+    },
+    "strong": {
+      "$type": "color",
+      "$value": "{primitive.slate.300}",
+      "$description": "Границы, идентифицирующие контрол: инпуты, селекты, кнопки-обводки."
+    }
+  },
+  "action": {
+    "$description": "Действия. primary — системное действие; ton — TON-экраны (утверждённое решение, sky-700 — не менять); destructive — удаление/отмена.",
+    "primary": {
+      "$type": "color",
+      "$value": "{primitive.indigo.600}",
+      "$description": "Основная кнопка/действие экрана. Ссылки и фокус-акценты держим в том же индиго."
+    },
+    "primary-hover": {
+      "$type": "color",
+      "$value": "{primitive.indigo.700}",
+      "$description": "Hover/active основного действия."
+    },
+    "primary-text": {
+      "$type": "color",
+      "$value": "{primitive.white}",
+      "$description": "Текст/иконка на action.primary. Пара white-on-indigo-600 проходит AA (см. валидацию контраста)."
+    },
+    "ton": {
+      "$type": "color",
+      "$value": "{primitive.sky.700}",
+      "$description": "Основное действие на TON-экранах (оплата, кошелёк). Утверждённое студийное решение — sky-700, НЕ менять на indigo."
+    },
+    "ton-hover": {
+      "$type": "color",
+      "$value": "{primitive.sky.800}",
+      "$description": "Hover/active TON-действия."
+    },
+    "ton-text": {
+      "$type": "color",
+      "$value": "{primitive.white}",
+      "$description": "Текст/иконка на action.ton. Пара white-on-sky-700 проходит AA."
+    },
+    "destructive": {
+      "$type": "color",
+      "$value": "{primitive.red.600}",
+      "$description": "Деструктивное действие: удалить, отозвать, кик."
+    },
+    "destructive-text": {
+      "$type": "color",
+      "$value": "{primitive.white}",
+      "$description": "Текст/иконка на action.destructive."
+    }
+  },
+  "feedback": {
+    "$description": "Обратная связь — ТОЛЬКО парами фон+текст из одного набора: text-шаг каждого цвета выбран так, чтобы проходить AA на своём bg. Не смешивать шаги из разных пар.",
+    "success": {
+      "$description": "Успех: оплачено, сохранено, активно.",
+      "bg": {
+        "$type": "color",
+        "$value": "{primitive.emerald.50}",
+        "$description": "Фон success-сообщения."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "{primitive.emerald.700}",
+        "$description": "Текст/иконка на success.bg. Студийное правило: emerald не светлее 700 на светлом фоне."
+      }
+    },
+    "warning": {
+      "$description": "Предупреждение: ожидание оплаты, лимиты, деградации.",
+      "bg": {
+        "$type": "color",
+        "$value": "{primitive.amber.50}",
+        "$description": "Фон warning-сообщения."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "{primitive.amber.700}",
+        "$description": "Текст/иконка на warning.bg. Более светлые amber на белом не проходят контраст."
+      }
+    },
+    "error": {
+      "$description": "Ошибка: провал платежа, невалидные данные.",
+      "bg": {
+        "$type": "color",
+        "$value": "{primitive.red.50}",
+        "$description": "Фон error-сообщения."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "{primitive.red.700}",
+        "$description": "Текст/иконка на error.bg. Для кнопок действия используется action.destructive (red-600), не эта пара."
+      }
+    },
+    "info": {
+      "$description": "Нейтральная информация: подсказки, статусы процесса.",
+      "bg": {
+        "$type": "color",
+        "$value": "{primitive.sky.50}",
+        "$description": "Фон info-сообщения."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "{primitive.sky.700}",
+        "$description": "Текст/иконка на info.bg."
+      }
+    }
+  },
+  "component": {
+    "$description": "Компонентный слой — именованные паттерны, за которыми стоят студийные правила продукта.",
+    "money-zero": {
+      "$type": "color",
+      "$value": "{primitive.slate.900}",
+      "$description": "Правило нулей: денежные нули тёмные (ink-цвет), приглушаются только «деятельные» нули — нулевые счётчики действий/событий. Ноль в балансе — это число, а не отсутствие данных, поэтому он не серый."
+    },
+    "micro-label": {
+      "$type": "typography",
+      "$value": {
+        "fontSize": "11px",
+        "textCase": "uppercase",
+        "letterSpacing": "{letterSpacing.widest}",
+        "color": "{text.ink.muted}"
+      },
+      "$description": "Микро-лейбл: 11px, uppercase, letter-spacing widest, slate-500. Единый паттерн надсеточных подписей и мелких рубрикаторов."
+    }
+  }
+}

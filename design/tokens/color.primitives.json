@@ -1,0 +1,712 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Примитивы цвета Bullgram — полные рампы (50–950) ТОЛЬКО палитр, реально встречающихся в admin-v2/src и site-v2/src, плюс white/black. Значения байт-в-байт из admin-v2/node_modules/tailwindcss/theme.css (Tailwind v4 default, oklch). ЖЕЛЕЗНОЕ ПРАВИЛО: примитив никогда не используется в компонентах напрямую — только через semantic-слой (color.semantic.json); изменение значения примитива = изменение визуала всего продукта.",
+  "primitive": {
+    "slate": {
+      "$description": "Серый с холодным подтоном — нейтральный каркас продукта: текст, поверхности, границы. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(98.4% 0.003 247.858)",
+        "$description": "Slate 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css. Semantic: surface.page / surface.subtle."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(96.8% 0.007 247.896)",
+        "$description": "Slate 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css. Semantic: surface.subtle-strong."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(92.9% 0.013 255.508)",
+        "$description": "Slate 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css. Semantic: border.default."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(86.9% 0.022 252.894)",
+        "$description": "Slate 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: border.strong."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(70.4% 0.04 256.788)",
+        "$description": "Slate 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css. Semantic: text.ink.faint."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(55.4% 0.046 257.417)",
+        "$description": "Slate 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css. Semantic: text.ink.muted (floor контентного текста)."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(44.6% 0.043 257.281)",
+        "$description": "Slate 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(37.2% 0.044 257.287)",
+        "$description": "Slate 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: text.ink.body."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(27.9% 0.041 260.031)",
+        "$description": "Slate 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(20.8% 0.042 265.755)",
+        "$description": "Slate 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css. Semantic: text.ink.strong / component.money-zero."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(12.9% 0.042 264.695)",
+        "$description": "Slate 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "indigo": {
+      "$description": "Основной брендовый акцент действий (кнопки, ссылки, фокус). Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(96.2% 0.018 272.314)",
+        "$description": "Indigo 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(93% 0.034 272.788)",
+        "$description": "Indigo 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(87% 0.065 274.039)",
+        "$description": "Indigo 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(78.5% 0.115 274.713)",
+        "$description": "Indigo 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(67.3% 0.182 276.935)",
+        "$description": "Indigo 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(58.5% 0.233 277.117)",
+        "$description": "Indigo 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(51.1% 0.262 276.966)",
+        "$description": "Indigo 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css. Semantic: action.primary."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(45.7% 0.24 277.023)",
+        "$description": "Indigo 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: action.primary-hover."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(39.8% 0.195 277.366)",
+        "$description": "Indigo 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(35.9% 0.144 278.697)",
+        "$description": "Indigo 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(25.7% 0.09 281.288)",
+        "$description": "Indigo 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "amber": {
+      "$description": "Тёплый жёлто-оранжевый — предупреждения и ожидание оплаты. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(98.7% 0.022 95.277)",
+        "$description": "Amber 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.warning.bg."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(96.2% 0.059 95.617)",
+        "$description": "Amber 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(92.4% 0.12 95.746)",
+        "$description": "Amber 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(87.9% 0.169 91.605)",
+        "$description": "Amber 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(82.8% 0.189 84.429)",
+        "$description": "Amber 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(76.9% 0.188 70.08)",
+        "$description": "Amber 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(66.6% 0.179 58.318)",
+        "$description": "Amber 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(55.5% 0.163 48.998)",
+        "$description": "Amber 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.warning.text."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(47.3% 0.137 46.201)",
+        "$description": "Amber 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(41.4% 0.112 45.904)",
+        "$description": "Amber 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(27.9% 0.077 45.635)",
+        "$description": "Amber 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "rose": {
+      "$description": "Розово-красный — мягкие деструктивные и «горящие» акценты. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(96.9% 0.015 12.422)",
+        "$description": "Rose 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(94.1% 0.03 12.58)",
+        "$description": "Rose 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(89.2% 0.058 10.001)",
+        "$description": "Rose 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(81% 0.117 11.638)",
+        "$description": "Rose 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(71.2% 0.194 13.428)",
+        "$description": "Rose 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(64.5% 0.246 16.439)",
+        "$description": "Rose 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(58.6% 0.253 17.585)",
+        "$description": "Rose 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(51.4% 0.222 16.935)",
+        "$description": "Rose 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(45.5% 0.188 13.697)",
+        "$description": "Rose 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(41% 0.159 10.272)",
+        "$description": "Rose 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(27.1% 0.105 12.094)",
+        "$description": "Rose 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "emerald": {
+      "$description": "Зелёный — успех, оплачено, активно. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(97.9% 0.021 166.113)",
+        "$description": "Emerald 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.success.bg."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(95% 0.052 163.051)",
+        "$description": "Emerald 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(90.5% 0.093 164.15)",
+        "$description": "Emerald 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(84.5% 0.143 164.978)",
+        "$description": "Emerald 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(76.5% 0.177 163.223)",
+        "$description": "Emerald 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(69.6% 0.17 162.48)",
+        "$description": "Emerald 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(59.6% 0.145 163.225)",
+        "$description": "Emerald 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(50.8% 0.118 165.612)",
+        "$description": "Emerald 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.success.text."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(43.2% 0.095 166.913)",
+        "$description": "Emerald 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(37.8% 0.077 168.94)",
+        "$description": "Emerald 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(26.2% 0.051 172.552)",
+        "$description": "Emerald 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "blue": {
+      "$description": "Синий — информационные акценты и ссылки второго плана. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(97% 0.014 254.604)",
+        "$description": "Blue 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(93.2% 0.032 255.585)",
+        "$description": "Blue 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(88.2% 0.059 254.128)",
+        "$description": "Blue 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(80.9% 0.105 251.813)",
+        "$description": "Blue 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(70.7% 0.165 254.624)",
+        "$description": "Blue 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(62.3% 0.214 259.815)",
+        "$description": "Blue 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(54.6% 0.245 262.881)",
+        "$description": "Blue 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(48.8% 0.243 264.376)",
+        "$description": "Blue 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(42.4% 0.199 265.638)",
+        "$description": "Blue 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(37.9% 0.146 265.522)",
+        "$description": "Blue 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(28.2% 0.091 267.935)",
+        "$description": "Blue 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "red": {
+      "$description": "Красный — ошибки и деструктивные действия. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(97.1% 0.013 17.38)",
+        "$description": "Red 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.error.bg."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(93.6% 0.032 17.717)",
+        "$description": "Red 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(88.5% 0.062 18.334)",
+        "$description": "Red 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(80.8% 0.114 19.571)",
+        "$description": "Red 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(70.4% 0.191 22.216)",
+        "$description": "Red 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(63.7% 0.237 25.331)",
+        "$description": "Red 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(57.7% 0.245 27.325)",
+        "$description": "Red 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css. Semantic: action.destructive."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(50.5% 0.213 27.518)",
+        "$description": "Red 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.error.text."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(44.4% 0.177 26.899)",
+        "$description": "Red 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(39.6% 0.141 25.723)",
+        "$description": "Red 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(25.8% 0.092 26.042)",
+        "$description": "Red 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "sky": {
+      "$description": "Голубой — TON-экраны и информационные подсказки. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(97.7% 0.013 236.62)",
+        "$description": "Sky 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css. Semantic: feedback.info.bg."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(95.1% 0.026 236.824)",
+        "$description": "Sky 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(90.1% 0.058 230.902)",
+        "$description": "Sky 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(82.8% 0.111 230.318)",
+        "$description": "Sky 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(74.6% 0.16 232.661)",
+        "$description": "Sky 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(68.5% 0.169 237.323)",
+        "$description": "Sky 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(58.8% 0.158 241.966)",
+        "$description": "Sky 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(50% 0.134 242.749)",
+        "$description": "Sky 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css. Semantic: action.ton / feedback.info.text."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(44.3% 0.11 240.79)",
+        "$description": "Sky 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css. Semantic: action.ton-hover."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(39.1% 0.09 240.876)",
+        "$description": "Sky 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(29.3% 0.066 243.157)",
+        "$description": "Sky 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "violet": {
+      "$description": "Фиолетовый — второстепенные акценты. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(96.9% 0.016 293.756)",
+        "$description": "Violet 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(94.3% 0.029 294.588)",
+        "$description": "Violet 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(89.4% 0.057 293.283)",
+        "$description": "Violet 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(81.1% 0.111 293.571)",
+        "$description": "Violet 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(70.2% 0.183 293.541)",
+        "$description": "Violet 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(60.6% 0.25 292.717)",
+        "$description": "Violet 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(54.1% 0.281 293.009)",
+        "$description": "Violet 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(49.1% 0.27 292.581)",
+        "$description": "Violet 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(43.2% 0.232 292.759)",
+        "$description": "Violet 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(38% 0.189 293.745)",
+        "$description": "Violet 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(28.3% 0.141 291.089)",
+        "$description": "Violet 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "orange": {
+      "$description": "Оранжевый — второстепенные акценты и предупреждения. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(98% 0.016 73.684)",
+        "$description": "Orange 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(95.4% 0.038 75.164)",
+        "$description": "Orange 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(90.1% 0.076 70.697)",
+        "$description": "Orange 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(83.7% 0.128 66.29)",
+        "$description": "Orange 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(75% 0.183 55.934)",
+        "$description": "Orange 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(70.5% 0.213 47.604)",
+        "$description": "Orange 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(64.6% 0.222 41.116)",
+        "$description": "Orange 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(55.3% 0.195 38.402)",
+        "$description": "Orange 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(47% 0.157 37.304)",
+        "$description": "Orange 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(40.8% 0.123 38.172)",
+        "$description": "Orange 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(26.6% 0.079 36.259)",
+        "$description": "Orange 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "purple": {
+      "$description": "Пурпурный — второстепенные акценты. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(97.7% 0.014 308.299)",
+        "$description": "Purple 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(94.6% 0.033 307.174)",
+        "$description": "Purple 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(90.2% 0.063 306.703)",
+        "$description": "Purple 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(82.7% 0.119 306.383)",
+        "$description": "Purple 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(71.4% 0.203 305.504)",
+        "$description": "Purple 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(62.7% 0.265 303.9)",
+        "$description": "Purple 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(55.8% 0.288 302.321)",
+        "$description": "Purple 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(49.6% 0.265 301.924)",
+        "$description": "Purple 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(43.8% 0.218 303.724)",
+        "$description": "Purple 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(38.1% 0.176 304.987)",
+        "$description": "Purple 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(29.1% 0.149 302.717)",
+        "$description": "Purple 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "teal": {
+      "$description": "Бирюзовый — второстепенные акценты. Все 11 шагов (50–950) — значения байт-в-байт из tailwindcss/theme.css (Tailwind v4 default, oklch).",
+      "50": {
+        "$type": "color",
+        "$value": "oklch(98.4% 0.014 180.72)",
+        "$description": "Teal 50 — самый светлый шаг — фоны уведомлений и подложек. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "100": {
+        "$type": "color",
+        "$value": "oklch(95.3% 0.051 180.801)",
+        "$description": "Teal 100 — светлый шаг — приглушённые заливки и hover-фоны. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "200": {
+        "$type": "color",
+        "$value": "oklch(91% 0.096 180.426)",
+        "$description": "Teal 200 — светлый шаг — декоративные границы и разделители. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "300": {
+        "$type": "color",
+        "$value": "oklch(85.5% 0.138 181.071)",
+        "$description": "Teal 300 — границы контролов и иконки на цветном фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "400": {
+        "$type": "color",
+        "$value": "oklch(77.7% 0.152 181.912)",
+        "$description": "Teal 400 — светлый текст-акцент и декор (ниже floor контентного текста). Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "500": {
+        "$type": "color",
+        "$value": "oklch(70.4% 0.14 182.503)",
+        "$description": "Teal 500 — средний шаг — приглушённый, но читаемый контентный текст. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "600": {
+        "$type": "color",
+        "$value": "oklch(60% 0.118 184.704)",
+        "$description": "Teal 600 — основной насыщенный шаг — кнопки и активные состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "700": {
+        "$type": "color",
+        "$value": "oklch(51.1% 0.096 186.391)",
+        "$description": "Teal 700 — тёмный шаг — hover кнопок и текст на светлом цветовом фоне. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "800": {
+        "$type": "color",
+        "$value": "oklch(43.7% 0.078 188.216)",
+        "$description": "Teal 800 — тёмный шаг — усиленные hover-состояния. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "900": {
+        "$type": "color",
+        "$value": "oklch(38.6% 0.063 188.416)",
+        "$description": "Teal 900 — очень тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      },
+      "950": {
+        "$type": "color",
+        "$value": "oklch(27.7% 0.046 192.524)",
+        "$description": "Teal 950 — самый тёмный шаг. Tailwind v4 default, байт-в-байт из theme.css."
+      }
+    },
+    "white": {
+      "$type": "color",
+      "$value": "#ffffff",
+      "$description": "Белый — поверхность карточек и текст на насыщенных действиях (action.*-text). Tailwind v4 default (--color-white: #fff, нормализовано до 6 знаков)."
+    },
+    "black": {
+      "$type": "color",
+      "$value": "#000000",
+      "$description": "Чёрный — зарезервирован для особых случаев (сплошные подложки, печать). Tailwind v4 default (--color-black: #000, нормализовано до 6 знаков)."
+    }
+  }
+}

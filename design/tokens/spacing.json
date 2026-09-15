@@ -1,0 +1,177 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Отступы Bullgram — де-факто дефолтная шкала Tailwind v4 (--spacing: 0.25rem), ноль визуальных амбиций. Базовый шаг 4px.",
+  "base": {
+    "$type": "dimension",
+    "$value": "0.25rem",
+    "$description": "Базовый шаг шкалы = 4px; вся шкала — его кратные (Tailwind v4 генерирует любое кратное динамически, здесь зафиксированы штатные ступени)."
+  },
+  "scale": {
+    "$description": "Дефолтная шкала отступов Tailwind v4: любое значение кратно --spacing: 0.25rem (4px). Значения в rem — физические величины ступеней; Tailwind v4 эммитит утилиты как calc(var(--spacing) * N), per-step CSS-переменных нет — билд волны 2 отдаёт только --spacing. px в описаниях.",
+    "0": {
+      "$type": "dimension",
+      "$value": "0px",
+      "$description": "spacing-0 = 0px (0px)."
+    },
+    "0.5": {
+      "$type": "dimension",
+      "$value": "0.125rem",
+      "$description": "spacing-0.5 = 2px (0.125rem)."
+    },
+    "1": {
+      "$type": "dimension",
+      "$value": "0.25rem",
+      "$description": "spacing-1 = 4px (0.25rem)."
+    },
+    "1.5": {
+      "$type": "dimension",
+      "$value": "0.375rem",
+      "$description": "spacing-1.5 = 6px (0.375rem)."
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "0.5rem",
+      "$description": "spacing-2 = 8px (0.5rem)."
+    },
+    "2.5": {
+      "$type": "dimension",
+      "$value": "0.625rem",
+      "$description": "spacing-2.5 = 10px (0.625rem)."
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "0.75rem",
+      "$description": "spacing-3 = 12px (0.75rem)."
+    },
+    "3.5": {
+      "$type": "dimension",
+      "$value": "0.875rem",
+      "$description": "spacing-3.5 = 14px (0.875rem)."
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "1rem",
+      "$description": "spacing-4 = 16px (1rem)."
+    },
+    "5": {
+      "$type": "dimension",
+      "$value": "1.25rem",
+      "$description": "spacing-5 = 20px (1.25rem)."
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "1.5rem",
+      "$description": "spacing-6 = 24px (1.5rem)."
+    },
+    "7": {
+      "$type": "dimension",
+      "$value": "1.75rem",
+      "$description": "spacing-7 = 28px (1.75rem)."
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "2rem",
+      "$description": "spacing-8 = 32px (2rem)."
+    },
+    "9": {
+      "$type": "dimension",
+      "$value": "2.25rem",
+      "$description": "spacing-9 = 36px (2.25rem)."
+    },
+    "10": {
+      "$type": "dimension",
+      "$value": "2.5rem",
+      "$description": "spacing-10 = 40px (2.5rem)."
+    },
+    "11": {
+      "$type": "dimension",
+      "$value": "2.75rem",
+      "$description": "spacing-11 = 44px (2.75rem)."
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": "3rem",
+      "$description": "spacing-12 = 48px (3rem)."
+    },
+    "14": {
+      "$type": "dimension",
+      "$value": "3.5rem",
+      "$description": "spacing-14 = 56px (3.5rem)."
+    },
+    "16": {
+      "$type": "dimension",
+      "$value": "4rem",
+      "$description": "spacing-16 = 64px (4rem)."
+    },
+    "20": {
+      "$type": "dimension",
+      "$value": "5rem",
+      "$description": "spacing-20 = 80px (5rem)."
+    },
+    "24": {
+      "$type": "dimension",
+      "$value": "6rem",
+      "$description": "spacing-24 = 96px (6rem)."
+    },
+    "28": {
+      "$type": "dimension",
+      "$value": "7rem",
+      "$description": "spacing-28 = 112px (7rem)."
+    },
+    "32": {
+      "$type": "dimension",
+      "$value": "8rem",
+      "$description": "spacing-32 = 128px (8rem)."
+    },
+    "36": {
+      "$type": "dimension",
+      "$value": "9rem",
+      "$description": "spacing-36 = 144px (9rem)."
+    },
+    "40": {
+      "$type": "dimension",
+      "$value": "10rem",
+      "$description": "spacing-40 = 160px (10rem)."
+    },
+    "44": {
+      "$type": "dimension",
+      "$value": "11rem",
+      "$description": "spacing-44 = 176px (11rem)."
+    },
+    "48": {
+      "$type": "dimension",
+      "$value": "12rem",
+      "$description": "spacing-48 = 192px (12rem)."
+    },
+    "52": {
+      "$type": "dimension",
+      "$value": "13rem",
+      "$description": "spacing-52 = 208px (13rem)."
+    },
+    "56": {
+      "$type": "dimension",
+      "$value": "14rem",
+      "$description": "spacing-56 = 224px (14rem)."
+    },
+    "64": {
+      "$type": "dimension",
+      "$value": "16rem",
+      "$description": "spacing-64 = 256px (16rem)."
+    },
+    "72": {
+      "$type": "dimension",
+      "$value": "18rem",
+      "$description": "spacing-72 = 288px (18rem)."
+    },
+    "80": {
+      "$type": "dimension",
+      "$value": "20rem",
+      "$description": "spacing-80 = 320px (20rem)."
+    },
+    "96": {
+      "$type": "dimension",
+      "$value": "24rem",
+      "$description": "spacing-96 = 384px (24rem)."
+    }
+  }
+}

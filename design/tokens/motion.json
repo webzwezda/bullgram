@@ -1,0 +1,16 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Моушн Bullgram — де-факто transition-длительности кита, ноль визуальных амбиций. UI-моушн живёт в диапазоне 150–300ms; ease-out — дефолтная кривая (byte-equal --ease-out из tailwindcss/theme.css). Для prefers-reduced-motion анимации отключаются на уровне приложения.",
+  "duration": {
+    "fast": { "$type": "duration", "$value": "150ms", "$description": "Быстро: hover, focus, смена цвета/прозрачности. Совпадает с Tailwind default (--default-transition-duration: 150ms)." },
+    "normal": { "$type": "duration", "$value": "200ms", "$description": "Дефолтная длительность перехода кита: тогглы, дропдауны, смена состояний." },
+    "slow": { "$type": "duration", "$value": "300ms", "$description": "Медленно: модалки, панели, крупные раскрытия. Верхняя граница обычного UI-моушна." }
+  },
+  "ease": {
+    "out": {
+      "$type": "cubicBezier",
+      "$value": [0, 0, 0.2, 1],
+      "$description": "Дефолтная кривая кита — ease-out (CSS-форма: cubic-bezier(0, 0, 0.2, 1), byte-equal --ease-out из theme.css). Замедление в конце для входящих состояний."
+    }
+  }
+}
