@@ -24,6 +24,9 @@ import { forgetInvoices, getRememberedInvoices, rememberInvoice } from '../lib/m
 
 const AMOUNT_CHIPS = [0.1, 0.5, 1, 5, 10];
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const WALLET_RE = /^(?:UQ|EQ|0Q)[A-Za-z0-9_\-]{46}$/;
+const VIEW_CHUNK_SIZE = 5;
+const VIEW_CHUNK_DELAY_MS = 300;
 
 function FieldError({ message }) {
   if (!message) return null;
@@ -43,7 +46,7 @@ function SectionLabel({ icon: Icon, children, hint }) {
         <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{children}</span>
       </div>
       {hint ? (
-        <span className="text-[10px] text-slate-400 font-medium">{hint}</span>
+        <span className="text-[11px] text-slate-500 font-medium">{hint}</span>
       ) : null}
     </div>
   );
@@ -92,39 +95,57 @@ export function CreateInvoicePage() {
         }
       }
 
-      // Счета этого браузера (в т.ч. созданные без регистрации): статус через public-view
+      // Счета этого браузера (в т.ч. созданные без регистрации): статус через public-view,
+      // чанками по 5 с паузой, чтобы не выжечь общий лимит запросов с одного IP
       const remembered = getRememberedInvoices();
       const staleIds = [];
-      const views = await Promise.allSettled(
-        remembered.map((entry) =>
-          apiRequest(`/api/public-invoices/public/${entry.id}/public-view`)
-        )
-      );
-      views.forEach((result, index) => {
-        const entry = remembered[index];
-        if (result.status === 'fulfilled') {
-          const view = result.value;
-          if (view.status !== 'pending' && view.status !== 'paid') {
+      let someFailed = false;
+      for (let i = 0; i < remembered.length; i += VIEW_CHUNK_SIZE) {
+        const chunk = remembered.slice(i, i + VIEW_CHUNK_SIZE);
+        const views = await Promise.allSettled(
+          chunk.map((entry) =>
+            apiRequest(`/api/public-invoices/public/${entry.id}/public-view`)
+          )
+        );
+        views.forEach((result, index) => {
+          const entry = chunk[index];
+          if (result.status === 'fulfilled') {
+            const view = result.value;
+            if (view.status !== 'pending' && view.status !== 'paid') {
+              staleIds.push(entry.id);
+              return;
+            }
+            byId.set(view.id, {
+              id: view.id,
+              title: view.item_title || null,
+              amount_ton: view.amount_ton,
+              status: view.status,
+              created_at: entry.created_at,
+            });
+          } else if (result.reason?.status === 404) {
             staleIds.push(entry.id);
-            return;
+          } else {
+            someFailed = true;
+            byId.set(entry.id, {
+              id: entry.id,
+              title: null,
+              amount_ton: null,
+              status: 'unknown',
+              created_at: entry.created_at,
+            });
           }
-          byId.set(view.id, {
-            id: view.id,
-            title: view.item_title || null,
-            amount_ton: view.amount_ton,
-            status: view.status,
-            created_at: entry.created_at,
-          });
-        } else if (result.reason?.status === 404) {
-          staleIds.push(entry.id);
+        });
+        if (i + VIEW_CHUNK_SIZE < remembered.length) {
+          await new Promise((resolve) => setTimeout(resolve, VIEW_CHUNK_DELAY_MS));
         }
-      });
+      }
       if (staleIds.length) forgetInvoices(staleIds);
 
       const items = Array.from(byId.values())
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
         .slice(0, 20);
       setMyInvoices(items);
+      if (someFailed) setMyError('Не удалось загрузить часть счетов');
     } catch (e) {
       setMyError(e.message || 'Не удалось загрузить счета');
     } finally {
@@ -148,34 +169,48 @@ export function CreateInvoicePage() {
     if (submitError) setSubmitError('');
   };
 
-  const validate = () => {
+  const validate = (fieldName) => {
     const next = {};
+    const check = (key, error) => {
+      if (!fieldName || fieldName === key) next[key] = error;
+    };
+
     const title = form.title.trim();
-    if (!title) next.title = 'Укажите название';
-    else if (title.length > 120) next.title = 'До 120 символов';
+    if (!title) check('title', 'Укажите название');
+    else if (title.length > 120) check('title', 'До 120 символов');
 
     const amount = Number(form.amount_ton);
     if (!Number.isFinite(amount) || amount < 0.01 || amount > 10000) {
-      next.amount_ton = 'От 0.01 до 10000 GRAM';
+      check('amount_ton', 'От 0.01 до 10000 TON');
     }
 
-    if (!form.secret_payload) next.secret_payload = 'Укажите, что получит покупатель';
-    else if (form.secret_payload.length > 2000) next.secret_payload = 'До 2000 символов';
+    if (!form.secret_payload) check('secret_payload', 'Укажите, что получит покупатель');
+    else if (form.secret_payload.length > 2000) check('secret_payload', 'До 2000 символов');
 
     if (form.description && form.description.length > 500) {
-      next.description = 'До 500 символов';
+      check('description', 'До 500 символов');
     }
 
     if (!form.seller_wallet.trim()) {
-      next.seller_wallet = 'Укажите TON-кошелёк';
-    } else if (!/^[A-Za-z0-9_\-]{20,}$/.test(form.seller_wallet.trim())) {
-      next.seller_wallet = 'Похоже на неверный адрес';
+      check('seller_wallet', 'Укажите TON-кошелёк');
+    } else if (!WALLET_RE.test(form.seller_wallet.trim())) {
+      check('seller_wallet', 'Адрес кошелька должен быть 48 символов и начинаться с UQ, EQ или 0Q');
     }
 
     if (!form.seller_email.trim()) {
-      next.seller_email = 'Укажите email';
+      check('seller_email', 'Укажите email');
     } else if (!EMAIL_RE.test(form.seller_email.trim())) {
-      next.seller_email = 'Неверный email';
+      check('seller_email', 'Неверный email');
+    }
+
+    if (fieldName) {
+      setErrors((prev) => {
+        const merged = { ...prev };
+        if (next[fieldName]) merged[fieldName] = next[fieldName];
+        else delete merged[fieldName];
+        return merged;
+      });
+      return !next[fieldName];
     }
 
     setErrors(next);
@@ -206,7 +241,15 @@ export function CreateInvoicePage() {
       rememberInvoice(data.id);
       navigate(`/created/${data.id}`);
     } catch (err) {
-      setSubmitError(err.message || 'Не удалось создать счёт');
+      if (Array.isArray(err.fieldErrors) && err.fieldErrors.length > 0) {
+        const fieldErrors = {};
+        for (const item of err.fieldErrors) {
+          if (item?.field) fieldErrors[item.field] = item.message;
+        }
+        setErrors(fieldErrors);
+      } else {
+        setSubmitError(err.message || 'Не удалось создать счёт');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -226,7 +269,7 @@ export function CreateInvoicePage() {
               <FilePlus className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl font-bold text-slate-900">Счёт на оплату в GRAM</h2>
+              <h2 className="text-xl font-bold text-slate-900">Счёт на оплату в TON</h2>
               <p className="text-sm font-medium text-slate-500 mt-0.5">
                 Заполните условия — мы сгенерируем ссылку для покупателя.{' '}
                 <span className="inline-flex items-center gap-1 font-mono">
@@ -246,7 +289,7 @@ export function CreateInvoicePage() {
                 type="text"
                 value={form.title}
                 onChange={(e) => update('title', e.target.value.slice(0, 120))}
-                onBlur={() => form.title && validate()}
+                onBlur={() => form.title && validate('title')}
                 placeholder="Например: консультация, файл, доступ к материалу"
                 maxLength={120}
                 aria-invalid={!!errors.title}
@@ -275,7 +318,7 @@ export function CreateInvoicePage() {
                   min="0.01"
                   value={form.amount_ton}
                   onChange={(e) => update('amount_ton', e.target.value)}
-                  onBlur={() => form.amount_ton && validate()}
+                  onBlur={() => form.amount_ton && validate('amount_ton')}
                   placeholder="0.5"
                   aria-invalid={!!errors.amount_ton}
                   className={inputClass('amount_ton')}
@@ -305,8 +348,8 @@ export function CreateInvoicePage() {
                   type="text"
                   value={form.seller_wallet}
                   onChange={(e) => update('seller_wallet', e.target.value)}
-                  onBlur={() => form.seller_wallet && validate()}
-                  placeholder="EQ… или UQ… или 0Q…"
+                  onBlur={() => form.seller_wallet && validate('seller_wallet')}
+                  placeholder="UQ… / EQ…"
                   spellCheck={false}
                   aria-invalid={!!errors.seller_wallet}
                   className={`${inputClass('seller_wallet')} font-mono`}
@@ -320,14 +363,14 @@ export function CreateInvoicePage() {
               <textarea
                 value={form.secret_payload}
                 onChange={(e) => update('secret_payload', e.target.value.slice(0, 2000))}
-                onBlur={() => form.secret_payload && validate()}
+                onBlur={() => form.secret_payload && validate('secret_payload')}
                 placeholder="Ссылка, ключ, код, контакт — что увидит покупатель после оплаты"
                 maxLength={2000}
                 rows={4}
                 aria-invalid={!!errors.secret_payload}
                 className={`w-full rounded-xl border bg-white px-3.5 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/5 transition-colors font-mono ${errors.secret_payload ? 'border-rose-300' : 'border-slate-200 focus:border-slate-400'}`}
               />
-              <div className="flex items-center justify-between text-xs text-slate-400 mt-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-1.5">
                 <span>Текст увидят только после успешной оплаты.</span>
                 <span className="font-mono">{form.secret_payload.length}/2000</span>
               </div>
@@ -341,7 +384,7 @@ export function CreateInvoicePage() {
                   type="email"
                   value={form.seller_email}
                   onChange={(e) => update('seller_email', e.target.value)}
-                  onBlur={() => form.seller_email && validate()}
+                  onBlur={() => form.seller_email && validate('seller_email')}
                   placeholder="you@example.com"
                   aria-invalid={!!errors.seller_email}
                   className={inputClass('seller_email')}
@@ -376,8 +419,8 @@ export function CreateInvoicePage() {
               </div>
             ) : null}
 
-            <p className="text-center text-[11px] text-slate-400 leading-relaxed">
-              Bullgram обеспечивает приём платежа и не гарантирует доставку товара.
+            <p className="text-center text-[11px] text-slate-500 leading-relaxed">
+              Платёж идёт напрямую на твой кошелёк — Bullgram только создаёт счёт и ссылку оплаты
             </p>
           </form>
         </div>
@@ -453,12 +496,18 @@ function MyInvoiceRow({ invoice, onOpen }) {
         </div>
       </button>
       <div className="shrink-0 text-right">
-        <div className="text-sm font-bold text-slate-900 tabular-nums">
-          {Number(invoice.amount_ton)} <span className="text-slate-500 font-semibold">TON</span>
-        </div>
-        <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.cls}`}>
-          {status.label}
-        </span>
+        {invoice.status === 'unknown' ? (
+          <div className="text-[11px] text-slate-500 mt-1">Не удалось загрузить</div>
+        ) : (
+          <>
+            <div className="text-sm font-bold text-slate-900 tabular-nums">
+              {Number(invoice.amount_ton)} <span className="text-slate-500 font-semibold">TON</span>
+            </div>
+            <span className={`inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${status.cls}`}>
+              {status.label}
+            </span>
+          </>
+        )}
       </div>
       <div className="shrink-0 flex items-center gap-1.5">
         <button
@@ -511,35 +560,40 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
               <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
             ))}
           </div>
-        ) : error ? (
-          <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-sm text-rose-700 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <div className="flex-1">{error}</div>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Повторить
-            </button>
-          </div>
-        ) : count === 0 ? (
-          <div className="text-center py-8 px-4">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 mx-auto flex items-center justify-center mb-3">
-              <Receipt className="w-6 h-6 text-slate-400" />
-            </div>
-            <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-              Создайте первый — он появится здесь. Неоплаченные счёта исчезают из списка после истечения срока.
-            </p>
-          </div>
         ) : (
-          <div className="space-y-2">
-            {items.map((inv) => (
-              <MyInvoiceRow key={inv.id} invoice={inv} onOpen={onOpen} />
-            ))}
-          </div>
+          <>
+            {error ? (
+              <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-sm text-rose-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div className="flex-1">{error}</div>
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 text-xs font-semibold hover:bg-rose-50 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Повторить
+                </button>
+              </div>
+            ) : null}
+            {count > 0 ? (
+              <div className={`space-y-2 ${error ? 'mt-3' : ''}`}>
+                {items.map((inv) => (
+                  <MyInvoiceRow key={inv.id} invoice={inv} onOpen={onOpen} />
+                ))}
+              </div>
+            ) : !error ? (
+              <div className="text-center py-8 px-4">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 mx-auto flex items-center justify-center mb-3">
+                  <Receipt className="w-6 h-6 text-slate-400" />
+                </div>
+                <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                  Создайте первый — он появится здесь. Неоплаченные счёта исчезают из списка после истечения срока.
+                </p>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </Card>

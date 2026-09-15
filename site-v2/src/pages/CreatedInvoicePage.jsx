@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw,
   Send,
+  X,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { apiRequest } from '../api/client.js';
@@ -18,6 +19,7 @@ import { SecretRevealBlock } from '../components/SecretRevealBlock.jsx';
 import { rememberInvoice } from '../lib/my-invoices.js';
 
 const POLL_INTERVAL_MS = 5000;
+const POLL_RETRY_MS = 10000;
 const PUBLIC_VIEW_ENDPOINT = (id) => `/api/public-invoices/public/${id}/public-view`;
 
 function formatRemaining(expiresAt) {
@@ -37,21 +39,32 @@ export function CreatedInvoicePage() {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pollIssue, setPollIssue] = useState(false);
+  const [pollDelay, setPollDelay] = useState(POLL_INTERVAL_MS);
+  const [pollTick, setPollTick] = useState(0);
   const [copied, setCopied] = useState(false);
   const [linkQr, setLinkQr] = useState(null);
+  const [qrFailed, setQrFailed] = useState(false);
   const [remaining, setRemaining] = useState(null);
-  const timerRef = useRef(null);
 
   const fetchInvoice = useCallback(async () => {
     try {
       const data = await apiRequest(PUBLIC_VIEW_ENDPOINT(id));
       setInvoice(data);
       setError('');
+      setPollIssue(false);
+      setPollDelay(POLL_INTERVAL_MS);
       if (data?.status === 'pending' || data?.status === 'paid') rememberInvoice(id);
     } catch (e) {
-      setError(e.message || 'Не удалось загрузить счёт');
+      if (e.status === 400 || e.status === 404) {
+        setError(e.message || 'Счёт не найден');
+      } else {
+        setPollIssue(true);
+        setPollDelay(POLL_RETRY_MS);
+      }
     } finally {
       setLoading(false);
+      setPollTick((t) => t + 1);
     }
   }, [id]);
 
@@ -60,17 +73,11 @@ export function CreatedInvoicePage() {
   }, [fetchInvoice]);
 
   useEffect(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (invoice?.status === 'pending' && !error) {
-      timerRef.current = setInterval(fetchInvoice, POLL_INTERVAL_MS);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [invoice?.status, invoice?.id, error, fetchInvoice]);
+    if (error) return;
+    if (invoice?.status !== 'pending') return;
+    const t = setTimeout(fetchInvoice, pollDelay);
+    return () => clearTimeout(t);
+  }, [pollTick, pollDelay, error, invoice?.status, invoice?.id, fetchInvoice]);
 
   useEffect(() => {
     if (!invoice?.expires_at) return;
@@ -84,8 +91,14 @@ export function CreatedInvoicePage() {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bullgram.xyz';
     const url = `${origin}/pay/${invoice.id}`;
     QRCode.toDataURL(url, { margin: 1, width: 320 })
-      .then(setLinkQr)
-      .catch(() => setLinkQr(null));
+      .then((dataUrl) => {
+        setLinkQr(dataUrl);
+        setQrFailed(false);
+      })
+      .catch(() => {
+        setLinkQr(null);
+        setQrFailed(true);
+      });
   }, [invoice?.id]);
 
   const onCopyLink = async () => {
@@ -105,7 +118,7 @@ export function CreatedInvoicePage() {
     if (!invoice?.id) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bullgram.xyz';
     const url = `${origin}/pay/${invoice.id}`;
-    const text = `Счёт на ${Number(invoice.amount_ton || 0)} GRAM`;
+    const text = `Счёт на ${Number(invoice.amount_ton || 0)} TON`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -164,7 +177,7 @@ export function CreatedInvoicePage() {
   const isExpired = invoice.status === 'expired';
 
   const status = isPaid
-    ? { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт оплачен', desc: `${Number(invoice.amount_ton || 0)} GRAM пришли на ваш кошелёк. Секрет ниже — что получил покупатель.` }
+    ? { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт оплачен', desc: `${Number(invoice.amount_ton || 0)} TON пришли на твой кошелёк. Секрет ниже — что получил покупатель.` }
     : isExpired
       ? { Icon: Clock, bg: 'bg-slate-500', shadow: 'shadow-slate-400/20', title: 'Срок счёта истёк', desc: 'Создайте новый счёт, если покупка ещё актуальна.' }
       : { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт создан', desc: 'Отправьте ссылку покупателю — он оплатит и увидит секрет.' };
@@ -173,6 +186,20 @@ export function CreatedInvoicePage() {
 
   return (
     <section className="space-y-6">
+      {pollIssue ? (
+        <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 leading-relaxed flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <p className="flex-1">Не удалось обновить статус — повторяем попытку</p>
+          <button
+            type="button"
+            onClick={() => setPollIssue(false)}
+            aria-label="Скрыть"
+            className="shrink-0 text-rose-700 hover:text-rose-900 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : null}
       <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
           <div className="flex flex-row items-center gap-4">
@@ -198,7 +225,7 @@ export function CreatedInvoicePage() {
               <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма</div>
               <div className="text-2xl font-black tracking-tight text-slate-900">
                 {Number(invoice.amount_ton || 0)}
-                <span className="text-sm font-bold text-slate-500 ml-1.5">GRAM</span>
+                <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
                 {invoice.network === 'testnet' ? (
                   <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider">
                     Testnet
@@ -215,26 +242,28 @@ export function CreatedInvoicePage() {
               <code className="block text-xs font-mono text-slate-900 bg-slate-50 border border-slate-100 rounded-lg p-3 break-all">
                 {payUrl}
               </code>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={onCopyLink}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-colors ${
-                    copied ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200'
-                  }`}
-                >
-                  {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  {copied ? 'Скопировано' : 'Скопировать ссылку'}
-                </button>
-                <button
-                  type="button"
-                  onClick={onShareTelegram}
-                  className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                  Поделиться в Telegram
-                </button>
-              </div>
+              {!isPaid ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={onCopyLink}
+                    className={`flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-colors ${
+                      copied ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200'
+                    }`}
+                  >
+                    {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Скопировано' : 'Скопировать ссылку'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onShareTelegram}
+                    className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                    Поделиться в Telegram
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid sm:grid-cols-[auto_1fr] gap-4 items-center">
@@ -249,6 +278,10 @@ export function CreatedInvoicePage() {
                     QR ссылки — наведите камеру покупателя
                   </span>
                 </div>
+              ) : qrFailed ? (
+                <p className="text-xs text-slate-500 self-center text-center max-w-[11rem] leading-relaxed">
+                  QR не построился — используй ссылку оплаты выше
+                </p>
               ) : (
                 <div className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-slate-100 animate-pulse self-center" />
               )}
@@ -279,8 +312,25 @@ export function CreatedInvoicePage() {
               ) : null}
             </div>
 
-            {isPaid && invoice.secret_payload ? (
-              <SecretRevealBlock secret={invoice.secret_payload} title="Секрет (для истории)" />
+            {isPaid ? (
+              invoice.secret_payload ? (
+                <SecretRevealBlock secret={invoice.secret_payload} title="Секрет (для истории)" />
+              ) : (
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 space-y-3">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Секрет (для истории)</div>
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    Не удалось загрузить секрет — обнови страницу или нажми «Проверить ещё раз»
+                  </p>
+                  <button
+                    type="button"
+                    onClick={fetchInvoice}
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors w-fit"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Проверить ещё раз
+                  </button>
+                </div>
+              )
             ) : null}
 
             {isPaid ? null : (

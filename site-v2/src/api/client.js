@@ -22,6 +22,7 @@ export async function apiRequest(path, { accessToken, method = 'GET', body } = {
   if (!response.ok || data?.error) {
     const err = new Error(data?.error || `HTTP ${response.status}`);
     err.status = response.status;
+    err.fieldErrors = data?.errors || null;
     throw err;
   }
 
