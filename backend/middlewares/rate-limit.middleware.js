@@ -6,9 +6,10 @@
 
 export function rateLimit({ windowMs, max, message = 'Слишком много запросов, попробуйте позже' }) {
     const hits = new Map(); // key → array of timestamps
+    const MAX_KEYS = 5000;
 
     return function rateLimitMiddleware(req, res, next) {
-        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+        const ip = req.ip || req.socket?.remoteAddress || 'unknown';
         const key = `${req.method}:${req.originalUrl}:${ip}`;
         const now = Date.now();
 
@@ -23,6 +24,15 @@ export function rateLimit({ windowMs, max, message = 'Слишком много 
         }
 
         hits.set(key, arr);
+
+        if (hits.size > MAX_KEYS) {
+            for (const [k, tsArr] of hits) {
+                if (tsArr.every(ts => now - ts >= windowMs)) {
+                    hits.delete(k);
+                }
+            }
+        }
+
         next();
     };
 }

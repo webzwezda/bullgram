@@ -28,7 +28,8 @@ async function notifyAdmin(request) {
         const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: TELEGRAM_ADMIN_CHAT_ID, text })
+            body: JSON.stringify({ chat_id: TELEGRAM_ADMIN_CHAT_ID, text }),
+            signal: AbortSignal.timeout(5000)
         });
         const data = await response.json();
         return { notified: data?.ok === true, reason: data?.description || null };

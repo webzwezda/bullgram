@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Send } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 
@@ -15,6 +15,14 @@ export function AccessRequestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const successHeadingRef = useRef(null);
+
+  useEffect(() => {
+    if (sent) {
+      successHeadingRef.current?.focus();
+    }
+  }, [sent]);
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -25,6 +33,15 @@ export function AccessRequestPage() {
       setSent(true);
       return;
     }
+
+    const errors = {};
+    if (!name.trim()) errors.name = 'Укажи имя';
+    if (!contact.trim()) errors.contact = 'Укажи контакт для связи';
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
@@ -44,8 +61,8 @@ export function AccessRequestPage() {
     return (
       <div className="w-full max-w-2xl mx-auto px-4 py-16 sm:px-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm" role="status">
-          <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" strokeWidth={1.8} />
-          <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-950">Заявка отправлена</h1>
+          <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-700" strokeWidth={1.8} />
+          <h1 ref={successHeadingRef} tabIndex={-1} className="mt-4 text-2xl font-black tracking-tight text-slate-950 outline-none">Заявка отправлена</h1>
           <p className="mt-3 text-base font-medium leading-7 text-slate-600">
             Мы получили вашу заявку и напишем вам по указанному контакту.
             Доступ подключим в режиме Normal — без юзерботов и прокси,
@@ -106,12 +123,20 @@ export function AccessRequestPage() {
             name="name"
             type="text"
             required
+            maxLength={100}
             autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Имя"
+            aria-invalid={fieldErrors.name ? true : undefined}
+            aria-describedby={fieldErrors.name ? 'name-error' : undefined}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
+          {fieldErrors.name ? (
+            <p id="name-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
+              {fieldErrors.name}
+            </p>
+          ) : null}
         </div>
 
         <div>
@@ -123,30 +148,51 @@ export function AccessRequestPage() {
             name="contact"
             type="text"
             required
-            autoComplete="email"
+            maxLength={100}
+            autoComplete="off"
             value={contact}
             onChange={(e) => setContact(e.target.value)}
             placeholder="Telegram @username или email"
+            aria-invalid={fieldErrors.contact ? true : undefined}
+            aria-describedby={fieldErrors.contact ? 'contact-error' : undefined}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
-          <p className="mt-1.5 text-xs font-medium text-slate-400">
+          {fieldErrors.contact ? (
+            <p id="contact-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
+              {fieldErrors.contact}
+            </p>
+          ) : null}
+          <p className="mt-1.5 text-xs font-medium text-slate-500">
             Напишем сюда, когда подключим доступ
           </p>
         </div>
 
         <div>
-          <label htmlFor="note" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Ваша ситуация или пожелания <span className="font-medium text-slate-400">(по желанию)</span>
-          </label>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2">
+            <label htmlFor="note" className="text-sm font-bold text-slate-700">
+              Ваша ситуация или пожелания <span className="font-medium text-slate-500">(по желанию)</span>
+            </label>
+            <span className="shrink-0 text-[11px] font-medium text-slate-500" aria-hidden="true">
+              {note.length} / 500
+            </span>
+          </div>
           <textarea
             id="note"
             name="note"
             rows={3}
+            maxLength={500}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Например: пользуюсь скринридером, нужен крупный шрифт, важна поддержка без спешки"
+            aria-invalid={fieldErrors.note ? true : undefined}
+            aria-describedby={fieldErrors.note ? 'note-error' : undefined}
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
+          {fieldErrors.note ? (
+            <p id="note-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
+              {fieldErrors.note}
+            </p>
+          ) : null}
         </div>
 
         {error ? (
@@ -164,7 +210,7 @@ export function AccessRequestPage() {
           {submitting ? 'Отправляем…' : 'Отправить заявку'}
         </button>
 
-        <p className="text-center text-xs font-medium text-slate-400">
+        <p className="text-center text-xs font-medium text-slate-500">
           Форма работает без регистрации. Если что-то не получилось —
           напишите нам в Telegram, примем заявку вручную.
         </p>

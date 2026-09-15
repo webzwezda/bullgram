@@ -86,6 +86,11 @@ SUPABASE_SERVICE_KEY=your_service_role_key
 TG_API_ID=your_api_id
 TG_API_HASH=your_api_hash
 
+# Бот авторизации: шлёт админам уведомления о заявках на доступ
+# (публичный эндпоинт access-requests). Пусто — уведомления выключены.
+TG_BOT_TOKEN=your_bot_token
+TG_ADMIN_CHAT_ID=your_admin_chat_id
+
 # Сервер
 PORT=3000
 ```
