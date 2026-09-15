@@ -65,7 +65,7 @@ meta description/OG; tailwind.css токен-слой мёртв (teal/cream) �
 | 1 | `/` HomePage + POST /api/billing/checkout/ton-connect | **done (ACCEPT)** |
 | 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | **done (ACCEPT)** |
 | 3 | `/create` + `/created/:id` + public-invoices бэкенд | **done (ACCEPT)** |
-| 4 | `/access-request` + access-requests бэкенд | pending |
+| 4 | `/access-request` + access-requests бэкенд | **done (ACCEPT)** |
 | 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/LoginCard/UserProfileCard, api client, config, index.html (шрифты/OG) | pending |
 | 6 | батч-рантайм: редиректы, 404, hero-контент против правила «ОДИН исход», финальная дизайн-прогонка | pending |
 
@@ -212,3 +212,48 @@ P3 дожаты: GRAM→TON в шаре и статусах, onBlur валиди
 
 Коммиты волны: fix(site) волна 3 + fix(site) полировка (см. git log 2026-09-15),
 docs.
+
+### Волна 4 — `/access-request` (заявки на особый тариф) — ЗАКРЫТА, дизайн-критика ACCEPT
+
+Код-ревью: 4 P1. Хороши: honeypot честный end-to-end (offscreen + aria-hidden +
+silent success с обеих сторон), PII-дисциплина (только name/contact/note, RLS
+service-only), XSS некуда (React-текст, TG-сообщение без parse_mode).
+
+P1-фиксы:
+1. Общий rate-limit мидлварь ключился по левому X-Forwarded-For (спуфабельно) →
+   req.ip (trust proxy 1); заодно Map prune при >5000 ключей. Мидлварь также
+   защищает autopost/userbot-web (за JWT — изменение безопасно).
+2. Молчаливая обрезка: note клампился на 500 сервером без maxLength на клиенте —
+   человек пишет 1500, админ видит 500. maxLength 500/100/100 + живой счётчик
+   «N / 500». Note остался optional — по лейблу «(по желанию)» и бэкенду.
+3. Заявки читаются только одним TG-вызовом без таймаута → AbortSignal.timeout(5000).
+   Поверхность в admin-v2 НЕ строил: access_requests без owner_id, платформенные
+   данные — решение владельца (записано ниже). TG_BOT_TOKEN/TG_ADMIN_CHAT_ID
+   задокументированы в .env.example + README.
+4. slate-400 → slate-500 (страница для людей с инвалидностью — худшее место для
+   провала контраста).
+
+Дизайн-критика: ACCEPT ×2. Первый раунд поймал мой процессный прокол — форма не была
+снята до деплоя (только success-экран), форму judgeил по исходнику с оговоркой; плюс
+нашёл: ты/вы раздрай в ошибках («Укажи имя» на вы-странице), фокус не идёт на первое
+невалидное поле, jargon «без юзерботов и прокси» на первом экране для уязвимой
+аудитории (нарушение правила 2026-09-12), мёртвый текст вместо Telegram-ссылки,
+asterisk rose-500. Всё дожато: вы-голос, фокус на первое поле, живая ссылка на
+SUPPORT_TELEGRAM (футер + экран успеха + «обычно в течение 1–2 дней» на успехе),
+hint «До 500 символов. Увидят только мы.» через aria-describedby, rose-700.
+Второй раунд: форма переснята на задеплоенном билде, контраст замерен пикселями
+(slate-500 4.73:1, rose-700 6.68:1, CTA 5.33:1) — ACCEPT, условие закрыто.
+
+Рантайм: живая отправка с меткой «аудит» — форма → 201 → строка в access_requests
+(name «аудит», contact «@audit_test», note NULL — опциональность работает, status
+'new'), тестовая заявка удалена. БД: таблица пустая, застрявших 'new' нет.
+
+Решение владельца (нужно): min-поверхность в admin-v2 для чтения access_requests
+(read-only + статус-бейджи). НЕ строить без явной задачи: таблица без owner_id,
+нужно решить, кто из админов видит ПИИ заявчиков. Сегодня единственный канал —
+TG-уведомление в админский чат (теперь с таймаутом).
+
+Принятые P3: placeholder контакта 3.4:1 (формат-подсказка), спейсинг трёх promise-строк,
+мигание лимитеров при деплое.
+
+Коммиты волны: fix(site+backend) волна 4 + fix(site) полировка после ACCEPT, docs.
