@@ -66,6 +66,8 @@ Key commands:
 - `cd site-v2 && npm run build`: build the public v2 site.
 - `npm run deploy`: deploy backend, then deploy `site-v2` and `admin-v2`.
 - `npm run deploy:v2`: deploy only `site-v2` and `admin-v2`.
+- `npm run tokens:build` / `npm run tokens:check`: regenerate and gate the design tokens (see Design System section).
+- `npm run check:design`: design-system quality gates (tokens / contrast / hardcodes-ratchet / axe / ui-sync).
 - `cd backend && npm run deploy`
 
 The deploy scripts use `rsync` to a live server. Treat them as production-only commands.
@@ -114,6 +116,18 @@ For payment and plan UX:
 - `Payments / Requisites` should stay clean and first-run friendly
 - `Plans / Billing` should carry tariff, package, referral, and webhook complexity
 - do not leak internal trial/debug wording into user-facing forms when backend limits already enforce the rules
+
+## Design System (`design/`)
+
+Built 2026-09-15/16 (plan: `docs/plans/2026-09-15-unified-design-system.md`). Both apps render colors/typography from one DTCG token source; UI guidelines live in root `DESIGN.md`; the single live backlog is `docs/plans/BACKLOG.md`.
+
+- **Iron rule**: values in `design/tokens/color.primitives.json` are byte-equal to Tailwind v4 defaults (`admin-v2/node_modules/tailwindcss/theme.css`). Never edit a primitive to "fix" one screen — changing a primitive changes the whole product (SemVer MAJOR, record in `design/CHANGELOG.md`). New colors enter as semantic aliases on existing ramp steps.
+- **Semantic-first for new UI code**: `text-ink-*`, `bg-surface-*`, `border-border-*`, `bg-action-*`, `bg-feedback-*-bg/text` (mapping table in `design/README.md`; color semantics emit as `--color-*`, never `--text-*` — that namespace is font-size in v4). Legacy raw palette classes (`text-slate-500`…) still work — palette aliasing makes them token-driven — and the ratchet gate blocks growth; migrate a page's classes when you touch it.
+- **Gates**: `npm run check:design` (tokens / contrast / hardcodes-ratchet / axe / ui-sync) must pass before push. `--update-baseline` is a conscious operation — justify it in the commit message.
+- **Pipeline**: `npm run tokens:build` regenerates byte-identical `admin-v2/src/styles/tokens.css` + `site-v2/src/styles/tokens.css`; `npm run tokens:check` must stay green (stale detect + zero-delta gate vs theme.css + completeness assert).
+- **Component canonical**: `admin-v2/src/components/ui/` is the source of truth for shared primitives (button/input/badge/card); site-v2 keeps byte-identical copies and the `ui-sync` gate fails on drift. Promote a component into the canonical kit only with ≥2 real usages.
+- **Fonts**: Manrope (both apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; admin URLs need the `/app/` prefix (vite `base: '/app/'`), site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
+- **Critic ordering (standing owner rule)**: design-critic runs only after code-review AND deploy, on prod screenshots; visible waves also hand the critic a mobile (390px) frame and hover frames of key controls.
 
 ## Testing Guidelines
 There is no automated test suite configured yet for the product. Until one exists, verify changes manually:
@@ -309,6 +323,7 @@ Task management defaults:
 - check the plan before starting implementation when the task is large enough to justify it
 - mark plan items complete as work progresses
 - add a short review section to the same `docs/plans/` note after implementation and verification
+- open items across all work live in one file: `docs/plans/BACKLOG.md` — each item needs a solution, an owner, and a trigger; finished plan notes get a review section, stale ones get a SUPERSEDED header pointing at BACKLOG.md
 - explain changes at a high level as the work moves forward
 - after any user correction, capture the lesson in the active `docs/plans/` note or another focused note under `docs/plans/`, with a rule that prevents the same mistake
 - review relevant lessons from `docs/plans/` at the start of future work in this project when applicable
