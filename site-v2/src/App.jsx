@@ -76,7 +76,7 @@ export function App() {
         <a href="/" className="min-w-0 flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-500/20">B</div>
           <div className="min-w-0">
-            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Bullgram</div>
+            <div className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Bullgram</div>
             <div className="truncate text-sm font-black text-slate-900">{currentNavLabel}</div>
           </div>
         </a>
@@ -113,7 +113,7 @@ export function App() {
         <nav className="flex flex-col gap-6 flex-1 overflow-y-auto">
           {navSections.map((section) => (
             <div key={section.title} className="flex flex-col gap-2">
-              <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-400 mb-1">
+              <div className="px-3 text-xs font-bold tracking-widest uppercase text-slate-500 mb-1">
                 {section.title}
               </div>
               <div className="flex flex-col gap-1">
@@ -157,7 +157,7 @@ export function App() {
           ))}
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-400">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <a href="/docs/" className="transition-colors hover:text-slate-700">Docs</a>
             <span className="text-slate-300">·</span>
             <a href="/blog/" className="transition-colors hover:text-slate-700">Блог</a>

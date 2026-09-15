@@ -365,18 +365,18 @@ export function HomePage() {
               <path d="M12 5.5 17.5 11 12 18.5 6.5 11 12 5.5Z" fill="#fff" />
             </svg>
             <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase">
-              Crypto Friendly
-            </span>
+            Оплата в TON
+          </span>
           </span>
           </div>
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
             Юзерботы для Telegram <br className="hidden sm:block" />
-            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">работают с первого дня</span>
+            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">работают с&nbsp;первого дня</span>
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-[44rem] leading-relaxed mb-10 tracking-tight">
-            <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого аккаунта.
+            <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого&nbsp;аккаунта.
           </p>
 
           <button

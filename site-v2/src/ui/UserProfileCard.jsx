@@ -69,7 +69,7 @@ export function UserProfileCard() {
             {currentPlan.title}
           </span>
           {currentPlan.hint && (
-            <span className="text-[10px] text-slate-400 mt-1 font-semibold">{currentPlan.hint}</span>
+            <span className="text-[10px] text-slate-500 mt-1 font-semibold">{currentPlan.hint}</span>
           )}
         </div>
       </div>
