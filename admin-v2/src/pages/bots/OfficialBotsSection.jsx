@@ -617,37 +617,12 @@ function BotRuntimeSection({
     </Button>
   );
 
-  // Нейтральные состояния (polling / enabled / receiving) показываем всегда —
-  // компактным slate-блоком с постоянным доступом к «Проверить webhook».
-  if (!isError) {
-    return (
-      <Card className="border-0 shadow-sm ring-1 ring-slate-200/60 bg-slate-50 rounded-2xl overflow-hidden mb-6">
-        <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: statusMeta.dot }} />
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-slate-900">{statusMeta.title}</div>
-              <div className="text-xs font-medium text-slate-500 mt-0.5">{statusMeta.text}</div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            {checkWebhookButton}
-            {selectedOfficialBot?.webhook_mode === 'webhook' ? (
-              <Button
-                variant="outline"
-                className="h-11 rounded-xl font-bold shadow-sm w-full sm:w-auto border-slate-200 text-slate-700 bg-white hover:bg-slate-100"
-                onClick={() => reregisterWebhook?.(selectedOfficialBot)}
-                disabled={isBusy || !reregisterWebhook}
-              >
-                {isBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                Переподключить webhook
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </Card>
-    );
-  }
+  // ВАЖНО (решение владельца 2026-09-15): нейтральный webhook-статус-блок
+  // («Webhook включён; апдейты уже приходили») удалён — раньше всё работало
+  // без него, постоянная поверхность оказалась шумом. Статус рендерим ТОЛЬКО
+  // при ошибке подключения. Не воскрешать нейтральный блок; потребность
+  // «проверить вручную» закрывает кнопка «Проверить webhook» на error-карточке.
+  if (!isError) return null;
 
   return (
     <Card className="border-0 shadow-sm ring-1 ring-rose-200/50 bg-rose-50 rounded-2xl overflow-hidden mb-6">
