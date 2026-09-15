@@ -313,9 +313,9 @@ export function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (hash === '#tariffs') {
-      document.getElementById('tariffs')?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
   }, [hash]);
 
   return (
