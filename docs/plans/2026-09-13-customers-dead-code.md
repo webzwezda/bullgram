@@ -1,3 +1,6 @@
+> **SUPERSEDED / ЗАКРЫТ 2026-09-16** — открытых пунктов нет: спот-чек кода 2026-09-16: candidates/reconciliation/demo-seed в customers.routes.js отсутствуют — dead-code удалён
+> Живой список открытых задач: docs/plans/BACKLOG.md
+
 # План: чистка мёртвого кода /app/customers
 
 Дата: 2026-09-13. Источник: код-ревью `code-reviewer` (fix-first) — после
