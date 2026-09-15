@@ -270,6 +270,8 @@ code-reviewer: REQUEST_CHANGES — 4×P1: (1) MCP-токен автоматаati
 
 Дизайн-критика: REJECT (1 blocker + 5 major) → фиксы (0f92f8d): CTA кошелька sky-500 2.65:1 → slate-900 (как «Сохранить»); «Действует до»/«Привязан» emerald-700/800; «Перевыпустить» amber-700 (обе страницы); Command Center — честная заглушка «Command Center — заготовка» с линком на /userbots; OpsRail line-clamp title; ManualTonPaymentCard AA.
 
+**Решение владельца (2026-09-15): Command Center на «/» остаётся заготовкой** как есть (честно подписан, линк на /userbots на месте). Не достраивать и не редиректнуть без явной задачи.
+
 Residual (на потом): focus trap модалок; nested креды прокси в userbot-эндпоинтах; watermark иконки рейла; авто-сохранение контура при открытии /sales-bot.
 
 ## Конфликт «платформенный кошелёк vs AGENTS.md» решён (2026-09-15, решение владельца)
