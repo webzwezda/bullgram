@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+/* Единый источник дизайн-токенов (генерат: npm run tokens:build). После tailwindcss,
+   чтобы наши палитры (байт-равные дефолтам) переопределяли их без визуальной дельты. */
+@import "./tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
