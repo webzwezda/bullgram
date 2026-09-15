@@ -35,7 +35,7 @@ design/tokens/
 | `font.sizeLineHeight.*` | `--text-*--line-height` (`--text-sm--line-height`) |
 | `lineHeight.*` | `--leading-*` |
 | `letterSpacing.*` | `--tracking-*` |
-| `font.family.sans` / `font.family.mono` | `--font-sans` / `--font-mono` — **в выхлопе с волны 4**; сейчас сознательно не эммитятся (нулевая дельта, см. шапку tokens.css) |
+| `font.family.sans` / `font.family.mono` | `--font-sans` / `--font-mono` — эммитится с волны 4 (сначала admin-v2; site-v2 подключит токены в волне 6) |
 | `spacing.base` | только `--spacing: 0.25rem`; per-step spacing-переменных в v4 нет |
 
 `component.micro-label` — нестандартный композит (`textCase`/`color` вне DTCG-typography): build-скрипт волны 2 обрабатывает его явно, строгие DTCG-инструменты эти поля молча потеряют.

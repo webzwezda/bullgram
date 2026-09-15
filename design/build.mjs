@@ -79,7 +79,22 @@ function resolveTokenValue(tree, node, seen = new Set()) {
 /** Значение ноды как строка для CSS (числа — как есть: 100, 1.25, 1). */
 function cssValue(tree, node) {
   const value = resolveTokenValue(tree, node);
-  return typeof value === "number" ? String(value) : value;
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return serializeFontFamily(value);
+  return value;
+}
+
+// CSS-дженерики (и high-level ключевые слова) в font-family не берутся в кавычки,
+// именованные семейства — в одинарные (стиль целевых стеков site-v2/токенов).
+const CSS_GENERIC_FAMILIES = new Set([
+  "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+  "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math", "fangsong",
+]);
+
+/** DTCG fontFamily-массив → CSS-стек: ["Manrope","Segoe UI","system-ui","sans-serif"]
+ *  → 'Manrope', 'Segoe UI', system-ui, sans-serif. */
+function serializeFontFamily(families) {
+  return families.map((f) => (CSS_GENERIC_FAMILIES.has(f) ? f : `'${f}'`)).join(", ");
 }
 
 /** Листья DTCG-дерева: [{path: string[], node}] в порядке файла. */
@@ -139,8 +154,15 @@ function collectEntries(tree) {
     }
   }
 
-  // 3. Типографика. font.family.* сознательно НЕ эммитится (TODO в шапке).
+  // 3. Типографика: font.family.* → --font-sans/--font-mono (с волны 4: Manrope —
+  //    целевой sans обоих приложений; mono-стек сходится волнами 4/6).
   const font = tree.font ?? {};
+  for (const family of ["sans", "mono"]) {
+    const node = font.family?.[family];
+    if (node) {
+      entries.push({ name: `--font-${family}`, value: cssValue(tree, node), kind: "typography" });
+    }
+  }
   const sizes = Object.keys(font.size ?? {}).filter((k) => !k.startsWith("$"));
   for (const size of sizes) {
     entries.push({ name: `--text-${size}`, value: cssValue(tree, font.size[size]), kind: "typography" });
@@ -179,8 +201,6 @@ function generateCss(tree) {
     "/* Эммитится в admin-v2/src/styles/tokens.css и site-v2/src/styles/tokens.css — копии байт-идентичны. */",
     "/*",
     " * Сознательно НЕ эммитится (см. design/README.md, «Маппинг токенов → Tailwind v4 @theme»):",
-    " * - font.family.* (--font-sans/--font-mono): переход admin-v2 на целевой sans-стек — осознанное",
-    " *   решение волны 4; эммит сейчас нарушил бы гейт нулевой визуальной дельты (app'ы на разных стеках).",
     " * - radius.*: admin-v2 (shadcn --radius: 0.625rem) и site-v2 держат per-app override радиуса",
     " *   до отдельного решения; radius.json фиксирует только общую дефолтную шкалу.",
     " * - motion.*: в Tailwind v4 нет namespace для кастомных duration/ease токенов.",

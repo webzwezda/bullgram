@@ -10,7 +10,6 @@
   --brand-ink: #ecfeff;
   --accent: #c2410c;
   --shadow: 0 18px 40px rgba(15, 23, 42, 0.07);
-  font-family: "Manrope", "Segoe UI", sans-serif;
 }
 
 * {
@@ -121,7 +120,7 @@ a.link-action:hover {
 .upgrade-callout {
   margin-top: 16px;
   border: 1px solid rgba(194, 65, 12, 0.18);
-  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  background: linear-gradient(180deg, #fff7ed, var(--color-white));
   border-radius: 18px;
   padding: 16px;
   box-shadow: none;
@@ -208,7 +207,7 @@ a.link-action:hover {
   border-radius: 999px;
   border: 1px solid rgba(219, 234, 254, 0.25);
   background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  color: var(--color-white);
   font-size: 13px;
   font-weight: 800;
 }
@@ -400,7 +399,7 @@ a.link-action:hover {
 
 .shop-admin-head__stat,
 .shop-admin-summary-card {
-  background: #ffffff;
+  background: var(--color-white);
   border: 1px solid #e7eef5;
   border-radius: 16px;
   padding: 14px 15px;
@@ -521,7 +520,7 @@ a.link-action:hover {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--color-white);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
   transition: transform 0.18s ease;
 }
@@ -635,14 +634,14 @@ a.link-action:hover {
 }
 
 .table-card {
-  background: #ffffff;
+  background: var(--color-white);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .toolbar-card {
   margin-top: 0;
-  background: #ffffff;
+  background: var(--color-white);
 }
 
 .plans-tariffs-section {
@@ -682,7 +681,7 @@ a.link-action:hover {
 }
 
 .create-tariff-window {
-  background: #ffffff;
+  background: var(--color-white);
   border: 1px solid #e8edf3;
   border-radius: 24px;
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
@@ -743,7 +742,7 @@ a.link-action:hover {
   width: 28px;
   height: 28px;
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: #ffffff;
+  color: var(--color-white);
   font-size: 14px;
   font-weight: 700;
   border-radius: 8px;
@@ -937,7 +936,7 @@ a.link-action:hover {
   left: 3px;
   width: 20px;
   height: 20px;
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: transform 0.25s ease;
@@ -1033,7 +1032,7 @@ a.link-action:hover {
 
 .button--primary {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #ffffff;
+  color: var(--color-white);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
 }
 
@@ -1109,7 +1108,7 @@ a.link-action:hover {
 
 /* Tariff Card Styles */
 .tariff-card {
-  background: #ffffff;
+  background: var(--color-white);
   border: 1px solid #e8edf3;
   border-radius: 20px;
   box-shadow: 0 2px 16px rgba(15, 23, 42, 0.05);
@@ -1352,7 +1351,7 @@ a.link-action:hover {
 
 .payment-overview__copy,
 .payment-overview__rule {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--color-white) 0%, #fbfdff 100%);
   border: 1px solid #e7edf4;
   border-radius: 22px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
@@ -1397,7 +1396,7 @@ a.link-action:hover {
 
 .proxy-summary-card,
 .proxy-surface-card {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--color-white) 0%, #fbfdff 100%);
   border: 1px solid #e7edf4;
   border-radius: 22px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
@@ -1648,7 +1647,7 @@ a.link-action:hover {
 .inline-action--accent {
   background: #0f172a;
   border-color: #0f172a;
-  color: #ffffff;
+  color: var(--color-white);
 }
 
 .inline-action--accent:hover {
@@ -1725,7 +1724,7 @@ a.link-action:hover {
   text-align: left;
   width: 100%;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 16px;
   padding: 14px;
   color: inherit;
@@ -1764,7 +1763,7 @@ a.link-action:hover {
 
 
 .table-mono {
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12.5px;
 }
 
@@ -1796,7 +1795,7 @@ a.link-action:hover {
 .mcp-step-card {
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--color-white);
   padding: 16px;
 }
 
@@ -1843,7 +1842,7 @@ a.link-action:hover {
   border-radius: 14px;
   background: #0f172a;
   color: #e2e8f0;
-  font: 12px/1.7 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font: 12px/1.7 'JetBrains Mono', ui-monospace, monospace;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1892,7 +1891,7 @@ a.link-action:hover {
 
 .mcp-inline-values__row code {
   color: var(--text);
-  font: 12px/1.6 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font: 12px/1.6 'JetBrains Mono', ui-monospace, monospace;
   word-break: break-word;
 }
 
@@ -1983,7 +1982,7 @@ a.link-action:hover {
   border-radius: 22px;
   padding: 20px 20px 14px;
   border: 1px solid #e7edf4;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--color-white) 0%, #fbfdff 100%);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
@@ -2005,7 +2004,7 @@ a.link-action:hover {
 
 .filter-chip {
   border: 1px solid #e2e8f0;
-  background: #ffffff;
+  background: var(--color-white);
   color: #526173;
   padding: 8px 13px;
   border-radius: 999px;
@@ -2017,13 +2016,13 @@ a.link-action:hover {
 .filter-chip--active {
   background: #0f172a;
   border-color: #0f172a;
-  color: #ffffff;
+  color: var(--color-white);
 }
 
 .list-item {
   border-radius: 18px;
   padding: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--color-white) 0%, #fbfdff 100%);
 }
 
 .list-item__title {
@@ -2095,7 +2094,7 @@ a.link-action:hover {
 .thread-message {
   max-width: 88%;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--color-white);
   color: #334155;
   border-radius: 16px 16px 16px 6px;
   padding: 12px;
@@ -2124,7 +2123,7 @@ a.link-action:hover {
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
-  background: #ffffff;
+  background: var(--color-white);
 }
 
 .observer-admin__head {
@@ -2194,7 +2193,7 @@ a.link-action:hover {
     height: 42px;
     border-radius: 10px;
     border: 1px solid var(--border);
-    background: #fff;
+    background: var(--color-white);
     display: inline-flex;
     flex-direction: column;
     justify-content: center;
@@ -2424,7 +2423,7 @@ a.link-action:hover {
   bottom: 3px;
   height: calc(100% - 6px);
   width: calc(50% - 4px);
-  background: #ffffff;
+  background: var(--color-white);
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   left: calc(3px + (var(--active-index, 0) * (50% + 1px)));
