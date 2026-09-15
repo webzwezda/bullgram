@@ -62,11 +62,11 @@ meta description/OG; tailwind.css токен-слой мёртв (teal/cream) �
 
 | # | Поверхность | Статус |
 |---|---|---|
-| 1 | `/` HomePage + POST /api/billing/checkout/ton-connect | in progress |
-| 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | pending |
+| 1 | `/` HomePage + POST /api/billing/checkout/ton-connect | **done (ACCEPT)** |
+| 2 | `/pay/:purchaseId` + PayLayout + ton-checkout + 4 публичных view/verify бэка | in progress |
 | 3 | `/create` + `/created/:id` + public-invoices бэкенд | pending |
 | 4 | `/access-request` + access-requests бэкенд | pending |
-| 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/Login/UserProfileCard, api client, config, index.html (шрифты/OG) | pending |
+| 5 | общий шелл: App.jsx, AuthProvider, SiteAuthGate/LoginCard/UserProfileCard, api client, config, index.html (шрифты/OG) | pending |
 | 6 | батч-рантайм: редиректы, 404, hero-контент против правила «ОДИН исход», финальная дизайн-прогонка | pending |
 
 ## Журнал
@@ -75,4 +75,42 @@ meta description/OG; tailwind.css токен-слой мёртв (teal/cream) �
 
 ## Review
 
-(заполняется по ходу)
+### Волна 1 — `/` (HomePage) — ЗАКРЫТА, дизайн-критика ACCEPT
+
+Код-ревью: fix-first, 3 P1 + 8 P2, P0 нет. Money-path изоляция (owner_id, платформенный
+кошелёк, claim-idempotency verify) подтверждена ревьюером.
+
+P1-фиксы:
+1. verify-поллинг: catch-ветка спала только на pending → 13 ретраев выгорали за ~2с при
+   HTTP-ошибках; теперь sleep в catch (окно ~65с сохранено).
+2. После неудачной verify кнопка предлагала ПОВТОРНУЮ оплату (двойная оплата, деньги
+   теряются) → recovery-режим «Проверить платёж снова» (verifyCurrent), свежая оплата
+   только из idle; «Платёж не ушёл — оплатить заново» — явная ссылка-reset; busy-герд
+   на recovery-кнопке (доработано в ревью диффа); кошелёк-отвал → честное сообщение.
+3. H1 «Юзерботы для Telegram с API и MCP» нарушал правило «ОДИН исход» → «…которые
+   работают с первого дня» (+ запятая перед «которые», nbsp против висячих предлогов).
+
+P2: GRAM→TON на карточках/бейдже (цепная валюта); provider-гард pending-баннера
+(фронт) + .eq('provider','ton_connect') в getCurrentBillingState (бэк, consumers
+проверены — безопасно); «Счёт истёк» при 00:00 вместо вечного «Завершить оплату»;
+маскировка PLATFORM_TON_WALLET из 503-ответа (лог серверно); сетевые ошибки без
+английского «Failed to fetch»; slate-400→500 микро-лейблы; мёртвый href/комментарии.
+
+Дизайн-критика (3 раунда): REJECT(скриншоты секций показали героя 4 раза —
+программный скролл не пробил scroll-snap) → починена съёмка через hash-ссылки,
+заодно найден реальный баг: hash-скролл работал только для #tariffs, #paywall/
+#userbots/#quick-start не работали — эффект обобщён на все секции. REJECT(секция 3:
+нет кнопки покупки в пике желания, жаргон AI-Agents/n8n первым предложением) →
+добавлена primary «Купить готового юзербота» (→ /app/userbots), REST API/MCP понижены
+до ghost, подзаголовок исход-первым. ACCEPT (все 5 секций pass, P1/P2 нет).
+
+Рантайм-клики (прод, реальный Chrome владельца): флагман-CTA → /app/userbots ✓;
+«Пройти Quick Start» → /docs/quick-start/ ✓; «Открыть кабинет» → /app/profile ✓.
+Консоль браузера недоступна из computer-use — не проверена (билд+смок+рендер ок).
+
+Отложено (записать владельцу при случае): фиат-якорь к «10 TON» (нужен курс/решение);
+proof-бит в нижней трети героя; порядок буллитов Pro (исход «уже готовый тг-аккаунт»
+первым вместо «безлимит по API и MCP») — взять в волну 6; мобильная прогонка.
+
+Коммиты волны: 179cb1d (бэклог), e00c24c (фиксы кода), + правки критики и hash-скролл
+(2 коммита), + финальные P3.
