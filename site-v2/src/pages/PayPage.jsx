@@ -67,6 +67,20 @@ export function PayPage() {
   const [manualVerifying, setManualVerifying] = useState(false);
   const [manualMessage, setManualMessage] = useState('');
   const timerRef = useRef(null);
+  const retryTimeoutRef = useRef(null);
+  const [loadedPurchaseId, setLoadedPurchaseId] = useState(purchaseId);
+
+  if (loadedPurchaseId !== purchaseId) {
+    setLoadedPurchaseId(purchaseId);
+    setPurchase(null);
+    setPurchaseKind(null);
+    setRetryCount(0);
+    setVerifying(false);
+    setManualVerifying(false);
+    setManualMessage('');
+    setError('');
+    setLoading(true);
+  }
 
   const fetchPurchase = useCallback(async (isRetry = false) => {
     try {
@@ -118,7 +132,7 @@ export function PayPage() {
       if (isRetry && retryCount < MAX_RETRIES) {
         const delay = 2000 * (retryCount + 1);
         setRetryCount((c) => c + 1);
-        setTimeout(() => fetchPurchase(true), delay);
+        retryTimeoutRef.current = setTimeout(() => fetchPurchase(true), delay);
         return;
       }
       setError(e.message || 'Не удалось загрузить счёт');
@@ -131,6 +145,7 @@ export function PayPage() {
     fetchPurchase();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
   }, [purchaseId]);
 
@@ -139,15 +154,29 @@ export function PayPage() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    const billingAwaitingFulfillment = purchase?.status === 'paid'
+      && purchaseKind === 'billing'
+      && purchase?.fulfillment_status !== 'completed';
     if (purchase?.status === 'pending' && !error) {
       timerRef.current = setInterval(() => {
+        fetchPurchase();
+      }, POLL_INTERVAL_MS);
+    } else if (billingAwaitingFulfillment && !error) {
+      let attempts = 0;
+      timerRef.current = setInterval(() => {
+        attempts += 1;
+        if (attempts > 10) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          return;
+        }
         fetchPurchase();
       }, POLL_INTERVAL_MS);
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [purchase?.status, purchase?.id, error, fetchPurchase]);
+  }, [purchase?.status, purchase?.id, purchase?.fulfillment_status, error, fetchPurchase, purchaseKind]);
 
   const handlePaid = useCallback(() => {
     setVerifying(false);
@@ -191,7 +220,16 @@ export function PayPage() {
       />
     );
   }
-  if (purchase && purchaseKind !== 'public_invoice' && isExpired(purchase)) return <ExpiredView />;
+  if (purchase && purchaseKind !== 'public_invoice' && isExpired(purchase)) {
+    return (
+      <ExpiredView
+        canVerifyPayment={purchaseKind === 'shop'}
+        verifying={manualVerifying}
+        message={manualMessage}
+        onVerify={verifyManually}
+      />
+    );
+  }
   if (purchase && purchaseKind === 'public_invoice' && purchase.status === 'expired') return <ExpiredView />;
 
   const verifyEndpoint = purchaseKind === 'invoice'
@@ -240,7 +278,7 @@ function PaymentView({
   }, [purchase.expires_at]);
 
   const isPublicInvoice = purchaseKind === 'public_invoice';
-  const isTestnet = isPublicInvoice && purchase.network === 'testnet';
+  const isTestnet = purchase.network === 'testnet';
   const amount = Number(purchase.amount_ton || 0);
 
   const tabClass = (active) => `flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${
@@ -262,7 +300,7 @@ function PaymentView({
               </p>
             </div>
             {remaining ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600 shrink-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600 shrink-0">
                 <Clock className="w-3.5 h-3.5" />
                 {remaining}
               </span>
@@ -275,7 +313,7 @@ function PaymentView({
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Сумма к оплате</div>
             <div className="text-3xl font-black tracking-tight text-slate-900 leading-none">
               {amount}
-              <span className="text-sm font-bold text-slate-500 ml-1.5">GRAM</span>
+              <span className="text-sm font-bold text-slate-500 ml-1.5">TON</span>
               {isTestnet ? (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-[10px] font-bold uppercase tracking-wider align-middle">
                   Testnet
@@ -366,7 +404,7 @@ function PaymentView({
         </div>
       </Card>
 
-      <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 px-2">
+      <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 px-2">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
         <span>Платёж проходит напрямую через TON-блокчейн. Bullgram не хранит ваши средства.</span>
       </div>
@@ -435,14 +473,6 @@ function formatBillingEndDate(durationDays) {
 function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
   const isBilling = purchaseKind === 'billing';
 
-  useEffect(() => {
-    if (!isBilling) return;
-    const timer = setTimeout(() => {
-      window.location.reload();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [isBilling]);
-
   const title = isBilling ? 'Тариф Pro активирован' : processing ? 'Платёж получен' : 'Счёт оплачен';
   const description = isBilling ? (
     <>
@@ -450,9 +480,9 @@ function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
       {purchase.duration_days ? ` (${purchase.duration_days} дн.)` : null}.
     </>
   ) : processing ? (
-    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} GRAM. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
+    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Подписка активируется в течение нескольких минут — если доступ не пришёл, нажмите «Проверить оплату» в боте.`
   ) : (
-    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} GRAM. Доступ активирован в течение нескольких минут.`
+    `${purchase.item_title || 'Заказ'} оплачен на ${Number(purchase.amount_ton || 0)} TON. Доступ активирован в течение нескольких минут.`
   );
 
   return (
@@ -495,7 +525,7 @@ function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
   );
 }
 
-function ExpiredView() {
+function ExpiredView({ canVerifyPayment, verifying, message, onVerify }) {
   return (
     <section className="space-y-6">
       <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
@@ -512,6 +542,25 @@ function ExpiredView() {
             </div>
           </div>
         </div>
+        {canVerifyPayment ? (
+          <div className="p-5 sm:p-6 bg-white space-y-3">
+            <p className="text-sm font-medium text-slate-500">
+              Если вы уже отправили перевод — деньги не пропадут, проверим.
+            </p>
+            <button
+              type="button"
+              onClick={onVerify}
+              disabled={verifying}
+              className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors shadow-md shadow-indigo-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Проверить оплату
+            </button>
+            {message ? (
+              <p className="text-sm font-medium text-rose-700">{message}</p>
+            ) : null}
+          </div>
+        ) : null}
       </Card>
     </section>
   );

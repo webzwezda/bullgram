@@ -55,20 +55,15 @@ export function publicBillingRoutes(supabase) {
   const viewHitsByIp = new Map();
   const verifyHitsByIp = new Map();
 
-  function pickIp(req) {
-    const raw = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
-      .split(',')[0].trim();
-    if (!raw) return null;
-    if (/^::ffff:\d+\.\d+\.\d+\.\d+$/.test(raw)) return raw.slice(7);
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) return raw;
-    if (/^[0-9a-f:]+$/i.test(raw)) return raw;
-    return null;
-  }
-
   function checkRateLimit(map, ip, limit, windowMs) {
     const now = Date.now();
     const windowStart = now - windowMs;
-    const hits = (map.get(ip) || []).filter((t) => t > windowStart);
+    for (const [key, hits] of map) {
+      const fresh = hits.filter((t) => t > windowStart);
+      if (fresh.length > 0) map.set(key, fresh);
+      else map.delete(key);
+    }
+    const hits = map.get(ip) || [];
     if (hits.length >= limit) return false;
     hits.push(now);
     map.set(ip, hits);
@@ -76,7 +71,7 @@ export function publicBillingRoutes(supabase) {
   }
 
   router.get('/public/:id/public-view', async (req, res) => {
-    const ip = pickIp(req) || 'unknown';
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(viewHitsByIp, ip, VIEW_RATE_LIMIT_RPM, RATE_LIMIT_WINDOW_MS)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -109,7 +104,7 @@ export function publicBillingRoutes(supabase) {
   });
 
   router.post('/public/:id/verify-public', async (req, res) => {
-    const ip = pickIp(req) || 'unknown';
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(verifyHitsByIp, ip, VIEW_RATE_LIMIT_RPM, RATE_LIMIT_WINDOW_MS)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -130,14 +125,6 @@ export function publicBillingRoutes(supabase) {
 
       if (order.status === 'paid') {
         return res.json({ status: 'paid', success: true, already: true });
-      }
-      if (order.status === 'expired') {
-        return res.json({ status: 'expired', success: false });
-      }
-
-      if (order.expires_at && new Date(order.expires_at).getTime() <= Date.now()) {
-        const fresh = await markExpired({ supabase, table: 'billing_orders', id });
-        if (fresh) return res.json({ status: 'expired', success: false });
       }
 
       const payload = order.payload || {};
@@ -167,11 +154,31 @@ export function publicBillingRoutes(supabase) {
         return res.json({ status: 'pending', success: false, retry: true });
       }
 
+      // Платёж мог прийти после истечения заказа — деньги уже на кошельке платформы.
+      // Сначала ищем платёж и только потом решаем, истёк ли заказ.
       if (!result.ok) {
+        if (order.status === 'expired') {
+          return res.json({ status: 'expired', success: false });
+        }
+        if (order.expires_at && new Date(order.expires_at).getTime() <= Date.now()) {
+          const fresh = await markExpired({ supabase, table: 'billing_orders', id });
+          if (fresh) return res.json({ status: 'expired', success: false });
+        }
         return res.json({ status: 'pending', success: false, retry: true });
       }
 
       const nowIso = new Date().toISOString();
+
+      // Опоздавший платёж: строка уже истекла, а claimPaid делает CAS только по
+      // status='pending'. Возвращаем в pending, чтобы зачёт сработал.
+      if (order.status === 'expired') {
+        await supabase
+          .from('billing_orders')
+          .update({ status: 'pending', updated_at: nowIso })
+          .eq('id', order.id)
+          .eq('status', 'expired');
+      }
+
       const claimed = await claimPaid({
         supabase,
         table: 'billing_orders',

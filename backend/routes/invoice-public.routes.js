@@ -13,15 +13,15 @@ export function invoicePublicRoutes(supabase, getBotById) {
   const viewHitsByIp = new Map();
   const verifyHitsByIp = new Map();
 
-  function pickIp(req) {
-    return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
-      .split(',')[0].trim();
-  }
-
   function checkRateLimit(map, ip) {
     const now = Date.now();
     const windowStart = now - RATE_LIMIT_WINDOW_MS;
-    const hits = (map.get(ip) || []).filter((t) => t > windowStart);
+    for (const [key, hits] of map) {
+      const fresh = hits.filter((t) => t > windowStart);
+      if (fresh.length > 0) map.set(key, fresh);
+      else map.delete(key);
+    }
+    const hits = map.get(ip) || [];
     if (hits.length >= PUBLIC_RATE_LIMIT_RPM) return false;
     hits.push(now);
     map.set(ip, hits);
@@ -29,7 +29,7 @@ export function invoicePublicRoutes(supabase, getBotById) {
   }
 
   router.get('/public/:invoiceId/public-view', async (req, res) => {
-    const ip = pickIp(req);
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(viewHitsByIp, ip)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -109,7 +109,7 @@ export function invoicePublicRoutes(supabase, getBotById) {
   });
 
   router.post('/public/:invoiceId/verify-public', async (req, res) => {
-    const ip = pickIp(req);
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(verifyHitsByIp, ip)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -138,7 +138,15 @@ export function invoicePublicRoutes(supabase, getBotById) {
       if (invoice.expires_at && new Date(invoice.expires_at).getTime() <= Date.now()) {
         const fresh = await markExpired({ supabase, table: 'invoices', id: invoice.id });
         if (fresh) return res.json({ status: 'expired', success: false });
-        return res.json({ status: 'paid', success: true });
+        const { data: actual } = await supabase
+          .from('invoices')
+          .select('status')
+          .eq('id', invoice.id)
+          .maybeSingle();
+        if (actual?.status === 'paid') {
+          return res.json({ status: 'paid', success: true });
+        }
+        return res.json({ status: actual?.status || 'expired', success: false, retry: actual?.status === 'pending' });
       }
 
       const { data: tariff } = await supabase
@@ -192,7 +200,15 @@ export function invoicePublicRoutes(supabase, getBotById) {
       });
 
       if (!claimed) {
-        return res.json({ status: 'paid', success: true });
+        const { data: actual } = await supabase
+          .from('invoices')
+          .select('status')
+          .eq('id', invoice.id)
+          .maybeSingle();
+        if (actual?.status === 'paid') {
+          return res.json({ status: 'paid', success: true });
+        }
+        return res.json({ status: actual?.status || 'pending', success: false, retry: true });
       }
 
       const botId = tariff.bot_id;

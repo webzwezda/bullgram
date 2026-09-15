@@ -29,29 +29,34 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
       const body = buildVerifyBody ? buildVerifyBody({ boc: null, senderWallet }) : { sender_wallet: senderWallet };
 
       for (let attempt = 1; attempt <= VERIFY_POLL_MAX_RETRIES; attempt += 1) {
+        let data;
         try {
-          const data = await apiRequest(verifyEndpoint, {
+          data = await apiRequest(verifyEndpoint, {
             accessToken,
             method: 'POST',
             body
           });
-
-          if (data?.status === 'paid') {
-            setStatus('paid');
-            onComplete?.(data);
-            return;
-          }
-          if (data?.status === 'pending' || data?.retry) {
-            if (attempt < VERIFY_POLL_MAX_RETRIES) {
-              await sleep(VERIFY_POLL_DELAY_MS);
-              continue;
-            }
-          }
         } catch (verifyError) {
           if (attempt >= VERIFY_POLL_MAX_RETRIES) {
             throw verifyError;
           }
           await sleep(VERIFY_POLL_DELAY_MS);
+          continue;
+        }
+
+        if (data?.status === 'paid') {
+          setStatus('paid');
+          onComplete?.(data);
+          return;
+        }
+        if (data?.status === 'expired') {
+          throw new Error('Счёт истёк');
+        }
+        if (data?.status === 'pending' || data?.retry) {
+          if (attempt < VERIFY_POLL_MAX_RETRIES) {
+            await sleep(VERIFY_POLL_DELAY_MS);
+            continue;
+          }
         }
       }
 

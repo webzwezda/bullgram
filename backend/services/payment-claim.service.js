@@ -20,7 +20,7 @@ export async function markExpired({ supabase, table, id, patch = {}, statusField
     supabase,
     table,
     id,
-    patch: { [statusField]: 'expired', updated_at: new Date().toISOString(), ...patch },
+    patch: { [statusField]: 'expired', ...patch },
     statusField,
     pendingValue
   });

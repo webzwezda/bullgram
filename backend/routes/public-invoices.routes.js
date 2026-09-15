@@ -24,20 +24,15 @@ export function publicInvoiceRoutes(supabase) {
   const verifyHitsByIp = new Map();
   const createHitsByIp = new Map();
 
-  function pickIp(req) {
-    const raw = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')
-      .split(',')[0].trim();
-    if (!raw) return null;
-    if (/^::ffff:\d+\.\d+\.\d+\.\d+$/.test(raw)) return raw.slice(7);
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) return raw;
-    if (/^[0-9a-f:]+$/i.test(raw)) return raw;
-    return null;
-  }
-
   function checkRateLimit(map, ip, limit, windowMs) {
     const now = Date.now();
     const windowStart = now - windowMs;
-    const hits = (map.get(ip) || []).filter((t) => t > windowStart);
+    for (const [key, hits] of map) {
+      const fresh = hits.filter((t) => t > windowStart);
+      if (fresh.length > 0) map.set(key, fresh);
+      else map.delete(key);
+    }
+    const hits = map.get(ip) || [];
     if (hits.length >= limit) return false;
     hits.push(now);
     map.set(ip, hits);
@@ -108,8 +103,7 @@ export function publicInvoiceRoutes(supabase) {
   });
 
   router.post('/public/create', optionalAuthenticateUser, async (req, res) => {
-    const rawIp = pickIp(req);
-    const ip = rawIp || 'unknown';
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(createHitsByIp, ip, CREATE_RATE_LIMIT_PER_HOUR, CREATE_WINDOW_MS)) {
       return res.status(429).json({ error: 'Слишком много счетов за час. Попробуйте позже.' });
     }
@@ -142,7 +136,7 @@ export function publicInvoiceRoutes(supabase) {
           network: normalized.network,
           expires_at: expiresAt,
           grace_until: graceUntil,
-          creator_ip: rawIp,
+          creator_ip: req.ip || null,
           creator_user_agent: userAgent,
           creator_user_id: req.user?.id || null
         })
@@ -163,7 +157,7 @@ export function publicInvoiceRoutes(supabase) {
   });
 
   router.get('/public/:id/public-view', async (req, res) => {
-    const ip = pickIp(req) || 'unknown';
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(viewHitsByIp, ip, VIEW_RATE_LIMIT_RPM, RATE_LIMIT_WINDOW_MS)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -176,7 +170,7 @@ export function publicInvoiceRoutes(supabase) {
     try {
       const { data: inv, error } = await supabase
         .from('public_invoices')
-        .select('id, status, amount_ton, title, description, secret_payload, seller_wallet, memo, network, expires_at, grace_until, paid_at')
+        .select('id, status, amount_ton, title, description, seller_wallet, memo, network, expires_at, grace_until, paid_at')
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
@@ -213,7 +207,12 @@ export function publicInvoiceRoutes(supabase) {
       };
 
       if (inv.status === 'paid') {
-        base.secret_payload = inv.secret_payload;
+        const { data: secretRow } = await supabase
+          .from('public_invoices')
+          .select('secret_payload')
+          .eq('id', id)
+          .maybeSingle();
+        base.secret_payload = secretRow?.secret_payload || null;
         base.paid_at = inv.paid_at;
       }
 
@@ -225,7 +224,7 @@ export function publicInvoiceRoutes(supabase) {
   });
 
   router.post('/public/:id/verify-public', async (req, res) => {
-    const ip = pickIp(req) || 'unknown';
+    const ip = req.ip || 'unknown';
     if (!checkRateLimit(verifyHitsByIp, ip, VIEW_RATE_LIMIT_RPM, RATE_LIMIT_WINDOW_MS)) {
       return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
     }
@@ -290,7 +289,15 @@ export function publicInvoiceRoutes(supabase) {
       });
 
       if (!claimed) {
-        return res.json({ status: 'paid', success: true, secret_payload: inv.secret_payload });
+        const { data: actual } = await supabase
+          .from('public_invoices')
+          .select('status, secret_payload, tx_hash')
+          .eq('id', inv.id)
+          .maybeSingle();
+        if (actual?.status === 'paid') {
+          return res.json({ status: 'paid', success: true, secret_payload: actual.secret_payload ?? inv.secret_payload, tx_hash: actual.tx_hash || null });
+        }
+        return res.json({ status: actual?.status || 'pending', success: false, retry: true });
       }
 
       const origin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');

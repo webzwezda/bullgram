@@ -159,7 +159,7 @@ function isMissingSalesChannelColumn(error) {
 }
 
 function buildShopMemo() {
-    return 'shop_' + Math.random().toString(36).slice(2, 10);
+    return 'shop_' + crypto.randomBytes(5).toString('hex');
 }
 
 function detectNetwork() {
@@ -2688,7 +2688,12 @@ export default function shopRoutes(supabase) {
     function checkRateLimit(map, ip) {
         const now = Date.now();
         const windowStart = now - 60_000;
-        const hits = (map.get(ip) || []).filter((t) => t > windowStart);
+        for (const [key, hits] of map) {
+            const fresh = hits.filter((t) => t > windowStart);
+            if (fresh.length > 0) map.set(key, fresh);
+            else map.delete(key);
+        }
+        const hits = map.get(ip) || [];
         if (hits.length >= PUBLIC_RATE_LIMIT_RPM) return false;
         hits.push(now);
         map.set(ip, hits);
@@ -2696,7 +2701,7 @@ export default function shopRoutes(supabase) {
     }
 
     router.get('/public/purchase/:purchaseId/public-view', async (req, res) => {
-        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+        const ip = req.ip || 'unknown';
         if (!checkRateLimit(publicViewHitsByIp, ip)) {
             return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
         }
@@ -2761,7 +2766,7 @@ export default function shopRoutes(supabase) {
     });
 
     router.post('/public/purchase/:purchaseId/verify-public', async (req, res) => {
-        const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
+        const ip = req.ip || 'unknown';
         if (!checkRateLimit(publicVerifyHitsByIp, ip)) {
             return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
         }
