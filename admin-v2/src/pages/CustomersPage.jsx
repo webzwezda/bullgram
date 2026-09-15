@@ -77,11 +77,11 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
   if (!target) {
     return (
       <div className="p-16 text-center flex flex-col items-center">
-        <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+        <div className="w-16 h-16 rounded-2xl bg-surface-subtle flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
           <Users className="w-8 h-8" />
         </div>
-        <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Группа не подключена</h4>
-        <p className="text-slate-500 font-medium text-sm">Добавьте эту группу в контуре продаж на экране «Бот продаж»</p>
+        <h4 className="text-lg font-black text-ink-strong tracking-tight mb-2">Группа не подключена</h4>
+        <p className="text-ink-muted font-medium text-sm">Добавьте эту группу в контуре продаж на экране «Бот продаж»</p>
       </div>
     );
   }
@@ -109,10 +109,10 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
 
   return (
     <div className="overflow-hidden flex flex-col">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-8 py-6 border-b border-slate-100 bg-surface-subtle/30 gap-3">
         <div>
-          <h3 className="text-xl font-black text-slate-900">{target.channelTitle || TABS.find(t => t.id === `audience-${targetType}`)?.label || 'Группа'}</h3>
-          <div className="text-sm text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
+          <h3 className="text-xl font-black text-ink-strong">{target.channelTitle || TABS.find(t => t.id === `audience-${targetType}`)?.label || 'Группа'}</h3>
+          <div className="text-sm text-ink-muted mt-0.5 flex flex-wrap gap-x-3">
             <span>{target.totalMembers} {plural(target.totalMembers, 'участник', 'участника', 'участников')}</span>
             {isPaid && paidCount > 0 && <span className="text-emerald-600">{paidCount} оплачено</span>}
             {isPaid && expiredCount > 0 && <span className="text-amber-600">{expiredCount} просрочено</span>}
@@ -123,7 +123,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
           <button
             onClick={() => onSync(targetType)}
             disabled={!!syncingType}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-border-default rounded-xl text-sm font-bold text-ink-body shadow-sm hover:bg-surface-subtle transition-all disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${syncingType === targetType ? 'animate-spin' : ''}`} />
             {syncingType === targetType ? 'Загружаем...' : 'Обновить список'}
@@ -131,7 +131,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
           {target.baseId && (
             <a
               href={`/app/broadcast?baseId=${target.baseId}`}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 !text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 bg-action-primary !text-action-primary-text rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-action-primary-hover transition-all"
             >
               <Megaphone className="w-4 h-4" />
               Рассылка
@@ -142,36 +142,36 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
 
       {!target.baseId ? (
         <div className="p-16 text-center flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+          <div className="w-16 h-16 rounded-2xl bg-surface-subtle flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
             <Users className="w-8 h-8" />
           </div>
-          <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Участники еще не загружены</h4>
-          <p className="text-slate-500 font-medium text-sm">Нажмите «Обновить список» чтобы загрузить участников из Telegram</p>
+          <h4 className="text-lg font-black text-ink-strong tracking-tight mb-2">Участники еще не загружены</h4>
+          <p className="text-ink-muted font-medium text-sm">Нажмите «Обновить список» чтобы загрузить участников из Telegram</p>
         </div>
       ) : members.length === 0 ? (
         <div className="p-16 text-center flex flex-col items-center">
-          <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+          <div className="w-16 h-16 rounded-2xl bg-surface-subtle flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
             <Users className="w-8 h-8" />
           </div>
-          <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">Пусто</h4>
-          <p className="text-slate-500 font-medium text-sm">В этой группе пока нет участников</p>
+          <h4 className="text-lg font-black text-ink-strong tracking-tight mb-2">Пусто</h4>
+          <p className="text-ink-muted font-medium text-sm">В этой группе пока нет участников</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100">
-                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Имя</th>
-                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
-                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
-                {!isPaid && <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Приватка</th>}
+              <tr className="bg-surface-subtle/80 border-b border-slate-100">
+                <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Имя</th>
+                <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] hidden md:table-cell">Username</th>
+                <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] hidden lg:table-cell">TG ID</th>
+                {!isPaid && <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Приватка</th>}
                 {isPaid && (
                   <>
-                    <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Оплата</th>
-                    <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Доступ до</th>
+                    <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Оплата</th>
+                    <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Доступ до</th>
                   </>
                 )}
-                <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] text-right">Действия</th>
+                <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] text-right">Действия</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -190,20 +190,20 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                 };
                 const nameCell = (
                   <td className="px-6 py-4">
-                    <div className="font-black text-slate-900 text-sm truncate">
+                    <div className="font-black text-ink-strong text-sm truncate">
                       {row.display_name || row.first_name || (row.username ? `@${row.username}` : 'Неизвестный')}
                     </div>
                   </td>
                 );
                 const usernameCell = (
                   <td className="px-6 py-4 hidden md:table-cell">
-                    {row.username ? <span className="text-xs font-semibold text-slate-500">@{row.username}</span> : <span className="text-slate-300">—</span>}
+                    {row.username ? <span className="text-xs font-semibold text-ink-muted">@{row.username}</span> : <span className="text-slate-300">—</span>}
                   </td>
                 );
                 const idCell = (
                   <td className="px-6 py-4 hidden lg:table-cell">
                     {row.tg_user_id
-                      ? <span className="font-mono text-xs text-slate-500">{row.tg_user_id}</span>
+                      ? <span className="font-mono text-xs text-ink-muted">{row.tg_user_id}</span>
                       : <span className="text-slate-300">—</span>}
                   </td>
                 );
@@ -212,12 +212,12 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                 const privateCell = (
                   <td className="px-6 py-4">
                     {crmRow?.status === 'active' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-feedback-success-bg text-emerald-600 ring-1 ring-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                         Активна
                       </span>
                     ) : crmRow?.status === 'expired' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-feedback-warning-bg text-amber-600 ring-1 ring-amber-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         Истекла
                       </span>
@@ -229,14 +229,14 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                 if (isPaid) {
                   const ps = row.paymentStatus;
                   const statusStyles = ps === 'paid'
-                    ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200'
+                    ? 'bg-feedback-success-bg text-emerald-600 ring-1 ring-emerald-200'
                     : ps === 'expired'
-                      ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-200'
-                      : 'bg-red-50 text-red-600 ring-1 ring-red-200';
+                      ? 'bg-feedback-warning-bg text-amber-600 ring-1 ring-amber-200'
+                      : 'bg-feedback-error-bg text-red-600 ring-1 ring-red-200';
                   const statusLabel = ps === 'paid' ? 'Оплачено' : ps === 'expired' ? 'Просрочен' : 'Без оплаты';
                   const dot = ps === 'paid' ? 'bg-emerald-500' : ps === 'expired' ? 'bg-amber-500' : 'bg-red-500';
                   return (
-                    <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={rowId} className="hover:bg-surface-subtle/50 transition-colors">
                       {nameCell}
                       {usernameCell}
                       {idCell}
@@ -255,7 +255,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
-                            className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="p-2 bg-white border border-border-default text-ink-muted hover:text-ink-strong hover:border-border-strong hover:bg-surface-subtle rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                             popovertarget={`row-menu-aud-${targetType}-${rowId}`}
                             disabled={!!mutatingRowId}
                             title="Действия"
@@ -265,12 +265,12 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                           <div
                             id={`row-menu-aud-${targetType}-${rowId}`}
                             popover="auto"
-                            className="w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
+                            className="w-56 rounded-2xl border border-border-default bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
                             style={ROW_MENU_STYLE}
                           >
-                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-5'); }}>Продлить на 5 дней</button>
-                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
-                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-5'); }}>Продлить на 5 дней</button>
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-30'); }}>Продлить на 30 дней</button>
+                            <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'extend-forever'); }}>Выдать навсегда</button>
                             <div className="border-t border-slate-100" />
                             {actionRow._crmSubscription && (
                               <button type="button" className="w-full px-4 py-3 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => { closeAllRowMenus(); onAction(actionRow, 'kick'); }}>Удалить из группы</button>
@@ -278,7 +278,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                           </div>
                           {row.tg_user_id && (
                             <>
-                              <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                              <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                                 <Send className="w-3.5 h-3.5" />
                               </button>
                             </>
@@ -289,7 +289,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                   );
                 }
                 return (
-                  <tr key={rowId} className="hover:bg-slate-50/50 transition-colors">
+                  <tr key={rowId} className="hover:bg-surface-subtle/50 transition-colors">
                     {nameCell}
                     {usernameCell}
                     {idCell}
@@ -298,7 +298,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                       <div className="flex justify-end gap-2">
                         {row.tg_user_id && (
                           <>
-                            <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                            <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                               <Send className="w-3.5 h-3.5" />
                             </button>
                           </>
@@ -311,7 +311,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
             </tbody>
           </table>
           {enrichedRows.length > 100 && (
-            <div className="px-6 py-3 text-sm text-slate-500 font-medium border-t border-slate-100 bg-slate-50/50">
+            <div className="px-6 py-3 text-sm text-ink-muted font-medium border-t border-slate-100 bg-surface-subtle/50">
               Показано 100 из {enrichedRows.length}
             </div>
           )}
@@ -886,10 +886,10 @@ export function CustomersPage() {
   return (
     <section className="page page--flush space-y-6">
       {/* Main Content Card */}
-      <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-slate-300/60">
+      <div className="bg-white border border-border-default/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all hover:border-border-strong/60">
 
         {state.error && (
-          <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+          <div className="p-5 rounded-2xl bg-feedback-error-bg border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
             <AlertCircle className="w-5 h-5 shrink-0" />
             {state.error}
           </div>
@@ -901,14 +901,14 @@ export function CustomersPage() {
           <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: 'Активный доступ', value: stats.activeCustomers, icon: CheckCircle2, color: 'text-emerald-600' },
-              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-slate-900' : 'text-slate-500' }
+              { label: 'Доступ закончился', value: stats.expiredCustomers, icon: Clock, color: stats.expiredCustomers > 0 ? 'text-ink-strong' : 'text-ink-muted' }
             ].map((item, idx) => (
               <div
                 key={idx}
-                className="bg-slate-50/50 border border-slate-100 p-6 rounded-2xl"
+                className="bg-surface-subtle/50 border border-slate-100 p-6 rounded-2xl"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-500">{item.label}</span>
+                  <span className="text-xs font-black uppercase tracking-widest text-ink-muted">{item.label}</span>
                   <item.icon className={`w-5 h-5 ${item.color} opacity-70`} />
                 </div>
                 <div
@@ -924,8 +924,8 @@ export function CustomersPage() {
           {selectedBotId ? (
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-6 mb-3">
-                <div className="text-xs font-black uppercase tracking-widest text-slate-500">Выручка TON</div>
-                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                <div className="text-xs font-black uppercase tracking-widest text-ink-muted">Выручка TON</div>
+                <div className="flex rounded-xl border border-border-default overflow-hidden">
                   {[
                     { id: '7', label: '7 дней' },
                     { id: '30', label: '30 дней' },
@@ -936,7 +936,7 @@ export function CustomersPage() {
                       type="button"
                       onClick={() => setMoneyPeriod(p.id)}
                       className={`px-3 py-1.5 text-xs font-bold transition-colors ${
-                        moneyPeriod === p.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                        moneyPeriod === p.id ? 'bg-action-primary text-action-primary-text' : 'bg-white text-slate-600 hover:bg-surface-subtle'
                       }`}
                     >
                       {p.label}
@@ -945,15 +945,15 @@ export function CustomersPage() {
                 </div>
               </div>
               <div className="bg-white border border-slate-100 border-l-4 border-l-indigo-400 p-6 rounded-2xl">
-                <div className="text-3xl font-black tracking-tighter text-slate-900 tabular-nums">
+                <div className="text-3xl font-black tracking-tighter text-ink-strong tabular-nums">
                   {botAnalytics.data ? formatTon(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) : '—'}
                 </div>
                 <div className="text-xs font-medium mt-1">
                   {botAnalytics.error && !botAnalytics.data
                     ? <span className="text-red-500">{botAnalytics.error}</span>
                     : botAnalytics.data && Number(moneyPeriod === 'all' ? botAnalytics.data.revenueTON : (botAnalytics.data.revenuePeriodTON ?? 0)) > 0
-                      ? <span className="text-slate-500">{moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время'}</span>
-                      : <span className="text-slate-900">За период платежей нет</span>}
+                      ? <span className="text-ink-muted">{moneyPeriod === '7' ? 'За 7 дней' : moneyPeriod === '30' ? 'За 30 дней' : 'За всё время'}</span>
+                      : <span className="text-ink-strong">За период платежей нет</span>}
                 </div>
               </div>
             </>
@@ -961,14 +961,14 @@ export function CustomersPage() {
         </section>
 
         {/* Filter & Search Section */}
-        <section className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-200/60">
+        <section className="p-6 md:p-8 bg-surface-subtle/50 border-t border-border-default/60">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white shrink-0">
               <Filter className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">Фильтры и поиск</h3>
-              <p className="text-sm text-slate-500 font-medium mt-0.5">Выберите сегмент клиентов</p>
+              <h3 className="text-xl font-black text-ink-strong tracking-tight">Фильтры и поиск</h3>
+              <p className="text-sm text-ink-muted font-medium mt-0.5">Выберите сегмент клиентов</p>
             </div>
           </div>
 
@@ -991,10 +991,10 @@ export function CustomersPage() {
                   title={isDisabled ? 'Группа не в контуре продаж — подключите её на экране «Бот продаж»' : undefined}
                   className={`flex items-center gap-2 px-4 py-3 text-sm font-bold whitespace-nowrap border-b-2 transition-all ${
                     isActive
-                      ? 'border-indigo-600 text-indigo-600'
+                      ? 'border-indigo-600 text-action-primary'
                       : isDisabled
-                        ? 'border-transparent text-slate-500 opacity-50 cursor-not-allowed'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                        ? 'border-transparent text-ink-muted opacity-50 cursor-not-allowed'
+                        : 'border-transparent text-ink-muted hover:text-ink-body hover:border-border-strong'
                   }`}
                   onClick={() => !isDisabled && setTabState(tab.id)}
                   disabled={!!isDisabled}
@@ -1002,7 +1002,7 @@ export function CustomersPage() {
                   {Icon && <Icon className="w-4 h-4" />}
                   {tab.label}
                   {count !== null && count > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${isActive ? 'bg-indigo-100 text-action-primary' : 'bg-surface-subtle-strong text-ink-muted'}`}>
                       {count}
                     </span>
                   )}
@@ -1015,7 +1015,7 @@ export function CustomersPage() {
           <div className="flex flex-col md:flex-row items-center gap-4">
             <div className="relative flex-1 w-full">
               <input
-                className="w-full pl-12 pr-6 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                className="w-full pl-12 pr-6 py-3.5 bg-white border border-border-default rounded-xl text-ink-strong font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -1025,7 +1025,7 @@ export function CustomersPage() {
             </div>
             <div className="w-full md:w-[280px] shrink-0">
               <select
-                className="w-full px-4 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
+                className="w-full px-4 py-3.5 bg-white border border-border-default rounded-xl text-ink-strong font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm text-sm"
                 value={selectedBotId}
                 onChange={(event) => {
                   const next = new URLSearchParams(window.location.search);
@@ -1045,11 +1045,11 @@ export function CustomersPage() {
         </section>
 
         {/* Data Table Card */}
-        <div className="border-t border-slate-200/60">
+        <div className="border-t border-border-default/60">
         {isAudienceTab ? (
           <>
             {audienceState.error && (
-              <div className="p-5 rounded-2xl bg-red-50 border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
+              <div className="p-5 rounded-2xl bg-feedback-error-bg border border-red-100 text-red-600 font-bold text-sm flex items-center gap-3 shadow-sm">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 {audienceState.error}
               </div>
@@ -1067,7 +1067,7 @@ export function CustomersPage() {
         <>
           {isBotTab && (
             <div className="relative mx-8 mt-4">
-              <div className="flex gap-2 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
+              <div className="flex gap-2 p-1.5 bg-surface-subtle-strong rounded-2xl overflow-x-auto">
                 {BOT_SUBTABS.map((sub) => {
                   const count = subtabCounts[sub.id] || 0;
                   const subCap = state.caps ? (state.caps[CAPS_KEY_BY_SUBTAB[sub.id]] || null) : null;
@@ -1077,15 +1077,15 @@ export function CustomersPage() {
                       type="button"
                       className={`shrink-0 px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 ${
                         activeBotSubtab === sub.id
-                          ? 'bg-white text-indigo-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-700'
+                          ? 'bg-white text-action-primary shadow-sm'
+                          : 'text-slate-600 hover:text-ink-body'
                       }`}
                       onClick={() => setBotSubtab(sub.id)}
                     >
                       {sub.label}
                       {count > 0 && (
                         <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded-md ${activeBotSubtab === sub.id ? 'bg-indigo-100 text-indigo-600' : 'bg-white text-slate-500'}`}
+                          className={`text-[11px] px-1.5 py-0.5 rounded-md ${activeBotSubtab === sub.id ? 'bg-indigo-100 text-action-primary' : 'bg-white text-ink-muted'}`}
                           title={subCap?.truncated ? `Показаны последние ${subCap.limit} ${plural(subCap.limit, 'запись', 'записи', 'записей')}` : undefined}
                         >
                           {subCap?.truncated ? `${count}+` : count}
@@ -1101,14 +1101,14 @@ export function CustomersPage() {
         <div className="overflow-hidden flex flex-col">
 
           {/* Table Header Area */}
-          <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-slate-50/30">
-            <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
+          <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100 bg-surface-subtle/30">
+            <h3 className="text-xl font-black text-ink-strong flex items-center gap-3">
               {isBotTab
                 ? (BOT_SUBTABS.find((sub) => sub.id === activeBotSubtab)?.label || 'Клиенты')
                 : (TABS.find((tab) => tab.id === activeTab)?.label || 'Клиенты')}
             </h3>
             <div className="flex items-center gap-3">
-              <span className="px-4 py-1.5 bg-slate-50 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
+              <span className="px-4 py-1.5 bg-surface-subtle text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider border border-slate-100">
                 {/* total из caps — размер всего среза таблицы, а вкладка показывает
                     подмножество (статусы, дедуп по контактам), поэтому честная
                     нижняя граница — «N+ показанных», не total */}
@@ -1128,11 +1128,11 @@ export function CustomersPage() {
                 : subMeta.empty;
               return (
                 <div className="p-16 text-center flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
+                  <div className="w-16 h-16 rounded-2xl bg-surface-subtle flex items-center justify-center text-slate-300 shadow-inner mb-4 border border-slate-100">
                     <FileText className="w-8 h-8" />
                   </div>
-                  <h4 className="text-lg font-black text-slate-900 tracking-tight mb-2">{emptyMeta.title}</h4>
-                  <p className="text-slate-500 font-medium text-sm">{emptyMeta.text}</p>
+                  <h4 className="text-lg font-black text-ink-strong tracking-tight mb-2">{emptyMeta.title}</h4>
+                  <p className="text-ink-muted font-medium text-sm">{emptyMeta.text}</p>
                 </div>
               );
             })()
@@ -1141,43 +1141,43 @@ export function CustomersPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Клиент</th>
-                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden md:table-cell">Тариф / канал</th>
-                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px]">Статус</th>
-                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
-                      <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[10px] text-right">Действия</th>
+                    <tr className="bg-surface-subtle/80 border-b border-slate-100">
+                      <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Клиент</th>
+                      <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] hidden md:table-cell">Тариф / канал</th>
+                      <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px]">Статус</th>
+                      <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] hidden lg:table-cell">Причина</th>
+                      <th className="px-6 py-4 font-black text-ink-muted uppercase tracking-widest text-[10px] text-right">Действия</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {activeRows.slice(0, limit).map((row) => {
                       const statusConfig = (() => {
-                        if (row.status === 'Доступ активен') return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: CheckCircle2 };
-                        if (row.status === 'Доступ закончился') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: Clock };
-                        return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', icon: null };
+                        if (row.status === 'Доступ активен') return { bg: 'bg-feedback-success-bg', text: 'text-feedback-success-text', border: 'border-emerald-200', icon: CheckCircle2 };
+                        if (row.status === 'Доступ закончился') return { bg: 'bg-feedback-error-bg', text: 'text-feedback-error-text', border: 'border-red-200', icon: Clock };
+                        return { bg: 'bg-surface-subtle-strong', text: 'text-slate-600', border: 'border-border-default', icon: null };
                       })();
                       const contextDisplay = getContextDisplay(row);
 
                       const StatusIcon = statusConfig.icon;
 
                       return (
-                        <tr key={`${activeTab}-${row.id}`} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={`${activeTab}-${row.id}`} className="hover:bg-surface-subtle/80 transition-colors">
 
                           {/* Client Col */}
                           <td className="px-6 py-4">
                             <div className="min-w-0">
-                                <div className="font-black text-slate-900 text-sm truncate flex items-center gap-1.5">
+                                <div className="font-black text-ink-strong text-sm truncate flex items-center gap-1.5">
                                   <span>
                                     {getClientDisplayName(row) || (row.tg_username ? `@${row.tg_username}` : row.tg_user_id ? `ID: ${row.tg_user_id}` : 'Неизвестный')}
                                   </span>
                                 </div>
                                 {row.tg_user_id ? (
-                                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                  <div className="text-[10px] font-bold text-ink-muted uppercase tracking-tight">
                                     ID: {row.tg_user_id}
                                   </div>
                                 ) : null}
                                 {row.tg_username ? (
-                                  <div className="text-xs font-semibold text-slate-500 truncate">
+                                  <div className="text-xs font-semibold text-ink-muted truncate">
                                     @{row.tg_username}
                                   </div>
                                 ) : null}
@@ -1190,7 +1190,7 @@ export function CustomersPage() {
                               {contextDisplay.primary}
                             </div>
                             {contextDisplay.secondary ? (
-                              <div className="text-xs text-slate-500 truncate mt-1">
+                              <div className="text-xs text-ink-muted truncate mt-1">
                                 {contextDisplay.secondary}
                               </div>
                             ) : null}
@@ -1218,7 +1218,7 @@ export function CustomersPage() {
                                 <>
                                   <button
                                     type="button"
-                                    className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                    className="p-2 bg-white border border-border-default text-ink-muted hover:text-ink-strong hover:border-border-strong hover:bg-surface-subtle rounded-lg transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                                     popovertarget={`row-menu-${row.id}`}
                                     disabled={mutatingRowId === String(row.id)}
                                     title="Действия"
@@ -1229,26 +1229,26 @@ export function CustomersPage() {
                                   <div
                                     id={`row-menu-${row.id}`}
                                     popover="auto"
-                                    className="w-56 rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
+                                    className="w-56 rounded-2xl border border-border-default bg-white shadow-xl shadow-slate-900/10 overflow-hidden p-0"
                                     style={ROW_MENU_STYLE}
                                   >
                                     <button
                                       type="button"
-                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors"
                                       onClick={() => runSubscriptionAction(row, 'extend-5')}
                                     >
                                       Продлить на 5 дней
                                     </button>
                                     <button
                                       type="button"
-                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors"
                                       onClick={() => runSubscriptionAction(row, 'extend-30')}
                                     >
                                       Продлить на 30 дней
                                     </button>
                                     <button
                                       type="button"
-                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                      className="w-full px-4 py-3 text-left text-sm font-semibold text-ink-body hover:bg-surface-subtle transition-colors"
                                       onClick={() => runSubscriptionAction(row, 'extend-forever')}
                                     >
                                       Выдать навсегда
@@ -1268,12 +1268,12 @@ export function CustomersPage() {
                               ) : null}
                               {row.tg_user_id && (
                                 <>
-                                  <button className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                                  <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
                                     <Send className="w-3.5 h-3.5" />
                                   </button>
                                 </>
                               )}
-                              <a className="p-2 bg-white border border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-300 rounded-lg transition-all shadow-sm" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
+                              <a className="p-2 bg-white border border-border-default text-ink-faint hover:text-ink-strong hover:bg-surface-subtle hover:border-border-strong rounded-lg transition-all shadow-sm" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </a>
                             </div>
@@ -1285,11 +1285,11 @@ export function CustomersPage() {
                 </table>
               </div>
 
-              <div className="px-8 py-4 border-t border-slate-100 bg-slate-50/30 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="px-8 py-4 border-t border-slate-100 bg-surface-subtle/30 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex-1">
                   {activeRows.length > limit ? (
                     <button
-                      className="w-full md:w-auto px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2"
+                      className="w-full md:w-auto px-6 py-3 bg-white border border-border-default text-ink-body rounded-xl text-sm font-bold shadow-sm hover:bg-surface-subtle hover:border-border-strong transition-all flex items-center justify-center gap-2"
                       onClick={() => setLimit((prev) => prev + 80)}
                     >
                       Показать еще {Math.min(80, activeRows.length - limit)} из {activeRows.length - limit}
@@ -1299,7 +1299,7 @@ export function CustomersPage() {
                 <div className="flex justify-end">
                   <a
                     href="/app/broadcast"
-                    className="w-full md:w-auto px-6 py-3 bg-indigo-600 !text-white rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                    className="w-full md:w-auto px-6 py-3 bg-action-primary !text-action-primary-text rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-action-primary-hover transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
                     Рассылка
