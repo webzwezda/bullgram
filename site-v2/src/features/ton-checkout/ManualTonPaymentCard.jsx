@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Check, Copy, ExternalLink, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
 
 function amountNanoTon(purchase) {
   const nano = String(purchase?.amount_nanoton || '').trim();
@@ -82,7 +82,7 @@ function RequisiteRow({ label, value, copyValue }) {
       onClick={copy}
       title={copyValue || value}
     >
-      <span className="w-14 shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-500">{label}</span>
+      <span className="w-[72px] shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-500">{label}</span>
       <span className={`min-w-0 flex-1 font-mono text-[12px] font-bold text-slate-700 ${copyFailed ? 'break-all' : 'truncate'}`}>{value}</span>
       <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
         copied ? 'text-emerald-600' : copyFailed ? 'text-rose-700' : 'text-slate-300 group-hover:text-slate-500'
@@ -203,9 +203,15 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
             {error ? (
               <p className="text-xs text-rose-700 text-center">{error}</p>
             ) : null}
+            <div className="rounded-lg bg-amber-50 px-3 py-2 flex items-start gap-1.5">
+              <AlertTriangle className="size-3 text-amber-600 shrink-0 mt-0.5" />
+              <span className="text-[11px] font-bold text-amber-900 leading-relaxed">
+                Переводи ровно сумму с этим memo — иначе платёж не зачтётся
+              </span>
+            </div>
             <button
               type="button"
-              className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-sm shadow-md shadow-sky-700/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onCheck}
               disabled={checking}
             >
@@ -216,10 +222,6 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
                 </>
               ) : 'Проверить оплату'}
             </button>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-              <ShieldCheck className="size-3 text-emerald-500 shrink-0" />
-              Переводи ровно сумму с этим memo — иначе платёж не зачтётся
-            </span>
             <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
               <Loader2 className="size-3 animate-spin shrink-0" />
               Статус проверяется автоматически каждые 10 секунд

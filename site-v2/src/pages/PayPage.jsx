@@ -282,7 +282,7 @@ function PaymentView({
   const amount = Number(purchase.amount_ton || 0);
 
   const tabClass = (active) => `flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide rounded-lg transition-all ${
-    active ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+    active ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'
   }`;
 
   return (
