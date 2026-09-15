@@ -180,7 +180,7 @@ export function CreatedInvoicePage() {
     ? { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт оплачен', desc: `${Number(invoice.amount_ton || 0)} TON пришли на твой кошелёк. Секрет ниже — что получил покупатель.` }
     : isExpired
       ? { Icon: Clock, bg: 'bg-slate-500', shadow: 'shadow-slate-400/20', title: 'Срок счёта истёк', desc: 'Создайте новый счёт, если покупка ещё актуальна.' }
-      : { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт создан', desc: 'Отправьте ссылку покупателю — он оплатит и увидит секрет.' };
+      : { Icon: CheckCircle2, bg: 'bg-emerald-600', shadow: 'shadow-emerald-500/20', title: 'Счёт создан', desc: 'Отправь ссылку покупателю — он оплатит и увидит секрет.' };
 
   const StatusIcon = status.Icon;
 
@@ -211,7 +211,7 @@ export function CreatedInvoicePage() {
               <p className="text-sm font-medium text-slate-500 mt-0.5">{status.desc}</p>
             </div>
             {!isPaid && !isExpired ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600 shrink-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-[11px] font-mono text-slate-600 shrink-0" title="Срок оплаты счёта">
                 <Clock className="w-3.5 h-3.5" />
                 {remaining || '00:00'}
               </span>
@@ -274,8 +274,8 @@ export function CreatedInvoicePage() {
                     alt="QR-код ссылки на оплату"
                     className="w-40 h-40 sm:w-44 sm:h-44 rounded-xl bg-white border border-slate-200 p-2"
                   />
-                  <span className="text-[10px] text-slate-400 text-center mt-1.5 max-w-[12rem] leading-tight">
-                    QR ссылки — наведите камеру покупателя
+                  <span className="text-[11px] text-slate-500 text-center mt-1.5 max-w-[12rem] leading-tight">
+                    QR ссылки — наведи камеру покупателя
                   </span>
                 </div>
               ) : qrFailed ? (
@@ -297,7 +297,7 @@ export function CreatedInvoicePage() {
                       rel="noreferrer"
                       className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700"
                     >
-                      Открыть <ExternalLink className="w-3 h-3" />
+                      Открыть как покупатель <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                   <button
@@ -338,7 +338,7 @@ export function CreatedInvoicePage() {
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
                   <p>
-                    Сохраните эту страницу в закладки — без аккаунта восстановить ссылку нельзя.
+                    Сохрани эту страницу в закладки — без аккаунта восстановить ссылку нельзя.
                     Платформа не хранит ваши счета дольше 90 дней.
                   </p>
                 </div>

@@ -589,7 +589,7 @@ function MyInvoicesCard({ items, loading, error, onRetry, onOpen }) {
                 </div>
                 <p className="text-sm font-semibold text-slate-700">У вас пока нет счетов</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Создайте первый — он появится здесь. Неоплаченные счёта исчезают из списка после истечения срока.
+                  Создайте первый — он появится здесь. Неоплаченные счета исчезают из списка после истечения срока.
                 </p>
               </div>
             ) : null}
