@@ -15,10 +15,9 @@ const plans = [
     id: 'trial',
     label: 'Пробный вход',
     title: 'Trial',
-    price: '0 GRAM',
+    price: '0 TON',
     period: 'бессрочно',
     description: 'Пробный доступ к Bullgram, чтобы собрать первый рабочий контур и проверить сценарии без оплаты.',
-    href: '/app/profile',
     action: 'Начать Trial',
     features: [
       '100 запросов к API и MCP',
@@ -30,7 +29,7 @@ const plans = [
     id: 'pro',
     label: 'Полный доступ',
     title: 'Pro',
-    price: '10 GRAM',
+    price: '10 TON',
     period: 'за 365 дней доступа',
     description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
     highlighted: true,
@@ -84,19 +83,22 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
   }
 
   if (pendingOrder) {
+    const expired = !countdown || countdown === '00:00';
     return (
       <div className="mt-auto space-y-2">
         <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-amber-700 ring-1 ring-inset ring-amber-200">
-          Ожидает оплаты · {countdown || '00:00'}
+          {expired ? 'Счёт истёк' : `Ожидает оплаты · ${countdown}`}
         </div>
-        <button
-          type="button"
-          onClick={() => navigate(`/pay/${pendingOrder.id}`)}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-amber-600/20 transition hover:bg-amber-700"
-        >
-          Завершить оплату
-          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-        </button>
+        {expired ? null : (
+          <button
+            type="button"
+            onClick={() => navigate(`/pay/${pendingOrder.id}`)}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-amber-600/20 transition hover:bg-amber-700"
+          >
+            Завершить оплату
+            <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        )}
       </div>
     );
   }
@@ -127,7 +129,9 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
       navigate(`/pay/${data.order_id}`);
     } catch (e) {
       const status = e?.status || e?.statusCode;
-      if (status >= 500) {
+      if (!status) {
+        setError('Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.');
+      } else if (status >= 500) {
         setError('Сервис оплаты недоступен. Напишите в поддержку.');
       } else {
         setError(e.message || 'Не удалось создать счёт');
@@ -152,7 +156,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
           </>
         ) : (
           <>
-            Оплатить GRAM
+            Оплатить TON
             <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
           </>
         )}
@@ -187,7 +191,7 @@ function PlanCard({ plan, children }) {
           {plan.label}
         </div>
       ) : (
-        <div className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-slate-400">{plan.label}</div>
+        <div className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-slate-500">{plan.label}</div>
       )}
 
       {plan.highlighted ? <div className="mb-4 h-2" /> : null}
@@ -204,7 +208,7 @@ function PlanCard({ plan, children }) {
       <ul className="mb-8 space-y-3">
         {plan.features.map((feature) => (
           <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 text-emerald-500`} strokeWidth={2.5} />
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} aria-hidden="true" />
             <span>{feature}</span>
           </li>
         ))}
@@ -286,7 +290,7 @@ function PaywallBotMock() {
 
 export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
-  const pendingOrder = billingOrder?.status === 'pending' ? billingOrder : null;
+  const pendingOrder = billingOrder?.status === 'pending' && billingOrder?.provider === 'ton_connect' ? billingOrder : null;
   const { hash } = useLocation();
   const [stars, setStars] = useState(null);
 
@@ -354,7 +358,7 @@ export function HomePage() {
 
           <span
             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]"
-            title="Принимаем оплату только в криптовалюте — GRAM"
+            title="Принимаем оплату только в криптовалюте — TON"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="11" fill="#0098EA" />
@@ -368,7 +372,7 @@ export function HomePage() {
 
           <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
             Юзерботы для Telegram <br className="hidden sm:block" />
-            с <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">API и MCP</span>
+            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-500">работают с первого дня</span>
           </h1>
 
           <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-[44rem] leading-relaxed mb-10 tracking-tight">
@@ -455,7 +459,7 @@ export function HomePage() {
               <ul className="mt-6 space-y-3">
                 {['Администрирование ваших групп', 'Мониторинг чужих групп и чатов', 'Участие в рассылках'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} />
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} aria-hidden="true" />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -486,7 +490,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 5 — paywall бот */}
+      {/* Экран 4 — paywall бот */}
       <ScreenSection id="paywall">
         <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
           <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
@@ -502,7 +506,7 @@ export function HomePage() {
               <ul className="mt-6 space-y-3">
                 {['автоматическая выдача доступа после оплаты', 'тарифы и подписки внутри бота', 'напоминания и удаление тех, кто не продлил'].map((feature) => (
                   <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} />
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} aria-hidden="true" />
                     <span>{feature}</span>
                   </li>
                 ))}
@@ -525,7 +529,7 @@ export function HomePage() {
         </div>
       </ScreenSection>
 
-      {/* Экран 6 — быстрый старт */}
+      {/* Экран 5 — быстрый старт */}
       <ScreenSection id="quick-start">
         <div className="relative isolate flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 text-center sm:px-6">
           <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />

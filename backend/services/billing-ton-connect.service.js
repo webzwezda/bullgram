@@ -37,7 +37,8 @@ function addMinutes(date, minutes) {
 export async function createTonConnectOrder(supabase, ownerId) {
     const merchantWallet = String(process.env.PLATFORM_TON_WALLET || '').trim();
     if (!merchantWallet) {
-        const error = new Error('PLATFORM_TON_WALLET не настроен');
+        console.error('[billing-ton-connect] PLATFORM_TON_WALLET не настроен');
+        const error = new Error('Платёж временно недоступен, попробуй позже');
         error.statusCode = 503;
         throw error;
     }

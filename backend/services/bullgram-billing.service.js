@@ -114,6 +114,7 @@ export async function getCurrentBillingState(supabase, ownerId) {
             .from('billing_orders')
             .select('*')
             .eq('owner_id', ownerId)
+            .eq('provider', 'ton_connect')
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle()

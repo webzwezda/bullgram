@@ -5,6 +5,7 @@ import { apiRequest } from '../../api/client.js';
 
 const VERIFY_POLL_DELAY_MS = 5000;
 const VERIFY_POLL_MAX_RETRIES = 13;
+const PENDING_MESSAGE = 'Платёж отправлен, но ещё не подтверждён блокчейном. Попробуйте проверить позже или обновите страницу.';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,7 +36,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
             body
           });
 
-          if (data?.status === 'paid' || (data?.success === true && data?.status === 'paid')) {
+          if (data?.status === 'paid') {
             setStatus('paid');
             onComplete?.(data);
             return;
@@ -50,6 +51,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
           if (attempt >= VERIFY_POLL_MAX_RETRIES) {
             throw verifyError;
           }
+          await sleep(VERIFY_POLL_DELAY_MS);
         }
       }
 
@@ -89,7 +91,7 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
           ]
         });
       } catch (sendError) {
-        setStatus('failed');
+        setStatus('idle');
         const message = sendError?.message || 'Транзакция отклонена';
         setError(message);
         onError?.(new Error(message));
@@ -104,12 +106,12 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
           senderWallet,
           onStillPending: () => {
             setStatus('pending');
-            setError('Платёж отправлен, но ещё не подтверждён блокчейном. Попробуйте проверить позже или обновите страницу.');
+            setError(PENDING_MESSAGE);
           }
         });
       } catch (verifyError) {
         setStatus('failed');
-        const message = verifyError?.message || 'Не удалось верифицировать платеж';
+        const message = verifyError?.message || 'Не удалось верифицировать платёж';
         setError(message);
         onError?.(new Error(message));
       }
@@ -121,7 +123,10 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
     async () => {
       if (!tonConnectUI) return;
       const senderWallet = tonConnectUI.account?.address || '';
-      if (!senderWallet) return;
+      if (!senderWallet) {
+        setError('Кошелёк не подключён. Подключи кошелёк и попробуй ещё раз.');
+        return;
+      }
 
       setStatus('verifying');
       setError(null);
@@ -129,11 +134,13 @@ export function useTonCheckout({ verifyEndpoint, buildVerifyBody, accessToken, o
         await runVerifyLoop({
           senderWallet,
           onStillPending: () => {
-            setStatus('idle');
+            setStatus('pending');
+            setError(PENDING_MESSAGE);
           }
         });
       } catch (verifyError) {
-        setStatus('idle');
+        setStatus('failed');
+        setError(verifyError?.message || 'Не удалось верифицировать платёж');
       }
     },
     [tonConnectUI, runVerifyLoop]
