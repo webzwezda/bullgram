@@ -13,6 +13,7 @@
     "build:v2": "npm run build:site && npm run build:admin",
     "tokens:build": "node design/build.mjs",
     "tokens:check": "node design/build.mjs --check",
+    "check:design": "node design/check-design.mjs",
     "ci": "./ops/scripts/ci/run-all-gates.sh",
     "ci:source": "./ops/scripts/ci/run-all-gates.sh 01 02 06",
     "ci:smoke": "./ops/scripts/ci/run-all-gates.sh 03 04 05",

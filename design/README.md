@@ -65,14 +65,34 @@ design/tokens/
 
 ## Валидация
 
-Из каталога кита `~/.zcode/ux-ui-agent-skills/`:
+Единый гейт качества (волна 5), из корня репозитория:
+
+```bash
+npm run check:design
+```
+
+Что проверяет `design/check-design.mjs` (kit-скрипты вызываются из `~/.zcode/ux-ui-agent-skills/`, в репо не копируются):
+
+1. **tokens** — `validate_tokens.py design/tokens`: JSON валиден, все алиасы резолвятся. Обязателен exit 0.
+2. **contrast** — `design/contrast-snapshot.mjs` собирает hex-слепок semantic-токенов (резолв алиасов + oklch→sRGB, round-trip проверен на #dc2626, #62748e, #4f39f6, #e7000b) → `validate_contrast.py /tmp/bullgram-contrast.json`. Exit 1 с **единственным** FAIL `border.strong ≥ 3:1` (WCAG 1.4.11) — зелёный (известный, задокументирован ниже); любой **другой** FAIL — гейт красный.
+3. **hardcodes** — `lint_hardcodes.py admin-v2/src site-v2/src` против ratchet-снапшота `design/lint-baseline.json`. Гейт падает **только** если текущих findings стало больше baseline (total + по каждому типу + по каждому файлу). Меньше — зелёный с подсказкой обновить baseline. Baseline перегенерируется осознанно при миграции на семантику: `node design/check-design.mjs --update-baseline`.
+4. **axe** (опционально) — `axe_audit.mjs` по `design/qa/harness-studio-pairs.html`: рендер-аудит студийных пар (нужны playwright + Chrome в окружении; без них шаг честно SKIPPED). Падение — только на serious/critical. Harness: статичная страница, `:root` — дословный слепок `admin-v2/src/styles/tokens.css`, измеряемая разметка — слой `--qa-*` (те же значения в sRGB-hex из пайплайна contrast-snapshot: kit-скрипт `measure_render.mjs` парсит computed style только в rgb()/hex, строки oklch он не читает).
+
+Разовые проверки того же harness вручную (measure_render — реальный рендер, ground truth):
+
+```bash
+node ~/.zcode/ux-ui-agent-skills/scripts/measure_render.mjs design/qa/harness-studio-pairs.html
+```
+
+Нюанс Tailwind v4 (важно для любых контрастных расчётов): oklch-значения v4 при рендере дают hex, отличающийся от v3-палитры на насыщенных цветах (red-600 → `#e7000b`, indigo-600 → `#4f39f6`, slate-900 → `#0f172b`). Конвертируй oklch в sRGB стандартным пайплайном (как браузер), а не по v3-таблицам — так делает `contrast-snapshot.mjs`.
+
+Из каталога кита `~/.zcode/ux-ui-agent-skills/` те же гейты можно позвать руками:
 
 ```bash
 # структура: JSON + резолв всех алиасов (строгий режим — самодостаточный набор)
 python3 scripts/validate_tokens.py /Users/webzwezda/Desktop/bullgram/design/tokens
 
-# контраст: собираем hex-слепок semantic-токенов (резолв алиасов + oklch→sRGB,
-# round-trip проверен на #dc2626, #62748e, #4f39f6, #e7000b) и подаём официальному скрипту:
+# контраст: собираем hex-слепок semantic-токенов и подаём официальному скрипту:
 node design/contrast-snapshot.mjs   # из корня репо; пишет /tmp/bullgram-contrast.json
 python3 scripts/validate_contrast.py /tmp/bullgram-contrast.json
 ```
