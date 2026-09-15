@@ -35,7 +35,7 @@ design/tokens/
 | `font.sizeLineHeight.*` | `--text-*--line-height` (`--text-sm--line-height`) |
 | `lineHeight.*` | `--leading-*` |
 | `letterSpacing.*` | `--tracking-*` |
-| `font.family.sans` / `font.family.mono` | `--font-sans` / `--font-mono` |
+| `font.family.sans` / `font.family.mono` | `--font-sans` / `--font-mono` — **в выхлопе с волны 4**; сейчас сознательно не эммитятся (нулевая дельта, см. шапку tokens.css) |
 | `spacing.base` | только `--spacing: 0.25rem`; per-step spacing-переменных в v4 нет |
 
 `component.micro-label` — нестандартный композит (`textCase`/`color` вне DTCG-typography): build-скрипт волны 2 обрабатывает его явно, строгие DTCG-инструменты эти поля молча потеряют.
@@ -71,10 +71,12 @@ design/tokens/
 # структура: JSON + резолв всех алиасов (строгий режим — самодостаточный набор)
 python3 scripts/validate_tokens.py /Users/webzwezda/Desktop/bullgram/design/tokens
 
-# контраст: официальный скрипт ожидает один DTCG-файл с группой semantic.* и hex-значениями.
-# Примитивы у нас oklch, поэтому перед прогоном собери hex-слепок semantic-токенов
-# (резолв алиасов + конвертация oklch→sRGB) и подай его скрипту:
-python3 scripts/validate_contrast.py <hex-слепок> --aaa
+# контраст: собираем hex-слепок semantic-токенов (резолв алиасов + oklch→sRGB,
+# round-trip проверен на #dc2626, #62748e, #4f39f6, #e7000b) и подаём официальному скрипту:
+node design/contrast-snapshot.mjs   # из корня репо; пишет /tmp/bullgram-contrast.json
+python3 scripts/validate_contrast.py /tmp/bullgram-contrast.json
 ```
 
-Прогон от 2026-09-16: `validate_tokens` — 6/6 файлов, 259 токенов (134 примитива + 29 semantic + 48 typography с машинным слоем интерлиньяжей + 34 spacing + 10 radius + 4 motion), 0 ошибок, 0 висячих алиасов. Контраст — все обязательные AA-пары проходят (ink.strong/body/muted, 4 feedback-пары, primary/ton/destructive текст-на-действии); `ink.muted` = 4.76:1 на белом и 4.55:1 на slate-50. Единственный FAIL официального скрипта — его собственная доп. пара `border.strong ≥ 3:1` (WCAG 1.4.11): slate-300 на slate-50 даёт 1.42:1. Это де-факто студии; примитивы не трогаем (см. Risks плана волны 1) — если когда-нибудь решим ужесточать, кандидат `border.strong` = slate-400/500, но это отдельное визуальное решение.
+Сборка артефактов и гейт актуальности — из корня репозитория: `npm run tokens:build` (перегенерировать оба `tokens.css`) и `npm run tokens:check` (байт-сверка копий + сверка color-примитивов с `tailwindcss/theme.css`).
+
+Прогон от 2026-09-16: `validate_tokens` — 6/6 файлов, 259 токенов (134 примитива + 29 semantic + 48 typography с машинным слоем интерлиньяжей + 34 spacing + 10 radius + 4 motion), 0 ошибок, 0 висячих алиасов. Контраст — все обязательные AA-пары проходят (ink.strong/body/muted, 4 feedback-пары, primary/ton/destructive текст-на-действии); `ink.muted` = 4.76:1 на белом и 4.55:1 на slate-50. Единственный FAIL официального скрипта — его обязательная пара `border.strong ≥ 3:1` (WCAG 1.4.11): slate-300 на slate-50 даёт 1.42:1, поэтому exit-код 1 у `validate_contrast` на этом слепке — ожидаемое поведение, а не регрессия. Это де-факто студии; примитивы не трогаем (см. Risks плана волны 1) — если когда-нибудь решим ужесточать, кандидат `border.strong` = slate-400/500, но это отдельное визуальное решение.
