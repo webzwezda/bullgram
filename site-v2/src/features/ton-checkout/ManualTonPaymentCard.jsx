@@ -94,32 +94,31 @@ function RequisiteRow({ label, value, copyValue }) {
 }
 
 export function ManualTonPaymentCard({ purchase, checking = false, error = '', onCheck }) {
-  const [qrView, setQrView] = useState('trust');
-  const [qrs, setQrs] = useState({ ton: null, trust: null });
+  const [qr, setQr] = useState(null);
+  const [qrFailed, setQrFailed] = useState(false);
 
   const addr = purchase?.seller_wallet;
   const memo = purchase?.memo || '';
   const nano = amountNanoTon(purchase);
   const tonUrl = addr ? `ton://transfer/${addr}?amount=${nano}&text=${encodeURIComponent(memo)}` : '';
-  const trustUrl = addr
-    ? `https://link.trustwallet.com/send?asset=c607&address=${addr}&amount=${Number(purchase?.amount_ton || 0)}&memo=${encodeURIComponent(memo)}`
-    : '';
 
   useEffect(() => {
     if (!tonUrl) return;
     let cancelled = false;
-    Promise.all([
-      QRCode.toDataURL(tonUrl, { margin: 1, width: 360 }),
-      QRCode.toDataURL(trustUrl, { margin: 1, width: 360 })
-    ])
-      .then(([ton, trust]) => {
-        if (!cancelled) setQrs({ ton, trust });
+    QRCode.toDataURL(tonUrl, { margin: 1, width: 360 })
+      .then((dataUrl) => {
+        if (!cancelled) {
+          setQr(dataUrl);
+          setQrFailed(false);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setQrFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [tonUrl, trustUrl]);
+  }, [tonUrl]);
 
   if (!addr) {
     return (
@@ -130,46 +129,28 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
   }
 
   const links = buildWalletLinks(purchase);
-  const effectiveQrView = qrs.trust ? qrView : 'ton';
-  const qrSrc = effectiveQrView === 'trust'
-    ? (qrs.trust || qrs.ton)
-    : (qrs.ton || qrs.trust);
   const amountText = String(Number(purchase.amount_ton || 0));
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="flex flex-col sm:flex-row">
         <div className="sm:w-[240px] sm:shrink-0 p-4 flex flex-col items-center justify-center gap-2.5 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50/50">
-          {qrs.trust && qrs.ton ? (
-            <div className="flex p-0.5 bg-slate-200/70 rounded-lg">
-              <button
-                type="button"
-                className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide rounded-md transition-all ${effectiveQrView === 'trust' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                onClick={() => setQrView('trust')}
-              >
-                Trust
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide rounded-md transition-all ${effectiveQrView === 'ton' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                onClick={() => setQrView('ton')}
-              >
-                TON
-              </button>
-            </div>
-          ) : null}
-          {qrSrc ? (
+          {qr ? (
             <div className="w-[180px] aspect-square rounded-xl border border-slate-100 p-2 bg-white shadow-sm">
               <img
                 className="w-full h-full object-contain mix-blend-multiply"
-                src={qrSrc}
-                alt={effectiveQrView === 'ton' ? 'QR для перевода TON' : 'QR для Trust Wallet'}
+                src={qr}
+                alt="QR для перевода TON с memo"
               />
             </div>
+          ) : qrFailed ? (
+            <p className="w-[180px] text-[11px] text-slate-500 text-center leading-relaxed">
+              QR не построился — открой кошелёк по ссылке ниже
+            </p>
           ) : (
             <div className="w-[180px] aspect-square rounded-xl bg-slate-100 animate-pulse" />
           )}
-          <p className="text-[11px] text-slate-500 text-center">Отсканируй камерой кошелька</p>
+          <p className="text-[11px] text-slate-500 text-center">Отсканируй камерой любого TON-кошелька</p>
         </div>
 
         <div className="flex-1 min-w-0 divide-y divide-slate-100">
