@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Send } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
+import { SUPPORT_TELEGRAM } from '../contacts.js';
 
 // Публичная форма заявки на доступ к Bullgram (режим Normal — без юзерботов
 // и прокси). Доступна без регистрации: заявка сохраняется и уходит админу
@@ -35,10 +36,12 @@ export function AccessRequestPage() {
     }
 
     const errors = {};
-    if (!name.trim()) errors.name = 'Укажи имя';
-    if (!contact.trim()) errors.contact = 'Укажи контакт для связи';
+    if (!name.trim()) errors.name = 'Укажите имя';
+    if (!contact.trim()) errors.contact = 'Укажите контакт для связи';
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      const first = ['name', 'contact', 'note'].find((f) => errors[f]);
+      document.getElementById(first)?.focus();
       return;
     }
     setFieldErrors({});
@@ -64,9 +67,9 @@ export function AccessRequestPage() {
           <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-700" strokeWidth={1.8} />
           <h1 ref={successHeadingRef} tabIndex={-1} className="mt-4 text-2xl font-black tracking-tight text-slate-950 outline-none">Заявка отправлена</h1>
           <p className="mt-3 text-base font-medium leading-7 text-slate-600">
-            Мы получили вашу заявку и напишем вам по указанному контакту.
-            Доступ подключим в режиме Normal — без юзерботов и прокси,
-            с человеческой помощью в настройке.
+            Мы получили вашу заявку и напишем вам по указанному контакту —
+            обычно в течение 1–2 дней. Доступ подключим в режиме Normal —
+            работу с сайтом, с человеческой помощью в настройке.
           </p>
           <a
             href="/"
@@ -74,6 +77,13 @@ export function AccessRequestPage() {
           >
             Вернуться на главную
           </a>
+          <p className="mt-4 text-sm font-medium text-slate-500">
+            Если что-то не получилось —{' '}
+            <a href={SUPPORT_TELEGRAM} target="_blank" rel="noreferrer" className="font-bold text-blue-600 underline decoration-2 underline-offset-2 hover:text-blue-700">
+              напишите нам в Telegram
+            </a>
+            , примем заявку вручную.
+          </p>
         </div>
       </div>
     );
@@ -87,7 +97,7 @@ export function AccessRequestPage() {
       <p className="mt-4 text-base font-medium leading-7 text-slate-600">
         Для людей с инвалидностью цифровые барьеры — не мелочь. Поэтому без справок,
         очередей и автоматических отказов: заполните три поля — рассмотрим заявку лично
-        и подключим режим Normal (работа с сайтом без юзерботов и прокси).
+        и подключим режим Normal — работу с сайтом, с человеческой помощью в настройке.
       </p>
       <ul className="mt-4 space-y-1.5 text-sm font-semibold text-slate-500">
         <li>— справки и документы не нужны;</li>
@@ -116,7 +126,7 @@ export function AccessRequestPage() {
 
         <div>
           <label htmlFor="name" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Как вас зовут <span className="text-rose-500">*</span>
+            Как вас зовут <span className="text-rose-700">*</span>
           </label>
           <input
             id="name"
@@ -141,7 +151,7 @@ export function AccessRequestPage() {
 
         <div>
           <label htmlFor="contact" className="mb-1.5 block text-sm font-bold text-slate-700">
-            Контакт для связи <span className="text-rose-500">*</span>
+            Контакт для связи <span className="text-rose-700">*</span>
           </label>
           <input
             id="contact"
@@ -185,14 +195,12 @@ export function AccessRequestPage() {
             onChange={(e) => setNote(e.target.value)}
             placeholder="Например: пользуюсь скринридером, нужен крупный шрифт, важна поддержка без спешки"
             aria-invalid={fieldErrors.note ? true : undefined}
-            aria-describedby={fieldErrors.note ? 'note-error' : undefined}
+            aria-describedby="note-hint"
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
           />
-          {fieldErrors.note ? (
-            <p id="note-error" role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">
-              {fieldErrors.note}
-            </p>
-          ) : null}
+          <p id="note-hint" className="mt-1.5 text-xs font-medium text-slate-500">
+            До 500 символов. Увидят только мы.
+          </p>
         </div>
 
         {error ? (
