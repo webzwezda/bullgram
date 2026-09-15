@@ -135,7 +135,7 @@ Never commit `.env`, session files, or production credentials. Document new Supa
 
 If you touch `shop`, preserve the current ownership-transfer model:
 
-- TON payment must use the seller’s own wallet from `payment_settings`, not a global wallet
+- two distinct money flows, never mix destinations: platform lots (proxies, bundles, platform userbots) accept TON on the **platform site wallet** — это наш админский кошелёк; a seller admin’s own paid-access flows (их официальный бот продаёт доступ в их приватные каналы/чаты) accept TON on **that admin’s `payment_settings.ton_wallet`** (owner decision 2026-09-15)
 - listed `userbot` assets are reserved from active operations until sold or delisted
 - post-purchase delivery is ownership transfer inside Bullgram, not a raw file drop
 
