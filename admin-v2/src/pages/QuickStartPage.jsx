@@ -1298,9 +1298,17 @@ export function QuickStartPage() {
                                 id={`seed-premium-toggle-${tab}`}
                                 className="sr-only peer"
                                 checked={Boolean(config.seedReactionPremium)}
-                                onChange={(e) => setChannelConfigs(prev => ({
-                                  ...prev,
-                                  [tab]: { ...prev[tab], seedReactionPremium: e.target.checked }
+                                onChange={(e) => setChannelConfigs(prev => {
+                                  const premiumOn = e.target.checked;
+                                  const emojis = parseReactionEmojis(prev[tab].seedReactionEmoji);
+                                  // Выключение премиума схлопывает выбор до первой эмоции:
+                                  // не-премиум бот физически ставит только одну, оставлять
+                                  // «выбрано три» = снова вводить админа в заблуждение.
+                                  if (!premiumOn && emojis.length > 1) {
+                                    toast.info(`Премиум выключен — осталась первая эмоция ${emojis[0]}`);
+                                    return { ...prev, [tab]: { ...prev[tab], seedReactionPremium: false, seedReactionEmoji: emojis[0] } };
+                                  }
+                                  return { ...prev, [tab]: { ...prev[tab], seedReactionPremium: premiumOn } };
                                 }))}
                               />
                               <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-border-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-action-primary"></div>
