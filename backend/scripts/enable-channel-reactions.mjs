@@ -42,11 +42,11 @@ console.log(`юзербот: ${userbot.tg_username || userbot.id}; канал: $
 const client = await svc.createAuthorizedClient(userbot);
 try {
     const peer = await client.getInputEntity(CHANNEL);
+    // В слое GramJS на сервере reaction — bare-конструктор: элементы списка
+    // передаются голыми строками эмодзи (Api.ReactionTypeEmoji отсутствует).
     await client.invoke(new Api.messages.SetChatAvailableReactions({
         peer,
-        availableReactions: new Api.ChatReactionsSome({
-            reactions: EMOJIS.map((emoticon) => new Api.ReactionTypeEmoji({ emoticon }))
-        })
+        availableReactions: new Api.ChatReactionsSome({ reactions: [...EMOJIS] })
     }));
     console.log(`OK — доступные реакции канала установлены: ${EMOJIS.join(' ')} (режим «некоторые»)`);
 } catch (err) {
