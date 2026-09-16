@@ -1309,7 +1309,7 @@ export function QuickStartPage() {
                                     return { ...prev, [tab]: { ...prev[tab], seedReactionPremium: false, seedReactionEmoji: emojis[0] } };
                                   }
                                   return { ...prev, [tab]: { ...prev[tab], seedReactionPremium: premiumOn } };
-                                }))}
+                                })}
                               />
                               <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-border-strong after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-action-primary"></div>
                             </label>
