@@ -85,3 +85,34 @@ export function buildSeedReactionAttempts(raw, { maxAttempts = 3 } = {}) {
 export function normalizeSeedEmojiList(raw) {
     return buildSeedReactionAttempts(raw).join(',');
 }
+
+/**
+ * Планы попыток установки seed-реакции.
+ *
+ * setMessageReaction ЗАМЕНЯЕТ предыдущий набор реакций бота на сообщении,
+ * поэтому мультиреакция = ОДИН вызов со списком из нескольких эмодзи
+ * (последовательные одиночные вызовы перезаписали бы друг друга — осталась
+ * бы последняя). Отсюда попытка = массив эмодзи, а не один эмодзи.
+ *
+ *   non-premium или один эмодзи → singles: [[e1],[e2],[e3]] — как раньше,
+ *     не-премиум бот физически не может поставить больше одной.
+ *   premium и >1 → префиксы полного набора вниз до одного:
+ *     [e1,e2,e3] → [[e1,e2,e3],[e1,e2],[e1]] — первая успешная попытка
+ *     фиксирует набор; если заявленный премиум не принят Telegram'ом,
+ *     деградируем до одной реакции.
+ *
+ * Вход — плоский список из buildSeedReactionAttempts (уже нормализован);
+ * на всякий случай принимается и сырая строка «e1,e2».
+ */
+export function buildSeedReactionPlans(emojis, { premium = false } = {}) {
+    const list = Array.isArray(emojis) ? emojis : buildSeedReactionAttempts(emojis);
+    if (list.length === 0) return [];
+    if (!premium || list.length === 1) {
+        return list.map((emoji) => [emoji]);
+    }
+    const plans = [];
+    for (let size = list.length; size >= 1; size--) {
+        plans.push(list.slice(0, size));
+    }
+    return plans;
+}

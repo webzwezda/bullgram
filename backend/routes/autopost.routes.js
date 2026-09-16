@@ -156,7 +156,7 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day, seed_reaction_emoji } = req.body;
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day, seed_reaction_emoji, seed_reaction_premium } = req.body;
 
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
@@ -196,6 +196,12 @@ export default function autopostRoutes(supabase) {
                     }
                     updates.seed_reaction_emoji = normalizeSeedEmojiList(seed_reaction_emoji);
                 }
+            }
+            if (seed_reaction_premium !== undefined) {
+                // Заявка владельца «у бота есть Telegram Premium». Не верифицируем:
+                // если заявка ошибочна, рантайм-фолбэк в publishItem сам деградирует
+                // до одиночной реакции.
+                updates.seed_reaction_premium = seed_reaction_premium === true;
             }
             
             const { data: channel, error } = await supabase

@@ -8,7 +8,7 @@
  *   old_reaction: [{👍}]   new_reaction: [{❤️}]         →  0 (замена эмодзи)
  *   old_reaction: []       new_reaction: []             →  0 (no-op)
  */
-import { computeReactionDelta, buildSeedReactionAttempts, normalizeSeedEmojiList } from '../services/autopost/handlers/reactions.js';
+import { computeReactionDelta, buildSeedReactionAttempts, buildSeedReactionPlans, normalizeSeedEmojiList } from '../services/autopost/handlers/reactions.js';
 
 let failures = 0;
 function assert(condition, label) {
@@ -48,6 +48,21 @@ assert(JSON.stringify(buildSeedReactionAttempts('👍,👎,🔥,🥰', { maxAtte
 assert(JSON.stringify(buildSeedReactionAttempts('👍,, ,👎')) === JSON.stringify(['👍', '👎']), 'empty items dropped');
 assert(JSON.stringify(buildSeedReactionAttempts('👍,👍,👍')) === JSON.stringify(['👍']), 'dedupe of identical emojis');
 assert(buildSeedReactionAttempts(',,,').length === 0, 'only separators → no attempts, Telegram not called');
+
+console.log('--- reactions.buildSeedReactionPlans ---');
+
+// non-premium — прежнее поведение: одиночные попытки (лимит бота без премиума — 1 реакция).
+assert(JSON.stringify(buildSeedReactionPlans(['👍', '🔥', '❤'])) === JSON.stringify([['👍'], ['🔥'], ['❤']]), 'non-premium → singles');
+assert(JSON.stringify(buildSeedReactionPlans(['👍', '🔥', '❤'], { premium: false })) === JSON.stringify([['👍'], ['🔥'], ['❤']]), 'explicit premium:false → singles');
+// premium — setMessageReaction заменяет предыдущий набор, поэтому попытка = один
+// вызов со списком; деградация по префиксам вниз до одиночного.
+assert(JSON.stringify(buildSeedReactionPlans(['👍', '🔥', '❤'], { premium: true })) === JSON.stringify([['👍', '🔥', '❤'], ['👍', '🔥'], ['👍']]), 'premium 3 → prefixes [[3],[2],[1]]');
+assert(JSON.stringify(buildSeedReactionPlans(['👍', '🔥'], { premium: true })) === JSON.stringify([['👍', '🔥'], ['👍']]), 'premium 2 → prefixes [[2],[1]]');
+assert(JSON.stringify(buildSeedReactionPlans(['👍'], { premium: true })) === JSON.stringify([['👍']]), 'premium 1 → single plan');
+assert(JSON.stringify(buildSeedReactionPlans([], { premium: true })) === JSON.stringify([]), 'premium 0 → [] (Telegram not called)');
+assert(JSON.stringify(buildSeedReactionPlans([], { premium: false })) === JSON.stringify([]), 'non-premium 0 → [] (Telegram not called)');
+// Толерантность к сырой строке из настроек (нормальный путь — готовый список).
+assert(JSON.stringify(buildSeedReactionPlans('❤️, 👍', { premium: true })) === JSON.stringify([['❤', '👍'], ['❤']]), 'raw string input normalized');
 
 console.log('--- reactions.normalizeSeedEmojiList ---');
 

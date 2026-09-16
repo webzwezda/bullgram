@@ -14,7 +14,7 @@ import {
     getStats as getStatsImpl
 } from './autopost/queue.js';
 import { registerAllHandlers } from './autopost/handlers/index.js';
-import { buildSeedReactionAttempts } from './autopost/handlers/reactions.js';
+import { buildSeedReactionAttempts, buildSeedReactionPlans } from './autopost/handlers/reactions.js';
 import {
     setGuestSession,
     getGuestSession,
@@ -295,26 +295,30 @@ export class AutopostService {
         // а не после DB-апдейта. Если setMessageReaction упадёт (нет прав),
         // пост всё равно считается опубликованным.
         //
-        // Лимит не-премиум бота — 1 реакция на сообщение, поэтому шлём попытки
-        // по одной: первая — основная, остальные — запасные. Список уже
-        // нормализован (❤️ → ❤, без VS16 — иначе Telegram даёт REACTION_INVALID),
+        // setMessageReaction ЗАМЕНЯЕТ предыдущий набор реакций бота на сообщении,
+        // поэтому каждая попытка — один вызов с готовым набором. Премиум-канал
+        // (channel.seed_reaction_premium) шлёт мультиреакцию 2-3 эмодзи одним
+        // вызовом; при отказе деградируем по префиксам вниз до одиночного.
+        // Не-премиум — прежние одиночные попытки. Список уже нормализован
+        // (❤️ → ❤, без VS16 — иначе Telegram даёт REACTION_INVALID),
         // пустой/мусорный список → Telegram не вызываем вовсе.
-        const seedAttempts = buildSeedReactionAttempts(channel?.seed_reaction_emoji);
-        if (seedAttempts.length > 0 && messageIds && messageIds.length > 0) {
+        const seedPlans = buildSeedReactionPlans(
+            buildSeedReactionAttempts(channel?.seed_reaction_emoji),
+            { premium: channel?.seed_reaction_premium === true }
+        );
+        if (seedPlans.length > 0 && messageIds && messageIds.length > 0) {
             let seeded = false;
-            for (const emoji of seedAttempts) {
+            for (const plan of seedPlans) {
                 try {
-                    await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], [
-                        { type: 'emoji', emoji }
-                    ]);
+                    await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], plan.map((emoji) => ({ type: 'emoji', emoji })));
                     seeded = true;
                     break;
                 } catch (e) {
-                    console.error(`[Autopost] seed reaction attempt failed (chat=${item.target_channel_id} message=${messageIds[0]} emoji="${emoji}"):`, e.message);
+                    console.error(`[Autopost] seed reaction attempt failed (chat=${item.target_channel_id} message=${messageIds[0]} emojis="${plan.join(',')}"):`, e.message);
                 }
             }
             if (!seeded) {
-                console.error(`[Autopost] seed reaction не удалась ни одной попыткой из ${seedAttempts.length} (chat=${item.target_channel_id} message=${messageIds[0]}) — проверь, что эмодзи разрешён в настройках реакций канала (non-fatal, пост опубликован)`);
+                console.error(`[Autopost] seed reaction не удалась ни одной попыткой из ${seedPlans.length} (chat=${item.target_channel_id} message=${messageIds[0]}) — проверь, что эмодзи разрешён в настройках реакций канала, а для мультиреакций — что бот реально премиум (non-fatal, пост опубликован)`);
             }
         }
 
