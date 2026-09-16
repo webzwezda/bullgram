@@ -525,7 +525,7 @@ export default function(supabase) {
     router.post('/send', authenticateUser, async (req, res) => {
         try {
             ensureBroadcastAllowed(req.profile);
-            const { audience_type, channel_id, base_id, manual_tg_user_ids, base_filter, manual_members, title, message_text, sender_type, sender_userbot_id, sender_userbot_ids, delay_ms, preparation_id, skip_unreachable } = req.body;
+            const { audience_type, channel_id, base_id, manual_tg_user_ids, base_filter, manual_members, title, message_text, sender_type, sender_userbot_id, sender_userbot_ids, delay_ms, preparation_id, skip_unreachable, leave_groups_on_complete } = req.body;
             if (!audience_type) return res.status(400).json({ error: 'Не выбрана аудитория' });
             if (!message_text || !message_text.trim()) return res.status(400).json({ error: 'Нет текста рассылки' });
 
@@ -636,6 +636,9 @@ export default function(supabase) {
                         failed: 0,
                         preparation_id: preparation_id || null,
                         skipped_unreachable: skippedUnreachableCount,
+                        // галочка «выйти по окончанию рассылки»: jobs/broadcast-membership-cleanup.job.js
+                        // читает этот флаг после терминального статуса кампании
+                        ...(leave_groups_on_complete === true ? { leave_groups_on_complete: true } : {}),
                         queued_at: new Date().toISOString()
                     }
                 })

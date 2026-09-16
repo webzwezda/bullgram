@@ -78,7 +78,8 @@ function loadDraft() {
       return {
         title: typeof parsed.title === 'string' ? parsed.title : '',
         base: typeof parsed.base === 'string' ? parsed.base : '',
-        message_text: typeof parsed.message_text === 'string' ? parsed.message_text : ''
+        message_text: typeof parsed.message_text === 'string' ? parsed.message_text : '',
+        leave_groups_on_complete: parsed.leave_groups_on_complete === true
       };
     }
   } catch {
@@ -105,7 +106,7 @@ export function BroadcastPage() {
     userbots: []
   });
   const [step, setStep] = useState('base');
-  const [form, setForm] = useState({ title: '', base: '', message_text: '' });
+  const [form, setForm] = useState({ title: '', base: '', message_text: '', leave_groups_on_complete: false });
   const [manual, setManual] = useState({ tg_user_ids: [], members: [] });
   const [selectedIds, setSelectedIds] = useState([]);
   const [membersPage, setMembersPage] = useState(0);
@@ -591,7 +592,8 @@ export function BroadcastPage() {
           delay_ms: 5000,
           message_text: form.message_text.trim(),
           preparation_id: preparation?.status === 'ready' ? preparation.id : undefined,
-          manual_confirmed_userbot_risk: true
+          manual_confirmed_userbot_risk: true,
+          leave_groups_on_complete: form.leave_groups_on_complete === true
         }
       });
       const queuedCount = Number(data.queued_count);
@@ -1110,6 +1112,20 @@ export function BroadcastPage() {
               {!preparationBlocking && messageEmpty ? (
                 <div className="mt-3 text-sm text-amber-700 font-medium">Напиши текст сообщения — без него кнопка отправки серая.</div>
               ) : null}
+              <label className="mt-5 flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 mt-0.5 accent-action-primary shrink-0"
+                  checked={form.leave_groups_on_complete === true}
+                  onChange={(e) => setField('leave_groups_on_complete', e.target.checked)}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-ink-strong">Юзерботы выйдут из групп после рассылки</span>
+                  <span className="block text-xs text-ink-muted font-medium mt-0.5">
+                    Кто вступал ради охвата — выйдет (вместе с админкой, если её давали). Свои каналы и контурные площадки не тронем, старые админы останутся.
+                  </span>
+                </span>
+              </label>
               <div className="mt-6 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
                 <button type="button" className={`${btnGhost} w-full sm:w-auto`} onClick={() => setStep('userbots')}>
                   Назад

@@ -69,6 +69,7 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 ### Рассылки (`/api/broadcast`)
 
 - `POST /api/broadcast/campaigns/:id/cancel` - Стоп активной рассылки (queued/sending → `cancelled`); чужая или не активная → 404
+- `POST /api/broadcast/send` - `leave_groups_on_complete: true` ставит в meta кампании флаг: после терминального успеха (`sent`/`completed_with_errors`) джоба `broadcast-membership-cleanup.job.js` выводит юзерботов из групп, куда они вступали ради подготовки (свои чаты и контурные слоты не трогает)
 
 ### Сообщения (`/api/messaging`)
 

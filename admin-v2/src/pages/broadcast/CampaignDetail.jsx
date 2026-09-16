@@ -52,6 +52,11 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefr
   const senderNames = (meta.sender_usernames || []).map((name) => `@${name}`);
   const skippedUnreachable = Number(meta.skipped_unreachable || 0);
   const campaignActive = CAMPAIGN_ACTIVE_STATUSES.has(campaign.status);
+  const leaveGroupsOnComplete = meta.leave_groups_on_complete === true;
+  const cleanup = leaveGroupsOnComplete && meta.cleanup && typeof meta.cleanup === 'object' ? meta.cleanup : null;
+  const cleanupTotal = Number(cleanup?.total || 0);
+  const cleanupDone = Number(cleanup?.done || 0);
+  const cleanupFailed = Number(cleanup?.failed || 0);
 
   const [failures, setFailures] = useState({ open: false, loading: false, rows: [], total: null, page: 0 });
   const [cancelling, setCancelling] = useState(false);
@@ -131,6 +136,18 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefr
       {skippedUnreachable > 0 ? (
         <div className="text-sm font-bold text-amber-700">
           Пропущены (недостижимые): {skippedUnreachable}
+        </div>
+      ) : null}
+
+      {leaveGroupsOnComplete ? (
+        <div className="text-xs font-medium text-ink-muted">
+          Юзерботы выйдут из вступленных групп после завершения
+          {cleanup ? (
+            <>
+              {' '}· Выход из групп: {cleanupDone}/{cleanupTotal}
+              {cleanupFailed > 0 ? <span className="text-feedback-warning-text font-bold"> · не вышло: {cleanupFailed}</span> : null}
+            </>
+          ) : null}
         </div>
       ) : null}
 

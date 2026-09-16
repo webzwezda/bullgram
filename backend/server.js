@@ -68,6 +68,7 @@ import { startPublicInvoicesCleanup } from './jobs/public-invoices-cleanup.job.j
 import { startBillingActivationRecovery } from './jobs/billing-activation-recovery.job.js';
 import { startShopPurchaseExpiry } from './jobs/shop-purchase-expiry.job.js';
 import { startBroadcastDeliveryJob } from './jobs/broadcast-delivery.job.js';
+import { startBroadcastMembershipCleanupJob } from './jobs/broadcast-membership-cleanup.job.js';
 
 // ==========================================
 // ИНИЦИАЛИЗАЦИЯ SUPABASE
@@ -386,4 +387,6 @@ httpServer.listen(PORT, async () => {
     startShopPurchaseExpiry(supabase);
     // Доставка массовых рассылок вынесена из POST /send в фоновую джобу (mark-and-queue)
     startBroadcastDeliveryJob(supabase, getBotById);
+    // Выход юзерботов из групп после успешной рассылки (галочка «выйти по окончанию»)
+    startBroadcastMembershipCleanupJob(supabase);
 });

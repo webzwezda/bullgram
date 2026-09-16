@@ -86,6 +86,67 @@ function touchpoint(via, userbotId, options = {}) {
     };
 }
 
+// channels.tg_chat_id хранится в MARKED-форме ('-100{id}' для каналов/supergroups, '-{id}' для
+// basic-групп), а Telegram (joinChatByInvite) отдаёт голые положительные id. Cleanup сверяет
+// recorded tg_chat_id с channels.tg_chat_id — в join-строку пишем только marked, иначе протекция
+// не матчится и cleanup выкинет юзербота из собственного канала владельца.
+export function toMarkedChatId(kind, rawId) {
+    const value = String(rawId ?? '').trim();
+    if (!value || value === 'null') return null;
+    if (value.startsWith('-')) return value; // уже marked — оставляем как есть
+    return String(kind) === 'group' ? `-${value}` : `-100${value}`;
+}
+
+// Приоритет: 1) target.chat_id уже marked (пришёл из channels) — берём его;
+// 2) иначе выводим из joined.kind; 3) защита от двойного маркирования — внутри toMarkedChatId.
+export function resolveMarkedChatId(targetChatId, kind, rawId) {
+    const target = String(targetChatId ?? '').trim();
+    if (target.startsWith('-')) return target;
+    return toMarkedChatId(kind, rawId);
+}
+
+// Факт join'а «ради кампании» — источник истины для cleanup
+// (jobs/broadcast-membership-cleanup.job.js): кто записан здесь — выходит по окончании
+// рассылки. Всё, что не записано (старые membership, известные диалоги), cleanup не трогает.
+// chatId ждём уже в MARKED-форме (см. resolveMarkedChatId в phaseJoin).
+// Ошибка записи не должна ломать join-флоу — warn + continue.
+export async function recordPreparationJoin(supabase, { ownerId, preparationId, userbotId, chatId, chatTitle = null, grantedAdmin = false }) {
+    try {
+        const tgChatId = String(chatId ?? '').trim();
+        if (!tgChatId || tgChatId === 'null') return;
+        const { data: existing } = await supabase
+            .from('broadcast_preparation_joins')
+            .select('id, granted_admin')
+            .eq('preparation_id', preparationId)
+            .eq('userbot_id', String(userbotId))
+            .eq('tg_chat_id', tgChatId)
+            .limit(1)
+            .maybeSingle();
+        if (existing) {
+            if (grantedAdmin && !existing.granted_admin) {
+                await supabase
+                    .from('broadcast_preparation_joins')
+                    .update({ granted_admin: true })
+                    .eq('id', existing.id);
+            }
+            return;
+        }
+        const { error: insertError } = await supabase.from('broadcast_preparation_joins').insert({
+            owner_id: ownerId,
+            preparation_id: preparationId,
+            userbot_id: String(userbotId),
+            tg_chat_id: tgChatId,
+            chat_title: chatTitle || null,
+            granted_admin: !!grantedAdmin
+        });
+        if (insertError) {
+            console.warn(`[broadcast-preparation] не записали join ${preparationId}/${userbotId}:`, insertError.message || insertError);
+        }
+    } catch (error) {
+        console.warn(`[broadcast-preparation] не записали join ${preparationId}/${userbotId}:`, error?.message || error);
+    }
+}
+
 export class BroadcastPreparationService {
     constructor(supabase) {
         this.supabase = supabase;
@@ -515,6 +576,14 @@ export class BroadcastPreparationService {
         }
         scanChatIdsCache.set(preparation.id, knownChats);
 
+        // Persist скана в phase_detail: in-memory кэш умирает вместе с процессом (рестарт
+        // посреди подготовки / упавший скан), а phaseJoin не должен вступать вслепую без него.
+        const persistedScan = {};
+        for (const [userbotId, chatIds] of knownChats.entries()) {
+            persistedScan[String(userbotId)] = [...chatIds].map(String);
+        }
+        await this.updatePhaseDetail(preparation.id, { scanned_chats: persistedScan });
+
         // peer cache + пересечение
         const items = await this.loadItems(preparation.id);
         const memberIds = items.map(item => item.tg_user_id);
@@ -760,10 +829,32 @@ export class BroadcastPreparationService {
         const ownerId = preparation.owner_id;
         await this.setStatus(preparation.id, 'joining');
 
-        const pool = await this.loadPoolUserbots(ownerId, preparation.userbot_ids);
+        const rawPool = await this.loadPoolUserbots(ownerId, preparation.userbot_ids);
         const targets = await this.buildJoinTargets(preparation);
         const externalTargets = preparation.external_targets || [];
         const knownChats = scanChatIdsCache.get(preparation.id);
+
+        // Сканные диалоги должны переживать рестарт процесса: объединяем in-memory кэш
+        // с persisted-набором из phase_detail.scanned_chats (пишет phaseScan).
+        // null = скана нет вовсе → юзербот не вступаем вслепую: он может уже быть
+        // участником цели, и после join'а cleanup выкинет его, хотя тот был там раньше.
+        const persistedScan = preparation.phase_detail?.scanned_chats || {};
+        const knownChatsFor = (userbotId) => {
+            const cached = knownChats?.get(String(userbotId));
+            const persisted = persistedScan[String(userbotId)];
+            if (!cached && !(Array.isArray(persisted) || persisted instanceof Set)) return null;
+            const merged = new Set([...(persisted || [])].map(String));
+            for (const id of cached || []) merged.add(String(id));
+            return merged;
+        };
+        const pool = [];
+        for (const userbot of rawPool) {
+            if (knownChatsFor(userbot.id) === null) {
+                console.warn(`[broadcast-preparation] ${preparation.id}: для @${userbot.tg_username || userbot.id} нет скана диалогов — не вступаем вслепую, юзербот пропущен`);
+                continue;
+            }
+            pool.push(userbot);
+        }
 
         const pausedUntil = new Map(); // userbot_id -> ts
         const joinStates = new Map(); // `${scope}:${raw}:${userbot_id}` -> 'done' | 'failed'
@@ -788,8 +879,8 @@ export class BroadcastPreparationService {
                     allDone = false;
 
                     // JoinChannel идемпотентен: повторный вызов не падает USER_ALREADY_PARTICIPANT, но жжёт квоту —
-                    // если по скану диалогов юзербот уже в канале, отмечаем done без похода в Telegram
-                    if (target.scope === 'owner' && target.chat_id && knownChats?.get(String(userbot.id))?.has(String(target.chat_id))) {
+                    // если по скану диалогов (кэш ∪ persisted) юзербот уже в канале, отмечаем done без похода в Telegram
+                    if (target.scope === 'owner' && target.chat_id && knownChatsFor(userbot.id)?.has(String(target.chat_id))) {
                         joinStates.set(key, 'done');
                         joinsDone += 1;
                         progressed = true;
@@ -810,6 +901,17 @@ export class BroadcastPreparationService {
 
                         const chatId = joined?.chat_id ? String(joined.chat_id) : target.chat_id;
                         const accessHash = joined?.access_hash || null;
+                        // успешный join именно в этот прогон — записываем для cleanup
+                        // (USER_ALREADY_PARTICIPANT и skip по скану диалогов НЕ пишем: там юзербот был раньше);
+                        // tg_chat_id приводим к MARKED-форме channels.tg_chat_id, иначе протекция cleanup не матчится
+                        const markedChatId = resolveMarkedChatId(target.chat_id, joined?.kind, chatId);
+                        await recordPreparationJoin(this.supabase, {
+                            ownerId,
+                            preparationId: preparation.id,
+                            userbotId: userbot.id,
+                            chatId: markedChatId,
+                            chatTitle: joined?.title || target.title || null
+                        });
                         if (chatId) {
                             try {
                                 const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
@@ -819,6 +921,15 @@ export class BroadcastPreparationService {
                                 if (scanMessage.toUpperCase().includes('CHAT_ADMIN_REQUIRED') && chatId) {
                                     const granted = await this.tryGrantAdminRights(preparation, pool, userbot, chatId, target.raw);
                                     if (granted) {
+                                        // админку выдали в этом прогоне — cleanup учтёт granted_admin
+                                        await recordPreparationJoin(this.supabase, {
+                                            ownerId,
+                                            preparationId: preparation.id,
+                                            userbotId: userbot.id,
+                                            chatId: markedChatId,
+                                            chatTitle: joined?.title || target.title || null,
+                                            grantedAdmin: true
+                                        });
                                         try {
                                             const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
                                             await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);

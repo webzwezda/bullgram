@@ -10,6 +10,7 @@
     "test:sales": "node test/test-contour-admin-rights.js",
     "test:messaging": "node test/test-messaging-router.js",
     "test:broadcast": "node test/test-broadcast-router.js",
+    "test:broadcast-cleanup": "node test/test-broadcast-cleanup.js",
     "test:lifecycle": "node test/test-lifecycle-dm.js",
     "test:mcp": "node test/test-mcp-shared.js && node test/test-mcp-dispatch.js && node test/test-external-rest.js",
     "test:contours": "node test/test-contours-overview.js"
