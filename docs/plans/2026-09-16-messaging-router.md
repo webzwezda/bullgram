@@ -23,14 +23,14 @@ export class MessagingRouter { // deps: { supabase, sleep, now, random }
 }
 ```
 
-- [x] Миграция 20260916210000 применена; эталонный SQL в backend/sql/
-- [ ] **A. Ядро:** `messaging-router.service.js` + `routes/messaging.routes.js` (`GET /api/messaging/capacity`, `POST /api/messaging/send` с idempotency_key, гейт USERBOT_DM_ENABLED) + монтаж в server.js + .env.example + backend/README.md + `backend/test/test-messaging-router.js` + npm script `test:messaging`
-- [ ] **E. Join-метод «инвайт от юзербота-админа»:** в `joinUserbotToChannel` (contour-admin-rights.service.js) после провала официального бота — найти юзербота владельца-админа цели (sales_contour_actor_rights state ok / диалоги), экспортнуть инвайт им, ImportChatInvite; тесты в test-contour-admin-rights.js
-- [ ] **B. Broadcast на роутер:** jobs/broadcast-delivery.job.js + services/broadcast-delivery.service.js → router.deliver (квоты, паузы, джиттер, автопауза актёров); POST /api/broadcast/campaigns/:id/cancel; если актор-пул пуст целиком → кампания failed с понятной meta.queue_error; чисто-юзерботные кампании при исчерпании квот тянутся по тикам (pending переигрывается — существующая семантика)
-- [ ] **C. Остальные отправители через роутер:** retention (контурный пул вместо loadLatestUserbot + common_chat_id из канала подписки), auto-kick DM, abandoned-фолбэк за новым флагом USERBOT_ABANDONED_DM_ENABLED=false
-- [ ] **D. UI:** шаг «Юзерботы» рассылки — предупреждение ёмкости (GET /api/messaging/capacity); кнопка «Стоп» кампании; на /app/bases — чипы «права актёров» на карточках каналов из /api/official-bot/contours
-- [ ] Гейты: `test:*` зелёные, admin build, check:design, код-ревью, пуш, CI
-- [ ] Ревью-секция здесь + закрытие BACKLOG §12
+- [x] Миграция 20260916210000 применена; эталонный SQL в backend/sql/ (+ 20260916220000: индекс идемпотентности скоуплен на владельца)
+- [x] **A. Ядро:** `messaging-router.service.js` + `routes/messaging.routes.js` (`GET /api/messaging/capacity`, `POST /api/messaging/send` с idempotency_key, гейт USERBOT_DM_ENABLED) + монтаж в server.js + .env.example + backend/README.md + `backend/test/test-messaging-router.js` + npm script `test:messaging`
+- [x] **E. Join-метод «инвайт от юзербота-админа»:** в `joinUserbotToChannel` (contour-admin-rights.service.js) после провала официального бота — найти юзербота владельца-админа цели (sales_contour_actor_rights state ok / диалоги), экспортнуть инвайт им, ImportChatInvite; тесты в test-contour-admin-rights.js
+- [x] **B. Broadcast на роутер:** jobs/broadcast-delivery.job.js + services/broadcast-delivery.service.js → router.deliver (квоты, паузы, джиттер, автопауза актёров); POST /api/broadcast/campaigns/:id/cancel; если актор-пул пуст целиком → кампания failed с понятной meta.queue_error; чисто-юзерботные кампании при исчерпании квот тянутся по тикам (pending переигрывается — существующая семантика)
+- [x] **C. Остальные отправители через роутер:** retention (контурный пул вместо loadLatestUserbot + common_chat_id из канала подписки), auto-kick DM, abandoned-фолбэк за новым флагом USERBOT_ABANDONED_DM_ENABLED=false
+- [x] **D. UI:** шаг «Юзерботы» рассылки — предупреждение ёмкости (GET /api/messaging/capacity); кнопка «Стоп» кампании; на /app/bases — чипы «права актёров» на карточках каналов из /api/official-bot/contours (+ actor_rights_by_target в эндпоинте)
+- [x] Гейты: `test:*` зелёные, admin build, check:design, код-ревью, пуш, CI
+- [x] Ревью-секция здесь + закрытие BACKLOG §12
 
 ## Задача владельца
 
@@ -123,4 +123,12 @@ export class MessagingRouter { // deps: { supabase, sleep, now, random }
 
 ## Ревью
 
-_заполнить после реализации_
+Реализовано 2026-09-16, коммит a61f440 (деплой пушем в main, CI + deploy-pull.sh).
+
+**Сделано сверх плана:** скоуплен на владельца индекс идемпотентности (миграция 20260916220000); flood-pause зеркалится на in-memory объект пула (иначе пауза невидима до перезагрузки пула и остаток тика долбит flood-аккаунт и помечает получателей failed навсегда); в /contours добавлен `actor_rights_by_target` из `sales_contour_actor_rights` — без него чипы на базах видели только официальный бот.
+
+**Код-ревью (staff, adversarial):** REJECT → исправлены все 3 P1 (зеркало паузы; owner_id на пре-чеке идемпотентности; owner_id на кандидатах peer-invite) и 4 P2 (owner-скоуп пауз, ключ идемпотентности только на первой попытке, status-гард на прогресс-апдейте, показ ёмкости при пустом пуле). Повторный прогон всех гейтов зелёный.
+
+**Проверено:** test:messaging 76, test:broadcast 75, test:lifecycle 36, test:contours 12, test:sales 80, test:autopost — все зелёные; admin build PASS; check:design PASS (ratchet не вырос).
+
+**Хвосты (BACKLOG §13):** видимость пауз юзерботов для владельца в UI (сейчас пауза видна только косвенно через ёмкость); prod-проход по браузеру владельца (ёмкость, «Стоп», чипы) по browser doctrine; e2e-наблюдение первой реальной рассылки (flood → quotaWait → догонка на следующем тике).
