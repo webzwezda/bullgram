@@ -1,4 +1,4 @@
-import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, MessagesSquare, Link2, Lock, KeyRound, Plus, X, ShieldCheck, Info, XCircle } from 'lucide-react';
+import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, MessagesSquare, Link2, Lock, KeyRound, Plus, X, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -277,8 +277,6 @@ function BotConfigSection({
                 contourError={salesContourSectionProps?.contourError}
                 ensureAdminRights={salesContourSectionProps?.ensureAdminRights}
                 ensureAdminPending={salesContourSectionProps?.ensureAdminPending}
-                ensureAdminOutcome={salesContourSectionProps?.ensureAdminOutcome}
-                dismissEnsureAdminResult={salesContourSectionProps?.dismissEnsureAdminResult}
                 targets={targets}
                 refreshTelegramPlaceInfo={refreshTelegramPlaceInfo}
                 deleteTelegramPlace={deleteTelegramPlace}
@@ -847,112 +845,6 @@ const ROLE_CONFIGS = [
   }
 ];
 
-// Тона результата выдачи прав — семантические feedback-пары (фон+текст из одного набора).
-const ENSURE_ADMIN_TONE_CLASS = {
-  success: 'bg-feedback-success-bg text-feedback-success-text',
-  info: 'bg-feedback-info-bg text-feedback-info-text',
-  warning: 'bg-feedback-warning-bg text-feedback-warning-text',
-  error: 'bg-feedback-error-bg text-feedback-error-text'
-};
-
-function ensureAdminTargetTitle(target) {
-  const key = String(target || '').trim();
-  const config = ROLE_CONFIGS.find((entry) => entry.key === key);
-  if (config) return config.title;
-  return key ? key.replace(/_/g, ' ') : 'площадка';
-}
-
-function ensureAdminOutcomeMeta(result) {
-  const state = String(result?.state || '').trim();
-  const message = String(result?.message || '').trim();
-  const warnings = (Array.isArray(result?.warnings) ? result.warnings : [])
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
-
-  if (state === 'ok') return { tone: 'success', icon: CheckCircle2, text: 'права в порядке', warnings: [] };
-  if (state === 'owner_appointed') return { tone: 'info', icon: Info, text: 'назначен владельцем — бот не может менять его права', warnings: [] };
-  if (state === 'promote_forbidden') return { tone: 'warning', icon: AlertTriangle, text: 'не хватает прав у бота — выдай вручную', warnings };
-  if (state === 'missing_membership') return { tone: 'warning', icon: AlertTriangle, text: 'не состоит в площадке — перезапусти «Вступить везде»', warnings };
-  if (state === 'needs_promote') return { tone: 'warning', icon: AlertTriangle, text: 'требуется довыдача прав', warnings };
-  return { tone: 'error', icon: XCircle, text: message || 'не удалось выдать права', warnings };
-}
-
-// Группируем результаты по актёру (юзербот / официальный бот), внутри — строка на площадку.
-function groupEnsureAdminResults(results) {
-  const groups = [];
-  const byKey = new Map();
-
-  for (const item of Array.isArray(results) ? results : []) {
-    const actorType = String(item?.actor_type || '').trim();
-    const username = String(item?.actor_username || '').trim().replace(/^@/, '');
-    const actorId = String(item?.actor_id || '').trim();
-    const key = `${actorType}:${actorId || username || 'unknown'}`;
-
-    let group = byKey.get(key);
-    if (!group) {
-      group = {
-        key,
-        label: actorType === 'userbot' ? (username ? `@${username}` : 'Юзербот') : 'Официальный бот',
-        items: []
-      };
-      byKey.set(key, group);
-      groups.push(group);
-    }
-
-    group.items.push(item);
-  }
-
-  return groups;
-}
-
-function EnsureAdminOutcomeBlock({ outcome, onDismiss }) {
-  const groups = groupEnsureAdminResults(outcome?.results);
-  if (!groups.length) return null;
-
-  return (
-    <div className="rounded-xl border border-border-default bg-surface-card shadow-sm p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-bold text-ink-strong">
-          {String(outcome?.summary || '').trim() || 'Права в контуре'}
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          title="Скрыть"
-          aria-label="Скрыть результаты выдачи прав"
-          className="text-ink-muted hover:text-ink-strong transition-colors shrink-0"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {groups.map((group) => (
-        <div key={group.key} className="space-y-1.5">
-          <div className="text-xs font-bold uppercase tracking-wider text-ink-muted">{group.label}</div>
-          {group.items.map((item, idx) => {
-            const meta = ensureAdminOutcomeMeta(item);
-            const Icon = meta.icon;
-            return (
-              <div
-                key={`${String(item?.target || 'target')}-${idx}`}
-                className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium ${ENSURE_ADMIN_TONE_CLASS[meta.tone]}`}
-              >
-                <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <div className="min-w-0">
-                  <div className="font-bold">{ensureAdminTargetTitle(item?.target)}: {meta.text}</div>
-                  {meta.warnings.map((warning) => (
-                    <div key={warning} className="mt-0.5 opacity-90">{warning}</div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function optionsForRole(config, props) {
   if (config.key === 'public_channel') return props.publicChannelOptions || [];
   if (config.key === 'public_chat') return props.publicChatOptions || [];
@@ -971,8 +863,6 @@ function SalesContourBlock({
   contourError,
   ensureAdminRights,
   ensureAdminPending,
-  ensureAdminOutcome,
-  dismissEnsureAdminResult,
   targets,
   refreshTelegramPlaceInfo,
   deleteTelegramPlace,
@@ -1013,10 +903,6 @@ function SalesContourBlock({
             {ensureAdminPending ? 'Выдаю максимум прав…' : 'Выдать максимум прав'}
           </Button>
         </div>
-
-        {ensureAdminOutcome ? (
-          <EnsureAdminOutcomeBlock outcome={ensureAdminOutcome} onDismiss={dismissEnsureAdminResult} />
-        ) : null}
 
         <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
           {ROLE_CONFIGS.map((config) => (

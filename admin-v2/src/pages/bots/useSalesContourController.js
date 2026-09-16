@@ -669,10 +669,9 @@ export function useSalesContourController({
   const joinAllPollTimerRef = useRef(null);
   const joinAllPollCancelledRef = useRef(false);
 
-  // «Выдать права»: держим pending-стейт для спиннера и результат последнего прогона для блока под кнопкой.
+  // «Выдать максимум прав»: держим pending-стейт для спиннера; результат — только тостом.
   const [ensureAdminPending, setEnsureAdminPending] = useState(false);
   const ensureAdminInFlightRef = useRef(false);
-  const [ensureAdminResult, setEnsureAdminResult] = useState(null);
 
   // При unmount во время фонового join-all гасим таймер поллинга; pending-стейт умрёт вместе с компонентом.
   useEffect(() => () => stopJoinAllPolling(), []);
@@ -823,7 +822,6 @@ export function useSalesContourController({
     try {
       const data = await ensureContourAdminRights(accessToken, botId);
       const summary = String(data?.summary || '').trim();
-      setEnsureAdminResult({ botId: toId(botId), summary, results: asArray(data?.results) });
       toast.success(summary || 'Права выданы');
     } catch (err) {
       console.error('ensure-admin failed:', err?.message);
@@ -834,23 +832,12 @@ export function useSalesContourController({
     }
   }
 
-  function dismissEnsureAdminResult() {
-    setEnsureAdminResult(null);
-  }
-
-  // Блок результатов показываем только у того бота, для которого гоняли выдачу прав.
-  const ensureAdminOutcome = ensureAdminResult && ensureAdminResult.botId === selectedBotId
-    ? ensureAdminResult
-    : null;
-
   return {
     botRightsByTarget,
     checkBotRights,
     checkingBotRightsTarget,
     contourError: officialBotContoursError,
-    dismissEnsureAdminResult,
     draft,
-    ensureAdminOutcome,
     ensureAdminPending,
     ensureAdminRights,
     isVisible: !!selectedBotId,
