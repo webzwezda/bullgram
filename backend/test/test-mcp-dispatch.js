@@ -144,6 +144,8 @@ function resetRateLimiter() {
 
 // ---------------------------------------------------------------------------
 console.log('--- registry has all 10 operations ---');
+// Проверяем подмножеством: автопост-инструменты регистрируются там же,
+// и список будет расти — точное равенство здесь ломалось при каждом новом тулe.
 {
   const names = listOperationNames().sort();
   console.log(`  registered: ${names.length} operations`);
@@ -153,8 +155,9 @@ console.log('--- registry has all 10 operations ---');
     'bullgram_userbot_dialogs', 'bullgram_userbot_messages',
     'bullgram_userbot_messages_search', 'bullgram_userbot_participants',
     'bullgram_userbot_message_send'
-  ].sort();
-  assertEqual(names, expected, 'all 10 operations registered');
+  ];
+  const missing = expected.filter((n) => !names.includes(n));
+  assertEqual(missing, [], 'all 10 core operations registered');
 }
 
 console.log('--- happy path: result returned, audit finalized as success ---');

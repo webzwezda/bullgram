@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AutopostService } from '../services/autopost.service.js';
 import { normalizeSeedEmojiList } from '../services/autopost/handlers/reactions.js';
+import { validateDiscussionEnable } from '../services/autopost/discussion.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { enforceAutopostBotQuota } from '../utils/product-tier.js';
 import { rateLimit } from '../middlewares/rate-limit.middleware.js';
@@ -156,7 +157,7 @@ export default function autopostRoutes(supabase) {
     // Изменение настроек конкретного канала
     router.patch('/bots/:botId/channels/:channelId', async (req, res) => {
         try {
-            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day, seed_reaction_emoji, seed_reaction_premium } = req.body;
+            const { auto_accept_suggestions, buttons_config, posts_per_day, posting_times, timezone, suggestion_posts_per_day, suggestion_posting_times, suggest_button_enabled, max_suggestions_per_day, seed_reaction_emoji, seed_reaction_premium, discussion_forward_enabled } = req.body;
 
             // Проверяем владельца бота
             const { data: bot, error: botErr } = await supabase
@@ -203,7 +204,54 @@ export default function autopostRoutes(supabase) {
                 // до одиночной реакции.
                 updates.seed_reaction_premium = seed_reaction_premium === true;
             }
-            
+            if (discussion_forward_enabled !== undefined) {
+                updates.discussion_forward_enabled = discussion_forward_enabled === true;
+            }
+            // Включение обсуждений верифицируем по реальному Telegram: у канала
+            // должна быть привязанная группа обсуждений, и бот должен в ней
+            // состоять — иначе форвардить некуда/некому. Выключение — просто save false.
+            if (discussion_forward_enabled === true) {
+                const { data: ch, error: chErr } = await supabase
+                    .from('channels')
+                    .select('id, tg_chat_id, discussion_forward_enabled, linked_chat_id')
+                    .eq('id', req.params.channelId)
+                    .eq('autopost_bot_id', req.params.botId)
+                    .single();
+                if (chErr || !ch) return res.status(404).json({ error: 'Канал не найден' });
+
+                // Повторное включение идемпотентно (Telegram не дёргаем), но если
+                // группа отвязалась (linked_chat_id = null после refresh) —
+                // ревирифицируем: иначе тумблер «включён в никуда» и не чинится
+                // повторным сохранением настроек.
+                if (ch.discussion_forward_enabled !== true || ch.linked_chat_id == null) {
+                    const tgBot = service.getBot(req.params.botId);
+                    if (!tgBot) return res.status(503).json({ error: 'Бот не запущен — включи его и повтори' });
+
+                    let chat;
+                    try {
+                        chat = await tgBot.telegram.getChat(ch.tg_chat_id);
+                    } catch (e) {
+                        return res.status(400).json({ error: 'Не удалось получить данные канала в Telegram: ' + (e.message || e) + '. Проверь, что бот всё ещё админ в канале.' });
+                    }
+
+                    let memberStatus = null;
+                    try {
+                        const botTgId = tgBot.botInfo?.id || (await tgBot.telegram.getMe()).id;
+                        const member = await tgBot.telegram.getChatMember(chat.linked_chat_id, botTgId);
+                        memberStatus = member?.status || null;
+                    } catch (e) {
+                        memberStatus = null; // getChatMember упал — считаем, что бот не состоит
+                    }
+
+                    const verdict = validateDiscussionEnable({ chat, memberStatus });
+                    if (!verdict.ok) return res.status(400).json({ error: verdict.error });
+
+                    // linked_chat_id узнали из getChat — сохраняем сразу, чтобы
+                    // publishItem потом никуда не ходил за ним повторно.
+                    updates.linked_chat_id = verdict.linkedChatId;
+                }
+            }
+
             const { data: channel, error } = await supabase
                 .from('channels')
                 .update(updates)
@@ -582,6 +630,9 @@ export default function autopostRoutes(supabase) {
                 title: chat.title || String(chat.id),
                 username: chat.username || null,
                 visibility,
+                // getChat отдаёт привязанную группу обсуждений — обновляем по факту
+                // (null, если в Telegram её отвязали).
+                linked_chat_id: chat.linked_chat_id ?? null,
                 last_visibility_check_at: new Date().toISOString()
             }).eq('id', channel.id).select().single();
 

@@ -106,7 +106,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
 
                 const { data: channel } = await supabase
                     .from('channels')
-                    .select('id, buttons_config, suggest_button_enabled, seed_reaction_emoji')
+                    .select('id, buttons_config, suggest_button_enabled, seed_reaction_emoji, discussion_forward_enabled, linked_chat_id')
                     .eq('tg_chat_id', targetChatId)
                     .eq('autopost_bot_id', item.bot_id)
                     .maybeSingle();

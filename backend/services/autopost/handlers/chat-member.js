@@ -41,6 +41,14 @@ export function registerChatMemberHandler(bot, service, botId) {
                         visibility: chat.username ? 'public' : 'private',
                         last_visibility_check_at: new Date().toISOString()
                     };
+                    // linked_chat_id в Chat-объекте из my_chat_member обычно
+                    // отсутствует (поле отдаёт только getChat) — пишем только если
+                    // оно всё-таки пришло: затирать ранее сохранённое значение
+                    // частичным апдейтом нельзя. Основные точки захвата — refresh
+                    // и включение тумблера обсуждения.
+                    if (chat.linked_chat_id != null) {
+                        channelPayload.linked_chat_id = chat.linked_chat_id;
+                    }
 
                     let bound = false;
                     if (!existingChannel) {

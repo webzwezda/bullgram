@@ -85,7 +85,7 @@ export async function createPostHandler({ supabase, req, args }) {
   // --- Load channels, verify all are connected to this bot ---
   const { data: channels, error: chErr } = await supabase
     .from('channels')
-    .select('id, tg_chat_id, title, buttons_config, suggest_button_enabled, seed_reaction_emoji, autopost_bot_id')
+    .select('id, tg_chat_id, title, buttons_config, suggest_button_enabled, seed_reaction_emoji, autopost_bot_id, discussion_forward_enabled, linked_chat_id')
     .in('tg_chat_id', channelIds)
     .eq('autopost_bot_id', bot_id);
   if (chErr) {
@@ -148,7 +148,10 @@ export async function createPostHandler({ supabase, req, args }) {
     for (const item of items) {
       const channel = channels.find(c => String(c.tg_chat_id) === String(item.target_channel_id));
       try {
-        const messageIds = await service.publishItem(tgBot, item, channel, bot.username);
+        // publishItem возвращает { messageIds, discussionMessageIds }:
+        // discussionMessageIds — форварды в группу обсуждений (когда у канала
+        // включён discussion_forward_enabled), иначе пустой массив.
+        const { messageIds, discussionMessageIds } = await service.publishItem(tgBot, item, channel, bot.username);
         results.push({
           id: item.id,
           target_channel_id: item.target_channel_id,
@@ -156,6 +159,7 @@ export async function createPostHandler({ supabase, req, args }) {
           channel_title: channel?.title || null,
           status: 'posted',
           posted_message_ids: messageIds || [],
+          discussion_message_ids: discussionMessageIds || [],
           scheduled_at: null,
           error: null
         });
@@ -176,6 +180,7 @@ export async function createPostHandler({ supabase, req, args }) {
           channel_title: channel?.title || null,
           status: 'failed',
           posted_message_ids: null,
+          discussion_message_ids: null,
           scheduled_at: null,
           error: String(err?.message || err).slice(0, 500)
         });
@@ -258,7 +263,7 @@ registerOperation('bullgram_autopost_post_create', {
   requiresIntegrationToken: true,
   rateLimitClass: 'write',
   title: 'Create autopost',
-  description: 'Create a text post in one or more autopost channels. Inline buttons, suggest-button, and seed reaction are inherited from channel settings (cannot be overridden per-post). Pass target_channel_ids (array) for multi-target fan-out, or target_channel_id (string) for single-target back-compat. Set publish_now=true to publish synchronously (returns items[].posted_message_ids). Omit or set publish_now=false to enqueue — scheduler will place items per channel posts_per_day/posting_times. Optional scheduled_at (ISO 8601) pins a specific slot across all channels. Response is always 200 with items[].status showing posted|queued|scheduled|failed per channel.',
+  description: 'Create a text post in one or more autopost channels. Inline buttons, suggest-button, and seed reaction are inherited from channel settings (cannot be overridden per-post). Pass target_channel_ids (array) for multi-target fan-out, or target_channel_id (string) for single-target back-compat. Set publish_now=true to publish synchronously (returns items[].posted_message_ids, plus items[].discussion_message_ids when the channel has discussion forwarding enabled). Omit or set publish_now=false to enqueue — scheduler will place items per channel posts_per_day/posting_times. Optional scheduled_at (ISO 8601) pins a specific slot across all channels. Response is always 200 with items[].status showing posted|queued|scheduled|failed per channel.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

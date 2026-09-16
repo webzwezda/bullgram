@@ -1,0 +1,30 @@
+# Autopost: родная кнопка «Перейти к обсуждению»
+
+**Контекст.** Каналы bullrun.ru (бот Эрика) имеют привязанную группу обсуждений, но посты автопостера идут через Bot API (Telegraf), а Bot API не создаёт тред обсуждения автоматически — кнопки нет. Решение: после публикации бот форвардит пост в `linked_chat_id` — Telegram связывает посты и вешает родную кнопку. Условие: бот — админ в группе обсуждений.
+
+**Миграция:** `20260916150000` (применена через Supabase MCP 2026-09-16): `channels.linked_chat_id bigint`, `channels.discussion_forward_enabled bool default false`, `autopost_items.discussion_message_ids bigint[] default '{}'`.
+
+## Чеклист
+
+- [x] Миграция применена
+- [x] Бэкенд: захват `linked_chat_id` (my_chat_member оппортунистически + refresh getChat + PATCH при включении)
+- [x] Бэкенд: форвард в `publishItem` (все пути публикации), отказоустойчиво — ошибка форварда не роняет пост
+- [x] Бэкенд: PATCH `discussion_forward_enabled` с живой валидацией (linked group есть, бот может писать)
+- [x] MCP: `list_channels` (флаг + linked_chat_id), `post_create` publish_now (discussion_message_ids), `message_delete` (чистит и копию)
+- [x] Тесты: `backend/test/test-autopost-discussion.js` в цепочке `test:autopost`
+- [x] Админка: тумблер «Обсуждение» в настройках канала (QuickStartPage)
+- [x] Верификация: `test:autopost`, `test:mcp`, `npm run build` (admin-v2), `npm run check:design`
+- [x] Код-ревью, коммит, пуш (деплой)
+- [ ] Операционка (Эрик): добавить бота админом в группу обсуждений bullrun.ru → включить тумблер в админке
+
+## Правила
+
+- Тумблер per-channel, по умолчанию выключен (manual-by-default).
+- Ошибка форварда — только warn в лог, пост не считается упавшим.
+- `discussion_message_ids` нужен, чтобы `message_delete` (rolling-pin) не оставлял сирот в обсуждении.
+
+## Ревью (после имплементации, 2026-09-16)
+
+- `code-reviewer`: FIX-FIRST → оба P1 закрыты. (1) SQL-копия миграции `sql/autopost-discussion.sql` — схема не живёт только в проде. (2) Dead-state «тумблер включён, группа отвязана»: PATCH ревирифицирует при `linked_chat_id = null` (не только при false→true), плюс warn в `publishItem`. P2 частичные форварды — уже отправленные ids вешаются на `e.forwardedIds` и сохраняются для cleanup (тест есть). P2 my_chat_member-guard оставлен оппортунистическим, комментарий поправлен (поле реально отдаёт только getChat). P2 «PATCH с включённым тумблером падает целиком при сломанной конфигурации» — осознанный выбор: 400 с внятным текстом лучше тихой поломки.
+- Попутно починены два протухших ассерта `test:mcp` (список операций в `test-mcp-dispatch.js` — подмножество вместо точного равенства; счётчик путей openapi в `test-external-rest.js` — нижняя граница). `test:mcp` был красным до этой ветки.
+- Хвосты: миграция 20260916130000 (premium-реакции) не имеет SQL-копии в `sql/`; браузерная проверка тумблера на проде (/app) после деплоя; end-to-end кнопка появится после шагов Эрика (бот админом в группу обсуждений → тумблер) на ближайшем посте по расписанию.

@@ -180,7 +180,9 @@ export function QuickStartPage() {
       suggestButtonEnabled: row?.suggest_button_enabled || false,
       maxSuggestionsPerDay: row?.max_suggestions_per_day !== undefined ? row.max_suggestions_per_day : 5,
       seedReactionEmoji: row?.seed_reaction_emoji || null,
-      seedReactionPremium: row?.seed_reaction_premium === true
+      seedReactionPremium: row?.seed_reaction_premium === true,
+      discussionForwardEnabled: row?.discussion_forward_enabled === true,
+      linkedChatId: row?.linked_chat_id ?? null
     };
   }
 
@@ -286,7 +288,7 @@ export function QuickStartPage() {
       const sortedPostingTimes = [...new Set(config.postingTimes || ['10:00'])].sort();
       const sortedSuggestionTimes = [...new Set(config.suggestionPostingTimes || ['12:00'])].sort();
 
-      await patchChannel(createdBot.id, config.id, {
+      const data = await patchChannel(createdBot.id, config.id, {
         auto_accept_suggestions: config.autoAccept,
         buttons_config: config.buttons,
         posts_per_day: sortedPostingTimes.length,
@@ -297,7 +299,11 @@ export function QuickStartPage() {
         suggest_button_enabled: config.suggestButtonEnabled,
         max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5),
         seed_reaction_emoji: config.seedReactionEmoji || null,
-        seed_reaction_premium: config.seedReactionPremium === true
+        seed_reaction_premium: config.seedReactionPremium === true,
+        // Форвард постов в привязанную группу обсуждений. На этом PATCH бэкенд
+        // перепроверяет linked_chat: если группы нет или бота в ней нет —
+        // отвечает 400, сообщение показывается в toast как есть.
+        discussion_forward_enabled: config.discussionForwardEnabled === true
       }, accessToken);
 
       setChannelConfigs(prev => ({
@@ -309,7 +315,13 @@ export function QuickStartPage() {
           suggestButtonEnabled: config.suggestButtonEnabled,
           maxSuggestionsPerDay: config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5,
           seedReactionEmoji: config.seedReactionEmoji || null,
-          seedReactionPremium: config.seedReactionPremium === true
+          seedReactionPremium: config.seedReactionPremium === true,
+          discussionForwardEnabled: config.discussionForwardEnabled === true,
+          // linked_chat может разрешиться на бэкенде во время этого же PATCH —
+          // берём свежий из ответа, иначе оставляем прошлое значение.
+          linkedChatId: data?.channel && data.channel.linked_chat_id !== undefined
+            ? (data.channel.linked_chat_id ?? null)
+            : prev[channelId].linkedChatId
         }
       }));
 
@@ -1365,6 +1377,42 @@ export function QuickStartPage() {
                             })}
                           </div>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Обсуждение — форвард постов в привязанную группу обсуждений.
+                        Бот-API не создаёт тред обсуждения сам, поэтому бот пересылает
+                        пост в linked-группу — Telegram показывает нативную кнопку. */}
+                    <div className="bg-surface-subtle/50 hover:bg-surface-subtle/80 rounded-2xl p-4 border border-border-default flex flex-col gap-3 transition-all">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <label htmlFor={`discussion-toggle-${tab}`} className="text-sm font-bold text-ink-body block">Пересылать посты в группу обсуждений</label>
+                          <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
+                            Бот пересылает каждый опубликованный пост в привязанную к каналу группу обсуждений — подписчики обсуждают прямо в Telegram.
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
+                          <input
+                            type="checkbox"
+                            id={`discussion-toggle-${tab}`}
+                            className="sr-only peer"
+                            checked={Boolean(config.discussionForwardEnabled)}
+                            onChange={(e) => setChannelConfigs(prev => ({
+                              ...prev,
+                              [tab]: { ...prev[tab], discussionForwardEnabled: e.target.checked }
+                            }))}
+                          />
+                          <div className="w-11 h-6 bg-border-default peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-border-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-action-primary"></div>
+                        </label>
+                      </div>
+                      {config.linkedChatId ? (
+                        <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
+                          Привязанная группа найдена — под постами появится кнопка «Перейти к обсуждению». Бот должен быть админом в этой группе.
+                        </span>
+                      ) : (
+                        <span className="text-xs text-feedback-warning-text font-semibold leading-relaxed block">
+                          Привязанная группа обсуждений не найдена. Привяжи группу к каналу в настройках Telegram, затем обнови канал (или включи тумблер и сохрани — бэкенд перепроверит и подскажет).
+                        </span>
                       )}
                     </div>
 

@@ -15,6 +15,7 @@ import {
 } from './autopost/queue.js';
 import { registerAllHandlers } from './autopost/handlers/index.js';
 import { buildSeedReactionAttempts, buildSeedReactionPlans } from './autopost/handlers/reactions.js';
+import { forwardToDiscussion } from './autopost/discussion.js';
 import {
     setGuestSession,
     getGuestSession,
@@ -275,10 +276,43 @@ export class AutopostService {
     // --- Управление ботами ---
 
     /**
+     * publishItem получает channel-объект от вызывающего. Scheduler передаёт
+     * урезанный select (jobs/autopost-scheduler.job.js) без discussion-колонок —
+     * добираем их точечным запросом, чтобы форвард в обсуждения работал на всех
+     * путях публикации. Вызовы с полным select (*) идут как раньше, без запроса.
+     */
+    async resolveDiscussionChannel(item, channel) {
+        if (channel && channel.discussion_forward_enabled !== undefined) return channel;
+        try {
+            const { data, error } = await this.supabase
+                .from('channels')
+                .select('discussion_forward_enabled, linked_chat_id')
+                .eq('tg_chat_id', item.target_channel_id)
+                .eq('autopost_bot_id', item.bot_id)
+                .maybeSingle();
+            if (error) throw error;
+            if (!data) return channel;
+            return {
+                ...(channel || {}),
+                discussion_forward_enabled: data.discussion_forward_enabled,
+                linked_chat_id: data.linked_chat_id
+            };
+        } catch (e) {
+            console.warn(`[Autopost] discussion channel lookup failed (channel=${item.target_channel_id}, non-fatal):`, e.message);
+            return channel;
+        }
+    }
+
+    /**
      * Публикует пост в канал и фиксирует результат на item.
      * Выносит общую логику publish + UPDATE, которая раньше дублировалась
      * в scheduler / post_now / sug_post_now. Дополнительно сохраняет
      * posted_message_ids для последующего lookup'а реакций.
+     *
+     * Если у канала включён discussion_forward_enabled и есть linked_chat_id,
+     * форвардит опубликованные сообщения в группу обсуждений — так появляются
+     * нативные комментарии. discussion_message_ids пишутся тем же UPDATE;
+     * ошибка форварда публикацию не роняет.
      *
      * Если у channel.seed_reaction_emoji выставлено значение (например '❤'),
      * бот сразу ставит эту реакцию на первое сообщение поста — social proof.
@@ -322,6 +356,26 @@ export class AutopostService {
             }
         }
 
+        // Нативные ветки обсуждений: Bot API не создаёт тред при отправке в канал,
+        // поэтому форвардим опубликованные сообщения в привязанную группу
+        // обсуждений — Telegram связывает их, и в канале появляется нативная
+        // кнопка «Перейти к обсуждению». Ошибка форварда НЕ роняет публикацию:
+        // пост уже в канале, item не должен уйти в failed.
+        const discussionChannel = await this.resolveDiscussionChannel(item, channel);
+        let discussionIds = [];
+        if (discussionChannel?.discussion_forward_enabled && discussionChannel?.linked_chat_id && messageIds && messageIds.length > 0) {
+            try {
+                discussionIds = await forwardToDiscussion(bot.telegram, item.target_channel_id, discussionChannel.linked_chat_id, messageIds);
+            } catch (e) {
+                // Частично успевшие форварды не теряем — иначе message_delete
+                // не сможет убрать их копии из обсуждения.
+                discussionIds = Array.isArray(e?.forwardedIds) ? e.forwardedIds : [];
+                console.warn(`[Autopost] discussion forward failed (channel=${item.target_channel_id} discussion=${discussionChannel.linked_chat_id}, non-fatal, пост опубликован):`, e.message);
+            }
+        } else if (discussionChannel?.discussion_forward_enabled && !discussionChannel?.linked_chat_id) {
+            console.warn(`[Autopost] discussion_forward_enabled включён, но linked_chat_id пуст (channel=${item.target_channel_id}) — перепривяжи группу: выключи и включи тумблер обсуждения`);
+        }
+
         // claimed-путь (scheduler) финализирует только item, который ещё в 'sending':
         // если статус уже изменился (recovery забрал, ручная правка) — апдейт не пройдёт
         // и повторная отправка следующим тиком исключена. Ручные пути (post_now, MCP,
@@ -332,6 +386,7 @@ export class AutopostService {
                 status: 'posted',
                 posted_at: new Date().toISOString(),
                 posted_message_ids: messageIds || [],
+                discussion_message_ids: discussionIds || [],
                 error_message: null
             })
             .eq('id', item.id);
@@ -340,7 +395,9 @@ export class AutopostService {
             : postedUpdate);
         if (postedError) console.error('[Autopost] mark posted failed:', postedError.message);
 
-        return messageIds || [];
+        // create-post (MCP) читает оба списка для ответа; остальные вызовы
+        // (scheduler, post_now, sug_post_now) возвращаемое значение игнорируют.
+        return { messageIds: messageIds || [], discussionMessageIds: discussionIds || [] };
     }
 
     /**
