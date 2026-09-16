@@ -610,14 +610,8 @@ export function useSalesContourController({
     }
   }
 
-  async function checkBotRights(target = botRightsTarget) {
-    if (!selectedOfficialBot?.id) return;
-
-    const normalizedTarget = normalizeContourTarget(target);
-    if (dirtyBotIds[selectedBotId]) {
-      toast.warning('Сначала сохрани изменения контура');
-      return;
-    }
+  // Тихая проверка прав одного слота (без тостов): { ok: true } или { ok: false, error }.
+  async function verifyBotRightsSilent(normalizedTarget) {
     const targetFieldByKey = {
       public_channel: 'publicChannelId',
       public_chat: 'publicChatId',
@@ -625,13 +619,10 @@ export function useSalesContourController({
       paid_chat: 'paidChatId'
     };
     if (!draft[targetFieldByKey[normalizedTarget]]) {
-      return;
+      return { ok: true, skipped: true };
     }
 
     const key = `${selectedBotId}:${normalizedTarget}`;
-    setBotRightsTarget(normalizedTarget);
-    setCheckingRightsKey(key);
-
     try {
       const result = await apiRequest('/api/official-bot/contours/check-rights', {
         accessToken,
@@ -646,7 +637,7 @@ export function useSalesContourController({
         ...prev,
         [key]: normalizeRightsResult(result, normalizedTarget)
       }));
-      showUiMessage('Права бота проверены.', 'success');
+      return { ok: true };
     } catch (error) {
       setBotRightsByKey((prev) => ({
         ...prev,
@@ -656,9 +647,94 @@ export function useSalesContourController({
           message: error.message
         }
       }));
-      showUiMessage(error.message, 'error');
+      return { ok: false, error };
+    }
+  }
+
+  async function checkBotRights(target = botRightsTarget) {
+    if (!selectedOfficialBot?.id) return;
+
+    const normalizedTarget = normalizeContourTarget(target);
+    if (dirtyBotIds[selectedBotId]) {
+      toast.warning('Сначала сохрани изменения контура');
+      return;
+    }
+    const key = `${selectedBotId}:${normalizedTarget}`;
+    setCheckingRightsKey(normalizedTarget);
+
+    const { ok, error, skipped } = await verifyBotRightsSilent(normalizedTarget);
+    setCheckingRightsKey('');
+    if (skipped) return;
+    if (ok) {
+      showUiMessage('Права бота проверены.', 'success');
+    } else {
+      showUiMessage(error?.message || 'Не удалось проверить права', 'error');
+    }
+  }
+
+  // «Обновить информацию»: по каждой площадке сохранённого контура — refresh из
+  // Telegram (title/username/visibility + авто-перенос слота) и тихая проверка прав
+  // бота. Итог — одним тостом, без спама по каждой площадке.
+  const [contourInfoPending, setContourInfoPending] = useState(false);
+
+  async function refreshContourInfo() {
+    const botId = selectedOfficialBot?.id;
+    if (!botId || contourInfoPending) return;
+    if (dirtyBotIds[selectedBotId]) {
+      toast.warning('Сначала сохрани изменения контура');
+      return;
+    }
+
+    const slotFields = {
+      public_channel: 'publicChannelId',
+      public_chat: 'publicChatId',
+      paid_channel: 'paidChannelId',
+      paid_chat: 'paidChatId'
+    };
+    const slotLabels = {
+      public_channel: 'открытый канал',
+      public_chat: 'открытый чат',
+      paid_channel: 'закрытый канал',
+      paid_chat: 'закрытый чат'
+    };
+    const slots = Object.entries(slotFields)
+      .map(([target, field]) => ({ target, channelId: draft[field] || null }))
+      .filter((slot) => slot.channelId);
+    if (!slots.length) {
+      toast.warning('В контуре нет привязанных площадок');
+      return;
+    }
+
+    setContourInfoPending(true);
+    const failed = [];
+    const moved = [];
+    try {
+      for (const slot of slots) {
+        try {
+          const data = await apiRequest(`/api/official-bot/channels/${slot.channelId}/refresh`, {
+            accessToken,
+            method: 'POST'
+          });
+          const change = data?.contourChange;
+          if (change?.from && change?.to) {
+            moved.push(`${slotLabels[change.from] || change.from} → ${slotLabels[change.to] || change.to}`);
+          }
+        } catch (error) {
+          failed.push(slotLabels[slot.target]);
+          continue;
+        }
+        const { ok } = await verifyBotRightsSilent(slot.target);
+        if (!ok) failed.push(`${slotLabels[slot.target]} (права)`);
+      }
+      await reloadAccounts();
+
+      if (failed.length === 0) {
+        toast.success(`Обновлено площадок: ${slots.length}${moved.length ? `. Переносы: ${moved.join('; ')}` : ''}`);
+      } else {
+        toast.error(`Не обновилось: ${failed.join(', ')}`);
+      }
     } finally {
-      setCheckingRightsKey('');
+      setContourInfoPending(false);
     }
   }
 
@@ -837,6 +913,7 @@ export function useSalesContourController({
     checkBotRights,
     checkingBotRightsTarget,
     contourError: officialBotContoursError,
+    contourInfoPending,
     draft,
     ensureAdminPending,
     ensureAdminRights,
@@ -846,6 +923,7 @@ export function useSalesContourController({
     publicChatOptions,
     paidChatOptions,
     publicChannelOptions,
+    refreshContourInfo,
     savingContour: String(state?.savingContourBotId || '') === selectedBotId,
     async setFieldValue(fieldOrPatch, value, options = {}) {
       const patch = typeof fieldOrPatch === 'object' && fieldOrPatch !== null

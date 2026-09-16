@@ -271,16 +271,14 @@ function BotConfigSection({
                 draft={contourDraftWithProps || {}}
                 setFieldValue={salesContourSectionProps?.setFieldValue}
                 savingContour={salesContourSectionProps?.savingContour}
-                checkBotRights={salesContourSectionProps?.checkBotRights}
-                checkingBotRightsTarget={salesContourSectionProps?.checkingBotRightsTarget}
                 botRightsByTarget={salesContourSectionProps?.botRightsByTarget}
                 contourError={salesContourSectionProps?.contourError}
                 ensureAdminRights={salesContourSectionProps?.ensureAdminRights}
                 ensureAdminPending={salesContourSectionProps?.ensureAdminPending}
+                refreshContourInfo={salesContourSectionProps?.refreshContourInfo}
+                contourInfoPending={salesContourSectionProps?.contourInfoPending}
                 targets={targets}
-                refreshTelegramPlaceInfo={refreshTelegramPlaceInfo}
                 deleteTelegramPlace={deleteTelegramPlace}
-                refreshingTelegramPlaceId={refreshingTelegramPlaceId}
               />
             </div>
           ) : null}
@@ -857,16 +855,14 @@ function SalesContourBlock({
   draft,
   setFieldValue,
   savingContour,
-  checkBotRights,
-  checkingBotRightsTarget,
   botRightsByTarget,
   contourError,
   ensureAdminRights,
   ensureAdminPending,
+  refreshContourInfo,
+  contourInfoPending,
   targets,
-  refreshTelegramPlaceInfo,
-  deleteTelegramPlace,
-  refreshingTelegramPlaceId
+  deleteTelegramPlace
 }) {
   return (
     <div className="bg-slate-50/50 pb-5">
@@ -888,20 +884,36 @@ function SalesContourBlock({
             </div>
             <div className="text-base font-bold text-slate-900">Привязка площадок</div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => ensureAdminRights?.()}
-            disabled={ensureAdminPending}
-            title="Проверит и выдаст права админа боту и юзерботам во всех площадках контура"
-            className="h-9 px-3 text-xs rounded-xl bg-surface-card border-border-default shadow-sm font-bold text-ink-body hover:bg-surface-subtle shrink-0"
-          >
-            {ensureAdminPending ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-            ) : (
-              <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-ink-faint" />
-            )}
-            {ensureAdminPending ? 'Выдаю максимум прав…' : 'Выдать максимум прав'}
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => refreshContourInfo?.()}
+              disabled={contourInfoPending || ensureAdminPending}
+              title="Обновит данные площадок из Telegram и перепроверит права бота"
+              className="h-9 px-3 text-xs rounded-xl bg-surface-card border-border-default shadow-sm font-bold text-ink-body hover:bg-surface-subtle shrink-0"
+            >
+              {contourInfoPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5 text-ink-faint" />
+              )}
+              {contourInfoPending ? 'Обновляю…' : 'Обновить информацию'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => ensureAdminRights?.()}
+              disabled={ensureAdminPending || contourInfoPending}
+              title="Проверит и выдаст права админа боту и юзерботам во всех площадках контура"
+              className="h-9 px-3 text-xs rounded-xl bg-surface-card border-border-default shadow-sm font-bold text-ink-body hover:bg-surface-subtle shrink-0"
+            >
+              {ensureAdminPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-ink-faint" />
+              )}
+              {ensureAdminPending ? 'Выдаю максимум прав…' : 'Выдать максимум прав'}
+            </Button>
+          </div>
         </div>
 
         <div className="[display:grid] grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
@@ -912,13 +924,9 @@ function SalesContourBlock({
               draft={draft}
               setFieldValue={setFieldValue}
               savingContour={savingContour}
-              checkBotRights={checkBotRights}
-              checkingBotRightsTarget={checkingBotRightsTarget}
               botRightsByTarget={botRightsByTarget}
               targets={targets}
-              refreshTelegramPlaceInfo={refreshTelegramPlaceInfo}
               deleteTelegramPlace={deleteTelegramPlace}
-              refreshingTelegramPlaceId={refreshingTelegramPlaceId}
             />
           ))}
         </div>
@@ -932,24 +940,18 @@ function ContourCard({
   draft,
   setFieldValue,
   savingContour,
-  checkBotRights,
-  checkingBotRightsTarget,
   botRightsByTarget,
   targets,
-  refreshTelegramPlaceInfo,
-  deleteTelegramPlace,
-  refreshingTelegramPlaceId
+  deleteTelegramPlace
 }) {
   const Icon = config.icon;
   const options = optionsForRole(config, draft._props || {});
   const selectedId = String(draft[config.field] || '');
   const selectedOption = options.find((o) => String(o.id) === selectedId);
   const selectedTarget = (targets || []).find((t) => String(t.id) === selectedId) || null;
-  const isRefreshingSelected = !!selectedTarget && refreshingTelegramPlaceId === String(selectedTarget.id);
   const connected = !!selectedId;
   const rights = botRightsByTarget[config.key] || null;
   const summary = rightsSummary(rights, selectedId);
-  const checking = checkingBotRightsTarget === config.key;
 
   async function copyToClipboard(text, label) {
     try {
@@ -1020,36 +1022,15 @@ function ContourCard({
           </Select>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="outline"
-            className="h-9 px-3 text-xs rounded-xl text-slate-700 bg-white border-slate-200 shadow-sm font-bold hover:bg-slate-50 flex-1 sm:flex-initial justify-center"
-            onClick={() => checkBotRights(config.key)}
-            disabled={!selectedId || checking}
-          >
-            {checking ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5 mr-1.5 text-slate-400" />}
-            {checking ? 'Проверка...' : 'Проверить права'}
-          </Button>
           {selectedTarget ? (
-            <>
-              <button
-                type="button"
-                title="Обновить информацию из Telegram"
-                aria-label="Обновить информацию из Telegram"
-                onClick={() => refreshTelegramPlaceInfo?.(selectedTarget)}
-                disabled={isRefreshingSelected}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 shadow-sm transition-colors shrink-0"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSelected ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                type="button"
-                title="Удалить площадку из Bullgram"
-                onClick={() => deleteTelegramPlace?.(selectedTarget)}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm transition-colors shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
+            <button
+              type="button"
+              title="Удалить площадку из Bullgram"
+              onClick={() => deleteTelegramPlace?.(selectedTarget)}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 shadow-sm transition-colors shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           ) : null}
         </div>
       </div>
@@ -1062,7 +1043,7 @@ function ContourCard({
           return (
             <div className="flex items-start gap-2 text-xs font-bold text-amber-700 bg-amber-50 p-2.5 rounded-xl border border-amber-200">
               <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>Канал стал {becameLabel} — нажмите «Обновить» для авто-переноса в правильный слот.</span>
+              <span>Канал стал {becameLabel} — нажми «Обновить информацию», и площадка переедет в правильный слот.</span>
             </div>
           );
         }
