@@ -511,6 +511,117 @@ export default function (supabase) {
         }
     });
 
+    // Замена токена существующего official-бота без пересоздания строки:
+    // контур, права, каналы, тарифы и админы ссылаются на tg_accounts.id,
+    // поэтому токен обновляем in-place. Простое re-add из /add не годится:
+    // оно не отличит токен чужого бота и не перерегистрирует webhook,
+    // который BotFather сбрасывает при revoke токена.
+    router.post('/:accountId/token', authenticateUser, async (req, res) => {
+        const { botToken } = req.body;
+        if (!botToken) return res.status(400).json({ error: 'Токен не передан' });
+
+        try {
+            const account = await loadOwnedOfficialBotAccount(supabase, req.user.id, req.params.accountId);
+
+            const bot = new Telegraf(botToken);
+            let botInfo;
+            try {
+                botInfo = await bot.telegram.getMe();
+            } catch (getMeErr) {
+                // До этого места ничего не меняли — бот живёт на старом токене.
+                return res.status(400).json({ error: 'Неверный токен — Telegram его не принял: ' + (getMeErr.message || getMeErr) });
+            }
+
+            // Токен должен быть от того же бота: у другого бота свой tg_account_id —
+            // он не подошёл бы к контуру и вебхуку этой строки.
+            if (botInfo.id.toString() !== String(account.tg_account_id)) {
+                return res.status(400).json({ error: 'Это токен другого бота. Выпусти новый токен в BotFather у этого же бота: /mybots → API Token → Revoke current token.' });
+            }
+
+            const normalizedKind = normalizeBotKind(account.bot_kind, { allowMissing: true }) || 'sales';
+            const webhookMode = normalizeWebhookMode(account.webhook_mode);
+            const updates = { session_data: encrypt(botToken), tg_username: botInfo.username };
+            let saved = false;
+            let webhookReregistered = false;
+            let webhookWarning = null;
+
+            if (normalizedKind !== 'template' && !isLocalDevelopment() && webhookMode === 'webhook') {
+                // Revoke токена сбрасывает webhook на стороне Telegram — проверяем
+                // и при необходимости регистрируем заново с тем же секретом,
+                // чтобы не ротировать URL и не терять привязку.
+                try {
+                    const webhookInfo = await bot.telegram.getWebhookInfo();
+                    if (!webhookInfo?.url) {
+                        const secret = account.webhook_secret || generateOfficialBotWebhookSecret();
+                        const webhookUrl = account.webhook_url || buildOfficialBotWebhookUrl(account.id, secret);
+                        await bot.telegram.setWebhook(webhookUrl, {
+                            allowed_updates: OFFICIAL_BOT_WEBHOOK_ALLOWED_UPDATES,
+                            secret_token: secret
+                        });
+                        updates.webhook_mode = 'webhook';
+                        updates.webhook_secret = secret;
+                        updates.webhook_url = webhookUrl;
+                        updates.webhook_set_at = new Date().toISOString();
+                        webhookReregistered = true;
+                    }
+                    const fresh = await bot.telegram.getWebhookInfo();
+                    updates.webhook_status = fresh?.last_error_message ? 'error' : 'enabled';
+                    updates.runtime_status = 'webhook';
+                    updates.runtime_error = fresh?.last_error_message || null;
+                } catch (webhookErr) {
+                    // Не молчим: без webhook бот мёртв, честно помечаем строку,
+                    // чтобы UI не показывал здорового бота.
+                    console.error(`[official-bot] webhook re-register failed для ${account.id}: ${webhookErr.message}`);
+                    webhookWarning = 'Webhook перерегистрировать не удалось: ' + (webhookErr.message || webhookErr);
+                    updates.webhook_status = 'error';
+                    updates.runtime_error = String(webhookErr.message || webhookErr);
+                }
+            }
+
+            const { error: updateErr } = await supabase
+                .from('tg_accounts')
+                .update(updates)
+                .eq('id', account.id)
+                .eq('owner_id', req.user.id);
+            if (updateErr) throw updateErr;
+            saved = true;
+
+            // Рестарт строго после успешной записи: при ошибке записи бот
+            // продолжает работать как работал, ничего не останавливаем.
+            // Polling-боты остаются на polling — режим выбран админом явно.
+            try {
+                officialBotService.stopBot(account.id);
+                if (normalizedKind === 'template') {
+                    // template — без runtime
+                } else if (isLocalDevelopment() || webhookMode !== 'webhook') {
+                    officialBotService.startBot(account.id, botToken, botInfo.username, account.bot_role);
+                } else {
+                    officialBotService.startWebhookBot(account.id, botToken, botInfo.username, account.bot_role);
+                }
+            } catch (restartErr) {
+                console.error(`[official-bot] runtime restart failed для ${account.id}: ${restartErr.message}`);
+                return res.status(200).json({
+                    success: true,
+                    bot: botInfo,
+                    webhook_reregistered: webhookReregistered,
+                    warning: 'Токен сохранён, но бот не перезапустился — включи его вручную.'
+                });
+            }
+
+            const payload = { success: true, bot: botInfo, webhook_reregistered: webhookReregistered };
+            if (webhookWarning) payload.warning = webhookWarning;
+            return res.status(200).json(payload);
+        } catch (err) {
+            if (err instanceof SalesContourError || isSalesContourFoundationError(err)) {
+                return sendOfficialBotError(res, err, 'Не получилось обновить токен.', err.statusCode || 400);
+            }
+            console.error('Ошибка обновления токена бота:', err.message);
+            res.status(500).json({ error: saved
+                ? 'Токен сохранён, но при финализации что-то сломалось — проверь статус бота.'
+                : 'Не получилось обновить токен, бот не тронут: ' + (err.message || err) });
+        }
+    });
+
     router.post('/role', authenticateUser, async (req, res) => {
         const { account_id, bot_role } = req.body;
         if (!account_id) return res.status(400).json({ error: 'Не передан бот для смены роли' });

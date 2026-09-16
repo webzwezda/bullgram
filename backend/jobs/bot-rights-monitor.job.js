@@ -139,9 +139,26 @@ export const startBotRightsMonitor = (supabase) => {
         console.log('[bot-rights-monitor] Check completed.');
     }
 
-    // Запускаем через 5 минут после старта сервера, чтобы не забивать инициализацию
+    // Запускаем через 5 минут после старта сервера, чтобы не забивать инициализацию.
+    // Прогон последовательный: при сотнях контуров он идёт десятки минут, поэтому
+    // перекрывать тики нельзя — пропускаем, если предыдущий ещё не дошёл до конца.
+    // Guard общий и для первого запуска: зависший стартовый прогон не должен
+    // перекрываться первым тиком интервала.
+    let monitorRunning = false;
+    const runGuarded = async () => {
+        if (monitorRunning) {
+            console.warn('[bot-rights-monitor] previous run still in progress, skipping tick');
+            return;
+        }
+        monitorRunning = true;
+        try {
+            await runMonitor();
+        } finally {
+            monitorRunning = false;
+        }
+    };
     setTimeout(() => {
-        runMonitor();
-        setInterval(runMonitor, CHECK_INTERVAL_MS);
+        runGuarded();
+        setInterval(runGuarded, CHECK_INTERVAL_MS);
     }, 5 * 60 * 1000);
 };

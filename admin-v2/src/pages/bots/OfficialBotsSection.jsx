@@ -1,5 +1,5 @@
 import { Bot, Trash2, Users, UserCog, ExternalLink, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Radio, MessageSquare, MessagesSquare, Link2, Lock, KeyRound, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -82,6 +82,59 @@ function ConnectBotForm({ botForm, setBotForm, state, addOfficialBot }) {
   );
 }
 
+function ReplaceTokenForm({ account, value, setValue, state, replaceOfficialBotToken, onClose }) {
+  const saving = state?.replacingTokenId === String(account?.id || '');
+
+  async function saveToken() {
+    const ok = await replaceOfficialBotToken?.(account, value);
+    if (ok) {
+      setValue('');
+      onClose();
+    }
+  }
+
+  return (
+    <div className="p-5 sm:p-6 bg-surface-card border-b border-border-default">
+      <div className="max-w-2xl space-y-3">
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-ink-muted block">
+            Новый токен для {botTitle(account)}
+          </label>
+          <p className="text-sm font-medium text-ink-muted">
+            Выпусти новый токен в BotFather: /mybots → API Token → Revoke current token. Вставь сюда — контур, права, каналы и тарифы останутся на месте.
+          </p>
+          <Input
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="8123456789:AAE_x7v9Kq2Lm..."
+            spellCheck="false"
+            className="font-mono bg-surface-card h-11 rounded-xl border-border-default shadow-sm"
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            onClick={saveToken}
+            disabled={saving || !value.trim()}
+            className="h-11 px-6 rounded-xl bg-action-primary hover:bg-action-primary-hover !text-action-primary-text shadow-sm w-full sm:w-auto font-bold"
+          >
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            {saving ? 'Сохранение...' : 'Сохранить токен'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={saving}
+            className="h-11 px-5 rounded-xl text-ink-body border-border-default bg-surface-card hover:bg-surface-subtle shadow-sm w-full sm:w-auto font-bold"
+          >
+            Отмена
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BotConfigSection({
   selectedOfficialBot,
   selectedOfficialBotId,
@@ -90,6 +143,7 @@ function BotConfigSection({
   botForm,
   setBotForm,
   addOfficialBot,
+  replaceOfficialBotToken,
   deleteOfficialBot,
   state,
   salesContourSectionProps,
@@ -99,6 +153,15 @@ function BotConfigSection({
   refreshingTelegramPlaceId
 }) {
   const isNew = selectedOfficialBotId === 'new';
+
+  // Панель замены токена — одна на карточку, закрывается и чистится при смене бота.
+  const [replaceTokenOpen, setReplaceTokenOpen] = useState(false);
+  const [replaceTokenValue, setReplaceTokenValue] = useState('');
+
+  useEffect(() => {
+    setReplaceTokenOpen(false);
+    setReplaceTokenValue('');
+  }, [selectedOfficialBotId]);
 
   const contourDraftWithProps = salesContourSectionProps?.draft
     ? { ...salesContourSectionProps.draft, _props: salesContourSectionProps }
@@ -145,6 +208,18 @@ function BotConfigSection({
             {!isNew && selectedOfficialBot ? (
               <Button
                 variant="ghost"
+                onClick={() => setReplaceTokenOpen((open) => !open)}
+                aria-expanded={replaceTokenOpen}
+                className="h-10 px-3 rounded-xl text-ink-body hover:bg-surface-subtle hover:text-ink-strong font-bold border border-border-default shadow-sm"
+              >
+                <KeyRound className="w-4 h-4 mr-1.5" />
+                <span className="text-sm">Заменить токен</span>
+              </Button>
+            ) : null}
+
+            {!isNew && selectedOfficialBot ? (
+              <Button
+                variant="ghost"
                 onClick={() => deleteOfficialBot?.(selectedOfficialBot)}
                 disabled={state?.deletingBotId === selectedOfficialBot.id}
                 title="Удалить бота"
@@ -161,6 +236,20 @@ function BotConfigSection({
           </div>
         </div>
       </div>
+
+      {!isNew && selectedOfficialBot && replaceTokenOpen ? (
+        <ReplaceTokenForm
+          account={selectedOfficialBot}
+          value={replaceTokenValue}
+          setValue={setReplaceTokenValue}
+          state={state}
+          replaceOfficialBotToken={replaceOfficialBotToken}
+          onClose={() => {
+            setReplaceTokenOpen(false);
+            setReplaceTokenValue('');
+          }}
+        />
+      ) : null}
 
       {isNew ? (
         <div className="p-5 sm:p-6 bg-white">
@@ -1095,6 +1184,7 @@ export function OfficialBotsSection({
   setBotForm,
   state,
   addOfficialBot,
+  replaceOfficialBotToken,
   deleteOfficialBot,
   selectedOfficialBot,
   selectedOfficialBotId,
@@ -1152,6 +1242,7 @@ export function OfficialBotsSection({
         botForm={botForm}
         setBotForm={setBotForm}
         addOfficialBot={addOfficialBot}
+        replaceOfficialBotToken={replaceOfficialBotToken}
         deleteOfficialBot={deleteOfficialBot}
         state={state}
         salesContourSectionProps={salesContourSectionProps}

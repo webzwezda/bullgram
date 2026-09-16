@@ -171,6 +171,35 @@ export function useOfficialBotsController({
     }
   }
 
+  // Замена токена у существующего бота (токен умер / отозван в BotFather).
+  // Контур, права, каналы, тарифы и админы остаются на месте — бэкенд обновляет токен in-place.
+  async function replaceOfficialBotToken(account, newToken) {
+    const accountId = String(account?.id || '');
+    const trimmed = String(newToken || '').trim();
+    if (!accountId) return false;
+    if (!trimmed) {
+      showUiMessage('Вставь новый токен бота.', 'error');
+      return false;
+    }
+
+    setState((prev) => ({ ...prev, replacingTokenId: accountId }));
+    try {
+      await apiRequest(`/api/official-bot/${accountId}/token`, {
+        accessToken,
+        method: 'POST',
+        body: { botToken: trimmed }
+      });
+      await reloadAccounts();
+      showUiMessage('Токен обновлён.', 'success');
+      return true;
+    } catch (error) {
+      showUiMessage(error.message, 'error');
+      return false;
+    } finally {
+      setState((prev) => ({ ...prev, replacingTokenId: '' }));
+    }
+  }
+
   async function refreshOfficialBotWebhookStatus(account) {
     const accountId = String(account?.id || '');
     if (!accountId) return;
@@ -262,6 +291,7 @@ export function useOfficialBotsController({
     officialBots,
     refreshOfficialBotWebhookStatus,
     regeneratingInvite,
+    replaceOfficialBotToken,
     reregisterWebhook,
     selectedOfficialBot,
     selectedOfficialBotId,

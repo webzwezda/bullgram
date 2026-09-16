@@ -126,6 +126,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     officialBots,
     refreshOfficialBotWebhookStatus,
     regeneratingInvite,
+    replaceOfficialBotToken,
     reregisterWebhook,
     selectedOfficialBot,
     selectedOfficialBotId,
@@ -323,6 +324,7 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     inviteLink,
     newAdminTgId,
     regeneratingInvite,
+    replaceOfficialBotToken,
     setNewAdminTgId,
     ownerId: user?.id
   };
