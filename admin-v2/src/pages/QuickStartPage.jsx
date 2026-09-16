@@ -1292,6 +1292,7 @@ export function QuickStartPage() {
                             const val = opt.value || opt.emoji;
                             const activeReactions = parseReactionEmojis(config.seedReactionEmoji);
                             const active = activeReactions.includes(val);
+                            const orderIndex = activeReactions.indexOf(val);
                             return (
                               <button
                                 key={val}
@@ -1302,7 +1303,7 @@ export function QuickStartPage() {
                                   if (cur.includes(val)) {
                                     next = cur.filter(x => x !== val);
                                   } else if (cur.length >= 3) {
-                                    toast.error('Максимум 3 реакции на пост');
+                                    toast.error('Максимум 3 варианта — на пост идёт первый');
                                     return prev;
                                   } else {
                                     next = [...cur, val];
@@ -1316,9 +1317,25 @@ export function QuickStartPage() {
                                 }`}
                               >
                                 {opt.emoji} {opt.label}
+                                {active && (
+                                  <span className="ml-1 text-[10px] font-black opacity-80" title={orderIndex === 0 ? 'Эта реакция появится на постах' : 'Запасная, если первая не пройдёт'}>
+                                    №{orderIndex + 1}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
+                        </div>
+                      )}
+                      {Boolean(config.seedReactionEmoji) && parseReactionEmojis(config.seedReactionEmoji).length > 0 && (
+                        <div className="text-xs text-slate-600 font-semibold flex items-center gap-1.5 flex-wrap -mt-1">
+                          <span>На постах появится:</span>
+                          <span className="text-base leading-none" aria-hidden="true">{parseReactionEmojis(config.seedReactionEmoji)[0]}</span>
+                          {parseReactionEmojis(config.seedReactionEmoji).length > 1 && (
+                            <span className="text-slate-500 font-semibold">
+                              · запасные (только если первая не пройдёт): {parseReactionEmojis(config.seedReactionEmoji).slice(1).join(' ')}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
