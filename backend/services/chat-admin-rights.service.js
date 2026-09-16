@@ -106,9 +106,11 @@ export class ChatAdminRightsService {
                 const channel = await this.resolveChatEntity(client, rawLink, chatId);
                 if (!channel) continue;
 
+                // InputUserSelf не кастится в InputPeer ("Cannot cast InputUserSelf to any
+                // kind of InputPeer") — нужен resolved channel + InputPeerSelf.
                 const self = await withTimeout(client.invoke(new Api.channels.GetParticipant({
                     channel,
-                    participant: new Api.InputUserSelf()
+                    participant: new Api.InputPeerSelf()
                 })), 30_000, 'GetParticipant');
                 const rights = self?.participant?.adminRights;
                 if (!rights || rights.canPromoteMembers !== true) continue;

@@ -9,6 +9,7 @@ import {
     isSalesContourFoundationError,
     normalizeBotKind
 } from '../services/sales-contour.service.js';
+import { createContourAdminRightsService } from '../services/contour-admin-rights.service.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 
@@ -736,6 +737,25 @@ export default function (supabase) {
             res.json({ success: true, ...data });
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось проверить права бота в Telegram');
+        }
+    });
+
+    // ensure-admin: проверяет и выдаёт админ-права official-боту и юзерботам по всем
+    // площадкам контура. Синхронный ответ: results по каждой ячейке (target × actor).
+    router.post('/contours/ensure-admin', authenticateUser, async (req, res) => {
+        try {
+            const botId = req.body?.bot_id ?? req.body?.account_id;
+            if (!botId) {
+                return res.status(400).json({ error: 'Не передан bot_id' });
+            }
+            const botApi = await createSalesContourBotApi(req.user.id, botId);
+            const adminRightsService = createContourAdminRightsService(supabase, {
+                botApiFactory: async () => botApi
+            });
+            const data = await adminRightsService.ensureAll(req.user.id, { botId, autoJoin: true });
+            res.json({ success: true, results: data.results, summary: data.summary });
+        } catch (error) {
+            return sendOfficialBotError(res, error, 'Не получилось выдать права в контуре');
         }
     });
 

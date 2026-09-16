@@ -1,4 +1,5 @@
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { classifyTelegramError } from './contour-admin-rights.service.js';
 import { Api } from 'telegram';
 
 export const SALES_BOT_KINDS = Object.freeze(['sales', 'template']);
@@ -42,12 +43,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const ADMIN_MEMBER_STATUSES = new Set(['administrator', 'creator']);
 const CONTOUR_TARGET_KEYS = Object.keys(CONTOUR_TARGET_CONFIG);
 const LEFT_STATUSES = new Set(['left', 'kicked']);
+// Права юзербота при promote через join-all. can_promote_members намеренно false (safety):
+// юзербот не должен раздавать админок. Полный максимум — CONTOUR_USERBOT_MAX_RIGHTS
+// в contour-admin-rights.service.js.
 const CONTOUR_USERBOT_PROMOTE_RIGHTS = Object.freeze({
     can_invite_users: true,
     can_promote_members: false,
     can_change_info: false,
     can_delete_messages: false,
-    can_restrict_members: false,
+    can_restrict_members: true,
     can_pin_messages: false,
     can_manage_topics: false,
     can_manage_video_chats: false,
@@ -86,11 +90,10 @@ export function getSalesContourFoundationMessage() {
 }
 
 export function isSalesContourFoundationError(error) {
-    const message = String(error?.message || '').toLowerCase();
-    return message.includes('sales_bot_contours')
-        || message.includes('sales_bot_contour_rights')
-        || message.includes('bot_kind')
-        || message.includes('selected_userbot_ids');
+    // Только коды Postgres: 42P01 (undefined_table), 42703 (undefined_column).
+    // Текстовые совпадения убраны: ловили ложные срабатывания на именах колонок/таблиц
+    // в данных и в сообщениях прикладных ошибок.
+    return error?.code === '42P01' || error?.code === '42703';
 }
 
 export function normalizeBotKind(value, { allowMissing = false } = {}) {
@@ -1224,16 +1227,58 @@ export class SalesContourService {
             String((await botApi.getChatMember(tgChatId, userbotTgId).catch(() => null))?.status || '').toLowerCase()
         );
 
+        // Промоут с классификацией ошибок: упал, но юзербот уже админ (назначен владельцем) —
+        // это not-error, фиксируем предупреждение. Классификатор общий с ensure-admin.
+        let promoteWarnings = [];
         if (!isAdmin) {
-            await botApi.promoteChatMember(tgChatId, userbotTgId, CONTOUR_USERBOT_PROMOTE_RIGHTS);
+            try {
+                await botApi.promoteChatMember(tgChatId, userbotTgId, CONTOUR_USERBOT_PROMOTE_RIGHTS);
+            } catch (promoteError) {
+                const reRead = await botApi.getChatMember(tgChatId, userbotTgId).catch(() => null);
+                const reStatus = String(reRead?.status || '').toLowerCase();
+                if (ADMIN_MEMBER_STATUSES.has(reStatus)) {
+                    const classified = classifyTelegramError(promoteError, reStatus);
+                    promoteWarnings = classified === 'owner_appointed'
+                        ? ['назначен владельцем — бот не может менять его права']
+                        : [`юзербот уже админ (ошибка promote: ${classified})`];
+                } else {
+                    const classified = classifyTelegramError(promoteError, 'member');
+                    return {
+                        target: targetKey,
+                        channel_id: channel.id,
+                        channel_title: channel.title,
+                        status: 'error',
+                        message: `${label}: юзербот вступил, но получить админ-права не получилось (${classified}).`
+                    };
+                }
+            }
+        }
+
+        // Перечитываем фактические права и включаем их в результат.
+        const finalRights = buildTelegramMemberRights(
+            await botApi.getChatMember(tgChatId, userbotTgId).catch(() => null)
+        );
+        const finalIsAdmin = !!finalRights?.is_admin;
+
+        if (!finalIsAdmin && !promoteWarnings.length) {
+            return {
+                target: targetKey,
+                channel_id: channel.id,
+                channel_title: channel.title,
+                status: 'error',
+                rights: finalRights,
+                message: `${label}: юзербот вступил, но после выдачи прав админ-статус не подтвердился.`
+            };
         }
 
         return {
             target: targetKey,
             channel_id: channel.id,
             channel_title: channel.title,
-            status: wasMember && isAdmin ? 'already_admin' : 'joined',
-            message: `${label}: юзербот ${wasMember ? 'уже был в площадке' : 'вступил'}, ${isAdmin ? 'уже админ' : 'получил права админа'}.`
+            status: (wasMember && isAdmin) || promoteWarnings.length ? 'already_admin' : 'joined',
+            rights: finalRights,
+            warnings: promoteWarnings,
+            message: `${label}: юзербот ${wasMember ? 'уже был в площадке' : 'вступил'}, ${isAdmin ? 'уже админ' : 'получил права админа'}.${promoteWarnings.length ? ` ${promoteWarnings.join(' ')}.` : ''}`
         };
     }
 

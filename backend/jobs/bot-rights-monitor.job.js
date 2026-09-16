@@ -6,6 +6,7 @@
 import { Telegraf } from 'telegraf';
 import { decrypt } from '../utils/crypto.js';
 import { SalesContourService } from '../services/sales-contour.service.js';
+import { ContourAdminRightsService } from '../services/contour-admin-rights.service.js';
 
 const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 часов
 const SERIAL_DELAY_MS = 1000; // 1 секунда паузы между проверками
@@ -22,6 +23,8 @@ export const startBotRightsMonitor = (supabase) => {
 
     async function runMonitor() {
         console.log('[bot-rights-monitor] Starting background check...');
+        // Один инстанс сервиса ensure-admin на весь прогон (переиспользуется между контурами).
+        const contourAdminRightsService = new ContourAdminRightsService(supabase);
         try {
             // Загружаем все контуры, у которых настроен хотя бы один ресурс
             const { data: contours, error } = await supabase
@@ -131,6 +134,31 @@ export const startBotRightsMonitor = (supabase) => {
                             console.error(`[bot-rights-monitor] Failed to save error status to DB:`, dbSaveErr.message);
                         }
                     }
+                }
+
+                // ensure-admin: самовосстановление прав юзерботов контура (добор
+                // can_restrict_members и т.п.). autoJoin=false — монитор никогда не
+                // вступает сам: нет членства → состояние missing_membership, без вступления.
+                // repairMode=true — права самого бота только что проверены выше, не дублируем.
+                try {
+                    const { data: bindings, error: bindingsError } = await supabase
+                        .from('official_bot_userbot_bindings')
+                        .select('userbot_id')
+                        .eq('bot_id', botId)
+                        .eq('is_active', true);
+
+                    if (bindingsError) throw bindingsError;
+
+                    if ((bindings || []).length > 0) {
+                        console.log(`[bot-rights-monitor] ensure-admin for bot ${botId} (${bindings.length} userbot bindings)...`);
+                        await contourAdminRightsService.ensureAll(ownerId, {
+                            botId,
+                            autoJoin: false,
+                            repairMode: true
+                        });
+                    }
+                } catch (ensureErr) {
+                    console.error(`[bot-rights-monitor] ensure-admin failed for bot ${botId}:`, ensureErr.message);
                 }
             }
         } catch (globalErr) {

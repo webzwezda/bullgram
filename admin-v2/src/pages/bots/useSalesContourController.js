@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
-import { fetchContourJoinAllStatus, startContourJoinAll } from '../../api/official-bot.js';
+import { ensureContourAdminRights, fetchContourJoinAllStatus, startContourJoinAll } from '../../api/official-bot.js';
 
 const JOIN_ALL_CONFIRM_TEXT = 'Юзербот вступит в площадки контура и получит в них права админа. Telegram может не дать вступить без приглашения — тогда площадка не подключится, и её нужно будет добавить вручную. Это занимает до минуты. Продолжить?';
 const JOIN_ALL_POLL_INTERVAL_MS = 3000;
 const JOIN_ALL_POLL_TIMEOUT_MS = 10 * 60 * 1000;
 const JOIN_ALL_STALLED_TEXT = 'Вступление зависло, попробуй ещё раз';
 const JOIN_ALL_ERROR_TEXT = 'Ошибка вступления в группы';
+const ENSURE_ADMIN_ERROR_TEXT = 'Не удалось выдать права';
 
 function normalizeUserbotMode(value) {
   return value === 'single' || value === 'pool' ? value : 'none';
@@ -668,6 +669,11 @@ export function useSalesContourController({
   const joinAllPollTimerRef = useRef(null);
   const joinAllPollCancelledRef = useRef(false);
 
+  // «Выдать права»: держим pending-стейт для спиннера и результат последнего прогона для блока под кнопкой.
+  const [ensureAdminPending, setEnsureAdminPending] = useState(false);
+  const ensureAdminInFlightRef = useRef(false);
+  const [ensureAdminResult, setEnsureAdminResult] = useState(null);
+
   // При unmount во время фонового join-all гасим таймер поллинга; pending-стейт умрёт вместе с компонентом.
   useEffect(() => () => stopJoinAllPolling(), []);
 
@@ -801,12 +807,52 @@ export function useSalesContourController({
     return true;
   }
 
+  // «Выдать права»: синхронно выдаём/подтверждаем права админа актёрам контура на бэке.
+  // Запрос может висеть до минуты (серийные вызовы Telegram) — просто крутим спиннер, поллинг не нужен.
+  async function ensureAdminRights() {
+    const botId = selectedOfficialBot?.id;
+    if (!botId || ensureAdminInFlightRef.current) return;
+    if (dirtyBotIds[selectedBotId]) {
+      toast.warning('Сначала сохрани изменения контура');
+      return;
+    }
+
+    ensureAdminInFlightRef.current = true;
+    setEnsureAdminPending(true);
+
+    try {
+      const data = await ensureContourAdminRights(accessToken, botId);
+      const summary = String(data?.summary || '').trim();
+      setEnsureAdminResult({ botId: toId(botId), summary, results: asArray(data?.results) });
+      toast.success(summary || 'Права выданы');
+    } catch (err) {
+      console.error('ensure-admin failed:', err?.message);
+      toast.error(err?.message || ENSURE_ADMIN_ERROR_TEXT);
+    } finally {
+      ensureAdminInFlightRef.current = false;
+      setEnsureAdminPending(false);
+    }
+  }
+
+  function dismissEnsureAdminResult() {
+    setEnsureAdminResult(null);
+  }
+
+  // Блок результатов показываем только у того бота, для которого гоняли выдачу прав.
+  const ensureAdminOutcome = ensureAdminResult && ensureAdminResult.botId === selectedBotId
+    ? ensureAdminResult
+    : null;
+
   return {
     botRightsByTarget,
     checkBotRights,
     checkingBotRightsTarget,
     contourError: officialBotContoursError,
+    dismissEnsureAdminResult,
     draft,
+    ensureAdminOutcome,
+    ensureAdminPending,
+    ensureAdminRights,
     isVisible: !!selectedBotId,
     joinAllPending,
     paidChannelOptions,

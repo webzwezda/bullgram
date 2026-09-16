@@ -17,3 +17,14 @@ export async function fetchContourJoinAllStatus(accessToken, botId) {
   params.set('bot_id', String(botId));
   return apiRequest(`/api/official-bot/contours/join-all/status?${params.toString()}`, { accessToken });
 }
+
+// Выдача/подтверждение прав админа актёрам контура (официальный бот + юзерботы).
+// Синхронный ответ, серийные вызовы Telegram — может занять до ~60s, поллинг не нужен:
+// { success: true, results: [{ target, actor_type, actor_id, actor_username, state, is_admin, flags, warnings, message }], summary }
+export async function ensureContourAdminRights(accessToken, botId) {
+  return apiRequest('/api/official-bot/contours/ensure-admin', {
+    accessToken,
+    method: 'POST',
+    body: { bot_id: botId }
+  });
+}
