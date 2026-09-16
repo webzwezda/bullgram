@@ -1010,7 +1010,7 @@ function SalesContourBlock({
             ) : (
               <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-ink-faint" />
             )}
-            {ensureAdminPending ? 'Выдаю права…' : 'Выдать права'}
+            {ensureAdminPending ? 'Выдаю максимум прав…' : 'Выдать максимум прав'}
           </Button>
         </div>
 
