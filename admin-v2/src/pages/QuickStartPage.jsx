@@ -1261,7 +1261,7 @@ export function QuickStartPage() {
                         <div className="space-y-1">
                           <label htmlFor={`seed-reaction-toggle-${tab}`} className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                            Бот ставит одну реакцию — остальные запасные, если первая не пройдёт. Эмодзи должен быть разрешён в настройках реакций самого канала.
+                            Бот ставит эту эмоцию на каждый пост. Эмодзи должен быть разрешён в настройках реакций самого канала.
                           </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
@@ -1272,7 +1272,7 @@ export function QuickStartPage() {
                             checked={Boolean(config.seedReactionEmoji)}
                             onChange={(e) => setChannelConfigs(prev => ({
                               ...prev,
-                              [tab]: { ...prev[tab], seedReactionEmoji: e.target.checked ? (prev[tab].seedReactionEmoji || '👍,👎') : null }
+                              [tab]: { ...prev[tab], seedReactionEmoji: e.target.checked ? (prev[tab].seedReactionEmoji || '👍') : null }
                             }))}
                           />
                           <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
@@ -1292,23 +1292,21 @@ export function QuickStartPage() {
                             const val = opt.value || opt.emoji;
                             const activeReactions = parseReactionEmojis(config.seedReactionEmoji);
                             const active = activeReactions.includes(val);
-                            const orderIndex = activeReactions.indexOf(val);
                             return (
                               <button
                                 key={val}
                                 type="button"
                                 onClick={() => setChannelConfigs(prev => {
                                   const cur = parseReactionEmojis(prev[tab].seedReactionEmoji);
-                                  let next;
+                                  // Одиночный выбор: лимит не-премиум бота — 1 реакция на пост.
                                   if (cur.includes(val)) {
-                                    next = cur.filter(x => x !== val);
-                                  } else if (cur.length >= 3) {
-                                    toast.error('Максимум 3 варианта — на пост идёт первый');
-                                    return prev;
-                                  } else {
-                                    next = [...cur, val];
+                                    return { ...prev, [tab]: { ...prev[tab], seedReactionEmoji: null } };
                                   }
-                                  return { ...prev, [tab]: { ...prev[tab], seedReactionEmoji: next.length ? next.join(',') : null } };
+                                  if (cur.length > 0) {
+                                    toast.info('Две эмоции — только с Telegram Premium');
+                                    return prev;
+                                  }
+                                  return { ...prev, [tab]: { ...prev[tab], seedReactionEmoji: val } };
                                 })}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                                   active
@@ -1317,25 +1315,9 @@ export function QuickStartPage() {
                                 }`}
                               >
                                 {opt.emoji} {opt.label}
-                                {active && (
-                                  <span className="ml-1 text-[10px] font-black opacity-80" title={orderIndex === 0 ? 'Эта реакция появится на постах' : 'Запасная, если первая не пройдёт'}>
-                                    №{orderIndex + 1}
-                                  </span>
-                                )}
                               </button>
                             );
                           })}
-                        </div>
-                      )}
-                      {Boolean(config.seedReactionEmoji) && parseReactionEmojis(config.seedReactionEmoji).length > 0 && (
-                        <div className="text-xs text-slate-600 font-semibold flex items-center gap-1.5 flex-wrap -mt-1">
-                          <span>На постах появится:</span>
-                          <span className="text-base leading-none" aria-hidden="true">{parseReactionEmojis(config.seedReactionEmoji)[0]}</span>
-                          {parseReactionEmojis(config.seedReactionEmoji).length > 1 && (
-                            <span className="text-slate-500 font-semibold">
-                              · запасные (только если первая не пройдёт): {parseReactionEmojis(config.seedReactionEmoji).slice(1).join(' ')}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
