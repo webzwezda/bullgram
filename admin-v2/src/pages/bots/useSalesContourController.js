@@ -695,7 +695,12 @@ export function useSalesContourController({
         }
       });
       if (isActive) {
-        triggerJoinAll();
+        const joinStarted = triggerJoinAll();
+        if (!joinStarted) {
+          // Тумблер включён, но подтверждение отклонено или join-all уже занят —
+          // без подсказки выглядит, будто вступление уже пошло.
+          toast.info('Вступление в площадки не запущено — перещёлкни тумблер «Участвует в ротации» ещё раз и подтверди.');
+        }
       }
       showUiMessage(isActive ? 'Юзербот включён в ротацию.' : 'Юзербот приостановлен.', 'success');
     } catch (err) {
@@ -764,11 +769,13 @@ export function useSalesContourController({
     tick();
   }
 
+  // Возвращает true, если join-all реально запущен (или уже идёт и мы следим),
+  // false — если отклонили подтверждение или сработал in-flight guard.
   function triggerJoinAll() {
     const botId = selectedOfficialBot?.id;
     // In-flight guard: join-all исполняется в фоне, повторные клики и параллельный поллинг стакать нельзя.
-    if (!botId || joinAllInFlightRef.current) return;
-    if (!window.confirm(JOIN_ALL_CONFIRM_TEXT)) return;
+    if (!botId || joinAllInFlightRef.current) return false;
+    if (!window.confirm(JOIN_ALL_CONFIRM_TEXT)) return false;
 
     joinAllInFlightRef.current = true;
     setJoinAllPending(true);
@@ -791,6 +798,7 @@ export function useSalesContourController({
         toast.error(err?.message || JOIN_ALL_ERROR_TEXT);
         resetJoinAllState();
       });
+    return true;
   }
 
   return {
