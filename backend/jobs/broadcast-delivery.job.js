@@ -7,19 +7,31 @@
  *   1. берёт ОДНУ кампанию: свежую 'queued' ИЛИ зависшую 'sending' (heartbeat в meta
  *      старше STALE_HEARTBEAT_MS — процесс умер посреди кампании);
  *   2. claim'ит её условным апдейтом в 'sending' — если 0 строк, кампанию забрал кто-то другой;
- *   3. доставляет pending-доставки по одной, маркируя исход каждой после факта отправки (send-then-mark: краш между отправкой и маркировкой даёт дубль одному получателю при резюме — осознанный трейд-офф);
+ *   3. доставляет pending-доставки по одной через MessagingRouter (ротация пула,
+ *      квоты, паузы актёров, джиттер), маркируя исход каждой после факта отправки
+ *      (send-then-mark: краш между отправкой и маркировкой даёт дубль одному
+ *      получателю при резюме — осознанный трейд-офф);
  *   4. в try/finally пишет финальный статус: 'sent' или 'completed_with_errors'.
+ *
+ * Отмена кампании (POST /api/broadcast/campaigns/:id/cancel → status='cancelled')
+ * выигрывает у всего: цикл доставки перед каждым получателем проверяет актуальный
+ * статус, а финализация пишет статус только из 'sending'.
  *
  * У broadcast_campaigns нет колонки updated_at, поэтому «живость» кампании отслеживается
  * через meta.delivery_heartbeat_at — джоба обновляет его после каждой доставки,
  * а reaper считает кампанию зависшей, если heartbeat протух.
  */
 import { UserbotService } from '../services/userbot.service.js';
+import { MessagingRouter, resolveMessagingCaps } from '../services/messaging-router.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import {
     loadPreparationMatrix,
     createBroadcastDeliverySender,
-    senderTypeUsesUserbot
+    senderTypeUsesUserbot,
+    isPureUserbotSenderType,
+    hasDeliverableActor,
+    planCampaignFinalization,
+    isDeliverableCampaignStatus
 } from '../services/broadcast-delivery.service.js';
 
 const TICK_INTERVAL_MS = 30_000;
@@ -68,7 +80,14 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         process.env.TG_API_ID,
         process.env.TG_API_HASH
     );
-    const { deliverToRecipient } = createBroadcastDeliverySender({ userbotService, getBotById });
+    // Весь юзербот-трафик рассылок — через роутер: квоты, паузы, ротация, джиттер.
+    const messagingRouter = new MessagingRouter({
+        supabase,
+        sendUserbot: (account, tgUserId, text, options) =>
+            userbotService.sendMessage(account, tgUserId, text, options)
+    });
+    const messagingCaps = resolveMessagingCaps(process.env);
+    const { deliverToRecipient } = createBroadcastDeliverySender({ supabase, getBotById, router: messagingRouter });
 
     let running = false;
 
@@ -107,7 +126,8 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
 
         if (!candidate) return null;
 
-        // Claim условным апдейтом: если 0 строк — кампанию забрал кто-то другой, пропускаем
+        // Claim условным апдейтом: если 0 строк — кампанию забрал кто-то другой
+        // или её успели отменить ('cancelled' не claim'аем), пропускаем
         const nowIso = new Date().toISOString();
         const claimedMeta = {
             ...(candidate.meta || {}),
@@ -185,8 +205,20 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         }
     }
 
-    // Финал по фактическому состоянию БД, а не по локальным счётчикам: резюм зависшей
-    // кампании и легаси-кампании без pending-строк финализируются тем же путём.
+    // Отмена посреди кампании: статус читаем перед каждым получателем.
+    // Ошибка чтения — не повод рвать доставку, считаем что кампания ещё наша.
+    async function isCampaignStillOurs(campaignId) {
+        const { data, error } = await supabase
+            .from('broadcast_campaigns')
+            .select('status')
+            .eq('id', campaignId)
+            .maybeSingle();
+        if (error) return true;
+        return isDeliverableCampaignStatus(data?.status);
+    }
+
+    // Финал по фактическому состоянию БД, а не по локальным счётчикам.
+    // Статус пишем только из 'sending': отмена кампании всегда выигрывает у финализации.
     async function finalizeCampaign(campaign, meta) {
         try {
             const { data: rows, error } = await supabase
@@ -195,47 +227,38 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
                 .eq('campaign_id', campaign.id);
             if (error) throw error;
 
-            const sentTotal = (rows || []).filter(row => row.delivery_status === 'sent').length;
-            const failedTotal = (rows || []).filter(row => row.delivery_status === 'failed').length;
-            const pendingTotal = (rows || []).filter(row => row.delivery_status === 'pending').length;
+            const decision = planCampaignFinalization(rows || [], meta);
 
-            if (pendingTotal > 0) {
-                // Есть незамаркированные доставки (сбой БД во время маркировки) — не финализируем:
-                // heartbeat протухнет и reaper вернётся доделывать
-                console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: ${pendingTotal} доставок остались pending — вернёмся следующим тиком`);
-                await supabase
-                    .from('broadcast_campaigns')
-                    .update({ meta: { ...meta, sent: sentTotal, failed: failedTotal, total: (rows || []).length } })
-                    .eq('id', campaign.id);
+            if (decision.action === 'wait') {
+                if (decision.refreshHeartbeat) {
+                    console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: ${decision.counts.pending} доставок остались pending — вернёмся следующим тиком`);
+                    await supabase
+                        .from('broadcast_campaigns')
+                        .update({ meta: decision.meta })
+                        .eq('id', campaign.id)
+                        .eq('status', 'sending');
+                } else {
+                    console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: доставок ещё нет, ждём вставки из /send`);
+                }
                 return;
             }
 
-            // /send вставляет доставки ПОСЛЕ создания 'queued' кампании: если тик попал
-            // в это окно, pending ещё нет, а meta.total обещает их получить. Финализировать
-            // нельзя — оставшиеся батчи легли бы в уже закрытую кампанию и остались
-            // pending навсегда (reaper берёт только queued/sending). Ждём следующего тика.
-            if ((rows || []).length === 0 && Number(meta.total || 0) > 0) {
-                console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: доставок ещё нет, ждём вставки из /send`);
-                return;
-            }
-
-            const finalStatus = failedTotal > 0 ? 'completed_with_errors' : 'sent';
-            await supabase
+            const { data: finalized, error: finalizeError } = await supabase
                 .from('broadcast_campaigns')
                 .update({
-                    status: finalStatus,
-                    sent_at: new Date().toISOString(),
-                    meta: {
-                        ...meta,
-                        sent: sentTotal,
-                        failed: failedTotal,
-                        total: (rows || []).length,
-                        delivery_finished_at: new Date().toISOString()
-                    }
+                    status: decision.status,
+                    sent_at: decision.meta.delivery_finished_at,
+                    meta: decision.meta
                 })
                 .eq('id', campaign.id)
-                .in('status', ['sending']);
-            console.log(`[BroadcastDelivery] Кампания ${campaign.id} завершена: ${finalStatus}, sent=${sentTotal}, failed=${failedTotal}`);
+                .in('status', ['sending'])
+                .select('id');
+            if (finalizeError) throw finalizeError;
+            if (finalized && finalized.length > 0) {
+                console.log(`[BroadcastDelivery] Кампания ${campaign.id} завершена: ${decision.status}, sent=${decision.counts.sent}, failed=${decision.counts.failed}`);
+            } else {
+                console.log(`[BroadcastDelivery] Кампания ${campaign.id}: финализация пропущена — статус уже не 'sending' (отменена?)`);
+            }
         } catch (error) {
             console.error(`[BroadcastDelivery] Не финализировали кампанию ${campaign.id}:`, error?.message || error);
         }
@@ -251,13 +274,22 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
 
         const pending = await loadPendingDeliveries(campaign.id);
 
+        // Чисто-юзерботная кампания без единого живого актёра (пул пуст, все в карантине/
+        // бане или на длинной паузе) — ждать нечего, честно роняем кампанию. flood-паузы
+        // временные: такие кампании продолжают тянуться по тикам через pending-строки.
         const selectedUserbots = await loadSelectedUserbots(ownerId, meta.sender_userbot_ids);
-        if (pending.length > 0 && senderTypeUsesUserbot(senderType) && selectedUserbots.length === 0) {
-            console.error(`[BroadcastDelivery] Кампания ${campaign.id}: юзерботы недоступны (проданы/сломаны), помечаем ${pending.length} доставок как failed`);
-            await failAllPending(campaign.id, 'Юзерботы этой рассылки больше недоступны (проданы или отключены)');
-            await finalizeCampaign(campaign, meta);
+        if (pending.length > 0 && isPureUserbotSenderType(senderType) && !hasDeliverableActor(selectedUserbots)) {
+            const queueError = 'Нет доступных юзерботов: все на паузе или в карантине. Разберите юзерботов и перезапустите рассылку.';
+            console.error(`[BroadcastDelivery] Кампания ${campaign.id}: ${queueError} Помечаем ${pending.length} доставок как failed`);
+            await failAllPending(campaign.id, queueError);
+            await supabase
+                .from('broadcast_campaigns')
+                .update({ status: 'failed', meta: { ...meta, queue_error: queueError } })
+                .eq('id', campaign.id)
+                .eq('status', 'sending');
             return;
         }
+        // Для official_then_* пустой пул юзерботов не фатален — официального бота это не касается.
 
         let preparationMatrix = null;
         if (meta.preparation_id) {
@@ -276,6 +308,12 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
 
         try {
             for (let index = 0; index < pending.length; index++) {
+                // Отмена/чужой статус — прекращаем доставку сразу, строки остаются как есть
+                if (!(await isCampaignStillOurs(campaign.id))) {
+                    console.log(`[BroadcastDelivery] Кампания ${campaign.id}: доставка остановлена — статус изменился (отмена?)`);
+                    break;
+                }
+
                 const delivery = pending[index];
                 const row = {
                     tg_user_id: delivery.tg_user_id,
@@ -287,14 +325,22 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
                 };
 
                 const result = await deliverToRecipient({
+                    ownerId,
                     campaignId: campaign.id,
                     messageText: campaign.message_text,
                     senderType,
                     selectedUserbots,
                     preparationMatrix,
                     row,
-                    index
+                    baseDelayMs: delayMs
                 });
+
+                // Весь пул на паузе/квоте: строку не трогаем (остаётся pending), тик заканчиваем —
+                // квоты за этот тик не разморозятся. Финализация оставит кампанию в 'sending'.
+                if (result.quotaWait) {
+                    console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: юзерботы пула на паузе или вне квоты — ${pending.length - index} доставок ждём до следующего тика`);
+                    break;
+                }
 
                 if (result.deliveryStatus === 'sent') {
                     sent++;
@@ -324,20 +370,26 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
                     console.error(`[BroadcastDelivery] Не обновили исход доставки ${delivery.id}:`, deliveryUpdateError.message);
                 }
 
-                // Прогресс + heartbeat одним апдейтом: по heartbeat reaper понимает, что кампания жива
+                // Прогресс + heartbeat одним апдейтом: по heartbeat reaper понимает, что кампания жива.
+                // Guard по статусу: отмена кампании посреди получателя не должна быть затёрта —
+                // при чужом статусе апдейт просто не попадёт в meta.
                 meta.sent = sent;
                 meta.failed = failed;
                 meta.delivery_heartbeat_at = new Date().toISOString();
                 const { error: progressError } = await supabase
                     .from('broadcast_campaigns')
                     .update({ meta })
-                    .eq('id', campaign.id);
+                    .eq('id', campaign.id)
+                    .eq('status', 'sending');
                 if (progressError) {
                     console.error(`[BroadcastDelivery] Не обновили прогресс кампании ${campaign.id}:`, progressError.message);
                 }
 
                 if (delayMs > 0 && index < pending.length - 1) {
-                    await sleep(delayMs);
+                    // Пейсинг между получателями с ±jitterPercent (роутер внутри доставки
+                    // джиттерит только между попытками акторов — это другой уровень)
+                    const jitterSpan = (messagingCaps.jitterPercent / 100) * delayMs;
+                    await sleep(Math.max(0, delayMs + (Math.random() * 2 - 1) * jitterSpan));
                 }
             }
         } finally {

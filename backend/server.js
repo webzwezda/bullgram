@@ -16,6 +16,7 @@ import analyticsRoutes from './routes/analytics.routes.js'; // <-- НОВОЕ: �
 import accessRoutes from './routes/access.routes.js';
 import broadcastRoutes from './routes/broadcast.routes.js';
 import broadcastPreparationRoutes from './routes/broadcast-preparation.routes.js';
+import messagingRoutes from './routes/messaging.routes.js';
 import { BroadcastPreparationService } from './services/broadcast-preparation.service.js';
 import paymentRoutes from './routes/payment.routes.js';
 import billingRoutes from './routes/billing.routes.js';
@@ -178,6 +179,7 @@ app.use('/api/analytics', analyticsRoutes(supabase)); // <-- НОВОЕ: Под�
 app.use('/api/access', accessRoutes(supabase));
 app.use('/api/broadcast', broadcastRoutes(supabase));
 app.use('/api/broadcast', broadcastPreparationRoutes(supabase));
+app.use('/api/messaging', messagingRoutes(supabase));
 app.use('/api/payment', paymentRoutes(supabase, getBotById));
 app.use('/api/billing', billingRoutes(supabase));
 app.use('/api/billing', publicBillingRoutes(supabase));

@@ -5,6 +5,7 @@
  */
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
 
 function isUserbotAutoKickDmEnabled() {
     return String(process.env.USERBOT_AUTO_KICK_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -18,12 +19,57 @@ function isOperationalUserbot(account) {
     return String(account?.runtime_status || '').trim().toLowerCase() !== 'pending_activation';
 }
 
-export const startAutoKick = (supabase, getBotFunction) => {
+export const startAutoKick = (supabase, getBotFunction, { messagingRouter: messagingRouterOverride } = {}) => {
+    const messagingRouter = messagingRouterOverride || new MessagingRouter({ supabase });
+
     const userbotService = new UserbotService(
         supabase,
         process.env.TG_API_ID,
         process.env.TG_API_HASH
     );
+
+    // Контурный пул бота: те же акторы, что и в retention-фолбэке (активные связки, без shop-резерва)
+    async function loadContourPool(ownerId, botId) {
+        const [reservedUserbotIds, bindingsResponse] = await Promise.all([
+            loadReservedUserbotIds(supabase, ownerId),
+            supabase
+                .from('official_bot_userbot_bindings')
+                .select('userbot_id')
+                .eq('bot_id', botId)
+                .eq('is_active', true)
+        ]);
+        if (bindingsResponse.error) throw bindingsResponse.error;
+
+        const userbotIds = [...new Set((bindingsResponse.data || []).map((row) => String(row.userbot_id)))].filter(Boolean);
+        if (userbotIds.length === 0) return [];
+
+        const { data, error } = await supabase
+            .from('tg_accounts')
+            .select('*, proxies(is_working)')
+            .eq('owner_id', ownerId)
+            .eq('account_type', 'userbot')
+            .in('id', userbotIds);
+        if (error) throw error;
+
+        const now = new Date();
+        return (data || []).filter((account) =>
+            !reservedUserbotIds.has(String(account.id)) && isActorEligible(account, { now })
+        );
+    }
+
+    // Пул ЛС после кика: контурные акторы бота; пусто — последний рабочий юзербот пулом из одного
+    async function loadKickDmPool(ownerId, botId) {
+        if (botId) {
+            try {
+                const contourPool = await loadContourPool(ownerId, botId);
+                if (contourPool.length > 0) return contourPool;
+            } catch (poolErr) {
+                console.error('[AutoKick] Не собрали контурный пул для ЛС, падаем на последний юзербот:', poolErr?.message || poolErr);
+            }
+        }
+        const latest = await loadLatestUserbot(ownerId);
+        return latest ? [latest] : [];
+    }
 
     async function loadLatestUserbot(ownerId) {
         const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
@@ -112,20 +158,21 @@ export const startAutoKick = (supabase, getBotFunction) => {
                         if (bot) {
                             await bot.telegram.sendMessage(sub.tg_user_id, '😢 Твоя подписка истекла, и ты был исключен.\nНажми /start чтобы вернуться!');
                         } else if (isUserbotAutoKickDmEnabled()) {
-                            const userbot = await loadLatestUserbot(sub.channels.owner_id);
+                            const pool = await loadKickDmPool(sub.channels.owner_id, botId);
 
-                            if (userbot) {
-                                await userbotService.sendMessage(
-                                    userbot,
-                                    sub.tg_user_id,
-                                    `😢 Твоя подписка на «${sub.channels.title || 'закрытый канал'}» истекла, и доступ был отключен. Напиши боту снова, чтобы продлить подписку.`,
-                                    {
-                                        event_source: 'auto_kick',
-                                        event_type: 'expired_notice',
-                                        channel_id: sub.channel_id || null,
-                                        subscription_id: sub.id
-                                    }
-                                );
+                            if (pool.length > 0) {
+                                const result = await messagingRouter.deliver({
+                                    ownerId: sub.channels.owner_id,
+                                    tgUserId: sub.tg_user_id.toString(),
+                                    text: `😢 Твоя подписка на «${sub.channels.title || 'закрытый канал'}» истекла, и доступ был отключен. Напиши боту снова, чтобы продлить подписку.`,
+                                    pool,
+                                    eventSource: 'auto_kick'
+                                });
+                                if (result.status !== 'sent') {
+                                    console.warn(`[AutoKick] Юзербот-пул не доставил ЛС ${sub.tg_user_id}: ${result.errorKind} ${result.errorText || ''}`);
+                                }
+                            } else {
+                                console.warn(`[AutoKick] Нет рабочего юзербота для ЛС ${sub.tg_user_id}`);
                             }
                         } else {
                             console.log(`[AutoKick] USERBOT_AUTO_KICK_DM_ENABLED=false, пропускаем ЛС через юзербота для ${sub.tg_user_id}`);

@@ -1,7 +1,7 @@
-import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 // Хелперы доставки переехали в общий util (единственный источник; до этого дублировались здесь и в abandoned-cart.job.js)
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
+import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
 
 function isUserbotRetentionDmEnabled() {
     return String(process.env.USERBOT_RETENTION_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -17,12 +17,53 @@ function isOperationalUserbot(account) {
  * и отправляет напоминания (сначала ботом, если заблокирован - юзерботом)
  */
 
-export const startRetention = (supabase, getBotFunction) => {
-    const userbotService = new UserbotService(
-        supabase,
-        process.env.TG_API_ID,
-        process.env.TG_API_HASH
-    );
+export const startRetention = (supabase, getBotFunction, { messagingRouter: messagingRouterOverride } = {}) => {
+    const messagingRouter = messagingRouterOverride || new MessagingRouter({ supabase });
+
+    // Контурный пул бота: активные связки official_bot ↔ юзербот (те же акторы, что показывает
+    // контурный UI), без shop-резерва и неэлигибельных акторов. Чинит рассинхрон
+    // «UI обещает контурного хелпера, job шлёт новейшим юзерботом».
+    async function loadContourPool(ownerId, botId) {
+        const [reservedUserbotIds, bindingsResponse] = await Promise.all([
+            loadReservedUserbotIds(supabase, ownerId),
+            supabase
+                .from('official_bot_userbot_bindings')
+                .select('userbot_id')
+                .eq('bot_id', botId)
+                .eq('is_active', true)
+        ]);
+        if (bindingsResponse.error) throw bindingsResponse.error;
+
+        const userbotIds = [...new Set((bindingsResponse.data || []).map((row) => String(row.userbot_id)))].filter(Boolean);
+        if (userbotIds.length === 0) return [];
+
+        const { data, error } = await supabase
+            .from('tg_accounts')
+            .select('*, proxies(is_working)')
+            .eq('owner_id', ownerId)
+            .eq('account_type', 'userbot')
+            .in('id', userbotIds);
+        if (error) throw error;
+
+        const now = new Date();
+        return (data || []).filter((account) =>
+            !reservedUserbotIds.has(String(account.id)) && isActorEligible(account, { now })
+        );
+    }
+
+    // Пул ретеншн-фолбэка: контурные акторы бота; пусто — последний рабочий юзербот пулом из одного
+    async function loadRetentionPool(ownerId, botId) {
+        if (botId) {
+            try {
+                const contourPool = await loadContourPool(ownerId, botId);
+                if (contourPool.length > 0) return contourPool;
+            } catch (poolErr) {
+                console.error('[Напоминание] Не собрали контурный пул, падаем на последний юзербот:', poolErr?.message || poolErr);
+            }
+        }
+        const latest = await loadLatestUserbot(ownerId);
+        return latest ? [latest] : [];
+    }
 
     async function loadLatestUserbot(ownerId) {
         const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
@@ -84,7 +125,7 @@ export const startRetention = (supabase, getBotFunction) => {
             // Ищем подписки, которые истекают в ближайшие 24 часа и которым ещё не отправляли напоминание (или прошло больше суток)
             const { data: expiringSubs, error } = await supabase
                 .from('subscriptions')
-                .select(`id, tg_user_id, channel_id, channels!inner ( owner_id, bot_id, title )`)
+                .select(`id, tg_user_id, channel_id, channels!inner ( owner_id, bot_id, title, tg_chat_id )`)
                 .eq('status', 'active')
                 .gt('expires_at', nowIso)
                 .lte('expires_at', targetTime)
@@ -263,31 +304,42 @@ export const startRetention = (supabase, getBotFunction) => {
                                 // Дефинитивный скип — маркируем, чтобы не обрабатывать подписку каждый тик
                                 await markReminderSent(sub.id);
                             } else {
-                                const userbot = await loadLatestUserbot(ownerId);
-                                if (userbot) {
+                                const pool = await loadRetentionPool(ownerId, botId);
+                                if (pool.length > 0) {
                                     // Юзербот шлёт без parse_mode — сырые ** и _ ушли бы подписчику литералами
-                                    await userbotService.sendMessage(
-                                        userbot,
-                                        sub.tg_user_id.toString(),
-                                        `🔔 Системное уведомление!\nМой бот не смог до тебя достучаться, пишу лично.\n\n${stripMarkdownDecor(messageText)}`,
-                                        {
-                                            event_source: 'retention',
-                                            event_type: 'retention_reminder',
-                                            channel_id: sub.channel_id || null,
-                                            subscription_id: sub.id
-                                        }
-                                    );
-                                    console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
-                                    await logReminderEvent(sub, ownerId, botId, {
-                                        delivered_by: 'userbot',
-                                        bot_id: botId || null,
-                                        userbot_id: userbot?.id || null,
-                                        userbot_username: userbot?.tg_username || null,
-                                        message_text: messageText,
-                                        source_tariff_id: sourceTariff?.id || null,
-                                        upsell_tariff_id: upsellTariff?.id || null
+                                    const result = await messagingRouter.deliver({
+                                        ownerId,
+                                        tgUserId: sub.tg_user_id.toString(),
+                                        text: `🔔 Системное уведомление!\nМой бот не смог до тебя достучаться, пишу лично.\n\n${stripMarkdownDecor(messageText)}`,
+                                        pool,
+                                        // Общая группа подписки: даём роутеру шанс собрать peer сканом общего чата
+                                        commonChatId: sub.channels.tg_chat_id ? String(sub.channels.tg_chat_id) : null,
+                                        eventSource: 'retention'
                                     });
-                                    await markReminderSent(sub.id);
+
+                                    if (result.status === 'sent') {
+                                        const actor = pool.find((account) => String(account.id) === String(result.actorId));
+                                        console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
+                                        await logReminderEvent(sub, ownerId, botId, {
+                                            delivered_by: 'userbot',
+                                            bot_id: botId || null,
+                                            userbot_id: result.actorId || null,
+                                            userbot_username: actor?.tg_username || null,
+                                            message_text: messageText,
+                                            source_tariff_id: sourceTariff?.id || null,
+                                            upsell_tariff_id: upsellTariff?.id || null
+                                        });
+                                        await markReminderSent(sub.id);
+                                    } else {
+                                        // Роутер не дотянулся (пауза/квота/ошибка Telegram) — транзиентно, не маркируем
+                                        console.warn(`[Напоминание] Юзербот-пул не доставил для ${sub.tg_user_id}: ${result.errorKind} ${result.errorText || ''}`);
+                                        await logReminderEvent(sub, ownerId, botId, {
+                                            delivered_by: 'failed',
+                                            bot_id: botId || null,
+                                            error_kind: result.errorKind || 'unknown',
+                                            error: result.errorText || 'unknown'
+                                        });
+                                    }
                                 } else {
                                     // Нет рабочего юзербота — не маркируем, попробуем в следующий тик
                                     console.warn(`[Напоминание] Нет рабочего юзербота у owner ${ownerId}, откладываем напоминание для ${sub.tg_user_id}`);

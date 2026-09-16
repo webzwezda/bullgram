@@ -714,5 +714,48 @@ export default function(supabase) {
         }
     });
 
+    // Стоп кампании: queued/sending → cancelled. Джоба доставки проверяет статус перед
+    // каждым получателем и финализирует только из 'sending' — отмена всегда выигрывает.
+    router.post('/campaigns/:id/cancel', authenticateUser, async (req, res) => {
+        try {
+            const campaignId = String(req.params.id || '').trim();
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(campaignId)) {
+                return res.status(404).json({ error: 'Кампания не найдена или уже не активна' });
+            }
+
+            const { data: existing, error: loadError } = await supabase
+                .from('broadcast_campaigns')
+                .select('meta')
+                .eq('id', campaignId)
+                .eq('owner_id', req.user.id)
+                .maybeSingle();
+            if (loadError) throw loadError;
+            if (!existing) {
+                return res.status(404).json({ error: 'Кампания не найдена или уже не активна' });
+            }
+
+            const nowIso = new Date().toISOString();
+            const { data: cancelled, error: cancelError } = await supabase
+                .from('broadcast_campaigns')
+                .update({
+                    status: 'cancelled',
+                    meta: { ...(existing.meta || {}), cancelled_at: nowIso }
+                })
+                .eq('id', campaignId)
+                .eq('owner_id', req.user.id)
+                .in('status', ['queued', 'sending'])
+                .select('id');
+            if (cancelError) throw cancelError;
+            if (!cancelled || cancelled.length === 0) {
+                return res.status(404).json({ error: 'Кампания не найдена или уже не активна' });
+            }
+
+            res.json({ ok: true, status: 'cancelled', cancelled_at: nowIso });
+        } catch (error) {
+            console.error('Ошибка отмены кампании:', error);
+            res.status(500).json({ error: 'Ошибка отмены рассылки' });
+        }
+    });
+
     return router;
 }

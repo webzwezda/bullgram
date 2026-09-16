@@ -23,6 +23,12 @@
  *   - membership check failure (бот не видит состав) + autoJoin=false → error,
  *     НЕ missing_membership
  *   - flood_wait stops remaining targets for that actor
+ *   - peer-invite (3-й способ): бот-инвайт падает → юзербот-сосед из подтверждённых
+ *     ячеек прав (ok/owner_appointed) экспортирует инвайт, вступающий импортирует,
+ *     ссылка отзывается, клиент соседа отключается
+ *   - экспорт у соседа падает → предупреждение в ячейку, structured failure, не throw
+ *   - вступающий исключён из кандидатов (нет self-invite); state=error и
+ *     pending_activation не становятся кандидатами
  */
 import { Api } from 'telegram';
 import {
@@ -62,12 +68,13 @@ function applyFilters(rows, filters) {
   }));
 }
 
-function makeMockSupabase({ bots = [], userbots = [], channels = [], contours = [], bindings = [] } = {}) {
+function makeMockSupabase({ bots = [], userbots = [], channels = [], contours = [], bindings = [], actorRights = [] } = {}) {
   const tables = {
     tg_accounts: [...bots, ...userbots],
     channels,
     sales_bot_contours: contours,
     official_bot_userbot_bindings: bindings,
+    sales_contour_actor_rights: actorRights,
     shop_items: [],
     shop_item_assets: []
   };
@@ -123,7 +130,9 @@ function makeBotApi({
   adminByChat = {},
   promoteError = null,
   onPromoteAttempt = null,
-  getMemberErrorFor = null
+  getMemberErrorFor = null,
+  exportInviteError = null,
+  createInviteError = null
 } = {}) {
   const calls = { getChatMember: [], promote: [], exportInvite: [], createInvite: [], revoke: [] };
   const api = {
@@ -147,10 +156,12 @@ function makeBotApi({
     },
     async exportChatInviteLink(chatId) {
       calls.exportInvite.push(String(chatId));
+      if (exportInviteError) throw exportInviteError;
       return 'https://t.me/+testhash123';
     },
     async createChatInviteLink(chatId, _opts) {
       calls.createInvite.push(String(chatId));
+      if (createInviteError) throw createInviteError;
       return { invite_link: 'https://t.me/+testhash456' };
     },
     async revokeChatInviteLink(chatId, link) {
@@ -161,8 +172,20 @@ function makeBotApi({
   return { api, calls };
 }
 
-function makeUserbotClient({ peers = {}, fullChats = {}, participantResults = {}, joinError = null } = {}) {
-  const calls = { getInputEntity: [], invoke: [], getEntity: [], disconnect: 0 };
+// Fake GramJS client с реальной поверхностью telegram@2.26.22. Помимо чтения
+// админ-состояния умеет join/export/import/revoke — этого требует сценарий
+// инвайта от юзербота-соседа (кандидат-экспортёр получает СВОЙ клиент).
+function makeUserbotClient({
+  peers = {},
+  fullChats = {},
+  participantResults = {},
+  joinError = null,
+  joinChannelError = null,
+  importError = null,
+  exportInviteError = null,
+  exportInviteResult = { className: 'ChatInviteExported', link: 'https://t.me/+peerinvite777' }
+} = {}) {
+  const calls = { getInputEntity: [], invoke: [], getEntity: [], imports: [], exportInvites: [], revokeExports: [], disconnect: 0 };
   const chatByPeer = new Map(Object.entries(peers).map(([chatId, peer]) => [peer, String(chatId)]));
   const client = {
     async getInputEntity(chatId) {
@@ -183,6 +206,24 @@ function makeUserbotClient({ peers = {}, fullChats = {}, participantResults = {}
         if (result instanceof Error) throw result;
         if (!result) throw new Error('USER_NOT_PARTICIPANT');
         return result;
+      }
+      if (request instanceof Api.channels.JoinChannel) {
+        if (joinChannelError) throw joinChannelError;
+        return {};
+      }
+      if (request instanceof Api.messages.ImportChatInvite) {
+        calls.imports.push(request.hash);
+        if (importError) throw importError;
+        return {};
+      }
+      if (request instanceof Api.messages.ExportChatInvite) {
+        calls.exportInvites.push(chatByPeer.get(request.peer) || '');
+        if (exportInviteError) throw exportInviteError;
+        return exportInviteResult;
+      }
+      if (request instanceof Api.messages.EditExportedChatInvite) {
+        calls.revokeExports.push(request.link);
+        return {};
       }
       if (joinError) throw joinError;
       return {};
@@ -230,10 +271,98 @@ const FIXTURE_CHANNELS = [
   { id: CH2_ID, owner_id: OWNER_ID, bot_id: BOT_ID, tg_chat_id: '-100222', title: 'Chat1', chat_type: 'supergroup', username: null, visibility: 'unknown', created_at: '2026-01-02T00:00:00Z' }
 ];
 
-function makeService(supabase, botApi, client) {
+// Юзербот-сосед (уже админ в площадке — приглашает вступающего) и юзербот
+// с pending_activation (для проверки отбраковки кандидатов).
+const PEER_USERBOT_ID = '66666666-6666-4666-8666-666666666666';
+const PENDING_USERBOT_ID = '77777777-7777-4777-8777-777777777777';
+const PEER_USERBOT = {
+  id: PEER_USERBOT_ID, owner_id: OWNER_ID, account_type: 'userbot', tg_account_id: '9001',
+  tg_username: 'ub2admin', session_data: 'enc:session', proxy_id: null,
+  runtime_status: 'ok', proxies: null
+};
+const PENDING_USERBOT = {
+  id: PENDING_USERBOT_ID, owner_id: OWNER_ID, account_type: 'userbot', tg_account_id: '9101',
+  tg_username: 'ub-pending', session_data: 'enc:session', proxy_id: null,
+  runtime_status: 'pending_activation', proxies: null
+};
+
+// Среда сценариев инвайта от соседа: одна площадка (public_channel '-100111'),
+// бот-инвайт всегда падает (бота в площадке нет), username-вступление падает
+// (CHAT_INVITE_REQUIRED). Первая проверка членства вступающего прячет его запись
+// в членах (иначе до join дело не дойдёт), повторная — видит (после импорта инвайта).
+function makePeerInviteEnv({
+  actorRights = [],
+  userbots = [FIXTURE_USERBOT, PEER_USERBOT],
+  membersForJoiner = true,
+  joinChannelError = new Error('CHAT_INVITE_REQUIRED'),
+  exportInviteError = null,
+  exportInviteResult = { className: 'ChatInviteExported', link: 'https://t.me/+peerinvite777' },
+  botInviteError = new Error('Forbidden: bot is not a member of the supergroup chat')
+} = {}) {
+  const members = new Map();
+  members.set('-100111:7001', FULL_BOT_RIGHTS);
+  let joinerChecks = 0;
+  if (membersForJoiner) members.set('-100111:8001', { status: 'member' });
+
+  const adminByChat = { '-100111': PLAIN_PARTICIPANT };
+  const botApi = makeBotApi({
+    members,
+    adminByChat,
+    exportInviteError: botInviteError,
+    createInviteError: botInviteError,
+    getMemberErrorFor: membersForJoiner
+      ? (_chatId, userId) => (userId === '8001' && joinerChecks++ === 0)
+        ? new Error('Bad Request: user not found')
+        : null
+      : null
+  });
+
+  const peers = {
+    '-100111': new Api.InputPeerChannel({ channelId: BigInt('1011'), accessHash: BigInt('1') })
+  };
+  const joiner = makeUserbotClient({
+    peers,
+    participantResults: adminByChat,
+    joinChannelError
+  });
+  const exporter = makeUserbotClient({ peers, exportInviteError, exportInviteResult });
+
+  const factoryCalls = [];
+  const clientFactory = async (account) => {
+    factoryCalls.push(String(account.id));
+    return String(account.id) === PEER_USERBOT_ID ? exporter.client : joiner.client;
+  };
+
+  const supabase = makeMockSupabase({
+    bots: [FIXTURE_BOT],
+    userbots,
+    channels: [FIXTURE_CHANNELS[0]],
+    contours: [{
+      bot_id: BOT_ID, owner_id: OWNER_ID,
+      public_channel_id: CH1_ID, paid_channel_id: null,
+      public_chat_id: null, paid_chat_id: null,
+      userbot_mode: 'single', selected_userbot_id: USERBOT_ID, selected_userbot_ids: []
+    }],
+    bindings: [{ bot_id: BOT_ID, userbot_id: USERBOT_ID, is_active: true }],
+    actorRights
+  });
+
+  const service = makeService(supabase, botApi, joiner.client, clientFactory);
+  return { supabase, botApi, joiner, exporter, factoryCalls, service, adminByChat, peers };
+}
+
+function makeActorRightRow(actorId, state, target = 'public_channel') {
+  return {
+    owner_id: OWNER_ID, bot_id: BOT_ID, actor_type: 'userbot', actor_id: actorId,
+    target, channel_id: CH1_ID, state, is_admin: true, flags: {},
+    warnings: [], message: '', checked_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+  };
+}
+
+function makeService(supabase, botApi, client, clientFactory = null) {
   return new ContourAdminRightsService(supabase, {
     botApiFactory: async () => botApi.api,
-    userbotClientFactory: async () => client.client,
+    userbotClientFactory: clientFactory || (async () => client.client),
     sleep: async () => {},
     now: () => 1758000000000
   });
@@ -665,6 +794,85 @@ console.log('\n[ensureAll] basic group: GetFullChat branch, self found by userId
     'no channels.GetParticipant for basic group'
   );
   assertEqual(botApi.calls.promote.length, 0, 'no promote needed for basic-group admin');
+}
+
+// ---------------------------------------------------------------------------
+// 12. peer-invite: бот-инвайт падает → юзербот-сосед приглашает, revoke + disconnect
+// ---------------------------------------------------------------------------
+console.log('\n[ensureAll] peer userbot invite: joiner joins via peer admin invite');
+{
+  const { botApi, joiner, exporter, factoryCalls, service } = makePeerInviteEnv({
+    actorRights: [makeActorRightRow(PEER_USERBOT_ID, 'ok')]
+  });
+  const res = await service.ensureAll(OWNER_ID, { botId: BOT_ID, autoJoin: true });
+
+  const cell = res.results.find((r) => r.actor_type === 'userbot' && r.target === 'public_channel');
+  assertEqual(cell?.state, 'ok', 'join via peer invite confirmed → cell ok');
+  assertEqual(botApi.calls.exportInvite, ['-100111'], 'bot export attempted (and failed) before peer invite');
+  assertEqual(botApi.calls.createInvite, ['-100111'], 'bot createInvite attempted (and failed) before peer invite');
+  assertTrue(joiner.calls.invoke.some((r) => r instanceof Api.channels.JoinChannel), 'JoinChannel tried before peer invite');
+  assertEqual(joiner.calls.imports, ['peerinvite777'], 'joiner imported hash from peer-exported link');
+  assertEqual(exporter.calls.exportInvites.length, 1, 'peer exported invite exactly once');
+  assertEqual(exporter.calls.revokeExports, ['https://t.me/+peerinvite777'], 'revoke attempted with the exported link');
+  assertEqual(exporter.calls.disconnect, 1, 'exporter client disconnected once');
+  assertEqual(factoryCalls.filter((id) => id === PEER_USERBOT_ID).length, 1, 'exporter client opened exactly once');
+  assertTrue(
+    (cell.warnings || []).some((w) => w.includes('только что вступил')),
+    'cell notes fresh join',
+    cell?.warnings
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 13. экспорт у соседа падает → предупреждение, structured failure, не throw
+// ---------------------------------------------------------------------------
+console.log('\n[ensureAll] peer invite: export throws → warning, structured failure');
+{
+  const { joiner, exporter, service } = makePeerInviteEnv({
+    actorRights: [makeActorRightRow(PEER_USERBOT_ID, 'ok')],
+    exportInviteError: new Error('CHAT_ADMIN_REQUIRED')
+  });
+  const res = await service.ensureAll(OWNER_ID, { botId: BOT_ID, autoJoin: true });
+
+  const cell = res.results.find((r) => r.actor_type === 'userbot' && r.target === 'public_channel');
+  assertEqual(cell?.state, 'missing_membership', 'export failure → structured missing_membership cell');
+  assertTrue(
+    (cell?.warnings || []).some((w) => w.includes('не смог сделать инвайт') && w.includes('ub2admin')),
+    'warning names the failed peer exporter',
+    cell?.warnings
+  );
+  assertTrue(
+    String(cell?.message || '').includes('ни одним из способов'),
+    'cell message lists all join methods failed',
+    cell?.message
+  );
+  assertEqual(joiner.calls.imports, [], 'no import attempted without a link');
+  assertEqual(exporter.calls.disconnect, 1, 'exporter still disconnected after export failure');
+  assertEqual(exporter.calls.revokeExports, [], 'no revoke attempted without exported link');
+}
+
+// ---------------------------------------------------------------------------
+// 14. вступающий исключён из кандидатов; state=error и pending_activation — не кандидаты
+// ---------------------------------------------------------------------------
+console.log('\n[ensureAll] peer invite: joining actor excluded, bad candidates filtered out');
+{
+  const { joiner, exporter, factoryCalls, service } = makePeerInviteEnv({
+    actorRights: [
+      makeActorRightRow(USERBOT_ID, 'ok'),
+      makeActorRightRow(PENDING_USERBOT_ID, 'ok'),
+      makeActorRightRow(PEER_USERBOT_ID, 'error')
+    ],
+    userbots: [FIXTURE_USERBOT, PEER_USERBOT, PENDING_USERBOT],
+    membersForJoiner: false
+  });
+  const res = await service.ensureAll(OWNER_ID, { botId: BOT_ID, autoJoin: true });
+
+  const cell = res.results.find((r) => r.actor_type === 'userbot' && r.target === 'public_channel');
+  assertEqual(cell?.state, 'missing_membership', 'no eligible candidates → missing_membership');
+  assertEqual(exporter.calls.exportInvites, [], 'no invite export attempted');
+  assertEqual(factoryCalls.filter((id) => id === PEER_USERBOT_ID).length, 0, 'state=error row never opened as exporter');
+  assertEqual(factoryCalls.filter((id) => id === PENDING_USERBOT_ID).length, 0, 'pending_activation row never opened as exporter');
+  assertEqual(joiner.calls.imports, [], 'no self-invite import attempted');
 }
 
 console.log(`\n=== contour-admin-rights: ${passes} passed, ${failures} failed ===`);

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Users, Bot, MessageSquare, Loader2, Check, Plus } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { fetchClientBaseMembers } from '../api/client-bases.js';
+import { fetchMessagingCapacity } from '../api/messaging.js';
 import { memberDisplayName, paymentBadge, coverageLabel, coverageChannels } from './bases/shared.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { getProductTierRules } from '../app/productTier.js';
@@ -118,6 +119,7 @@ export function BroadcastPage() {
   const [pendingGroups, setPendingGroups] = useState([]);
   const [addingGroups, setAddingGroups] = useState(false);
   const [broadcastFlags, setBroadcastFlags] = useState({ userbot_broadcast_enabled: false });
+  const [capacity, setCapacity] = useState(null);
   const pollRef = useRef(null);
   const memberIndexRef = useRef(new Map());
 
@@ -165,6 +167,16 @@ export function BroadcastPage() {
     return key(preparation.userbot_ids) === key(poolIds);
   }, [preparation, poolIds]);
   const selectionMatchesPreparation = Boolean(preparation && baseMatchesPreparation && poolMatchesPreparation);
+
+  // Сколько контактов реально уйдёт в рассылку при текущем выборе. Не знаем (базы по каналам) — null.
+  const audienceSize = clientSelectionActive
+    ? selectedIds.length
+    : form.base.startsWith('client:')
+      ? members.total
+      : form.base === 'manual'
+        ? (manual.tg_user_ids || []).length
+        : null;
+  const poolKey = useMemo(() => [...poolIds].map(String).sort().join(','), [poolIds]);
 
   const baseOptions = useMemo(() => {
     const options = state.clientBases.map((b) => ({
@@ -361,6 +373,30 @@ export function BroadcastPage() {
       }
     };
   }, [accessToken, preparation?.id, preparation?.status]);
+
+  // Оценка темпа: потянет ли пул юзерботов эту базу. Обновляем с дебаунсом,
+  // пока виден шаг «Юзерботы» и размер аудитории известен; не получили — блок просто не показываем.
+  useEffect(() => {
+    if (step !== 'userbots' || !accessToken || !audienceSize) {
+      setCapacity(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setCapacity(null);
+    const timer = window.setTimeout(() => {
+      fetchMessagingCapacity(accessToken, audienceSize)
+        .then((data) => {
+          if (!cancelled) setCapacity(data);
+        })
+        .catch(() => {
+          if (!cancelled) setCapacity(null);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [step, accessToken, audienceSize, poolKey]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -931,6 +967,26 @@ export function BroadcastPage() {
               </div>
               </div>
             )}
+            {capacity && audienceSize > 0 && capacity.poolSize === 0 ? (
+              <div className="mt-4 rounded-2xl border border-border-default bg-feedback-warning-bg px-4 py-3 text-sm font-bold text-feedback-warning-text">
+                Рабочих юзерботов нет — рассылать некому. Подключи хотя бы одного на{' '}
+                <Link to="/userbots" className="underline hover:opacity-80">/app/userbots</Link>
+                : базе на {capacity.audienceSize} контактов нужно ~{capacity.botsNeeded} юзерботов на один день.
+              </div>
+            ) : null}
+            {capacity && audienceSize > 0 && capacity.poolSize > 0 && capacity.days != null ? (
+              capacity.days <= 1 ? (
+                <div className="mt-4 rounded-2xl border border-border-default bg-surface-subtle px-4 py-3 text-sm font-medium text-ink-body">
+                  Пул потянет базу за ~1 день — безопасный темп ~{capacity.dailyCap} ЛС/день на юзербота.
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-border-default bg-feedback-warning-bg px-4 py-3 text-sm font-bold text-feedback-warning-text">
+                  Базе на {capacity.audienceSize} контактов нужно ~{capacity.botsNeeded} юзерботов, чтобы разойтись за день.
+                  У тебя {capacity.poolSize} — растянется на ~{capacity.days} дн. Это нормально: роутер сам держит
+                  безопасный темп, чтобы Telegram не забанил аккаунты.
+                </div>
+              )
+            ) : null}
             {preparation && !selectionMatchesPreparation ? (
               <div className="mt-4 text-sm text-amber-700 font-medium">
                 Выбор изменился — нужна новая подготовка.

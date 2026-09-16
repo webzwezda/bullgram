@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Loader2, RefreshCw, Square } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase.js';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { cancelBroadcastCampaign } from '../../api/messaging.js';
 import { CampaignReplies } from './CampaignReplies.jsx';
 import { STATUS_LABELS, campaignStatusTone } from './PreparationRunner.jsx';
 import {
@@ -16,6 +18,8 @@ const AUDIENCE_LABELS = {
 };
 
 const CAMPAIGN_ACTIVE_STATUSES = new Set(['queued', 'sending']);
+
+const btnStop = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border-default bg-surface-card text-xs font-bold text-action-destructive hover:bg-feedback-error-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap';
 
 const FAILURES_PAGE = 25;
 
@@ -50,6 +54,7 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefr
   const campaignActive = CAMPAIGN_ACTIVE_STATUSES.has(campaign.status);
 
   const [failures, setFailures] = useState({ open: false, loading: false, rows: [], total: null, page: 0 });
+  const [cancelling, setCancelling] = useState(false);
   // Защита от гонок: ответ по прошлой кампании/странице не перезапишет свежий (паттерн reqId из CustomersPage)
   const failuresReqIdRef = useRef(0);
 
@@ -91,6 +96,25 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefr
     return () => window.clearInterval(timer);
   }, [campaignActive, onRefresh, campaign.id]);
 
+  // «Стоп» активной кампании: подтверждение → cancel → рефреш статуса в списке.
+  async function stopCampaign() {
+    if (cancelling) return;
+    const confirmed = window.confirm(
+      `Остановить рассылку «${campaign.title}»? Уже отправленные сообщения останутся, остальные доставляться не будут.`
+    );
+    if (!confirmed) return;
+    setCancelling(true);
+    try {
+      await cancelBroadcastCampaign(accessToken, campaign.id);
+      toast.success('Рассылка остановлена');
+      if (typeof onRefresh === 'function') await onRefresh();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   const progressDone = (counts.sent || 0) + (counts.failed || 0);
   const progressPct = counts.total > 0 ? Math.min(100, Math.round((progressDone / counts.total) * 100)) : null;
 
@@ -120,6 +144,13 @@ export function CampaignDetail({ accessToken, userbots, campaign, onBack, onRefr
             <StatusBadge tone={campaignStatusTone(campaign.status)}>
               {STATUS_LABELS[campaign.status] || campaign.status}
             </StatusBadge>
+            {campaignActive ? (
+              <button type="button" className={btnStop} disabled={cancelling} onClick={stopCampaign}>
+                {cancelling
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Останавливаем...</>
+                  : <><Square className="w-4 h-4" /> Стоп</>}
+              </button>
+            ) : null}
             {typeof onRefresh === 'function' ? (
               <button type="button" className={`${btnGhost} !px-3 !py-1.5`} onClick={onRefresh}>
                 <RefreshCw className="w-4 h-4" /> Обновить

@@ -72,6 +72,48 @@ function isOfficialBotWebhookFoundationError(error) {
         || String(error?.message || '').includes('webhook_mode');
 }
 
+const CONTOUR_ACTOR_RIGHTS_SELECT = 'bot_id, actor_type, actor_id, target, state, is_admin, checked_at';
+
+// Права акторов контура по площадкам (official bot + юзерботы) для ботов владельца.
+async function loadContourActorRights(supabase, ownerId, botIds) {
+    const ids = Array.from(new Set((botIds || []).map((id) => String(id)).filter(Boolean)));
+    if (!ids.length) return [];
+    const { data, error } = await supabase
+        .from('sales_contour_actor_rights')
+        .select(CONTOUR_ACTOR_RIGHTS_SELECT)
+        .eq('owner_id', ownerId)
+        .in('bot_id', ids);
+    if (error) throw error;
+    return data || [];
+}
+
+// Чистая группировка: строки sales_contour_actor_rights → { [target]: [{ actor_type,
+// actor_id, state, is_admin, checked_at }] }. Внутри площадки official_bot идёт первым,
+// дальше юзерботы; внутри одного типа — свежий checked_at первым.
+export function buildActorRightsByTarget(rows) {
+    const officialBotRank = (type) => (String(type) === 'official_bot' ? 0 : 1);
+    const sorted = [...(Array.isArray(rows) ? rows : [])].sort((a, b) => {
+        const rankDiff = officialBotRank(a?.actor_type) - officialBotRank(b?.actor_type);
+        if (rankDiff !== 0) return rankDiff;
+        return new Date(b?.checked_at || 0) - new Date(a?.checked_at || 0);
+    });
+
+    const byTarget = {};
+    for (const row of sorted) {
+        const target = String(row?.target || '').trim();
+        if (!target) continue;
+        if (!byTarget[target]) byTarget[target] = [];
+        byTarget[target].push({
+            actor_type: String(row.actor_type || ''),
+            actor_id: String(row.actor_id || ''),
+            state: String(row.state || 'unknown'),
+            is_admin: !!row.is_admin,
+            checked_at: row.checked_at || null
+        });
+    }
+    return byTarget;
+}
+
 function getOfficialBotWebhookOrigin() {
     return String(
         process.env.OFFICIAL_BOT_WEBHOOK_ORIGIN
@@ -712,9 +754,30 @@ export default function (supabase) {
         }
     });
 
+    // Права всех акторов контура (official bot + юзерботы) по площадкам, из
+    // sales_contour_actor_rights. Таблицы может не быть (SQL не применён) или она пуста —
+    // тогда отдаём пустой объект, ничего не ломая в основном ответе.
     router.get('/contours', authenticateUser, async (req, res) => {
         try {
             const data = await salesContourService.getContoursOverview(req.user.id);
+            const bots = Array.isArray(data?.bots) ? data.bots : [];
+            let actorRows = [];
+            try {
+                actorRows = await loadContourActorRights(supabase, req.user.id, bots.map((bot) => bot.id));
+            } catch (actorError) {
+                console.warn('[contours] actor rights load failed (fail-soft):', actorError?.message || actorError);
+            }
+            const actorRowsByBotId = new Map();
+            for (const row of actorRows) {
+                const botKey = String(row?.bot_id || '');
+                if (!botKey) continue;
+                if (!actorRowsByBotId.has(botKey)) actorRowsByBotId.set(botKey, []);
+                actorRowsByBotId.get(botKey).push(row);
+            }
+            data.bots = bots.map((bot) => ({
+                ...bot,
+                actor_rights_by_target: buildActorRightsByTarget(actorRowsByBotId.get(String(bot.id)) || [])
+            }));
             res.json(data);
         } catch (error) {
             return sendOfficialBotError(res, error, 'Не получилось загрузить sales contours');

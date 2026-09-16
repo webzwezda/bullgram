@@ -66,6 +66,17 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 
 - `POST /api/official-bot/add` - Добавить бота по токену
 
+### Рассылки (`/api/broadcast`)
+
+- `POST /api/broadcast/campaigns/:id/cancel` - Стоп активной рассылки (queued/sending → `cancelled`); чужая или не активная → 404
+
+### Сообщения (`/api/messaging`)
+
+Единая точка исходящих ЛС через юзерботов: квоты на юзербота, паузы, ротация пула (`backend/services/messaging-router.service.js`, план: `docs/plans/2026-09-16-messaging-router.md`).
+
+- `GET /api/messaging/capacity?audience_size=N` - Оценка ёмкости: сколько юзерботов нужно на базу N и на сколько дней растянется отправка
+- `POST /api/messaging/send` - Точечная ЛС через юзербота с `idempotency_key`; под тем же гейтом `USERBOT_DM_ENABLED`, что и `/api/userbot/send-message`
+
 ## Установка
 
 ```bash
@@ -121,8 +132,16 @@ USERBOT_AUTO_KICK_FALLBACK_ENABLED=false
 # DM after auto-kick via userbot
 USERBOT_AUTO_KICK_DM_ENABLED=false
 
+# abandoned-cart follow-up via userbot when the official bot is blocked
+USERBOT_ABANDONED_DM_ENABLED=false
+
 # userbot-based broadcasts
 USERBOT_BROADCAST_ENABLED=false
+
+# messaging router: per-userbot DM quotas (hourly/daily) and send jitter, percent
+USERBOT_DM_HOURLY_CAP=20
+USERBOT_DM_DAILY_CAP=50
+USERBOT_DM_JITTER_PERCENT=20
 
 # broadcast preparation: auto-join userbots into groups for DM touchpoints
 USERBOT_AUTO_JOIN_ENABLED=false

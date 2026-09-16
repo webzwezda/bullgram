@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ListChecks, MessageCircle } from 'lucide-react';
+import { ListChecks, Loader2, MessageCircle, Square } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiRequest } from '../api/client.js';
+import { cancelBroadcastCampaign } from '../api/messaging.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { supabase } from '../lib/supabase.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
@@ -16,6 +18,10 @@ const AUDIENCE_LABELS = {
   channel_audience_members: 'База по каналам',
   manual_list: 'Ручная выборка'
 };
+
+const CAMPAIGN_CANCELLABLE_STATUSES = new Set(['queued', 'sending']);
+
+const btnStop = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border-default bg-surface-card text-xs font-bold text-action-destructive hover:bg-feedback-error-bg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap';
 
 function formatWhen(value) {
   if (!value) return '—';
@@ -55,6 +61,7 @@ export function BroadcastHistoryPage() {
   const [activeCampaignId, setActiveCampaignId] = useState(
     () => new URLSearchParams(window.location.search).get('campaign')
   );
+  const [cancellingId, setCancellingId] = useState(null);
 
   useEffect(() => {
     if (!accessToken || !user?.id) return undefined;
@@ -97,6 +104,25 @@ export function BroadcastHistoryPage() {
       '',
       id ? `/app/broadcast/history?campaign=${encodeURIComponent(id)}` : '/app/broadcast/history'
     );
+  }
+
+  // «Стоп» для активной кампании: подтверждение → cancel → тихий рефреш списка.
+  async function stopCampaign(campaign) {
+    if (!accessToken || cancellingId) return;
+    const confirmed = window.confirm(
+      `Остановить рассылку «${campaign.title}»? Уже отправленные сообщения останутся, остальные доставляться не будут.`
+    );
+    if (!confirmed) return;
+    setCancellingId(campaign.id);
+    try {
+      await cancelBroadcastCampaign(accessToken, campaign.id);
+      toast.success('Рассылка остановлена');
+      await refreshCampaigns();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setCancellingId(null);
+    }
   }
 
   // Тихий рефреш списка для авто-опроса активной кампании (queued/sending) и кнопки «Обновить»
@@ -205,13 +231,27 @@ export function BroadcastHistoryPage() {
                       </StatusBadge>
                     </Td>
                     <Td right>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
-                        onClick={() => openCampaign(campaign.id)}
-                      >
-                        <MessageCircle className="w-3.5 h-3.5" /> Ответы
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {CAMPAIGN_CANCELLABLE_STATUSES.has(campaign.status) ? (
+                          <button
+                            type="button"
+                            className={btnStop}
+                            disabled={cancellingId === campaign.id}
+                            onClick={() => stopCampaign(campaign)}
+                          >
+                            {cancellingId === campaign.id
+                              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Останавливаем...</>
+                              : <><Square className="w-3.5 h-3.5" /> Стоп</>}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors"
+                          onClick={() => openCampaign(campaign.id)}
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" /> Ответы
+                        </button>
+                      </div>
                     </Td>
                   </Tr>
                 ))}

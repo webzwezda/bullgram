@@ -40,6 +40,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const INTER_CELL_DELAY_MS = 500;
 const MEMBERSHIP_WAIT_ATTEMPTS = 3;
 const MEMBERSHIP_WAIT_INTERVAL_MS = 2000;
+const PEER_INVITE_MAX_CANDIDATES = 3;
+const PEER_INVITE_DELAY_MS = 2000;
 
 // Копия CONTOUR_TARGET_CONFIG из sales-contour.service.js (там не экспортируется, а
 // добавлять экспорт сверх согласованных правок нельзя). Поля и семантика должны совпадать.
@@ -263,7 +265,7 @@ export class ContourAdminRightsService {
 
             const actorResults = actor.type === 'official_bot'
                 ? await this.ensureOfficialBotActor(botApi, actor, targets)
-                : await this.ensureUserbotActor(botApi, actor, targets, { autoJoin });
+                : await this.ensureUserbotActor(botApi, actor, targets, { autoJoin, ownerId, botId });
 
             for (const result of actorResults) {
                 results.push(result);
@@ -376,7 +378,7 @@ export class ContourAdminRightsService {
         return results;
     }
 
-    async ensureUserbotActor(botApi, actor, targets, { autoJoin }) {
+    async ensureUserbotActor(botApi, actor, targets, { autoJoin, ownerId, botId }) {
         const results = [];
         const userbotTgId = String(actor.account.tg_account_id || '').trim();
 
@@ -427,7 +429,9 @@ export class ContourAdminRightsService {
                 try {
                     cell = await this.ensureUserbotTarget(botApi, client, base, channel, {
                         autoJoin,
-                        userbotTgId
+                        userbotTgId,
+                        ownerId,
+                        botId
                     });
                 } catch (error) {
                     // страховка: всё, что не поймали внутри, классифицируем здесь
@@ -460,7 +464,7 @@ export class ContourAdminRightsService {
         return results;
     }
 
-    async ensureUserbotTarget(botApi, client, base, channel, { autoJoin, userbotTgId }) {
+    async ensureUserbotTarget(botApi, client, base, channel, { autoJoin, userbotTgId, ownerId, botId }) {
         const tgChatId = channel.tg_chat_id;
         const label = base.label;
         const warnings = [];
@@ -516,7 +520,12 @@ export class ContourAdminRightsService {
                 };
             }
 
-            const joined = await this.joinUserbotToChannel(botApi, client, channel, warnings);
+            const joined = await this.joinUserbotToChannel(botApi, client, channel, warnings, {
+                ownerId,
+                botId,
+                target: base.target,
+                excludeActorId: base.actor_id
+            });
             if (!joined) {
                 return {
                     ...base,
@@ -792,8 +801,10 @@ export class ContourAdminRightsService {
     }
 
     // Стратегия вступления из joinSingleTarget: публичный username → JoinChannel,
-    // приватная площадка → инвайт-ссылка через бота + ImportChatInvite.
-    async joinUserbotToChannel(botApi, client, channel, warnings) {
+    // приватная площадка → инвайт-ссылка через бота + ImportChatInvite,
+    // и третий способ — инвайт от юзербота-соседа, уже подтверждённого внутри площадки
+    // (выручает, когда official-бота в площадке нет и бот-инвайт невозможен).
+    async joinUserbotToChannel(botApi, client, channel, warnings, { ownerId, botId, target, excludeActorId } = {}) {
         const tgChatId = channel.tg_chat_id;
         const username = String(channel.username || '').trim().replace(/^@/, '');
 
@@ -846,7 +857,133 @@ export class ContourAdminRightsService {
             }
         }
 
+        // 3. Инвайт от юзербота-соседа. Неудача соседа — только предупреждение,
+        // наверх летит лишь flood_wait самого вступающего (как у бот-инвайта).
+        return await this.tryJoinViaPeerUserbotInvite({
+            ownerId,
+            botId,
+            target,
+            channel,
+            client,
+            excludeActorId,
+            warnings
+        });
+    }
+
+    // Инвайт от юзербота-соседа, который уже сидит в площадке. Кандидаты — только
+    // подтверждённые ячейки прав этой же площадки (ok / owner_appointed), сам
+    // вступающий исключён: сам себя он пригласить не может.
+    // Метод не бросает исключений, кроме flood_wait вступающего на ImportChatInvite.
+    async tryJoinViaPeerUserbotInvite({ ownerId, botId, target, channel, client, excludeActorId, warnings }) {
+        if (!ownerId || !botId || !target) return false;
+
+        const candidates = await this.loadPeerInviteCandidates(ownerId, botId, target, excludeActorId);
+        if (!candidates.length) return false;
+
+        for (let index = 0; index < candidates.length; index++) {
+            const candidate = candidates[index];
+            const who = candidate.tg_username || candidate.id;
+            if (index > 0) await this.deps.sleep(PEER_INVITE_DELAY_MS);
+
+            let exporter = null;
+            let peer = null;
+            let link = null;
+            try {
+                exporter = await this.deps.userbotClientFactory(candidate);
+                peer = await exporter.getInputEntity(channel.tg_chat_id);
+                // telegram@2.26.x: channels.ExportInvite больше нет — messages.ExportChatInvite
+                // принимает resolved-пир и канала/супергруппы, и базисной группы.
+                const exported = await exporter.invoke(new Api.messages.ExportChatInvite({ peer }));
+                link = exported?.link || null;
+            } catch (error) {
+                warnings.push(`юзербот ${who} не смог сделать инвайт (${buildErrorMessage(error)}) — пробуем дальше`);
+                // ссылки нет — отзывать нечего, просто отпускаем клиента соседа
+                if (exporter?.disconnect) await exporter.disconnect().catch(() => {});
+                continue;
+            }
+
+            const hash = extractInviteHash(link);
+            if (!hash) {
+                warnings.push(`инвайт-ссылка от юзербота ${who} без хеша — пробуем дальше`);
+                await this.revokePeerInvite(exporter, peer, link);
+                continue;
+            }
+
+            try {
+                await client.invoke(new Api.messages.ImportChatInvite({ hash }));
+                return true;
+            } catch (error) {
+                const classified = classifyTelegramError(error, 'member');
+                if (classified === 'flood_wait') throw error;
+                if (classified === 'already_member') return true;
+                warnings.push(`вступление по инвайту от юзербота ${who} не получилось (${buildErrorMessage(error)})`);
+            } finally {
+                await this.revokePeerInvite(exporter, peer, link);
+            }
+        }
+
         return false;
+    }
+
+    // Отзыв инвайта и отключение клиента соседа. Best-effort: прав на отзыв у соседа
+    // может не быть, провал отзыва не должен влиять на результат вступления.
+    async revokePeerInvite(exporter, peer, link) {
+        if (!exporter) return;
+        if (link && peer) {
+            try {
+                await exporter.invoke(new Api.messages.EditExportedChatInvite({ peer, link, revoked: true }));
+            } catch {
+                // нет прав на отзыв — ссылку отзовёт владелец площадки или она истечёт сама
+            }
+        }
+        if (exporter.disconnect) {
+            await exporter.disconnect().catch(() => {});
+        }
+    }
+
+    // Соседи-приглашатели: actor_id из подтверждённых ячеек прав этой площадки →
+    // полные аккаунты tg_accounts с той же отбраковкой, что и акторы
+    // (shop-reserved / pending_activation / restricted — мимо).
+    async loadPeerInviteCandidates(ownerId, botId, target, excludeActorId) {
+        let actorIds = [];
+        try {
+            const { data, error } = await this.supabase
+                .from('sales_contour_actor_rights')
+                .select('actor_id')
+                .eq('owner_id', ownerId)
+                .eq('bot_id', botId)
+                .eq('target', target)
+                .eq('actor_type', 'userbot')
+                .in('state', ['ok', 'owner_appointed']);
+            if (error) throw error;
+            actorIds = [...new Set((data || [])
+                .map((row) => normalizeUuidValue(row.actor_id))
+                .filter((id) => id && id !== excludeActorId))];
+        } catch (error) {
+            console.error('[contour-admin-rights] failed to load peer-invite candidates:', error.message);
+            return [];
+        }
+
+        if (!actorIds.length) return [];
+
+        const [reservedUserbotIds, response] = await Promise.all([
+            loadReservedUserbotIds(this.supabase, ownerId),
+            this.supabase
+                .from('tg_accounts')
+                .select('id, owner_id, account_type, tg_account_id, tg_username, session_data, proxy_id, runtime_status, proxies(id, name, is_working, last_check_country, last_check_country_code)')
+                .eq('owner_id', ownerId)
+                .eq('account_type', 'userbot')
+                .in('id', actorIds)
+        ]);
+
+        if (response.error) {
+            console.error('[contour-admin-rights] failed to load peer-invite accounts:', response.error.message);
+            return [];
+        }
+
+        return (response.data || [])
+            .filter((userbot) => this.isUserbotEligible(userbot, reservedUserbotIds))
+            .slice(0, PEER_INVITE_MAX_CANDIDATES);
     }
 
     floodWaitCell(base, error, subject = 'юзербота') {
