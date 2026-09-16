@@ -14,6 +14,7 @@ import {
     getStats as getStatsImpl
 } from './autopost/queue.js';
 import { registerAllHandlers } from './autopost/handlers/index.js';
+import { buildSeedReactionAttempts } from './autopost/handlers/reactions.js';
 import {
     setGuestSession,
     getGuestSession,
@@ -279,7 +280,7 @@ export class AutopostService {
      * в scheduler / post_now / sug_post_now. Дополнительно сохраняет
      * posted_message_ids для последующего lookup'а реакций.
      *
-     * Если у channel.seed_reaction_emoji выставлено значение (например '❤️'),
+     * Если у channel.seed_reaction_emoji выставлено значение (например '❤'),
      * бот сразу ставит эту реакцию на первое сообщение поста — social proof.
      * Боты не получают собственные message_reaction апдейты → это НЕ засчитывается
      * в reaction_total, счётчик остаётся чистым по реальным юзерам.
@@ -293,22 +294,27 @@ export class AutopostService {
         // Реакцию ставим ДО записи в БД — она должна появиться вместе с постом,
         // а не после DB-апдейта. Если setMessageReaction упадёт (нет прав),
         // пост всё равно считается опубликованным.
-        if (channel?.seed_reaction_emoji && messageIds && messageIds.length > 0) {
-            // seed_reaction_emoji может содержать список через запятую (до 3 реакций)
-            const emojis = String(channel.seed_reaction_emoji).split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3);
-            try {
-                await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0],
-                    emojis.map((emoji) => ({ type: 'emoji', emoji }))
-                );
-            } catch (e) {
-                // Часть набора реакций могла не пройти — пробуем только первую
+        //
+        // Лимит не-премиум бота — 1 реакция на сообщение, поэтому шлём попытки
+        // по одной: первая — основная, остальные — запасные. Список уже
+        // нормализован (❤️ → ❤, без VS16 — иначе Telegram даёт REACTION_INVALID),
+        // пустой/мусорный список → Telegram не вызываем вовсе.
+        const seedAttempts = buildSeedReactionAttempts(channel?.seed_reaction_emoji);
+        if (seedAttempts.length > 0 && messageIds && messageIds.length > 0) {
+            let seeded = false;
+            for (const emoji of seedAttempts) {
                 try {
                     await bot.telegram.setMessageReaction(item.target_channel_id, messageIds[0], [
-                        { type: 'emoji', emoji: emojis[0] }
+                        { type: 'emoji', emoji }
                     ]);
-                } catch (e2) {
-                    console.error('[Autopost] seed reaction failed (non-fatal):', e2.message);
+                    seeded = true;
+                    break;
+                } catch (e) {
+                    console.error(`[Autopost] seed reaction attempt failed (chat=${item.target_channel_id} message=${messageIds[0]} emoji="${emoji}"):`, e.message);
                 }
+            }
+            if (!seeded) {
+                console.error(`[Autopost] seed reaction не удалась ни одной попыткой из ${seedAttempts.length} (chat=${item.target_channel_id} message=${messageIds[0]}) — проверь, что эмодзи разрешён в настройках реакций канала (non-fatal, пост опубликован)`);
             }
         }
 

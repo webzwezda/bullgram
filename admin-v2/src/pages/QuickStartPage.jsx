@@ -44,7 +44,8 @@ https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 -d '{"target_channel_ids":["-100111","-100222"],"caption":"Hello","publish_now":true}'`;
 
 function parseReactionEmojis(value) {
-  return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+  // VS16 (U+FE0F) вырезаем: в БД/Telegram хранится каноничное '❤', без селектора.
+  return String(value || '').split(',').map(s => s.trim().replace(/\uFE0F/g, '')).filter(Boolean);
 }
 
 export function QuickStartPage() {
@@ -1260,7 +1261,7 @@ export function QuickStartPage() {
                         <div className="space-y-1">
                           <label htmlFor={`seed-reaction-toggle-${tab}`} className="text-sm font-bold text-slate-800 block">Автореакция на посты</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                            Бот будет ставить выбранные реакции под каждый новый пост сразу после публикации (до 3 шт.).
+                            Бот ставит одну реакцию — остальные запасные, если первая не пройдёт. Эмодзи должен быть разрешён в настройках реакций самого канала.
                           </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
@@ -1282,27 +1283,29 @@ export function QuickStartPage() {
                           {[
                             { emoji: '👍', label: 'Лайк' },
                             { emoji: '👎', label: 'Дизлайк' },
-                            { emoji: '❤️', label: 'Сердце' },
+                            { emoji: '❤️', value: '❤', label: 'Сердце' },
                             { emoji: '🔥', label: 'Огонь' },
                             { emoji: '🥰', label: 'Восхищение' },
                             { emoji: '🎉', label: 'Праздник' }
                           ].map(opt => {
+                            // value — то, что уходит в БД ('❤' без VS16); emoji — что рисуем.
+                            const val = opt.value || opt.emoji;
                             const activeReactions = parseReactionEmojis(config.seedReactionEmoji);
-                            const active = activeReactions.includes(opt.emoji);
+                            const active = activeReactions.includes(val);
                             return (
                               <button
-                                key={opt.emoji}
+                                key={val}
                                 type="button"
                                 onClick={() => setChannelConfigs(prev => {
                                   const cur = parseReactionEmojis(prev[tab].seedReactionEmoji);
                                   let next;
-                                  if (cur.includes(opt.emoji)) {
-                                    next = cur.filter(x => x !== opt.emoji);
+                                  if (cur.includes(val)) {
+                                    next = cur.filter(x => x !== val);
                                   } else if (cur.length >= 3) {
                                     toast.error('Максимум 3 реакции на пост');
                                     return prev;
                                   } else {
-                                    next = [...cur, opt.emoji];
+                                    next = [...cur, val];
                                   }
                                   return { ...prev, [tab]: { ...prev[tab], seedReactionEmoji: next.length ? next.join(',') : null } };
                                 })}

@@ -57,3 +57,31 @@ export function computeReactionDelta(reaction) {
     if (!had && has) return 1;
     return 0;
 }
+
+/**
+ * Seed-реакция: разбор строки из настроек канала («❤️, 👍») в упорядоченный
+ * список попыток. Первая — основная, остальные — запасные: лимит не-премиум
+ * бота — 1 реакция на сообщение, поэтому каждая попытка шлёт ровно один эмодзи.
+ *
+ * U+FE0F (variation selector) вырезается: Telegram в setMessageReaction ждёт
+ * каноничное значение ('❤'), с селектором ('❤️') возвращает REACTION_INVALID.
+ * Пустые элементы и дубли отбрасываются, результат срезается до maxAttempts.
+ */
+export function buildSeedReactionAttempts(raw, { maxAttempts = 3 } = {}) {
+    if (raw === null || raw === undefined || maxAttempts <= 0) return [];
+    const seen = new Set();
+    const attempts = [];
+    for (const part of String(raw).split(',')) {
+        const emoji = part.trim().replace(/\uFE0F/g, '');
+        if (!emoji || seen.has(emoji)) continue;
+        seen.add(emoji);
+        attempts.push(emoji);
+        if (attempts.length >= maxAttempts) break;
+    }
+    return attempts;
+}
+
+/** Нормализованная строка для БД: те же правила, join через запятую. */
+export function normalizeSeedEmojiList(raw) {
+    return buildSeedReactionAttempts(raw).join(',');
+}

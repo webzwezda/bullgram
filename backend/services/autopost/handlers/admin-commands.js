@@ -6,6 +6,7 @@ import { Markup } from 'telegraf';
 import { getAdminKeyboard, showQueueForChannel, suggestionInlineKeyboard } from '../keyboard.js';
 import { formatMonthLabel } from '../best-of.js';
 import { classifyMonthInTz } from '../timezone.js';
+import { normalizeSeedEmojiList } from './reactions.js';
 
 export function registerAdminCommandsHandler(bot, service, botId) {
     const supabase = service.supabase;
@@ -258,7 +259,9 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         const rows = [];
         for (let i = 0; i < options.length; i += 2) {
             const pair = options.slice(i, i + 2).map(opt => {
-                const mark = channel.seed_reaction_emoji === opt.emoji ? '✅ ' : '';
+                // В БД значение хранится нормализованным ('❤', без VS16) —
+                // сравниваем в той же форме, иначе ✅ теряется после сохранения.
+                const mark = normalizeSeedEmojiList(channel.seed_reaction_emoji) === normalizeSeedEmojiList(opt.emoji) ? '✅ ' : '';
                 return Markup.button.callback(`${mark}${opt.label}`, `seed_set:${opt.emoji}`);
             });
             rows.push(pair);
@@ -288,8 +291,10 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         }
 
         const ALLOWED = ['❤️', '👍', '👎', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '💯', '💩', '🤣', '⚡'];
-        const value = raw === 'off' ? null : raw;
-        if (value !== null && !ALLOWED.includes(value)) {
+        // Нормализуем перед сохранением (❤️ → ❤, без VS16) — Telegram принимает
+        // только каноничное значение, с VS16 даёт REACTION_INVALID.
+        const value = raw === 'off' ? null : normalizeSeedEmojiList(raw);
+        if (value !== null && !ALLOWED.map((x) => x.replace(/\uFE0F/g, '')).includes(value)) {
             return ctx.answerCbQuery('Недопустимый эмодзи');
         }
 

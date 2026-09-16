@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AutopostService } from '../services/autopost.service.js';
+import { normalizeSeedEmojiList } from '../services/autopost/handlers/reactions.js';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { enforceAutopostBotQuota } from '../utils/product-tier.js';
 import { rateLimit } from '../middlewares/rate-limit.middleware.js';
@@ -177,20 +178,23 @@ export default function autopostRoutes(supabase) {
             if (suggest_button_enabled !== undefined) updates.suggest_button_enabled = suggest_button_enabled;
             if (max_suggestions_per_day !== undefined) updates.max_suggestions_per_day = Number(max_suggestions_per_day);
             if (seed_reaction_emoji !== undefined) {
-                // null = выключить. Иначе — до 3 эмодзи через запятую, каждый из стандартного набора Telegram.
+                // null = выключить. Иначе — до 3 эмодзи через запятую. Прогоняем через
+                // нормализацию (❤️ → ❤, trim, dedupe, cap 3): Telegram в setMessageReaction
+                // принимает каноничное '❤', с VS16 ('❤️') даёт REACTION_INVALID.
                 const ALLOWED = ['❤️', '👍', '👎', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🎉', '🤩', '💯', '💩', '🤣', '⚡'];
+                const allowedSet = new Set(ALLOWED.map((x) => x.replace(/\uFE0F/g, '')));
                 if (seed_reaction_emoji === null) {
                     updates.seed_reaction_emoji = null;
                 } else {
                     const list = String(seed_reaction_emoji).split(',').map((x) => x.trim()).filter(Boolean);
-                    const bad = list.filter((x) => !ALLOWED.includes(x));
+                    const bad = list.filter((x) => !allowedSet.has(x.replace(/\uFE0F/g, '')));
                     if (!list.length || bad.length) {
                         return res.status(400).json({ error: 'Недопустимый эмодзи. Разрешены: ' + ALLOWED.join(' ') });
                     }
                     if (list.length > 3) {
                         return res.status(400).json({ error: 'Максимум 3 реакции' });
                     }
-                    updates.seed_reaction_emoji = list.join(',');
+                    updates.seed_reaction_emoji = normalizeSeedEmojiList(seed_reaction_emoji);
                 }
             }
             
