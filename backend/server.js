@@ -51,6 +51,7 @@ import { startAbandonedCart } from './jobs/abandoned-cart.job.js';
 import { startBrowseFollowup } from './jobs/browse-followup.job.js';
 import { startAutopostScheduler } from './jobs/autopost-scheduler.job.js';
 import { startAutopostStuckEditingRecovery } from './jobs/autopost-stuck-editing.job.js';
+import { startAutopostChecklistEventsCleanup } from './jobs/autopost-checklist-events-cleanup.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
@@ -353,6 +354,8 @@ httpServer.listen(PORT, async () => {
     const autopostService = new AutopostService(supabase);
     startAutopostScheduler(supabase, (botId) => autopostService.getBot(botId), autopostService);
     startAutopostStuckEditingRecovery(supabase, autopostService);
+    // Ретеншен ленты событий чек-листов (план: docs/plans/2026-09-17-autopost-checklists.md)
+    startAutopostChecklistEventsCleanup(supabase);
     // Запускаем все активные autopost-боты
     try {
         const { data: autopostBots } = await supabase.from('autopost_bots').select('*').eq('is_active', true);

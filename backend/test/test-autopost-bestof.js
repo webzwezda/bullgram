@@ -44,18 +44,38 @@ console.log('\n--- best-of.composeBestOfMonth ---');
 
 // Mock supabase: цепочка методов, накапливающая фильтры, thenable на конце.
 function makeMock(rows) {
-    const calls = { eqs: [], gts: [], gtes: [], lts: [], orders: [] };
+    const calls = { eqs: [], nes: [], ors: [], gts: [], gtes: [], lts: [], orders: [] };
     const chain = {
         _rows: rows,
         from() { return chain; },
         select() { return chain; },
         eq(field, value) { calls.eqs.push([field, value]); return chain; },
+        ne(field, value) { calls.nes.push([field, value]); return chain; },
+        or(expr) { calls.ors.push(expr); return chain; },
         gt(field, value) { calls.gts.push([field, value]); return chain; },
         gte(field, value) { calls.gtes.push([field, value]); return chain; },
         lt(field, value) { calls.lts.push([field, value]); return chain; },
         order(field, opts) { calls.orders.push([field, opts]); return chain; },
         then(resolve) {
-            resolve({ data: chain._rows, error: null });
+            // or — серверный фильтр (как в реальном PostgREST): строка вида
+            // 'field.op.value,field.op.value', строка остаётся, если выполняется
+            // хотя бы одно условие (OR). NULL-семантика: is.null → значение == null.
+            let rows = chain._rows;
+            for (const expr of calls.ors) {
+                const conds = String(expr).split(',').map((c) => {
+                    const parts = c.split('.');
+                    return { field: parts[0], op: parts[1], value: parts.slice(2).join('.') };
+                });
+                rows = rows.filter((r) => conds.some(({ field, op, value }) => {
+                    if (op === 'neq') return r[field] !== value;
+                    if (op === 'is') return value === 'null' ? r[field] == null : r[field] === value;
+                    return true;
+                }));
+            }
+            for (const [field, value] of calls.nes) {
+                rows = rows.filter((r) => r[field] !== value);
+            }
+            resolve({ data: rows, error: null });
         },
         _calls: calls
     };
@@ -88,6 +108,7 @@ function makeMock(rows) {
     assert(mock._calls.gtes.length === 1 && mock._calls.gtes[0][0] === 'posted_at', 'gte posted_at (start of month)');
     assert(mock._calls.lts.length === 1 && mock._calls.lts[0][0] === 'posted_at', 'lt posted_at (end of month)');
     assert(mock._calls.gts.length === 1 && mock._calls.gts[0][0] === 'reaction_total', 'gt reaction_total > 0');
+    assert(mock._calls.ors.length === 1 && mock._calls.ors[0] === 'media_type.neq.checklist,media_type.is.null', 'or-filter: media_type != checklist OR media_type IS NULL');
 }
 
 // Фильтрация: только посты с медиа-файлом; video/animation тоже проходят (Фаза 2).
@@ -108,6 +129,34 @@ function makeMock(rows) {
     assert(items[1].id === 'anim1', 'anim1 next (80)');
     assert(items[2].id === 'photo1', 'photo1 last (10)');
     assert(totalWithReactions === 4, 'totalWithReactions counts pre-filter (4)');
+}
+
+// Чек-листы исключаются жёстким фильтром: юзер-реакция на списке могла бы накрутить
+// reaction_total, но строка media_type='checklist' не должна попасть даже в totalWithReactions.
+{
+    const rows = [
+        { id: 'photo1', file_id: 'f1', file_ids: [], caption: 'photo', reaction_total: 10, posted_at: '2026-06-01T10:00:00Z', media_type: 'photo' },
+        { id: 'check1', file_id: null, file_ids: [], caption: 'Список дел', reaction_total: 100, posted_at: '2026-06-02T10:00:00Z', media_type: 'checklist' }
+    ];
+    rows.sort((a, b) => b.reaction_total - a.reaction_total);
+    const { items, totalWithReactions } = await composeBestOfMonth(makeMock(rows), 'bot-1', 'chan-1', 2026, 6);
+
+    assert(items.length === 1 && items[0].id === 'photo1', 'checklist row excluded from top');
+    assert(totalWithReactions === 1, 'checklist row excluded from totalWithReactions');
+}
+
+// NULL media_type: PostgREST neq молча выкидывает NULL-строки, а старые посты без
+// media_type должны оставаться в best-of — потому фильтр через or(...is.null).
+{
+    const rows = [
+        { id: 'old1', file_id: 'f1', file_ids: [], caption: 'старый пост', reaction_total: 30, posted_at: '2026-06-01T10:00:00Z', media_type: null },
+        { id: 'check1', file_id: null, file_ids: [], caption: 'Список дел', reaction_total: 100, posted_at: '2026-06-02T10:00:00Z', media_type: 'checklist' }
+    ];
+    rows.sort((a, b) => b.reaction_total - a.reaction_total);
+    const { items, totalWithReactions } = await composeBestOfMonth(makeMock(rows), 'bot-1', 'chan-1', 2026, 6);
+
+    assert(items.length === 1 && items[0].id === 'old1', 'NULL media_type row stays in top');
+    assert(totalWithReactions === 1, 'NULL media_type row counted, checklist excluded');
 }
 
 // Лимит 10: при 15 постах возвращаем ровно 10, totalWithReactions = 15.

@@ -94,3 +94,39 @@ export function patchBot(botId, payload, token) {
         token
     });
 }
+
+// --- Чек-листы автопостера ---
+
+export function fetchChecklists(botId, { status } = {}, token) {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    const qs = params.toString();
+    return request(`/api/autopost/bots/${botId}/checklists${qs ? `?${qs}` : ''}`, { token });
+}
+
+export function createChecklist(botId, { title, items, channelIds, expiresAt, dedupKey }, token) {
+    return request(`/api/autopost/bots/${botId}/checklists`, {
+        method: 'POST',
+        body: { title, items, channelIds, expiresAt, dedupKey },
+        token
+    });
+}
+
+export function getChecklistState(botId, checklistId, token) {
+    return request(`/api/autopost/bots/${botId}/checklists/${checklistId}`, { token });
+}
+
+export function updateChecklist(botId, checklistId, payload, token) {
+    return request(`/api/autopost/bots/${botId}/checklists/${checklistId}`, {
+        method: 'PATCH',
+        body: payload,
+        token
+    });
+}
+
+export function cancelChecklist(botId, checklistId, token) {
+    return request(`/api/autopost/bots/${botId}/checklists/${checklistId}/cancel`, {
+        method: 'POST',
+        token
+    });
+}

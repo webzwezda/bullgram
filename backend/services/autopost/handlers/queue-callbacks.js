@@ -58,7 +58,7 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
                 .eq('tg_chat_id', item.target_channel_id)
                 .maybeSingle();
 
-            await service.publishItem(bot, item, channel, botData?.username);
+            await service.publishItem(bot, item, channel, botData?.username, { actorSource: 'admin' });
 
             await ctx.answerCbQuery('Опубликовано!');
             try { await ctx.deleteMessage(); } catch (e) {}
@@ -72,6 +72,11 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
                 .from('autopost_items')
                 .update({ status: 'failed', error_message: String(err.message || '').slice(0, 1000) })
                 .eq('id', itemId);
+            // Список закрыли/удалили между кликом и публикацией — человекочитаемый
+            // тост вместо сырцового кода ошибки.
+            if (err.message === 'CHECKLIST_UNAVAILABLE' || err.message === 'NOT_FOUND') {
+                return ctx.answerCbQuery('Список закрыт или удалён');
+            }
             await ctx.answerCbQuery('Ошибка: ' + err.message);
         }
     });
@@ -93,11 +98,17 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
 
         const { data: item } = await supabase
             .from('autopost_items')
-            .select('id, post_batch_id')
+            .select('id, post_batch_id, media_type')
             .eq('id', itemId)
             .eq('bot_id', botId)
             .maybeSingle();
         if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
+
+        // Чек-лист: правка подписи рассинхронила бы items с опубликованными кнопками —
+        // список правится целиком через операцию update (add/rename/remove/reset).
+        if (item.media_type === 'checklist') {
+            return ctx.answerCbQuery('Чек-лист правится через «☑️ Чек-листы»');
+        }
 
         const batchId = item.post_batch_id;
 
@@ -202,11 +213,25 @@ export function registerQueueCallbacksHandler(bot, service, botId) {
 
         const { data: item } = await supabase
             .from('autopost_items')
-            .select('post_batch_id')
+            .select('post_batch_id, media_type, checklist_id')
             .eq('id', itemId)
             .eq('bot_id', botId)
             .maybeSingle();
         if (!item?.post_batch_id) return ctx.answerCbQuery('Пост не найден');
+
+        // Чек-лист: удаление из очереди = отмена всего списка (иначе список остался бы
+        // «активным», но непубликуемым). Posted копии остаются — клавиатуры снимет cancel.
+        if (item.media_type === 'checklist' && item.checklist_id) {
+            try {
+                await service.cancelChecklist(botId, item.checklist_id, { source: 'admin', tgId: tgUserId });
+                await ctx.answerCbQuery('Список закрыт');
+                try { await ctx.deleteMessage(); } catch (e) {}
+            } catch (err) {
+                console.error('[Autopost] Ошибка отмены чек-листа:', err.message);
+                await ctx.answerCbQuery('Ошибка: ' + err.message);
+            }
+            return;
+        }
 
         // Actionable siblings: queued/scheduled/editing. Posted/failed не трогаем —
         // posted уже в Telegram, deleting DB row только запутает счётчик.

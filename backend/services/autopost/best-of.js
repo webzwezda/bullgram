@@ -48,6 +48,12 @@ export async function composeBestOfMonth(supabase, botId, channelId, year, month
         .select('id, file_id, file_ids, caption, reaction_total, posted_at, media_type, posted_message_ids, post_batch_id, target_channel_id')
         .eq('bot_id', botId)
         .eq('status', 'posted')
+        // Чек-листы исключаем жёстким фильтром по media_type, а не «естественным»
+        // отсутствием реакций: случайная юзер-реакция на списке накрутит
+        // reaction_total через GIN-lookup, и фильтр reaction_total > 0 его бы пропустил.
+        // or(...) вместо ne(): PostgREST `neq` молча выкидывает NULL-строки, а старые
+        // посты без media_type должны оставаться в best-of.
+        .or('media_type.neq.checklist,media_type.is.null')
         .gt('reaction_total', 0)
         .gte('posted_at', start)
         .lt('posted_at', end)

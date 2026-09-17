@@ -220,6 +220,21 @@ console.log('--- GET /openapi.json (public) ---');
   close();
 }
 
+console.log('--- OpenAPI registry: 5 checklist REST paths present ---');
+{
+  // Спек собираем так же, как генератор /openapi.json: реестр операций уже
+  // зарегистрирован side-effect импортом '../mcp/tools/index.js' выше.
+  const spec = buildOpenApiSpec();
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists'], true, 'checklists collection path present');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists'].post, true, 'POST checklists (create)');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists'].get, true, 'GET checklists (list)');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists/{checklist_id}'], true, 'checklist item path present');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists/{checklist_id}'].get, true, 'GET checklist state');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists/{checklist_id}'].patch, true, 'PATCH checklist (update)');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists/{checklist_id}/cancel'], true, 'cancel path present');
+  assertEqual(!!spec.paths['/autopost/bots/{bot_id}/checklists/{checklist_id}/cancel'].post, true, 'POST cancel');
+}
+
 console.log('--- GET /docs (Scalar HTML) ---');
 {
   const supabase = makeMockSupabase();

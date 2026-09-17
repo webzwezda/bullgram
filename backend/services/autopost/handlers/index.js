@@ -6,6 +6,8 @@ import { registerChatMemberHandler } from './chat-member.js';
 import { registerOnboardingHandler } from './onboarding.js';
 import { registerAdminCommandsHandler } from './admin-commands.js';
 import { registerQueueCallbacksHandler } from './queue-callbacks.js';
+import { registerChecklistCallbacksHandler } from './checklist-callbacks.js';
+import { registerChecklistMenuHandler } from './checklist-menu.js';
 import { registerSuggestionCallbacksHandler } from './suggestion-callbacks.js';
 import { registerAlbumCallbacksHandler } from './album-callbacks.js';
 import { registerChannelSelectHandler } from './channel-select.js';
@@ -18,6 +20,8 @@ export function registerAllHandlers(bot, service, botId) {
     registerOnboardingHandler(bot, service, botId);
     registerAdminCommandsHandler(bot, service, botId);
     registerQueueCallbacksHandler(bot, service, botId);
+    registerChecklistCallbacksHandler(bot, service, botId);
+    registerChecklistMenuHandler(bot, service, botId);
     registerSuggestionCallbacksHandler(bot, service, botId);
     registerAlbumCallbacksHandler(bot, service, botId);
     registerChannelSelectHandler(bot, service, botId);

@@ -5,6 +5,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Card } from '../components/ui/card.jsx';
 import { Input } from '../components/ui/input.jsx';
+import { Textarea } from '../components/ui/textarea.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
 import { supabase } from '../lib/supabase.js';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
@@ -20,7 +21,11 @@ import {
     refreshChannel,
     addAdmin,
     removeAdmin,
-    deleteBot
+    deleteBot,
+    fetchChecklists,
+    createChecklist,
+    getChecklistState,
+    cancelChecklist
 } from './autopost/api.js';
 
 function maskBotToken(value) {
@@ -46,6 +51,25 @@ https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 function parseReactionEmojis(value) {
   // VS16 (U+FE0F) вырезаем: в БД/Telegram хранится каноничное '❤', без селектора.
   return String(value || '').split(',').map(s => s.trim().replace(/\uFE0F/g, '')).filter(Boolean);
+}
+
+// Статус чек-листа — вычисляемая строка с бэка (active/expired/cancelled),
+// здесь только человекочитаемая метка + цвет из feedback-пары токенов.
+const CHECKLIST_STATUS_META = {
+  active: { label: 'Активен', className: 'bg-feedback-success-bg text-feedback-success-text' },
+  expired: { label: 'Истёк', className: 'bg-feedback-warning-bg text-feedback-warning-text' },
+  cancelled: { label: 'Закрыт', className: 'bg-feedback-info-bg text-feedback-info-text' }
+};
+
+function splitChecklistLines(value) {
+  return String(value || '').split('\n').map((s) => s.trim()).filter(Boolean);
+}
+
+function formatChecklistTime(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 export function QuickStartPage() {
@@ -93,6 +117,25 @@ export function QuickStartPage() {
   // включая несколько public или несколько private).
   const [channelConfigs, setChannelConfigs] = useState({});
 
+  // Чек-листы: список активных + состояние (items/summary) по каждому —
+  // прогрес «X из M» и отметки живут в state-ручке, поэтому тянем её по каждому списку.
+  const [checklists, setChecklists] = useState([]);
+  const [checklistStates, setChecklistStates] = useState({});
+  const [checklistsLoading, setChecklistsLoading] = useState(false);
+  const [checklistsError, setChecklistsError] = useState(null);
+  const [expandedChecklistId, setExpandedChecklistId] = useState(null);
+  const [refreshingChecklist, setRefreshingChecklist] = useState({});
+  const [cancellingChecklist, setCancellingChecklist] = useState({});
+  const [showChecklistForm, setShowChecklistForm] = useState(false);
+  const [checklistTitle, setChecklistTitle] = useState('');
+  const [checklistItemsText, setChecklistItemsText] = useState('');
+  const [checklistChannelIds, setChecklistChannelIds] = useState([]);
+  const [checklistExpiresAt, setChecklistExpiresAt] = useState('');
+  const [checklistDedupKey, setChecklistDedupKey] = useState('');
+  const [creatingChecklist, setCreatingChecklist] = useState(false);
+  const checklistReqIdRef = useRef(0);
+  const checklistRefreshTimerRef = useRef(null);
+
   // Загрузка существующих ботов
   const loadBots = useCallback(async () => {
     if (!user?.id) return;
@@ -130,6 +173,12 @@ export function QuickStartPage() {
       setCreatedBot(null);
       setActiveChannelId(null);
       setChannelConfigs({});
+      setChecklists([]);
+      setChecklistStates({});
+      setChecklistsError(null);
+      setExpandedChecklistId(null);
+      setShowChecklistForm(false);
+      setChecklistChannelIds([]);
       return;
     }
 
@@ -140,6 +189,7 @@ export function QuickStartPage() {
     setInviteRevealed(false);
     setBotToken(bot.bot_token || '');
     setCreatedBot({ id: bot.id, bot_username: bot.username });
+    setChecklistChannelIds([]);
 
     loadChannels(bot.id);
     loadAdmins(bot.id);
@@ -227,6 +277,159 @@ export function QuickStartPage() {
     }
   }
 
+  // --- Чек-листы ---
+
+  // Грузим активные списки и по каждому — состояние (пункты/прогресс/summary).
+  // Списки короткие (семейный масштаб), поэтому N параллельных state-запросов
+  // дешевле отдельного агрегата на бэке.
+  async function loadChecklists(botId) {
+    if (!botId) return;
+    const reqId = ++checklistReqIdRef.current;
+    setChecklistsLoading(true);
+    setChecklistsError(null);
+    try {
+      const data = await fetchChecklists(botId, { status: 'active' }, accessToken);
+      if (reqId !== checklistReqIdRef.current) return;
+      const rows = data.items || [];
+      setChecklists(rows);
+      const states = await Promise.all(
+        rows.map((row) => getChecklistState(botId, row.id, accessToken).catch(() => null))
+      );
+      if (reqId !== checklistReqIdRef.current) return;
+      const next = {};
+      rows.forEach((row, i) => { if (states[i]) next[row.id] = states[i]; });
+      setChecklistStates(next);
+    } catch (e) {
+      if (reqId !== checklistReqIdRef.current) return;
+      setChecklistsError(e.message);
+    } finally {
+      if (reqId === checklistReqIdRef.current) setChecklistsLoading(false);
+    }
+  }
+
+  // Загрузка при выборе бота. Очищаем прошлые данные сразу, чтобы после
+  // переключения бота не мигнули чужие списки.
+  useEffect(() => {
+    const botId = createdBot?.id;
+    if (selectedBotId === 'new' || !botId) return;
+    setChecklists([]);
+    setChecklistStates({});
+    setChecklistsError(null);
+    setExpandedChecklistId(null);
+    loadChecklists(botId);
+  }, [selectedBotId, createdBot?.id]);
+
+  function toggleChecklistChannel(tgChatId) {
+    setChecklistChannelIds((prev) =>
+      prev.includes(tgChatId) ? prev.filter((id) => id !== tgChatId) : [...prev, tgChatId]
+    );
+  }
+
+  // Создание: клиентская проверка зеркалит капы бэка (1–25 пунктов, 1–100
+  // символов, заголовок ≤200, dedup_key ≤128), чтобы не гонять заведомо невалидный
+  // запрос и показать ошибку сразу.
+  async function handleCreateChecklist() {
+    if (!createdBot?.id || creatingChecklist) return;
+    const title = checklistTitle.trim();
+    const items = splitChecklistLines(checklistItemsText);
+    if (title.length > 200) {
+      toast.error('Заголовок длиннее 200 символов');
+      return;
+    }
+    if (items.length < 1) {
+      toast.error('Нужен хотя бы один пункт — по одному в строке');
+      return;
+    }
+    if (items.length > 25) {
+      toast.error(`Максимум 25 пунктов (сейчас ${items.length})`);
+      return;
+    }
+    const tooLong = items.find((t) => t.length > 100);
+    if (tooLong) {
+      toast.error(`Пункт «${tooLong.slice(0, 30)}…» длиннее 100 символов`);
+      return;
+    }
+    if (checklistChannelIds.length === 0) {
+      toast.error('Выберите хотя бы один канал');
+      return;
+    }
+    const dedupKey = checklistDedupKey.trim();
+    if (dedupKey.length > 128) {
+      toast.error('dedup_key длиннее 128 символов');
+      return;
+    }
+    setCreatingChecklist(true);
+    try {
+      await createChecklist(createdBot.id, {
+        title,
+        items,
+        channelIds: checklistChannelIds,
+        expiresAt: checklistExpiresAt ? new Date(checklistExpiresAt).toISOString() : undefined,
+        dedupKey: dedupKey || undefined
+      }, accessToken);
+      toast.success('Список создан — уйдёт в выбранные каналы по ближайшему слоту');
+      setChecklistTitle('');
+      setChecklistItemsText('');
+      setChecklistChannelIds([]);
+      setChecklistExpiresAt('');
+      setChecklistDedupKey('');
+      setShowChecklistForm(false);
+      loadChecklists(createdBot.id);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCreatingChecklist(false);
+    }
+  }
+
+  // «Обновить» — перечитать состояние одного списка: прогресс, отметки, summary.
+  async function handleRefreshChecklist(checklistId) {
+    if (!createdBot?.id || refreshingChecklist[checklistId]) return;
+    setRefreshingChecklist((prev) => ({ ...prev, [checklistId]: true }));
+    try {
+      const state = await getChecklistState(createdBot.id, checklistId, accessToken);
+      setChecklistStates((prev) => ({ ...prev, [checklistId]: state }));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setRefreshingChecklist((prev) => ({ ...prev, [checklistId]: false }));
+    }
+  }
+
+  function toggleChecklistExpand(row) {
+    setExpandedChecklistId((prev) => (prev === row.id ? null : row.id));
+    // Состояние не доехало при загрузке списка — дотягиваем при раскрытии.
+    if (!checklistStates[row.id] && createdBot?.id) {
+      handleRefreshChecklist(row.id);
+    }
+  }
+
+  function askCloseChecklist(row) {
+    if (!createdBot?.id) return;
+    askConfirm({
+      title: 'Закрыть чек-лист',
+      description: `«${row.title || 'Без названия'}»: кнопки в Telegram снимутся, неопубликованные строки уйдут из очереди. Отметки останутся в истории.`,
+      actionLabel: 'Закрыть',
+      danger: true,
+      onConfirm: () => doCloseChecklist(row.id)
+    });
+  }
+
+  async function doCloseChecklist(checklistId) {
+    if (!createdBot?.id) return;
+    setCancellingChecklist((prev) => ({ ...prev, [checklistId]: true }));
+    try {
+      await cancelChecklist(createdBot.id, checklistId, accessToken);
+      toast.success('Чек-лист закрыт');
+      if (expandedChecklistId === checklistId) setExpandedChecklistId(null);
+      loadChecklists(createdBot.id);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCancellingChecklist((prev) => ({ ...prev, [checklistId]: false }));
+    }
+  }
+
   // Realtime-подписка: канал подключён/отключён, либо обновился список админов.
   // Заменяет setInterval-поллинг. Инициальная загрузка — в useEffect выбора бота.
   useEffect(() => {
@@ -252,9 +455,26 @@ export function QuickStartPage() {
         { event: '*', schema: 'public', table: 'autopost_items', filter: `bot_id=eq.${botId}` },
         () => {}
       )
+      // Тапы семьи по пунктам в Telegram: лёгкий refetch списка с дебаунсом,
+      // чтобы серия кликов не превратилась в серию запросов.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'autopost_checklist_items', filter: `bot_id=eq.${botId}` },
+        () => {
+          if (checklistRefreshTimerRef.current) clearTimeout(checklistRefreshTimerRef.current);
+          checklistRefreshTimerRef.current = setTimeout(() => {
+            checklistRefreshTimerRef.current = null;
+            loadChecklists(botId);
+          }, 800);
+        }
+      )
       .subscribe();
 
     return () => {
+      if (checklistRefreshTimerRef.current) {
+        clearTimeout(checklistRefreshTimerRef.current);
+        checklistRefreshTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
   }, [createdBot?.id, selectedBotId, accessToken]);
@@ -1487,6 +1707,249 @@ export function QuickStartPage() {
               );
             })}
         </Card>
+
+          {/* Чек-листы: список с кнопками в группе, отмечать могут все участники
+              чата, состояние общее. Контент автопостера — команд-центр и заказы
+              не трогаем (осознанное решение в плане фичи). */}
+          <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-base font-bold text-ink-strong">☑️ Чек-листы</h3>
+                <p className="text-xs text-ink-muted font-semibold leading-relaxed max-w-[70ch]">
+                  Список с кнопками в группе: семья отмечает пункты, состояние видят все. Создаётся здесь или агентом через Bullgram MCP.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => setShowChecklistForm((v) => !v)}
+                className="h-9 rounded-xl font-semibold shrink-0"
+              >
+                {showChecklistForm ? 'Свернуть' : '＋ Новый список'}
+              </Button>
+            </div>
+
+            {/* Форма создания — свёрнута по умолчанию, чтобы не стоять между
+                админом и уже живыми списками */}
+            {showChecklistForm && (
+              <div className="rounded-2xl border border-border-default bg-surface-card p-4 sm:p-5 space-y-4 animate-fade-in">
+                <div className="space-y-1.5">
+                  <label htmlFor="checklist-title" className="text-xs font-bold uppercase tracking-wider text-ink-muted block">Заголовок</label>
+                  <Input
+                    id="checklist-title"
+                    value={checklistTitle}
+                    onChange={(e) => setChecklistTitle(e.target.value)}
+                    placeholder="Покупки на завтра"
+                    maxLength={200}
+                    className="h-11 rounded-xl bg-surface-card"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="checklist-items" className="text-xs font-bold uppercase tracking-wider text-ink-muted block">Пункты</label>
+                  <Textarea
+                    id="checklist-items"
+                    value={checklistItemsText}
+                    onChange={(e) => setChecklistItemsText(e.target.value)}
+                    placeholder={'Купить картошку\nКупить капусту'}
+                    rows={4}
+                    className="rounded-xl bg-surface-card min-h-24"
+                  />
+                  <p className="text-xs text-ink-muted font-semibold">
+                    По одному пункту в строке — от 1 до 25 пунктов, до 100 символов каждый.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-ink-muted block">Каналы публикации</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {channels.map((ch) => {
+                      const tgId = String(ch.tg_chat_id);
+                      const checked = checklistChannelIds.includes(tgId);
+                      return (
+                        <label
+                          key={ch.id}
+                          className={`flex items-center gap-2.5 rounded-xl border p-3 cursor-pointer transition-all ${
+                            checked
+                              ? 'border-action-primary bg-action-primary/5'
+                              : 'border-border-default bg-surface-subtle/50 hover:border-border-strong'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-action-primary shrink-0"
+                            checked={checked}
+                            onChange={() => toggleChecklistChannel(tgId)}
+                          />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-bold text-ink-body truncate">{ch.title || 'Канал'}</span>
+                            <span className="block text-xs text-ink-muted font-semibold truncate">
+                              {ch.username ? `@${ch.username}` : (ch.visibility === 'public' ? 'Публичный' : 'Приватный')}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="checklist-expires" className="text-xs font-bold uppercase tracking-wider text-ink-muted block">Закрыть после (необязательно)</label>
+                    <Input
+                      id="checklist-expires"
+                      type="datetime-local"
+                      value={checklistExpiresAt}
+                      onChange={(e) => setChecklistExpiresAt(e.target.value)}
+                      className="h-11 rounded-xl bg-surface-card"
+                    />
+                    <p className="text-xs text-ink-muted font-semibold">После этой даты список пометится как истёкший.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="checklist-dedup" className="text-xs font-bold uppercase tracking-wider text-ink-muted block">dedup_key (необязательно)</label>
+                    <Input
+                      id="checklist-dedup"
+                      value={checklistDedupKey}
+                      onChange={(e) => setChecklistDedupKey(e.target.value)}
+                      placeholder="daily-shopping"
+                      className="h-11 rounded-xl bg-surface-card font-mono"
+                    />
+                    <p className="text-xs text-ink-muted font-semibold">Для повторяющихся задач — защита от дублей.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleCreateChecklist}
+                    disabled={creatingChecklist}
+                    className="h-11 px-6 rounded-xl font-bold"
+                  >
+                    {creatingChecklist ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                    Создать список
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() => setShowChecklistForm(false)}
+                    className="rounded-xl font-semibold"
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-ink-muted block">Активные списки ({checklists.length})</label>
+              {checklistsLoading && checklists.length === 0 ? (
+                <div className="flex items-center gap-2 p-4 text-sm text-ink-muted font-semibold">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Загружаем чек-листы...
+                </div>
+              ) : checklistsError ? (
+                <div className="rounded-2xl border border-border-default bg-feedback-error-bg p-4 flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-feedback-error-text">{checklistsError}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => loadChecklists(createdBot.id)}
+                    className="rounded-lg font-semibold shrink-0"
+                  >
+                    Повторить
+                  </Button>
+                </div>
+              ) : checklists.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border-strong bg-surface-card/50 p-5 text-sm text-ink-muted font-semibold">
+                  Пока нет активных чек-листов
+                  <span className="block text-xs mt-1 font-semibold">
+                    Создайте список кнопкой «＋ Новый список» — или пусть агент ведёт его через Bullgram MCP.
+                  </span>
+                </div>
+              ) : (
+                checklists.map((row) => {
+                  const st = checklistStates[row.id];
+                  const stateItems = (st?.items || []).slice().sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0));
+                  const doneCount = stateItems.filter((it) => it.is_checked === true).length;
+                  const statusMeta = CHECKLIST_STATUS_META[row.status] || CHECKLIST_STATUS_META.active;
+                  const isExpanded = expandedChecklistId === row.id;
+                  return (
+                    <div key={row.id} className="rounded-2xl border border-border-default bg-surface-card overflow-hidden">
+                      <div className="p-4 flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleChecklistExpand(row)}
+                          className="flex-1 min-w-0 text-left cursor-pointer space-y-1"
+                        >
+                          <span className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-ink-strong">{row.title || 'Без названия'}</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${statusMeta.className}`}>
+                              {statusMeta.label}
+                            </span>
+                          </span>
+                          <span className="block text-xs text-ink-muted font-semibold">
+                            {st ? `${doneCount} из ${stateItems.length}` : 'Состояние не загрузилось'}
+                            {row.expires_at ? ` · закроется после ${formatChecklistTime(row.expires_at)}` : ''}
+                          </span>
+                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            onClick={() => handleRefreshChecklist(row.id)}
+                            disabled={refreshingChecklist[row.id]}
+                            className="rounded-lg font-semibold"
+                          >
+                            {refreshingChecklist[row.id]
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <RefreshCw className="w-3.5 h-3.5" />}
+                            Обновить
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            type="button"
+                            onClick={() => askCloseChecklist(row)}
+                            disabled={cancellingChecklist[row.id]}
+                            className="rounded-lg font-semibold"
+                          >
+                            {cancellingChecklist[row.id] ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                            Закрыть
+                          </Button>
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="border-t border-border-default bg-surface-subtle/50 p-4 space-y-2 animate-fade-in">
+                          {st?.summary && (
+                            <p className="text-xs text-ink-body font-semibold leading-relaxed">{st.summary}</p>
+                          )}
+                          {stateItems.map((item) => (
+                            <div key={item.id} className="flex items-start gap-2 text-sm">
+                              <span className="shrink-0" aria-hidden="true">{item.is_checked ? '✅' : '⬜'}</span>
+                              <span className={`min-w-0 font-semibold ${item.is_checked ? 'text-ink-muted' : 'text-ink-body'}`}>
+                                {item.text}
+                                {item.is_checked && (item.checked_by_name || item.checked_at) ? (
+                                  <span className="text-xs text-ink-muted">
+                                    {' '}— {[item.checked_by_name, formatChecklistTime(item.checked_at)].filter(Boolean).join(', ')}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </div>
+                          ))}
+                          {stateItems.length === 0 && (
+                            <p className="text-xs text-ink-muted font-semibold">В списке нет пунктов.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
           {/* Список Администраторов (В самом низу) */}
           <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">

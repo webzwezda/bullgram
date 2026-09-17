@@ -1,6 +1,8 @@
 import { Telegraf, Markup } from 'telegraf';
 import crypto from 'crypto';
-import { sendItemToChannel } from './autopost/sender.js';
+import { sendItemToChannel, getFloodWaitSeconds } from './autopost/sender.js';
+import { buildChecklistMessage, applyChecklistOps, computeChecklistStatus } from './autopost/checklist.js';
+import { log } from './autopost/logger.js';
 import { getAdminKeyboard, showQueueForChannel } from './autopost/keyboard.js';
 import {
     startAutopostBot,
@@ -158,7 +160,7 @@ export class AutopostService {
         return data || [];
     }
 
-    async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, suggestedByTgId = null }) {
+    async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, checklistId = null, suggestedByTgId = null }) {
         // Resolve target channels: array takes precedence over scalar; both can be passed.
         // Multi-target fan-out: one logical post → N item rows grouped by post_batch_id.
         const scalar = targetChannelId != null ? [String(targetChannelId)] : [];
@@ -183,8 +185,9 @@ export class AutopostService {
 
         // Текстовые посты (без fileIds) получают media_type='text' явно,
         // чтобы не маскироваться под 'photo' и корректно исключаться из best-of.
+        // Чек-лист всегда 'checklist' явно — не даём fallback'у съесть тип.
         const hasMedia = fileIds && fileIds.length > 0;
-        const resolvedMediaType = mediaType || (hasMedia ? 'photo' : 'text');
+        const resolvedMediaType = checklistId ? 'checklist' : (mediaType || (hasMedia ? 'photo' : 'text'));
 
         const batchId = crypto.randomUUID();
         const rows = channelIds.map((cid, idx) => ({
@@ -198,6 +201,7 @@ export class AutopostService {
             sort_order: baseSort + idx,
             is_suggestion: isSuggestion,
             media_type: resolvedMediaType,
+            checklist_id: checklistId || null,
             suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
         }));
 
@@ -318,8 +322,28 @@ export class AutopostService {
      * бот сразу ставит эту реакцию на первое сообщение поста — social proof.
      * Боты не получают собственные message_reaction апдейты → это НЕ засчитывается
      * в reaction_total, счётчик остаётся чистым по реальным юзерам.
+     *
+     * Чек-лист (media_type='checklist'): checklist+items грузятся ЗДЕСЬ (у sender
+     * нет доступа к supabase) и прокидываются в рендер через item.options;
+     * seed-реакция и форвард в обсуждения пропускаются — вторая живая клавиатура
+     * в обсуждении дала бы чужой контекст callback'ов (решение 5 из плана).
      */
-    async publishItem(bot, item, channel, botUsername, { claimed = false } = {}) {
+    async publishItem(bot, item, channel, botUsername, { claimed = false, actorSource = 'agent' } = {}) {
+        const isChecklist = item.media_type === 'checklist';
+
+        // Отменённый/удалённый список публиковать нельзя — строка уйдёт в failed у вызывающего.
+        if (isChecklist) {
+            const checklist = await this.loadChecklistScoped(item.bot_id, item.checklist_id);
+            if (!checklist || checklist.cancelled_at) {
+                throw new Error('CHECKLIST_UNAVAILABLE');
+            }
+            item.options = {
+                checklist,
+                items: await this.loadChecklistItems(checklist.id),
+                showNames: await this.resolveChecklistShowNames(item.bot_id, item.target_channel_id)
+            };
+        }
+
         const messageIds = await sendItemToChannel(bot.telegram, item.target_channel_id, item, {
             channel,
             botUsername
@@ -336,10 +360,14 @@ export class AutopostService {
         // Не-премиум — прежние одиночные попытки. Список уже нормализован
         // (❤️ → ❤, без VS16 — иначе Telegram даёт REACTION_INVALID),
         // пустой/мусорный список → Telegram не вызываем вовсе.
-        const seedPlans = buildSeedReactionPlans(
-            buildSeedReactionAttempts(channel?.seed_reaction_emoji),
-            { premium: channel?.seed_reaction_premium === true }
-        );
+        // Чек-листы — без seed-реакций (решение 6: реакции юзеров на списке не мешаем,
+        // но и не провоцируем; best-of всё равно фильтрует по media_type).
+        const seedPlans = isChecklist
+            ? []
+            : buildSeedReactionPlans(
+                buildSeedReactionAttempts(channel?.seed_reaction_emoji),
+                { premium: channel?.seed_reaction_premium === true }
+            );
         if (seedPlans.length > 0 && messageIds && messageIds.length > 0) {
             let seeded = false;
             for (const plan of seedPlans) {
@@ -361,7 +389,9 @@ export class AutopostService {
         // обсуждений — Telegram связывает их, и в канале появляется нативная
         // кнопка «Перейти к обсуждению». Ошибка форварда НЕ роняет публикацию:
         // пост уже в канале, item не должен уйти в failed.
-        const discussionChannel = await this.resolveDiscussionChannel(item, channel);
+        // Чек-листы не форвардятся (решение 5): копия в обсуждении = вторая живая
+        // клавиатура с чужим контекстом callback'ов.
+        const discussionChannel = isChecklist ? null : await this.resolveDiscussionChannel(item, channel);
         let discussionIds = [];
         if (discussionChannel?.discussion_forward_enabled && discussionChannel?.linked_chat_id && messageIds && messageIds.length > 0) {
             try {
@@ -395,6 +425,20 @@ export class AutopostService {
             : postedUpdate);
         if (postedError) console.error('[Autopost] mark posted failed:', postedError.message);
 
+        // Лента событий чек-листа: агент читает историю (published) через state.
+        // Ошибка записи non-fatal — список уже опубликован.
+        if (isChecklist) {
+            const { error: evError } = await this.supabase.from('autopost_checklist_events').insert({
+                checklist_id: item.checklist_id,
+                action: 'published',
+                actor_source: actorSource === 'admin' ? 'admin' : 'agent'
+            });
+            if (evError) {
+                log.error('checklist', 'published_event_failed', { botId: item.bot_id, checklistId: item.checklist_id, err: evError.message });
+            }
+            log.info('checklist', 'published', { botId: item.bot_id, checklistId: item.checklist_id, itemId: item.id, chatId: item.target_channel_id });
+        }
+
         // create-post (MCP) читает оба списка для ответа; остальные вызовы
         // (scheduler, post_now, sug_post_now) возвращаемое значение игнорируют.
         return { messageIds: messageIds || [], discussionMessageIds: discussionIds || [] };
@@ -419,6 +463,353 @@ export class AutopostService {
             return null;
         }
         return data || null;
+    }
+
+    // --- Чек-листы ---
+    // Каждая загрузка чек-листа — строго по паре (id, bot_id): чужой checklist_id
+    // под своим ботом — штатный NOT_FOUND (план: защита от IDOR).
+
+    async loadChecklistScoped(botId, checklistId) {
+        const { data, error } = await this.supabase
+            .from('autopost_checklists')
+            .select('*')
+            .eq('id', checklistId)
+            .eq('bot_id', botId)
+            .maybeSingle();
+        if (error) throw error;
+        return data || null;
+    }
+
+    async loadChecklistItems(checklistId) {
+        const { data, error } = await this.supabase
+            .from('autopost_checklist_items')
+            .select('*')
+            .eq('checklist_id', checklistId)
+            .order('position', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    }
+
+    async getChecklistState(botId, checklistId, { includeEvents = false, eventsLimit = 20 } = {}) {
+        const checklist = await this.loadChecklistScoped(botId, checklistId);
+        if (!checklist) throw new Error('NOT_FOUND');
+        const status = computeChecklistStatus(checklist);
+        const state = {
+            checklist: { ...checklist, status },
+            items: await this.loadChecklistItems(checklistId)
+        };
+        if (includeEvents) {
+            const { data, error } = await this.supabase
+                .from('autopost_checklist_events')
+                .select('*')
+                .eq('checklist_id', checklistId)
+                .order('created_at', { ascending: false })
+                .limit(Math.min(Math.max(1, Number(eventsLimit) || 20), 100));
+            if (error) throw error;
+            state.events = data || [];
+        }
+        // Ленивое истечение (TTL, решение плана — без отдельной джобы): списку с
+        // прошедшим expires_at снимаем клавиатуры при чтении state. Один заход на
+        // чтение — removeChecklistKeyboards сам state не читает, рекурсии нет.
+        // Best-effort: бот офлайн — тихий log.debug; ошибка Telegram/БД — log.debug
+        // (перерисовки внутри уже non-fatal, истина в БД).
+        if (status === 'expired') {
+            const telegram = this.getBot(botId)?.telegram;
+            if (!telegram) {
+                log.debug('checklist', 'lazy_expiry_skip_no_bot', { botId, checklistId });
+            } else {
+                try {
+                    await this.removeChecklistKeyboards(telegram, botId, checklistId);
+                    log.info('checklist', 'lazy_expiry_keyboards_removed', { botId, checklistId });
+                } catch (e) {
+                    log.debug('checklist', 'lazy_expiry_keyboard_remove_failed', { botId, checklistId, err: e.message });
+                }
+            }
+        }
+        return state;
+    }
+
+    /**
+     * Список чек-листов бота. Статус вычисляемый — фильтр применяется в коде
+     * после fetch (масштаб мелкий, индекс (owner_id, created_at desc) покрывает).
+     * Курсор = created_at ISO; строки с тем же created_at, что у курсора,
+     * пропускаются — для этого масштаба приемлемо. Старые курсоры вида
+     * `created_at|id` читаются: парсер берёт только половину до '|'.
+     */
+    async listChecklists(botId, { status, createdAfter, limit = 20, cursor } = {}) {
+        const cappedLimit = Math.min(Math.max(1, Number(limit) || 20), 100);
+        let query = this.supabase
+            .from('autopost_checklists')
+            .select('*')
+            .eq('bot_id', botId)
+            .order('created_at', { ascending: false });
+        if (createdAfter) query = query.gte('created_at', new Date(createdAfter).toISOString());
+        if (cursor) {
+            const [createdAtIso] = String(cursor).split('|');
+            if (createdAtIso) query = query.lt('created_at', createdAtIso);
+        }
+        const { data, error } = await query.limit(cappedLimit);
+        if (error) throw error;
+        const rows = data || [];
+        const items = rows
+            .map((row) => ({ ...row, status: computeChecklistStatus(row) }))
+            .filter((row) => !status || row.status === status);
+        const last = rows[rows.length - 1];
+        return {
+            items,
+            nextCursor: rows.length === cappedLimit && last ? last.created_at : null
+        };
+    }
+
+    /**
+     * Правки опубликованного списка: add/rename/remove/reset. Отметки переживают
+     * rename (перенос по item_id — семантика в applyChecklistOps, чистой функции).
+     * После записи — перерисовка всех posted-копий; отменённый список править нельзя
+     * (его клавиатуры уже сняты — перерисовка вернула бы их).
+     * Кап общего числа: существующие пункты + добавляемые ≤ 25 (TOO_MANY_ITEMS).
+     */
+    async updateChecklist(botId, checklistId, { add, rename, remove, reset } = {}, actor = {}) {
+        const checklist = await this.loadChecklistScoped(botId, checklistId);
+        if (!checklist) throw new Error('NOT_FOUND');
+        if (checklist.cancelled_at) throw new Error('CHECKLIST_CANCELLED');
+
+        const items = await this.loadChecklistItems(checklistId);
+        // Кап после add — здесь, ПОСЛЕ NOT_FOUND-проверки по паре (id, bot_id):
+        // pre-load в вызывающих читал бы потенциально чужие строки до scope-гейта.
+        if (items.length + (Array.isArray(add) ? add.length : 0) > 25) {
+            throw new Error('TOO_MANY_ITEMS');
+        }
+        const { items: nextItems, events } = applyChecklistOps(items, { add, rename, remove, reset });
+        const originalIds = new Set(items.map((it) => String(it.id)));
+
+        if (reset === true) {
+            const { error } = await this.supabase
+                .from('autopost_checklist_items')
+                .update({ is_checked: false, checked_by_tg_id: null, checked_by_name: null, checked_at: null })
+                .eq('checklist_id', checklistId)
+                .eq('is_checked', true);
+            if (error) throw error;
+        }
+
+        for (const r of Array.isArray(rename) ? rename : []) {
+            const { error } = await this.supabase
+                .from('autopost_checklist_items')
+                .update({ text: String(r?.text ?? '').trim() })
+                .eq('id', r?.item_id)
+                .eq('checklist_id', checklistId);
+            if (error) throw error;
+        }
+
+        for (const rawId of Array.isArray(remove) ? remove : []) {
+            const { error } = await this.supabase
+                .from('autopost_checklist_items')
+                .delete()
+                .eq('id', rawId)
+                .eq('checklist_id', checklistId);
+            if (error) throw error;
+        }
+
+        const addedRows = nextItems.filter((it) => !originalIds.has(String(it.id)));
+        if (addedRows.length > 0) {
+            const { error } = await this.supabase.from('autopost_checklist_items').insert(
+                addedRows.map((it) => ({
+                    id: it.id,
+                    checklist_id: checklistId,
+                    bot_id: checklist.bot_id,
+                    text: it.text,
+                    position: it.position
+                }))
+            );
+            if (error) throw error;
+        }
+
+        if (events.length > 0) {
+            const { error } = await this.supabase.from('autopost_checklist_events').insert(
+                events.map((ev) => ({
+                    checklist_id: checklistId,
+                    item_id: ev.item_id,
+                    action: ev.action,
+                    actor_source: actor?.source || 'agent',
+                    actor_tg_id: actor?.tgId ?? null,
+                    actor_name: actor?.name ?? null
+                }))
+            );
+            if (error) throw error;
+        }
+
+        const bot = this.getBot(botId);
+        if (bot?.telegram) {
+            await this.rerenderChecklistPost(bot.telegram, botId, checklistId);
+        } else {
+            log.warn('checklist', 'rerender_skip_no_bot', { botId, checklistId });
+        }
+
+        return this.getChecklistState(botId, checklistId);
+    }
+
+    /**
+     * Отмена списка: queued/scheduled-строки очереди удаляются (семантика del_post),
+     * posted остаются в Telegram, но клавиатуры снимаются — тапы по закрытому
+     * списку должны умереть. Статус 'cancelled' у items сознательно не вводим
+     * (решение 9: scheduler/статистика ждут фиксированный набор статусов).
+     */
+    async cancelChecklist(botId, checklistId, actor = {}) {
+        const checklist = await this.loadChecklistScoped(botId, checklistId);
+        if (!checklist) throw new Error('NOT_FOUND');
+        // Идемпотентность: повторный cancel (двойной тап, гонка колбэков) просто
+        // возвращает состояние — без второго события и без правок клавиатур.
+        if (checklist.cancelled_at) return this.getChecklistState(botId, checklistId);
+
+        const { data: queuedRows } = await this.supabase
+            .from('autopost_items')
+            .select('target_channel_id')
+            .eq('checklist_id', checklistId)
+            .in('status', ['queued', 'scheduled']);
+        const { error: delError } = await this.supabase
+            .from('autopost_items')
+            .delete()
+            .eq('checklist_id', checklistId)
+            .in('status', ['queued', 'scheduled']);
+        if (delError) throw delError;
+
+        const { error: updError } = await this.supabase
+            .from('autopost_checklists')
+            .update({ cancelled_at: new Date().toISOString() })
+            .eq('id', checklistId)
+            .eq('bot_id', botId);
+        if (updError) throw updError;
+
+        const { error: evError } = await this.supabase.from('autopost_checklist_events').insert({
+            checklist_id: checklistId,
+            action: 'cancelled',
+            actor_source: actor?.source || 'agent',
+            actor_tg_id: actor?.tgId ?? null,
+            actor_name: actor?.name ?? null
+        });
+        if (evError) throw evError;
+
+        log.info('checklist', 'cancelled', {
+            botId,
+            checklistId,
+            queuedRemoved: queuedRows?.length || 0,
+            actorSource: actor?.source || 'agent'
+        });
+
+        const affectedChannels = [...new Set((queuedRows || []).map((r) => String(r.target_channel_id)))];
+        for (const cid of affectedChannels) {
+            await this.collapseQueue(botId, cid);
+        }
+
+        const bot = this.getBot(botId);
+        if (bot?.telegram) {
+            await this.removeChecklistKeyboards(bot.telegram, botId, checklistId);
+        } else {
+            log.warn('checklist', 'cancel_keyboard_skip_no_bot', { botId, checklistId });
+        }
+
+        return this.getChecklistState(botId, checklistId);
+    }
+
+    /**
+     * Per-chat lookup видимости канала: в публичных каналах имена из кнопок
+     * убираем — кнопки видны всему интернету через t.me/s/ (решение 11).
+     * Ошибка lookup'а или отсутствие строки канала → имена прячем
+     * (fail-closed: приватность важнее атрибуции).
+     */
+    async resolveChecklistShowNames(botId, targetChannelId) {
+        try {
+            const { data, error } = await this.supabase
+                .from('channels')
+                .select('visibility')
+                .eq('tg_chat_id', String(targetChannelId))
+                .eq('autopost_bot_id', botId)
+                .maybeSingle();
+            if (error) throw error;
+            if (!data) return false;
+            return data.visibility !== 'public';
+        } catch (e) {
+            log.warn('checklist', 'visibility_lookup_failed', { botId, targetChannelId, err: e.message });
+            return false;
+        }
+    }
+
+    async loadChecklistRenderContext(botId, checklistId) {
+        const checklist = await this.loadChecklistScoped(botId, checklistId);
+        if (!checklist) return null;
+        const { data: postedRows, error } = await this.supabase
+            .from('autopost_items')
+            .select('id, target_channel_id, posted_message_ids')
+            .eq('checklist_id', checklistId)
+            .eq('bot_id', botId)
+            .eq('status', 'posted');
+        if (error) throw error;
+        return { checklist, items: await this.loadChecklistItems(checklistId), postedRows: postedRows || [] };
+    }
+
+    /**
+     * Перерисовывает ВСЕ опубликованные копии чек-листа: свежий текст с прогрессом
+     * + клавиатура. Per-chat ошибки non-fatal — истина в БД, клавиатура догонит
+     * следующим тогглом. Один FLOOD_WAIT-ретай по retry_after (паттерн sender.js).
+     */
+    async rerenderChecklistPost(telegramClient, botId, checklistId) {
+        const context = await this.loadChecklistRenderContext(botId, checklistId);
+        if (!context) return;
+        const { checklist, items, postedRows } = context;
+        if (checklist.cancelled_at) {
+            // Отменённый список клавиатуру не возвращает.
+            return this.removeChecklistKeyboards(telegramClient, botId, checklistId);
+        }
+        const showNamesByChat = new Map();
+        for (const row of postedRows) {
+            const messageIds = Array.isArray(row.posted_message_ids) ? row.posted_message_ids : [];
+            if (messageIds.length === 0) continue;
+            if (!showNamesByChat.has(row.target_channel_id)) {
+                showNamesByChat.set(row.target_channel_id, await this.resolveChecklistShowNames(botId, row.target_channel_id));
+            }
+            const { text, replyMarkup } = buildChecklistMessage(checklist, items, {
+                showNames: showNamesByChat.get(row.target_channel_id)
+            });
+            for (const messageId of messageIds) {
+                await this.applyEditWithFloodRetry(telegramClient, () =>
+                    telegramClient.editMessageText(row.target_channel_id, messageId, undefined, text, { reply_markup: replyMarkup })
+                , { botId, checklistId, chatId: row.target_channel_id, messageId, op: 'rerender' });
+            }
+        }
+    }
+
+    /** Снятие клавиатур у опубликованных копий (cancel): текст остаётся, кнопки умирают. */
+    async removeChecklistKeyboards(telegramClient, botId, checklistId) {
+        const context = await this.loadChecklistRenderContext(botId, checklistId);
+        if (!context) return;
+        for (const row of context.postedRows) {
+            const messageIds = Array.isArray(row.posted_message_ids) ? row.posted_message_ids : [];
+            for (const messageId of messageIds) {
+                await this.applyEditWithFloodRetry(telegramClient, () =>
+                    telegramClient.editMessageReplyMarkup(row.target_channel_id, messageId)
+                , { botId, checklistId, chatId: row.target_channel_id, messageId, op: 'keyboard_remove' });
+            }
+        }
+    }
+
+    async applyEditWithFloodRetry(telegramClient, editFn, meta) {
+        try {
+            await editFn();
+        } catch (err) {
+            const wait = getFloodWaitSeconds(err);
+            if (wait <= 0) {
+                log.warn('checklist', 'render_failed', { ...meta, err: err.message });
+                return;
+            }
+            // спим в хендлере бота: долгий FLOOD_WAIT заморозил бы все апдейты
+            // инстанса; истина в БД — клавиатура догонит следующим тогглом
+            const capped = Math.min(wait, 10);
+            await new Promise((resolve) => setTimeout(resolve, capped * 1000));
+            try {
+                await editFn();
+            } catch (retryErr) {
+                log.warn('checklist', 'render_failed_after_flood_retry', { ...meta, waitSeconds: capped, err: retryErr.message });
+            }
+        }
     }
 
     startBot(botId, token) {

@@ -34,7 +34,7 @@ backend/
 - **Supabase** - База данных PostgreSQL и аутентификация
 - **Telegraf** - Официальные Telegram боты
 - **GramJS (telegram)** - Юзербот для scraping и direct messaging
-- **node-cron** - Фоновые задачи
+- **setInterval** - Фоновые задачи (автопостер: планировщик каждые 5 минут, recovery каждую минуту)
 
 ## API Эндпоинты
 
@@ -77,6 +77,24 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 
 - `GET /api/messaging/capacity?audience_size=N` - Оценка ёмкости: сколько юзерботов нужно на базу N и на сколько дней растянется отправка
 - `POST /api/messaging/send` - Точечная ЛС через юзербота с `idempotency_key`; под тем же гейтом `USERBOT_DM_ENABLED`, что и `/api/userbot/send-message`
+
+### Автопостер (`/api/autopost`)
+
+Планировщик автопостера — не node-cron, а `setInterval`-джобы: `jobs/autopost-scheduler.job.js` (тик каждые 5 минут — публикует очередь `autopost_items` по слотам каналов) и `jobs/autopost-stuck-editing.job.js` (тик каждую минуту — возвращает в очередь посты, зависшие в `editing`/`sending`).
+
+Чек-листы — интерактивные списки дел с inline-кнопками: состояние в БД, домочадцы отмечают пункты прямо в Telegram, «кто и когда» пишется в атрибуцию. Пять MCP-операций (`mcp/tools/autopost/checklist-*.js`), они же внешний REST (`/api/external/v1`, `brapi_`-токен):
+
+- `bullgram_autopost_checklist_create` — `POST /autopost/bots/{bot_id}/checklists` — создать и опубликовать (`publish_now` / `scheduled_at` / очередь); `dedup_key` обязателен в крон-путях (повтор → `already_exists=true` без дубля), `pin`, `expires_at`
+- `bullgram_autopost_checklist_state` — `GET /autopost/bots/{bot_id}/checklists/{checklist_id}` — пункты + кто отметил + summary (+ `include_events` — лента событий)
+- `bullgram_autopost_checklist_list` — `GET /autopost/bots/{bot_id}/checklists` — список с фильтром `status` (active/expired/cancelled) и курсором
+- `bullgram_autopost_checklist_update` — `PATCH /autopost/bots/{bot_id}/checklists/{checklist_id}` — add/rename/remove/reset без потери отметок
+- `bullgram_autopost_checklist_cancel` — `POST /autopost/bots/{bot_id}/checklists/{checklist_id}/cancel` — закрыть: снять клавиатуры, убрать строки очереди
+
+Админские JWT-ручки для той же жизни: `GET/POST /api/autopost/bots/:botId/checklists`, `GET/PATCH /api/autopost/bots/:botId/checklists/:checklistId`, `POST /api/autopost/bots/:botId/checklists/:checklistId/cancel`.
+
+Ретеншен ленты событий: `CHECKLIST_EVENTS_RETENTION_DAYS` — дни жизни `autopost_checklist_events` (по умолчанию 90, минимум 7 — ниже порога откат к дефолту); чистит `jobs/autopost-checklist-events-cleanup.job.js` раз в 6ч.
+
+Сценарий агента: вечером `checklist_create` с `scheduled_at` на утро → семья отмечает пункты в Telegram → утром `checklist_state` с `include_events=true` питает память агента.
 
 ## Установка
 

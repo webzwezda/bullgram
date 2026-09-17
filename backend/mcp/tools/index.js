@@ -22,3 +22,8 @@ import './autopost/list-bots.js';
 import './autopost/list-channels.js';
 import './autopost/create-post.js';
 import './autopost/delete-message.js';
+import './autopost/checklist-create.js';
+import './autopost/checklist-state.js';
+import './autopost/checklist-list.js';
+import './autopost/checklist-update.js';
+import './autopost/checklist-cancel.js';

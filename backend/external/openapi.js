@@ -294,7 +294,15 @@ export function buildOpenApiSpec({ baseURL = '', serverUrl = '' } = {}) {
         '**External integrations (n8n, zapier, scripts):** ' +
         'use `POST /autopost/bots/{bot_id}/posts` to publish text posts to Telegram channels ' +
         'with inline buttons inherited from channel settings. Set `publish_now=true` for ' +
-        'immediate send, or omit to enqueue per channel schedule.',
+        'immediate send, or omit to enqueue per channel schedule.\n\n' +
+        '**Checklists (interactive to-do lists):** `POST /autopost/bots/{bot_id}/checklists` ' +
+        'publishes a checklist with one inline button per item — family members tap items right ' +
+        'in Telegram, the state lives in the DB. Typical agent loop: create in the evening with ' +
+        '`scheduled_at` (or `publish_now=true`), read `GET /autopost/bots/{bot_id}/checklists/' +
+        '{checklist_id}` in the morning with `include_events=true` (who checked what and when). ' +
+        'Always pass `dedup_key` in cron paths — a repeat call returns the existing checklist ' +
+        'with `already_exists=true` instead of double-posting. PATCH the checklist for edits ' +
+        '(checks survive rename by item_id, reset for cyclic lists), POST `.../cancel` to close it.',
       contact: { name: 'Bullgram', url: 'https://bullgram.xyz' }
     },
     servers,

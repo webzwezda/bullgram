@@ -99,6 +99,11 @@ export function registerAdminCommandsHandler(bot, service, botId) {
             service.adminStates.delete(tgUserId);
             return ctx.reply('❌ Выбор каналов отменён.');
         }
+        if (state?.action === 'await_checklist_text' || state?.action === 'await_checklist_channel') {
+            if (state.timer) clearTimeout(state.timer);
+            service.adminStates.delete(tgUserId);
+            return ctx.reply('❌ Создание чек-листа отменено.');
+        }
     });
 
     bot.hears('📋 Очередь', async (ctx) => {
@@ -309,6 +314,52 @@ export function registerAdminCommandsHandler(bot, service, botId) {
         await ctx.reply(`Готово. Реакция для «${channel.title}»: ${label}`);
     });
 
+    // Меню чек-листов: активные списки с прогрессом + инлайн-действия.
+    // Детали/закрытие/создание — в handlers/checklist-menu.js (clstate/clcancel/clnew).
+    bot.hears('☑️ Чек-листы', async (ctx) => {
+        const tgUserId = ctx.from.id;
+        const { isAdmin } = await service.getBotAdminContext(botId, tgUserId);
+        if (!isAdmin) return ctx.reply('Доступ запрещен.');
+
+        // Фильтр 'active' считается в коде после fetch — берём с запасом и режем до 10.
+        const { items: lists } = await service.listChecklists(botId, { status: 'active', limit: 50 });
+        const active = (lists || []).slice(0, 10);
+
+        if (active.length === 0) {
+            return ctx.reply(
+                'Активных чек-листов нет. Создай через Bullgram MCP или /app/autopost.',
+                Markup.inlineKeyboard([[Markup.button.callback('＋ Новый список', 'clnew')]])
+            );
+        }
+
+        // Прогресс одним батч-запросом по странице (паттерн itemsCountByChecklist в keyboard.js).
+        const { data: itemRows } = await supabase
+            .from('autopost_checklist_items')
+            .select('checklist_id, is_checked')
+            .in('checklist_id', active.map((c) => c.id));
+        const progress = new Map();
+        for (const r of itemRows || []) {
+            const p = progress.get(r.checklist_id) || { done: 0, total: 0 };
+            p.total += 1;
+            if (r.is_checked === true) p.done += 1;
+            progress.set(r.checklist_id, p);
+        }
+
+        const lines = active.map((c, i) => {
+            const p = progress.get(c.id) || { done: 0, total: 0 };
+            const expires = c.expires_at ? ` · до ${shortExpiry(c.expires_at)}` : '';
+            return `${i + 1}. ☑️ ${c.title || 'Без названия'} — Выполнено ${p.done} из ${p.total}${expires}`;
+        });
+
+        const rows = active.map((c) => [
+            Markup.button.callback(`🧾 Итог · ${(c.title || 'Без названия').slice(0, 20)}`, `clstate:${c.id}`),
+            Markup.button.callback('Закрыть список', `clcancel:${c.id}`)
+        ]);
+        rows.push([Markup.button.callback('＋ Новый список', 'clnew')]);
+
+        await ctx.reply(`☑️ Активные чек-листы (${active.length}):\n\n${lines.join('\n')}`, Markup.inlineKeyboard(rows));
+    });
+
     bot.command('stats', async (ctx) => {
         try {
             const stats = await service.getStats(botId);
@@ -343,6 +394,15 @@ export function registerAdminCommandsHandler(bot, service, botId) {
             await ctx.reply('❌ Ошибка при планировании.');
         }
     });
+
+    // Короткий «до 18.09 14:00» для меню. Серверная таймзона — это подсказка,
+    // а не источник истины: expires_at лежит в БД в ISO.
+    function shortExpiry(iso) {
+        const d = new Date(iso);
+        if (!iso || Number.isNaN(d.getTime())) return '';
+        const p = (n) => String(n).padStart(2, '0');
+        return `${p(d.getDate())}.${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
 
     async function resolveActiveChannel(botData, tgUserId) {
         const { data: channels } = await supabase

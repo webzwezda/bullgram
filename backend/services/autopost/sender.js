@@ -6,6 +6,8 @@
  * Возвращает массив message_ids (для sendMediaGroup их несколько).
  */
 
+import { buildChecklistMessage } from './checklist.js';
+
 function buildReplyMarkup({ channel, botUsername }) {
     if (!channel) return undefined;
 
@@ -121,6 +123,19 @@ export async function sendItemToChannel(telegramClient, targetChatId, item, opti
             await applyAlbumReplyMarkup(telegramClient, targetChatId, ids, replyMarkup);
             return ids;
         }
+    }
+
+    // Чек-лист: собственный рендер (текст с прогрессом + кнопка на пункт).
+    // Данные (checklist/items/showNames) прокидывает publishItem через item.options —
+    // здесь БД не читаем. Канальные URL-кнопки и «Предложить новость» не подмешиваем:
+    // клавиатура чек-листа принадлежит его пунктам (решение 8 из плана). Plain text.
+    if (item.media_type === 'checklist') {
+        const checklistOpts = item.options || {};
+        const { text, replyMarkup } = buildChecklistMessage(checklistOpts.checklist, checklistOpts.items, {
+            showNames: checklistOpts.showNames !== false
+        });
+        const message = await telegramClient.sendMessage(targetChatId, text, { reply_markup: replyMarkup });
+        return [message.message_id];
     }
 
     const fileId = pickFileId(item);

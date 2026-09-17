@@ -4,6 +4,7 @@
 import { Markup } from 'telegraf';
 
 const CHANNEL_FORMS = ['канал', 'канала', 'каналов'];
+const ITEM_FORMS = ['пункт', 'пункта', 'пунктов'];
 
 function pluralizeChannels(n) {
     const n10 = Math.abs(n) % 10;
@@ -11,6 +12,14 @@ function pluralizeChannels(n) {
     if (n10 === 1 && n100 !== 11) return CHANNEL_FORMS[0];
     if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return CHANNEL_FORMS[1];
     return CHANNEL_FORMS[2];
+}
+
+function pluralizeItems(n) {
+    const n10 = Math.abs(n) % 10;
+    const n100 = Math.abs(n) % 100;
+    if (n10 === 1 && n100 !== 11) return ITEM_FORMS[0];
+    if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return ITEM_FORMS[1];
+    return ITEM_FORMS[2];
 }
 
 export async function getAdminKeyboard(botId, tgUserId, supabase) {
@@ -30,11 +39,13 @@ export async function getAdminKeyboard(botId, tgUserId, supabase) {
         modeLabel = `🔄 Направление: ${activeChannel.title} ${activeChannel.visibility === 'public' ? '📢' : '🔒'}`;
     }
 
+    // Ровно 4 ряда — лимит меню. «Чек-листы» встраиваем в последний ряд,
+    // пятый ряд не заводим (план «Бот-меню»: ряд «☑️ Чек-листы» без роста сетки).
     return Markup.keyboard([
         [modeLabel],
         ['➕ Фото/Видео', '📝 Текст'],
         ['📋 Очередь', '📥 Предложки'],
-        ['🏆 Лучшее', '❤️ Автореакция']
+        ['🏆 Лучшее', '❤️ Автореакция', '☑️ Чек-листы']
     ]).resize();
 }
 
@@ -151,6 +162,21 @@ export async function showQueueForChannel(ctx, botId, channel, supabase, offset 
         .eq('autopost_bot_id', botId);
     const channelsCountNum = channelsCount || 0;
 
+    // (3) Чек-лист-карточки: количество пунктов одним батч-запросом по странице.
+    const checklistIds = [...new Set(items
+        .filter(i => i.media_type === 'checklist' && i.checklist_id)
+        .map(i => i.checklist_id))];
+    const itemsCountByChecklist = new Map();
+    if (checklistIds.length > 0) {
+        const { data: checklistItemRows } = await supabase
+            .from('autopost_checklist_items')
+            .select('checklist_id')
+            .in('checklist_id', checklistIds);
+        for (const r of checklistItemRows || []) {
+            itemsCountByChecklist.set(r.checklist_id, (itemsCountByChecklist.get(r.checklist_id) || 0) + 1);
+        }
+    }
+
     await ctx.reply(`📋 **Очередь постов (${channel.title})** — посты ${actualOffset + 1}–${actualOffset + items.length} из ${total}`);
 
     for (const item of items) {
@@ -162,6 +188,20 @@ export async function showQueueForChannel(ctx, botId, channel, supabase, offset 
             ? `📅 Запланирован на ${new Date(item.scheduled_at).toLocaleString('ru-RU')}${batchSuffix}`
             : `📦 В очереди${batchSuffix}`;
         const typeLabel = isText ? '📝 Текст\n\n' : '';
+
+        // Чек-лист: карточка без действий публикации. «Изменить текст» рассинхронила бы
+        // items, «Опубликовать» одной строки при fan-out опубликовала бы один канал из N,
+        // «Перенести» молча увела бы строку в чужой канал списка. Удаление остаётся —
+        // для чек-листа это отмена всего списка (см. del_post в queue-callbacks.js).
+        if (item.media_type === 'checklist') {
+            const count = itemsCountByChecklist.get(item.checklist_id) || 0;
+            const text = `${statusText}\n☑️ ${item.caption || 'Список'} · ${count} ${pluralizeItems(count)}`;
+            await ctx.reply(text, Markup.inlineKeyboard([
+                [Markup.button.callback('❌ Удалить', `del_post:${item.id}`)]
+            ]));
+            continue;
+        }
+
         const inlineKeyboard = queueItemInlineKeyboard(item, channel, { batchSize, channelsCount: channelsCountNum });
 
         if (fileId) {
