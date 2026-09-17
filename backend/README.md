@@ -96,6 +96,19 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 
 Сценарий агента: вечером `checklist_create` с `scheduled_at` на утро → семья отмечает пункты в Telegram → утром `checklist_state` с `include_events=true` питает память агента.
 
+### Юзербот-операции (MCP/REST)
+
+Полный базовый набор действий юзерботом (`mcp/tools/messages|dialogs|account/`, они же внешний REST `/api/external/v1`); волна 2 — план `docs/plans/2026-09-17-mcp-userbot-ops.md`:
+
+- `bullgram_userbot_message_edit` — `POST /userbots/{userbot_id}/messages/{chat_id}/edit` — правка своего сообщения (чужие → `MESSAGE_EDIT_FORBIDDEN`)
+- `bullgram_userbot_message_delete` — `POST /userbots/{userbot_id}/messages/{chat_id}/delete` — удалить до 100 сообщений, необратимо: обязателен `confirm: true`
+- `bullgram_userbot_message_forward` — `POST /userbots/{userbot_id}/messages/{chat_id}/forward` — переслать сообщения в `to_chat_id`
+- `bullgram_userbot_message_pin` — `POST /userbots/{userbot_id}/messages/{chat_id}/pin` — закрепить/открепить (`unpin`)
+- `bullgram_userbot_chat_read` — `POST /userbots/{userbot_id}/chats/{chat_id}/read` — отметить чат прочитанным
+- `bullgram_userbot_user_resolve` — `POST /userbots/{userbot_id}/resolve` — живой резолв по `username` | `tg_user_id` (ровно один), отдаёт `access_hash` для invite/promote
+
+Волна 1 там же: `group_create`, `member_invite`, `member_promote`, `group_invite_link` (гейт `USERBOT_GROUP_ADMIN_ENABLED`), `botfather_create_bot` (гейт `USERBOT_BOTFATHER_ENABLED`) и `bot_init` в autopost.
+
 ## Установка
 
 ```bash
@@ -166,6 +179,12 @@ USERBOT_DM_JITTER_PERCENT=20
 USERBOT_AUTO_JOIN_ENABLED=false
 USERBOT_JOIN_PER_HOUR=4
 USERBOT_JOIN_SLEEP_MS=45000
+
+# userbot group-admin ops via MCP/REST: group_create, member_invite, member_promote, group_invite_link
+USERBOT_GROUP_ADMIN_ENABLED=false
+
+# bot creation through the BotFather DM flow via MCP/REST (botfather_create_bot)
+USERBOT_BOTFATHER_ENABLED=false
 
 # auto-delete restricted userbots after quarantine window
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true

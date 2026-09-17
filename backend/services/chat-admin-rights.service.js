@@ -113,7 +113,9 @@ export class ChatAdminRightsService {
                     participant: new Api.InputPeerSelf()
                 })), 30_000, 'GetParticipant');
                 const rights = self?.participant?.adminRights;
-                if (!rights || rights.canPromoteMembers !== true) continue;
+                // ChatAdminRights (MTProto) не имеет флага canPromoteMembers — это Bot-API-имя;
+                // в TL-схеме право «назначать админов» = addAdmins (api.d.ts, telegram 2.26.22).
+                if (!rights || rights.addAdmins !== true) continue;
 
                 const participants = await withTimeout(client.getParticipants(channel, { limit: 5000 }), 120_000, 'Скан участников');
                 const target = (participants || []).find(participant => String(participant.id) === String(targetTgUserId));
@@ -122,7 +124,9 @@ export class ChatAdminRightsService {
                 await withTimeout(client.invoke(new Api.channels.EditAdmin({
                     channel,
                     userId: new Api.InputUser({ userId: BigInt(String(targetTgUserId)), accessHash: BigInt(String(target.accessHash)) }),
-                    adminRights: new Api.ChatAdminRights({ canManageChat: true }),
+                    // canManageChat в TL-схеме нет — такой запрос сериализуется в ALL-false права
+                    // (демоут с фейковым успехом). Все флаги ниже сверены с api.d.ts ChatAdminRights.
+                    adminRights: new Api.ChatAdminRights({ changeInfo: true, deleteMessages: true, pinMessages: true, inviteUsers: true }),
                     rank: ''
                 })), 30_000, 'EditAdmin');
                 return { userbot: candidate };

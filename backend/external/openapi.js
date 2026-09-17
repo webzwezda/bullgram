@@ -302,7 +302,14 @@ export function buildOpenApiSpec({ baseURL = '', serverUrl = '' } = {}) {
         '{checklist_id}` in the morning with `include_events=true` (who checked what and when). ' +
         'Always pass `dedup_key` in cron paths — a repeat call returns the existing checklist ' +
         'with `already_exists=true` instead of double-posting. PATCH the checklist for edits ' +
-        '(checks survive rename by item_id, reset for cyclic lists), POST `.../cancel` to close it.',
+        '(checks survive rename by item_id, reset for cyclic lists), POST `.../cancel` to close it.\n\n' +
+        '**Userbot group & message ops:** a userbot can act on Telegram directly — create a group/channel ' +
+        '(`POST /userbots/{userbot_id}/groups`, returns an invite link), invite and promote members, manage invite links, ' +
+        'edit / delete / forward / pin its sent messages (`POST /userbots/{userbot_id}/messages/{chat_id}/edit|delete|forward|pin`), ' +
+        'mark chats read (`POST /userbots/{userbot_id}/chats/{chat_id}/read`), and resolve any Telegram user by @username or id ' +
+        '(`POST /userbots/{userbot_id}/resolve`, returns access_hash for invites/promotes). ' +
+        'Group-admin and BotFather operations are gated behind `USERBOT_GROUP_ADMIN_ENABLED` / `USERBOT_BOTFATHER_ENABLED` ' +
+        '(default off); message deletion requires `confirm: true` because it is irreversible.',
       contact: { name: 'Bullgram', url: 'https://bullgram.xyz' }
     },
     servers,

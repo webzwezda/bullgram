@@ -2128,6 +2128,20 @@ export class UserbotService {
                 30_000,
                 'leaveChat.resolveEntity'
             );
+            if (entity instanceof Api.InputPeerChat) {
+                // basic-группа: LeaveChannel не работает — выход = удалить себя из чата.
+                // userId требует InputUser (InputPeerSelf сервер отклоняет по схеме TL) —
+                // паттерн broadcast-membership-cleanup.job.js (DeleteChatUser + InputUserSelf).
+                await withTimeout(
+                    client.invoke(new Api.messages.DeleteChatUser({
+                        chatId: entity.chatId,
+                        userId: new Api.InputUserSelf()
+                    })),
+                    30_000,
+                    'leaveChat.deleteChatUser'
+                );
+                return { success: true, chat_id: String(id) };
+            }
             await withTimeout(
                 client.invoke(new Api.channels.LeaveChannel({ channel: entity })),
                 30_000,
@@ -2211,6 +2225,710 @@ export class UserbotService {
         }
     }
 
+    // ============================================================
+    // Волна 1 userbot-ops: жизненный цикл группы/бота (план 2026-09-17).
+    // Все имена Api.* сверены с node_modules/telegram/tl/api.d.ts (telegram 2.26.22).
+    // Каждый метод: assertUserbotOperatable → флаг-гейт → createAuthorizedClient →
+    // try → finally safeDisconnect → wrapTelegramError.
+    // ============================================================
+
+    /**
+     * Создать группу или канал, где юзербот — владелец. Сразу выпускает invite-ссылку.
+     * GramJS: channels.CreateChannel({ megagroup | broadcast, title, about }) →
+     * result.chats[0] (Api.Channel: id/accessHash/title) → messages.ExportChatInvite({ peer }).
+     */
+    async createGroupChat(userbot, { title, kind = 'group', about = '' } = {}) {
+        assertUserbotOperatable(userbot);
+        assertFeatureEnabled('USERBOT_GROUP_ADMIN_ENABLED', 'Создание групп/каналов юзерботом');
+
+        const titleStr = String(title || '').trim();
+        if (!titleStr || titleStr.length > 128) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "title" is required (1-128 chars).', {});
+        }
+        const isChannel = String(kind || 'group') === 'channel';
+        const aboutStr = String(about || '').trim().slice(0, 255);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const result = await withTimeout(
+                client.invoke(new Api.channels.CreateChannel({
+                    title: titleStr,
+                    about: aboutStr,
+                    megagroup: !isChannel,
+                    broadcast: isChannel
+                })),
+                30_000,
+                'createGroupChat.createChannel'
+            );
+            const chat = result?.chats?.[0] || null;
+            if (!chat?.id) {
+                throw new MCPError(
+                    ERROR_CODES.TELEGRAM_ERROR,
+                    'Telegram не вернул созданный чат в ответе CreateChannel.',
+                    { auditStatus: 'telegram_error' }
+                );
+            }
+
+            const peer = new Api.InputPeerChannel({
+                channelId: BigInt(String(chat.id)),
+                accessHash: BigInt(String(chat.accessHash ?? '0'))
+            });
+            const exported = await withTimeout(
+                client.invoke(new Api.messages.ExportChatInvite({ peer })),
+                30_000,
+                'createGroupChat.exportInvite'
+            );
+
+            console.log('[UserbotService] createGroupChat: создан чат:', {
+                userbot_id: userbot.id,
+                chat_id: String(chat.id),
+                kind: isChannel ? 'channel' : 'group',
+                title: chat.title || titleStr
+            });
+
+            return {
+                chat_id: String(chat.id),
+                access_hash: chat?.accessHash != null ? String(chat.accessHash) : null,
+                title: chat?.title || titleStr,
+                invite_link: exported?.link || null
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'createGroupChat');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Пригласить участников в группу/канал по одному, чтобы отказ одному не ронял остальных.
+     * GramJS: channels.InviteToChannel({ channel, users: [entity] }).
+     */
+    async inviteGroupMembers(userbot, { chatId, members } = {}) {
+        assertUserbotOperatable(userbot);
+        assertFeatureEnabled('USERBOT_GROUP_ADMIN_ENABLED', 'Приглашение участников юзерботом');
+
+        const id = normalizeChatIdInput(chatId);
+        const rawMembers = Array.isArray(members) ? members : [];
+        if (rawMembers.length === 0) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "members" must be a non-empty array of @usernames.', {});
+        }
+        const usernames = rawMembers.map((raw) => {
+            const value = String(raw || '').trim();
+            if (!/^@?[A-Za-z0-9_]{4,32}$/.test(value)) {
+                throw new MCPError(
+                    ERROR_CODES.INVALID_PARAMS,
+                    `member "${value}" is not a valid @username.`,
+                    {}
+                );
+            }
+            return `@${value.replace(/^@/, '')}`;
+        });
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const channel = await this.resolveChatPeer(client, id);
+            const results = [];
+            for (let i = 0; i < usernames.length; i++) {
+                const username = usernames[i];
+                try {
+                    const user = await withTimeout(
+                        client.getEntity(username),
+                        30_000,
+                        'inviteGroupMembers.resolveUser'
+                    );
+                    await withTimeout(
+                        client.invoke(new Api.channels.InviteToChannel({ channel, users: [user] })),
+                        30_000,
+                        'inviteGroupMembers.invite'
+                    );
+                    results.push({ member: username, status: 'ok', error: null });
+                } catch (memberError) {
+                    const rawError = String(memberError?.errorMessage || memberError?.message || memberError);
+                    // USER_ALREADY_PARTICIPANT — участник уже в чате, это не провал операции.
+                    if (rawError.toUpperCase().includes('USER_ALREADY_PARTICIPANT')) {
+                        results.push({ member: username, status: 'already', error: null });
+                    } else {
+                        results.push({
+                            member: username,
+                            status: 'failed',
+                            error: rawError.slice(0, 300)
+                        });
+                    }
+                }
+                // Пауза между инвайтами (кроме последнего) — Telegram не любит серию InviteToChannel.
+                if (i < usernames.length - 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+            }
+            return { results };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'inviteGroupMembers');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Назначить/разжать админа в группе или канале.
+     * Права сверяются с api.d.ts (telegram 2.26.22): Api.ChatAdminRights —
+     * changeInfo/postMessages/editMessages/deleteMessages/banUsers/inviteUsers/
+     * pinMessages/addAdmins/anonymous/manageCall/other/manageTopics/... —
+     * Bot-API-имена (canManageChat/canPromoteMembers) в MTProto отсутствуют:
+     * право «назначать админов» = addAdmins.
+     */
+    async promoteGroupMember(userbot, { chatId, member, rights = 'all' } = {}) {
+        assertUserbotOperatable(userbot);
+        assertFeatureEnabled('USERBOT_GROUP_ADMIN_ENABLED', 'Назначение админов юзерботом');
+
+        const id = normalizeChatIdInput(chatId);
+        const memberStr = String(member || '').trim();
+        if (!memberStr) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "member" is required.', {});
+        }
+        const preset = PROMOTE_ADMIN_RIGHTS_PRESETS[rights];
+        if (!preset) {
+            throw new MCPError(
+                ERROR_CODES.INVALID_PARAMS,
+                'Argument "rights" must be one of: all, post_only, revoke.',
+                {}
+            );
+        }
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const channel = await this.resolveChatPeer(client, id);
+
+            // Свои права: GetParticipant(channel, InputPeerSelf) — паттерн chat-admin-rights.service.js.
+            const self = await withTimeout(
+                client.invoke(new Api.channels.GetParticipant({
+                    channel,
+                    participant: new Api.InputPeerSelf()
+                })),
+                30_000,
+                'promoteGroupMember.getSelf'
+            );
+            const selfRights = self?.participant?.adminRights;
+            if (!selfRights || selfRights.addAdmins !== true) {
+                throw new MCPError(
+                    ERROR_CODES.FORBIDDEN,
+                    'У юзербота нет прав назначать админов в этом чате.',
+                    {}
+                );
+            }
+
+            const targetUser = await this.resolveMemberInputUser(client, channel, memberStr);
+            await withTimeout(
+                client.invoke(new Api.channels.EditAdmin({
+                    channel,
+                    userId: targetUser,
+                    adminRights: new Api.ChatAdminRights(preset),
+                    rank: ''
+                })),
+                30_000,
+                'promoteGroupMember.editAdmin'
+            );
+
+            return { chat_id: String(id), member: memberStr, rights };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'promoteGroupMember');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Выпустить свежую invite-ссылку или отозвать: конкретную (аргумент link)
+     * либо текущую основную (revoke=true без link — достаём её из
+     * channels.GetFullChannel → fullChat.exportedInvite.link, затем
+     * messages.EditExportedChatInvite({ peer, link, revoked: true })).
+     * Паттерн contour-admin-rights.service.js.
+     */
+    async exportGroupInviteLink(userbot, { chatId, link = null, revoke = false } = {}) {
+        assertUserbotOperatable(userbot);
+        assertFeatureEnabled('USERBOT_GROUP_ADMIN_ENABLED', 'Инвайт-ссылки юзерботом');
+
+        const id = normalizeChatIdInput(chatId);
+        const linkStr = link != null ? String(link).trim() : '';
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const peer = await this.resolveChatPeer(client, id);
+
+            if (revoke && linkStr) {
+                await withTimeout(
+                    client.invoke(new Api.messages.EditExportedChatInvite({
+                        peer,
+                        link: linkStr,
+                        revoked: true
+                    })),
+                    30_000,
+                    'exportGroupInviteLink.revoke'
+                );
+                return { chat_id: String(id), revoked: true, invite_link: null };
+            }
+
+            if (revoke) {
+                const full = await withTimeout(
+                    client.invoke(new Api.channels.GetFullChannel({ channel: peer })),
+                    30_000,
+                    'exportGroupInviteLink.full'
+                );
+                const currentLink = full?.fullChat?.exportedInvite?.link || null;
+                if (!currentLink) {
+                    throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'У группы нет активной ссылки-инвайта', {});
+                }
+                await withTimeout(
+                    client.invoke(new Api.messages.EditExportedChatInvite({
+                        peer,
+                        link: currentLink,
+                        revoked: true
+                    })),
+                    30_000,
+                    'exportGroupInviteLink.revokeCurrent'
+                );
+                return { chat_id: String(id), revoked: true, invite_link: null };
+            }
+
+            const exported = await withTimeout(
+                client.invoke(new Api.messages.ExportChatInvite({ peer })),
+                30_000,
+                'exportGroupInviteLink.export'
+            );
+            return {
+                chat_id: String(id),
+                revoked: false,
+                invite_link: exported?.link || null
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'exportGroupInviteLink');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Создать бота через DM-диалог с @BotFather — ОДИН клиент на операцию,
+     * никаких персистентных клиентов (правило плана). Флоу: /newbot → имя →
+     * username → парс токена из ответа. DM-гейта нет — как у SpamBot-инспектора.
+     * Гард от параллельного запуска на одном юзерботе (RATE_LIMITED) и
+     * редакция токена из raw_reply.
+     */
+    async botFatherCreateBot(userbot, { botName, botUsername, stepTimeoutMs } = {}) {
+        assertUserbotOperatable(userbot);
+        assertFeatureEnabled('USERBOT_BOTFATHER_ENABLED', 'Создание ботов через BotFather');
+
+        const inFlightKey = String(userbot.id);
+        if (botFatherCreateBotInFlight.has(inFlightKey)) {
+            throw new MCPError(ERROR_CODES.RATE_LIMITED, 'Создание бота для этого юзербота уже идёт', {});
+        }
+        botFatherCreateBotInFlight.set(inFlightKey, true);
+
+        const name = String(botName || '').trim();
+        if (!name || name.length > 64) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "bot_name" is required (1-64 chars).', {});
+        }
+        const username = String(botUsername || '').trim().toLowerCase().replace(/^@/, '');
+        if (!username) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "bot_username" is required.', {});
+        }
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const peer = await withTimeout(
+                client.getInputEntity('botfather'),
+                30_000,
+                'botFatherCreateBot.resolvePeer'
+            );
+            // Baseline: id последнего сообщения в диалоге — ответы BotFather ищем строго выше его.
+            const baseline = await withTimeout(
+                client.getMessages(peer, { limit: 1 }),
+                30_000,
+                'botFatherCreateBot.baseline'
+            );
+            const baselineId = Number(baseline?.[0]?.id || 0);
+
+            const sendStep = async (text, label) => {
+                const sent = await withTimeout(
+                    client.sendMessage(peer, { message: text }),
+                    30_000,
+                    `${label}.send`
+                );
+                const afterId = Math.max(Number(sent?.id || 0), baselineId);
+                return waitForBotFatherReply(client, peer, afterId, stepTimeoutMs, label);
+            };
+
+            await sendStep('/newbot', 'botFatherCreateBot.step1');
+            await sendStep(name, 'botFatherCreateBot.step2');
+            const reply = await sendStep(username, 'botFatherCreateBot.step3');
+
+            if (/taken|unavailable/i.test(reply)) {
+                throw new MCPError(
+                    ERROR_CODES.INVALID_PARAMS,
+                    `BotFather отклонил username: ${reply.slice(0, 300)}`,
+                    {}
+                );
+            }
+            const token = parseBotFatherToken(reply);
+            if (!token) {
+                throw new MCPError(
+                    ERROR_CODES.TELEGRAM_ERROR,
+                    `BotFather ответил без токена: ${reply.slice(0, 300)}`,
+                    { auditStatus: 'telegram_error' }
+                );
+            }
+
+            console.log('[UserbotService] botFatherCreateBot: бот создан:', {
+                userbot_id: userbot.id,
+                bot_username: `@${username}`
+            });
+
+            return {
+                bot_username: `@${username}`,
+                bot_token: token,
+                raw_reply: token ? reply.replace(token, '<redacted>') : reply.slice(0, 1000)
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'botFatherCreateBot');
+        } finally {
+            botFatherCreateBotInFlight.delete(inFlightKey);
+            await safeDisconnect(client);
+        }
+    }
+
+    // ============================================================
+    // Волна 2 userbot-ops: банальные операции с сообщениями/чатами.
+    // Без флагов-kill-switch (необратимость delete закрыта явным confirm-ом
+    // на уровне операции); peer резолвим волновским resolveChatPeer.
+    // ============================================================
+
+    /**
+     * Отредактировать СВОЁ сообщение. Чужие Telegram отклоняет с
+     * MESSAGE_EDIT_FORBIDDEN — маппится wrapTelegramError-ом.
+     * GramJS: messages.EditMessage({ peer, id, message }).
+     */
+    async editSentMessage(userbot, { chatId, messageId, text } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const id = normalizeChatIdInput(chatId);
+        const textStr = String(text ?? '');
+        if (!textStr.trim() || textStr.length > 4096) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "text" is required (1-4096 chars).', {});
+        }
+        const msgId = normalizeMessageIdInput(messageId);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const peer = await this.resolveChatPeer(client, id);
+            await withTimeout(
+                client.invoke(new Api.messages.EditMessage({
+                    peer,
+                    id: msgId,
+                    message: textStr
+                })),
+                30_000,
+                'editSentMessage.edit'
+            );
+            return { chat_id: String(id), message_id: msgId, edited: true };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'editSentMessage');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Удалить сообщения безвозвратно (revoke). GramJS-хелпер client.deleteMessages
+     * сам выбирает channels.DeleteMessages для каналов/супергрупп и
+     * messages.DeleteMessages({ revoke }) для ЛС/базик-чатов (api.d.ts + client/messages.js).
+     */
+    async deleteSentMessages(userbot, { chatId, messageIds } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const id = normalizeChatIdInput(chatId);
+        const rawIds = Array.isArray(messageIds) ? messageIds : [];
+        if (rawIds.length === 0) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "message_ids" must be a non-empty array of message IDs.', {});
+        }
+        // Хелпер принимает только числовые id (client/messages.js deleteMessages).
+        const ids = rawIds.map(normalizeMessageIdInput);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            // Резолвим peer заранее: внутри хелпера getInputEntity без fallback на диалоги.
+            const peer = await this.resolveChatPeer(client, id);
+            await withTimeout(
+                client.deleteMessages(peer, ids, { revoke: true }),
+                60_000,
+                'deleteSentMessages.delete'
+            );
+            console.log('[UserbotService] deleteSentMessages: удалено:', {
+                userbot_id: userbot.id,
+                chat_id: String(id),
+                count: ids.length
+            });
+            return { chat_id: String(id), deleted: ids.length };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'deleteSentMessages');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Переслать сообщения в другой чат. GramJS: messages.ForwardMessages
+     * ({ fromPeer, id, randomId, toPeer }). Конструктор сам автогенерирует
+     * randomId, но мы задаём их явно — намеренно, ради дедупликации
+     * и тестируемости (детерминированный инвариант в тестах).
+     */
+    async forwardSentMessages(userbot, { fromChatId, messageIds, toChatId } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const fromId = normalizeChatIdInput(fromChatId);
+        const toId = normalizeChatIdInput(toChatId);
+        const rawIds = Array.isArray(messageIds) ? messageIds : [];
+        if (rawIds.length === 0) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "message_ids" must be a non-empty array of message IDs.', {});
+        }
+        const ids = rawIds.map(normalizeMessageIdInput);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const fromPeer = await this.resolveChatPeer(client, fromId);
+            const toPeer = await this.resolveChatPeer(client, toId);
+            await withTimeout(
+                client.invoke(new Api.messages.ForwardMessages({
+                    fromPeer,
+                    id: ids,
+                    randomId: ids.map(() => randomPositiveLong()),
+                    toPeer
+                })),
+                30_000,
+                'forwardSentMessages.forward'
+            );
+            return { to_chat_id: String(toId), forwarded: ids.length };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'forwardSentMessages');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Закрепить/открепить сообщение в чате.
+     * GramJS: messages.UpdatePinnedMessage({ peer, id, unpin }).
+     */
+    async pinChatMessage(userbot, { chatId, messageId, unpin = false } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const id = normalizeChatIdInput(chatId);
+        const msgId = normalizeMessageIdInput(messageId);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const peer = await this.resolveChatPeer(client, id);
+            await withTimeout(
+                client.invoke(new Api.messages.UpdatePinnedMessage({
+                    peer,
+                    id: msgId,
+                    unpin: unpin === true
+                })),
+                30_000,
+                'pinChatMessage.pin'
+            );
+            return { chat_id: String(id), message_id: msgId, pinned: !(unpin === true) };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'pinChatMessage');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Отметить чат прочитанным. markDialogAsRead не подходит — он резолвит
+     * DM-адресата, а не произвольный чат. Peer-ветки по классу результата
+     * getInputEntity: каналы/супергруппы — channels.ReadMessageContents по id
+     * последнего сообщения (пустой канал размечать нечем), остальные —
+     * messages.ReadHistory({ peer, maxId: MAX_INT }).
+     */
+    async markChatRead(userbot, { chatId } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const id = normalizeChatIdInput(chatId);
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const peer = await this.resolveChatPeer(client, id);
+            const className = String(peer?.className || '');
+            const isChannelPeer = className === 'InputPeerChannel' || className === 'Channel';
+
+            if (isChannelPeer) {
+                const latest = await withTimeout(
+                    client.getMessages(peer, { limit: 1 }),
+                    30_000,
+                    'markChatRead.latest'
+                );
+                const latestId = Number(latest?.[0]?.id || 0);
+                if (latestId > 0) {
+                    await withTimeout(
+                        client.invoke(new Api.channels.ReadMessageContents({
+                            channel: peer,
+                            id: [latestId]
+                        })),
+                        30_000,
+                        'markChatRead.readContents'
+                    );
+                }
+            } else {
+                await withTimeout(
+                    client.invoke(new Api.messages.ReadHistory({
+                        peer,
+                        maxId: 2147483647
+                    })),
+                    30_000,
+                    'markChatRead.readHistory'
+                );
+            }
+            return { chat_id: String(id), read: true };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'markChatRead');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Резолв пользователя Telegram по @username или tg_user_id (ровно один).
+     * Фундамент access_hash для invite/promote. GramJS: client.getEntity(...)
+     * → Api.User: id/username/firstName/lastName/verified/accessHash.
+     */
+    async resolveTelegramUser(userbot, { username, tgUserId } = {}) {
+        assertUserbotOperatable(userbot);
+
+        const usernameStr = String(username ?? '').trim();
+        const idStr = String(tgUserId ?? '').trim();
+        if (Boolean(usernameStr) === Boolean(idStr)) {
+            throw new MCPError(
+                ERROR_CODES.INVALID_PARAMS,
+                'Pass exactly one of "username" or "tg_user_id".',
+                {}
+            );
+        }
+        // Формат username проверяем до getEntity: Telegram отвечает на мусор
+        // невнятной peer-ошибкой, лучше валить сразу.
+        if (usernameStr && !/^@?[a-zA-Z0-9_]{4,32}$/.test(usernameStr)) {
+            throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Некорректный username', {});
+        }
+        const lookup = usernameStr
+            ? `@${usernameStr.replace(/^@/, '')}`
+            : idStr;
+
+        const client = await this.createAuthorizedClient(userbot);
+        try {
+            const entity = await withTimeout(
+                client.getEntity(lookup),
+                30_000,
+                'resolveTelegramUser.getEntity'
+            );
+            if (entity?.id == null) {
+                throw new MCPError(
+                    ERROR_CODES.TELEGRAM_ERROR,
+                    'Telegram не вернул профиль пользователя.',
+                    { auditStatus: 'telegram_error' }
+                );
+            }
+            return {
+                id: String(entity.id),
+                username: entity.username || null,
+                first_name: entity.firstName || entity.first_name || null,
+                last_name: entity.lastName || entity.last_name || null,
+                verified: entity.verified === true,
+                access_hash: entity.accessHash != null ? String(entity.accessHash) : ''
+            };
+        } catch (error) {
+            throw await wrapTelegramError(this.supabase, userbot, error, 'resolveTelegramUser');
+        } finally {
+            await safeDisconnect(client);
+        }
+    }
+
+    /**
+     * Резолв peer чата: свежий клиент не знает peer по сырому id — при провале
+     * ищем в диалогах по bare id (паттерн resolveChatEntity / broadcast-cleanup resolvePeer).
+     * User-ветка тоже принимается: волна-2 операции должны работать и по DM-пирам.
+     */
+    async resolveChatPeer(client, chatId) {
+        try {
+            return await client.getInputEntity(chatId);
+        } catch (error) {
+            const dialogs = await withTimeout(
+                client.getDialogs({ limit: 300 }),
+                120_000,
+                'resolveChatPeer.scanDialogs'
+            );
+            const bare = String(chatId).replace(/^-100/, '');
+            const hit = (dialogs || []).find(dialog =>
+                String(dialog?.id || '').replace(/^-100/, '') === bare &&
+                (dialog?.entity?.className === 'Channel'
+                    || dialog?.entity?.className === 'Chat'
+                    || dialog?.entity?.className === 'User'));
+            if (!hit?.entity) throw error;
+            return hit.entity;
+        }
+    }
+
+    /**
+     * InputUser участника с access_hash: сначала getEntity, без access_hash —
+     * getParticipants-скан чата (паттерн chat-admin-rights.service.js findPromoterUserbot).
+     * В скане username сравниваем case-insensitively, id нормализуем —
+     * у участников Telegram отдаёт bare id без '-100'/'-'.
+     */
+    async resolveMemberInputUser(client, channel, member) {
+        const raw = String(member || '').trim();
+        const isNumericId = /^-?\d+$/.test(raw);
+        const lookup = isNumericId ? raw : `@${raw.replace(/^@/, '')}`;
+        const bareId = isNumericId ? raw.replace(/^-100/, '').replace(/^-/, '') : null;
+        const bareUsername = isNumericId ? null : raw.replace(/^@/, '').toLowerCase();
+
+        if (!isNumericId) {
+            try {
+                const entity = await withTimeout(
+                    client.getEntity(lookup),
+                    30_000,
+                    'resolveMemberInputUser.getEntity'
+                );
+                if (entity?.id != null && entity?.accessHash != null) {
+                    return new Api.InputUser({
+                        userId: BigInt(String(entity.id)),
+                        accessHash: BigInt(String(entity.accessHash))
+                    });
+                }
+            } catch {
+                // нет access_hash через getEntity — пробуем скан участников
+            }
+        }
+
+        const participants = await withTimeout(
+            client.getParticipants(channel, { limit: 5000 }),
+            120_000,
+            'resolveMemberInputUser.scanParticipants'
+        );
+        const target = (participants || []).find(p =>
+            (bareId != null && String(p?.id || '') === bareId)
+            || (bareUsername != null && String(p?.username || '').toLowerCase() === bareUsername));
+        if (target?.id != null && target?.accessHash != null) {
+            return new Api.InputUser({
+                userId: BigInt(String(target.id)),
+                accessHash: BigInt(String(target.accessHash))
+            });
+        }
+
+        throw new MCPError(
+            ERROR_CODES.INVALID_PARAMS,
+            `Не удалось найти участника ${raw} в этом чате. Участник должен состоять в чате, иначе Telegram не отдаёт access_hash.`,
+            {}
+        );
+    }
+
     async _lastTelegramEventFor(userbotId) {
         if (!userbotId) return null;
         const { data } = await this.supabase
@@ -2227,6 +2945,87 @@ export class UserbotService {
 // ============================================================
 // Local helpers — pure functions for Plan 01 Phase 4 userbot helpers
 // ============================================================
+
+// ============================================================
+// Волна 1 userbot-ops: чистые хелперы (план 2026-09-17).
+// ============================================================
+
+// Флаги-kill-switch для опасных операций (дефолт false — доктрина userbot-флагов).
+function assertFeatureEnabled(envName, featureLabel) {
+    const enabled = String(process.env[envName] || '').trim().toLowerCase() === 'true';
+    if (!enabled) {
+        throw new MCPError(
+            ERROR_CODES.TOOL_DISABLED,
+            `${featureLabel}: операция выключена на этом сервере. Включи ${envName} в .env (true) и перезапусти backend.`,
+            {}
+        );
+    }
+}
+
+// Токен бота из ответа BotFather: «123456789:AA...long-secret...».
+export function parseBotFatherToken(rawValue = '') {
+    const match = String(rawValue || '').match(/(\d{6,10}:[A-Za-z0-9_-]{30,})/);
+    return match ? match[1] : null;
+}
+
+// Права для channels.EditAdmin. Имена флагов сверены с api.d.ts
+// (telegram 2.26.22) class ChatAdminRights: changeInfo/postMessages/editMessages/
+// deleteMessages/banUsers/inviteUsers/pinMessages/addAdmins/anonymous/manageCall/
+// other/manageTopics/postStories/editStories/deleteStories. Bot-API-имена
+// (canManageChat, canPromoteMembers) в MTProto-схеме отсутствуют: право
+// «назначать админов» — это addAdmins. 'revoke' = пустые права (разжать).
+const PROMOTE_ADMIN_RIGHTS_PRESETS = Object.freeze({
+    all: Object.freeze({
+        changeInfo: true,
+        postMessages: true,
+        editMessages: true,
+        deleteMessages: true,
+        banUsers: true,
+        inviteUsers: true,
+        pinMessages: true,
+        addAdmins: true
+    }),
+    post_only: Object.freeze({ postMessages: true }),
+    revoke: Object.freeze({})
+});
+
+const BOTFATHER_STEP_TIMEOUT_MS = 20_000;
+
+// Ин-флайт-гард botFatherCreateBot: параллельный вызов на одном юзерботе путает
+// baseline и ответы шагов — второй запуск отклоняем, пока первый не дойдёт до finally.
+const botFatherCreateBotInFlight = new Map();
+
+function botFatherSleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Поллинг DM-диалога с BotFather: ждём ВХОДЯЩЕЕ сообщение с id > afterId (в GramJS
+// custom Message нет поля incoming — входящие опознаём по флагу out === false,
+// свои исходящие не берём). Таймаут шага — TELEGRAM_ERROR.
+async function waitForBotFatherReply(client, peer, afterId, timeoutMs, label) {
+    const timeout = Number(timeoutMs) > 0 ? Number(timeoutMs) : BOTFATHER_STEP_TIMEOUT_MS;
+    const interval = Math.min(1500, Math.max(50, Math.floor(timeout / 4)));
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+        await botFatherSleep(interval);
+        const messages = await withTimeout(
+            client.getMessages(peer, { limit: 5 }),
+            30_000,
+            `${label}.poll`
+        );
+        const fresh = (messages || []).find(m => m?.out === false && Number(m?.id || 0) > afterId);
+        if (fresh) {
+            return String(fresh?.message || '').trim();
+        }
+    }
+
+    throw new MCPError(
+        ERROR_CODES.TELEGRAM_ERROR,
+        'BotFather не ответил вовремя — повтори операцию чуть позже.',
+        { auditStatus: 'telegram_error' }
+    );
+}
 
 function parseTelegramInviteLink(rawValue = '') {
     const value = String(rawValue || '').trim();
@@ -2310,6 +3109,20 @@ function normalizeChatIdInput(value) {
         throw new MCPError(ERROR_CODES.INVALID_PARAMS, `chat_id "${str}" is not a valid Telegram chat ID.`, {});
     }
     return str;
+}
+
+// Волна 2 userbot-ops: id сообщения — положительное целое (GramJS ждёт int).
+function normalizeMessageIdInput(value) {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n <= 0) {
+        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `message_id "${value}" is not a valid Telegram message ID.`, {});
+    }
+    return n;
+}
+
+// Положительный 63-битный long для randomId в messages.ForwardMessages.
+function randomPositiveLong() {
+    return BigInt(`0x${crypto.randomBytes(8).toString('hex')}`) >> 1n;
 }
 
 async function safeDisconnect(client) {
