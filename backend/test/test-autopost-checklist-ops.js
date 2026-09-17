@@ -10,12 +10,19 @@
  * unique-violation гонка (23505) → существующий возвращён; ветки публикации
  * publish_now / scheduled_at / queued; non-fatal pin; маппинг ошибок update
  * (NOT_FOUND / ITEM_NOT_FOUND / CHECKLIST_CANCELLED / TOO_MANY_ITEMS) и cancel.
+ * Плюс agent_note (посты: batch fan-out; чек-листы: create/update/''-очистка,
+ * читается через state/list), posts_list (фильтр статуса, курсор created_at|id,
+ * чужой бот) и channel_update (таймзона, слоты, collapseQueue, чужой канал).
  */
 import { createChecklistHandler } from '../mcp/tools/autopost/checklist-create.js';
 import { checklistStateHandler } from '../mcp/tools/autopost/checklist-state.js';
 import { checklistListHandler } from '../mcp/tools/autopost/checklist-list.js';
 import { updateChecklistHandler } from '../mcp/tools/autopost/checklist-update.js';
 import { cancelChecklistHandler } from '../mcp/tools/autopost/checklist-cancel.js';
+import { createPostHandler } from '../mcp/tools/autopost/create-post.js';
+import { postsListHandler } from '../mcp/tools/autopost/posts-list.js';
+import { updateChannelHandler } from '../mcp/tools/autopost/channel-update.js';
+import { randomUUID } from 'node:crypto';
 import { MCPError, ERROR_CODES } from '../shared/errors.js';
 import { AutopostService } from '../services/autopost.service.js';
 import { startAutopostBot, stopAutopostBot } from '../services/autopost/bot-lifecycle.js';
@@ -121,7 +128,7 @@ function makeDb({ bots = [makeBot()], channels = [makeChannel()], checklists = [
     }
 
     function chain(table) {
-        const state = { filters: {}, inFilters: [], gteFilters: [], ltFilters: [], mode: null };
+        const state = { filters: {}, inFilters: [], gteFilters: [], ltFilters: [], orderKey: null, orderAsc: true, limitValue: null, mode: null };
         const b = {
             select() { return b; },
             eq(k, v) { state.filters[k] = v; return b; },
@@ -129,14 +136,26 @@ function makeDb({ bots = [makeBot()], channels = [makeChannel()], checklists = [
             gte(k, v) { state.gteFilters.push([k, v]); return b; },
             lt(k, v) { state.ltFilters.push([k, v]); return b; },
             contains() { return b; },
-            order() { return b; },
-            limit() { return b; },
+            order(k, opts = {}) { state.orderKey = k; state.orderAsc = opts.ascending !== false; return b; },
+            limit(n) { state.limitValue = n; return b; },
             maybeSingle() { state.mode = 'maybeSingle'; return Promise.resolve(run()); },
             single() { state.mode = 'single'; return Promise.resolve(run()); },
             then(resolve, reject) { return Promise.resolve(run()).then(resolve, reject); }
         };
         function run() {
-            const rows = db[table].filter((row) => rowMatches(row, state));
+            let rows = db[table].filter((row) => rowMatches(row, state));
+            if (state.orderKey) {
+                const dir = state.orderAsc ? 1 : -1;
+                const cmp = (va, vb) => {
+                    if (typeof va === 'number' && typeof vb === 'number') return va - vb;
+                    const sa = String(va ?? '');
+                    const sb = String(vb ?? '');
+                    return sa < sb ? -1 : sa > sb ? 1 : 0;
+                };
+                // Array.prototype.sort стабильна (ES2019): равные ключи сохраняют порядок вставки.
+                rows.sort((a, b) => dir * cmp(a[state.orderKey], b[state.orderKey]));
+            }
+            if (state.limitValue != null) rows = rows.slice(0, state.limitValue);
             return { data: state.mode ? (rows[0] ?? null) : rows, error: null };
         }
 
@@ -151,7 +170,8 @@ function makeDb({ bots = [makeBot()], channels = [makeChannel()], checklists = [
                     return { select: () => ({ single: async () => ({ data: null, error: checklistInsertError }) }) };
                 }
                 const inserted = rows.map((r) => ({
-                    id: `chk-${rowId++}`,
+                    // UUID, как в real-БД: state/update-хендлеры валидируют checklist_id как UUID.
+                    id: randomUUID(),
                     cancelled_at: null,
                     created_at: new Date().toISOString(),
                     ...r
@@ -182,6 +202,8 @@ function makeDb({ bots = [makeBot()], channels = [makeChannel()], checklists = [
                     scheduled_at: null,
                     error_message: null,
                     is_suggestion: false,
+                    // Зеркало дефолта real-БД: created_at now() — курсор posts_list на него опирается.
+                    created_at: new Date().toISOString(),
                     ...r
                 }));
                 db.autopost_items.push(...inserted);
@@ -580,6 +602,214 @@ console.log('--- checklist_update: чужой бот → NOT_FOUND бота ---'
         args: { bot_id: BOT_ID, checklist_id: CL_ID, add: ['x'] }
     }));
     assert(err?.code === ERROR_CODES.NOT_FOUND, 'bot probe NOT_FOUND');
+}
+
+console.log('--- post_create: agent_note пишется во все строки batch\'а; без заметки → null ---');
+{
+    // Два канала → две строки очереди, одна заметка на весь batch.
+    const mock = makeDb({
+        channels: [
+            makeChannel(),
+            { id: 'ch2', tg_chat_id: '-100222', title: 'Второй', visibility: 'private', autopost_bot_id: BOT_ID }
+        ]
+    });
+    await createPostHandler({
+        supabase: mock,
+        req: REQ,
+        args: {
+            bot_id: BOT_ID,
+            target_channel_ids: [CHANNEL_TG_ID, '-100222'],
+            caption: 'напоминание о привычках',
+            agent_note: 'этот пост о привычках, привычки в вики/папка X'
+        }
+    });
+    const rows = mock.db.autopost_items;
+    assert(rows.length === 2, 'two queue rows for two channels');
+    assert(rows.every((r) => r.agent_note === 'этот пост о привычках, привычки в вики/папка X'), 'note on every batch row');
+    assert(new Set(rows.map((r) => r.post_batch_id)).size === 1, 'rows share one batch_id');
+    assert(rows.every((r) => ['queued', 'scheduled'].includes(r.status)), 'queued-branch statuses');
+    assert(mock.calls.rpc.includes('autopost_collapse_queue'), 'collapseQueue ran for both channels');
+}
+{
+    const mock = makeDb();
+    await createPostHandler({
+        supabase: mock,
+        req: REQ,
+        args: { bot_id: BOT_ID, target_channel_ids: [CHANNEL_TG_ID], caption: 'без заметки' }
+    });
+    assert(mock.db.autopost_items[0]?.agent_note === null, 'no agent_note → null on the row');
+}
+{
+    const mock = makeDb();
+    const err = await capture(createPostHandler({
+        supabase: mock,
+        req: REQ,
+        args: { bot_id: BOT_ID, target_channel_ids: [CHANNEL_TG_ID], caption: 'x', agent_note: 'a'.repeat(2001) }
+    }));
+    assert(err?.code === ERROR_CODES.INVALID_PARAMS, 'agent_note > 2000 → INVALID_PARAMS');
+    assert(mock.db.autopost_items.length === 0, 'no rows inserted on bad note');
+}
+
+console.log('--- posts_list: agent_note, фильтр статуса, курсор created_at|id ---');
+{
+    const mkPost = (id, createdAt, status, note) => ({
+        id,
+        bot_id: BOT_ID,
+        target_channel_id: CHANNEL_TG_ID,
+        post_batch_id: 'batch-1',
+        caption: `пост ${id.slice(-1)}`,
+        media_type: 'text',
+        status,
+        agent_note: note,
+        created_at: createdAt,
+        posted_message_ids: [],
+        scheduled_at: null,
+        posted_at: null,
+        error_message: null,
+        sort_order: 1
+    });
+    const mock = makeDb({
+        items: [
+            mkPost('aaaaaaaa-0000-4000-8000-000000000001', '2026-09-17T10:00:00.000Z', 'posted', 'старый пост про привычки'),
+            mkPost('aaaaaaaa-0000-4000-8000-000000000002', '2026-09-17T11:00:00.000Z', 'queued', null),
+            mkPost('aaaaaaaa-0000-4000-8000-000000000003', '2026-09-17T12:00:00.000Z', 'queued', 'свежий контекст')
+        ]
+    });
+
+    const page1 = await postsListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID, limit: 2 } });
+    assert(page1.items.length === 2, 'limit respected');
+    assert(page1.items[0].id === 'aaaaaaaa-0000-4000-8000-000000000003', 'fresh first (created_at desc)');
+    assert(page1.items[0].agent_note === 'свежий контекст', 'agent_note returned');
+    assert(page1.items[0].target_channel_id === CHANNEL_TG_ID, 'target_channel_id as string');
+    assert(page1.next_cursor === '2026-09-17T11:00:00.000Z|aaaaaaaa-0000-4000-8000-000000000002', 'cursor = created_at|id');
+
+    const page2 = await postsListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID, limit: 2, cursor: page1.next_cursor } });
+    assert(page2.items.length === 1 && page2.items[0].id === 'aaaaaaaa-0000-4000-8000-000000000001', 'cursor paginates to older page');
+    assert(page2.next_cursor === null, 'short page → null cursor');
+
+    const posted = await postsListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID, status: 'posted' } });
+    assert(posted.items.length === 1 && posted.items[0].agent_note === 'старый пост про привычки', 'status filter + note');
+    const bad = await capture(postsListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID, status: 'nope' } }));
+    assert(bad?.code === ERROR_CODES.INVALID_PARAMS, 'unknown status → INVALID_PARAMS');
+}
+{
+    const mock = makeDb({ bots: [] });
+    const err = await capture(postsListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID } }));
+    assert(err?.code === ERROR_CODES.NOT_FOUND, 'foreign bot → NOT_FOUND');
+}
+
+console.log('--- чек-листы: agent_note пишется, правится, чистится, читается ---');
+{
+    const mock = makeDb();
+    const created = await createChecklistHandler({
+        supabase: mock,
+        req: REQ,
+        args: { ...BASE_ARGS, items: ['картошка'], agent_note: 'чек-лист о привычках, привычки в вики/папка X' }
+    });
+    assert(mock.db.autopost_checklists[0]?.agent_note === 'чек-лист о привычках, привычки в вики/папка X', 'note stored on create');
+
+    const state = await checklistStateHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID, checklist_id: created.checklist.id } });
+    assert(state.checklist.agent_note === 'чек-лист о привычках, привычки в вики/папка X', 'state returns agent_note');
+
+    // agent_note без остальных правок — валидный вызов.
+    const updated = await updateChecklistHandler({
+        supabase: mock,
+        req: REQ,
+        args: { bot_id: BOT_ID, checklist_id: created.checklist.id, agent_note: 'другой контекст' }
+    });
+    assert(updated.checklist.agent_note === 'другой контекст', 'note-only update rewrites note');
+
+    // Пустая строка — очистить (в БД null).
+    const cleared = await updateChecklistHandler({
+        supabase: mock,
+        req: REQ,
+        args: { bot_id: BOT_ID, checklist_id: created.checklist.id, agent_note: '' }
+    });
+    assert(cleared.checklist.agent_note === null, "empty string clears note (null)");
+
+    const listed = await checklistListHandler({ supabase: mock, req: REQ, args: { bot_id: BOT_ID } });
+    assert(listed.items.length === 1 && listed.items[0].agent_note === null, 'list returns cleared note');
+
+    const tooLong = await capture(createChecklistHandler({
+        supabase: mock,
+        req: REQ,
+        args: { ...BASE_ARGS, items: ['x'], agent_note: 'a'.repeat(2001) }
+    }));
+    assert(tooLong?.code === ERROR_CODES.INVALID_PARAMS, 'checklist agent_note > 2000 → INVALID_PARAMS');
+    assert(mock.calls.checklistInserts === 1, 'no second checklist inserted on bad note');
+}
+
+console.log('--- channel_update: валидация, NOT_FOUND, happy path + collapseQueue ---');
+{
+    // Ни одного поля → INVALID_PARAMS.
+    {
+        const mock = makeDb();
+        const err = await capture(updateChannelHandler({
+            supabase: mock,
+            req: REQ,
+            args: { bot_id: BOT_ID, channel_id: CHANNEL_TG_ID }
+        }));
+        assert(err?.code === ERROR_CODES.INVALID_PARAMS, 'neither field → INVALID_PARAMS');
+    }
+    // Неизвестная таймзона → INVALID_PARAMS.
+    {
+        const mock = makeDb();
+        const err = await capture(updateChannelHandler({
+            supabase: mock,
+            req: REQ,
+            args: { bot_id: BOT_ID, channel_id: CHANNEL_TG_ID, timezone: 'Mars/Olympus' }
+        }));
+        assert(err?.code === ERROR_CODES.INVALID_PARAMS && /таймзона/.test(err?.message), 'unknown timezone → INVALID_PARAMS');
+    }
+    // Битые слоты: не HH:MM, вне диапазона, не массив.
+    {
+        const mock = makeDb();
+        for (const badTimes of [['25:00'], ['10:60'], ['9:00'], '10:00', ['10:00', '10:00', '10:00', '10:00', '10:00', '10:00', '10:00', '10:00', '10:00', '10:00', '10:00']]) {
+            const err = await capture(updateChannelHandler({
+                supabase: mock,
+                req: REQ,
+                args: { bot_id: BOT_ID, channel_id: CHANNEL_TG_ID, posting_times: badTimes }
+            }));
+            assert(err?.code === ERROR_CODES.INVALID_PARAMS, `bad posting_times (${JSON.stringify(badTimes).slice(0, 20)}) → INVALID_PARAMS`);
+        }
+        assert(mock.db.channels[0].posting_times === undefined, 'no partial write on bad times');
+    }
+    // Чужой/не привязанный канал → NOT_FOUND.
+    {
+        const mock = makeDb({ channels: [] });
+        const err = await capture(updateChannelHandler({
+            supabase: mock,
+            req: REQ,
+            args: { bot_id: BOT_ID, channel_id: '-100999', timezone: 'Europe/Moscow' }
+        }));
+        assert(err?.code === ERROR_CODES.NOT_FOUND && err?.message === 'Канал не найден или не привязан к этому боту.', 'foreign channel → NOT_FOUND');
+    }
+    // Happy path: таймзона + слоты сохраняются, очередь пересобирается.
+    {
+        const mock = makeDb();
+        const res = await updateChannelHandler({
+            supabase: mock,
+            req: REQ,
+            args: { bot_id: BOT_ID, channel_id: CHANNEL_TG_ID, timezone: 'Asia/Vladivostok', posting_times: ['10:00'] }
+        });
+        assert(mock.db.channels[0].timezone === 'Asia/Vladivostok', 'timezone persisted');
+        assert(JSON.stringify(mock.db.channels[0].posting_times) === '["10:00"]', 'posting_times persisted');
+        assert(res.channel.tg_chat_id === CHANNEL_TG_ID && res.channel.timezone === 'Asia/Vladivostok', 'response carries channel card');
+        assert(JSON.stringify(res.channel.posting_times) === '["10:00"]', 'response carries slots');
+        assert(mock.calls.rpc.includes('autopost_collapse_queue'), 'collapseQueue ran after slot change');
+    }
+    // Timezone-only: запись есть, очередь НЕ пересобирается.
+    {
+        const mock = makeDb();
+        const res = await updateChannelHandler({
+            supabase: mock,
+            req: REQ,
+            args: { bot_id: BOT_ID, channel_id: CHANNEL_TG_ID, timezone: 'Asia/Vladivostok' }
+        });
+        assert(mock.db.channels[0].timezone === 'Asia/Vladivostok', 'timezone-only persisted');
+        assert(!mock.calls.rpc.includes('autopost_collapse_queue'), 'timezone-only skips collapseQueue');
+        assert(res.channel.timezone === 'Asia/Vladivostok' && res.channel.posting_times === null, 'timezone-only response card');
+    }
 }
 
 // --- Cleanup: не оставляем офлайн-бота в lifecycle-реестре процесса.

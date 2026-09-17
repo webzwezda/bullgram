@@ -77,6 +77,7 @@ registerOperation('bullgram_autopost_checklist_state', {
     'Текущее состояние чек-листа: пункты с отметками (кто и когда отметил), summary («Итог: 2 из 3 — картошка ✅ (Вася, 10:12)…») и вычисляемый статус active/expired/cancelled — закрытый или истёкший список не ошибка, а поле в ответе. ' +
     'Зови утром после ночной публикации или когда нужен прогресс: checklist_create вечером с scheduled_at → checklist_state утром. ' +
     'include_events=true добавит ленту событий (checked/unchecked/added/renamed/removed/reset/cancelled/published) — корми ею свою память, чтобы следующая сводка учитывала реальность. ' +
+    'В checklist возвращается и agent_note — твоя приватная заметка из checklist_create/checklist_update (в Telegram не показывается): перечитай её после сброса сессии, чтобы восстановить контекст списка. ' +
     'Исчезнувший id — штатный NOT_FOUND: просто создай список заново.',
   inputSchema: {
     type: 'object',

@@ -62,7 +62,8 @@ export async function createChecklistHandler({ supabase, req, args }) {
     scheduled_at = null,
     expires_at = null,
     dedup_key = null,
-    pin = false
+    pin = false,
+    agent_note = null
   } = args || {};
 
   if (!isValidUuid(bot_id)) {
@@ -98,6 +99,20 @@ export async function createChecklistHandler({ supabase, req, args }) {
     expiresAtValue = d.toISOString();
   }
   const dedupKey = dedup_key != null && String(dedup_key).trim() !== '' ? String(dedup_key).trim() : null;
+
+  // Приватная заметка агента: не рендерится в Telegram, читается через
+  // checklist_state / checklist_list. Пустая строка → null (заметки нет).
+  let agentNoteValue = null;
+  if (agent_note !== undefined && agent_note !== null) {
+    if (typeof agent_note !== 'string') {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be a string (≤ 2000 characters).', {});
+    }
+    const trimmed = agent_note.trim();
+    if (trimmed.length > 2000) {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be ≤ 2000 characters.', {});
+    }
+    agentNoteValue = trimmed === '' ? null : trimmed;
+  }
 
   // --- Load bot, verify ownership ---
   const { data: bot, error: botErr } = await supabase
@@ -188,7 +203,8 @@ export async function createChecklistHandler({ supabase, req, args }) {
       title: titleStr,
       created_by: 'agent',
       expires_at: expiresAtValue,
-      dedup_key: dedupKey
+      dedup_key: dedupKey,
+      agent_note: agentNoteValue
     })
     .select()
     .single();
@@ -326,6 +342,7 @@ registerOperation('bullgram_autopost_checklist_create', {
     'Как вести список: вечером создай список с scheduled_at на утро (или publish_now=true, чтобы вышел сразу); утром читай checklist_state (include_events=true — для памяти: кто и когда отметил). ' +
     'dedup_key обязателен во всех крон-путях: повторный вызов с тем же ключом вернёт существующий список с already_exists=true и НЕ задублирует пост. ' +
     'expires_at — TTL разового списка (потом статус станет expired). pin=true — закрепить опубликованное сообщение (для долгоживущих списков в группе; без прав на закрепление — non-fatal). ' +
+    'agent_note — заметка для себя, не показывается в Telegram: контекст списка, отсылки к вики. Читается через checklist_state/checklist_list. ' +
     'target_channel_ids — только каналы, подключённые к этому боту.',
   inputSchema: {
     type: 'object',
@@ -379,6 +396,11 @@ registerOperation('bullgram_autopost_checklist_create', {
         type: 'boolean',
         default: false,
         description: 'true = pin the published message after the first successful post (once, non-fatal without pin rights).'
+      },
+      agent_note: {
+        type: 'string',
+        maxLength: 2000,
+        description: 'Private note to self, never rendered in Telegram: checklist context, wiki references. Read it back via checklist_state/checklist_list.'
       }
     }
   },

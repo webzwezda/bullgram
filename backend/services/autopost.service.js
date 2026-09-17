@@ -160,7 +160,7 @@ export class AutopostService {
         return data || [];
     }
 
-    async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, checklistId = null, suggestedByTgId = null }) {
+    async addPostItem({ botId, targetChannelId, targetChannelIds, fileIds, caption, status = 'queued', isSuggestion = false, mediaType, checklistId = null, suggestedByTgId = null, agentNote = null }) {
         // Resolve target channels: array takes precedence over scalar; both can be passed.
         // Multi-target fan-out: one logical post → N item rows grouped by post_batch_id.
         const scalar = targetChannelId != null ? [String(targetChannelId)] : [];
@@ -202,7 +202,10 @@ export class AutopostService {
             is_suggestion: isSuggestion,
             media_type: resolvedMediaType,
             checklist_id: checklistId || null,
-            suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null
+            suggested_by_tg_id: suggestedByTgId ? String(suggestedByTgId) : null,
+            // Приватная заметка агента (не рендерится в Telegram) — одна на весь
+            // batch: все target-каналы шарят один контекст поста.
+            agent_note: agentNote || null
         }));
 
         const { data, error } = await this.supabase
@@ -568,7 +571,7 @@ export class AutopostService {
      * (его клавиатуры уже сняты — перерисовка вернула бы их).
      * Кап общего числа: существующие пункты + добавляемые ≤ 25 (TOO_MANY_ITEMS).
      */
-    async updateChecklist(botId, checklistId, { add, rename, remove, reset } = {}, actor = {}) {
+    async updateChecklist(botId, checklistId, { add, rename, remove, reset, agentNote } = {}, actor = {}) {
         const checklist = await this.loadChecklistScoped(botId, checklistId);
         if (!checklist) throw new Error('NOT_FOUND');
         if (checklist.cancelled_at) throw new Error('CHECKLIST_CANCELLED');
@@ -578,6 +581,17 @@ export class AutopostService {
         // pre-load в вызывающих читал бы потенциально чужие строки до scope-гейта.
         if (items.length + (Array.isArray(add) ? add.length : 0) > 25) {
             throw new Error('TOO_MANY_ITEMS');
+        }
+        // Приватная заметка агента: семантика «ключ пришёл» (typeof), а не
+        // «значение truthy» — иначе пустой строкой нельзя было бы очистить.
+        // '' → null (очистить), непустая строка → перезаписать.
+        if (typeof agentNote !== 'undefined') {
+            const { error } = await this.supabase
+                .from('autopost_checklists')
+                .update({ agent_note: agentNote === '' ? null : agentNote })
+                .eq('id', checklistId)
+                .eq('bot_id', botId);
+            if (error) throw error;
         }
         const { items: nextItems, events } = applyChecklistOps(items, { add, rename, remove, reset });
         const originalIds = new Set(items.map((it) => String(it.id)));

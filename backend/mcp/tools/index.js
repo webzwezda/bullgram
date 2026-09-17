@@ -32,6 +32,8 @@ import './participants/list-participants.js';
 import './autopost/list-bots.js';
 import './autopost/list-channels.js';
 import './autopost/create-post.js';
+import './autopost/posts-list.js';
+import './autopost/channel-update.js';
 import './autopost/delete-message.js';
 import './autopost/bot-init.js';
 import './autopost/checklist-create.js';

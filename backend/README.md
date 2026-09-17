@@ -87,8 +87,18 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 - `bullgram_autopost_checklist_create` — `POST /autopost/bots/{bot_id}/checklists` — создать и опубликовать (`publish_now` / `scheduled_at` / очередь); `dedup_key` обязателен в крон-путях (повтор → `already_exists=true` без дубля), `pin`, `expires_at`
 - `bullgram_autopost_checklist_state` — `GET /autopost/bots/{bot_id}/checklists/{checklist_id}` — пункты + кто отметил + summary (+ `include_events` — лента событий)
 - `bullgram_autopost_checklist_list` — `GET /autopost/bots/{bot_id}/checklists` — список с фильтром `status` (active/expired/cancelled) и курсором
-- `bullgram_autopost_checklist_update` — `PATCH /autopost/bots/{bot_id}/checklists/{checklist_id}` — add/rename/remove/reset без потери отметок
+- `bullgram_autopost_checklist_update` — `PATCH /autopost/bots/{bot_id}/checklists/{checklist_id}` — add/rename/remove/reset без потери отметок (+ `agent_note`)
 - `bullgram_autopost_checklist_cancel` — `POST /autopost/bots/{bot_id}/checklists/{checklist_id}/cancel` — закрыть: снять клавиатуры, убрать строки очереди
+
+Посты и настройки канала (те же MCP/REST-транспорты):
+
+- `bullgram_autopost_post_create` — `POST /autopost/bots/{bot_id}/posts` — текстовый пост в каналы (`publish_now` / `scheduled_at` / очередь, multi-target fan-out); `agent_note` — заметка агента
+- `bullgram_autopost_posts_list` — `GET /autopost/bots/{bot_id}/posts` — посты бота, свежие сверху: фильтр `status` (posted/queued/scheduled/sending/editing/failed), курсор, `posted_message_ids`, ошибки публикации и `agent_note`
+- `bullgram_autopost_channel_update` — `PATCH /autopost/bots/{bot_id}/channels/{channel_id}` — настройка канала: `timezone` (IANA) и `posting_times` (1–10 слотов «HH:MM»); смена слотов пересобирает очередь канала
+
+`agent_note` (посты — колонка `autopost_items.agent_note`, чек-листы — `autopost_checklists.agent_note`) — заметка агента, не показывается в Telegram: контекст поста/списка, отсылки к вики. Пишется в `post_create`/`checklist_create`, правится и очищается (`''` → null) в `checklist_update`, читается через `posts_list`/`checklist_state`/`checklist_list` — так агент переживает собственные сбросы сессии.
+
+Правило времени: `scheduled_at` — всегда UTC; таймзона канала управляет слотами `posting_times` (например, `timezone='Asia/Vladivostok'` + `posting_times=['10:00']` → ежедневные слоты в 10:00 по Владивостоку = 00:00Z; очередь без `scheduled_at` ложится в ближайший слот).
 
 Админские JWT-ручки для той же жизни: `GET/POST /api/autopost/bots/:botId/checklists`, `GET/PATCH /api/autopost/bots/:botId/checklists/:checklistId`, `POST /api/autopost/bots/:botId/checklists/:checklistId/cancel`.
 

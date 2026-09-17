@@ -63,9 +63,9 @@ registerOperation('bullgram_autopost_checklist_list', {
   rateLimitClass: 'read',
   title: 'List autopost checklists',
   description:
-    'Список чек-листов бота, свежие сверху: id, заголовок, вычисляемый статус (active/expired/cancelled), dedup_key, время создания. ' +
+    'Список чек-листов бота, свежие сверху: id, заголовок, вычисляемый статус (active/expired/cancelled), dedup_key, время создания, agent_note — твоя приватная заметка (в Telegram не показывается). ' +
     'Фильтр status — чтобы взять только живые (active) или просроченные (expired); created_after — «списки, созданные после»; next_cursor — пагинация для растущей истории. ' +
-    'Точку входа после потери памяти ищи так: checklist_list со status=active → checklist_state по найденным id. Просроченные можно закрыть checklist_cancel.',
+    'Точку входа после потери памяти ищи так: checklist_list со status=active → checklist_state по найденным id (там и agent_note, и отметки). Просроченные можно закрыть checklist_cancel.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

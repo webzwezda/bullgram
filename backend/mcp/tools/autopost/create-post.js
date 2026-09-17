@@ -30,7 +30,8 @@ export async function createPostHandler({ supabase, req, args }) {
     target_channel_ids,
     caption,
     publish_now = false,
-    scheduled_at = null
+    scheduled_at = null,
+    agent_note = null
   } = args || {};
 
   // --- Validation: at least one target required ---
@@ -67,6 +68,19 @@ export async function createPostHandler({ supabase, req, args }) {
       throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'scheduled_at must be ISO 8601 date', {});
     }
     scheduledAtValue = d.toISOString();
+  }
+
+  // Приватная заметка агента: не рендерится в Telegram, читается через posts_list.
+  let agentNoteValue = null;
+  if (agent_note !== undefined && agent_note !== null) {
+    if (typeof agent_note !== 'string') {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be a string (≤ 2000 characters).', {});
+    }
+    const trimmed = agent_note.trim();
+    if (trimmed.length > 2000) {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be ≤ 2000 characters.', {});
+    }
+    agentNoteValue = trimmed === '' ? null : trimmed;
   }
 
   // --- Load bot, verify ownership ---
@@ -137,7 +151,8 @@ export async function createPostHandler({ supabase, req, args }) {
       fileIds: [],
       caption: captionStr,
       status: 'queued',
-      mediaType: 'text'
+      mediaType: 'text',
+      agentNote: agentNoteValue
     });
 
     // Per-channel publish: каждый item публикуется со своим channel object
@@ -208,7 +223,8 @@ export async function createPostHandler({ supabase, req, args }) {
     fileIds: [],
     caption: captionStr,
     status,
-    mediaType: 'text'
+    mediaType: 'text',
+    agentNote: agentNoteValue
   });
 
   if (scheduledAtValue) {
@@ -263,7 +279,7 @@ registerOperation('bullgram_autopost_post_create', {
   requiresIntegrationToken: true,
   rateLimitClass: 'write',
   title: 'Create autopost',
-  description: 'Create a text post in one or more autopost channels. Inline buttons, suggest-button, and seed reaction are inherited from channel settings (cannot be overridden per-post). Pass target_channel_ids (array) for multi-target fan-out, or target_channel_id (string) for single-target back-compat. Set publish_now=true to publish synchronously (returns items[].posted_message_ids, plus items[].discussion_message_ids when the channel has discussion forwarding enabled). Omit or set publish_now=false to enqueue — scheduler will place items per channel posts_per_day/posting_times. Optional scheduled_at (ISO 8601) pins a specific slot across all channels. Response is always 200 with items[].status showing posted|queued|scheduled|failed per channel.',
+  description: 'Create a text post in one or more autopost channels. Inline buttons, suggest-button, and seed reaction are inherited from channel settings (cannot be overridden per-post). Pass target_channel_ids (array) for multi-target fan-out, or target_channel_id (string) for single-target back-compat. Set publish_now=true to publish synchronously (returns items[].posted_message_ids, plus items[].discussion_message_ids when the channel has discussion forwarding enabled). Omit or set publish_now=false to enqueue — scheduler will place items per channel posts_per_day/posting_times. Optional scheduled_at (ISO 8601, UTC) pins a specific slot across all channels. Response is always 200 with items[].status showing posted|queued|scheduled|failed per channel. agent_note — заметка для себя, не показывается в Telegram: контекст поста, отсылки к вики. Читается через posts_list.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -298,6 +314,11 @@ registerOperation('bullgram_autopost_post_create', {
         type: 'string',
         format: 'date-time',
         description: 'ISO 8601 timestamp. Only when publish_now=false. Pins specific slot for all channels (status=scheduled). Skips collapseQueue.'
+      },
+      agent_note: {
+        type: 'string',
+        maxLength: 2000,
+        description: 'Private note to self, never rendered in Telegram: post context, wiki references. Shared by all rows of the batch. Read it back via posts_list.'
       }
     }
   },

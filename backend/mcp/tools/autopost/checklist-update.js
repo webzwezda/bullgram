@@ -18,7 +18,7 @@ export async function updateChecklistHandler({ supabase, req, args }) {
     throw new MCPError(ERROR_CODES.INTERNAL, 'checklist_update requires authenticated user', {});
   }
 
-  const { bot_id, checklist_id, add, rename, remove, reset } = args || {};
+  const { bot_id, checklist_id, add, rename, remove, reset, agent_note } = args || {};
 
   if (!isValidUuid(bot_id)) {
     throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "bot_id" must be a UUID.', {});
@@ -31,8 +31,21 @@ export async function updateChecklistHandler({ supabase, req, args }) {
   const hasRename = Array.isArray(rename) && rename.length > 0;
   const hasRemove = Array.isArray(remove) && remove.length > 0;
   const hasReset = reset === true;
-  if (!hasAdd && !hasRename && !hasRemove && !hasReset) {
-    throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Нужна хотя бы одна правка: add, rename, remove или reset.', {});
+  // Заметка — полноценная правка: agent_note alone должен работать без add/rename.
+  // '' = очистить; null/отсутствие = «не трогал» (сервис различает по typeof).
+  let agentNoteValue;
+  if (agent_note !== undefined && agent_note !== null) {
+    if (typeof agent_note !== 'string') {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be a string (≤ 2000 characters; пустая строка — очистить).', {});
+    }
+    if (agent_note.length > 2000) {
+      throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "agent_note" must be ≤ 2000 characters.', {});
+    }
+    agentNoteValue = agent_note;
+  }
+  const hasNote = agentNoteValue !== undefined;
+  if (!hasAdd && !hasRename && !hasRemove && !hasReset && !hasNote) {
+    throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Нужна хотя бы одна правка: add, rename, remove, reset или agent_note.', {});
   }
 
   if (hasAdd) {
@@ -81,7 +94,7 @@ export async function updateChecklistHandler({ supabase, req, args }) {
     state = await service.updateChecklist(
       bot_id,
       checklist_id,
-      { add, rename, remove, reset },
+      { add, rename, remove, reset, agentNote: agentNoteValue },
       { source: 'agent' }
     );
   } catch (err) {
@@ -116,6 +129,7 @@ registerOperation('bullgram_autopost_checklist_update', {
   description:
     'Правит живой чек-лист без потери отметок. add — дописать пункты в конец; rename — переименовать по item_id (отметка и атрибуция остаются на пункте — бери свежие item_id из checklist_state); remove — удалить по item_id; reset=true — массово снять отметки. ' +
     'reset — для циклических списков: «покупки» после похода сбрасывай reset, а не пересоздавай. Клавиатуры во всех опубликованных копиях перерисуются автоматически, события (added/renamed/removed/reset) попадут в ленту. ' +
+    'agent_note — приватная заметка для себя, не показывается в Telegram: контекст списка, отсылки к вики; пустая строка — очистить; читается через checklist_state/checklist_list. Можно передать agent_note без остальных правок. ' +
     'Нужна хотя бы одна правка за вызов; максимум 25 пунктов после add. Отменённый список править нельзя (INVALID_PARAMS).',
   inputSchema: {
     type: 'object',
@@ -158,6 +172,11 @@ registerOperation('bullgram_autopost_checklist_update', {
       reset: {
         type: 'boolean',
         description: 'true = uncheck all items and clear attribution (cyclic lists: reset after each cycle instead of recreating).'
+      },
+      agent_note: {
+        type: 'string',
+        maxLength: 2000,
+        description: 'Private note to self, never rendered in Telegram: checklist context, wiki references. Empty string clears it. Read it back via checklist_state/checklist_list.'
       }
     }
   },
