@@ -50,9 +50,8 @@ console.log('--- checklist.buildChecklistMessage: render ---');
     ];
     const { text, replyMarkup } = buildChecklistMessage(checklist, items, { showNames: true });
 
-    assert(text.startsWith('Покупки на завтра\n'), 'text starts with title');
-    assert(text.includes('Выполнено 1 из 2\n'), 'progress line "Выполнено 1 из 2"');
-    assert(text.endsWith('Отмечайте выполненное — я запомню кто и когда'), 'hint line at the end');
+    // Текст сообщения = только название (без прогресса и подсказок)
+    assert(text === 'Покупки на завтра', 'text is title only, nothing else');
 
     const rows = replyMarkup.inline_keyboard;
     assert(rows.length === 2, 'one button row per item');
@@ -233,7 +232,7 @@ console.log('--- sender.sendItemToChannel: checklist branch ---');
 
     assert(JSON.stringify(ids) === '[777]', 'returns [message_id]');
     assert(captured.chatId === '-100123', 'sends to target chat');
-    assert(captured.text.includes('Покупки на завтра') && captured.text.includes('Выполнено 1 из 2'), 'message text = checklist render');
+    assert(captured.text === 'Покупки на завтра', 'message text = title only');
     assert(JSON.stringify(captured.extra) === JSON.stringify({ reply_markup: buildChecklistMessage(checklist, items, { showNames: true }).replyMarkup }), 'reply_markup = checklist keyboard, no parse_mode / channel buttons');
     assert(captured.extra.reply_markup.inline_keyboard.length === 2, 'keyboard has one button per item');
 }

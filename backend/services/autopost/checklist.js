@@ -57,22 +57,18 @@ function buildItemLabel(item, showNames) {
 }
 
 /**
- * Текст + клавиатура чек-листа. Прогресс «Выполнено X из M» — живая строка:
- * перерисовывается при каждом тоггле вместе с кнопками.
+ * Текст + клавиатура чек-листа. Текст сообщения = только название (без
+ * технички: прогресс видно по кнопкам ✅/⬜, сводку агент забирает через
+ * checklist_state → renderChecklistSummary). Пустой заголовок → «☑️»,
+ * т.к. Telegram не принимает пустой текст.
  * Возвращает replyMarkup как сырой объект { inline_keyboard } — удобно
  * прокидывать в reply_markup sendMessage/editMessageText.
  */
 export function buildChecklistMessage(checklist, items, { showNames = true } = {}) {
-    const title = String(checklist?.title ?? '');
+    const text = String(checklist?.title ?? '').trim() || '☑️';
     const ordered = [...(Array.isArray(items) ? items : [])].sort(
         (a, b) => Number(a?.position ?? 0) - Number(b?.position ?? 0)
     );
-    const done = ordered.filter((it) => it?.is_checked === true).length;
-    const text = [
-        title,
-        `Выполнено ${done} из ${ordered.length}`,
-        'Отмечайте выполненное — я запомню кто и когда'
-    ].join('\n');
     // Один пункт = один ряд клавиатуры (плоский массив Telegraf склеил бы в один ряд).
     const buttons = ordered.map((it) => [
         Markup.button.callback(buildItemLabel(it, showNames !== false), packCallbackData(it?.id))
