@@ -2286,8 +2286,14 @@ export class UserbotService {
                 title: chat.title || titleStr
             });
 
+            // Bot API-формат: для супергрупп/каналов id маркируется префиксом -100.
+            // Голый MTProto-id Bot API не находит («chat not found») — а именно Bot API
+            // публикует автопост-бот. Invite/promote резолвят оба формата через getEntity.
+            const botApiChatId = `-100${chat.id}`;
+
             return {
-                chat_id: String(chat.id),
+                chat_id: botApiChatId,
+                mtproto_id: String(chat.id),
                 access_hash: chat?.accessHash != null ? String(chat.accessHash) : null,
                 title: chat?.title || titleStr,
                 invite_link: exported?.link || null

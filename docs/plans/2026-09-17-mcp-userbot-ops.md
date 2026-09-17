@@ -62,4 +62,6 @@
 
 **Компромиссы (осознанные):** botFather in-flight guard per-process (одиночный pm2-инстанс); basic-группы не поддержаны в admin-ветках (волна 3); пауза 1с между инвайтами замедляет массовые приглашения (защита аккаунта важнее).
 
-**Гейты:** `test:autopost` — 10 файлов зелёные (test-userbot-ops ~130+ ассертов); `test:mcp` — 56/56; `node --check` — OK. Прод-e2e (фаза 3) — после включения флагов владельцем.
+**Гейты:** `test:autopost` — 10 файлов зелёные (test-userbot-ops ~130+ ассертов); `test:mcp` — 56/56; `node --check` — OK.
+
+**Прод-e2e (2026-09-17): пройден полностью.** Юзербот Erik: `group_create` → `botfather_create_bot` (реальный диалог, токен получен) → `autopost_bot_init` → `member_invite` → `member_promote` → `checklist_create` `publish_now` → живой тап владельца в Telegram → `checklist_state` с атрибуцией → `cancel`. Попутно пойман и исправлен баг формата chat_id (созданные группы: Bot API требует `-100…`, не голый MTProto-id — иначе «chat not found») и добавлен явный `my_chat_member` в `allowed_updates` (детерминированная привязка). Тестовые артефакты (бот, чек-листы, e2e-токен) удалены; сирота-бот `@bullgram_chk_e2e_bot` — удалить у BotFather вручную.

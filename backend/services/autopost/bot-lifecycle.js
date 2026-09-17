@@ -31,6 +31,7 @@ export function startAutopostBot(botId, token, registerHandlers) {
             'callback_query',
             'channel_post',
             'edited_channel_post',
+            'my_chat_member',
             'message_reaction',
             'chat_member'
         ]
