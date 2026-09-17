@@ -215,7 +215,8 @@ console.log('--- createGroupChat: happy path (группа + канал) и ва
     const service = makeService(client);
 
     const res = await service.createGroupChat(makeUserbot(), { title: 'Тестовая', kind: 'group', about: 'описание' });
-    assert(res.chat_id === '555' && res.access_hash === '999', 'chat_id + access_hash from CreateChannel result');
+    // Контракт после e2e-фикса: chat_id в Bot-API-формате (-100…), голый MTProto-id — в mtproto_id
+    assert(res.chat_id === '-100555' && res.mtproto_id === '555' && res.access_hash === '999', 'chat_id (-100) + mtproto_id + access_hash from CreateChannel result');
     assert(res.title === 'Тестовая', 'title echoed');
     assert(res.invite_link === 'https://t.me/+abc123', 'invite_link from ExportChatInvite');
     const create = invokeOfClass(client, 'CreateChannel');
