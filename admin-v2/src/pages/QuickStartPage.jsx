@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox, ChevronDown } from 'lucide-react';
+import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox, ScrollText, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { Button } from '../components/ui/button.jsx';
@@ -11,6 +11,8 @@ import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import {
     fetchChannels,
+    fetchItems,
+    fetchChecklists,
     patchBot,
     regenerateInvite,
     fetchAdmins,
@@ -46,6 +48,85 @@ https://bullgram.xyz/api/external/v1/autopost/bots/{bot_id}/posts \\
 function parseReactionEmojis(value) {
   // VS16 (U+FE0F) вырезаем: в БД/Telegram хранится каноничное '❤', без селектора.
   return String(value || '').split(',').map(s => s.trim().replace(/\uFE0F/g, '')).filter(Boolean);
+}
+
+// --- «Журнал публикаций» (read-only наблюдение за планом агента) ---
+
+const JOURNAL_PLANNED_STATUSES = ['queued', 'scheduled'];
+const JOURNAL_MEDIA_TYPES = ['photo', 'video', 'animation', 'document'];
+const JOURNAL_MEDIA_EMOJI = { photo: '🖼', video: '🎬', animation: '✨', document: '📄' };
+const JOURNAL_CHECKLIST_BADGES = {
+  active: { label: 'активен', className: 'bg-feedback-success-bg text-feedback-success-text' },
+  expired: { label: 'истёк', className: 'bg-feedback-warning-bg text-feedback-warning-text' },
+  cancelled: { label: 'отменён', className: 'bg-feedback-error-bg text-feedback-error-text' }
+};
+const JOURNAL_TABS = [
+  { key: 'media', label: '🖼 Медиа' },
+  { key: 'checklists', label: '☑️ Чекбоксы' },
+  { key: 'text', label: '📝 Текст' }
+];
+
+function formatJournalTime(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const hhmm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const ddmm = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  return `${hhmm}, ${ddmm}`;
+}
+
+// «⏰ 09:00, 21.09» либо «в очереди — ближайший слот» (scheduled_at не назначен).
+function journalTimeLabel(iso) {
+  const t = formatJournalTime(iso);
+  return t ? `⏰ ${t}` : 'в очереди — ближайший слот';
+}
+
+function journalSnippet(text, max = 80) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+// «в очереди» (без scheduled_at) идут первыми — это ближайшие к публикации,
+// дальше по возрастанию назначенного времени.
+function sortJournalRows(rows) {
+  return [...rows].sort((a, b) => {
+    const at = a.scheduled_at ? new Date(a.scheduled_at).getTime() : null;
+    const bt = b.scheduled_at ? new Date(b.scheduled_at).getTime() : null;
+    if (at === null && bt === null) return 0;
+    if (at === null) return -1;
+    if (bt === null) return 1;
+    return at - bt;
+  });
+}
+
+// target_channel_id — это tg_chat_id канала; конфиги каналов keyed по UUID.
+function findJournalChannel(configs, targetChannelId) {
+  const key = String(targetChannelId ?? '');
+  return Object.values(configs).find((c) => String(c.tgChatId) === key) || null;
+}
+
+function journalRowsByType(plannedItems, types, configs) {
+  return sortJournalRows(plannedItems.filter((it) => types.includes(it.media_type)))
+    .map((item) => ({ item, channel: findJournalChannel(configs, item.target_channel_id) }));
+}
+
+// Одна строка на канал: «Запланировано N · при ~M/день хватит на K дн.»
+function journalMediaSummaryLines(rows) {
+  const byChannel = new Map();
+  for (const row of rows) {
+    const key = String(row.item.target_channel_id ?? '');
+    const entry = byChannel.get(key) || { count: 0, channel: row.channel };
+    entry.count += 1;
+    byChannel.set(key, entry);
+  }
+  return [...byChannel.values()].map(({ count, channel }) => {
+    const perDay = parseInt(channel?.postsPerDay, 10) || 0;
+    if (perDay > 0) {
+      return `Запланировано ${count} · при ~${perDay}/день хватит на ${Math.ceil(count / perDay)} дн.`;
+    }
+    return `Запланировано ${count}`;
+  });
 }
 
 export function QuickStartPage() {
@@ -93,6 +174,17 @@ export function QuickStartPage() {
   // включая несколько public или несколько private).
   const [channelConfigs, setChannelConfigs] = useState({});
 
+  // «Журнал публикаций» — только наблюдение за запланированным контентом.
+  // Управление (создание/правка/отмена) сознательно не здесь: план ведёт агент.
+  const [journalItems, setJournalItems] = useState([]);
+  const [journalChecklists, setJournalChecklists] = useState([]);
+  const [journalLoading, setJournalLoading] = useState(false);
+  const [journalError, setJournalError] = useState(null);
+  const [journalTab, setJournalTab] = useState('media');
+  const loadJournalReqIdRef = useRef(0);
+  const journalDebounceRef = useRef(null);
+  const journalLoadedAtRef = useRef(0);
+
   // Загрузка существующих ботов
   const loadBots = useCallback(async () => {
     if (!user?.id) return;
@@ -130,6 +222,10 @@ export function QuickStartPage() {
       setCreatedBot(null);
       setActiveChannelId(null);
       setChannelConfigs({});
+      setJournalItems([]);
+      setJournalChecklists([]);
+      setJournalError(null);
+      journalLoadedAtRef.current = 0;
       return;
     }
 
@@ -143,6 +239,7 @@ export function QuickStartPage() {
 
     loadChannels(bot.id);
     loadAdmins(bot.id);
+    loadJournal(bot.id);
   }, [selectedBotId, accessToken]);
 
   async function loadChannels(botId, { merge = false } = {}) {
@@ -227,6 +324,50 @@ export function QuickStartPage() {
     }
   }
 
+  // Журнал публикаций: items (все, planned фильтруем на клиенте) + чек-листы
+  // (одна страница) одним параллельным заходом. Read-only.
+  async function loadJournal(botId) {
+    if (!botId || !accessToken) return;
+    const reqId = ++loadJournalReqIdRef.current;
+    setJournalLoading(true);
+    setJournalError(null);
+    try {
+      const [itemsData, listsData] = await Promise.all([
+        fetchItems(botId, accessToken),
+        fetchChecklists(botId, accessToken)
+      ]);
+      if (reqId !== loadJournalReqIdRef.current) return;
+      setJournalItems(Array.isArray(itemsData?.items) ? itemsData.items : []);
+      setJournalChecklists(Array.isArray(listsData?.items) ? listsData.items : []);
+      journalLoadedAtRef.current = Date.now();
+    } catch (e) {
+      if (reqId !== loadJournalReqIdRef.current) return;
+      setJournalError(e.message || 'Не удалось загрузить журнал публикаций');
+    } finally {
+      if (reqId === loadJournalReqIdRef.current) setJournalLoading(false);
+    }
+  }
+
+  // Realtime-серия событий не должна бить по API каждым item — debounce 800 мс.
+  function scheduleJournalRefetch(botId) {
+    if (journalDebounceRef.current) clearTimeout(journalDebounceRef.current);
+    journalDebounceRef.current = setTimeout(() => {
+      journalDebounceRef.current = null;
+      loadJournal(botId);
+    }, 800);
+  }
+
+  // Раскрыли секцию, а данные старше минуты (или ещё не приходили) — тихо освежаем.
+  function handleJournalToggle(e) {
+    if (!e.target.open) return;
+    const botId = createdBot?.id;
+    if (!botId) return;
+    const last = journalLoadedAtRef.current;
+    if (!last || Date.now() - last > 60000) {
+      loadJournal(botId);
+    }
+  }
+
   // Realtime-подписка: канал подключён/отключён, либо обновился список админов.
   // Заменяет setInterval-поллинг. Инициальная загрузка — в useEffect выбора бота.
   useEffect(() => {
@@ -245,16 +386,21 @@ export function QuickStartPage() {
         { event: 'UPDATE', schema: 'public', table: 'autopost_bots', filter: `id=eq.${botId}` },
         () => { loadAdmins(botId); }
       )
-      // События autopost_items пока не требуют действий на странице,
-      // подписка оставлена на будущее.
+      // События autopost_items: тихо освежаем «Журнал публикаций».
+      // Дебаунс — агент часто ставит в очередь серию постов, дёргать API
+      // на каждый item не нужно.
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'autopost_items', filter: `bot_id=eq.${botId}` },
-        () => {}
+        () => { scheduleJournalRefetch(botId); }
       )
       .subscribe();
 
     return () => {
+      if (journalDebounceRef.current) {
+        clearTimeout(journalDebounceRef.current);
+        journalDebounceRef.current = null;
+      }
       supabase.removeChannel(channel);
     };
   }, [createdBot?.id, selectedBotId, accessToken]);
@@ -640,6 +786,23 @@ export function QuickStartPage() {
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
+
+  // Журнал: planned = queued|scheduled (клиентский фильтр по полному списку),
+  // failed — вне табов, только строка-предупреждение.
+  const plannedJournalItems = journalItems.filter((it) => JOURNAL_PLANNED_STATUSES.includes(it.status));
+  const failedJournalCount = journalItems.filter((it) => it.status === 'failed').length;
+  const mediaJournalRows = journalRowsByType(plannedJournalItems, JOURNAL_MEDIA_TYPES, channelConfigs);
+  const checklistJournalRows = journalRowsByType(plannedJournalItems, ['checklist'], channelConfigs);
+  const textJournalRows = journalRowsByType(plannedJournalItems, ['text'], channelConfigs);
+  const journalTabCounts = {
+    media: mediaJournalRows.length,
+    checklists: checklistJournalRows.length,
+    text: textJournalRows.length
+  };
+  const journalTabRows = { media: mediaJournalRows, checklists: checklistJournalRows, text: textJournalRows };
+  const activeJournalRows = journalTabRows[journalTab] || [];
+  const mediaJournalSummary = journalMediaSummaryLines(mediaJournalRows);
+  const journalChecklistById = new Map(journalChecklists.map((cl) => [String(cl.id), cl]));
 
   return (
     <section className="page page--flush space-y-6">
@@ -1487,6 +1650,134 @@ export function QuickStartPage() {
               );
             })}
         </Card>
+
+          {/* Журнал публикаций — только наблюдение: что агент уже поставил
+              в очередь и на расписание. Кнопок управления здесь нет сознательно:
+              планом ведёт агент, ручные правки расписания ему только мешают. */}
+          <details
+            className="group shadow-sm ring-1 ring-border-default bg-white overflow-hidden rounded-2xl"
+            onToggle={handleJournalToggle}
+          >
+            <summary className="p-5 sm:p-6 cursor-pointer select-none flex items-center gap-3 list-none [&::-webkit-details-marker]:hidden">
+              <div className="w-9 h-9 rounded-xl bg-surface-subtle-strong flex items-center justify-center text-ink-muted shrink-0">
+                <ScrollText className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-ink-strong">Журнал публикаций</h3>
+                <p className="text-xs text-ink-muted mt-0.5 max-w-[70ch]">
+                  Что запланировано и когда выйдет. План ведёт агент — здесь только посмотреть.
+                </p>
+              </div>
+              {plannedJournalItems.length > 0 && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-surface-subtle-strong text-ink-body border border-border-default shrink-0">
+                  Запланировано: {plannedJournalItems.length}
+                </span>
+              )}
+              <ChevronDown className="w-4 h-4 text-ink-faint shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="px-5 sm:px-6 pb-5 sm:pb-6 pt-4 space-y-4 border-t border-border-default">
+              {journalError ? (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl bg-feedback-error-bg p-4 text-sm font-semibold text-feedback-error-text">
+                  <span className="flex-1">Не удалось загрузить журнал: {journalError}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadJournal(createdBot.id)}
+                    className="h-8 rounded-lg text-xs font-semibold shrink-0"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Повторить
+                  </Button>
+                </div>
+              ) : journalLoading && journalItems.length === 0 ? (
+                <p className="text-sm text-ink-muted font-semibold">Загрузка…</p>
+              ) : (
+                <>
+                  <div role="tablist" aria-label="Журнал публикаций" className="flex flex-wrap gap-2">
+                    {JOURNAL_TABS.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={journalTab === tab.key}
+                        onClick={() => setJournalTab(tab.key)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          journalTab === tab.key
+                            ? 'bg-action-primary text-action-primary-text border-action-primary'
+                            : 'bg-surface-card text-ink-body border-border-default hover:border-border-strong'
+                        }`}
+                      >
+                        {tab.label} · {journalTabCounts[tab.key]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {failedJournalCount > 0 && (
+                    <p className="text-xs text-feedback-warning-text font-semibold">
+                      ⚠️ Не удалось опубликовать: {failedJournalCount} — смотрите у агента/в Telegram
+                    </p>
+                  )}
+
+                  {journalTab === 'media' && mediaJournalSummary.length > 0 && (
+                    <div className="space-y-1">
+                      {mediaJournalSummary.map((line, idx) => (
+                        <p key={idx} className="text-xs text-ink-muted font-semibold">{line}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {activeJournalRows.length === 0 ? (
+                    <p className="text-sm text-ink-muted font-semibold">Ничего не запланировано</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeJournalRows.map(({ item, channel }) => {
+                        if (journalTab === 'checklists') {
+                          const cl = journalChecklistById.get(String(item.checklist_id));
+                          const badge = JOURNAL_CHECKLIST_BADGES[cl?.status] || null;
+                          const title = journalSnippet(cl?.title) || journalSnippet(item.caption) || 'Чек-лист';
+                          return (
+                            <div key={item.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-border-default bg-surface-subtle/60">
+                              <span className="text-base leading-none mt-0.5 shrink-0" aria-hidden="true">☑️</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <p className="text-sm font-bold text-ink-body truncate">{title}</p>
+                                  {badge && (
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${badge.className}`}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-ink-muted font-semibold mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                                  <span>{journalTimeLabel(item.scheduled_at)}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{channel?.title || `канал ${item.target_channel_id}`}</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+                        const emoji = journalTab === 'media' ? (JOURNAL_MEDIA_EMOJI[item.media_type] || '🖼') : '📝';
+                        const primary = journalSnippet(item.caption) || (journalTab === 'media' ? 'Без подписи' : 'Без текста');
+                        return (
+                          <div key={item.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-border-default bg-surface-subtle/60">
+                            <span className="text-base leading-none mt-0.5 shrink-0" aria-hidden="true">{emoji}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-ink-body truncate">{primary}</p>
+                              <p className="text-xs text-ink-muted font-semibold mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                                <span>{journalTimeLabel(item.scheduled_at)}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{channel?.title || `канал ${item.target_channel_id}`}</span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </details>
 
           {/* Список Администраторов (В самом низу) */}
           <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">

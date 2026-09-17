@@ -28,6 +28,16 @@ export function fetchAdmins(botId, token) {
     return request(`/api/autopost/bots/${botId}/admins`, { token });
 }
 
+// Все items бота (без status-фильтра, лимит 500) — для read-only «Журнала публикаций».
+export function fetchItems(botId, token) {
+    return request(`/api/autopost/bots/${botId}/items`, { token });
+}
+
+// Первая страница чек-листов (их title/status джойним с planned-items журнала).
+export function fetchChecklists(botId, token) {
+    return request(`/api/autopost/bots/${botId}/checklists?limit=100`, { token });
+}
+
 export function initBot({ botToken, adminTgId }, token) {
     return request('/api/autopost/bots/init', {
         method: 'POST',
