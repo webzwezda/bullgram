@@ -16,6 +16,11 @@ export function registerMediaHandler(bot, service, botId) {
 
     bot.on(['photo', 'video', 'animation', 'document'], async (ctx) => {
         try {
+            // Композиция постов и гостевые предложки — личный флоу с ботом
+            // (клавиатура админа и deep-link «Предложить новость» живут в DM).
+            // В группах, где бот админ, обычные медиа людей не должны
+            // превращаться в посты/предложки.
+            if (ctx.chat?.type !== 'private') return;
             const tgUserId = ctx.from.id;
             const { bot: botData, isAdmin } = await service.getBotAdminContext(botId, tgUserId);
 
@@ -229,6 +234,10 @@ export function registerMediaHandler(bot, service, botId) {
     // (то есть админ без await_text_post/edit_caption, либо гость).
     bot.on('text', async (ctx) => {
         try {
+            // Подсказка админу и гостевые предложки — личный флоу. В группах
+            // бот-админ получает весь чат людей: молчим (команды и inline-кнопки
+            // работают как раньше).
+            if (ctx.chat?.type !== 'private') return;
             const tgUserId = ctx.from.id;
             const text = ctx.message.text?.trim();
             if (!text) return;
