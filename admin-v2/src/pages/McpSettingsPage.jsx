@@ -157,7 +157,6 @@ export function McpSettingsPage() {
       "args": [
         "-y",
         "mcp-remote@latest",
-        "--http",
         "${APP_CONFIG.backendUrl}/api/mcp",
         "--header",
         "Authorization: Bearer ${tokenForSetup}"
