@@ -43,6 +43,13 @@ export function App() {
       ]
     },
     {
+      title: 'Userbot',
+      items: [
+        { to: '/userbots', label: 'Юзерботы', icon: Rocket },
+        { to: '/proxies', label: 'Прокси', icon: Globe },
+      ]
+    },
+    {
       title: 'Продажи и Клиенты',
       items: [
         { to: '/customers', label: 'Клиенты', icon: Users },
@@ -57,13 +64,6 @@ export function App() {
         { to: '/bases', label: 'Базы', icon: Database },
         { to: '/broadcast', label: 'Рассылка', icon: Send, exact: true },
         { to: '/broadcast/history', label: 'История рассылок', icon: History },
-      ]
-    },
-    {
-      title: 'Инфраструктура',
-      items: [
-        { to: '/userbots', label: 'Юзерботы', icon: Rocket },
-        { to: '/proxies', label: 'Прокси', icon: Globe },
       ]
     },
     {
