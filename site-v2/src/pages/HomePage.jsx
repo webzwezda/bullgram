@@ -111,7 +111,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
     return (
       <a
         href="/app/profile"
-        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-50 px-5 py-4 text-base font-black text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
+        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-5 py-4 text-base font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
       >
         <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
         Активирован до {formatEndDate(proEndsAt) || '—'}
@@ -130,7 +130,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
           <button
             type="button"
             onClick={() => navigate(`/pay/${pendingOrder.id}`)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-amber-600/20 transition hover:bg-amber-700"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-amber-600 px-5 py-4 text-base font-bold text-white shadow-lg shadow-amber-600/20 transition hover:bg-amber-700"
           >
             Завершить оплату
             <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -145,7 +145,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
       <button
         type="button"
         onClick={() => login()}
-        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
+        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-4 text-base font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
       >
         Войди, чтобы оплатить
         <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -184,7 +184,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
         type="button"
         onClick={onCreate}
         disabled={creating}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-4 text-base font-black text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-4 text-base font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {creating ? (
           <>
@@ -224,17 +224,17 @@ function PlanCard({ plan, children }) {
   return (
     <article className={cardClass}>
       {plan.highlighted ? (
-        <div className="absolute -top-4 left-6 rounded-lg bg-action-primary px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-action-primary-text shadow-md">
+        <div className="absolute -top-4 left-6 rounded-lg bg-action-primary px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-action-primary-text shadow-md">
           {plan.label}
         </div>
       ) : (
-        <div className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-ink-muted">{plan.label}</div>
+        <div className="mb-4 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">{plan.label}</div>
       )}
 
       {plan.highlighted ? <div className="mb-4 h-2" /> : null}
       <div className="mb-5">
-        <h3 className="text-2xl font-black text-ink-strong">{plan.title}</h3>
-        <p className="mt-2 text-sm font-semibold leading-6 text-ink-body">{plan.description}</p>
+        <h3 className="text-2xl font-bold text-ink-strong">{plan.title}</h3>
+        <p className="mt-2 min-h-[3rem] text-sm font-semibold leading-6 text-ink-body">{plan.description}</p>
       </div>
 
       <div className="mb-6">
@@ -274,14 +274,14 @@ function DigestCard() {
     <div className="overflow-hidden rounded-2xl bg-slate-900 p-2 shadow-2xl shadow-black/40 ring-1 ring-white/10">
       <div className="rounded-xl bg-slate-800 p-5 text-left sm:p-6">
         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-sm font-black text-indigo-300">АГ</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-sm font-black text-indigo-300">B</span>
           <div className="min-w-0">
-            <div className="text-sm font-black text-white">Агент Bullgram</div>
+            <div className="text-sm font-bold text-white">Агент Bullgram</div>
             <div className="text-xs font-semibold text-slate-400">сводка по расписанию · 09:00</div>
           </div>
         </div>
         <div className="pt-4">
-          <div className="text-base font-black text-white">Сводка за 24 часа</div>
+          <div className="text-base font-bold text-white">Сводка за 24 часа</div>
           <div className="mt-1 text-xs font-bold text-emerald-300">3 группы · 412 сообщений → 5 пунктов</div>
           <ul className="mt-4 space-y-2.5">
             {digestItems.map((item) => (
@@ -331,12 +331,12 @@ export function HomePage() {
           </span>
         </div>
 
-        <h1 className="mx-auto max-w-4xl text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
+        <h1 className="mx-auto max-w-4xl text-balance text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
           Твой агент читает <br className="hidden sm:block" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-500">Telegram за тебя</span>
+          <span className="text-action-primary">Telegram за тебя</span>
         </h1>
 
-        <p className="mx-auto max-w-[40rem] text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
+        <p className="mx-auto max-w-[40rem] text-pretty text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
           Подключи группы — и получай по расписанию короткие ИИ-сводки: что произошло и что важно.
           Рассылки, проверки и рутинные действия агент тоже берёт на себя.
         </p>
@@ -348,8 +348,8 @@ export function HomePage() {
       <section className="bg-white px-6 py-16 sm:px-10 lg:px-16 sm:py-20">
         <div className="mx-auto w-full max-w-6xl">
           <div className="mb-10 max-w-2xl">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Как это работает</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Как это работает</div>
+            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
               Три шага — и за Telegram больше не нужно следить
             </h2>
           </div>
@@ -357,25 +357,25 @@ export function HomePage() {
             {steps.map((step) => (
               <li key={step.n} className="rounded-2xl border border-border-default bg-surface-subtle p-6">
                 <div className="font-mono text-xs font-bold uppercase tracking-widest text-ink-muted">{step.n}</div>
-                <h3 className="mt-3 text-lg font-black leading-snug text-ink-strong">{step.title}</h3>
-                <p className="mt-2 text-sm font-medium leading-6 text-ink-body">{step.text}</p>
+                <h3 className="mt-3 text-lg font-bold leading-snug text-ink-strong">{step.title}</h3>
+                <p className="mt-2 text-pretty text-sm font-medium leading-6 text-ink-body">{step.text}</p>
               </li>
             ))}
           </ol>
         </div>
       </section>
 
-      {/* Живой пример — как выглядит сводка */}
+      {/* Пример сводки — формат карточки, цифры заменяются на данные первого реального прогона */}
       <section className="bg-white px-6 pb-16 sm:px-10 lg:px-16 sm:pb-20">
         <div className="mx-auto w-full max-w-2xl text-center">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Живой пример</div>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Пример сводки</div>
+          <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
             Так выглядит сводка за сутки
           </h2>
           <div className="mt-8">
             <DigestCard />
           </div>
-          <p className="mt-6 text-sm font-medium leading-6 text-ink-muted">
+          <p className="mt-6 text-pretty text-sm font-medium leading-6 text-ink-muted">
             Этим же контуром мы сами ведём свой канал каждый день:{' '}
             <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
           </p>
@@ -386,8 +386,8 @@ export function HomePage() {
       <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 sm:px-10 lg:px-16 sm:pb-24">
         <div className="mx-auto w-full max-w-5xl">
           <div className="mb-8">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Тарифы</div>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Тарифы</div>
+            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
               Сколько стоит вход
             </h2>
           </div>
@@ -406,7 +406,7 @@ export function HomePage() {
                   user ? (
                     <a
                       href="/app/profile"
-                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-card px-5 py-4 text-base font-black text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-4 text-base font-bold text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
                     >
                       Открыть кабинет
                       <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -415,7 +415,7 @@ export function HomePage() {
                     <button
                       type="button"
                       onClick={() => login('/app/profile')}
-                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-card px-5 py-4 text-base font-black text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-4 text-base font-bold text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
                     >
                       {plan.action}
                       <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -440,10 +440,10 @@ export function HomePage() {
       </section>
 
       {/* Дев-тир: MCP и API для своих автоматизаций */}
-      <section className="bg-slate-950 px-6 py-14 sm:px-10 lg:px-16">
+      <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
         <div className="mx-auto w-full max-w-5xl">
-          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Для разработчиков</div>
-          <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-400">Для разработчиков</div>
+          <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Строишь агентов или автоматизации?
           </h2>
           <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-slate-400">
@@ -471,15 +471,22 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Модули платформы — одной строкой */}
+      {/* Модули платформы — компактные чипы */}
       <section className="border-t border-border-default bg-surface-subtle px-6 py-8">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center gap-2 text-center sm:flex-row sm:gap-3">
-          <span className="shrink-0 text-xs font-black uppercase tracking-[0.16em] text-ink-muted">
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 text-center">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
             Платформа умеет ещё
           </span>
-          <p className="text-sm font-semibold text-ink-body">
-            {platformModules.join(' · ')}
-          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {platformModules.map((m) => (
+              <span
+                key={m}
+                className="rounded-full border border-border-default bg-surface-card px-3 py-1 text-xs font-semibold text-ink-body"
+              >
+                {m}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
