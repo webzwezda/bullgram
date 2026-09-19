@@ -17,12 +17,11 @@ const plans = [
     title: 'Trial',
     price: '0 TON',
     period: 'бессрочно',
-    description: 'Пробный доступ к Bullgram, чтобы собрать первый рабочий контур и проверить сценарии без оплаты.',
-    action: 'Начать Trial',
+    description: 'Подключи одну группу и получи первые сводки — чтобы понять, твоё ли это.',
+    action: 'Начать бесплатно',
     features: [
-      '100 запросов к API и MCP',
-      'Самостоятельное подключение юзербота',
-      '1 userbot на аккаунт'
+      '1 юзербот',
+      '100 запросов к API и MCP'
     ]
   },
   {
@@ -31,14 +30,50 @@ const plans = [
     title: 'Pro',
     price: '10 TON',
     period: 'за 365 дней доступа',
-    description: 'Основной платный тариф Bullgram: рабочий режим без лимитов на запросы и активы, рассылки и продажи.',
+    description: 'Полный режим для тех, кто делегирует агенту всё.',
     highlighted: true,
     features: [
-      'уже готовый к работе тг-аккаунт',
-      'безлимит по API и MCP',
-      'неограниченное количество ботов'
+      'сколько угодно групп и ботов',
+      'рассылки и автопостинг',
+      'готовый тг-аккаунт в комплекте',
+      'API и MCP без лимитов'
     ]
   }
+];
+
+const steps = [
+  {
+    n: '01',
+    title: 'Подключи группу',
+    text: 'Любую Telegram-группу или канал, за которыми не успеваешь следить: свои, рабочие, отраслевые.'
+  },
+  {
+    n: '02',
+    title: 'Агент читает и собирает суть',
+    text: 'Агент следит за всеми сообщениями и отделяет шум от того, что действительно важно.'
+  },
+  {
+    n: '03',
+    title: 'Получаешь сводку по расписанию',
+    text: 'Короткая выжимка приходит сама. Рассылки, проверки и рутину агент тоже берёт на себя.'
+  }
+];
+
+// «Живой пример»: цифры свода (3 группы · 412 сообщений → 5 важного) и факт-строки
+// (9 710 вызовов агента за 30 дней) реальные, из прод-базы на 2026-09-18.
+// Их обновляет владелец при следующем освежении секции.
+const digestItems = [
+  'BTC за сутки вышел из диапазона 56–58k на объёме — в двух каналах ждут ретест',
+  'TON-дайджест: обновление Wallet и новый каталог мини-аппов, обсуждение активное',
+  'Три разбора сделок за неделю в трейдинг-чате — главный вывод: не усреднять убыток',
+  'Аирдропы: новые задания от трёх проектов, дедлайны в течение 48 часов'
+];
+
+const platformModules = [
+  'платный доступ в канал',
+  'автопостинг с чек-листами',
+  'магазин за TON',
+  'рассылки по расписанию'
 ];
 
 function formatEndDate(value) {
@@ -181,34 +216,34 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
 
 function PlanCard({ plan, children }) {
   const cardClass = plan.highlighted
-    ? 'relative flex flex-col rounded-lg border-2 border-indigo-600 bg-white p-6 shadow-xl shadow-indigo-600/10'
-    : 'relative flex flex-col rounded-lg border border-slate-200 bg-white p-6 shadow-sm';
+    ? 'relative flex flex-col rounded-lg border-2 border-action-primary bg-surface-card p-6 shadow-xl shadow-indigo-600/10'
+    : 'relative flex flex-col rounded-lg border border-border-default bg-surface-card p-6 shadow-sm';
 
   return (
     <article className={cardClass}>
       {plan.highlighted ? (
-        <div className="absolute -top-4 left-6 rounded-lg bg-indigo-600 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-white shadow-md">
+        <div className="absolute -top-4 left-6 rounded-lg bg-action-primary px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-action-primary-text shadow-md">
           {plan.label}
         </div>
       ) : (
-        <div className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-slate-500">{plan.label}</div>
+        <div className="mb-4 text-xs font-black uppercase tracking-[0.16em] text-ink-muted">{plan.label}</div>
       )}
 
       {plan.highlighted ? <div className="mb-4 h-2" /> : null}
       <div className="mb-5">
-        <h3 className="text-2xl font-black text-slate-950">{plan.title}</h3>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{plan.description}</p>
+        <h3 className="text-2xl font-black text-ink-strong">{plan.title}</h3>
+        <p className="mt-2 text-sm font-semibold leading-6 text-ink-body">{plan.description}</p>
       </div>
 
       <div className="mb-6">
-        <div className="text-4xl font-black tracking-tight text-slate-950">{plan.price}</div>
-        <div className="mt-1 text-sm font-bold text-slate-500">{plan.period}</div>
+        <div className="text-4xl font-black tracking-tight text-ink-strong">{plan.price}</div>
+        <div className="mt-1 text-sm font-bold text-ink-muted">{plan.period}</div>
       </div>
 
       <ul className="mb-8 space-y-3">
         {plan.features.map((feature) => (
-          <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} aria-hidden="true" />
+          <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-ink-body">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-feedback-success-text" strokeWidth={2.5} aria-hidden="true" />
             <span>{feature}</span>
           </li>
         ))}
@@ -219,70 +254,43 @@ function PlanCard({ plan, children }) {
   );
 }
 
-function ScreenSection({ id, className = '', children }) {
+function StartFreeButton({ user, login, size = 'lg' }) {
+  const pad = size === 'lg' ? 'px-8 py-4 text-base' : 'px-5 py-3 text-sm';
   return (
-    <section id={id} className={`flex min-h-screen snap-start snap-always flex-col ${className}`}>
-      {children}
-    </section>
+    <button
+      type="button"
+      onClick={() => (user ? window.location.assign('/app/profile') : login('/app/profile'))}
+      className={`group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary ${pad} font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5`}
+    >
+      Начать бесплатно
+      <ArrowRight className={size === 'lg' ? 'w-5 h-5' : 'h-4 w-4'} strokeWidth={2.5} />
+    </button>
   );
 }
 
-function UserbotCardMock() {
-  const rows = [
-    ['Статус', 'Активен', 'text-emerald-300'],
-    ['Прокси', 'Выделенный', 'text-sky-300'],
-    ['Рассылки', 'По расписанию', 'text-slate-200'],
-    ['Мониторинг', 'Группы и чаты', 'text-slate-200']
-  ];
+function DigestCard() {
   return (
-    <div className="rounded-2xl bg-slate-900 p-6 ring-1 ring-white/10 shadow-2xl shadow-black/40">
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-black text-emerald-300">ЮБ</span>
-        <div>
-          <div className="text-base font-black text-white">erik-barber</div>
-          <div className="text-xs font-semibold text-slate-400">живой аккаунт · передан тебе</div>
-        </div>
-      </div>
-      <dl className="space-y-3 py-5">
-        {rows.map(([key, value, tone]) => (
-          <div key={key} className="flex items-center justify-between text-sm">
-            <dt className="font-semibold text-slate-400">{key}</dt>
-            <dd className={`font-bold ${tone}`}>{value}</dd>
+    <div className="overflow-hidden rounded-2xl bg-slate-900 p-2 shadow-2xl shadow-black/40 ring-1 ring-white/10">
+      <div className="rounded-xl bg-slate-800 p-5 text-left sm:p-6">
+        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-sm font-black text-indigo-300">АГ</span>
+          <div className="min-w-0">
+            <div className="text-sm font-black text-white">Агент Bullgram</div>
+            <div className="text-xs font-semibold text-slate-400">сводка по расписанию · 09:00</div>
           </div>
-        ))}
-      </dl>
-      <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/20">
-        Готов к работе. Ничего настраивать не нужно.
-      </div>
-    </div>
-  );
-}
-
-function PaywallBotMock() {
-  const messages = [
-    ['Оплата получена', '10 TON · тариф «Месяц»', 'text-emerald-700'],
-    ['Инвайт выдан', '@private_channel', 'text-sky-700'],
-    ['Подписка активна', 'до 14 мая', 'text-slate-900']
-  ];
-  return (
-    <div className="rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
-      <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-500/10 text-sm font-black text-sky-700">Б</span>
-        <div>
-          <div className="text-base font-black text-slate-900">бот paywall</div>
-          <div className="text-xs font-semibold text-slate-500">подключён к @private_channel</div>
         </div>
-      </div>
-      <div className="space-y-2.5 py-5">
-        {messages.map(([title, detail, tone]) => (
-          <div key={title} className="rounded-lg bg-white px-4 py-2.5 ring-1 ring-slate-200">
-            <div className={`text-sm font-bold ${tone}`}>{title}</div>
-            <div className="text-xs font-semibold text-slate-500">{detail}</div>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-lg bg-sky-50 px-4 py-3 text-sm font-bold text-sky-700 ring-1 ring-inset ring-sky-200">
-        Доступ выдаётся сам. Ты пишешь контент.
+        <div className="pt-4">
+          <div className="text-base font-black text-white">Сводка за 24 часа</div>
+          <div className="mt-1 text-xs font-bold text-emerald-300">3 группы · 412 сообщений → 5 важного</div>
+          <ul className="mt-4 space-y-2.5">
+            {digestItems.map((item) => (
+              <li key={item} className="flex gap-2.5 text-sm font-medium leading-6 text-slate-200">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -292,25 +300,6 @@ export function HomePage() {
   const { user, accessToken, profilePlan, proEndsAt, billingOrder, login } = useAuth();
   const pendingOrder = billingOrder?.status === 'pending' && billingOrder?.provider === 'ton_connect' ? billingOrder : null;
   const { hash } = useLocation();
-  const [stars, setStars] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    fetch('https://api.github.com/repos/webzwezda/bullgram')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('github api'))))
-      .then((data) => {
-        if (alive && typeof data?.stargazers_count === 'number') setStars(data.stargazers_count);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.add('home-scroll-snap');
-    return () => document.documentElement.classList.remove('home-scroll-snap');
-  }, []);
 
   useEffect(() => {
     if (!hash) return;
@@ -320,245 +309,194 @@ export function HomePage() {
 
   return (
     <div className="w-full">
-      {/* Экран 1 — герой (чуть ниже вьюпорта, чтобы тарифы приходили раньше) */}
-      <section className="relative flex min-h-[86vh] snap-start snap-always flex-col">
-        <div className="relative isolate flex w-full flex-1 flex-col items-center justify-center overflow-hidden px-4 pt-20 pb-16 text-center sm:px-6 lg:pt-28 lg:pb-24">
-          <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
-          <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
-          <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
+      {/* Герой — один исход: агент читает Telegram за тебя */}
+      <section className="relative isolate overflow-hidden px-4 pb-14 pt-20 text-center sm:px-6 sm:pt-24 lg:pt-28">
+        <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
+        <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-400/20 blur-[100px] rounded-full mix-blend-multiply pointer-events-none -z-10" />
 
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-          <a
-            href="https://github.com/webzwezda/bullgram"
-            target="_blank"
-            rel="noreferrer"
-            className="group inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)] transition-all hover:shadow-[0_2px_15px_-3px_rgba(79,70,229,0.2)] hover:border-indigo-200"
-            aria-label="Bullgram на GitHub — проект с открытым кодом"
-          >
-            <svg className="w-4 h-4 text-slate-900" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.91-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-            </svg>
-            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase group-hover:text-indigo-600 transition-colors">
-              Bullgram 2.0
-            </span>
-            <span className="w-1 h-1 rounded-full bg-slate-300" aria-hidden="true" />
-            <span className="text-[13px] font-bold tracking-wide text-slate-500 group-hover:text-indigo-600 transition-colors">
-              Open Source
-            </span>
-            {stars !== null && stars > 0 ? (
-              <>
-                <span className="w-px h-3.5 bg-slate-200" aria-hidden="true" />
-                <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 2l2.9 6.26 6.6.72-4.9 4.55 1.35 6.47L12 16.9 6.05 20l1.35-6.47-4.9-4.55 6.6-.72L12 2z" />
-                </svg>
-                <span className="text-[13px] font-bold text-slate-600 pr-1">{stars}</span>
-              </>
-            ) : null}
-          </a>
-
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
           <span
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200/60 shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)]"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-border-default shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)]"
             title="Принимаем оплату только в криптовалюте — TON"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="11" fill="#0098EA" />
               <path d="M12 5.5 17.5 11 12 18.5 6.5 11 12 5.5Z" fill="#fff" />
             </svg>
-            <span className="text-[13px] font-bold tracking-wide text-slate-700 uppercase">
-            Оплата в TON
+            <span className="text-[13px] font-bold tracking-wide text-ink-body uppercase">
+              Оплата в TON
+            </span>
           </span>
-          </span>
+        </div>
+
+        <h1 className="mx-auto max-w-4xl text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
+          Твой агент читает <br className="hidden sm:block" />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-500">Telegram за тебя</span>
+        </h1>
+
+        <p className="mx-auto max-w-[40rem] text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
+          Подключи группы — и получай по расписанию короткие ИИ-сводки: что произошло и что важно.
+          Рассылки, проверки и рутинные действия агент тоже берёт на себя.
+        </p>
+
+        <StartFreeButton user={user} login={login} />
+      </section>
+
+      {/* Как это работает — 3 шага */}
+      <section className="bg-white px-6 py-16 sm:px-10 lg:px-16 sm:py-20">
+        <div className="mx-auto w-full max-w-6xl">
+          <div className="mb-10 max-w-2xl">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Как это работает</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+              Три шага — и за Telegram больше не нужно следить
+            </h2>
           </div>
-
-          <h1 className="text-6xl sm:text-7xl lg:text-[5.5rem] font-black tracking-tighter text-slate-900 leading-[0.95] max-w-5xl mb-8">
-            Юзерботы для Telegram, <br className="hidden sm:block" />
-            которые <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-500">работают с&nbsp;первого дня</span>
-          </h1>
-
-          <p className="text-xl sm:text-2xl text-slate-500 font-medium max-w-[44rem] leading-relaxed mb-10 tracking-tight">
-            <span className="text-slate-800 font-bold">Купи юзербота</span> или подключи свой — и делегируй рутину: мониторинг, рассылки и действия в группах от имени живого&nbsp;аккаунта.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-            className="group relative z-10 inline-flex w-full items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-4 text-base font-bold text-white transition-all hover:bg-indigo-700 hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5 sm:w-auto"
-          >
-            Купить готового юзербота
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+          <ol className="grid gap-5 sm:grid-cols-3">
+            {steps.map((step) => (
+              <li key={step.n} className="rounded-2xl border border-border-default bg-surface-subtle p-6">
+                <div className="font-mono text-xs font-bold uppercase tracking-widest text-ink-muted">{step.n}</div>
+                <h3 className="mt-3 text-lg font-black leading-snug text-ink-strong">{step.title}</h3>
+                <p className="mt-2 text-sm font-medium leading-6 text-ink-body">{step.text}</p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
 
-      {/* Экран 2 — тарифы */}
-      <ScreenSection id="tariffs">
-        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 pb-16 pt-6 sm:px-10 lg:px-16">
-          <div className="mx-auto w-full max-w-5xl">
-            <div className="mb-8">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Тарифы</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Сколько стоит вход
-              </h2>
-            </div>
-            <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
-              {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan}>
-                  {plan.id === 'pro' ? (
-                    <ProCheckoutButton
-                      profilePlan={profilePlan}
-                      proEndsAt={proEndsAt}
-                      pendingOrder={pendingOrder}
-                      user={user}
-                      accessToken={accessToken}
-                    />
-                  ) : (
-                    user ? (
-                      <a
-                        href="/app/profile"
-                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                      >
-                        Открыть кабинет
-                        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => login('/app/profile')}
-                        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white px-5 py-4 text-base font-black text-slate-800 ring-1 ring-inset ring-slate-200 transition hover:bg-slate-50 hover:ring-slate-300"
-                      >
-                        {plan.action}
-                        <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                      </button>
-                    )
-                  )}
-                </PlanCard>
-              ))}
-            </div>
-            <p className="mt-6 text-center text-sm font-medium leading-6 text-slate-500">
-              Нужен особый тариф?{' '}
-              <a href="/access-request" className="font-bold text-indigo-600 underline decoration-2 underline-offset-2 hover:text-indigo-700">
-                Напиши — оформим.
-              </a>
-            </p>
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 3 — флагман: готовый юзербот */}
-      <ScreenSection id="userbots">
-        <div className="flex w-full flex-1 flex-col justify-center bg-slate-950 px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
-            <div className="lg:col-span-3">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Флагман</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                Готовый юзербот
-              </h2>
-          <p className="mt-4 text-base font-medium leading-7 text-slate-400">
-            Живой Telegram-аккаунт, который берёт рутину на себя — а управлять им можно из AI-агентов или n8n
-          </p>
-              <ul className="mt-6 space-y-3">
-                {['Администрирование ваших групп', 'Мониторинг чужих групп и чатов', 'Участие в рассылках'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-200">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" strokeWidth={2.5} aria-hidden="true" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => (user ? window.location.assign('/app/userbots') : login('/app/userbots'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
-                >
-                  Купить готового юзербота
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
-                >
-                  REST API
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
-                >
-                  Bullgram MCP
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-              </div>
-            </div>
-            <div className="lg:col-span-2">
-              <UserbotCardMock />
-            </div>
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 4 — paywall бот */}
-      <ScreenSection id="paywall">
-        <div className="flex w-full flex-1 flex-col justify-center bg-white px-6 py-16 sm:px-10 lg:px-16">
-          <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-5 lg:gap-16">
-            <div className="lg:col-span-3">
-              <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Paywall бот</div>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-                Платный доступ в твой канал
-              </h2>
-              <p className="mt-4 text-base font-medium leading-7 text-slate-500">
-                Бот принимает оплату, выдаёт инвайт и следит за подписками.
-                Ты занимаешься контентом, а доступом занимается бот.
-              </p>
-              <ul className="mt-6 space-y-3">
-                {['автоматическая выдача доступа после оплаты', 'тарифы и подписки внутри бота', 'напоминания и удаление тех, кто не продлил'].map((feature) => (
-                  <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-slate-700">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" strokeWidth={2.5} aria-hidden="true" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => (user ? window.location.assign('/app/sales-bot') : login('/app/sales-bot'))}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
-                >
-                  Подключить бота
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-                </button>
-              </div>
-            </div>
-            <div className="lg:col-span-2">
-              <PaywallBotMock />
-            </div>
-          </div>
-        </div>
-      </ScreenSection>
-
-      {/* Экран 5 — быстрый старт */}
-      <ScreenSection id="quick-start">
-        <div className="relative isolate flex w-full flex-1 flex-col items-center justify-center overflow-hidden bg-white px-4 text-center sm:px-6">
-          <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
-          <div className="absolute top-0 -z-10 h-[600px] w-full bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
-
-          <h2 className="max-w-4xl text-6xl font-black tracking-tighter text-slate-900 sm:text-7xl">
-            Готов начать?
+      {/* Живой пример — как выглядит сводка */}
+      <section className="bg-white px-6 pb-16 sm:px-10 lg:px-16 sm:pb-20">
+        <div className="mx-auto w-full max-w-2xl text-center">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Живой пример</div>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+            Так выглядит сводка за сутки
           </h2>
-          <a
-            href="/docs/quick-start/"
-            className="group mt-12 inline-flex items-center justify-center gap-3 rounded-full bg-indigo-600 px-14 py-6 text-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-[0_12px_40px_rgba(79,70,229,0.28)]"
-          >
-            Пройти Quick Start
-            <ArrowRight className="h-6 w-6 transition-transform group-hover:translate-x-1" />
-          </a>
-          <p className="mt-8 text-sm font-medium text-slate-500">
-            Оплата в TON · поддержка в Telegram
+          <div className="mt-8">
+            <DigestCard />
+          </div>
+          <p className="mt-6 text-sm font-medium leading-6 text-ink-muted">
+            Этим же контуром мы сами ведём свой канал каждый день:{' '}
+            <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
           </p>
         </div>
-      </ScreenSection>
+      </section>
 
+      {/* Тарифы */}
+      <section id="tariffs" className="bg-white px-6 pb-20 sm:px-10 lg:px-16 sm:pb-24">
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="mb-8">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Тарифы</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-ink-strong sm:text-4xl">
+              Сколько стоит вход
+            </h2>
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
+            {plans.map((plan) => (
+              <PlanCard key={plan.id} plan={plan}>
+                {plan.id === 'pro' ? (
+                  <ProCheckoutButton
+                    profilePlan={profilePlan}
+                    proEndsAt={proEndsAt}
+                    pendingOrder={pendingOrder}
+                    user={user}
+                    accessToken={accessToken}
+                  />
+                ) : (
+                  user ? (
+                    <a
+                      href="/app/profile"
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-card px-5 py-4 text-base font-black text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
+                    >
+                      Открыть кабинет
+                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => login('/app/profile')}
+                      className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-card px-5 py-4 text-base font-black text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
+                    >
+                      {plan.action}
+                      <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+                    </button>
+                  )
+                )}
+              </PlanCard>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-sm font-medium leading-6 text-ink-muted">
+            Вопрос по тарифам или нужен другой формат?{' '}
+            <a
+              href={SUPPORT_TELEGRAM}
+              target="_blank"
+              rel="noreferrer"
+              className="font-bold text-action-primary underline decoration-2 underline-offset-2 hover:text-action-primary-hover"
+            >
+              Напиши в поддержку в Telegram
+            </a>
+          </p>
+        </div>
+      </section>
+
+      {/* Дев-тир: MCP и API для своих автоматизаций */}
+      <section className="bg-slate-950 px-6 py-14 sm:px-10 lg:px-16">
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="text-xs font-black uppercase tracking-[0.16em] text-sky-400">Для разработчиков</div>
+          <h2 className="mt-3 text-2xl font-black tracking-tight text-white sm:text-3xl">
+            Строишь агентов или автоматизации?
+          </h2>
+          <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-slate-400">
+            MCP и API к живым Telegram-аккаунтам: сессии, прокси 1:1, предохранители.
+            Работает с n8n и любыми MCP-клиентами.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+            >
+              REST API
+              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+            >
+              Bullgram MCP
+              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Модули платформы — одной строкой */}
+      <section className="border-t border-border-default bg-surface-subtle px-6 py-8">
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-center gap-2 text-center sm:flex-row sm:gap-3">
+          <span className="shrink-0 text-xs font-black uppercase tracking-[0.16em] text-ink-muted">
+            Платформа умеет ещё
+          </span>
+          <p className="text-sm font-semibold text-ink-body">
+            {platformModules.join(' · ')}
+          </p>
+        </div>
+      </section>
+
+      {/* Финальный CTA */}
+      <section className="relative isolate overflow-hidden bg-white px-4 py-20 text-center sm:px-6 sm:py-24">
+        <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute top-0 -z-10 h-[600px] w-full bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
+
+        <h2 className="mx-auto max-w-3xl text-4xl font-black tracking-tighter text-ink-strong sm:text-6xl">
+          Хватит дочитывать всё вручную
+        </h2>
+        <div className="mt-10">
+          <StartFreeButton user={user} login={login} />
+        </div>
+        <p className="mt-6 text-sm font-medium text-ink-muted">
+          Регистрация → подключаешь группу → первая сводка в тот же день. Оплата в TON, поддержка в Telegram.
+        </p>
+      </section>
     </div>
   );
 }
