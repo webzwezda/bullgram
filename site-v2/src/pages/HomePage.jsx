@@ -59,14 +59,16 @@ const steps = [
   }
 ];
 
-// «Живой пример»: цифры свода (3 группы · 412 сообщений → 5 важного) и факт-строки
-// (9 710 вызовов агента за 30 дней) реальные, из прод-базы на 2026-09-18.
-// Их обновляет владелец при следующем освежении секции.
+// «Живой пример»: 9 710 вызовов агента за 30 дней — реальная цифра из прод-базы
+// (2026-09-18). Цифры карточки (3 группы · 412 сообщений → 5 пунктов) и тексты
+// выжимки — иллюстративный формат: заменить на настоящие данные контура владельца
+// при первом реальном прогоне сводок.
 const digestItems = [
   'BTC за сутки вышел из диапазона 56–58k на объёме — в двух каналах ждут ретест',
   'TON-дайджест: обновление Wallet и новый каталог мини-аппов, обсуждение активное',
   'Три разбора сделок за неделю в трейдинг-чате — главный вывод: не усреднять убыток',
-  'Аирдропы: новые задания от трёх проектов, дедлайны в течение 48 часов'
+  'Аирдропы: новые задания от трёх проектов, дедлайны в течение 48 часов',
+  'Два канала независимо подняли тему регулирования в ЕС — мнения сводятся в скепсис'
 ];
 
 const platformModules = [
@@ -254,16 +256,15 @@ function PlanCard({ plan, children }) {
   );
 }
 
-function StartFreeButton({ user, login, size = 'lg' }) {
-  const pad = size === 'lg' ? 'px-8 py-4 text-base' : 'px-5 py-3 text-sm';
+function StartFreeButton({ user, login }) {
   return (
     <button
       type="button"
       onClick={() => (user ? window.location.assign('/app/profile') : login('/app/profile'))}
-      className={`group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary ${pad} font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5`}
+      className="group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary px-8 py-4 text-base font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5"
     >
       Начать бесплатно
-      <ArrowRight className={size === 'lg' ? 'w-5 h-5' : 'h-4 w-4'} strokeWidth={2.5} />
+      <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
     </button>
   );
 }
@@ -281,7 +282,7 @@ function DigestCard() {
         </div>
         <div className="pt-4">
           <div className="text-base font-black text-white">Сводка за 24 часа</div>
-          <div className="mt-1 text-xs font-bold text-emerald-300">3 группы · 412 сообщений → 5 важного</div>
+          <div className="mt-1 text-xs font-bold text-emerald-300">3 группы · 412 сообщений → 5 пунктов</div>
           <ul className="mt-4 space-y-2.5">
             {digestItems.map((item) => (
               <li key={item} className="flex gap-2.5 text-sm font-medium leading-6 text-slate-200">
@@ -381,8 +382,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Тарифы */}
-      <section id="tariffs" className="bg-white px-6 pb-20 sm:px-10 lg:px-16 sm:pb-24">
+      {/* Тарифы (scroll-mt — чтобы якорь #tariffs не уезжал под липкую мобильную шапку) */}
+      <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 sm:px-10 lg:px-16 sm:pb-24">
         <div className="mx-auto w-full max-w-5xl">
           <div className="mb-8">
             <div className="text-xs font-black uppercase tracking-[0.16em] text-action-primary">Тарифы</div>
@@ -488,7 +489,7 @@ export function HomePage() {
         <div className="absolute top-0 -z-10 h-[600px] w-full bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
 
         <h2 className="mx-auto max-w-3xl text-4xl font-black tracking-tighter text-ink-strong sm:text-6xl">
-          Хватит дочитывать всё вручную
+          Хватит читать всё вручную
         </h2>
         <div className="mt-10">
           <StartFreeButton user={user} login={login} />
