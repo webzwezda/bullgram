@@ -36,7 +36,7 @@ export function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
     {
-      title: 'Quick Start',
+      title: 'BotFather-боты',
       items: [
         { to: '/autopost', label: 'Автопостер', icon: Zap },
         { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
