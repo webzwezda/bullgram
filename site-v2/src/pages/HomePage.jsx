@@ -28,14 +28,14 @@ const plans = [
   },
   {
     id: 'pro',
-    label: 'Полный доступ',
+    label: 'Рекомендуем',
     title: 'Pro',
     price: '10 TON',
     period: 'за 365 дней доступа',
     description: 'Год полного режима для постоянных автоматизаций.',
     highlighted: true,
     features: [
-      'готовый тг-аккаунт в комплекте',
+      'готовый Telegram-аккаунт в комплекте',
       'безлимит по API и MCP',
       'сколько угодно юзерботов и ботов'
     ]
@@ -200,8 +200,8 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
 
 function PlanCard({ plan, children }) {
   const cardClass = plan.highlighted
-    ? 'relative flex flex-col rounded-lg border-2 border-action-primary bg-surface-card p-6 shadow-xl shadow-indigo-600/10'
-    : 'relative flex flex-col rounded-lg border border-border-default bg-surface-card p-6 shadow-sm';
+    ? 'relative flex flex-col rounded-2xl border-2 border-action-primary bg-surface-card p-6 shadow-xl shadow-indigo-600/10'
+    : 'relative flex flex-col rounded-2xl border border-border-default bg-surface-card p-6 shadow-sm';
 
   return (
     <article className={cardClass}>
@@ -226,7 +226,7 @@ function PlanCard({ plan, children }) {
 
       <ul className="mb-8 space-y-3">
         {plan.features.map((feature) => (
-          <li key={feature} className="flex gap-3 text-sm font-semibold leading-6 text-ink-body">
+          <li key={feature} className="flex gap-3 text-sm font-medium leading-6 text-ink-body">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-feedback-success-text" strokeWidth={2.5} aria-hidden="true" />
             <span>{feature}</span>
           </li>
@@ -255,11 +255,11 @@ function McpExampleCard() {
   return (
     <div className="overflow-hidden rounded-2xl bg-slate-900 shadow-2xl shadow-black/40 ring-1 ring-white/10">
       <div className="flex items-center border-b border-white/10 px-4 py-3">
-        <span className="font-mono text-xs font-semibold text-slate-500">mcp · n8n · агент</span>
+        <span className="font-mono text-xs font-semibold text-slate-400">mcp · n8n · агент</span>
       </div>
       <pre className="overflow-x-auto p-5 font-mono text-xs leading-6 text-slate-200 sm:p-6">
         <code>
-          <span className="text-slate-500">{'// MCP · сообщения группы за последние сутки'}</span>
+          <span className="text-slate-400">{'// MCP · сообщения группы за последние сутки'}</span>
           {'\n'}
           <span className="text-indigo-300">bullgram_userbot_messages</span>
           {'({\n  userbot_id: '}
@@ -271,7 +271,7 @@ function McpExampleCard() {
           {',\n  limit:      '}
           <span className="text-slate-200">200</span>
           {'\n})\n\n'}
-          <span className="text-slate-500">{'// → текст, автор, время — готовый вход для n8n или агента'}</span>
+          <span className="text-slate-400">{'// → текст, автор, время — вход для n8n'}</span>
         </code>
       </pre>
     </div>
@@ -312,7 +312,7 @@ export function HomePage() {
           </span>
         </div>
 
-        <h1 className="mx-auto max-w-4xl text-balance text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
+        <h1 className="mx-auto max-w-4xl text-balance text-4xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
           Дай своему ИИ-агенту <br className="hidden sm:block" />
           <span className="text-action-primary">Telegram-аккаунт</span>
         </h1>
@@ -350,7 +350,7 @@ export function HomePage() {
       <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-400">MCP и REST API</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">MCP и REST API</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Живой интерфейс к живым аккаунтам
             </h2>
@@ -371,7 +371,7 @@ export function HomePage() {
               <button
                 type="button"
                 onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-3 text-sm font-bold text-ink-strong shadow-lg shadow-black/30 transition hover:bg-surface-subtle"
               >
                 Bullgram MCP
                 <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
@@ -389,7 +389,7 @@ export function HomePage() {
             <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-feedback-warning-text" strokeWidth={2.2} aria-hidden="true" />
             <div>
               <h3 className="text-base font-bold text-feedback-warning-text">Серая зона — говорим прямо</h3>
-              <p className="mt-2 text-pretty text-sm font-medium leading-6 text-feedback-warning-text/80">
+              <p className="mt-2 text-pretty text-sm font-medium leading-6 text-ink-body">
                 Автоматизация личного Telegram-аккаунта официально не благословлена, и агрессивная
                 работа ловит лимиты и баны. Bullgram закрывает инфраструктуру: прокси на каждую сессию,
                 безопасный старт, мониторинг SpamBot. Темп и аккуратность — на тебе: мы не делаем вид,
@@ -471,10 +471,14 @@ export function HomePage() {
         <p className="mt-6 text-pretty text-sm font-medium text-ink-muted">
           Регистрация → подключаешь сессию → первый вызов MCP в тот же день. Оплата в TON, поддержка в Telegram.
         </p>
-        <p className="mx-auto mt-10 max-w-xl text-pretty text-xs font-medium leading-5 text-ink-muted">
-          Мы сами строим на Bullgram: наш крипто-контур ежедневно сводит десятки каналов —{' '}
+        {/* Dogfood-цифра: 9 710 вызовов агента за 30 дней — реальная, из прод-базы
+            (снята 2026-09-18); обновлять при следующем прогоне. Число каналов не
+            называем — не верифицировано. */}
+        <p className="mx-auto mt-10 max-w-xl text-pretty text-sm font-medium leading-5 text-ink-muted">
+          Мы сами строим на Bullgram: наш крипто-контур каждый день делает ИИ-сводки по нашим
+          Telegram-каналам —{' '}
           <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
-          Разбор с n8n-JSON —{' '}
+          Разбор n8n-флоу —{' '}
           <a href="/blog/" className="font-semibold text-action-primary underline decoration-1 underline-offset-2 hover:text-action-primary-hover">
             скоро в блоге
           </a>

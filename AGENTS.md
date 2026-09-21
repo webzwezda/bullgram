@@ -107,7 +107,7 @@ Current product focus:
 - `Shop`: act as the main on-site checkout and package funnel
 - `P2P`: keep it a distinct working flow from asset marketplace logic
 - `Trial -> Normal -> Seller`: preserve and strengthen this upgrade path in UI and backend limits
-- site-v2 hero sells ONE outcome: «купил → получил готовое и работающее». Do not enumerate technical features (proxies, API, MCP, infra details) as selling points on the first screen — they confuse non-technical buyers and belong in docs and deeper sections (owner decision 2026-09-12)
+- site-v2 hero sells ONE outcome. Audience + wording decided by owner: since 2026-09-21 the product positioning is infrastructure for AI-agent and n8n builders («Дай своему ИИ-агенту Telegram-аккаунт», RU first, EN later) — for THIS technical audience naming MCP/API/proxies in the hero subline is correct and expected. The earlier 2026-09-12 rule (no technical features on the first screen, consumer framing «купил → получил готовое») applied to the consumer positioning and is superseded; the «one outcome, no feature dump» principle still stands. Autopost/paywall/shop stay OFF the homepage (separate landing later, owner decision 2026-09-21)
 
 If a feature depends on Telegram-specific constraints, explain that directly in the UI. In particular, any screen that offers manual outreach from a userbot should state that making the userbot an admin in a shared group/chat increases the chance of resolving the target and writing to them in private messages.
 
