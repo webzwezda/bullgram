@@ -46,7 +46,7 @@ const steps = [
   {
     n: '01',
     title: 'Подключи сессию',
-    text: 'Свою — файлом или QR. Или возьми готовый аккаунт из магазина: уже на выделенном прокси, стартует в safe-mode.'
+    text: 'Свою — файлом или QR. Или возьми готовый аккаунт из магазина — сразу рабочий.'
   },
   {
     n: '02',
@@ -319,7 +319,7 @@ export function HomePage() {
 
         <p className="mx-auto max-w-[42rem] text-pretty text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
           Живой аккаунт для агента: группы, каналы, сообщения — через MCP, REST API
-          или Telegram Web. Прокси и предохранители уже включены.
+          или Telegram Web.
         </p>
 
         <StartFreeButton user={user} login={login} />
@@ -355,9 +355,8 @@ export function HomePage() {
               Живой интерфейс к живым аккаунтам
             </h2>
             <p className="mt-4 text-pretty text-base font-medium leading-7 text-slate-400">
-              Каждая сессия — управляемый аккаунт: выделенный прокси 1:1, safe-mode после импорта,
-              лимиты флуда и паузы при риске бана. Инструменты читают группы, ищут сообщения,
-              шлют ЛС и управляют чатами — то, чего Bot API не умеет.
+              Инструменты читают группы и историю, ищут сообщения, шлют ЛС
+              и управляют чатами — то, чего Bot API не умеет.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <button
@@ -390,9 +389,9 @@ export function HomePage() {
             <div>
               <h3 className="text-base font-bold text-feedback-warning-text">Серая зона — говорим прямо</h3>
               <p className="mt-2 text-pretty text-sm font-medium leading-6 text-ink-body">
-                Автоматизация личного Telegram-аккаунта официально не благословлена, и агрессивная
-                работа ловит лимиты и баны. Bullgram закрывает инфраструктуру: прокси на каждую сессию,
-                безопасный старт, мониторинг SpamBot. Темп и аккуратность — на тебе: мы не делаем вид,
+                Автоматизация личного Telegram-аккаунта официально не благословлена,
+                и агрессивная работа ловит лимиты и баны. Мы со своей стороны делаем всё,
+                чтобы аккаунты жили долго. Темп и аккуратность — на тебе: мы не делаем вид,
                 что это белая зона.
               </p>
             </div>
