@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Loader2,
@@ -17,11 +18,12 @@ const plans = [
     title: 'Trial',
     price: '0 TON',
     period: 'бессрочно',
-    description: 'Подключи одну группу и получи первые сводки — чтобы понять, твоё ли это.',
+    description: 'Подключи свою сессию и проверь, как агент работает с твоими группами.',
     action: 'Начать бесплатно',
     features: [
       '1 юзербот',
-      '100 запросов к API и MCP'
+      '100 запросов к API и MCP',
+      'своя сессия — файлом или QR'
     ]
   },
   {
@@ -30,13 +32,12 @@ const plans = [
     title: 'Pro',
     price: '10 TON',
     period: 'за 365 дней доступа',
-    description: 'Полный режим для тех, кто делегирует агенту всё.',
+    description: 'Год полного режима для постоянных автоматизаций.',
     highlighted: true,
     features: [
-      'сколько угодно групп и ботов',
-      'рассылки и автопостинг',
       'готовый тг-аккаунт в комплекте',
-      'API и MCP без лимитов'
+      'безлимит по API и MCP',
+      'сколько угодно юзерботов и ботов'
     ]
   }
 ];
@@ -44,38 +45,19 @@ const plans = [
 const steps = [
   {
     n: '01',
-    title: 'Подключи группу',
-    text: 'Любую Telegram-группу или канал, за которыми не успеваешь следить: свои, рабочие, отраслевые.'
+    title: 'Подключи сессию',
+    text: 'Свою — файлом или QR. Или возьми готовый аккаунт из магазина: уже на выделенном прокси, стартует в safe-mode.'
   },
   {
     n: '02',
-    title: 'Агент читает и собирает суть',
-    text: 'Агент следит за всеми сообщениями и отделяет шум от того, что действительно важно.'
+    title: 'Дай агенту доступ',
+    text: 'Интеграционный токен — в два клика. MCP-сервер и REST API работают с n8n, Claude и любым MCP-клиентом.'
   },
   {
     n: '03',
-    title: 'Получаешь сводку по расписанию',
-    text: 'Короткая выжимка приходит сама. Рассылки, проверки и рутину агент тоже берёт на себя.'
+    title: 'Агент работает в Telegram',
+    text: 'Читает группы и историю, мониторит каналы, пишет в ЛС. Всё, чего не умеет Bot API.'
   }
-];
-
-// «Живой пример»: 9 710 вызовов агента за 30 дней — реальная цифра из прод-базы
-// (2026-09-18). Цифры карточки (3 группы · 412 сообщений → 5 пунктов) и тексты
-// выжимки — иллюстративный формат: заменить на настоящие данные контура владельца
-// при первом реальном прогоне сводок.
-const digestItems = [
-  'BTC за сутки вышел из диапазона 56–58k на объёме — в двух каналах ждут ретест',
-  'TON-дайджест: обновление Wallet и новый каталог мини-аппов, обсуждение активное',
-  'Три разбора сделок за неделю в трейдинг-чате — главный вывод: не усреднять убыток',
-  'Аирдропы: новые задания от трёх проектов, дедлайны в течение 48 часов',
-  'Два канала независимо подняли тему регулирования в ЕС — мнения сводятся в скепсис'
-];
-
-const platformModules = [
-  'платный доступ в канал',
-  'автопостинг с чек-листами',
-  'магазин за TON',
-  'рассылки по расписанию'
 ];
 
 function formatEndDate(value) {
@@ -269,30 +251,29 @@ function StartFreeButton({ user, login }) {
   );
 }
 
-function DigestCard() {
+function McpExampleCard() {
   return (
-    <div className="overflow-hidden rounded-2xl bg-slate-900 p-2 shadow-2xl shadow-black/40 ring-1 ring-white/10">
-      <div className="rounded-xl bg-slate-800 p-5 text-left sm:p-6">
-        <div className="flex items-center gap-3 border-b border-white/10 pb-4">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20 text-sm font-black text-indigo-300">B</span>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-white">Агент Bullgram</div>
-            <div className="text-xs font-semibold text-slate-400">сводка по расписанию · 09:00</div>
-          </div>
-        </div>
-        <div className="pt-4">
-          <div className="text-base font-bold text-white">Сводка за 24 часа</div>
-          <div className="mt-1 text-xs font-bold text-emerald-300">3 группы · 412 сообщений → 5 пунктов</div>
-          <ul className="mt-4 space-y-2.5">
-            {digestItems.map((item) => (
-              <li key={item} className="flex gap-2.5 text-sm font-medium leading-6 text-slate-200">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="overflow-hidden rounded-2xl bg-slate-900 shadow-2xl shadow-black/40 ring-1 ring-white/10">
+      <div className="flex items-center border-b border-white/10 px-4 py-3">
+        <span className="font-mono text-xs font-semibold text-slate-500">mcp · n8n · агент</span>
       </div>
+      <pre className="overflow-x-auto p-5 font-mono text-xs leading-6 text-slate-200 sm:p-6">
+        <code>
+          <span className="text-slate-500">{'// MCP · сообщения группы за последние сутки'}</span>
+          {'\n'}
+          <span className="text-indigo-300">bullgram_userbot_messages</span>
+          {'({\n  userbot_id: '}
+          <span className="text-emerald-300">"8f3c…"</span>
+          {',\n  chat_id:    '}
+          <span className="text-emerald-300">"-1001234567890"</span>
+          {',\n  since:      '}
+          <span className="text-emerald-300">"2026-09-19T00:00:00Z"</span>
+          {',\n  limit:      '}
+          <span className="text-slate-200">200</span>
+          {'\n})\n\n'}
+          <span className="text-slate-500">{'// → текст, автор, время — готовый вход для n8n или агента'}</span>
+        </code>
+      </pre>
     </div>
   );
 }
@@ -310,7 +291,7 @@ export function HomePage() {
 
   return (
     <div className="w-full">
-      {/* Герой — один исход: агент читает Telegram за тебя */}
+      {/* Герой — вариант B: исход для строителя агентов */}
       <section className="relative isolate overflow-hidden px-4 pb-14 pt-20 text-center sm:px-6 sm:pt-24 lg:pt-28">
         <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
         <div className="absolute top-0 -z-10 w-full h-[600px] bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
@@ -332,13 +313,13 @@ export function HomePage() {
         </div>
 
         <h1 className="mx-auto max-w-4xl text-balance text-5xl sm:text-6xl lg:text-7xl font-black tracking-tighter text-ink-strong leading-[0.95] mb-6 sm:mb-8">
-          Твой агент читает <br className="hidden sm:block" />
-          <span className="text-action-primary">Telegram за тебя</span>
+          Дай своему ИИ-агенту <br className="hidden sm:block" />
+          <span className="text-action-primary">Telegram-аккаунт</span>
         </h1>
 
-        <p className="mx-auto max-w-[40rem] text-pretty text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
-          Подключи группы — и получай по расписанию короткие ИИ-сводки: что произошло и что важно.
-          Рассылки, проверки и рутинные действия агент тоже берёт на себя.
+        <p className="mx-auto max-w-[42rem] text-pretty text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
+          Одно подключение MCP или REST API — и агент читает группы, следит за каналами
+          и пишет людям от имени живого пользователя. Сессии, прокси и предохранители уже включены.
         </p>
 
         <StartFreeButton user={user} login={login} />
@@ -350,7 +331,7 @@ export function HomePage() {
           <div className="mb-10 max-w-2xl">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Как это работает</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
-              Три шага — и за Telegram больше не нужно следить
+              Три шага — и агент в Telegram
             </h2>
           </div>
           <ol className="grid gap-5 sm:grid-cols-3">
@@ -365,20 +346,57 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Пример сводки — формат карточки, цифры заменяются на данные первого реального прогона */}
-      <section className="bg-white px-6 pb-16 sm:px-10 lg:px-16 sm:pb-20">
-        <div className="mx-auto w-full max-w-2xl text-center">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Пример сводки</div>
-          <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
-            Так выглядит сводка за сутки
-          </h2>
-          <div className="mt-8">
-            <DigestCard />
+      {/* Интерфейс: MCP и REST API к живым сессиям */}
+      <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-400">MCP и REST API</div>
+            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Живой интерфейс к живым аккаунтам
+            </h2>
+            <p className="mt-4 text-pretty text-base font-medium leading-7 text-slate-400">
+              Каждая сессия — управляемый аккаунт: выделенный прокси 1:1, safe-mode после импорта,
+              лимиты флуда и паузы при риске бана. Инструменты читают группы, ищут сообщения,
+              шлют ЛС и управляют чатами — то, чего Bot API не умеет.
+            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+              >
+                REST API
+                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+              <button
+                type="button"
+                onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
+              >
+                Bullgram MCP
+                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
-          <p className="mt-6 text-pretty text-sm font-medium leading-6 text-ink-muted">
-            Этим же контуром мы сами ведём свой канал каждый день:{' '}
-            <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
-          </p>
+          <McpExampleCard />
+        </div>
+      </section>
+
+      {/* Серая зона — честно, без сюсюканья */}
+      <section className="bg-white px-6 pb-16 sm:px-10 sm:pb-20 lg:px-16">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex gap-4 rounded-2xl border border-feedback-warning-text/20 bg-feedback-warning-bg p-6 sm:p-7">
+            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-feedback-warning-text" strokeWidth={2.2} aria-hidden="true" />
+            <div>
+              <h3 className="text-base font-bold text-feedback-warning-text">Серая зона — говорим прямо</h3>
+              <p className="mt-2 text-pretty text-sm font-medium leading-6 text-feedback-warning-text/80">
+                Автоматизация личного Telegram-аккаунта официально не благословлена, и агрессивная
+                работа ловит лимиты и баны. Bullgram закрывает инфраструктуру: прокси на каждую сессию,
+                безопасный старт, мониторинг SpamBot. Темп и аккуратность — на тебе: мы не делаем вид,
+                что это белая зона.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -439,70 +457,28 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Дев-тир: MCP и API для своих автоматизаций */}
-      <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
-        <div className="mx-auto w-full max-w-5xl">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-400">Для разработчиков</div>
-          <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Строишь агентов или автоматизации?
-          </h2>
-          <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-slate-400">
-            MCP и API к живым Telegram-аккаунтам: сессии, прокси 1:1, предохранители.
-            Работает с n8n и любыми MCP-клиентами.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
-            >
-              REST API
-              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
-            >
-              Bullgram MCP
-              <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* Модули платформы — компактные чипы */}
-      <section className="border-t border-border-default bg-surface-subtle px-6 py-8">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
-            Платформа умеет ещё
-          </span>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {platformModules.map((m) => (
-              <span
-                key={m}
-                className="rounded-full border border-border-default bg-surface-card px-3 py-1 text-xs font-semibold text-ink-body"
-              >
-                {m}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Финальный CTA */}
       <section className="relative isolate overflow-hidden bg-white px-4 py-20 text-center sm:px-6 sm:py-24">
         <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
         <div className="absolute top-0 -z-10 h-[600px] w-full bg-[radial-gradient(circle_800px_at_50%_-200px,#e0e7ff,transparent)]" />
 
-        <h2 className="mx-auto max-w-3xl text-4xl font-black tracking-tighter text-ink-strong sm:text-6xl">
-          Хватит читать всё вручную
+        <h2 className="mx-auto max-w-3xl text-balance text-4xl font-black tracking-tighter text-ink-strong sm:text-6xl">
+          Дай агенту Telegram — уже сегодня
         </h2>
         <div className="mt-10">
           <StartFreeButton user={user} login={login} />
         </div>
-        <p className="mt-6 text-sm font-medium text-ink-muted">
-          Регистрация → подключаешь группу → первая сводка в тот же день. Оплата в TON, поддержка в Telegram.
+        <p className="mt-6 text-pretty text-sm font-medium text-ink-muted">
+          Регистрация → подключаешь сессию → первый вызов MCP в тот же день. Оплата в TON, поддержка в Telegram.
+        </p>
+        <p className="mx-auto mt-10 max-w-xl text-pretty text-xs font-medium leading-5 text-ink-muted">
+          Мы сами строим на Bullgram: наш крипто-контур ежедневно сводит десятки каналов —{' '}
+          <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
+          Разбор с n8n-JSON —{' '}
+          <a href="/blog/" className="font-semibold text-action-primary underline decoration-1 underline-offset-2 hover:text-action-primary-hover">
+            скоро в блоге
+          </a>
+          .
         </p>
       </section>
     </div>
