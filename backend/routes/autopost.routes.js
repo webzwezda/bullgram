@@ -740,6 +740,25 @@ export default function autopostRoutes(supabase) {
         }
     });
 
+    // Очистить журнал от провалившихся публикаций (записи в Bullgram, не посты в Telegram)
+    router.delete('/bots/:botId/items/failed', async (req, res) => {
+        try {
+            if (!(await findOwnedBot(req.params.botId, req.user.id))) {
+                return res.status(403).json({ error: 'Нет доступа или бот не найден' });
+            }
+            const { data, error } = await supabase
+                .from('autopost_items')
+                .delete()
+                .eq('bot_id', req.params.botId)
+                .eq('status', 'failed')
+                .select('id');
+            if (error) throw error;
+            res.json({ ok: true, deleted: data?.length || 0 });
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // Отвязать канал от бота автопостера
     router.delete('/bots/:botId/channels/:channelId', async (req, res) => {
         try {

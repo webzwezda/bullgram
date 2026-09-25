@@ -33,6 +33,11 @@ export function fetchItems(botId, token) {
     return request(`/api/autopost/bots/${botId}/items`, { token });
 }
 
+// Удалить из журнала все провалившиеся публикации бота (посты в Telegram не затрагиваются).
+export function clearFailedItems(botId, token) {
+    return request(`/api/autopost/bots/${botId}/items/failed`, { method: 'DELETE', token });
+}
+
 // Первая страница чек-листов (их title/status джойним с planned-items журнала).
 export function fetchChecklists(botId, token) {
     return request(`/api/autopost/bots/${botId}/checklists?limit=100`, { token });

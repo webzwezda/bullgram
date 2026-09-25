@@ -22,7 +22,8 @@ import {
     refreshChannel,
     addAdmin,
     removeAdmin,
-    deleteBot
+    deleteBot,
+    clearFailedItems
 } from './autopost/api.js';
 
 function maskBotToken(value) {
@@ -177,6 +178,7 @@ export function QuickStartPage() {
   // «Журнал публикаций» — только наблюдение за запланированным контентом.
   // Управление (создание/правка/отмена) сознательно не здесь: план ведёт агент.
   const [journalItems, setJournalItems] = useState([]);
+  const [clearingFailed, setClearingFailed] = useState(false);
   const [journalChecklists, setJournalChecklists] = useState([]);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState(null);
@@ -501,6 +503,31 @@ export function QuickStartPage() {
       description: `Канал «${cfg.title}» будет отвязан от автопостера. Бот останется админом в Telegram — канал можно привязать заново без повторного добавления.`,
       actionLabel: 'Отвязать',
       onConfirm: () => doUnlinkChannel(channelId)
+    });
+  }
+
+  // Очистить журнал от провалившихся публикаций (записи Bullgram, посты в Telegram не трогаем)
+  async function doClearFailedItems() {
+    if (!createdBot?.id) return;
+    setClearingFailed(true);
+    try {
+      const res = await clearFailedItems(createdBot.id, accessToken);
+      setJournalItems(prev => prev.filter(it => it.status !== 'failed'));
+      toast.success(res?.deleted ? `Журнал очищен: удалено записей — ${res.deleted}` : 'Провалившихся публикаций нет');
+    } catch (e) {
+      toast.error(e.message || 'Не удалось очистить журнал');
+    } finally {
+      setClearingFailed(false);
+    }
+  }
+
+  function askClearFailedItems() {
+    if (!failedJournalCount) return;
+    askConfirm({
+      title: 'Очистить провалы в журнале?',
+      description: `Будет удалено записей: ${failedJournalCount}. Это только журнал Bullgram — опубликованные посты и очередь в Telegram не затрагиваются.`,
+      actionLabel: 'Очистить',
+      onConfirm: () => doClearFailedItems()
     });
   }
 
@@ -1676,13 +1703,25 @@ export function QuickStartPage() {
                   </div>
 
                   {failedJournalCount > 0 && (
-                    <p className="text-xs text-feedback-warning-text font-semibold">
-                      ⚠️ Не удалось опубликовать: {failedJournalCount}
-                      {latestFailedJournal?.created_at ? ` · последняя ${new Date(latestFailedJournal.created_at).toLocaleDateString('ru-RU')}` : ''}
-                      {latestFailedJournal?.error_message
-                        ? `: ${String(latestFailedJournal.error_message).replace(/bot\d+:[^/\s]+/g, 'bot***').slice(0, 90)}`
-                        : ''} — детали у агента (posts_list) или в Telegram-боте.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-feedback-warning-text font-semibold flex-1 min-w-0">
+                        ⚠️ Не удалось опубликовать: {failedJournalCount}
+                        {latestFailedJournal?.created_at ? ` · последняя ${new Date(latestFailedJournal.created_at).toLocaleDateString('ru-RU')}` : ''}
+                        {latestFailedJournal?.error_message
+                          ? `: ${String(latestFailedJournal.error_message).replace(/bot\d+:[^/\s]+/g, 'bot***').slice(0, 90)}`
+                          : ''} — детали у агента (posts_list) или в Telegram-боте.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={askClearFailedItems}
+                        disabled={clearingFailed}
+                        className="h-7 rounded-lg text-xs font-semibold shrink-0"
+                      >
+                        {clearingFailed ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                        Очистить ({failedJournalCount})
+                      </Button>
+                    </div>
                   )}
 
                   {journalTab === 'media' && mediaJournalSummary.length > 0 && (
