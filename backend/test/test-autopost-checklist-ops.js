@@ -197,7 +197,6 @@ function makeDb({ bots = [makeBot()], channels = [makeChannel()], checklists = [
                     media_type: 'text',
                     checklist_id: null,
                     posted_message_ids: [],
-                    discussion_message_ids: [],
                     posted_at: null,
                     scheduled_at: null,
                     error_message: null,
@@ -392,7 +391,6 @@ console.log('--- checklist_create: publish_now ветка (публикация 
     assert(Array.isArray(res.published) && res.published.length === 1, 'one channel published');
     assert(res.published[0].status === 'posted', 'published status posted');
     assert(JSON.stringify(res.published[0].posted_message_ids) === '[777]', 'posted_message_ids from telegram');
-    assert(JSON.stringify(res.published[0].discussion_message_ids) === '[]', 'no discussion forward for checklist');
     assert(JSON.stringify(pinCalls) === JSON.stringify([[CHANNEL_TG_ID, 777]]), 'pin called once with first message');
     const row = mock.db.autopost_items[0];
     assert(row?.status === 'posted' && row?.media_type === 'checklist' && row?.checklist_id === res.checklist.id, 'queue row posted as checklist');

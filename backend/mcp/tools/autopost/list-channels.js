@@ -29,7 +29,7 @@ export async function listAutopostChannelsHandler({ supabase, req, args }) {
 
   const { data: channels, error: chErr } = await supabase
     .from('channels')
-    .select('id, tg_chat_id, title, visibility, suggest_button_enabled, auto_accept_suggestions, max_suggestions_per_day, seed_reaction_emoji, seed_reaction_premium, buttons_config, discussion_forward_enabled, linked_chat_id')
+    .select('id, tg_chat_id, title, visibility, suggest_button_enabled, auto_accept_suggestions, max_suggestions_per_day, seed_reaction_emoji, seed_reaction_premium, buttons_config')
     .eq('autopost_bot_id', bot_id)
     .order('created_at', { ascending: false });
   if (chErr) throw chErr;
@@ -44,9 +44,7 @@ export async function listAutopostChannelsHandler({ supabase, req, args }) {
     max_suggestions_per_day: c.max_suggestions_per_day ?? null,
     seed_reaction_emoji: c.seed_reaction_emoji || null,
     seed_reaction_premium: Boolean(c.seed_reaction_premium),
-    buttons: Array.isArray(c.buttons_config) ? c.buttons_config : [],
-    discussion_forward_enabled: Boolean(c.discussion_forward_enabled),
-    ...(c.linked_chat_id != null ? { linked_chat_id: String(c.linked_chat_id) } : {})
+    buttons: Array.isArray(c.buttons_config) ? c.buttons_config : []
   }));
 
   return {

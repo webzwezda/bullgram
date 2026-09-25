@@ -277,9 +277,7 @@ export function QuickStartPage() {
       suggestButtonEnabled: row?.suggest_button_enabled || false,
       maxSuggestionsPerDay: row?.max_suggestions_per_day !== undefined ? row.max_suggestions_per_day : 5,
       seedReactionEmoji: row?.seed_reaction_emoji || null,
-      seedReactionPremium: row?.seed_reaction_premium === true,
-      discussionForwardEnabled: row?.discussion_forward_enabled === true,
-      linkedChatId: row?.linked_chat_id ?? null
+      seedReactionPremium: row?.seed_reaction_premium === true
     };
   }
 
@@ -445,11 +443,7 @@ export function QuickStartPage() {
         suggest_button_enabled: config.suggestButtonEnabled,
         max_suggestions_per_day: Number(config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5),
         seed_reaction_emoji: config.seedReactionEmoji || null,
-        seed_reaction_premium: config.seedReactionPremium === true,
-        // Форвард постов в привязанную группу обсуждений. На этом PATCH бэкенд
-        // перепроверяет linked_chat: если группы нет или бота в ней нет —
-        // отвечает 400, сообщение показывается в toast как есть.
-        discussion_forward_enabled: config.discussionForwardEnabled === true
+        seed_reaction_premium: config.seedReactionPremium === true
       }, accessToken);
 
       setChannelConfigs(prev => ({
@@ -461,13 +455,7 @@ export function QuickStartPage() {
           suggestButtonEnabled: config.suggestButtonEnabled,
           maxSuggestionsPerDay: config.maxSuggestionsPerDay !== '' ? config.maxSuggestionsPerDay : 5,
           seedReactionEmoji: config.seedReactionEmoji || null,
-          seedReactionPremium: config.seedReactionPremium === true,
-          discussionForwardEnabled: config.discussionForwardEnabled === true,
-          // linked_chat может разрешиться на бэкенде во время этого же PATCH —
-          // берём свежий из ответа, иначе оставляем прошлое значение.
-          linkedChatId: data?.channel && data.channel.linked_chat_id !== undefined
-            ? (data.channel.linked_chat_id ?? null)
-            : prev[channelId].linkedChatId
+          seedReactionPremium: config.seedReactionPremium === true
         }
       }));
 
@@ -1540,54 +1528,6 @@ export function QuickStartPage() {
                             })}
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Обсуждение — форвард постов в привязанную группу обсуждений.
-                        Бот-API не создаёт тред обсуждения сам, поэтому бот пересылает
-                        пост в linked-группу — Telegram показывает нативную кнопку. */}
-                    <div className="bg-surface-subtle/50 hover:bg-surface-subtle/80 rounded-2xl p-4 border border-border-default flex flex-col gap-3 transition-all">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <label htmlFor={`discussion-toggle-${tab}`} className="text-sm font-bold text-ink-body block">Пересылать посты в группу обсуждений</label>
-                          <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
-                            Каждый опубликованный пост бот автоматически пересылает в группу обсуждений — подписчики комментируют прямо в Telegram, под постом появляется кнопка «Перейти к обсуждению».
-                          </span>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
-                          <input
-                            type="checkbox"
-                            id={`discussion-toggle-${tab}`}
-                            className="sr-only peer"
-                            checked={Boolean(config.discussionForwardEnabled)}
-                            onChange={(e) => setChannelConfigs(prev => ({
-                              ...prev,
-                              [tab]: { ...prev[tab], discussionForwardEnabled: e.target.checked }
-                            }))}
-                          />
-                          <div className="w-11 h-6 bg-border-default peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-border-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-action-primary"></div>
-                        </label>
-                      </div>
-                      <div className="text-xs text-ink-muted font-semibold leading-relaxed space-y-1">
-                        <span className="block text-ink-body font-bold">Как включить — 3 шага:</span>
-                        <span className="block">1. Привяжи группу обсуждений к каналу: Telegram → канал → Управление → «Обсуждение группы».</span>
-                        <span className="block">2. Добавь постер-бота в эту группу. Админка не обязательна — достаточно права писать.</span>
-                        <span className="block">3. Включи тумблер и сохрани. Сервер сам проверит привязку и бота: если что-то не так, подскажет текстом.</span>
-                      </div>
-                      {config.linkedChatId ? (
-                        config.discussionForwardEnabled ? (
-                          <span className="text-xs text-feedback-success-text font-semibold leading-relaxed block">
-                            Включено: посты пересылаются в привязанную группу обсуждений.
-                          </span>
-                        ) : (
-                          <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
-                            Группа обсуждений привязана. Добавь бота в неё (шаг 2), если ещё не добавил, — и включай тумблер.
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-xs text-feedback-warning-text font-semibold leading-relaxed block">
-                          Пока не заработает: группа не привязана. Пройди шаги 1–2, затем включи тумблер — сервер сам найдёт группу и запомнит её.
-                        </span>
                       )}
                     </div>
 

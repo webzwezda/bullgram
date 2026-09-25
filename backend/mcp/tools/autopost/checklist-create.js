@@ -261,12 +261,11 @@ export async function createChecklistHandler({ supabase, req, args }) {
     for (const item of queuedItems) {
       const channel = channels.find(c => String(c.tg_chat_id) === String(item.target_channel_id));
       try {
-        const { messageIds, discussionMessageIds } = await service.publishItem(tgBot, item, channel, bot.username, { actorSource: 'agent' });
+        const { messageIds } = await service.publishItem(tgBot, item, channel, bot.username, { actorSource: 'agent' });
         published.push({
           target_channel_id: item.target_channel_id,
           status: 'posted',
           posted_message_ids: messageIds || [],
-          discussion_message_ids: discussionMessageIds || [],
           error: null
         });
         // pin: после первой успешной публикации, один раз, non-fatal —
@@ -292,7 +291,6 @@ export async function createChecklistHandler({ supabase, req, args }) {
           target_channel_id: item.target_channel_id,
           status: 'failed',
           posted_message_ids: null,
-          discussion_message_ids: null,
           error: String(err?.message || err).slice(0, 500)
         });
       }

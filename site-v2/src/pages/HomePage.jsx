@@ -332,7 +332,7 @@ export function HomePage() {
         </h1>
 
         <p className="mx-auto max-w-[42rem] text-pretty text-lg sm:text-xl text-ink-muted font-medium leading-relaxed mb-8 sm:mb-10 tracking-tight">
-          Живой аккаунт для агента: группы, каналы, сообщения — через MCP, REST API
+          Живой аккаунт для агента: группы, каналы, сообщения. Управление через MCP, REST API
           или Telegram Web.
         </p>
 
