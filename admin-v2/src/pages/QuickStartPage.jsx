@@ -776,9 +776,17 @@ export function QuickStartPage() {
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
 
   // Журнал: planned = queued|scheduled (клиентский фильтр по полному списку),
-  // failed — вне табов, только строка-предупреждение.
+  // failed — вне табов, только строка-предупреждение. Провалы старше 30 дней
+  // не считаем: протухший контент всё равно не переиздаётся, а баннер висит годами.
   const plannedJournalItems = journalItems.filter((it) => JOURNAL_PLANNED_STATUSES.includes(it.status));
-  const failedJournalCount = journalItems.filter((it) => it.status === 'failed').length;
+  const FAILED_JOURNAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const failedJournalItems = journalItems.filter((it) => (
+    it.status === 'failed' && Date.now() - new Date(it.created_at).getTime() < FAILED_JOURNAL_WINDOW_MS
+  ));
+  const failedJournalCount = failedJournalItems.length;
+  const latestFailedJournal = failedJournalItems.reduce((acc, it) => (
+    !acc || new Date(it.created_at) > new Date(acc.created_at) ? it : acc
+  ), null);
   const mediaJournalRows = journalRowsByType(plannedJournalItems, JOURNAL_MEDIA_TYPES, channelConfigs);
   const checklistJournalRows = journalRowsByType(plannedJournalItems, ['checklist'], channelConfigs);
   const textJournalRows = journalRowsByType(plannedJournalItems, ['text'], channelConfigs);
@@ -1669,7 +1677,11 @@ export function QuickStartPage() {
 
                   {failedJournalCount > 0 && (
                     <p className="text-xs text-feedback-warning-text font-semibold">
-                      ⚠️ Не удалось опубликовать: {failedJournalCount} — смотрите у агента/в Telegram
+                      ⚠️ Не удалось опубликовать: {failedJournalCount}
+                      {latestFailedJournal?.created_at ? ` · последняя ${new Date(latestFailedJournal.created_at).toLocaleDateString('ru-RU')}` : ''}
+                      {latestFailedJournal?.error_message
+                        ? `: ${String(latestFailedJournal.error_message).replace(/bot\d+:[^/\s]+/g, 'bot***').slice(0, 90)}`
+                        : ''} — детали у агента (posts_list) или в Telegram-боте.
                     </p>
                   )}
 
