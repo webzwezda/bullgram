@@ -1299,7 +1299,7 @@ export function QuickStartPage() {
                           <Inbox className="w-3.5 h-3.5" /> Предложки от подписчиков
                         </label>
                         <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                          Кнопка под постами, лимит, автопринятие и расписание — всё в одном месте.
+                          Тумблер включает кнопку «Предложить новость» под постами и открывает настройки: лимит, автопринятие, расписание.
                         </span>
                       </div>
 
@@ -1326,6 +1326,8 @@ export function QuickStartPage() {
                         </label>
                       </div>
 
+                      {/* Зависимые настройки — видимы только при включенной кнопке предложки */}
+                      {(config.suggestButtonEnabled || false) && (<>
                       {/* Суточный лимит предложений */}
                       <div className="bg-white hover:bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col gap-3.5 transition-all">
                         <div className="space-y-1">
@@ -1419,6 +1421,7 @@ export function QuickStartPage() {
                           </div>
                         </div>
                       )}
+                      </>)}
                     </div>
 
                     {/* Автореакция на посты */}
