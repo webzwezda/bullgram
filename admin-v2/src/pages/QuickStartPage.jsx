@@ -1551,7 +1551,7 @@ export function QuickStartPage() {
                         <div className="space-y-1">
                           <label htmlFor={`discussion-toggle-${tab}`} className="text-sm font-bold text-ink-body block">Пересылать посты в группу обсуждений</label>
                           <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
-                            Бот пересылает каждый опубликованный пост в привязанную к каналу группу обсуждений — подписчики обсуждают прямо в Telegram.
+                            Каждый опубликованный пост бот автоматически пересылает в группу обсуждений — подписчики комментируют прямо в Telegram, под постом появляется кнопка «Перейти к обсуждению».
                           </span>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 select-none">
@@ -1568,13 +1568,25 @@ export function QuickStartPage() {
                           <div className="w-11 h-6 bg-border-default peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-border-strong after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-action-primary"></div>
                         </label>
                       </div>
+                      <div className="text-xs text-ink-muted font-semibold leading-relaxed space-y-1">
+                        <span className="block text-ink-body font-bold">Как включить — 3 шага:</span>
+                        <span className="block">1. Привяжи группу обсуждений к каналу: Telegram → канал → Управление → «Обсуждение группы».</span>
+                        <span className="block">2. Добавь постер-бота в эту группу. Админка не обязательна — достаточно права писать.</span>
+                        <span className="block">3. Включи тумблер и сохрани. Сервер сам проверит привязку и бота: если что-то не так, подскажет текстом.</span>
+                      </div>
                       {config.linkedChatId ? (
-                        <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
-                          Привязанная группа найдена — под постами появится кнопка «Перейти к обсуждению». Бот должен быть админом в этой группе.
-                        </span>
+                        config.discussionForwardEnabled ? (
+                          <span className="text-xs text-feedback-success-text font-semibold leading-relaxed block">
+                            Включено: посты пересылаются в привязанную группу обсуждений.
+                          </span>
+                        ) : (
+                          <span className="text-xs text-ink-muted font-semibold leading-relaxed block">
+                            Группа обсуждений привязана. Добавь бота в неё (шаг 2), если ещё не добавил, — и включай тумблер.
+                          </span>
+                        )
                       ) : (
                         <span className="text-xs text-feedback-warning-text font-semibold leading-relaxed block">
-                          Привязанная группа обсуждений не найдена. Привяжи группу к каналу в настройках Telegram, затем обнови канал (или включи тумблер и сохрани — бэкенд перепроверит и подскажет).
+                          Пока не заработает: группа не привязана. Пройди шаги 1–2, затем включи тумблер — сервер сам найдёт группу и запомнит её.
                         </span>
                       )}
                     </div>
