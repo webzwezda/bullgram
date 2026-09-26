@@ -2460,3 +2460,9 @@ a.link-action:hover {
 }
 .ops-rail .pointer-events-none.absolute { display: none; }
 
+
+/* После удаления титула страницы первая секция не должна получать
+   наследственный верхний отступ — верхняя кромка контента = верх рельса. */
+.page--flush .section:first-child {
+  margin-top: 0;
+}
