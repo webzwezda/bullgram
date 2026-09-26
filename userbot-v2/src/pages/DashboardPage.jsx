@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Bot, CheckCircle2, Circle, Globe, KeyRound, Rocket, ShieldAlert
+  Bot, CheckCircle2, Circle, Globe, KeyRound, Rocket, ShieldAlert, ArrowUpRight
 } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
@@ -22,7 +22,9 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 // (ink.strong=slate-900, ink.muted=slate-500, surface.card=white,
 // border.default=slate-200, feedback.warning.text=amber-700): сырые шаги палитры
 // растят hardcodes-ratchet, поэтому в новый код не пишем.
-function StatCard({ icon: Icon, iconClasses, title, value, hint, to, cta, tone = 'default' }) {
+// Карточка-кнопка (решение владельца): без слов-ссылок, кликабельна целиком,
+// тонкая иконка-стрелка в углу.
+function StatCard({ icon: Icon, iconClasses, title, value, hint, to, tone = 'default' }) {
   const hintTone = tone === 'warning'
     ? 'text-feedback-warning-text font-medium'
     : tone === 'danger'
@@ -34,20 +36,24 @@ function StatCard({ icon: Icon, iconClasses, title, value, hint, to, cta, tone =
   const valueClass = tone !== 'default' && !hint
     ? (tone === 'warning' ? 'text-feedback-warning-text' : 'text-feedback-error-text')
     : 'text-ink-strong';
-  return (
-    <div className="bg-surface-card rounded-2xl ring-1 ring-border-default/50 shadow-sm p-5">
-      <div className="flex items-center gap-3 mb-3">
+  const cardClass = 'block rounded-2xl ring-1 ring-border-default/50 shadow-sm p-5';
+  const body = (
+    <>
+      <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconClasses}`}>
           <Icon className="w-5 h-5" />
         </div>
         <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">{title}</span>
-        {to ? (
-          <Link to={to} className="link-action shrink-0 ml-auto">{cta || 'Открыть'} →</Link>
-        ) : null}
+        <ArrowUpRight className="ml-auto w-4 h-4 text-ink-faint" />
       </div>
-      <div className={`text-2xl font-bold ${valueClass}`}>{value}</div>
+      <div className={`text-2xl font-bold mt-3 ${valueClass}`}>{value}</div>
       {hint ? <div className={`text-xs mt-1 ${hintTone}`}>{hint}</div> : null}
-    </div>
+    </>
+  );
+  return to ? (
+    <Link to={to} className={cardClass}>{body}</Link>
+  ) : (
+    <div className={cardClass}>{body}</div>
   );
 }
 
