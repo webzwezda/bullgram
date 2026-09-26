@@ -222,7 +222,7 @@ export function OpsRail() {
         done: (summary.userbotCount || 0) > 0,
         title: 'Аккаунт юзербота',
         hint: 'Авторизуйте рабочий Telegram аккаунт',
-        href: '/userbot/userbots',
+        href: '/userbot/accounts',
         icon: 'Smartphone'
       }
     ];

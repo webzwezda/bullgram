@@ -89,7 +89,7 @@ export function App() {
     >
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/shop" element={<ExternalRedirect to="/userbot/userbots" />} />
+        <Route path="/shop" element={<ExternalRedirect to="/userbot/accounts" />} />
         <Route path="/purchases" element={<ExternalRedirect to="/userbot/purchases" />} />
         <Route path="/plan" element={<ExternalRedirect to="/userbot/profile" />} />
         <Route path="/pay" element={<PayLayout />}>

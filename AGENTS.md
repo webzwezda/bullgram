@@ -29,7 +29,7 @@ Do not reintroduce legacy `/admin` assumptions into active UI or product copy. T
 
 Current v2 product surfaces already in the repo:
 
-- userbot product (`/userbot`): `dashboard` (`/userbot`), `userbots` (`/userbot/userbots`), `proxies` (`/userbot/proxies`), `agent MCP` (`/userbot/mcp`), `api keys` (`/userbot/api`), `purchases` (`/userbot/purchases`), `profile` (`/userbot/profile`)
+- userbot product (`/userbot`): `dashboard` (`/userbot`), `userbots` (`/userbot/accounts`), `proxies` (`/userbot/proxies`), `agent MCP` (`/userbot/mcp`), `api keys` (`/userbot/api`), `purchases` (`/userbot/purchases`), `profile` (`/userbot/profile`)
 - paid-access ops (`/app`): `command center` (`/app`), `customers` (`/app/customers`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`)
 - official bots (paywall): `sales-bot / official bot` (`/app/sales-bot`, включая контурную ротацию юзерботов), `autopost` (`/app/autopost`)
 - ecosystem tooling: `bases` (`/app/bases`)

@@ -329,7 +329,7 @@ function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = ''
   }));
   // Центр юзерботов живёт в отдельном приложении /userbot — полный переход с query.
   // Черновик передаётся через localStorage (общий origin), его читает UserbotCenter в /userbot.
-  window.location.assign(`/userbot/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`);
+  window.location.assign(`/userbot/accounts?tg_user_id=${encodeURIComponent(tgUserId)}`);
 }
 
 function rowMatches(row, search) {

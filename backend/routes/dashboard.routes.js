@@ -401,7 +401,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Юзерботы на битом прокси',
                     value: userbotsWithDeadProxy.length,
                     tone: userbotsWithDeadProxy.length > 0 ? 'danger' : 'ok',
-                    href: '/userbot/userbots',
+                    href: '/userbot/accounts',
                     hint: 'Эти аккаунты формально висят, но в бою будут только валиться. Сначала чини им прокси.'
                 },
                 {
@@ -409,7 +409,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Failover включен, но пула нет',
                     value: failoverEmptyPoolUserbots.length,
                     tone: failoverEmptyPoolUserbots.length > 0 ? 'warning' : 'ok',
-                    href: '/userbot/userbots',
+                    href: '/userbot/accounts',
                     hint: 'Авто-переключение включили, а резервные прокси не выбрали. Значит при смерти основного прокси аккаунт все равно ляжет.'
                 },
                 {
@@ -427,7 +427,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Лишние юзерботы без прокси',
                     value: directUserbotOverflow,
                     tone: directUserbotOverflow > 0 ? 'danger' : 'ok',
-                    href: '/userbot/userbots',
+                    href: '/userbot/accounts',
                     hint: 'Без прокси можно держать только один direct-аккаунт. Остальным нужен живой прокси.'
                 },
                 {
@@ -435,7 +435,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Сигналы от юзерботов не собраны',
                     value: signalRoutingReady ? 0 : 1,
                     tone: signalRoutingReady ? 'ok' : 'warning',
-                    href: signalAdminConfigured ? '/userbot/userbots' : '/app/payments',
+                    href: signalAdminConfigured ? '/userbot/accounts' : '/app/payments',
                     hint: signalRoutingReady
                         ? 'Ops-бот есть, admin_tg_id указан, входящие от юзерботов должны прилетать.'
                         : signalAdminConfigured
@@ -447,7 +447,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Горячие лички у юзерботов',
                     value: recentInboxAlerts.length,
                     tone: recentInboxAlerts.length > 0 ? 'warning' : 'ok',
-                    href: '/userbot/userbots',
+                    href: '/userbot/accounts',
                     hint: recentInboxAlerts.length > 0
                         ? 'Ops-бот уже словил мутные входящие. Проверь, кому надо ответить, пока деньги не ушли.'
                         : 'За последние сутки ops-бот не пинговал новые горячие лички.'
@@ -457,7 +457,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Telegram ругался на аккаунты',
                     value: recentTelegramRestrictions.length,
                     tone: recentTelegramRestrictions.length > 0 ? 'danger' : (recentTelegramErrorEvents.length > 0 ? 'warning' : 'ok'),
-                    href: '/userbot/userbots',
+                    href: '/userbot/accounts',
                     hint: recentTelegramRestrictions.length > 0
                         ? 'Есть свежие flood/restricted/privacy/session ошибки. Сначала разбери их, потом снова лезь в лички.'
                         : recentTelegramErrorEvents.length > 0

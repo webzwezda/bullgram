@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   Rocket, Globe, Bot, KeyRound, ShoppingCart, User,
   LayoutDashboard, Crown, LogOut
@@ -21,6 +21,13 @@ const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((m
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
 const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
+
+// Совместимый редирект: страница юзерботов теперь /accounts, query сохраняем
+// (?userbot_id=, ?tg_user_id= — deep-links из уведомлений и CRM admin-v2).
+function AccountsRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/accounts${search}`} replace />;
+}
 
 // Пилюля тарифа — тот же паттерн, что в OpsRail admin-v2
 function planMeta(plan) {
@@ -48,7 +55,7 @@ export function App() {
       title: 'Юзербот',
       items: [
         { to: '/', label: 'Дашборд', icon: LayoutDashboard },
-        { to: '/userbots', label: 'Юзерботы', icon: Rocket },
+        { to: '/accounts', label: 'Юзерботы', icon: Rocket },
         { to: '/proxies', label: 'Прокси', icon: Globe },
       ]
     },
@@ -227,7 +234,8 @@ export function App() {
               <Suspense fallback={<LoadingState text="Грузим экран..." />}>
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
-                  <Route path="/userbots" element={<UserbotsPage />} />
+                  <Route path="/accounts" element={<UserbotsPage />} />
+                  <Route path="/userbots" element={<AccountsRedirect />} />
                   <Route path="/proxies" element={<ProxyManagerPage />} />
                   <Route path="/mcp" element={<McpSettingsPage />} />
                   <Route path="/api" element={<ApiIntegrationsPage />} />

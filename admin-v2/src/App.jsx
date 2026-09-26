@@ -170,7 +170,7 @@ export function App() {
             </div>
             {sectionIndex === 0 ? (
               <a
-                href="/userbot/userbots"
+                href="/userbot/accounts"
                 onClick={() => setMobileNavOpen(false)}
                 className="flex flex-col gap-1 px-3 py-3 rounded-xl border border-slate-200/70 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-200 transition-colors"
               >
@@ -218,9 +218,9 @@ export function App() {
                 <Route path="/access" element={<Navigate to="/customers" replace />} />
                 <Route path="/bases" element={<BasesPage />} />
                 <Route path="/dossier" element={<Navigate to="/customers" replace />} />
-                <Route path="/userbots" element={<ExternalRedirect to="/userbot/userbots" />} />
+                <Route path="/userbots" element={<ExternalRedirect to="/userbot/accounts" />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
-                <Route path="/bots" element={<ExternalRedirect to="/userbot/userbots" />} />
+                <Route path="/bots" element={<ExternalRedirect to="/userbot/accounts" />} />
                 <Route path="/treasury" element={
                   profileLoading
                     ? <LoadingState text="Проверяем доступ..." />

@@ -14,7 +14,7 @@ export function CommandCenterPage() {
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-500">
               Сводный экран в работе. Управление юзерботами живёт в отдельном приложении{' '}
-              <a href="/userbot/userbots" className="font-semibold text-indigo-600 hover:text-indigo-700">Юзербот</a>.
+              <a href="/userbot/accounts" className="font-semibold text-indigo-600 hover:text-indigo-700">Юзербот</a>.
             </p>
           </div>
         </div>

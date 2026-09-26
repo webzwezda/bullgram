@@ -105,7 +105,7 @@ export default function PurchasesPage() {
                 <p className="card__body" style={{ marginTop: 6 }}>
                   Аккаунты и прокси покупаются на витрине в разделе «Юзерботы».
                 </p>
-                <Link to="/userbots" className="link-action" style={{ marginTop: 10 }}>
+                <Link to="/accounts" className="link-action" style={{ marginTop: 10 }}>
                   Открыть витрину →
                 </Link>
               </div>

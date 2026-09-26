@@ -194,7 +194,7 @@ export default function DashboardPage() {
             title="Юзерботы"
             value={String(userbotTotal)}
             hint={userbotHint}
-            to="/userbots"
+            to="/accounts"
             cta={safeModeUserbots.length > 0 ? 'Активировать' : 'Управлять'}
             tone={userbotTone}
           />
@@ -256,7 +256,7 @@ export default function DashboardPage() {
               done={userbotTotal > 0}
               title="2. Подключи аккаунт"
               text={userbotTotal > 0 ? `Аккаунтов: ${userbotTotal}.` : 'Отсканируй QR или загрузи .session на экране «Юзерботы».'}
-              to={userbotTotal > 0 ? null : '/userbots'}
+              to={userbotTotal > 0 ? null : '/accounts'}
             />
             <CheckRow
               done={userbotTotal > 0 && safeModeUserbots.length === 0}
@@ -264,7 +264,7 @@ export default function DashboardPage() {
               text={safeModeUserbots.length > 0
                 ? `${safeModeUserbots.length} в safe-mode — активируй вручную, фоновые задания их не трогают.`
                 : 'Новые аккаунты стартуют в safe-mode и ждут ручной активации.'}
-              to={safeModeUserbots.length > 0 ? '/userbots' : null}
+              to={safeModeUserbots.length > 0 ? '/accounts' : null}
             />
             <CheckRow
               done={agentConnected}
