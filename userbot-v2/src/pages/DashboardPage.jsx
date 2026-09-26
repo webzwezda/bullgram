@@ -7,7 +7,6 @@ import { apiRequest } from '../api/client.js';
 import { supabase } from '../lib/supabase.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { RecentCallsTable } from '../ui/RecentCallsTable.jsx';
 
 // Дашборд приложения «Юзербот» (план 2026-09-26-userbot-product-split, Фаза 3):
 // сводка состояния юзерботов/прокси/агента без нового бэкенда.
@@ -255,8 +254,6 @@ export default function DashboardPage() {
           </div>
         </div>
       ) : null}
-
-      <RecentCallsTable source="mcp" />
     </section>
   );
 }
