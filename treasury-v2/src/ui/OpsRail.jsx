@@ -60,9 +60,10 @@ function planMeta(plan) {
 
 // Промо-карточки соседних поверхностей в хвосте рельса (решение владельца):
 //   showPaywall=true (paywall) — алерт Pro-выдачи и промо «Юзерботы и прокси»;
-//   showUserbotPromos=true (кабинет /userbot) — промо paywall и хаба «Боты».
+//   showUserbotPromos=true (кабинет /userbot) — промо paywall и хаба «Боты»;
+//   showBotsPromos=true (хаб /bots) — промо «Юзерботы и прокси» и paywall.
 // Чек-листы онбординга сняты 2026-09-27: рельс это личный кабинет, не онбординг.
-export function OpsRail({ showPaywall = true, showUserbotPromos = false }) {
+export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBotsPromos = false }) {
   const { accessToken, user, login, logout, profilePlan } = useAuth();
   const [proFulfillmentPending, setProFulfillmentPending] = useState(0);
 
