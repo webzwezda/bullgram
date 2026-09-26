@@ -44,7 +44,7 @@ export function App() {
     return (
       <>
         <AuthGate />
-        <OpsRail showPaywall={false} />
+        <OpsRail showPaywall={false} showBotsPromos />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </>
@@ -149,7 +149,7 @@ export function App() {
           </AuthGate>
         </main>
 
-        <OpsRail showPaywall={false} />
+        <OpsRail showPaywall={false} showBotsPromos />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>

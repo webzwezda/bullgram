@@ -6,6 +6,42 @@ import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRo
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
 import { Bot, CreditCard, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
 
+function PromoCard({ href, icon: Icon, chipClass, iconClass, title, children }) {
+  return (
+    <a
+      href={href}
+      className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
+    >
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0 ${chipClass}`}>
+          <Icon className={`w-5 h-5 ${iconClass}`} />
+        </div>
+        <span className="text-sm font-bold text-slate-900">{title}</span>
+        <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
+      </div>
+      <p className="text-[11px] leading-snug text-slate-500 mt-2">{children}</p>
+    </a>
+  );
+}
+
+const UserbotsPromoCard = () => (
+  <PromoCard href="/userbot/accounts" icon={Rocket} chipClass="bg-blue-50 border-blue-100" iconClass="text-blue-600" title="Юзерботы и прокси">
+    Отдельное приложение для юзерботов. Рассылки и кики здесь продолжают их использовать.
+  </PromoCard>
+);
+
+const PaywallPromoCard = () => (
+  <PromoCard href="/paywall" icon={CreditCard} chipClass="bg-indigo-50 border-indigo-100" iconClass="text-indigo-600" title="Paywall">
+    Отдельное приложение продажи доступа: бот продаж, клиенты, рассылки и касса.
+  </PromoCard>
+);
+
+const BotsPromoCard = () => (
+  <PromoCard href="/bots" icon={Bot} chipClass="bg-blue-50 border-blue-100" iconClass="text-blue-600" title="Боты">
+    Хаб мелких ботов. Автопостер ведёт твои каналы: посты по расписанию и предложки.
+  </PromoCard>
+);
+
 function planMeta(plan) {
   if (plan === 'pro' || plan === 'normal') {
     return {
@@ -141,62 +177,19 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false }) {
 
       {showUserbotPromos ? (
         <>
-          <a
-            href="/paywall"
-            className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center border border-indigo-100 shrink-0">
-                <CreditCard className="w-5 h-5 text-indigo-600" />
-              </div>
-              <span className="text-sm font-bold text-slate-900">
-                Paywall
-              </span>
-              <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
-            </div>
-            <p className="text-[11px] leading-snug text-slate-500 mt-2">
-              Отдельное приложение продажи доступа: бот продаж, клиенты, рассылки и касса.
-            </p>
-          </a>
-          <a
-            href="/bots"
-            className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-                <Bot className="w-5 h-5 text-blue-600" />
-              </div>
-              <span className="text-sm font-bold text-slate-900">
-                Боты
-              </span>
-              <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
-            </div>
-            <p className="text-[11px] leading-snug text-slate-500 mt-2">
-              Хаб мелких ботов. Автопостер ведёт твои каналы: посты по расписанию и предложки.
-            </p>
-          </a>
+          <PaywallPromoCard />
+          <BotsPromoCard />
         </>
       ) : null}
 
-      {showPaywall ? (
-        <a
-          href="/userbot/accounts"
-          className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
-              <Rocket className="w-5 h-5 text-blue-600" />
-            </div>
-            <span className="text-sm font-bold text-slate-900">
-              Юзерботы и прокси
-            </span>
-            <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
-          </div>
-          <p className="text-[11px] leading-snug text-slate-500 mt-2">
-            Отдельное приложение для юзерботов. Рассылки и кики здесь продолжают их использовать.
-          </p>
-        </a>
+      {showBotsPromos ? (
+        <>
+          <UserbotsPromoCard />
+          <PaywallPromoCard />
+        </>
       ) : null}
+
+      {showPaywall ? <UserbotsPromoCard /> : null}
     </aside>
   );
 }
