@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const DESIGN_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(DESIGN_DIR, "..");
-const APPS = ["admin-v2", "site-v2", "userbot-v2", "bots-v2"];
+const APPS = ["admin-v2", "site-v2", "userbot-v2", "bots-v2", "treasury-v2"];
 const CANONICAL_APP = "admin-v2";
 const SHARED_FILES = [
   "src/lib/utils.js",

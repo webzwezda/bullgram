@@ -15,7 +15,6 @@ import { Toaster } from './components/ui/sonner.jsx';
 
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
-const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
 const OfficialBotsPage = lazy(() => import('./pages/bots/OfficialBotsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage.jsx').then((module) => ({ default: module.ReferralsPage })));
 const RetentionPage = lazy(() => import('./pages/RetentionPage.jsx').then((module) => ({ default: module.RetentionPage })));
@@ -210,12 +209,9 @@ export function App() {
                 <Route path="/userbots" element={<ExternalRedirect to="/userbot/accounts" />} />
                 <Route path="/sales-bot" element={<Navigate to="/" replace />} />
                 <Route path="/bots" element={<ExternalRedirect to="/userbot/accounts" />} />
-                <Route path="/treasury" element={
-                  profileLoading
-                    ? <LoadingState text="Проверяем доступ..." />
-                    : profileRole === 'admin' ? <TreasuryPage /> : <Navigate to="/" replace />
-                } />
-                <Route path="/shop" element={<Navigate to="/treasury" replace />} />
+                {/* Казна — отдельное приложение /treasury (внутренний инструмент платформы) */}
+                <Route path="/treasury" element={<ExternalRedirect to="/treasury" />} />
+                <Route path="/shop" element={<ExternalRedirect to="/treasury" />} />
                 <Route path="/shop-receipts" element={<Navigate to="/billing" replace />} />
                 <Route path="/referrals" element={<ReferralsPage />} />
                 <Route path="/retention" element={<RetentionPage />} />
@@ -233,8 +229,8 @@ export function App() {
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
-                <Route path="/p2p/create" element={<Navigate to="/treasury" replace />} />
-                <Route path="/p2p/orders" element={<Navigate to="/treasury" replace />} />
+                <Route path="/p2p/create" element={<ExternalRedirect to="/treasury" />} />
+                <Route path="/p2p/orders" element={<ExternalRedirect to="/treasury" />} />
                 <Route path="/proxies" element={<ExternalRedirect to="/userbot/proxies" />} />
                 <Route path="/admin-groups" element={<Navigate to="/" replace />} />
                 <Route path="/profile" element={<ExternalRedirect to="/userbot/profile" />} />

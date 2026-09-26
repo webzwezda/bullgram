@@ -1,13 +1,13 @@
 {
   "$comment": "Ratchet-снапшот lint_hardcodes (admin-v2/src + site-v2/src) для npm run check:design. Перегенерируется осознанно: node design/check-design.mjs --update-baseline. Гейт красный, только если текущих findings стало БОЛЬШЕ снапшота (total / kind / file).",
   "updatedAt": "2026-09-26",
-  "total": 6989,
+  "total": 7784,
   "kinds": {
-    "tailwind-palette": 4317,
-    "hex": 569,
-    "px": 2031,
-    "time": 53,
-    "font-family": 19
+    "tailwind-palette": 4375,
+    "hex": 753,
+    "px": 2563,
+    "time": 69,
+    "font-family": 24
   },
   "files": {
     "admin-v2/src/App.jsx": 32,
@@ -20,7 +20,6 @@
     "admin-v2/src/pages/PaymentSettingsPage.jsx": 22,
     "admin-v2/src/pages/BroadcastPage.jsx": 75,
     "admin-v2/src/pages/ReferralsPage.jsx": 453,
-    "admin-v2/src/pages/CommandCenterPage.jsx": 8,
     "admin-v2/src/pages/CustomersPage.jsx": 97,
     "admin-v2/src/pages/BroadcastHistoryPage.jsx": 10,
     "admin-v2/src/pages/AbandonedPage.jsx": 152,
@@ -37,8 +36,6 @@
     "admin-v2/src/pages/payment-settings/PrioritySignalsGrid.jsx": 9,
     "admin-v2/src/pages/payment-settings/payment-settings.utils.js": 6,
     "admin-v2/src/pages/payment-settings/TariffsSection.jsx": 152,
-    "admin-v2/src/pages/treasury/TreasuryTab.jsx": 59,
-    "admin-v2/src/pages/treasury/treasury.utils.js": 18,
     "admin-v2/src/pages/broadcast/PreparationRunner.jsx": 28,
     "admin-v2/src/pages/broadcast/ui.jsx": 46,
     "admin-v2/src/pages/broadcast/CampaignReplies.jsx": 15,
@@ -111,6 +108,14 @@
     "bots-v2/src/pages/autopost/AutopostManagePage.jsx": 288,
     "bots-v2/src/components/ui/badge.jsx": 1,
     "bots-v2/src/features/ton-checkout/TonWalletSidebarRow.jsx": 15,
-    "bots-v2/src/features/telegram/TelegramSidebarRow.jsx": 15
+    "bots-v2/src/features/telegram/TelegramSidebarRow.jsx": 15,
+    "treasury-v2/src/App.jsx": 21,
+    "treasury-v2/src/ui/AuthGate.jsx": 68,
+    "treasury-v2/src/ui/ErrorBoundary.jsx": 3,
+    "treasury-v2/src/styles/app.css": 704,
+    "treasury-v2/src/styles/tailwind.css": 6,
+    "treasury-v2/src/pages/treasury/TreasuryTab.jsx": 59,
+    "treasury-v2/src/pages/treasury/treasury.utils.js": 18,
+    "treasury-v2/src/components/ui/badge.jsx": 1
   }
 }

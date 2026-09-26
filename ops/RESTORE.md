@@ -38,9 +38,9 @@ npm --prefix docs-site install
   Бэкенд в pm2 дополнительно следит за процессом 3proxy в рантайме
   (два процесса 3proxy с reuseport — норма после пересозданий).
 - **Статика**: `/var/www/bullgram-site-v2`, `/var/www/bullgram-admin-v2`,
-  `/var/www/bullgram-userbot-v2`, `/var/www/bullgram-bots-v2` — симлинки на `dist`
+  `/var/www/bullgram-userbot-v2`, `/var/www/bullgram-bots-v2`, `/var/www/bullgram-treasury-v2` — симлинки на `dist`
   из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`. `/userbot/`
-  (приложение «Юзербот»), `/bots/` (приложение «Боты») и `/paywall/`
+  (приложение «Юзербот»), `/bots/` (приложение «Боты»), `/treasury/` (Казна) и `/paywall/`
   (paywall-кабина, папка admin-v2; URL переименован из `/app` 2026-09-27, nginx
   отдаёт 301 `/app/* → /paywall/*`) — nginx-location'ы с SPA-fallback; алиас
   `/userbot/telegram-web/` указывает на тот же `/var/www/bullgram-telegram-web`,

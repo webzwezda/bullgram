@@ -1,19 +1,20 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository has five active runtimes plus supporting docs/archive material:
+This repository has six active runtimes plus supporting docs/archive material:
 
 - `backend/`: Express API for Telegram subscription management. Entry point is `backend/server.js`; HTTP routes are in `backend/routes/`, business logic in `backend/services/`, cron jobs in `backend/jobs/`, middleware in `backend/middlewares/`, and utilities in `backend/utils/`.
 - `admin-v2/`: paywall/ops admin application on React/Vite. Source lives in `admin-v2/src/`, build output in `admin-v2/dist/`.
 - `userbot-v2/`: приложение «Юзербот» — основная поверхность продукта для билдеров ИИ-агентов: юзерботы, прокси, MCP/API-токены, покупки, профиль. Source lives in `userbot-v2/src/`, build output in `userbot-v2/dist/`. Не путать с `userbot-web/` (вендорный форк telegram-tt, раздаётся nginx'ом как `/app/telegram-web/`).
 - `bots-v2/`: приложение «Боты» — хаб мелких ботов (`/bots`): Автопостер (первый модуль), здесь же появляются следующие мелкие BotFather-боты. Source lives in `bots-v2/src/`, build output in `bots-v2/dist/`.
+- `treasury-v2/`: приложение «Казна» — внутренний инструмент платформы (`/treasury`): учёт TON, резервы, выводы. Доступ только у платформенного админа. Source lives in `treasury-v2/src/`, build output in `treasury-v2/dist/`.
 - `site-v2/`: primary public product site on React/Vite. Source lives in `site-v2/src/`, build output in `site-v2/dist/`.
 - `archive/`: archived notes and local-only operator artifacts that are not part of the active runtime.
 
 Runtime tech notes:
 
 - backend: Node.js, Express, Supabase (PostgreSQL + auth), Telegraf (official bots), GramJS (userbots), node-cron
-- `admin-v2`/`userbot-v2`/`bots-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2, userbot-v2, bots-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
+- `admin-v2`/`userbot-v2`/`bots-v2`/`treasury-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2, userbot-v2, bots-v2, treasury-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
 - admin-v2/userbot-v2/bots-v2 structure: `src/pages/` (feature routes), `src/ui/` (components), `src/api/` (backend calls); userbot-v2 и bots-v2 скопированы из admin-v2 — дизайн и общий кит байт-идентичны (гейт ui-sync)
 - multi-tenancy: all backend requests enforce `owner_id` for data isolation; each admin sees only their channels, bots, subscribers, orders, and settings
 
@@ -22,6 +23,7 @@ The project is now `v2-only` in active runtime:
 - `site-v2/` serves `/`
 - `userbot-v2/` serves `/userbot`
 - `bots-v2/` serves `/bots`
+- `treasury-v2/` serves `/treasury` (внутренний инструмент, вне продуктового меню)
 - `admin-v2/` serves `/paywall`
 - `backend/` serves the API
 
@@ -36,7 +38,8 @@ Current v2 product surfaces already in the repo:
 - paid-access ops (`/paywall`): `command center` (`/paywall`), `customers` (`/paywall/customers`), `broadcast` (`/paywall/broadcast`), `abandoned` (`/paywall/abandoned`), `retention` (`/paywall/retention`)
 - official bots (paywall): `sales-bot / official bot` (`/paywall/sales-bot`, включая контурную ротацию юзерботов)
 - ecosystem tooling: `bases` (`/paywall/bases`)
-- commerce: `referrals` (`/paywall/referrals`), `billing` (`/paywall/billing`), `treasury` (`/paywall/treasury`, казна проекта)
+- commerce: `referrals` (`/paywall/referrals`), `billing` (`/paywall/billing`)
+- platform internal: `treasury` (`/treasury`, казна проекта — отдельное приложение, вне меню)
 - key backend areas: `/api/userbot/*` (operations, health checks, manual actions), `/api/official-bot/*` (official bot management), `/api/mcp` (Bullgram MCP endpoint); full API docs in `backend/README.md`
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
 
