@@ -6,6 +6,7 @@ import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
+import { OpsRail } from './ui/OpsRail.jsx';
 
 const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
 
@@ -110,6 +111,8 @@ export function App() {
             </ErrorBoundary>
           </AuthGate>
         </main>
+
+        <OpsRail showPaywall={false} />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>

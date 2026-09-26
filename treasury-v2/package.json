@@ -12,6 +12,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "@tailwindcss/vite": "^4.2.2",
+    "@tonconnect/ui-react": "^3.0.0",
+    "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "lucide-react": "^1.7.0",
     "radix-ui": "^1.4.3",
