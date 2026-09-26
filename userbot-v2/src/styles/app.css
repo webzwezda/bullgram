@@ -2466,3 +2466,8 @@ a.link-action:hover {
 .page--flush .section:first-of-type {
   margin-top: 0;
 }
+
+/* Фон стат-карточек дашборда — мягкий градиент в оттенок сайта. */
+.stat-card-bg {
+  background: linear-gradient(180deg, #ffffff 0%, #eef3fc 100%);
+}

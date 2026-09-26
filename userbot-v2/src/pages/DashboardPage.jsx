@@ -36,7 +36,7 @@ function StatCard({ icon: Icon, iconClasses, title, value, hint, to, tone = 'def
   const valueClass = tone !== 'default' && !hint
     ? (tone === 'warning' ? 'text-feedback-warning-text' : 'text-feedback-error-text')
     : 'text-ink-strong';
-  const cardClass = 'block rounded-2xl ring-1 ring-border-default/50 shadow-sm p-5';
+  const cardClass = 'stat-card-bg block rounded-2xl ring-1 ring-border-default/50 shadow-sm p-5';
   const body = (
     <>
       <div className="flex items-center gap-3">
@@ -207,7 +207,7 @@ export default function DashboardPage() {
     <section className="page page--flush">
       <h1 className="sr-only">Дашборд</h1>
       <div className="section">
-        <div className="grid grid--flush grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid--flush grid-cols-1 sm:grid-cols-2 gap-4">
           <StatCard
             icon={Rocket}
             iconClasses="bg-action-primary/10 text-action-primary"
