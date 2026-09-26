@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { CalendarClock, Crown, LayoutDashboard } from 'lucide-react';
+import { CalendarClock, LayoutDashboard } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
@@ -13,25 +13,8 @@ import { OpsRail } from './ui/OpsRail.jsx';
 const HubPage = lazy(() => import('./pages/HubPage.jsx'));
 const AutopostManagePage = lazy(() => import('./pages/autopost/AutopostManagePage.jsx'));
 
-// Пилюля тарифа — та же мета, что у рельса /app и /userbot (profilePlan из AuthProvider).
-function planMeta(plan) {
-  if (plan === 'pro' || plan === 'normal') {
-    return {
-      title: 'Pro',
-      hint: 'Без лимитов',
-      pillClass: 'bg-amber-100 text-amber-800 border-amber-200'
-    };
-  }
-
-  return {
-    title: 'Trial',
-    hint: 'Бессрочно',
-    pillClass: 'bg-indigo-50 text-indigo-700 border-indigo-200'
-  };
-}
-
 export function App() {
-  const { user, profilePlan } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -68,11 +51,6 @@ export function App() {
     );
   }
 
-  const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор Bullgram';
-  const profileEmail = user?.email || '';
-  const avatarUrl = user?.user_metadata?.avatar_url || '';
-  const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
-  const currentPlan = planMeta(profilePlan);
 
   return (
     <div className="app-shell">
@@ -143,40 +121,8 @@ export function App() {
           ))}
         </nav>
 
-        {/* Профиль живёт в «Юзерботе» — строка ведёт туда внешней ссылкой (без роутера). */}
         <div className="px-3 pt-4 border-t border-slate-100">
-          <a
-            href="/userbot/profile"
-            className="flex items-center gap-3 rounded-xl p-2 -mx-2 transition-colors hover:bg-slate-50"
-            title="Профиль — в приложении «Юзербот»"
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={profileName} className="w-9 h-9 rounded-full object-cover border border-slate-200" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
-                {profileInitial}
-              </div>
-            )}
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-bold text-slate-900 truncate">{profileName}</span>
-              <span className="block text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</span>
-            </span>
-          </a>
-
-          <div className="flex items-center justify-between p-3 mt-3 bg-slate-50 rounded-xl border border-slate-100">
-            <span className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
-            </span>
-            <span className="flex flex-col items-end">
-              <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
-                {currentPlan.title}
-              </span>
-              <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 mt-4">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <a href="/" className="transition-colors hover:text-slate-700">
               На сайт
             </a>
