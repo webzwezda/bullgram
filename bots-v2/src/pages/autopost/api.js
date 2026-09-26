@@ -20,6 +20,11 @@ async function request(url, { method = 'GET', body, token } = {}) {
     return data;
 }
 
+// Список ботов владельца (хаб «Ботов»): username, is_active и мета. Без каналов.
+export function fetchBots(token) {
+    return request('/api/autopost/bots', { token });
+}
+
 export function fetchChannels(botId, token) {
     return request(`/api/autopost/bots/${botId}/channels`, { token });
 }

@@ -123,7 +123,7 @@ export async function createPostHandler({ supabase, req, args }) {
     if (!bot.is_active) {
       throw new MCPError(
         ERROR_CODES.TOOL_DISABLED,
-        'Bot is_active=false. Enable it in /app/autopost first.',
+        'Bot is_active=false. Enable it in /bots/autopost first.',
         {}
       );
     }
@@ -283,7 +283,7 @@ registerOperation('bullgram_autopost_post_create', {
       bot_id: {
         type: 'string',
         format: 'uuid',
-        description: 'Autopost bot ID (UUID from /api/external/v1/autopost/bots or /app/autopost URL)'
+        description: 'Autopost bot ID (UUID from /api/external/v1/autopost/bots or /bots/autopost URL)'
       },
       target_channel_id: {
         type: 'string',

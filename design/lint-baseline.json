@@ -1,20 +1,20 @@
 {
   "$comment": "Ratchet-снапшот lint_hardcodes (admin-v2/src + site-v2/src) для npm run check:design. Перегенерируется осознанно: node design/check-design.mjs --update-baseline. Гейт красный, только если текущих findings стало БОЛЬШЕ снапшота (total / kind / file).",
   "updatedAt": "2026-09-26",
-  "total": 6066,
+  "total": 6885,
   "kinds": {
-    "tailwind-palette": 4128,
-    "hex": 385,
-    "px": 1499,
-    "time": 40,
-    "font-family": 14
+    "tailwind-palette": 4213,
+    "hex": 569,
+    "px": 2031,
+    "time": 53,
+    "font-family": 19
   },
   "files": {
     "admin-v2/src/App.jsx": 32,
     "admin-v2/src/ui/AuthGate.jsx": 68,
     "admin-v2/src/ui/ErrorBoundary.jsx": 3,
     "admin-v2/src/ui/CodeBlock.jsx": 7,
-    "admin-v2/src/ui/OpsRail.jsx": 51,
+    "admin-v2/src/ui/OpsRail.jsx": 50,
     "admin-v2/src/styles/app.css": 707,
     "admin-v2/src/styles/tailwind.css": 6,
     "admin-v2/src/pages/PaymentSettingsPage.jsx": 22,
@@ -22,7 +22,6 @@
     "admin-v2/src/pages/ReferralsPage.jsx": 453,
     "admin-v2/src/pages/CommandCenterPage.jsx": 8,
     "admin-v2/src/pages/CustomersPage.jsx": 97,
-    "admin-v2/src/pages/QuickStartPage.jsx": 288,
     "admin-v2/src/pages/BroadcastHistoryPage.jsx": 10,
     "admin-v2/src/pages/AbandonedPage.jsx": 152,
     "admin-v2/src/pages/RetentionPage.jsx": 149,
@@ -73,9 +72,9 @@
     "userbot-v2/src/ui/AuthGate.jsx": 68,
     "userbot-v2/src/ui/ErrorBoundary.jsx": 3,
     "userbot-v2/src/ui/CodeBlock.jsx": 7,
-    "userbot-v2/src/ui/OpsRail.jsx": 51,
+    "userbot-v2/src/ui/OpsRail.jsx": 50,
     "userbot-v2/src/ui/RecentCallsTable.jsx": 56,
-    "userbot-v2/src/styles/app.css": 707,
+    "userbot-v2/src/styles/app.css": 704,
     "userbot-v2/src/styles/tailwind.css": 6,
     "userbot-v2/src/pages/McpSettingsPage.jsx": 59,
     "userbot-v2/src/pages/ProxyManagerPage.jsx": 378,
@@ -98,6 +97,14 @@
     "userbot-v2/src/features/profile/ProfileWalletCard.jsx": 25,
     "userbot-v2/src/features/shop-storefront/ProxyStorefrontSection.jsx": 119,
     "userbot-v2/src/features/telegram/TelegramSidebarRow.jsx": 15,
-    "userbot-v2/src/features/billing/PlatformTierUpgradeCard.jsx": 26
+    "userbot-v2/src/features/billing/PlatformTierUpgradeCard.jsx": 26,
+    "bots-v2/src/App.jsx": 35,
+    "bots-v2/src/ui/AuthGate.jsx": 68,
+    "bots-v2/src/ui/ErrorBoundary.jsx": 3,
+    "bots-v2/src/ui/CodeBlock.jsx": 7,
+    "bots-v2/src/styles/app.css": 704,
+    "bots-v2/src/styles/tailwind.css": 6,
+    "bots-v2/src/pages/autopost/AutopostManagePage.jsx": 288,
+    "bots-v2/src/components/ui/badge.jsx": 1
   }
 }

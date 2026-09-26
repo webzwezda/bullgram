@@ -327,7 +327,7 @@ export function registerAdminCommandsHandler(bot, service, botId) {
 
         if (active.length === 0) {
             return ctx.reply(
-                'Активных чек-листов нет. Создай через Bullgram MCP или /app/autopost.',
+                'Активных чек-листов нет. Создай через Bullgram MCP или /bots/autopost.',
                 Markup.inlineKeyboard([[Markup.button.callback('＋ Новый список', 'clnew')]])
             );
         }

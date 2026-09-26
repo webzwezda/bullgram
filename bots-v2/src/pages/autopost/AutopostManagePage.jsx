@@ -1,14 +1,18 @@
+// Управление автопостером («Боты», план 2026-09-27-bots-app-split, Фаза 3).
+// Перенесено из admin-v2/src/pages/QuickStartPage.jsx: сменились только
+// относительные импорты, имя компонента, заголовок страницы и внешний
+// указатель на выпуск API-токена (ключи теперь живут в «Юзерботе»).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox, ScrollText, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '../app/providers/AuthProvider.jsx';
-import { Button } from '../components/ui/button.jsx';
-import { Card } from '../components/ui/card.jsx';
-import { Input } from '../components/ui/input.jsx';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.jsx';
-import { supabase } from '../lib/supabase.js';
-import { CodeBlock } from '../ui/CodeBlock.jsx';
-import { LoadingState } from '../ui/LoadingState.jsx';
+import { useAuth } from '../../app/providers/AuthProvider.jsx';
+import { Button } from '../../components/ui/button.jsx';
+import { Card } from '../../components/ui/card.jsx';
+import { Input } from '../../components/ui/input.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select.jsx';
+import { supabase } from '../../lib/supabase.js';
+import { CodeBlock } from '../../ui/CodeBlock.jsx';
+import { LoadingState } from '../../ui/LoadingState.jsx';
 import {
     fetchChannels,
     fetchItems,
@@ -24,7 +28,7 @@ import {
     removeAdmin,
     deleteBot,
     clearFailedItems
-} from './autopost/api.js';
+} from './api.js';
 
 function maskBotToken(value) {
   const t = String(value || '');
@@ -130,7 +134,7 @@ function journalMediaSummaryLines(rows) {
   });
 }
 
-export function QuickStartPage() {
+export default function AutopostManagePage() {
   const { user, accessToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [selectedBotId, setSelectedBotId] = useState('new');
@@ -829,6 +833,10 @@ export function QuickStartPage() {
 
   return (
     <section className="page page--flush space-y-6">
+      <div className="page__header">
+        <h1>Автопостер</h1>
+        <p>Управление ботом «Автопостер» в приложении «Боты».</p>
+      </div>
       {/* Подключение бота */}
       <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
@@ -1007,7 +1015,7 @@ export function QuickStartPage() {
                 </a>
               </Button>
               <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs font-semibold border-slate-200 bg-white shadow-sm">
-                <a href="/app/integrations" className="flex items-center gap-1.5">
+                <a href="/userbot/api" className="flex items-center gap-1.5">
                   <Key className="w-3.5 h-3.5" />
                   Выпустить токен
                 </a>

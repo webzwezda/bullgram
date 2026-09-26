@@ -13,11 +13,11 @@ export function useOfficialBotsController({
     botToken: '',
     botKind: 'sales'
   });
-  // 'new' = sentinel для "создание нового бота" в верхнем селекторе (как в /app/autopost).
+  // 'new' = sentinel для "создание нового бота" в верхнем селекторе (как в приложении Боты, /bots/autopost).
   // '' = ещё не инициализировано, ниже подставится первое значение.
   const [selectedOfficialBotId, setSelectedOfficialBotId] = useState('');
 
-  // Multi-admin state (как в /app/autopost → "Администраторы бота").
+  // Multi-admin state (как в приложении Боты, /bots/autopost → "Администраторы бота").
   const [botAdmins, setBotAdmins] = useState([]);
   const [botAdminsLoading, setBotAdminsLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState('');

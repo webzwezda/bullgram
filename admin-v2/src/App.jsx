@@ -4,7 +4,7 @@ import {
   Users, Landmark, ShoppingCart, Database,
   Bot, Rocket, Wallet, Send,
   RefreshCcw,
-  Zap, History
+  History
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
@@ -24,7 +24,6 @@ const AbandonedPage = lazy(() => import('./pages/AbandonedPage.jsx').then((modul
 const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage.jsx').then((module) => ({ default: module.PaymentSettingsPage })));
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const BroadcastHistoryPage = lazy(() => import('./pages/BroadcastHistoryPage.jsx').then((module) => ({ default: module.BroadcastHistoryPage })));
-const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
 
 // Юзерботные экраны переехали в отдельное приложение /userbot (план 2026-09-26).
 // react-router Navigate не умеет переходить между SPA, поэтому полный переход
@@ -42,15 +41,9 @@ export function App() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
     {
-      title: 'BotFather-боты',
-      items: [
-        { to: '/autopost', label: 'Автопостер', icon: Zap },
-        { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
-      ]
-    },
-    {
       title: 'Продажи и Клиенты',
       items: [
+        { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
         { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
@@ -211,7 +204,8 @@ export function App() {
             <Suspense fallback={<LoadingState text="Грузим экран admin-v2..." />}>
               <Routes>
                 <Route path="/" element={<CommandCenterPage />} />
-                <Route path="/autopost" element={<QuickStartPage />} />
+                {/* Автопостер переехал в приложение «Боты» (/bots, план 2026-09-27). */}
+                <Route path="/autopost" element={<ExternalRedirect to="/bots/autopost" />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/crm" element={<Navigate to="/customers" replace />} />
                 <Route path="/orders" element={<Navigate to="/customers" replace />} />
@@ -247,7 +241,7 @@ export function App() {
                 <Route path="/p2p/create" element={<Navigate to="/treasury" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/treasury" replace />} />
                 <Route path="/proxies" element={<ExternalRedirect to="/userbot/proxies" />} />
-                <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
+                <Route path="/admin-groups" element={<Navigate to="/" replace />} />
                 <Route path="/profile" element={<ExternalRedirect to="/userbot/profile" />} />
               </Routes>
             </Suspense>
