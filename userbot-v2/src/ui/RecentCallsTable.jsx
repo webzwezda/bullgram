@@ -78,11 +78,11 @@ export function RecentCallsTable({ source }) {
   const hiddenCount = state.entries.length - shown.length;
 
   return (
-    <Card className="border-slate-200/70 bg-white shadow-sm">
+    <Card className="border-slate-200/70 bg-white rounded-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
       <CardHeader className="px-6 pt-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-lg font-bold tracking-tight text-slate-900">{title}</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
+            <CardTitle className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">{title}</CardTitle>
             <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
           </div>
           <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={load} disabled={state.loading}>

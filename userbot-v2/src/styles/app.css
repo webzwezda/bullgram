@@ -561,6 +561,17 @@ a.link-action:hover {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
+/* Интерактивная карточка-состояние (дашборд «Юзербот»): живой отклик курсора
+   в словаре кита — тот же ритом тени, чуть глубже на hover. */
+.card--interactive {
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+.card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09);
+}
+
 .stat-card__title {
   font-size: 11px;
   color: var(--muted-ink);

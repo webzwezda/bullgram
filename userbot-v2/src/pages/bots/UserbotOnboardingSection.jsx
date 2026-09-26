@@ -82,7 +82,7 @@ function FileUploadBox({ label, fileName, acceptedTypes, onChange, icon: Icon, c
       <div className="min-w-0 flex-1">
         <div className={`text-sm font-bold ${isUploaded ? 'text-slate-900' : 'text-slate-700'}`}>{label}</div>
         <div className={`truncate text-sm font-medium mt-0.5 ${isUploaded ? 'text-slate-600' : 'text-slate-400'}`}>
-          {fileName || `Нажмите чтобы выбрать файл`}
+          {fileName || `Нажми, чтобы выбрать файл`}
         </div>
       </div>
       <div className={`shrink-0 text-[11px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${
@@ -131,7 +131,7 @@ function QrFingerprintConfigurator({
               onValueChange={(value) => updateOnboarding({ qrFingerprintProfileId: value })}
             >
               <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm">
-                <SelectValue placeholder="Выберите профиль из списка" />
+                <SelectValue placeholder="Выбери профиль из списка" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
                 {fingerprintProfiles.map((profile) => (
@@ -274,7 +274,7 @@ export function UserbotOnboardingSection({
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900">Подключение аккаунта</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Добавьте нового юзербота в ваш контур</p>
+              <p className="text-sm text-slate-500 mt-0.5">Добавь нового юзербота в свой контур</p>
             </div>
           </div>
         </div>
@@ -290,7 +290,7 @@ export function UserbotOnboardingSection({
               <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
                 <div className="flex items-center gap-2">
                   <Network className="w-4 h-4 text-slate-400" />
-                  <SelectValue placeholder="Выберите живой прокси для подключения" />
+                  <SelectValue placeholder="Выбери живой прокси для подключения" />
                 </div>
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -398,11 +398,11 @@ export function UserbotOnboardingSection({
                         </li>
                         <li className="flex gap-2">
                           <span className="font-bold text-indigo-500">2.</span>
-                          <span>Выберите <b>Устройства</b></span>
+                          <span>Выбери <b>Устройства</b></span>
                         </li>
                         <li className="flex gap-2">
                           <span className="font-bold text-indigo-500">3.</span>
-                          <span>Нажмите <b>Подключить устройство</b></span>
+                          <span>Нажми <b>Подключить устройство</b></span>
                         </li>
                       </ol>
                     </div>

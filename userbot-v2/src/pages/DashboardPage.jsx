@@ -23,7 +23,7 @@ function StatCard({ icon: Icon, title, value, hint, to, cta, tone = 'default' })
       ? 'text-feedback-error-text'
       : 'text-ink-strong';
   return (
-    <div className="card">
+    <div className="card card--interactive">
       <div className="flex items-start justify-between gap-3">
         <div className="w-11 h-11 rounded-2xl bg-surface-subtle border border-border-default flex items-center justify-center shrink-0">
           <Icon className="w-5 h-5 text-ink-muted" />
@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [proxies, setProxies] = useState([]);
   const [tokens, setTokens] = useState([]);
+  const [apiTokens, setApiTokens] = useState([]);
   const [userbotRows, setUserbotRows] = useState([]);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export default function DashboardPage() {
         setState((prev) => ({ ...prev, loading: true, error: '' }));
         // Каждый источник падает самостоятельно: дашборд должен собраться
         // из того, что доступно, а не лечь целиком из-за одного эндпоинта.
-        const [dashboardResult, proxiesResult, tokensResult, accountsResult] = await Promise.all([
+        const [dashboardResult, proxiesResult, tokensResult, apiTokensResult, accountsResult] = await Promise.all([
           apiRequest('/api/dashboard', { accessToken })
             .then((data) => ({ ok: true, data }))
             .catch((error) => ({ ok: false, error })),
@@ -88,6 +89,9 @@ export default function DashboardPage() {
             .then((data) => ({ ok: true, data }))
             .catch((error) => ({ ok: false, error })),
           apiRequest('/api/mcp/tokens', { accessToken })
+            .then((data) => ({ ok: true, data }))
+            .catch((error) => ({ ok: false, error })),
+          apiRequest('/api/integrations/tokens', { accessToken })
             .then((data) => ({ ok: true, data }))
             .catch((error) => ({ ok: false, error })),
           supabase
@@ -99,10 +103,10 @@ export default function DashboardPage() {
 
         if (cancelled) return;
 
-        const failed = [dashboardResult, proxiesResult, tokensResult, accountsResult]
+        const failed = [dashboardResult, proxiesResult, tokensResult, apiTokensResult, accountsResult]
           .filter((item) => !item.ok)
           .map((item) => item.error?.message || 'источник недоступен');
-        if (failed.length === 4) {
+        if (failed.length === 5) {
           setState({ loading: false, error: failed[0] || 'Не удалось загрузить дашборд.' });
           return;
         }
@@ -110,6 +114,7 @@ export default function DashboardPage() {
         setSummary(dashboardResult.ok ? (dashboardResult.data?.summary || null) : null);
         setProxies(proxiesResult.ok ? (proxiesResult.data?.proxies || []) : []);
         setTokens(tokensResult.ok ? (tokensResult.data?.tokens || []) : []);
+        setApiTokens(apiTokensResult.ok ? (apiTokensResult.data?.tokens || []) : []);
         setUserbotRows(accountsResult.ok ? (accountsResult.data || []) : []);
         setState({ loading: false, error: '' });
       } catch (error) {
@@ -140,6 +145,8 @@ export default function DashboardPage() {
   const proxyTotal = summary?.proxyCount ?? proxies.length;
   const activeMcpTokens = tokens.filter((token) => !token.revoked_at);
   const agentConnected = activeMcpTokens.length > 0;
+  const activeApiTokens = apiTokens.filter((token) => !token.revoked_at);
+  const hasApiKey = activeApiTokens.length > 0;
 
   if (state.loading) {
     return <LoadingState text="Собираем состояние юзерботов, прокси и агента..." />;
@@ -216,6 +223,18 @@ export default function DashboardPage() {
             to="/mcp"
             cta={agentConnected ? 'Настроить' : 'Подключить'}
             tone={agentConnected ? 'default' : 'warning'}
+          />
+          <StatCard
+            icon={KeyRound}
+            title="API-ключ (REST)"
+            value={hasApiKey ? 'Выдан' : 'Нет ключа'}
+            hint={
+              hasApiKey
+                ? `Ключей: ${activeApiTokens.length}. REST — для прямых HTTP-вызовов Bullgram.`
+                : 'Нужен, если твоему флоу удобнее HTTP, чем MCP: n8n, кроны, свои скрипты.'
+            }
+            to="/api"
+            cta={hasApiKey ? 'Открыть' : 'Создать'}
           />
         </div>
       </div>
