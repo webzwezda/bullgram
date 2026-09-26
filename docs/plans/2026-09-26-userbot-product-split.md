@@ -114,10 +114,10 @@ Telegram Web: добавить nginx-алиас `/userbot/telegram-web/` на т
 - [x] Telegram Web: алиас `/userbot/telegram-web/`, старый путь не трогаем
 - [x] Seller-контур (лоты юзерботов) переезжает сразу — «все переезды сразу»
 
-Сервер (вручную, вне репо, до первого деплоя):
-- [ ] `ln -s /srv/bullgram/userbot-v2/dist /var/www/bullgram-userbot-v2`
-- [ ] nginx `/etc/nginx/sites-enabled/bullgram.xyz`: `location ^~ /userbot/ { alias /var/www/bullgram-userbot-v2/; try_files $uri $uri/ /userbot/index.html; }` + `location ^~ /userbot/telegram-web/ { alias /var/www/bullgram-telegram-web/; ... }` по образцу `/app/`; `nginx -t && systemctl reload nginx`
-- [ ] Обновить `ops/RESTORE.md` (третий симлинк, блок `/userbot`, отличие `userbot-v2` от `userbot-web`)
+Сервер (вручную, вне репо, до первого деплоя) — ВЫПОЛНЕНО 2026-09-26:
+- [x] `ln -sfn /srv/bullgram/userbot-v2/dist /var/www/bullgram-userbot-v2`
+- [x] nginx: блоки `^~ /userbot/assets/` (иммутабельный кэш), `^~ /userbot/telegram-web/` (алиас на тот же /var/www/bullgram-telegram-web), `= /userbot` (301), `/userbot/` (SPA fallback) — по образцу `/app/`; бэкап в /root/nginx-backups/; `nginx -t` OK, reload OK
+- [x] `ops/RESTORE.md` обновлён (третий симлинк, блок `/userbot`, отличие userbot-v2/userbot-web)
 
 ### Фаза 1 — дизайн-пайплайн на три приложения
 
@@ -170,7 +170,7 @@ Backend (только юзер-фейсы ссылки, контракты не 
 - [x] `scripts/deploy-pull.sh`: `need_userbot_v2_install` по образцу, **first-time node_modules-проверка** (ловушка первого деплоя закрыта), install, сборка через `build:v2`
 - [x] `AGENTS.md`: четвёртый рантайм, продуктовое разделение, команды, статус MCP-онбординга
 - [x] `ops/RESTORE.md`: третий симлинк + nginx-блок `/userbot/` + отличие userbot-v2/userbot-web
-- [ ] Деплой push-to-main; smoke `/userbot` отвечает 200; старые пути редиректят
+- [x] Деплой push-to-main (e52c16a + фикс-критика 2a75783, оба CI-деплоя success); smoke: `/userbot/` 200, SPA-fallback 200, `/userbot/telegram-web/` 200, старый `/app/telegram-web/` жив, ассеты 200, `/api/userbot-web/status` OK
 
 ### Фаза 7 — верификация (условие закрытия)
 
@@ -198,6 +198,22 @@ Backend (только юзер-фейсы ссылки, контракты не 
 
 Откат: `git revert` + push (CI перекатит); nginx-location и симлинк безвредны без диста; при необходимости — временный `location /userbot/ { return 302 /app/userbots; }`.
 
-## Ревью
+## Ревью (2026-09-26, разделение задеплоено и проверено)
 
-(заполнить после реализации и верификации)
+**Деплой:** e52c16a (разделение) + 2a75783 (фиксы критика); оба CI-прогона success. Сервер: симлинк + nginx-блоки `/userbot/` (+ алиас telegram-web) наложены до пуша, бэкап конфига сохранён.
+
+**Локальная верификация:** сборки site/admin/userbot зелёные; `tokens:check` (3 копии байт-идентичны), `ui-sync` 6/6, `check:design` PASS (baseline 6015 → 6030 после фиксов критика, осознанный рост от rgba/hover-классов); autopost-тесты зелёные.
+
+**Code-review (close-out, APPROVE WITH NOTES):** изоляция тенантов не ослаблена (anon-ключ, owner-скоуп, сервисных ключей во фронте нет); official-хук сохранил accounts+proxies+reserved-assets для контурной ротации; перенос дисциплинированный (23 файла байт-идентичны). Все 5 замечаний закрыты: nginx-порядок (выполнен до пуша), тихий rename `/admin-groups` (возвращён), baseline новых страниц (Dashboard/Purchases переписаны токен-чисто, +960→+819→финально ~+834 от перенесённого легаси), корневые jpeg (в коммит не попали), док-остатки (README, AGENTS fonts).
+
+**Прод-верификация (реальный Chrome владельца, Playwright-расширение):**
+- общая сессия трёх SPA работает (вход без повторного логина, профиль Pro/кошелёк/Telegram на месте)
+- `/userbot`: дашборд с живыми данными (1 юзербот, 7/7 прокси, MCP подключён, журнал реальных вызовов агента); юзерботы (центр @Erik, онбординг, витрина лотов); MCP (токен, промпт, тест); покупки (empty-state с CTA); профиль (Google/Telegram/тариф/кошелёк)
+- критический paywall-гейт: `/app/sales-bot` — контур показывает юзербота @Erik, «Участвует в ротации» включён; мастер рассылки на шаге «Юзерботы» выбирает @Erik с прокси и считает ёмкость
+- редиректы: `/app/userbots?userbot_id=…` → `/userbot/userbots?userbot_id=…` (query сохранён)
+
+**Design-critic (после деплоя, кадры: десктоп×2, мобайл 390×2, hover):** вердикт REVISE с тремя топ-фиксами — все три применены и задеплоены (2a75783): 4-я карточка «API-ключ (REST)» закрыла hero-сетку (2×2), `card--interactive` hover в app.css обоих приложений, журнал в карточном диалекте + шапка на 390px, копирайт онбординга на «ты».
+
+**Осталось вне этого этапа (см. BACKLOG):** порядок секций на /userbots (центр ниже онбординга независимо от состояния), мобильный горизонтальный скролл журнала вызовов (статус за свайпом), e2e покупки за TON на живых деньгах, скан ответов рассылки (CampaignReplies) живой кампанией, Telegram Web открытие из обоих приложений живым кликом (алиас проверен curl 200).
+
+**Урок:** разведка «3 строки бэкенда» оказалась 10 (grep по всем маршрутам обязателен); npm run script --flag не пробрасывает флаг — гейтовые флаги гонять напрямую `node design/…`.
