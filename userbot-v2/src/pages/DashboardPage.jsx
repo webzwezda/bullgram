@@ -190,7 +190,7 @@ export default function DashboardPage() {
     <section className="page page--flush">
       <h1 className="sr-only">Дашборд</h1>
       <div className="section">
-        <div className="grid grid--double">
+        <div className="grid grid--double gap-3">
           <StatCard
             icon={Rocket}
             title="Юзерботы"
@@ -234,7 +234,7 @@ export default function DashboardPage() {
           <div className="card">
             <div className="card__title">Онбординг</div>
             {pendingOnboarding.length > 0 ? (
-              <div className="grid grid--double" style={{ marginTop: 12 }}>
+              <div className="grid grid--double gap-3" style={{ marginTop: 12 }}>
                 {pendingOnboarding.map((row, index) => (
                   <CheckRow
                     key={row.title}
