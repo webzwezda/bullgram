@@ -2,7 +2,7 @@ import { Fragment, Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   Users, ShoppingCart, Database,
-  Bot, Rocket, Wallet, Send,
+  Bot, Wallet, Send,
   RefreshCcw,
   History
 } from 'lucide-react';
@@ -155,22 +155,6 @@ export function App() {
                 })}
               </div>
             </div>
-            {sectionIndex === 0 ? (
-              <a
-                href="/userbot/accounts"
-                onClick={() => setMobileNavOpen(false)}
-                className="flex flex-col gap-1 px-3 py-3 rounded-xl border border-slate-200/70 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-200 transition-colors"
-              >
-                <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                  <Rocket className="w-4 h-4 flex-shrink-0 text-blue-600" />
-                  Юзерботы и прокси
-                  <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
-                </span>
-                <span className="text-[11px] leading-snug text-slate-500">
-                  Отдельное приложение для юзерботов. Рассылки и кики здесь продолжают их использовать.
-                </span>
-              </a>
-            ) : null}
             </Fragment>
           ))}
         </nav>

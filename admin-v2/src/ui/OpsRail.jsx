@@ -345,6 +345,26 @@ export function OpsRail({ showPaywall = true }) {
         />
       ) : null}
 
+      {showPaywall ? (
+        <a
+          href="/userbot/accounts"
+          className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
+              <Rocket className="w-5 h-5 text-blue-600" />
+            </div>
+            <span className="text-sm font-bold text-slate-900">
+              Юзерботы и прокси
+            </span>
+            <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
+          </div>
+          <p className="text-[11px] leading-snug text-slate-500 mt-2">
+            Отдельное приложение для юзерботов. Рассылки и кики здесь продолжают их использовать.
+          </p>
+        </a>
+      ) : null}
+
       <ChecklistGroup
         title="Юзерботы"
         steps={checklists.userbots}
