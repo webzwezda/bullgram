@@ -31,11 +31,11 @@ function StatCard({ icon: Icon, title, value, hint, to, cta, tone = 'default' })
           <Link to={to} className="link-action shrink-0">{cta || 'Открыть'} →</Link>
         ) : null}
       </div>
-      <div className="card__title" style={{ marginTop: 12, fontSize: 13 }}>{title}</div>
-      <div className={`stat-card__value${tone === 'default' ? '' : ' ' + valueClass}`} style={{ marginTop: 4 }}>
+      <div className="stat-card__title mt-3">{title}</div>
+      <div className={`stat-card__value${tone === 'default' ? '' : ' ' + valueClass} mt-1`}>
         {value}
       </div>
-      {hint ? <p className="card__body" style={{ marginTop: 6 }}>{hint}</p> : null}
+      {hint ? <p className="card__body mt-1.5">{hint}</p> : null}
     </div>
   );
 }
@@ -46,7 +46,7 @@ function CheckRow({ done, title, text, to }) {
       {done ? (
         <CheckCircle2 className="w-5 h-5 text-feedback-success-text shrink-0" />
       ) : (
-        <Circle className="w-5 h-5 text-ink-faint shrink-0" />
+        <Circle className="w-5 h-5 text-ink-muted shrink-0" />
       )}
       <div className="min-w-0">
         <div className="text-sm font-bold text-ink-strong">{title}</div>
@@ -188,6 +188,7 @@ export default function DashboardPage() {
 
   return (
     <section className="page page--flush">
+      <h1 className="sr-only">Дашборд</h1>
       <div className="section">
         <div className="grid grid--double">
           <StatCard

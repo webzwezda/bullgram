@@ -23,7 +23,7 @@ function planMeta(plan) {
   return {
     title: 'Trial',
     hint: 'Бессрочно',
-    pillClass: 'bg-blue-100 text-blue-800 border-blue-200'
+    pillClass: 'bg-indigo-50 text-indigo-700 border-indigo-200'
   };
 }
 
@@ -55,7 +55,7 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all duration-700 ease-out"
+              className="h-full bg-emerald-700 rounded-full transition-all duration-700 ease-out"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -64,6 +64,7 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
           </span>
         </div>
 
+        {completed < total ? (
         <div className="flex flex-col gap-2.5">
           {steps.map((step) => {
             const StepIcon = ICONS[step.icon];
@@ -83,13 +84,13 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
                   {isDone ? (
                     <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                   ) : (
-                    <Circle className="w-5 h-5 text-slate-200 group-hover:text-slate-300" />
+                    <Circle className="w-5 h-5 text-slate-500" />
                   )}
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h4 className={`text-sm font-bold line-clamp-2 transition-colors ${isDone ? 'text-emerald-700 line-through' : 'text-slate-700 group-hover:text-slate-900'}`}>
+                    <h4 className={`text-sm font-bold line-clamp-2 transition-colors ${isDone ? 'text-emerald-700' : 'text-slate-700 group-hover:text-slate-900'}`}>
                       {step.title}
                     </h4>
                   </div>
@@ -110,6 +111,7 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
             );
           })}
         </div>
+        ) : null}
       </div>
     </div>
   );
@@ -262,7 +264,7 @@ export function OpsRail({ showPaywall = true }) {
           {avatarUrl ? (
             <img src={avatarUrl} alt={profileName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center text-white font-bold">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold">
               {profileInitial}
             </div>
           )}
@@ -281,7 +283,7 @@ export function OpsRail({ showPaywall = true }) {
             <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
               {currentPlan.title}
             </span>
-            <span className="text-[10px] text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
+            <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
           </div>
         </div>
 

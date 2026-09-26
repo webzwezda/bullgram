@@ -108,7 +108,7 @@ export function TelegramSidebarRow() {
           <button
             type="button"
             onClick={copyTgId}
-            className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
+            className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
             title="Скопировать Telegram ID"
             aria-label="Скопировать Telegram ID"
           >
@@ -119,7 +119,7 @@ export function TelegramSidebarRow() {
           type="button"
           onClick={handleUnlink}
           disabled={unlinking}
-          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
           title={state.canUnlink ? 'Отвязать Telegram' : 'Единственный способ входа — отвязка недоступна'}
           aria-label="Отвязать Telegram"
         >

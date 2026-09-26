@@ -111,7 +111,7 @@ export function App() {
           className="mb-2 px-2 flex items-center gap-3 rounded-xl transition-transform hover:scale-[1.02]"
           aria-label="Bullgram — Дашборд"
         >
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-600/20">
             BR
           </div>
           <span className="font-black text-xl tracking-tight text-slate-900">Bullgram</span>
@@ -135,7 +135,7 @@ export function App() {
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
                         ${isActive
-                          ? 'bg-blue-50 text-blue-700'
+                          ? 'bg-indigo-50 text-indigo-700'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         }
                       `}

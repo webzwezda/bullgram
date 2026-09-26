@@ -52,7 +52,7 @@ export function TonWalletSidebarRow() {
         <button
           type="button"
           onClick={copyAddress}
-          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
           title="Скопировать адрес кошелька"
           aria-label="Скопировать адрес кошелька"
         >
@@ -62,7 +62,7 @@ export function TonWalletSidebarRow() {
           type="button"
           onClick={disconnect}
           disabled={disconnecting}
-          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
           title="Отключить кошелёк"
           aria-label="Отключить кошелёк"
         >
@@ -76,7 +76,7 @@ export function TonWalletSidebarRow() {
     <button
       type="button"
       onClick={open}
-      className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg border border-sky-600 transition-colors shadow-sm mb-4"
+      className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold rounded-lg border border-sky-600 transition-colors shadow-sm mb-4"
     >
       <Wallet className="w-3.5 h-3.5" />
       Подключить TON-кошелёк
