@@ -2185,6 +2185,11 @@ a.link-action:hover {
     grid-template-columns: 1fr;
   }
 
+  /* Топбар уже называет экран — дублирующий заголовок страницы прячем. */
+  .page__header {
+    display: none;
+  }
+
   .mobile-bar {
     position: sticky;
     top: 0;

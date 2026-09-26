@@ -170,21 +170,27 @@ export default function DashboardPage() {
       ? 'danger'
       : 'default';
   const userbotHint = safeModeUserbots.length > 0
-    ? `${safeModeUserbots.length} в safe-mode — новые аккаунты ждут ручной активации. Открой «Юзерботы» и активируй их.`
+    ? `${safeModeUserbots.length} в safe-mode — активируй в «Юзерботах»`
     : restrictedUserbots.length > 0
       ? `${restrictedUserbots.length} аккаунтов ограничены Telegram — разбери их в центре управления.`
       : userbotTotal > 0
-        ? 'Все аккаунты активны и работают через свои прокси.'
+        ? undefined
         : 'Аккаунтов пока нет. Начни с онбординга на экране «Юзерботы».';
+
+  // Онбординг-карточка живёт только пока есть незакрытые шаги: выполненные
+  // строки скрываем целиком (дублируют стат-карточки выше и рельс).
+  const onboardingRows = [
+    { title: 'Добавь прокси', done: proxyTotal > 0, text: 'Каждому юзерботу — свой прокси', to: '/proxies' },
+    { title: 'Подключи аккаунт', done: userbotTotal > 0, text: 'QR или .session-файл', to: '/accounts' },
+    { title: 'Активируй аккаунт', done: userbotTotal > 0 && safeModeUserbots.length === 0, text: 'Ждет ручной активации (safe-mode)', to: '/accounts' },
+    { title: 'Подключи агента', done: agentConnected, text: 'Выпусти MCP-токен — вставь его в конфиг агента (mcpServers).', to: '/mcp' },
+  ];
+  const pendingOnboarding = onboardingRows.filter((row) => !row.done);
 
   return (
     <section className="page page--flush">
       <div className="page__header">
         <h1>Дашборд</h1>
-        <p>
-          Состояние твоих Telegram-аккаунтов, прокси и подключенного ИИ-агента.
-          Управление юзерботами живет здесь, платный доступ — в кабинете /app.
-        </p>
       </div>
 
       <div className="section">
@@ -202,11 +208,7 @@ export default function DashboardPage() {
             icon={Globe}
             title="Прокси"
             value={`${workingProxies} / ${proxyTotal}`}
-            hint={
-              proxyTotal === 0
-                ? 'Прокси еще нет. Каждый юзербот ходит в Telegram только через свой прокси.'
-                : 'Рабочих из всех добавленных. Один прокси — один юзербот.'
-            }
+            hint={proxyTotal === 0 ? 'Каждому юзерботу — свой прокси' : undefined}
             to="/proxies"
             cta="Открыть"
             tone={proxyTotal > 0 && workingProxies === 0 ? 'danger' : 'default'}
@@ -215,11 +217,7 @@ export default function DashboardPage() {
             icon={agentConnected ? Bot : KeyRound}
             title="Агент (MCP)"
             value={agentConnected ? 'Подключен' : 'Не подключен'}
-            hint={
-              agentConnected
-                ? `Активных токенов: ${activeMcpTokens.length}. Последние вызовы — ниже.`
-                : 'Выпусти MCP-токен и дай его своему ИИ-агенту — он получит инструменты Bullgram.'
-            }
+            hint={agentConnected ? undefined : 'Выпусти MCP-токен для своего агента'}
             to="/mcp"
             cta={agentConnected ? 'Настроить' : 'Подключить'}
             tone={agentConnected ? 'default' : 'warning'}
@@ -228,61 +226,39 @@ export default function DashboardPage() {
             icon={KeyRound}
             title="API-ключ (REST)"
             value={hasApiKey ? 'Выдан' : 'Нет ключа'}
-            hint={
-              hasApiKey
-                ? `Ключей: ${activeApiTokens.length}. REST — для прямых HTTP-вызовов Bullgram.`
-                : 'Нужен, если твоему флоу удобнее HTTP, чем MCP: n8n, кроны, свои скрипты.'
-            }
+            hint={hasApiKey ? undefined : 'Для n8n, кронов и скриптов'}
             to="/api"
             cta={hasApiKey ? 'Открыть' : 'Создать'}
           />
         </div>
       </div>
 
-      <div className="section">
-        <div className="card">
-          <div className="card__title">Онбординг</div>
-          <p className="card__body">
-            Четыре шага до рабочего аккаунта для агента. Порядок фиксированный: без прокси аккаунт не завести, без активации safe-mode не снимется.
-          </p>
-          <div className="grid grid--double" style={{ marginTop: 12 }}>
-            <CheckRow
-              done={proxyTotal > 0}
-              title="1. Добавь прокси"
-              text={proxyTotal > 0 ? `Прокси есть: ${proxyTotal}.` : 'Каждый юзербот ходит в Telegram через отдельный прокси.'}
-              to={proxyTotal > 0 ? null : '/proxies'}
-            />
-            <CheckRow
-              done={userbotTotal > 0}
-              title="2. Подключи аккаунт"
-              text={userbotTotal > 0 ? `Аккаунтов: ${userbotTotal}.` : 'Отсканируй QR или загрузи .session на экране «Юзерботы».'}
-              to={userbotTotal > 0 ? null : '/accounts'}
-            />
-            <CheckRow
-              done={userbotTotal > 0 && safeModeUserbots.length === 0}
-              title="3. Активируй аккаунт"
-              text={safeModeUserbots.length > 0
-                ? `${safeModeUserbots.length} в safe-mode — активируй вручную, фоновые задания их не трогают.`
-                : 'Новые аккаунты стартуют в safe-mode и ждут ручной активации.'}
-              to={safeModeUserbots.length > 0 ? '/accounts' : null}
-            />
-            <CheckRow
-              done={agentConnected}
-              title="4. Подключи агента"
-              text={agentConnected
-                ? 'MCP-токен активен, агент может вызывать Bullgram.'
-                : 'Выпусти MCP-токен и вставь его в конфиг агента (mcpServers).'}
-              to={agentConnected ? null : '/mcp'}
-            />
+      {pendingOnboarding.length > 0 || restrictedUserbots.length > 0 ? (
+        <div className="section">
+          <div className="card">
+            <div className="card__title">Онбординг</div>
+            {pendingOnboarding.length > 0 ? (
+              <div className="grid grid--double" style={{ marginTop: 12 }}>
+                {pendingOnboarding.map((row, index) => (
+                  <CheckRow
+                    key={row.title}
+                    done={false}
+                    title={`${index + 1}. ${row.title}`}
+                    text={row.text}
+                    to={row.to}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {restrictedUserbots.length > 0 ? (
+              <div className="pill pill--danger" style={{ marginTop: 12, gap: 6 }}>
+                <ShieldAlert className="w-3.5 h-3.5" />
+                {restrictedUserbots.length} аккаунт(ов) ограничены Telegram
+              </div>
+            ) : null}
           </div>
-          {restrictedUserbots.length > 0 ? (
-            <div className="pill pill--danger" style={{ marginTop: 12, gap: 6 }}>
-              <ShieldAlert className="w-3.5 h-3.5" />
-              {restrictedUserbots.length} аккаунт(ов) ограничены Telegram
-            </div>
-          ) : null}
         </div>
-      </div>
+      ) : null}
 
       <RecentCallsTable source="mcp" />
     </section>

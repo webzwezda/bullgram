@@ -46,9 +46,11 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
           <h3 className="text-lg font-black text-slate-900 tracking-tight">{title}</h3>
         </div>
 
-        <p className="text-sm text-slate-500 leading-relaxed mb-5 pr-4">
-          {description}
-        </p>
+        {description ? (
+          <p className="text-sm text-slate-500 leading-relaxed mb-5 pr-4">
+            {description}
+          </p>
+        ) : null}
 
         <div className="flex items-center gap-3 mb-6">
           <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -91,12 +93,14 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
                       {step.title}
                     </h4>
                   </div>
-                  <p
-                    className={`text-xs mt-0.5 line-clamp-2 transition-colors ${isDone ? 'text-slate-500' : 'text-slate-500 group-hover:text-slate-600'}`}
-                    title={step.hint}
-                  >
-                    {step.hint}
-                  </p>
+                  {!isDone && step.hint ? (
+                    <p
+                      className={`text-xs mt-0.5 line-clamp-2 transition-colors ${isDone ? 'text-slate-500' : 'text-slate-500 group-hover:text-slate-600'}`}
+                      title={step.hint}
+                    >
+                      {step.hint}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-hover:bg-slate-50">
@@ -113,6 +117,8 @@ function ChecklistGroup({ title, description, steps, icon: MainIcon }) {
 
 // showPaywall=false (кабинет /userbot) прячет paywall-секции — алерт Pro-выдачи
 // и онбординг «Продажа доступа»: продуктовое разделение (продажи живут в /app).
+// Description чеклистов и hint'ы done-шагов не рендерим: операционный виджет,
+// а не копирайт (волна «куча текста», критик P0).
 export function OpsRail({ showPaywall = true }) {
   const { accessToken, user, login, logout, profilePlan } = useAuth();
   const [state, setState] = useState({
@@ -332,7 +338,6 @@ export function OpsRail({ showPaywall = true }) {
       {showPaywall ? (
         <ChecklistGroup
           title="Продажа доступа"
-          description="Настройка автоматической выдачи инвайтов в приватные группы после оплаты."
           steps={checklists.bot}
           icon={Bot}
         />
@@ -340,7 +345,6 @@ export function OpsRail({ showPaywall = true }) {
 
       <ChecklistGroup
         title="Юзерботы"
-        description="Инфраструктура для рассылок и инвайтинга с рабочих аккаунтов Telegram."
         steps={checklists.userbots}
         icon={Rocket}
       />
