@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
-  Users, Landmark, ShoppingCart, Database,
+  Users, ShoppingCart, Database,
   Bot, Rocket, Wallet, Send,
   RefreshCcw,
   History
@@ -63,12 +63,8 @@ export function App() {
         { to: '/billing', label: 'Касса', icon: Wallet },
       ]
     },
-    ...(profileRole === 'admin' ? [{
-      title: 'Админ',
-      items: [
-        { to: '/treasury', label: 'Казна', icon: Landmark },
-      ]
-    }] : [])
+    // Казна (/treasury) — внутренний инструмент платформы: в меню не выводится,
+    // доступ по прямой ссылке, гейт по роли admin внутри роута.
   ];
   const navItems = navSections.flatMap((section) => section.items);
 
