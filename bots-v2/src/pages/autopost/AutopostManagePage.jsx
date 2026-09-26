@@ -833,10 +833,9 @@ export default function AutopostManagePage() {
 
   return (
     <section className="page page--flush space-y-6">
-      <div className="page__header">
-        <h1>Автопостер</h1>
-        <p>Подключение бота, каналы, расписание и журнал публикаций.</p>
-      </div>
+      {/* Заголовок только для скринридеров: экран начинается с карты выбора бота
+          (решение владельца — без видимых титулов, как на дашборде «Юзербота»). */}
+      <h1 className="sr-only">Автопостер</h1>
       {/* Подключение бота */}
       <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">

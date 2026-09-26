@@ -6,6 +6,7 @@ import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
+import { OpsRail } from './ui/OpsRail.jsx';
 
 // Экраны приложения (план 2026-09-27-bots-app-split, Фаза 3): хаб живой,
 // автопостер перенесён из admin-v2 (QuickStartPage → AutopostManagePage).
@@ -60,6 +61,8 @@ export function App() {
     return (
       <>
         <AuthGate />
+        <OpsRail showPaywall={false} />
+
         <Toaster position="bottom-right" richColors duration={4000} />
       </>
     );
@@ -199,6 +202,8 @@ export function App() {
             </ErrorBoundary>
           </AuthGate>
         </main>
+
+        <OpsRail showPaywall={false} />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>

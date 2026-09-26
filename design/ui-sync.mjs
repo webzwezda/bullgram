@@ -34,7 +34,7 @@ const SHARED_FILES = [
   "src/components/ui/badge.jsx",
   "src/components/ui/card.jsx",
   { file: "src/app/productTier.js", apps: ["admin-v2", "userbot-v2"] },
-  { file: "src/ui/OpsRail.jsx", apps: ["admin-v2", "userbot-v2"] },
+  { file: "src/ui/OpsRail.jsx", apps: ["admin-v2", "userbot-v2", "bots-v2"] },
 ];
 
 function sha256(abs) {
