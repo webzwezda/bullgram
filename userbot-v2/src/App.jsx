@@ -1,16 +1,15 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   Rocket, Globe, Bot, KeyRound, ShoppingCart, User,
-  LayoutDashboard, Crown, LogOut
+  LayoutDashboard
 } from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
-import { TonWalletSidebarRow } from './features/ton-checkout/TonWalletSidebarRow.jsx';
-import { TelegramSidebarRow } from './features/telegram/TelegramSidebarRow.jsx';
+import { OpsRail } from './ui/OpsRail.jsx';
 
 // Экраны приложения (план 2026-09-26-userbot-product-split, Фаза 3):
 // дашборд и покупки — новые, остальные переехали из admin-v2 целиком.
@@ -29,25 +28,10 @@ function AccountsRedirect() {
   return <Navigate to={`/accounts${search}`} replace />;
 }
 
-// Пилюля тарифа — тот же паттерн, что в OpsRail admin-v2
-function planMeta(plan) {
-  if (plan === 'pro' || plan === 'normal') {
-    return {
-      title: 'Pro',
-      hint: 'Без лимитов',
-      pillClass: 'bg-amber-100 text-amber-800 border-amber-200'
-    };
-  }
-
-  return {
-    title: 'Trial',
-    hint: 'Бессрочно',
-    pillClass: 'bg-blue-100 text-blue-800 border-blue-200'
-  };
-}
+// Пилюля тарифа и профиль с кошельком живут в правом рельсе (OpsRail) — как в /app.
 
 export function App() {
-  const { user, logout, profilePlan } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const navSections = [
@@ -96,12 +80,6 @@ export function App() {
       </>
     );
   }
-
-  const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'Оператор Bullgram';
-  const profileEmail = user?.email || '';
-  const avatarUrl = user?.user_metadata?.avatar_url || '';
-  const profileInitial = (profileEmail || profileName || 'U').trim().charAt(0).toUpperCase();
-  const currentPlan = planMeta(profilePlan);
 
   return (
     <div className="app-shell">
@@ -173,62 +151,20 @@ export function App() {
         </nav>
 
         <div className="px-3 pt-4 border-t border-slate-100">
-          <Link
-            to="/profile"
-            onClick={() => setMobileNavOpen(false)}
-            className="flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity"
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={profileName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center text-white font-bold">
-                {profileInitial}
-              </div>
-            )}
-            <span className="flex-1 min-w-0 block">
-              <span className="text-sm font-bold text-slate-900 truncate block">{profileName}</span>
-              <span className="text-xs text-slate-500 truncate block">{profileEmail || 'Без email'}</span>
-            </span>
-          </Link>
-
-          <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
-            </div>
-            <div className="flex flex-col items-end">
-              <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
-                {currentPlan.title}
-              </span>
-              <span className="text-[10px] text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
-            </div>
-          </div>
-
-          <TonWalletSidebarRow />
-          <TelegramSidebarRow />
-
-          <button
-            type="button"
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Выйти из системы
-          </button>
-
-          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 mt-4">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <a href="/" className="transition-colors hover:text-slate-700">
               На сайт
+            </a>
+            <span className="text-slate-300">·</span>
+            <a href="/app" className="transition-colors hover:text-slate-700">
+              Кабинет
             </a>
           </div>
         </div>
       </aside>
 
-      {/* Одноколоночный контур: правый рейл (OpsRail) — про paywall и сюда не копируется,
-          поэтому колонка 320px из .workspace-shell в app.css перекрывается инлайном
-          (unlayered CSS app.css сильнее Tailwind-утилит). */}
-      <div className="workspace-shell" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
-        <main className="main" style={{ paddingRight: 24 }}>
+      <div className="workspace-shell">
+        <main className="main">
           <AuthGate>
             <ErrorBoundary>
               <Suspense fallback={<LoadingState text="Грузим экран..." />}>
@@ -247,6 +183,8 @@ export function App() {
             </ErrorBoundary>
           </AuthGate>
         </main>
+
+        <OpsRail showPaywall={false} />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>
