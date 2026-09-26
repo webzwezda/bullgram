@@ -24,8 +24,14 @@ git fetch --all --prune
 # проходами ненадёжен (sudo/env_reset), поэтому пишем его в файл внутри .git —
 # без этого diff всегда пуст и условный npm install никогда не запускается.
 PREV_HEAD_FILE="$ROOT/.git/deploy-prev-head"
-git rev-parse HEAD > "$PREV_HEAD_FILE"
-PREV_HEAD="$(cat "$PREV_HEAD_FILE")"
+if [ -n "${DEPLOY_REEXEC:-}" ] && [ -f "$PREV_HEAD_FILE" ]; then
+  # Проход 2: HEAD уже перезётнут проходом 1 — берём записанный там PREV,
+  # иначе diff пуст и условный npm install никогда не запускается.
+  PREV_HEAD="$(cat "$PREV_HEAD_FILE")"
+else
+  git rev-parse HEAD > "$PREV_HEAD_FILE"
+  PREV_HEAD="$(cat "$PREV_HEAD_FILE")"
+fi
 git reset --hard origin/main
 NEW_HEAD="$(git rev-parse HEAD)"
 echo "    $PREV_HEAD → $NEW_HEAD"
@@ -160,5 +166,6 @@ if [ "$HTTP_CODE" = "000" ]; then
   exit 1
 fi
 echo "    backend HTTP $HTTP_CODE (alive)"
+rm -f "$PREV_HEAD_FILE"
 
 echo "==> [$(date -u +%FT%TZ)] deploy-pull done"
