@@ -189,10 +189,6 @@ export default function DashboardPage() {
 
   return (
     <section className="page page--flush">
-      <div className="page__header">
-        <h1>Дашборд</h1>
-      </div>
-
       <div className="section">
         <div className="grid grid--double">
           <StatCard
