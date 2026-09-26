@@ -37,8 +37,13 @@ npm --prefix docs-site install
   `cd /srv/bullgram/backend && node scripts/restore-managed-proxies.mjs`
   Бэкенд в pm2 дополнительно следит за процессом 3proxy в рантайме
   (два процесса 3proxy с reuseport — норма после пересозданий).
-- **Статика**: `/var/www/bullgram-site-v2` и `/var/www/bullgram-admin-v2` — симлинки
-  на `dist` из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`.
+- **Статика**: `/var/www/bullgram-site-v2`, `/var/www/bullgram-admin-v2`,
+  `/var/www/bullgram-userbot-v2` — симлинки на `dist` из чекаута `/srv/bullgram`;
+  собираются `scripts/deploy-pull.sh`. `/userbot/` (приложение «Юзербот», SPA с
+  fallback `try_files $uri $uri/ /userbot/index.html`) — nginx-location по образцу
+  `/app/`; алиас `/userbot/telegram-web/` указывает на тот же `/var/www/bullgram-telegram-web`,
+  что и `/app/telegram-web/`. `userbot-v2/` — не путать с `userbot-web/`
+  (вендорный telegram-tt для Telegram Web).
   Блог (`blog-site/`) собирается туда же в `dist/blog`, отдаётся на `/blog/`
   (nginx-блок по образцу `/docs`)
 - **Архивы**: `/var/www/_archive/` (бывшие блог/курсы), `/root/nginx-backups/`

@@ -522,7 +522,7 @@ function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
         <div className="p-5 sm:p-6 bg-white space-y-4">
           {isBilling ? (
             <a
-              href="/app"
+              href="/userbot"
               className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors shadow-md shadow-indigo-200"
             >
               Перейти в кабинет

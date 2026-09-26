@@ -123,7 +123,7 @@ export default function integrationsRoutes(supabase) {
 
     // --- Audit log ----------------------------------------------------------
     // Returns mcp_tool_log rows for the current owner, filtered by query params.
-    // Used by /app/claw/log to show every MCP+REST call made with their tokens.
+    // Used by the /userbot/mcp agent page to show every MCP+REST call made with their tokens.
     router.get('/audit-log', authenticateUser, async (req, res) => {
         try {
             const q = req.query || {};

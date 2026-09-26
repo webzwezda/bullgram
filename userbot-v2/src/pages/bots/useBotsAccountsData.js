@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
 import { supabase } from '../../lib/supabase.js';
 
+// Юзербот-режим хука из admin-v2 (план 2026-09-26-userbot-product-split, «Разрезается»):
+// official-часть (контуры /api/official-bot/contours и payment_settings) сюда не едет —
+// её потребители (OfficialBotsSection, useSalesContourController) остаются в paywall-кабине.
+// Проверено по потребителям: юзерботным секциям/контроллерам нужны tg_accounts, channels
+// (channelsByBotId в derived state), proxies (+proxySupport.profile_role), reserved-assets,
+// seller/items, recovery-status.
 const INITIAL_STATE = {
   loading: true,
   refreshing: false,
-  savingBot: false,
-  savingBotKindId: '',
-  savingContourBotId: '',
   checkingAccountId: '',
   togglingSafeModeId: '',
   bindingAccountId: '',
@@ -22,16 +25,13 @@ const INITIAL_STATE = {
   reservedItemsByAsset: {},
   sellerItemsById: {},
   channels: [],
-  officialBotContoursPayload: null,
-  officialBotContoursError: '',
-  paymentAdminTgId: '',
   recoveryMap: {},
   recoverySupported: true,
   updatedAt: null
 };
 
 async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
-  const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, paymentResp, recoveryResp, channelsResp, contoursResp] = await Promise.all([
+  const [accountsResp, proxiesResp, reservedResp, sellerItemsResp, recoveryResp, channelsResp] = await Promise.all([
     supabase
       .from('tg_accounts')
       .select('*')
@@ -40,11 +40,6 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     apiRequest('/api/userbot/proxies', { accessToken }),
     apiRequest('/api/shop/seller/reserved-assets', { accessToken }),
     apiRequest('/api/shop/seller/items', { accessToken }).catch(() => ({ items: [] })),
-    supabase
-      .from('payment_settings')
-      .select('admin_tg_id')
-      .eq('owner_id', ownerId)
-      .maybeSingle(),
     apiRequest('/api/userbot/recovery-status', { accessToken }).catch(() => ({
       support: { recovery: false },
       rows: []
@@ -52,14 +47,10 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     supabase
       .from('channels')
       .select('id, title, tg_chat_id, bot_id, chat_type, username, visibility, last_visibility_check_at')
-      .eq('owner_id', ownerId),
-    apiRequest('/api/official-bot/contours', { accessToken })
-      .then((payload) => ({ payload, error: '' }))
-      .catch((error) => ({ payload: null, error: error.message }))
+      .eq('owner_id', ownerId)
   ]);
 
   if (accountsResp.error) throw accountsResp.error;
-  if (paymentResp.error) throw paymentResp.error;
   if (channelsResp.error) throw channelsResp.error;
 
   return {
@@ -70,9 +61,6 @@ async function fetchBotsAccountsPayload({ accessToken, ownerId }) {
     reservedItemsByAsset: Object.fromEntries((reservedResp.entries || []).map((entry) => [entry.key, entry])),
     sellerItemsById: Object.fromEntries((sellerItemsResp.items || []).map((item) => [String(item.id), item])),
     channels: channelsResp.data || [],
-    officialBotContoursPayload: contoursResp.payload,
-    officialBotContoursError: contoursResp.error || '',
-    paymentAdminTgId: paymentResp.data?.admin_tg_id || '',
     recoveryMap: Object.fromEntries((recoveryResp.rows || []).map((row) => [String(row.account_id), row])),
     recoverySupported: recoveryResp.support?.recovery !== false,
     updatedAt: new Date().toISOString()
@@ -140,9 +128,6 @@ export function useBotsAccountsData({ accessToken, ownerId }) {
           reservedItemsByAsset: {},
           sellerItemsById: {},
           channels: [],
-          officialBotContoursPayload: null,
-          officialBotContoursError: '',
-          paymentAdminTgId: '',
           recoveryMap: {},
           recoverySupported: true,
           updatedAt: null

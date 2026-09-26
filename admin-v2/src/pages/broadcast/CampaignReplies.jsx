@@ -196,7 +196,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
                     key={target.id}
                     type="button"
                     className={`${btnGhost} !px-3 !py-1.5`}
-                    onClick={() => window.open(`/app/telegram-web/${target.id}`, '_blank', 'noopener')}
+                    onClick={() => window.open(`/userbot/telegram-web/${target.id}`, '_blank', 'noopener')}
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> @{target.tg_username || 'юзербот'}
                   </button>
@@ -273,7 +273,7 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
                                   <button
                                     type="button"
                                     className={`${btnAccent} !px-3 !py-1.5 !text-xs`}
-                                    onClick={() => window.open(`/app/telegram-web/${reply.userbot_id}`, '_blank', 'noopener')}
+                                    onClick={() => window.open(`/userbot/telegram-web/${reply.userbot_id}`, '_blank', 'noopener')}
                                   >
                                     <ExternalLink className="w-3.5 h-3.5" /> TG Web
                                   </button>

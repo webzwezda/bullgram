@@ -32,12 +32,21 @@ const CreateInvoicePage = lazyRoute(() => import('./pages/CreateInvoicePage.jsx'
 const CreatedInvoicePage = lazyRoute(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
 const AccessRequestPage = lazyRoute(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
 
+// Переход в другое приложение (/userbot, /app) — полный page load: SPA-роутер
+// здесь не резолвит чужие пути, Navigate уходил бы в wildcard на главную.
+function ExternalRedirect({ to }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return null;
+}
+
 const navSections = [
   {
     title: 'Навигация',
     items: [
       { to: '/', label: 'Главная', icon: Home },
-      { href: '/app', label: 'Кабинет', icon: LayoutDashboard, external: true }
+      { href: '/userbot', label: 'Кабинет', icon: LayoutDashboard, external: true }
     ]
   },
   {
@@ -80,9 +89,9 @@ export function App() {
     >
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/shop" element={<Navigate to="/app/profile" replace />} />
-        <Route path="/purchases" element={<Navigate to="/app/profile" replace />} />
-        <Route path="/plan" element={<Navigate to="/app/profile" replace />} />
+        <Route path="/shop" element={<ExternalRedirect to="/userbot/userbots" />} />
+        <Route path="/purchases" element={<ExternalRedirect to="/userbot/purchases" />} />
+        <Route path="/plan" element={<ExternalRedirect to="/userbot/profile" />} />
         <Route path="/pay" element={<PayLayout />}>
           <Route path=":purchaseId" element={<PayPage />} />
         </Route>

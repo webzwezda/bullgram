@@ -1053,7 +1053,7 @@ export function UserbotCenterSection({
                       className="h-10 px-3 sm:px-4 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm whitespace-nowrap"
                       onClick={() => {
                         if (!selectedLiveUserbotId) return;
-                        window.open(`/app/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
+                        window.open(`/userbot/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
                       }}
                       disabled={!selectedLiveUserbotId}
                     >

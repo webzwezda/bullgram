@@ -3,21 +3,21 @@
  * design/build.mjs — пайплайн DTCG → Tailwind v4 @theme (волна 2 плана единой дизайн-системы).
  *
  * Читает design/tokens/*.json (единый источник, формат DTCG), резолвит алиасы {path}
- * и эммитит БАЙТ-ИДЕНТИЧНЫЕ копии в admin-v2/src/styles/tokens.css и
- * site-v2/src/styles/tokens.css — один @theme-блок. Идентичность копий —
- * часть доказательства «единого источника».
+ * и эммитит БАЙТ-ИДЕНТИЧНЫЕ копии в admin-v2/src/styles/tokens.css,
+ * site-v2/src/styles/tokens.css и userbot-v2/src/styles/tokens.css — один @theme-блок.
+ * Идентичность копий — часть доказательства «единого источника».
  *
  * Режимы:
- *   node design/build.mjs           — (пере)сгенерировать оба tokens.css
+ *   node design/build.mjs           — (пере)сгенерировать все tokens.css
  *   node design/build.mjs --check   — гейт CI:
- *       1) оба tokens.css на диске байт-в-байт равны свежей генерации (иначе STALE, exit 1);
+ *       1) все tokens.css на диске байт-в-байт равны свежей генерации (иначе STALE, exit 1);
  *       2) каждый эммитнутый --color-{hue}-{step} байт-равен значению из
  *          admin-v2/node_modules/tailwindcss/theme.css (гейт нулевой визуальной дельты волны 3).
  *
  * Только stdlib Node, без зависимостей. Контракт маппинга — design/README.md,
  * раздел «Маппинг токенов → Tailwind v4 @theme».
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +27,7 @@ const TOKENS_DIR = path.join(DESIGN_DIR, "tokens");
 const OUTPUTS = [
   path.join(ROOT, "admin-v2", "src", "styles", "tokens.css"),
   path.join(ROOT, "site-v2", "src", "styles", "tokens.css"),
+  path.join(ROOT, "userbot-v2", "src", "styles", "tokens.css"),
 ];
 const THEME_CSS = path.join(ROOT, "admin-v2", "node_modules", "tailwindcss", "theme.css");
 
@@ -198,7 +199,7 @@ function generateCss(tree) {
   const head = [
     "/* GENERATED — не править руками, источник design/tokens, npm run tokens:build. */",
     "/* Проверка актуальности: npm run tokens:check (байт-сверка + гейт нулевой дельты с theme.css). */",
-    "/* Эммитится в admin-v2/src/styles/tokens.css и site-v2/src/styles/tokens.css — копии байт-идентичны. */",
+    "/* Эммитится в admin-v2/src/styles/tokens.css, site-v2 и userbot-v2 — копии байт-идентичны. */",
     "/*",
     " * Сознательно НЕ эммитится (см. design/README.md, «Маппинг токенов → Tailwind v4 @theme»):",
     " * - radius.*: admin-v2 (shadcn --radius: 0.625rem) и site-v2 держат per-app override радиуса",
@@ -315,7 +316,7 @@ function runCheck(tree) {
     const emitted = entries.length;
     if (!failed) {
       console.log(`tokens:check OK — ${emitted} переменных эммитено, ${checked} сверено с эталоном, 0 расхождений.`);
-      console.log(`Оба tokens.css актуальны и байт-идентичны. Доп. сверка typography/spacing с theme.css: ${extraChecked}/${extraChecked + extraDrift.length} совпадают (информативно).`);
+      console.log(`Все tokens.css (${OUTPUTS.length}) актуальны и байт-идентичны. Доп. сверка typography/spacing с theme.css: ${extraChecked}/${extraChecked + extraDrift.length} совпадают (информативно).`);
       console.log(`Гейт нулевой визуальной дельты волны 3: пройден (${checked} color-значений = theme.css).`);
     }
   }
@@ -334,6 +335,7 @@ function main() {
     }
     const css = generateCss(tree);
     for (const out of OUTPUTS) {
+      mkdirSync(path.dirname(out), { recursive: true });
       writeFileSync(out, css);
       console.log(`записан ${path.relative(ROOT, out)}`);
     }

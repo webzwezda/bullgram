@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { OfficialBotsSection } from './bots/OfficialBotsSection.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
@@ -30,10 +28,13 @@ import {
 import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.js';
 import { useListedShopUserbotsController } from './bots/useListedShopUserbotsController.js';
 import { useLiveUserbotsController } from './bots/useLiveUserbotsController.js';
-import { useOfficialBotsController } from './bots/useOfficialBotsController.js';
-import { useSalesContourController } from './bots/useSalesContourController.js';
 import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
+
+// Контейнер юзербот-режима admin-v2 BotsAccountsPage (план 2026-09-26-userbot-product-split,
+// Фаза 3): онбординг, центр управления (с чтением handoff-ключа
+// bullgram_userbot_center_handoff и query ?tg_user_id= / ?userbot_id=), витрина покупки,
+// лоты продавца, лоты платформы. Official-режим остался в paywall-кабине (/app/sales-bot).
 
 function showUiMessage(text, tone = 'default') {
   if (tone === 'success') return toast.success(text);
@@ -46,20 +47,12 @@ function userbotBatchTitleFor(count, firstItem) {
   return `Аккаунты x${count}`;
 }
 
-const CONTOUR_ROLE_LABELS = {
-  public_channel_id: 'Открытый канал',
-  paid_channel_id: 'Закрытый канал',
-  public_chat_id: 'Открытый чат',
-  paid_chat_id: 'Закрытый чат'
-};
-
-// Shared inventory data lives in hooks; page still owns userbot mutations and selection sync outside official-bot slice.
-function BotsAccountsPageContent({ mode = 'userbots' }) {
+// Shared inventory data lives in hooks; page still owns userbot mutations and selection sync.
+function UserbotsPageContent() {
   const { accessToken, user, profilePlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
-  const [refreshingTelegramPlaceId, setRefreshingTelegramPlaceId] = useState('');
   const { state, setState, reloadAccounts, patchLiveUserbot } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
@@ -93,7 +86,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     bundledUserbotLot,
     bundledUserbotLots,
     canSellUserbotAssets,
-    channelsByBotId,
     liveUserbots,
     listedShopUserbots,
     openUserbotPurchases,
@@ -110,99 +102,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     selectedOpenPurchaseId,
     profilePlan
   });
-
-  const {
-    addOfficialBot,
-    addingBotAdmin,
-    botAdmins,
-    botAdminsLoading,
-    botForm,
-    deleteOfficialBot,
-    handleAddBotAdmin,
-    handleRemoveBotAdmin,
-    handleRegenerateBotAdminInvite,
-    inviteLink,
-    newAdminTgId,
-    officialBots,
-    refreshOfficialBotWebhookStatus,
-    regeneratingInvite,
-    replaceOfficialBotToken,
-    reregisterWebhook,
-    selectedOfficialBot,
-    selectedOfficialBotId,
-    setBotForm,
-    setNewAdminTgId,
-    setSelectedOfficialBotId
-  } = useOfficialBotsController({
-    accessToken,
-    accounts: state.accounts,
-    paymentAdminTgId: state.paymentAdminTgId,
-    reloadAccounts,
-    setState,
-    showUiMessage
-  });
-
-  const salesContourSectionProps = useSalesContourController({
-    accessToken,
-    accounts: state.accounts,
-    proxies: state.proxies,
-    reservedUserbotIds: state.reservedUserbotIds,
-    channelsByBotId,
-    officialBotContoursPayload: state.officialBotContoursPayload,
-    officialBotContoursError: state.officialBotContoursError,
-    reloadAccounts,
-    selectedOfficialBot,
-    state,
-    setState,
-    showUiMessage
-  });
-
-  async function deleteTelegramPlace(place) {
-    const placeId = String(place?.id || '').trim();
-    if (!placeId) return;
-    const placeTitle = String(place?.title || place?.tg_chat_id || 'Telegram-площадку');
-    if (!window.confirm(`Удалить ${placeTitle} из Bullgram? В Telegram это ничего не удалит.`)) return;
-
-    try {
-      await apiRequest(`/api/official-bot/channels/${placeId}`, {
-        accessToken,
-        method: 'DELETE'
-      });
-      await reloadAccounts();
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    }
-  }
-
-  async function refreshTelegramPlaceInfo(place) {
-    const placeId = String(place?.id || '').trim();
-    if (!placeId) return;
-
-    setRefreshingTelegramPlaceId(placeId);
-    try {
-      const data = await apiRequest(`/api/official-bot/channels/${placeId}/refresh`, {
-        accessToken,
-        method: 'POST'
-      });
-      await reloadAccounts();
-      const change = data?.contourChange;
-      if (change && change.from && change.to) {
-        const from = CONTOUR_ROLE_LABELS[change.from] || change.from;
-        const to = CONTOUR_ROLE_LABELS[change.to] || change.to;
-        if (change.displacedChannelId) {
-          showUiMessage(`Канал перенесён из «${from}» в «${to}». Предыдущий канал из «${to}» перемещён в свободные площадки.`, 'success');
-        } else {
-          showUiMessage(`Канал автоматически перенесён из «${from}» в «${to}».`, 'success');
-        }
-      } else {
-        showUiMessage('Информация о Telegram-площадке обновлена.', 'success');
-      }
-    } catch (error) {
-      showUiMessage(error.message, 'error');
-    } finally {
-      setRefreshingTelegramPlaceId('');
-    }
-  }
 
   const {
     currentQrFingerprintProfile,
@@ -297,37 +196,6 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
       return String(openUserbotPurchases[0].id);
     });
   }, [openUserbotPurchases]);
-
-  const officialBotsSectionProps = {
-    botForm,
-    setBotForm,
-    state,
-    addOfficialBot,
-    deleteOfficialBot,
-    selectedOfficialBot,
-    selectedOfficialBotId,
-    setSelectedOfficialBotId,
-    officialBots,
-    refreshOfficialBotWebhookStatus,
-    reregisterWebhook,
-    channelsByBotId,
-    deleteTelegramPlace,
-    refreshTelegramPlaceInfo,
-    refreshingTelegramPlaceId,
-    salesContourSectionProps,
-    addingBotAdmin,
-    botAdmins,
-    botAdminsLoading,
-    handleAddBotAdmin,
-    handleRemoveBotAdmin,
-    handleRegenerateBotAdminInvite,
-    inviteLink,
-    newAdminTgId,
-    regeneratingInvite,
-    replaceOfficialBotToken,
-    setNewAdminTgId,
-    ownerId: user?.id
-  };
 
   const onboardingSectionCommonProps = {
     availableOnboardingProxies,
@@ -425,55 +293,43 @@ function BotsAccountsPageContent({ mode = 'userbots' }) {
     return (
       <section className="page page--flush">
         <div className="page__header">
-          <h1>Боты и аккаунты</h1>
-          <p>Новый экран уже собран, но загрузка контуров вернула ошибку.</p>
+          <h1>Юзерботы</h1>
+          <p>Экран собран, но загрузка аккаунтов вернула ошибку.</p>
         </div>
         <div className="error-card">{state.error}</div>
       </section>
     );
   }
 
-  const isOfficialMode = mode === 'official-bots';
-
   return (
     <section className="page page--flush">
-      {isOfficialMode ? (
-        <OfficialBotsSection {...officialBotsSectionProps} />
-      ) : (
-        <>
-          {state.proxySupport?.profile_role !== 'admin' ? (
-            <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
-          ) : null}
+      {state.proxySupport?.profile_role !== 'admin' ? (
+        <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
+      ) : null}
 
-          <UserbotOnboardingSection
-            {...onboardingSectionCommonProps}
-            steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
-          />
+      <UserbotOnboardingSection
+        {...onboardingSectionCommonProps}
+        steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
+      />
 
-          {canSellUserbotAssets ? (
-            <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
-          ) : null}
+      {canSellUserbotAssets ? (
+        <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
+      ) : null}
 
-          {state.proxySupport?.profile_role === 'admin' ? (
-            <AdminLotsSection
-              accessToken={accessToken}
-              types="bundle,userbot"
-              title="Юзерботы на витрине"
-              emptyText="Опубликованных лотов юзерботов сейчас нет."
-            />
-          ) : null}
+      {state.proxySupport?.profile_role === 'admin' ? (
+        <AdminLotsSection
+          accessToken={accessToken}
+          types="bundle,userbot"
+          title="Юзерботы на витрине"
+          emptyText="Опубликованных лотов юзерботов сейчас нет."
+        />
+      ) : null}
 
-          <UserbotCenterSection {...userbotCenterSectionProps} />
-        </>
-      )}
+      <UserbotCenterSection {...userbotCenterSectionProps} />
     </section>
   );
 }
 
-export function UserbotAccountsPage() {
-  return <BotsAccountsPageContent mode="userbots" />;
-}
-
-export function OfficialBotsPage() {
-  return <BotsAccountsPageContent mode="official-bots" />;
+export default function UserbotsPage() {
+  return <UserbotsPageContent />;
 }

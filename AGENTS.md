@@ -1,36 +1,39 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository has three active runtimes plus supporting docs/archive material:
+This repository has four active runtimes plus supporting docs/archive material:
 
 - `backend/`: Express API for Telegram subscription management. Entry point is `backend/server.js`; HTTP routes are in `backend/routes/`, business logic in `backend/services/`, cron jobs in `backend/jobs/`, middleware in `backend/middlewares/`, and utilities in `backend/utils/`.
-- `admin-v2/`: primary admin application on React/Vite. Source lives in `admin-v2/src/`, build output in `admin-v2/dist/`.
+- `admin-v2/`: paywall/ops admin application on React/Vite. Source lives in `admin-v2/src/`, build output in `admin-v2/dist/`.
+- `userbot-v2/`: приложение «Юзербот» — основная поверхность продукта для билдеров ИИ-агентов: юзерботы, прокси, MCP/API-токены, покупки, профиль. Source lives in `userbot-v2/src/`, build output in `userbot-v2/dist/`. Не путать с `userbot-web/` (вендорный форк telegram-tt, раздаётся nginx'ом как `/app/telegram-web/`).
 - `site-v2/`: primary public product site on React/Vite. Source lives in `site-v2/src/`, build output in `site-v2/dist/`.
 - `archive/`: archived notes and local-only operator artifacts that are not part of the active runtime.
 
 Runtime tech notes:
 
 - backend: Node.js, Express, Supabase (PostgreSQL + auth), Telegraf (official bots), GramJS (userbots), node-cron
-- `admin-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
-- admin-v2 structure: `src/pages/` (feature routes), `src/ui/` (components), `src/api/` (backend calls)
+- `admin-v2`/`userbot-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2, userbot-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
+- admin-v2/userbot-v2 structure: `src/pages/` (feature routes), `src/ui/` (components), `src/api/` (backend calls); userbot-v2 copied from admin-v2 — дизайн и общий кит байт-идентичны (гейт ui-sync)
 - multi-tenancy: all backend requests enforce `owner_id` for data isolation; each admin sees only their channels, bots, subscribers, orders, and settings
 
 The project is now `v2-only` in active runtime:
 
 - `site-v2/` serves `/`
+- `userbot-v2/` serves `/userbot`
 - `admin-v2/` serves `/app`
 - `backend/` serves the API
+
+Продуктовое разделение (2026-09-26, план docs/plans/2026-09-26-userbot-product-split.md): «Юзербот» (`/userbot`) — управление юзерботами/прокси и подключение агентов; paywall-кабина (`/app`) — продажа доступа, но она ПРОДОЛЖАЕТ использовать юзерботов (контурная ротация на `/app/sales-bot`, сканирование групп, авто-кик, retention, рассылки). Правило границы: управление юзерботами — в `/userbot`, использование paywall-фичами — в `/app` через те же backend API. Старые пути `/app/userbots`, `/app/proxies`, `/app/mcp`, `/app/api`, `/app/profile` — редиректы в `/userbot`.
 
 Do not reintroduce legacy `/admin` assumptions into active UI or product copy. Treat any reserve/legacy context as archived history, not as an active path.
 
 Current v2 product surfaces already in the repo:
 
-- paid-access ops: `command center` (`/app`), `crm` (`/app/crm`), `orders` (`/app/orders`), `access` (`/app/access`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`), `analytics` (`/app/analytics`)
-- Telegram infra: `proxies` (`/app/proxies`), `userbots` (`/app/userbots`), `sales-bot / official bot` (`/app/sales-bot`), `admin-groups` (`/app/admin-groups`)
-- ecosystem tooling: `bases` (`/app/bases`, legacy label `customer-bases`), `observer` (`/app/observer`)
-- commerce: `shop` (`/app/shop`), `shop receipts` (`/app/shop-receipts`), `referrals` (`/app/referrals`), `payments` (`/app/payments`), `billing` (`/app/billing`), `plans` (`/app/plans`)
-- `treasury` (`/app/treasury`): казна проекта
-- agent onboarding: `claw` (`/app/claw`)
+- userbot product (`/userbot`): `dashboard` (`/userbot`), `userbots` (`/userbot/userbots`), `proxies` (`/userbot/proxies`), `agent MCP` (`/userbot/mcp`), `api keys` (`/userbot/api`), `purchases` (`/userbot/purchases`), `profile` (`/userbot/profile`)
+- paid-access ops (`/app`): `command center` (`/app`), `customers` (`/app/customers`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`)
+- official bots (paywall): `sales-bot / official bot` (`/app/sales-bot`, включая контурную ротацию юзерботов), `autopost` (`/app/autopost`)
+- ecosystem tooling: `bases` (`/app/bases`)
+- commerce: `referrals` (`/app/referrals`), `billing` (`/app/billing`), `treasury` (`/app/treasury`, казна проекта)
 - key backend areas: `/api/userbot/*` (operations, health checks, manual actions), `/api/official-bot/*` (official bot management), `/api/mcp` (Bullgram MCP endpoint); full API docs in `backend/README.md`
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
 
@@ -38,7 +41,7 @@ Agent integration status:
 
 - `Bullgram MCP` is now the primary agent integration path
 - active endpoint: `POST /api/mcp`
-- active admin onboarding screen: `/app/claw`
+- active onboarding screen: `/userbot/mcp` (бывший `/app/claw`)
 - do not reintroduce temporary local bridge patterns for agent access when extending this area
 - prefer adding Bullgram tools and user-scoped MCP onboarding over DOM/browser-only agent hacks
 
@@ -54,14 +57,17 @@ Install dependencies for the active runtimes:
 ```bash
 cd backend && npm install
 cd admin-v2 && npm install
+cd userbot-v2 && npm install
 cd site-v2 && npm install
 ```
 
 Key commands:
 
 - `cd backend && node server.js`: run the API locally from the backend folder.
-- `cd admin-v2 && npm run dev`: run the new admin app locally.
-- `cd admin-v2 && npm run build`: build the new admin app.
+- `cd admin-v2 && npm run dev`: run the paywall admin app locally.
+- `cd admin-v2 && npm run build`: build the paywall admin app.
+- `cd userbot-v2 && npm run dev`: run the «Юзербот» app locally.
+- `cd userbot-v2 && npm run build`: build the «Юзербот» app.
 - `cd site-v2 && npm run dev`: run the public v2 site locally.
 - `cd site-v2 && npm run build`: build the public v2 site.
 - `npm run deploy`: deploy backend, then deploy `site-v2` and `admin-v2`.
@@ -126,7 +132,7 @@ Built 2026-09-15/16 (plan: `docs/plans/2026-09-15-unified-design-system.md`). Bo
 - **Gates**: `npm run check:design` (tokens / contrast / hardcodes-ratchet / axe / ui-sync) must pass before push. `--update-baseline` is a conscious operation — justify it in the commit message.
 - **Pipeline**: `npm run tokens:build` regenerates byte-identical `admin-v2/src/styles/tokens.css` + `site-v2/src/styles/tokens.css`; `npm run tokens:check` must stay green (stale detect + zero-delta gate vs theme.css + completeness assert).
 - **Component canonical**: `admin-v2/src/components/ui/` is the source of truth for shared primitives (button/input/badge/card); site-v2 keeps byte-identical copies and the `ui-sync` gate fails on drift. Promote a component into the canonical kit only with ≥2 real usages.
-- **Fonts**: Manrope (both apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; admin URLs need the `/app/` prefix (vite `base: '/app/'`), site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
+- **Fonts**: Manrope (all three apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; admin URLs need the `/app/` prefix (vite `base: '/app/'`), «Юзербот» uses `/userbot/`, site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
 - **Critic ordering (standing owner rule)**: design-critic runs only after code-review AND deploy, on prod screenshots; visible waves also hand the critic a mobile (390px) frame and hover frames of key controls.
 
 ## Testing Guidelines

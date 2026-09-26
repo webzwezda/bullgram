@@ -92,7 +92,7 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
   if (profilePlan === 'pro' || profilePlan === 'normal') {
     return (
       <a
-        href="/app/profile"
+        href="/userbot/profile"
         className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-5 py-4 text-base font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200 transition hover:bg-emerald-100"
       >
         <CheckCircle2 className="h-4 w-4" strokeWidth={2.5} />
@@ -242,7 +242,7 @@ function StartFreeButton({ user, login }) {
   return (
     <button
       type="button"
-      onClick={() => (user ? window.location.assign('/app/profile') : login('/app/profile'))}
+      onClick={() => (user ? window.location.assign('/userbot') : login('/userbot'))}
       className="group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary px-8 py-4 text-base font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5"
     >
       Начать бесплатно
@@ -436,7 +436,7 @@ export function HomePage() {
                 ) : (
                   user ? (
                     <a
-                      href="/app/profile"
+                      href="/userbot"
                       className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-4 text-base font-bold text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
                     >
                       Открыть кабинет
@@ -445,7 +445,7 @@ export function HomePage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => login('/app/profile')}
+                      onClick={() => login('/userbot')}
                       className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-4 text-base font-bold text-ink-strong ring-1 ring-inset ring-border-default transition hover:bg-surface-subtle hover:ring-border-strong"
                     >
                       {plan.action}

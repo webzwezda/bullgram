@@ -320,7 +320,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, tar
               <div className="text-sm text-amber-700 mb-4">
                 Базы аудитории тянут людей через живого юзербота. Если сессия умерла или прокси недоступен — переподключите аккаунт.
               </div>
-              <a href="/app/userbots" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+              <a href="/userbot/userbots" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
                 Открыть Юзерботы <ChevronRight className="w-4 h-4" />
               </a>
             </div>
@@ -527,9 +527,9 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, tar
                 <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-800">
                   <div className="font-bold mb-1">Нет подключённого юзербота</div>
                   <div className="text-sm opacity-90 mb-3">
-                    Без юзербота синк из групп недоступен. Подключите аккаунт на странице «Юзерботы».
+                    Без юзербота синк из групп недоступен. Подключите аккаунт в приложении «Юзербот».
                   </div>
-                  <a href="/app/userbots" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 !text-white hover:bg-slate-700 transition-colors">
+                  <a href="/userbot/userbots" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 !text-white hover:bg-slate-700 transition-colors">
                     Открыть Юзерботы <ChevronRight className="w-3.5 h-3.5" />
                   </a>
                 </div>

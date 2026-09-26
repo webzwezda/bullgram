@@ -1430,7 +1430,7 @@ export function ReferralsPage() {
         knownDialogIds: new Set((data.conversations || []).map((item) => String(item.tg_user_id)))
       };
       if (!payload.userbotId) {
-        window.alert('Нет рабочего юзербота, который напишет. Подключи и активируй юзербота в разделе «Юзерботы».');
+        window.alert('Нет рабочего юзербота, который напишет. Подключи и активируй юзербота в приложении «Юзербот» (/userbot/userbots).');
         return null;
       }
       dmCenterRef.current = payload;

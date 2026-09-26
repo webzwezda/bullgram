@@ -214,7 +214,7 @@ export function OpsRail() {
         done: (summary.proxyCount || 0) > 0,
         title: 'Прокси-сервер',
         hint: 'Подключите IPv4 прокси',
-        href: '/app/proxies',
+        href: '/userbot/proxies',
         icon: 'Globe'
       },
       {
@@ -222,7 +222,7 @@ export function OpsRail() {
         done: (summary.userbotCount || 0) > 0,
         title: 'Аккаунт юзербота',
         hint: 'Авторизуйте рабочий Telegram аккаунт',
-        href: '/app/userbots',
+        href: '/userbot/userbots',
         icon: 'Smartphone'
       }
     ];
@@ -258,10 +258,10 @@ export function OpsRail() {
               {profileInitial}
             </div>
           )}
-          <Link to="/profile" className="flex-1 min-w-0 block hover:opacity-80 transition-opacity">
+          <a href="/userbot/profile" className="flex-1 min-w-0 block hover:opacity-80 transition-opacity">
             <div className="text-sm font-bold text-slate-900 truncate hover:underline">{profileName}</div>
             <div className="text-xs text-slate-500 truncate hover:underline">{profileEmail || 'Без email'}</div>
-          </Link>
+          </a>
         </div>
 
         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">

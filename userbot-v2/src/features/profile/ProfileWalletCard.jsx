@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useTonAddress, useTonWallet, useTonConnectModal, useTonConnectUI } from '@tonconnect/ui-react';
 import { toast } from 'sonner';
 import { Copy, Loader2, Wallet, X } from 'lucide-react';
@@ -95,7 +94,7 @@ export function ProfileWalletCard() {
         <p className="text-sm text-slate-500 mt-0.5">
           Кошелёк, с которого ты платишь за тарифы Bullgram. Адрес запоминается при подключении — бери его отсюда для оплаты вручную.
           Это не касса: кошелёк для приёма оплат от твоих клиентов настраивается{' '}
-          <Link to="/billing" className="link-action">в Кассе → Реквизиты</Link>.
+          <a href="/app/billing" className="link-action">в Кассе → Реквизиты</a> в кабинете paywall.
         </p>
       </div>
 

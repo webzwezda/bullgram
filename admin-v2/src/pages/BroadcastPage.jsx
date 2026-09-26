@@ -913,7 +913,7 @@ export function BroadcastPage() {
             {state.userbots.length === 0 ? (
               <EmptyNote>
                 Нет юзерботов.{' '}
-                <Link to="/userbots" className="text-indigo-600 font-bold hover:text-indigo-700">Подключить аккаунты</Link>
+                <a href="/userbot/userbots" className="text-indigo-600 font-bold hover:text-indigo-700">Подключить аккаунты</a>
               </EmptyNote>
             ) : (
               <div>
@@ -971,8 +971,8 @@ export function BroadcastPage() {
             )}
             {capacity && audienceSize > 0 && capacity.poolSize === 0 ? (
               <div className="mt-4 rounded-2xl border border-border-default bg-feedback-warning-bg px-4 py-3 text-sm font-bold text-feedback-warning-text">
-                Рабочих юзерботов нет — рассылать некому. Подключи хотя бы одного на{' '}
-                <Link to="/userbots" className="underline hover:opacity-80">/app/userbots</Link>
+                Рабочих юзерботов нет — рассылать некому. Подключи хотя бы одного в приложении «Юзербот» —{' '}
+                <a href="/userbot/userbots" className="underline hover:opacity-80">/userbot/userbots</a>
                 : базе на {capacity.audienceSize} контактов нужно ~{capacity.botsNeeded} юзерботов на один день.
               </div>
             ) : null}

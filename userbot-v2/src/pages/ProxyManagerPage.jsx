@@ -823,6 +823,9 @@ export function ProxyManagerPage() {
                         <span>Handoff: <strong className="text-slate-700">{item.stats?.completed_transfers || 0}</strong></span>
                       </div>
                     </div>
+                    {/* Осознанная внешняя ссылка в paywall-кабину: заказы продавца
+                        (проданные прокси) живут в /app/billing?tab=purchases,
+                        в приложении «Юзербот» их экрана нет. Полный переход, новая вкладка. */}
                     <a
                       className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 !text-white text-xs font-bold hover:bg-blue-700 transition-all"
                       href="/app/billing?tab=purchases"

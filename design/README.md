@@ -97,7 +97,7 @@ node design/contrast-snapshot.mjs   # из корня репо; пишет /tmp/
 python3 scripts/validate_contrast.py /tmp/bullgram-contrast.json
 ```
 
-Сборка артефактов и гейт актуальности — из корня репозитория: `npm run tokens:build` (перегенерировать оба `tokens.css`) и `npm run tokens:check` (байт-сверка копий + сверка color-примитивов с `tailwindcss/theme.css`).
+Сборка артефактов и гейт актуальности — из корня репозитория: `npm run tokens:build` (перегенерировать все `tokens.css` — admin-v2, site-v2, userbot-v2) и `npm run tokens:check` (байт-сверка копий + сверка color-примитивов с `tailwindcss/theme.css`).
 
 Прогон от 2026-09-16: `validate_tokens` — 6/6 файлов, 259 токенов (134 примитива + 29 semantic + 48 typography с машинным слоем интерлиньяжей + 34 spacing + 10 radius + 4 motion), 0 ошибок, 0 висячих алиасов. Контраст — все обязательные AA-пары проходят (ink.strong/body/muted, 4 feedback-пары, primary/ton/destructive текст-на-действии); `ink.muted` = 4.76:1 на белом и 4.55:1 на slate-50. Единственный FAIL официального скрипта — его обязательная пара `border.strong ≥ 3:1` (WCAG 1.4.11): slate-300 на slate-50 даёт 1.42:1, поэтому exit-код 1 у `validate_contrast` на этом слепке — ожидаемое поведение, а не регрессия. Это де-факто студии; примитивы не трогаем (см. Risks плана волны 1) — если когда-нибудь решим ужесточать, кандидат `border.strong` = slate-400/500, но это отдельное визуальное решение.
 

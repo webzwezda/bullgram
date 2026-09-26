@@ -3087,7 +3087,7 @@ function assertUserbotOperatable(userbot) {
     if (userbot.runtime_status === 'pending_activation') {
         throw new MCPError(
             ERROR_CODES.SAFE_MODE_BLOCKED,
-            `Userbot ${userbot.id} is in safe-mode (pending_activation). Activate it at /app/userbots first.`,
+            `Userbot ${userbot.id} is in safe-mode (pending_activation). Activate it at /userbot/userbots first.`,
             {}
         );
     }

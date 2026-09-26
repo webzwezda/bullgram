@@ -48,7 +48,7 @@ export function ProfileTelegramCard() {
     try {
       const { data, error } = await supabase.auth.linkIdentity({
         provider: 'custom:telegram',
-        options: { redirectTo: `${window.location.origin}/app/profile` }
+        options: { redirectTo: `${window.location.origin}/userbot/profile` }
       });
       if (error) throw error;
       if (data?.url) {

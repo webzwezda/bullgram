@@ -1,8 +1,8 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import {
   Users, Landmark, ShoppingCart, Database,
-  Bot, Rocket, Globe, Wallet, Receipt, Send,
+  Bot, Rocket, Wallet, Send,
   RefreshCcw,
   Zap, History
 } from 'lucide-react';
@@ -17,19 +17,25 @@ const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').the
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
 const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
-const UserbotAccountsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.UserbotAccountsPage })));
-const OfficialBotsPage = lazy(() => import('./pages/BotsAccountsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
+const OfficialBotsPage = lazy(() => import('./pages/bots/OfficialBotsPage.jsx').then((module) => ({ default: module.OfficialBotsPage })));
 const ReferralsPage = lazy(() => import('./pages/ReferralsPage.jsx').then((module) => ({ default: module.ReferralsPage })));
 const RetentionPage = lazy(() => import('./pages/RetentionPage.jsx').then((module) => ({ default: module.RetentionPage })));
 const AbandonedPage = lazy(() => import('./pages/AbandonedPage.jsx').then((module) => ({ default: module.AbandonedPage })));
 const PaymentSettingsPage = lazy(() => import('./pages/PaymentSettingsPage.jsx').then((module) => ({ default: module.PaymentSettingsPage })));
-const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const BroadcastPage = lazy(() => import('./pages/BroadcastPage.jsx').then((module) => ({ default: module.BroadcastPage })));
 const BroadcastHistoryPage = lazy(() => import('./pages/BroadcastHistoryPage.jsx').then((module) => ({ default: module.BroadcastHistoryPage })));
-const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
-const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
 const QuickStartPage = lazy(() => import('./pages/QuickStartPage.jsx').then((module) => ({ default: module.QuickStartPage })));
-const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
+
+// Юзерботные экраны переехали в отдельное приложение /userbot (план 2026-09-26).
+// react-router Navigate не умеет переходить между SPA, поэтому полный переход
+// через window.location.replace с прокидом query (deep-links несут ?userbot_id= и т.п.).
+function ExternalRedirect({ to }) {
+  const { search } = useLocation();
+  useEffect(() => {
+    window.location.replace(to + search);
+  }, [to, search]);
+  return null;
+}
 export function App() {
   const { user, profileRole, profileLoading } = useAuth();
   const location = useLocation();
@@ -40,13 +46,6 @@ export function App() {
       items: [
         { to: '/autopost', label: 'Автопостер', icon: Zap },
         { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
-      ]
-    },
-    {
-      title: 'Userbot',
-      items: [
-        { to: '/userbots', label: 'Юзерботы', icon: Rocket },
-        { to: '/proxies', label: 'Прокси', icon: Globe },
       ]
     },
     {
@@ -139,8 +138,9 @@ export function App() {
         </NavLink>
         
         <nav className="flex flex-col gap-6 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1" style={{ scrollbarWidth: 'none' }}>
-          {navSections.map((section) => (
-            <div key={section.title} className="flex flex-col gap-1.5">
+          {navSections.map((section, sectionIndex) => (
+            <Fragment key={section.title}>
+            <div className="flex flex-col gap-1.5">
               <div className="px-3 text-[11px] font-bold tracking-wider uppercase text-slate-500 mb-1">
                 {section.title}
               </div>
@@ -155,8 +155,8 @@ export function App() {
                       onClick={() => setMobileNavOpen(false)}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
-                        ${isActive 
-                          ? 'bg-blue-50 text-blue-700' 
+                        ${isActive
+                          ? 'bg-blue-50 text-blue-700'
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         }
                       `}
@@ -168,6 +168,23 @@ export function App() {
                 })}
               </div>
             </div>
+            {sectionIndex === 0 ? (
+              <a
+                href="/userbot/userbots"
+                onClick={() => setMobileNavOpen(false)}
+                className="flex flex-col gap-1 px-3 py-3 rounded-xl border border-slate-200/70 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-200 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  <Rocket className="w-4 h-4 flex-shrink-0 text-blue-600" />
+                  Юзерботы и прокси
+                  <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
+                </span>
+                <span className="text-[11px] leading-snug text-slate-500">
+                  Отдельное приложение для юзерботов. Рассылки и кики здесь продолжают их использовать.
+                </span>
+              </a>
+            ) : null}
+            </Fragment>
           ))}
         </nav>
         <div className="px-3 pt-4 border-t border-slate-100">
@@ -176,23 +193,13 @@ export function App() {
               На сайт
             </a>
             <span className="text-slate-300">·</span>
-            <NavLink
-              to="/api"
-              className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
-              }
-            >
+            <a href="/userbot/api" className="transition-colors hover:text-slate-700">
               API
-            </NavLink>
+            </a>
             <span className="text-slate-300">·</span>
-            <NavLink
-              to="/mcp"
-              className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-slate-700' : 'hover:text-slate-700'}`
-              }
-            >
+            <a href="/userbot/mcp" className="transition-colors hover:text-slate-700">
               MCP
-            </NavLink>
+            </a>
           </div>
         </div>
       </aside>
@@ -211,9 +218,9 @@ export function App() {
                 <Route path="/access" element={<Navigate to="/customers" replace />} />
                 <Route path="/bases" element={<BasesPage />} />
                 <Route path="/dossier" element={<Navigate to="/customers" replace />} />
-                <Route path="/userbots" element={<UserbotAccountsPage />} />
+                <Route path="/userbots" element={<ExternalRedirect to="/userbot/userbots" />} />
                 <Route path="/sales-bot" element={<OfficialBotsPage />} />
-                <Route path="/bots" element={<Navigate to="/userbots" replace />} />
+                <Route path="/bots" element={<ExternalRedirect to="/userbot/userbots" />} />
                 <Route path="/treasury" element={
                   profileLoading
                     ? <LoadingState text="Проверяем доступ..." />
@@ -228,20 +235,20 @@ export function App() {
                 <Route path="/broadcast/history" element={<BroadcastHistoryPage />} />
                 <Route path="/broadcast" element={<BroadcastPage />} />
                 <Route path="/payments" element={<Navigate to="/billing" replace />} />
-                <Route path="/claw" element={<Navigate to="/mcp" replace />} />
-                <Route path="/claw/log" element={<Navigate to="/mcp" replace />} />
-                <Route path="/integrations" element={<Navigate to="/api" replace />} />
-                <Route path="/api" element={<ApiIntegrationsPage />} />
-                <Route path="/mcp" element={<McpSettingsPage />} />
-                <Route path="/api/mcp" element={<Navigate to="/mcp" replace />} />
+                <Route path="/claw" element={<ExternalRedirect to="/userbot/mcp" />} />
+                <Route path="/claw/log" element={<ExternalRedirect to="/userbot/mcp" />} />
+                <Route path="/integrations" element={<ExternalRedirect to="/userbot/api" />} />
+                <Route path="/api" element={<ExternalRedirect to="/userbot/api" />} />
+                <Route path="/mcp" element={<ExternalRedirect to="/userbot/mcp" />} />
+                <Route path="/api/mcp" element={<ExternalRedirect to="/userbot/mcp" />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
                 <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
                 <Route path="/p2p/create" element={<Navigate to="/treasury" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/treasury" replace />} />
-                <Route path="/proxies" element={<ProxyManagerPage />} />
+                <Route path="/proxies" element={<ExternalRedirect to="/userbot/proxies" />} />
                 <Route path="/admin-groups" element={<Navigate to="/app" replace />} />
-                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/profile" element={<ExternalRedirect to="/userbot/profile" />} />
               </Routes>
             </Suspense>
             </ErrorBoundary>

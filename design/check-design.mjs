@@ -44,7 +44,7 @@ const CONTRAST_JSON = "/tmp/bullgram-contrast.json";
 const HARNESS = path.join(DESIGN_DIR, "qa", "harness-studio-pairs.html");
 const UI_SYNC_SCRIPT = path.join(DESIGN_DIR, "ui-sync.mjs");
 const BASELINE_FILE = path.join(DESIGN_DIR, "lint-baseline.json");
-const LINT_TARGETS = ["admin-v2/src", "site-v2/src"];
+const LINT_TARGETS = ["admin-v2/src", "site-v2/src", "userbot-v2/src"].filter((t) => existsSync(path.join(ROOT, t)));
 
 // Известный ожидаемый FAIL validate_contrast.py на слепке semantic-цветов:
 // его обязательная пара «essential control border (WCAG 1.4.11)» — border.strong

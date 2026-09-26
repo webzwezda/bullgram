@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, Users, Megaphone, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -73,7 +73,6 @@ function closeAllRowMenus() {
 }
 
 function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutatingRowId }) {
-  const navigate = useNavigate();
   if (!target) {
     return (
       <div className="p-16 text-center flex flex-col items-center">
@@ -278,7 +277,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                           </div>
                           {row.tg_user_id && (
                             <>
-                              <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                              <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '')} title="Написать через юзербота" aria-label="Написать через юзербота">
                                 <Send className="w-3.5 h-3.5" />
                               </button>
                             </>
@@ -298,7 +297,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
                       <div className="flex justify-end gap-2">
                         {row.tg_user_id && (
                           <>
-                            <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                            <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(String(row.tg_user_id), '', target.tgChatId || '')} title="Написать через юзербота" aria-label="Написать через юзербота">
                               <Send className="w-3.5 h-3.5" />
                             </button>
                           </>
@@ -321,20 +320,16 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
   );
 }
 
-function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = '', navigate = null) {
+function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = '') {
   if (!tgUserId) return;
   window.localStorage.setItem(USERBOT_CENTER_HANDOFF_KEY, JSON.stringify({
     tg_user_id: String(tgUserId),
     draft_message: String(draftMessage || '').trim(),
     common_chat_id: String(commonChatId || '').trim()
   }));
-  // У роутера basename="/app": navigate() ждёт путь БЕЗ префикса, иначе получится /app/app/...
-  const url = `/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`;
-  if (navigate) {
-    navigate(url);
-  } else {
-    window.location.href = `/app${url}`;
-  }
+  // Центр юзерботов живёт в отдельном приложении /userbot — полный переход с query.
+  // Черновик передаётся через localStorage (общий origin), его читает UserbotCenter в /userbot.
+  window.location.assign(`/userbot/userbots?tg_user_id=${encodeURIComponent(tgUserId)}`);
 }
 
 function rowMatches(row, search) {
@@ -406,7 +401,6 @@ function normalizeCustomersTab(searchParams) {
 
 export function CustomersPage() {
   const { accessToken } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // Без tab в URL — дефолтимся на «Официальный бот»: иначе '' даёт isBotTab=false
   // (нет под-сегментов, нет строк) и «эффективная» вкладка не матчится с под-сегментами.
@@ -1268,7 +1262,7 @@ export function CustomersPage() {
                               ) : null}
                               {row.tg_user_id && (
                                 <>
-                                  <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '', navigate)} title="Написать через юзербота" aria-label="Написать через юзербота">
+                                  <button className="p-2 bg-white border border-border-default text-ink-faint hover:text-action-primary hover:border-indigo-200 hover:bg-indigo-50 rounded-lg transition-all shadow-sm" onClick={() => openUserbotCenterHandoff(row.tg_user_id, '', '')} title="Написать через юзербота" aria-label="Написать через юзербота">
                                     <Send className="w-3.5 h-3.5" />
                                   </button>
                                 </>

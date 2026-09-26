@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Copy, Loader2, Send, X } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
@@ -44,7 +43,7 @@ export function TelegramSidebarRow() {
     try {
       const { data, error } = await supabase.auth.linkIdentity({
         provider: 'custom:telegram',
-        options: { redirectTo: `${window.location.origin}/app/profile` }
+        options: { redirectTo: `${window.location.origin}/userbot/profile` }
       });
       if (error) throw error;
       if (data?.url) {
@@ -96,14 +95,14 @@ export function TelegramSidebarRow() {
     const label = state.telegramUsername ? `@${state.telegramUsername}` : 'Telegram';
     return (
       <div className="flex items-center gap-1.5 mb-4">
-        <Link
-          to="/profile"
+        <a
+          href="/userbot/profile"
           className="flex-1 min-w-0 flex items-center justify-center gap-2 py-2 px-3 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm truncate"
           title={state.manualTgId ? `TG ID: ${state.manualTgId} — открыть профиль` : 'Telegram привязан — открыть профиль'}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
           <span className="truncate">{label}</span>
-        </Link>
+        </a>
         {state.manualTgId ? (
           <button
             type="button"

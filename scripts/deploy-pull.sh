@@ -50,6 +50,7 @@ CHANGED_FILES="$(git diff --name-only "$PREV_HEAD" "$NEW_HEAD" 2>/dev/null || ec
 need_backend_install=0
 need_admin_install=0
 need_site_install=0
+need_userbot_v2_install=0
 need_docs_install=0
 need_blog_install=0
 
@@ -62,6 +63,9 @@ fi
 if echo "$CHANGED_FILES" | grep -q '^site-v2/package\.json$'; then
   need_site_install=1
 fi
+if echo "$CHANGED_FILES" | grep -q '^userbot-v2/package\.json$'; then
+  need_userbot_v2_install=1
+fi
 if echo "$CHANGED_FILES" | grep -q '^docs-site/package\.json$'; then
   need_docs_install=1
 fi
@@ -70,11 +74,12 @@ if echo "$CHANGED_FILES" | grep -q '^blog-site/package\.json$'; then
 fi
 
 # First-time setup: no node_modules → install everything
-if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ]; then
+if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ] || [ ! -d userbot-v2/node_modules ]; then
   echo "    first-time install (node_modules missing)"
   need_backend_install=1
   need_admin_install=1
   need_site_install=1
+  need_userbot_v2_install=1
 fi
 if [ ! -d docs-site/node_modules ]; then
   need_docs_install=1
@@ -95,6 +100,10 @@ if [ "$need_site_install" = "1" ]; then
   echo "==> npm install site-v2"
   npm --prefix site-v2 install
 fi
+if [ "$need_userbot_v2_install" = "1" ]; then
+  echo "==> npm install userbot-v2"
+  npm --prefix userbot-v2 install
+fi
 if [ "$need_docs_install" = "1" ]; then
   echo "==> npm install docs-site"
   npm --prefix docs-site install
@@ -105,7 +114,7 @@ if [ "$need_blog_install" = "1" ]; then
 fi
 
 # 3. Build frontends
-echo "==> npm run build:v2 (site-v2 + admin-v2)"
+echo "==> npm run build:v2 (site-v2 + admin-v2 + userbot-v2)"
 npm run build:v2
 
 # 3b. Build docs site into site-v2/dist/docs (static, served by nginx files-first)

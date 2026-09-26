@@ -80,7 +80,7 @@ async function enforceTrialMonthlyQuota(supabase, req, ownerId) {
   if (used !== null && used < 0) {
     throw new MCPError(
       ERROR_CODES.QUOTA_EXCEEDED,
-      `Лимит Trial: ${limit} запросов в месяц исчерпан (использовано ${Math.abs(used)}). Перейди на Pro: подписка в /app/billing`,
+      `Лимит Trial: ${limit} запросов в месяц исчерпан (использовано ${Math.abs(used)}). Перейди на Pro: подписка в /userbot/profile`,
       { auditStatus: 'quota_exceeded' }
     );
   }

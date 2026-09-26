@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Юзербот — Bullgram</title>
+    <meta name="description" content="Кабинет юзерботов Bullgram" />
+    <!-- Preload self-hosted Manrope (волна 4) — убирает CLS холодной загрузки:
+         woff2 стартует параллельно с CSS, а не после его разбора. -->
+    <link rel="preload" as="font" type="font/woff2" href="/userbot/manrope-cyrillic.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/userbot/manrope-latin.woff2" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

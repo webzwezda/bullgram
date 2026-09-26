@@ -1,6 +1,6 @@
 /* GENERATED — не править руками, источник design/tokens, npm run tokens:build. */
 /* Проверка актуальности: npm run tokens:check (байт-сверка + гейт нулевой дельты с theme.css). */
-/* Эммитится в admin-v2/src/styles/tokens.css и site-v2/src/styles/tokens.css — копии байт-идентичны. */
+/* Эммитится в admin-v2/src/styles/tokens.css, site-v2 и userbot-v2 — копии байт-идентичны. */
 /*
  * Сознательно НЕ эммитится (см. design/README.md, «Маппинг токенов → Tailwind v4 @theme»):
  * - radius.*: admin-v2 (shadcn --radius: 0.625rem) и site-v2 держат per-app override радиуса
