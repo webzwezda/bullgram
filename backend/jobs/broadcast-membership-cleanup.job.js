@@ -285,7 +285,9 @@ export function createBroadcastMembershipCleanup(supabase, deps = {}) {
         const { data: pendingRows, error: pendingError } = await supabase
             .from('broadcast_preparation_joins')
             .select('preparation_id')
-            .isNull('removed_at');
+            // IS NULL только через .filter: в supabase-js 2.99 у билдеров после
+            // .select()/.update() нет .isNull()/.isNotNull() — «not a function».
+            .filter('removed_at', 'is', null);
         if (pendingError) {
             console.error('[BroadcastCleanup] Ошибка выборки pending join-строк:', pendingError.message);
             return [];
@@ -351,7 +353,7 @@ export function createBroadcastMembershipCleanup(supabase, deps = {}) {
             .update(patch)
             .eq('id', row.id)
             .eq('owner_id', row.owner_id)
-            .isNull('removed_at');
+            .filter('removed_at', 'is', null);
         if (error) {
             console.error(`[BroadcastCleanup] Не обновили строку ${row.id}:`, error.message);
         }
@@ -476,7 +478,7 @@ export function createBroadcastMembershipCleanup(supabase, deps = {}) {
                 .select('*')
                 .eq('preparation_id', campaign.meta.preparation_id)
                 .eq('owner_id', campaign.owner_id)
-                .isNull('removed_at')
+                .filter('removed_at', 'is', null)
                 .order('joined_at', { ascending: true })
                 .limit(budget);
             if (error) {

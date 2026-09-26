@@ -72,8 +72,10 @@ function assertTrue(cond, label, extra = null) {
 }
 
 // ---------------------------------------------------------------------------
-// Mock Supabase: in-memory таблицы, generic filter builder (eq/in/gte/isNull/not/order/limit),
-// insert, условный update (цепочка .eq(...).isNull(...)), maybeSingle.
+// Mock Supabase: in-memory таблицы, generic filter builder (eq/in/gte/filter/not/order/limit),
+// insert, условный update (цепочка .eq(...).filter(...)), maybeSingle.
+// ВАЖНО: isNull/isNotNull у мока НЕТ — как и у реального supabase-js 2.99 после
+// .select()/.update(). Код джобы обязан фильтровать IS NULL через .filter('col', 'is', null).
 // ---------------------------------------------------------------------------
 function makeMockSupabase(tablesInit = {}) {
   const tables = {};
@@ -107,7 +109,8 @@ function makeMockSupabase(tablesInit = {}) {
         eq(col, val) { filters.push([col, 'eq', val]); return builder; },
         in(col, vals) { filters.push([col, 'in', vals]); return builder; },
         gte(col, val) { filters.push([col, 'gte', val]); return builder; },
-        isNull(col) { filters.push([col, 'isNull', null]); return builder; },
+        isNull() { throw new TypeError('c.isNull is not a function — используй .filter(col, \'is\', null), см. комментарий у мока'); },
+        filter(col, op, val) { filters.push([col, op, val]); return builder; },
         not(col, op, val) { filters.push([col, `not.${op}`, val]); return builder; },
         order(col, opts = {}) { orderSpec = { col, ascending: opts.ascending !== false }; return builder; },
         limit(n) { limitCount = n; return builder; },
@@ -128,7 +131,8 @@ function makeMockSupabase(tablesInit = {}) {
           const updateBuilder = {
             eq(col, val) { filters.push([col, 'eq', val]); return updateBuilder; },
             in(col, vals) { filters.push([col, 'in', vals]); return updateBuilder; },
-            isNull(col) { filters.push([col, 'isNull', null]); return updateBuilder; },
+            isNull() { throw new TypeError('c.isNull is not a function — используй .filter(col, \'is\', null), см. комментарий у мока'); },
+            filter(col, op, val) { filters.push([col, op, val]); return updateBuilder; },
             then(resolve) {
               const count = applyUpdate();
               resolve({ data: null, error: null, count });
