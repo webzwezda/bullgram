@@ -1,9 +1,9 @@
 {
   "$comment": "Ratchet-снапшот lint_hardcodes (admin-v2/src + site-v2/src) для npm run check:design. Перегенерируется осознанно: node design/check-design.mjs --update-baseline. Гейт красный, только если текущих findings стало БОЛЬШЕ снапшота (total / kind / file).",
   "updatedAt": "2026-09-26",
-  "total": 6995,
+  "total": 6989,
   "kinds": {
-    "tailwind-palette": 4323,
+    "tailwind-palette": 4317,
     "hex": 569,
     "px": 2031,
     "time": 53,
@@ -98,7 +98,7 @@
     "userbot-v2/src/features/shop-storefront/ProxyStorefrontSection.jsx": 119,
     "userbot-v2/src/features/telegram/TelegramSidebarRow.jsx": 15,
     "userbot-v2/src/features/billing/PlatformTierUpgradeCard.jsx": 26,
-    "bots-v2/src/App.jsx": 35,
+    "bots-v2/src/App.jsx": 21,
     "bots-v2/src/ui/AuthGate.jsx": 68,
     "bots-v2/src/ui/TonWalletSidebarRow.jsx": 15,
     "bots-v2/src/ui/ErrorBoundary.jsx": 3,
@@ -107,6 +107,7 @@
     "bots-v2/src/ui/TelegramSidebarRow.jsx": 15,
     "bots-v2/src/styles/app.css": 704,
     "bots-v2/src/styles/tailwind.css": 6,
+    "bots-v2/src/pages/HubPage.jsx": 8,
     "bots-v2/src/pages/autopost/AutopostManagePage.jsx": 288,
     "bots-v2/src/components/ui/badge.jsx": 1,
     "bots-v2/src/features/ton-checkout/TonWalletSidebarRow.jsx": 15,

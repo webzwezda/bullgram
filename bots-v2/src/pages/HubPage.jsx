@@ -5,6 +5,30 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { fetchBots } from './autopost/api.js';
 
+// Описание модуля — карточка в диалекте Command Center /app (запрос владельца):
+// градиентный чип-иконки + заголовок + проза со ссылкой на раздел.
+function AutoposterIntroCard() {
+  return (
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 shrink-0">
+          <Bot className="w-6 h-6" />
+        </div>
+        <div>
+          <div className="text-lg font-bold tracking-tight text-slate-900">
+            Автопостер
+          </div>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Telegram-бот, который ведёт твои каналы: сам публикует посты по расписанию,
+            принимает предложения от подписчиков и ставит реакции. Подключение и управление —{' '}
+            <Link to="/autopost" className="font-semibold text-indigo-600 hover:text-indigo-700">в разделе «Автопостер»</Link>.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Хаб «Ботов» (план 2026-09-27-bots-app-split, Фаза 3). Данные —
 // GET /api/autopost/bots (autopost/api.js). Диалект — дашборд «Юзербота»:
 // карточка-кнопка кликабельна целым пятном (stat-card-bg + ring), чип-иконка,
@@ -116,6 +140,9 @@ export default function HubPage() {
   return (
     <section className="page page--flush">
       <h1 className="sr-only">Боты</h1>
+      <div className="section">
+        <AutoposterIntroCard />
+      </div>
       <div className="section">
         <div className="grid grid--flush grid-cols-1 sm:grid-cols-2 gap-4">
           {bots.map((bot) => (
