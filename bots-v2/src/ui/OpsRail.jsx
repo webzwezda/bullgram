@@ -4,7 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
+import { Bot, CreditCard, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
 
 function planMeta(plan) {
   if (plan === 'pro' || plan === 'normal') {
@@ -22,10 +22,11 @@ function planMeta(plan) {
   };
 }
 
-// showPaywall=true только в paywall: там рендерятся алерт Pro-выдачи и промо
-// «Юзерботы и прокси». Чек-листы онбординга («Продажа доступа», «Юзерботы»)
-// сняты — решение владельца 2026-09-27: рельс это личный кабинет, не онбординг.
-export function OpsRail({ showPaywall = true }) {
+// Промо-карточки соседних поверхностей в хвосте рельса (решение владельца):
+//   showPaywall=true (paywall) — алерт Pro-выдачи и промо «Юзерботы и прокси»;
+//   showUserbotPromos=true (кабинет /userbot) — промо paywall и хаба «Боты».
+// Чек-листы онбординга сняты 2026-09-27: рельс это личный кабинет, не онбординг.
+export function OpsRail({ showPaywall = true, showUserbotPromos = false }) {
   const { accessToken, user, login, logout, profilePlan } = useAuth();
   const [proFulfillmentPending, setProFulfillmentPending] = useState(0);
 
@@ -136,6 +137,45 @@ export function OpsRail({ showPaywall = true }) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {showUserbotPromos ? (
+        <>
+          <a
+            href="/paywall"
+            className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center border border-indigo-100 shrink-0">
+                <CreditCard className="w-5 h-5 text-indigo-600" />
+              </div>
+              <span className="text-sm font-bold text-slate-900">
+                Paywall
+              </span>
+              <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
+            </div>
+            <p className="text-[11px] leading-snug text-slate-500 mt-2">
+              Отдельное приложение продажи доступа: бот продаж, клиенты, рассылки и касса.
+            </p>
+          </a>
+          <a
+            href="/bots"
+            className="block bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4 transition-colors hover:bg-slate-50"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center border border-blue-100 shrink-0">
+                <Bot className="w-5 h-5 text-blue-600" />
+              </div>
+              <span className="text-sm font-bold text-slate-900">
+                Боты
+              </span>
+              <span className="ml-auto text-slate-400" aria-hidden="true">→</span>
+            </div>
+            <p className="text-[11px] leading-snug text-slate-500 mt-2">
+              Хаб мелких ботов. Автопостер ведёт твои каналы: посты по расписанию и предложки.
+            </p>
+          </a>
+        </>
       ) : null}
 
       {showPaywall ? (

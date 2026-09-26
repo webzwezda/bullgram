@@ -184,7 +184,7 @@ export function App() {
           </AuthGate>
         </main>
 
-        <OpsRail showPaywall={false} />
+        <OpsRail showPaywall={false} showUserbotPromos />
 
         <Toaster position="bottom-right" richColors duration={4000} />
       </div>
