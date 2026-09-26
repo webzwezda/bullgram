@@ -15,27 +15,38 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 // supabase-клиент (тот же RLS-owner-путь, что использует экран «Юзерботы») —
 // нужен единственный недоступный из summary срез: юзерботы в safe-mode
 // (runtime_status = pending_activation).
-function StatCard({ icon: Icon, title, value, hint, to, cta, tone = 'default' }) {
-  const valueClass = tone === 'warning'
-    ? 'text-feedback-warning-text'
+// Стат-карточка в диалекте treasury (admin-v2 TreasuryTab.TreasuryStatCard):
+// белая карточка rounded-2xl + ring, чип-иконка, uppercase-лейбл в шапке рядом
+// с иконкой, крупное значение, подсказка под значением; CTA-ссылка — справа в шапке.
+// Цвета выражены semantic-токенами с тем же рендером, что у treasury-классов
+// (ink.strong=slate-900, ink.muted=slate-500, surface.card=white,
+// border.default=slate-200, feedback.warning.text=amber-700): сырые шаги палитры
+// растят hardcodes-ratchet, поэтому в новый код не пишем.
+function StatCard({ icon: Icon, iconClasses, title, value, hint, to, cta, tone = 'default' }) {
+  const hintTone = tone === 'warning'
+    ? 'text-feedback-warning-text font-medium'
     : tone === 'danger'
-      ? 'text-feedback-error-text'
-      : 'text-ink-strong';
+      ? 'text-feedback-error-text font-medium'
+      : 'text-ink-muted';
+  // У treasury тон живёт на подсказке; когда подсказки нет (карточка «Прокси»
+  // в danger — «0 / N» рабочих), сигнал переносим на значение, чтобы состояние
+  // не потерялось.
+  const valueClass = tone !== 'default' && !hint
+    ? (tone === 'warning' ? 'text-feedback-warning-text' : 'text-feedback-error-text')
+    : 'text-ink-strong';
   return (
-    <div className="card card--interactive">
-      <div className="flex items-start justify-between gap-3">
-        <div className="w-11 h-11 rounded-2xl bg-surface-subtle border border-border-default flex items-center justify-center shrink-0">
-          <Icon className="w-5 h-5 text-ink-muted" />
+    <div className="bg-surface-card rounded-2xl ring-1 ring-border-default/50 shadow-sm p-5">
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconClasses}`}>
+          <Icon className="w-5 h-5" />
         </div>
+        <span className="text-xs font-semibold text-ink-muted uppercase tracking-wide">{title}</span>
         {to ? (
-          <Link to={to} className="link-action shrink-0">{cta || 'Открыть'} →</Link>
+          <Link to={to} className="link-action shrink-0 ml-auto">{cta || 'Открыть'} →</Link>
         ) : null}
       </div>
-      <div className="stat-card__title mt-3">{title}</div>
-      <div className={`stat-card__value${tone === 'default' ? '' : ' ' + valueClass} mt-1`}>
-        {value}
-      </div>
-      {hint ? <p className="card__body mt-1.5">{hint}</p> : null}
+      <div className={`text-2xl font-bold ${valueClass}`}>{value}</div>
+      {hint ? <div className={`text-xs mt-1 ${hintTone}`}>{hint}</div> : null}
     </div>
   );
 }
@@ -190,9 +201,10 @@ export default function DashboardPage() {
     <section className="page page--flush">
       <h1 className="sr-only">Дашборд</h1>
       <div className="section">
-        <div className="grid grid--double gap-3">
+        <div className="grid grid--flush grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
             icon={Rocket}
+            iconClasses="bg-action-primary/10 text-action-primary"
             title="Юзерботы"
             value={String(userbotTotal)}
             hint={userbotHint}
@@ -202,6 +214,7 @@ export default function DashboardPage() {
           />
           <StatCard
             icon={Globe}
+            iconClasses="bg-feedback-success-bg text-feedback-success-text"
             title="Прокси"
             value={`${workingProxies} / ${proxyTotal}`}
             hint={proxyTotal === 0 ? 'Каждому юзерботу — свой прокси' : undefined}
@@ -211,6 +224,7 @@ export default function DashboardPage() {
           />
           <StatCard
             icon={agentConnected ? Bot : KeyRound}
+            iconClasses="bg-feedback-info-bg text-feedback-info-text"
             title="Агент (MCP)"
             value={agentConnected ? 'Подключен' : 'Не подключен'}
             hint={agentConnected ? undefined : 'Выпусти MCP-токен для своего агента'}
@@ -220,6 +234,7 @@ export default function DashboardPage() {
           />
           <StatCard
             icon={KeyRound}
+            iconClasses="bg-surface-subtle-strong text-ink-muted"
             title="API-ключ (REST)"
             value={hasApiKey ? 'Выдан' : 'Нет ключа'}
             hint={hasApiKey ? undefined : 'Для n8n, кронов и скриптов'}
