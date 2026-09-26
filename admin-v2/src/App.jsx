@@ -13,7 +13,6 @@ import { LoadingState } from './ui/LoadingState.jsx';
 import { OpsRail } from './ui/OpsRail.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
 
-const CommandCenterPage = lazy(() => import('./pages/CommandCenterPage.jsx').then((module) => ({ default: module.CommandCenterPage })));
 const CustomersPage = lazy(() => import('./pages/CustomersPage.jsx').then((module) => ({ default: module.CustomersPage })));
 const BasesPage = lazy(() => import('./pages/BasesPage.jsx').then((module) => ({ default: module.BasesPage })));
 const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
@@ -43,7 +42,7 @@ export function App() {
     {
       title: 'Продажи и Клиенты',
       items: [
-        { to: '/sales-bot', label: 'Бот продаж', icon: Bot },
+        { to: '/', label: 'Бот продаж', icon: Bot },
         { to: '/customers', label: 'Клиенты', icon: Users },
         { to: '/retention', label: 'Удержание', icon: RefreshCcw },
         { to: '/abandoned', label: 'Брошенные корзины', icon: ShoppingCart },
@@ -74,7 +73,7 @@ export function App() {
   const navItems = navSections.flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
-    if (location.pathname === '/') return 'Командный центр';
+    if (location.pathname === '/') return 'Бот продаж';
     const exact = navItems.find((item) => item.to === location.pathname);
     if (exact) return exact.label;
     const prefix = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`));
@@ -122,7 +121,7 @@ export function App() {
           end
           onClick={() => setMobileNavOpen(false)}
           className="mb-2 px-2 flex items-center gap-3 rounded-xl transition-transform hover:scale-[1.02]"
-          aria-label="Bullgram — Командный центр"
+          aria-label="Bullgram — Бот продаж"
         >
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-500/20">
             BR
@@ -203,7 +202,7 @@ export function App() {
             <ErrorBoundary>
             <Suspense fallback={<LoadingState text="Грузим экран admin-v2..." />}>
               <Routes>
-                <Route path="/" element={<CommandCenterPage />} />
+                <Route path="/" element={<OfficialBotsPage />} />
                 {/* Автопостер переехал в приложение «Боты» (/bots, план 2026-09-27). */}
                 <Route path="/autopost" element={<ExternalRedirect to="/bots/autopost" />} />
                 <Route path="/customers" element={<CustomersPage />} />
@@ -213,7 +212,7 @@ export function App() {
                 <Route path="/bases" element={<BasesPage />} />
                 <Route path="/dossier" element={<Navigate to="/customers" replace />} />
                 <Route path="/userbots" element={<ExternalRedirect to="/userbot/accounts" />} />
-                <Route path="/sales-bot" element={<OfficialBotsPage />} />
+                <Route path="/sales-bot" element={<Navigate to="/" replace />} />
                 <Route path="/bots" element={<ExternalRedirect to="/userbot/accounts" />} />
                 <Route path="/treasury" element={
                   profileLoading
@@ -236,7 +235,7 @@ export function App() {
                 <Route path="/mcp" element={<ExternalRedirect to="/userbot/mcp" />} />
                 <Route path="/api/mcp" element={<ExternalRedirect to="/userbot/mcp" />} />
                 <Route path="/api/sms-push" element={<Navigate to="/billing" replace />} />
-                <Route path="/plans" element={<Navigate to="/sales-bot" replace />} />
+                <Route path="/plans" element={<Navigate to="/" replace />} />
                 <Route path="/billing" element={<PaymentSettingsPage />} />
                 <Route path="/p2p/create" element={<Navigate to="/treasury" replace />} />
                 <Route path="/p2p/orders" element={<Navigate to="/treasury" replace />} />

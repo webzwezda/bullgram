@@ -197,7 +197,7 @@ export function OpsRail({ showPaywall = true }) {
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
         title: 'Telegram бот',
         hint: 'Создайте бота для автоматизации продаж',
-        href: '/paywall/sales-bot',
+        href: '/paywall',
         icon: 'Bot'
       },
       {
@@ -205,7 +205,7 @@ export function OpsRail({ showPaywall = true }) {
         done: (summary.tariffCount || 0) > 0,
         title: 'Тарифы и доступ',
         hint: 'Откройте бота и настройте тарифы внутри него',
-        href: '/paywall/sales-bot',
+        href: '/paywall',
         icon: 'LayoutList'
       },
       {
