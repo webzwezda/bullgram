@@ -40,10 +40,11 @@ npm --prefix docs-site install
 - **Статика**: `/var/www/bullgram-site-v2`, `/var/www/bullgram-admin-v2`,
   `/var/www/bullgram-userbot-v2`, `/var/www/bullgram-bots-v2` — симлинки на `dist`
   из чекаута `/srv/bullgram`; собираются `scripts/deploy-pull.sh`. `/userbot/`
-  (приложение «Юзербот») и `/bots/` (приложение «Боты», SPA с fallback
-  `try_files $uri $uri/ /bots/index.html`) — nginx-location'ы по образцу
-  `/app/`; алиас `/userbot/telegram-web/` указывает на тот же `/var/www/bullgram-telegram-web`,
-  что и `/app/telegram-web/`. `userbot-v2/` — не путать с `userbot-web/`
+  (приложение «Юзербот»), `/bots/` (приложение «Боты») и `/paywall/`
+  (paywall-кабина, папка admin-v2; URL переименован из `/app` 2026-09-27, nginx
+  отдаёт 301 `/app/* → /paywall/*`) — nginx-location'ы с SPA-fallback; алиас
+  `/userbot/telegram-web/` указывает на тот же `/var/www/bullgram-telegram-web`,
+  что и легаси-алиас `/app/telegram-web/`. `userbot-v2/` — не путать с `userbot-web/`
   (вендорный telegram-tt для Telegram Web).
   Блог (`blog-site/`) собирается туда же в `dist/blog`, отдаётся на `/blog/`
   (nginx-блок по образцу `/docs`)

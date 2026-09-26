@@ -393,7 +393,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Оплата есть, вход не подтвержден',
                     value: paidNotJoined.length,
                     tone: paidNotJoined.length > 0 ? 'danger' : 'ok',
-                    href: '/app/orders',
+                    href: '/paywall/orders',
                     hint: 'Это сигнал к проверке доступа: Telegram-вход мог не записаться, поэтому сначала сверяешь контур.'
                 },
                 {
@@ -435,7 +435,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Сигналы от юзерботов не собраны',
                     value: signalRoutingReady ? 0 : 1,
                     tone: signalRoutingReady ? 'ok' : 'warning',
-                    href: signalAdminConfigured ? '/userbot/accounts' : '/app/payments',
+                    href: signalAdminConfigured ? '/userbot/accounts' : '/paywall/payments',
                     hint: signalRoutingReady
                         ? 'Ops-бот есть, admin_tg_id указан, входящие от юзерботов должны прилетать.'
                         : signalAdminConfigured
@@ -469,7 +469,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Сидят внутри без живой подписки',
                     value: expiredButInside.length,
                     tone: expiredButInside.length > 0 ? 'danger' : 'ok',
-                    href: '/app/access',
+                    href: '/paywall/access',
                     hint: 'Вот тут прям течь по деньгам. Эти люди уже должны были вылететь или продлиться.'
                 },
                 {
@@ -477,7 +477,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Теплые неоплаты',
                     value: pendingInvoices.length,
                     tone: pendingInvoices.length > 0 ? 'warning' : 'ok',
-                    href: '/app/abandoned',
+                    href: '/paywall/abandoned',
                     hint: 'Это быстрые деньги. Люди уже нажали тариф, но не добили оплату.'
                 },
                 {
@@ -485,7 +485,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Партнерам надо занести',
                     value: referralPartnersWithDebt,
                     tone: referralPartnersWithDebt > 0 ? 'warning' : 'ok',
-                    href: '/app/referrals',
+                    href: '/paywall/referrals',
                     hint: 'Тут висит хвост по партнерке. Если не закрывать выплаты, нормальная органика быстро сдуется.'
                 },
                 {
@@ -493,7 +493,7 @@ export default function dashboardRoutes(supabase) {
                     title: 'Shop: права еще не переведены',
                     value: shopPendingTransfers,
                     tone: shopPendingTransfers > 0 ? 'warning' : 'ok',
-                    href: '/app/billing?tab=purchases',
+                    href: '/paywall/billing?tab=purchases',
                     hint: 'Если деньги по shop уже есть, а актив не перешел, это надо разбирать сразу.'
                 }
             ];

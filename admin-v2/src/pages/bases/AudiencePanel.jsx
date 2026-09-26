@@ -341,7 +341,7 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, tar
           <p className="text-slate-500 font-medium text-sm mb-6 max-w-md">
             Создайте бота, чтобы собирать аудиторию из его каналов и групп и работать с сегментами.
           </p>
-          <a href="/app/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+          <a href="/paywall/sales-bot" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 !text-white text-xs font-bold hover:bg-slate-700 transition-colors">
             Создать бота <ChevronRight className="w-4 h-4" />
           </a>
         </div>

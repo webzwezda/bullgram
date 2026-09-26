@@ -39,7 +39,7 @@ export function PaymentSettingsPage() {
     if (BILLING_TABS.some((entry) => entry.id === tab)) {
       setBillingTab(tab);
     }
-    window.history.replaceState({}, '', '/app/billing');
+    window.history.replaceState({}, '', '/paywall/billing');
   }, []);
 
   useEffect(() => {

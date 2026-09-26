@@ -189,7 +189,7 @@ export function OpsRail({ showPaywall = true }) {
         done: !!payment.hasTon,
         title: 'Способы оплаты',
         hint: 'Укажите реквизиты для приема платежей',
-        href: '/app/billing',
+        href: '/paywall/billing',
         icon: 'CreditCard'
       },
       {
@@ -197,7 +197,7 @@ export function OpsRail({ showPaywall = true }) {
         done: (summary.salesBotCount || 0) > 0 || (summary.channelWithBotCount || 0) > 0,
         title: 'Telegram бот',
         hint: 'Создайте бота для автоматизации продаж',
-        href: '/app/sales-bot',
+        href: '/paywall/sales-bot',
         icon: 'Bot'
       },
       {
@@ -205,7 +205,7 @@ export function OpsRail({ showPaywall = true }) {
         done: (summary.tariffCount || 0) > 0,
         title: 'Тарифы и доступ',
         hint: 'Откройте бота и настройте тарифы внутри него',
-        href: '/app/sales-bot',
+        href: '/paywall/sales-bot',
         icon: 'LayoutList'
       },
       {
@@ -213,7 +213,7 @@ export function OpsRail({ showPaywall = true }) {
         done: false,
         title: 'Рефералка',
         hint: 'Настройте бонусную программу',
-        href: '/app/referrals',
+        href: '/paywall/referrals',
         icon: 'Users'
       }
     ];

@@ -13,7 +13,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <TonConnectProvider>
       <AuthProvider>
-        <BrowserRouter basename="/app">
+        <BrowserRouter basename="/paywall">
           <App />
         </BrowserRouter>
       </AuthProvider>

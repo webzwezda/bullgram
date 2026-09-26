@@ -22,10 +22,10 @@ The project is now `v2-only` in active runtime:
 - `site-v2/` serves `/`
 - `userbot-v2/` serves `/userbot`
 - `bots-v2/` serves `/bots`
-- `admin-v2/` serves `/app`
+- `admin-v2/` serves `/paywall`
 - `backend/` serves the API
 
-Продуктовое разделение (2026-09-26/27, планы docs/plans/2026-09-26-userbot-product-split.md и docs/plans/2026-09-27-bots-app-split.md): «Юзербот» (`/userbot`) — управление юзерботами/прокси и подключение агентов; «Боты» (`/bots`) — мелкие BotFather-боты (Автопостер и следующие); paywall-кабина (`/app`) — продажа доступа, но она ПРОДОЛЖАЕТ использовать юзерботов (контурная ротация на `/app/sales-bot`, сканирование групп, авто-кик, retention, рассылки). Правило границы: управление юзерботами — в `/userbot`, мелкие боты — в `/bots`, paywall — в `/app`; все ходят в один backend API. Старые пути `/app/userbots`, `/app/proxies`, `/app/mcp`, `/app/api`, `/app/profile`, `/app/autopost` — редиректы в свои приложения.
+Продуктовое разделение (2026-09-26/27, планы docs/plans/2026-09-26-userbot-product-split.md и docs/plans/2026-09-27-bots-app-split.md): «Юзербот» (`/userbot`) — управление юзерботами/прокси и подключение агентов; «Боты» (`/bots`) — мелкие BotFather-боты (Автопостер и следующие); paywall-кабина (`/paywall`, папка admin-v2) — продажа доступа, но она ПРОДОЛЖАЕТ использовать юзерботов (контурная ротация на `/paywall/sales-bot`, сканирование групп, авто-кик, retention, рассылки). Правило границы: управление юзерботами — в `/userbot`, мелкие боты — в `/bots`, paywall — в `/paywall`; все ходят в один backend API. Старые пути `/app/userbots`, `/app/proxies`, `/app/mcp`, `/app/api`, `/app/profile`, `/app/autopost` — редиректы в свои приложения; сам `/app/*` — 301 на `/paywall/*` (nginx), легаси `/app/telegram-web/` живёт алиасом.
 
 Do not reintroduce legacy `/admin` assumptions into active UI or product copy. Treat any reserve/legacy context as archived history, not as an active path.
 
@@ -33,10 +33,10 @@ Current v2 product surfaces already in the repo:
 
 - userbot product (`/userbot`): `dashboard` (`/userbot`), `userbots` (`/userbot/accounts`), `proxies` (`/userbot/proxies`), `agent MCP` (`/userbot/mcp`), `api keys` (`/userbot/api`), `purchases` (`/userbot/purchases`), `profile` (`/userbot/profile`)
 - bots product (`/bots`): `hub` (`/bots`), `autopost` (`/bots/autopost` — онбординг бота, каналы, журнал публикаций, админы); следующие мелкие боты добавляются сюда
-- paid-access ops (`/app`): `command center` (`/app`), `customers` (`/app/customers`), `broadcast` (`/app/broadcast`), `abandoned` (`/app/abandoned`), `retention` (`/app/retention`)
-- official bots (paywall): `sales-bot / official bot` (`/app/sales-bot`, включая контурную ротацию юзерботов)
-- ecosystem tooling: `bases` (`/app/bases`)
-- commerce: `referrals` (`/app/referrals`), `billing` (`/app/billing`), `treasury` (`/app/treasury`, казна проекта)
+- paid-access ops (`/paywall`): `command center` (`/paywall`), `customers` (`/paywall/customers`), `broadcast` (`/paywall/broadcast`), `abandoned` (`/paywall/abandoned`), `retention` (`/paywall/retention`)
+- official bots (paywall): `sales-bot / official bot` (`/paywall/sales-bot`, включая контурную ротацию юзерботов)
+- ecosystem tooling: `bases` (`/paywall/bases`)
+- commerce: `referrals` (`/paywall/referrals`), `billing` (`/paywall/billing`), `treasury` (`/paywall/treasury`, казна проекта)
 - key backend areas: `/api/userbot/*` (operations, health checks, manual actions), `/api/official-bot/*` (official bot management), `/api/mcp` (Bullgram MCP endpoint); full API docs in `backend/README.md`
 - `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
 
@@ -68,7 +68,7 @@ cd site-v2 && npm install
 Key commands:
 
 - `cd backend && node server.js`: run the API locally from the backend folder.
-- `cd admin-v2 && npm run dev`: run the paywall admin app locally.
+- `cd admin-v2 && npm run dev`: run the paywall admin app locally (URL `/paywall`).
 - `cd admin-v2 && npm run build`: build the paywall admin app.
 - `cd userbot-v2 && npm run dev`: run the «Юзербот» app locally.
 - `cd userbot-v2 && npm run build`: build the «Юзербот» app.
@@ -138,7 +138,7 @@ Built 2026-09-15/16 (plan: `docs/plans/2026-09-15-unified-design-system.md`). Bo
 - **Gates**: `npm run check:design` (tokens / contrast / hardcodes-ratchet / axe / ui-sync) must pass before push. `--update-baseline` is a conscious operation — justify it in the commit message.
 - **Pipeline**: `npm run tokens:build` regenerates byte-identical tokens.css in all four apps (`admin-v2`, `site-v2`, `userbot-v2`, `bots-v2`); `npm run tokens:check` must stay green (stale detect + zero-delta gate vs theme.css + completeness assert).
 - **Component canonical**: `admin-v2/src/components/ui/` is the source of truth for shared primitives (button/input/badge/card); site-v2 keeps byte-identical copies and the `ui-sync` gate fails on drift. Promote a component into the canonical kit only with ≥2 real usages.
-- **Fonts**: Manrope (all four apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; admin URLs need the `/app/` prefix (vite `base: '/app/'`), «Юзербот» uses `/userbot/`, «Боты» uses `/bots/`, site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
+- **Fonts**: Manrope (all four apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; paywall URLs need the `/paywall/` prefix (vite `base: '/paywall/'`), «Юзербот» uses `/userbot/`, «Боты» uses `/bots/`, site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
 - **Critic ordering (standing owner rule)**: design-critic runs only after code-review AND deploy, on prod screenshots; visible waves also hand the critic a mobile (390px) frame and hover frames of key controls.
 
 ## Testing Guidelines
@@ -246,7 +246,7 @@ Bullgram-specific delegation defaults:
 - start with a `context-manager`-framed `Explore` pass when the affected runtime or file ownership is not obvious
 - use `backend-developer` framing for most backend feature and bug work
 - use `frontend-developer` framing for most `admin-v2` and `site-v2` work
-- use `mcp-developer` framing for Bullgram MCP and `/app/claw`
+- use `mcp-developer` framing for Bullgram MCP and the agent onboarding screen (`/userbot/mcp`)
 - use `reviewer` framing on nearly every risky change before final close-out
 - for close-out, pre-push, and on-demand reviews use the `code-reviewer` subagent (`~/.zcode/agents/code-reviewer.md`) for single-pass review, or the `code-review` skill (`.agents/skills/code-review/`) for full parallel multi-lens review — both instead of ad-hoc reviewer prompts
 - add `architect-reviewer` framing when touching cross-runtime flows or structural boundaries
@@ -283,7 +283,7 @@ For `cmux` usage:
 
 Browser doctrine:
 
-- all runtime tests of site/admin changes must run against the deployed production build (`https://bullgram.xyz`, admin at `/app`) after deploy, in the user's real Chrome — never against a local dev server or headless Chrome
+- all runtime tests of site/admin changes must run against the deployed production build (`https://bullgram.xyz`, paywall at `/paywall`) after deploy, in the user's real Chrome — never against a local dev server or headless Chrome
 - the browser path for these tests is the Playwright MCP server in extension mode (`playwright` server in `.mcp.json`, `@playwright/mcp --extension`) plus the user's «Playwright Extension» from the Chrome Web Store: the user clicks Connect in the extension, and the agent drives the user's actual Chrome tab with their logged-in sessions
 - see `docs/plans/04-site-verification.md` for the standing verification rule; do not spin up dev servers for visual checks, including from subagents — forbid it explicitly in their prompts
 - inside cmux: use `cmux browser` and browser surfaces by default for site/admin runtime checks so the user can see the same browser state

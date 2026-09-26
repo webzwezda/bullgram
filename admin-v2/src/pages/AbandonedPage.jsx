@@ -370,7 +370,7 @@ export function AbandonedPage() {
       suggested_title: `Дожим: ${label || 'Брошенные корзины'}`,
       suggested_message: 'Ты уже почти купил, но не завершил оплату. Если ещё актуально — вернись и закрой платёж сейчас.'
     }));
-    openApp('/app/broadcast');
+    openApp('/paywall/broadcast');
   }
 
   if (loading && bots.length === 0) {

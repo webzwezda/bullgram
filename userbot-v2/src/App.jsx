@@ -156,7 +156,7 @@ export function App() {
               На сайт
             </a>
             <span className="text-slate-300">·</span>
-            <a href="/app" className="transition-colors hover:text-slate-700">
+            <a href="/paywall" className="transition-colors hover:text-slate-700">
               Кабинет
             </a>
           </div>

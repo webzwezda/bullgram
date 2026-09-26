@@ -548,7 +548,7 @@ export function CustomersPage() {
       status: row.status || 'Нажал /start',
       reason: 'Первое касание с ботом',
       created_at: row.created_at,
-      href: '/app/customers?tab=started'
+      href: '/paywall/customers?tab=started'
     })),
     viewed: state.viewed.map((row) => ({
       id: row.id,
@@ -563,7 +563,7 @@ export function CustomersPage() {
       status: getViewedEventLabel(row.event_type),
       reason: 'Счет еще не создан',
       created_at: row.created_at,
-      href: '/app/customers?tab=viewed'
+      href: '/paywall/customers?tab=viewed'
     })),
     'invoice-created': state.invoiceCreated
       .map((row) => ({
@@ -579,7 +579,7 @@ export function CustomersPage() {
         status: 'Создал счет',
         reason: 'Счет создан — ждем оплату',
         created_at: row.created_at,
-        href: '/app/customers?tab=invoice-created'
+        href: '/paywall/customers?tab=invoice-created'
       })),
     'customers-active': state.crm.filter((row) => row.status === 'active').map((row) => ({
       id: row.id,
@@ -595,7 +595,7 @@ export function CustomersPage() {
       status: 'Доступ активен',
       reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
-      href: '/app/customers?tab=customers-active'
+      href: '/paywall/customers?tab=customers-active'
     })),
     'customers-expired': state.crm.filter((row) => row.status === 'expired').map((row) => ({
       id: row.id,
@@ -611,7 +611,7 @@ export function CustomersPage() {
       status: 'Доступ закончился',
       reason: appendAccessSource(getCustomerReason(row), row.access_source_label),
       expires_at: row.expires_at,
-      href: '/app/customers?tab=customers-expired'
+      href: '/paywall/customers?tab=customers-expired'
     }))
   }), [state]);
 
@@ -1267,7 +1267,7 @@ export function CustomersPage() {
                                   </button>
                                 </>
                               )}
-                              <a className="p-2 bg-white border border-border-default text-ink-faint hover:text-ink-strong hover:bg-surface-subtle hover:border-border-strong rounded-lg transition-all shadow-sm" href={row.href || '/app/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
+                              <a className="p-2 bg-white border border-border-default text-ink-faint hover:text-ink-strong hover:bg-surface-subtle hover:border-border-strong rounded-lg transition-all shadow-sm" href={row.href || '/paywall/customers'} target="_blank" rel="noreferrer" title="Открыть источник">
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </a>
                             </div>
@@ -1292,7 +1292,7 @@ export function CustomersPage() {
                 </div>
                 <div className="flex justify-end">
                   <a
-                    href="/app/broadcast"
+                    href="/paywall/broadcast"
                     className="w-full md:w-auto px-6 py-3 bg-action-primary !text-action-primary-text rounded-xl text-sm font-bold shadow-md shadow-indigo-200 hover:bg-action-primary-hover transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />

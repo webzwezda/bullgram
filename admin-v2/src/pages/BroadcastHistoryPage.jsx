@@ -102,7 +102,7 @@ export function BroadcastHistoryPage() {
     window.history.replaceState(
       {},
       '',
-      id ? `/app/broadcast/history?campaign=${encodeURIComponent(id)}` : '/app/broadcast/history'
+      id ? `/app/broadcast/history?campaign=${encodeURIComponent(id)}` : '/paywall/broadcast/history'
     );
   }
 
