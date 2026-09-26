@@ -15,7 +15,7 @@ const STATUS_META = {
   safe_mode_blocked: { label: 'Safe-mode', icon: ShieldAlert, color: 'text-orange-600', badge: 'bg-orange-50 text-orange-700 border-orange-200' },
   account_restricted: { label: 'Ограничен', icon: ShieldAlert, color: 'text-orange-600', badge: 'bg-orange-50 text-orange-700 border-orange-200' },
   integration_token_required: { label: 'Нет токена', icon: ShieldAlert, color: 'text-amber-600', badge: 'bg-amber-50 text-amber-700 border-amber-200' },
-  telegram_error: { label: 'Telegram error', icon: AlertTriangle, color: 'text-rose-600', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
+  telegram_error: { label: 'Ошибка Telegram', icon: AlertTriangle, color: 'text-rose-600', badge: 'bg-rose-50 text-rose-700 border-rose-200' },
   started: { label: 'В процессе', icon: Loader2, color: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 border-slate-200' }
 };
 
@@ -66,11 +66,6 @@ export function RecentCallsTable({ source }) {
   }, [accessToken, source]);
 
   const title = source === 'mcp' ? 'Последние MCP-вызовы' : source === 'rest' ? 'Последние API-вызовы' : 'Последние вызовы';
-  const subtitle = source === 'mcp'
-    ? 'Журнал вызовов через MCP-шлюз — вызовы твоего ИИ-агента в последнее время.'
-    : source === 'rest'
-      ? 'Журнал вызовов через REST API — внешние скрипты, интеграции, автоматизация.'
-      : 'Журнал вызовов ключами этого токена.';
 
   const hasUserbot = state.entries.some((row) => row.userbot_id);
   const hasError = state.entries.some((row) => row.error_message);
@@ -83,7 +78,6 @@ export function RecentCallsTable({ source }) {
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="min-w-0">
             <CardTitle className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap">{title}</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
           </div>
           <Button variant="outline" size="sm" className="h-9 rounded-xl" type="button" onClick={load} disabled={state.loading}>
             <RefreshCcw className={`h-4 w-4 ${state.loading ? 'animate-spin' : ''}`} /> Обновить
