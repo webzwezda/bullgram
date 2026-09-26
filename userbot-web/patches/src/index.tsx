@@ -4,7 +4,8 @@
 // auth flow, persists session to localStorage.
 //
 // Bullgram patch: before any other init runs, bootstrap the bridge:
-//   1) Extract `userbotId` from URL pathname `/app/telegram-web/:userbotId`.
+//   1) Extract `userbotId` from URL pathname
+//      `/userbot/telegram-web/:userbotId` or legacy `/app/telegram-web/:userbotId`.
 //   2) Read admin's Supabase JWT from localStorage (same origin as admin-v2).
 //   3) POST /api/userbot-web/web-session/:userbotId → bridge token +
 //      decoded sessionData + device fingerprint.

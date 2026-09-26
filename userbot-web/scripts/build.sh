@@ -33,4 +33,6 @@ mkdir -p "$DIST_DIR"
 cp -r "$UPSTREAM_DIR/dist/." "$DIST_DIR/"
 
 echo "==> Build complete: $DIST_DIR"
-ls -lh "$DIST_DIR" | head -10
+# `|| true`: with `set -o pipefail`, `ls` can die of SIGPIPE once `head`
+# closes the pipe on a large dist listing — which must not fail the build.
+ls -lh "$DIST_DIR" | head -10 || true

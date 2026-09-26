@@ -230,8 +230,9 @@ export async function fetchBridgeConfigFromNetwork(
 }
 
 export function extractUserbotIdFromUrl(): string | null {
-  // Expected path shape: /app/telegram-web/<userbotId>(/...)?
-  const m = window.location.pathname.match(/\/app\/telegram-web\/([^/]+)/);
+  // Served at both prefixes: /userbot/telegram-web/<userbotId> (current) and
+  // /app/telegram-web/<userbotId> (legacy, kept for bookmarks).
+  const m = window.location.pathname.match(/\/(?:app|userbot)\/telegram-web\/([^/]+)/);
   if (!m) return null;
   const id = decodeURIComponent(m[1]);
   if (id === 'index.html' || id.startsWith('static') || id.startsWith('assets')) return null;
