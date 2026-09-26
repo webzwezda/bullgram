@@ -1802,7 +1802,7 @@ export default function AutopostManagePage() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Администраторы бота</h3>
-                  <p className="text-xs font-semibold text-slate-500">Управляйте правами доступа и генерируйте приглашения</p>
+                  <p className="text-xs font-semibold text-slate-500">Управляй правами доступа и генерируй приглашения</p>
                 </div>
               </div>
             </div>
