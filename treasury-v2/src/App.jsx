@@ -7,7 +7,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
 
-const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx'));
+const TreasuryPage = lazy(() => import('./pages/treasury/TreasuryPage.jsx').then((module) => ({ default: module.TreasuryPage })));
 
 // Казна — внутренний инструмент платформы (учёт TON, резервы, выводы).
 // Отдельное приложение вне продуктовых поверхностей; доступ — только
