@@ -420,7 +420,7 @@ export default function AutopostManagePage() {
       existingBotsRef.current = [...existingBotsRef.current, data.bot];
       setExistingBots((prev) => [...prev, data.bot]);
       setSelectedBotId(data.bot.id);
-      toast.success('Бот успешно инициализирован! Теперь активируйте его в Telegram.');
+      toast.success('Бот успешно инициализирован! Теперь активируй его в Telegram.');
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -835,7 +835,7 @@ export default function AutopostManagePage() {
     <section className="page page--flush space-y-6">
       <div className="page__header">
         <h1>Автопостер</h1>
-        <p>Управление ботом «Автопостер» в приложении «Боты».</p>
+        <p>Подключение бота, каналы, расписание и журнал публикаций.</p>
       </div>
       {/* Подключение бота */}
       <Card className="p-0 gap-0 border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 bg-white overflow-hidden rounded-2xl">
@@ -849,7 +849,7 @@ export default function AutopostManagePage() {
                 <h2 className="text-xl font-bold text-slate-900">Бот автопостинга</h2>
                 {selectedBotId === 'new' ? (
                   <p className="text-sm font-medium text-slate-500 mt-0.5">
-                    Подключите Telegram-бота для автоматического постинга и приёма предложений
+                    Подключи Telegram-бота для автоматического постинга и приёма предложений
                   </p>
                 ) : null}
               </div>
@@ -952,7 +952,7 @@ export default function AutopostManagePage() {
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-bold text-slate-900">Что это за бот</h3>
                 <p className="text-sm text-slate-600 mt-1 leading-relaxed max-w-[70ch]">
-                  Telegram-бот, который ведёт ваши каналы за вас: сам публикует посты по расписанию,
+                  Telegram-бот, который ведёт твои каналы за тебя: сам публикует посты по расписанию,
                   принимает предложения от подписчиков и ставит реакции на новые посты.
                   Один бот может вести несколько каналов — всё управление здесь, на этом экране.
                 </p>
@@ -1033,14 +1033,14 @@ export default function AutopostManagePage() {
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Шаг 1 — активируйте бота</h3>
+              <h3 className="text-lg font-bold text-slate-900">Шаг 1 — активируй бота</h3>
               <p className="text-sm text-slate-500 mt-0.5">Откройте бота в Telegram и привяжите свой аккаунт как администратор.</p>
             </div>
           </div>
           <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 space-y-3">
             <p className="text-sm font-semibold text-slate-700">Пошаговая инструкция:</p>
             <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
-              <li>Нажмите кнопку <span className="font-bold text-slate-800">«Открыть @{createdBot.bot_username}»</span> ниже — откроется чат с ботом.</li>
+              <li>Нажми кнопку <span className="font-bold text-slate-800">«Открыть @{createdBot.bot_username}»</span> ниже — откроется чат с ботом.</li>
               <li>В чате нажмите <span className="font-bold text-slate-800">«Запустить»</span> (или отправьте <code className="font-mono text-[12px] bg-white px-1.5 py-0.5 rounded border border-slate-200">/start</code>).</li>
               <li>Бот ответит сообщением с кнопкой <span className="font-bold text-slate-800">«✅ Я администратор»</span> — нажмите её.</li>
               <li>Эта страница автоматически обновится и покажет настройку каналов.</li>
@@ -1069,13 +1069,13 @@ export default function AutopostManagePage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900">Подключение каналов</h3>
-              <p className="text-sm text-slate-500">Администратор успешно привязан. Теперь подключите ваши каналы к автопостеру.</p>
+              <p className="text-sm text-slate-500">Администратор успешно привязан. Теперь подключи свои каналы к автопостеру.</p>
             </div>
           </div>
           <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 space-y-3">
             <p className="text-sm font-semibold text-slate-700">Инструкция по подключению:</p>
             <ol className="list-decimal list-inside text-sm text-slate-600 space-y-2">
-              <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> в любой канал (публичный или приватный) в качестве администратора с правами на публикацию сообщений.</li>
+              <li>Добавь бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> в любой канал (публичный или приватный) в качестве администратора с правами на публикацию сообщений.</li>
               <li>Можно подключить сколько угодно каналов: например, два публичных для разных тем. Каждый получит свои кнопки, реакции и расписание.</li>
               <li>Бот автоматически поймает добавление и покажет канал на этой странице.</li>
             </ol>
@@ -1104,7 +1104,7 @@ export default function AutopostManagePage() {
                     <button
                       key={ch.id}
                       onClick={() => setActiveChannelId(ch.id)}
-                      className={`p-5 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                      className={`p-5 rounded-2xl border text-left transition-colors duration-200 cursor-pointer flex flex-col justify-between h-32 ${
                         isActive
                           ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
                           : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
@@ -1135,7 +1135,7 @@ export default function AutopostManagePage() {
                     Клик → раскрывает инструкция. */}
                 <button
                   onClick={() => setShowAddChannelHint(prev => !prev)}
-                  className={`p-5 rounded-2xl border-2 border-dashed text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex flex-col justify-between h-32 ${
+                  className={`p-5 rounded-2xl border-2 border-dashed text-left transition-colors duration-200 cursor-pointer flex flex-col justify-between h-32 ${
                     showAddChannelHint
                       ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-200'
                       : 'border-slate-300 bg-slate-50/40 hover:border-indigo-400 hover:bg-indigo-50/30'
@@ -1166,7 +1166,7 @@ export default function AutopostManagePage() {
                       <p className="font-bold text-slate-900">Как подключить новый канал</p>
                       <ol className="list-decimal list-inside space-y-1 text-xs text-slate-600">
                         <li>В Telegram откройте нужный канал → <b>Управление каналом</b> → <b>Администраторы</b>.</li>
-                        <li>Добавьте бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> с правом <b>«Публиковать посты»</b>.</li>
+                        <li>Добавь бота <span className="font-bold text-slate-800">@{createdBot.bot_username}</span> с правом <b>«Публиковать посты»</b>.</li>
                         <li>Канал появится здесь автоматически — настраивайте кнопки, реакции и расписание.</li>
                       </ol>
                       <p className="text-[11px] text-slate-500 pt-1">Можно подключить сколько угодно каналов. Каждый публикует со своими кнопками и реакциями.</p>
@@ -1329,7 +1329,7 @@ export default function AutopostManagePage() {
                         </SelectContent>
                       </Select>
                       <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                        По умолчанию используется часовой пояс вашего браузера.
+                        По умолчанию используется часовой пояс твоего браузера.
                       </p>
                     </div>
 
@@ -1376,7 +1376,7 @@ export default function AutopostManagePage() {
                         <div className="space-y-1">
                           <label className="text-sm font-bold text-slate-800 block">Лимит предложений в сутки</label>
                           <span className="text-xs text-slate-500 font-semibold leading-relaxed block">
-                            Максимальное количество предложений от одного пользователя за последние 24 часа. Укажите «0» для отключения ограничений.
+                            Максимальное количество предложений от одного пользователя за последние 24 часа. Поставь «0», чтобы снять ограничение.
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
