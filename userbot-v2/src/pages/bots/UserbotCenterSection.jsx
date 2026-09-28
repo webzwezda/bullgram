@@ -1541,7 +1541,7 @@ export function UserbotCenterSection({
               value={String(selectedLiveUserbot.id)}
               onValueChange={(value) => setSelectedLiveUserbotId(value)}
               triggerVariant="avatar"
-              className="h-12 bg-white border-slate-200 shadow-sm rounded-xl gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-auto"
+              className="h-12 bg-white border-slate-200 shadow-sm rounded-xl gap-2.5 w-full sm:w-auto"
               align="start"
               sideOffset={4}
             />
