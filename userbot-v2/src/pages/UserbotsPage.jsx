@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
-import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
@@ -28,13 +27,13 @@ import {
 import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.js';
 import { useListedShopUserbotsController } from './bots/useListedShopUserbotsController.js';
 import { useLiveUserbotsController } from './bots/useLiveUserbotsController.js';
-import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
 
-// Контейнер юзербот-режима admin-v2 BotsAccountsPage (план 2026-09-26-userbot-product-split,
-// Фаза 3): онбординг, центр управления (с чтением handoff-ключа
+// Витрина аккаунтов юзербот-режима (план 2026-09-26-userbot-product-split,
+// Фаза 3): центр управления (с чтением handoff-ключа
 // bullgram_userbot_center_handoff и query ?tg_user_id= / ?userbot_id=), витрина покупки,
-// лоты продавца, лоты платформы. Official-режим остался в paywall-кабине (/app/sales-bot).
+// лоты продавца, лоты платформы. Онбординг подключения переехал на /connect
+// (ConnectPage). Official-режим остался в paywall-кабине (/app/sales-bot).
 
 function showUiMessage(text, tone = 'default') {
   if (tone === 'success') return toast.success(text);
@@ -82,14 +81,12 @@ function UserbotsPageContent() {
   });
 
   const {
-    availableOnboardingProxies,
     bundledUserbotLot,
     bundledUserbotLots,
     canSellUserbotAssets,
     liveUserbots,
     listedShopUserbots,
     openUserbotPurchases,
-    planRules,
     selectedLiveUserbot,
     selectedShopUserbot,
     usedUserbotProxyIds,
@@ -103,24 +100,6 @@ function UserbotsPageContent() {
     profilePlan
   });
 
-  const {
-    currentQrFingerprintProfile,
-    fingerprintProfiles,
-    fingerprintProfilesState,
-    handleJsonFileChange,
-    handleSessionFileChange,
-    importSession,
-    onboarding,
-    startQrLogin,
-    switchFingerprintMode,
-    updateOnboarding
-  } = useUserbotOnboarding({
-    accessToken,
-    planRules,
-    userbotCount: userbots.length,
-    reloadAccounts,
-    showUiMessage
-  });
   const {
     accountBindingFeedback,
     accountCheckReport,
@@ -197,20 +176,12 @@ function UserbotsPageContent() {
     });
   }, [openUserbotPurchases]);
 
-  const onboardingSectionCommonProps = {
-    availableOnboardingProxies,
-    currentQrFingerprintProfile,
-    fingerprintProfiles,
-    fingerprintProfilesState,
-    handleJsonFileChange,
-    handleSessionFileChange,
-    importSession,
-    onboarding,
-    proxyLabel,
-    startQrLogin,
-    switchFingerprintMode,
-    updateOnboarding
-  };
+  // Пункт сайдбара «Telegram Web» открывает web-клиент для последнего
+  // выбранного на витрине живого юзербота.
+  useEffect(() => {
+    if (!selectedLiveUserbotId) return;
+    try { window.localStorage.setItem('bullgram_tg_web_account', String(selectedLiveUserbotId)); } catch {}
+  }, [selectedLiveUserbotId]);
 
   const buyerStorefrontSectionProps = {
     openPurchases: openUserbotPurchases,
@@ -306,11 +277,6 @@ function UserbotsPageContent() {
       {state.proxySupport?.profile_role !== 'admin' ? (
         <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
       ) : null}
-
-      <UserbotOnboardingSection
-        {...onboardingSectionCommonProps}
-        steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
-      />
 
       {canSellUserbotAssets ? (
         <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />

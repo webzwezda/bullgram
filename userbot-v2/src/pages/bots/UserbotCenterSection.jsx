@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2,
@@ -959,9 +959,10 @@ export function UserbotCenterSection({
             <div className="toolbar-card__title">Что делать дальше</div>
             <div className="list-stack">
               <div className="list-item">
-                <div className="list-item__title">Проверь onboarding выше на этой же странице</div>
+                <div className="list-item__title">Подключи юзербота на странице «Подключение»</div>
                 <div className="list-item__meta">
-                  Там живой onboarding: QR, импорт `.session/.json`, смена прокси и удаление мертвого аккаунта. Попробуй обновить страницу или заново выбрать юзербота.
+                  Там живой onboarding: QR, импорт `.session/.json`, выбор прокси.{' '}
+                  <Link to="/connect" className="font-semibold text-action-primary hover:text-action-primary-hover">Перейти к подключению</Link>
                 </div>
               </div>
             </div>
@@ -1544,6 +1545,14 @@ export function UserbotCenterSection({
               sideOffset={4}
             />
 
+            <Link
+              to="/connect"
+              className="h-12 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-action-primary text-action-primary-text text-sm font-bold hover:bg-action-primary-hover transition-all shadow-sm whitespace-nowrap"
+            >
+              <UserPlus className="w-4 h-4" />
+              Подключить аккаунт
+            </Link>
+
             {(() => {
               const restrictedBadge = restrictedMarker(selectedLiveUserbot);
               const recoveryBadge = recoveryStatusBadge(recovery);
@@ -1645,8 +1654,15 @@ export function UserbotCenterSection({
             </div>
             <h3 className="text-base font-semibold text-slate-900">Боевых аккаунтов пока нет</h3>
             <p className="mt-1 text-sm text-slate-500 max-w-sm">
-              Подключи аккаунт выше в onboarding, и его профиль, прокси и проверка сессии появятся здесь.
+              Подключи аккаунт в разделе «Подключение» — и его профиль, прокси и проверка сессии появятся здесь.
             </p>
+            <Link
+              to="/connect"
+              className="mt-4 h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-action-primary text-action-primary-text text-sm font-bold hover:bg-action-primary-hover shadow-sm"
+            >
+              <UserPlus className="w-4 h-4" />
+              Подключить аккаунт
+            </Link>
           </div>
         </div>
       )}

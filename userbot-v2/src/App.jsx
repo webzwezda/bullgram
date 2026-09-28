@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import {Rocket, Globe, Bot, KeyRound, ShoppingCart, User} from 'lucide-react';
+import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import {Rocket, Globe, Bot, KeyRound, ShoppingCart, User, UserPlus, MonitorSmartphone} from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
@@ -11,6 +12,7 @@ import { OpsRail } from './ui/OpsRail.jsx';
 // Экраны приложения (план 2026-09-26-userbot-product-split, Фаза 3):
 // дашборд и покупки — новые, остальные переехали из admin-v2 целиком.
 const UserbotsPage = lazy(() => import('./pages/UserbotsPage.jsx'));
+const ConnectPage = lazy(() => import('./pages/ConnectPage.jsx'));
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
@@ -24,18 +26,34 @@ function AccountsRedirect() {
   return <Navigate to={`/${search}`} replace />;
 }
 
+// Единый стиль пунктов сайдбара: обычные NavLink и внешний анкор «Telegram Web»
+// должны выглядеть идентично, поэтому классы объявлены здесь в одном экземпляре.
+const NAV_ICON_CLASS = 'w-[18px] h-[18px] flex-shrink-0';
+
+function navItemClassName(isActive) {
+  return `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+    isActive
+      ? 'bg-indigo-50 text-indigo-700'
+      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+  }`;
+}
+
 // Пилюля тарифа и профиль с кошельком живут в правом рельсе (OpsRail) — как в /app.
 
 export function App() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
   const navSections = [
     {
       title: 'Юзербот',
       items: [
         { to: '/', label: 'Юзерботы', icon: Rocket },
+        { to: '/connect', label: 'Подключение', icon: UserPlus },
         { to: '/proxies', label: 'Прокси', icon: Globe },
+        { label: 'Telegram Web', icon: MonitorSmartphone, external: true },
       ]
     },
     {
@@ -53,10 +71,11 @@ export function App() {
       ]
     }
   ];
-  const navItems = navSections.flatMap((section) => section.items);
+  const navItems = navSections.flatMap((section) => section.items.filter((item) => !item.external));
 
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Юзерботы';
+    if (location.pathname === '/connect') return 'Подключение';
     const exact = navItems.find((item) => item.to === location.pathname);
     if (exact) return exact.label;
     const prefix = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`));
@@ -66,6 +85,35 @@ export function App() {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/userbot-web/status', { method: 'GET' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (cancelled || !data) return;
+        setTelegramWebEnabled(Boolean(data.enabled));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  function handleTelegramWebOpen(event) {
+    event.preventDefault();
+    setMobileNavOpen(false);
+    let storedId = '';
+    try {
+      storedId = window.localStorage.getItem('bullgram_tg_web_account') || '';
+    } catch {
+      storedId = '';
+    }
+    if (storedId) {
+      window.open(`/userbot/telegram-web/${storedId}`, '_blank', 'noopener');
+      return;
+    }
+    navigate('/');
+    toast('Telegram Web открывается для конкретного юзербота. Выбери аккаунт на витрине — и пункт запомнит его.');
+  }
 
   if (!user) {
     return (
@@ -119,23 +167,31 @@ export function App() {
                 {section.title}
               </div>
               <div className="flex flex-col gap-0.5">
-                {section.items.map((item) => {
+                {section.items.filter((item) => !item.external || telegramWebEnabled).map((item) => {
                   const Icon = item.icon;
+                  if (item.external) {
+                    return (
+                      <a
+                        key={item.label}
+                        href="#"
+                        onClick={handleTelegramWebOpen}
+                        title="Откроется для последнего выбранного аккаунта"
+                        className={navItemClassName(false)}
+                      >
+                        <Icon className={NAV_ICON_CLASS} />
+                        <span className="truncate">{item.label}</span>
+                      </a>
+                    );
+                  }
                   return (
                     <NavLink
                       key={item.to}
                       to={item.to}
                       end={item.to === '/' || Boolean(item.exact)}
                       onClick={() => setMobileNavOpen(false)}
-                      className={({ isActive }) => `
-                        flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
-                        ${isActive
-                          ? 'bg-indigo-50 text-indigo-700'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                        }
-                      `}
+                      className={({ isActive }) => navItemClassName(isActive)}
                     >
-                      <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                      <Icon className={NAV_ICON_CLASS} />
                       <span className="truncate">{item.label}</span>
                     </NavLink>
                   );
@@ -165,6 +221,7 @@ export function App() {
               <Suspense fallback={<LoadingState text="Грузим экран..." />}>
                 <Routes>
                   <Route path="/" element={<UserbotsPage />} />
+                  <Route path="/connect" element={<ConnectPage />} />
                   <Route path="/accounts" element={<AccountsRedirect />} />
                   <Route path="/userbots" element={<AccountsRedirect />} />
                   <Route path="/proxies" element={<ProxyManagerPage />} />
