@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Globe, Bot, KeyRound, UserPlus, MonitorSmartphone} from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
+import { ExternalRedirect } from './ui/ExternalRedirect.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import { LoadingState } from './ui/LoadingState.jsx';
 import { Toaster } from './components/ui/sonner.jsx';
@@ -15,18 +16,13 @@ const ConnectPage = lazy(() => import('./pages/ConnectPage.jsx'));
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
-const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 
 // Совместимые редиректы: страница юзерботов поднята на корень /userbot
-// (?userbot_id=, ?tg_user_id= — deep-links из уведомлений и CRM), покупки
-// переехали в профиль (2026-09-28, страница /purchases удалена).
+// (?userbot_id=, ?tg_user_id= — deep-links из уведомлений и CRM), профиль и
+// покупки переехали в отдельное приложение /profile (2026-09-28, profile-v2).
 function AccountsRedirect() {
   const { search } = useLocation();
   return <Navigate to={`/${search}`} replace />;
-}
-
-function PurchasesRedirect() {
-  return <Navigate to="/profile" replace />;
 }
 
 // Единый стиль пунктов сайдбара.
@@ -70,7 +66,6 @@ export function App() {
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Telegram Web';
     if (location.pathname === '/connect') return 'Подключение';
-    if (location.pathname === '/profile') return 'Профиль';
     const exact = navItems.find((item) => item.to === location.pathname);
     if (exact) return exact.label;
     const prefix = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`));
@@ -179,8 +174,8 @@ export function App() {
                   <Route path="/proxies" element={<ProxyManagerPage />} />
                   <Route path="/mcp" element={<McpSettingsPage />} />
                   <Route path="/api" element={<ApiIntegrationsPage />} />
-                  <Route path="/purchases" element={<PurchasesRedirect />} />
-                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/purchases" element={<ExternalRedirect to="/profile/" />} />
+                  <Route path="/profile" element={<ExternalRedirect to="/profile/" />} />
                   <Route path="*" element={<UserbotsPage />} />
                 </Routes>
               </Suspense>

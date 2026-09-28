@@ -59,6 +59,7 @@ need_site_install=0
 need_userbot_v2_install=0
 need_bots_v2_install=0
 need_treasury_v2_install=0
+need_profile_v2_install=0
 need_docs_install=0
 need_blog_install=0
 
@@ -80,6 +81,9 @@ fi
 if echo "$CHANGED_FILES" | grep -q '^treasury-v2/package\.json$'; then
   need_treasury_v2_install=1
 fi
+if echo "$CHANGED_FILES" | grep -q '^profile-v2/package\.json$'; then
+  need_profile_v2_install=1
+fi
 if echo "$CHANGED_FILES" | grep -q '^docs-site/package\.json$'; then
   need_docs_install=1
 fi
@@ -88,7 +92,7 @@ if echo "$CHANGED_FILES" | grep -q '^blog-site/package\.json$'; then
 fi
 
 # First-time setup: no node_modules → install everything
-if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ] || [ ! -d userbot-v2/node_modules ] || [ ! -d bots-v2/node_modules ] || [ ! -d treasury-v2/node_modules ]; then
+if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d site-v2/node_modules ] || [ ! -d userbot-v2/node_modules ] || [ ! -d bots-v2/node_modules ] || [ ! -d treasury-v2/node_modules ] || [ ! -d profile-v2/node_modules ]; then
   echo "    first-time install (node_modules missing)"
   need_backend_install=1
   need_admin_install=1
@@ -96,6 +100,7 @@ if [ ! -d backend/node_modules ] || [ ! -d admin-v2/node_modules ] || [ ! -d sit
   need_userbot_v2_install=1
   need_bots_v2_install=1
   need_treasury_v2_install=1
+  need_profile_v2_install=1
 fi
 if [ ! -d docs-site/node_modules ]; then
   need_docs_install=1
@@ -127,6 +132,10 @@ fi
 if [ "$need_treasury_v2_install" = "1" ]; then
   echo "==> npm install treasury-v2"
   npm --prefix treasury-v2 install
+fi
+if [ "$need_profile_v2_install" = "1" ]; then
+  echo "==> npm install profile-v2"
+  npm --prefix profile-v2 install
 fi
 if [ "$need_docs_install" = "1" ]; then
   echo "==> npm install docs-site"

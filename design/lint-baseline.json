@@ -1,13 +1,13 @@
 {
   "$comment": "Ratchet-снапшот lint_hardcodes (admin-v2/src + site-v2/src) для npm run check:design. Перегенерируется осознанно: node design/check-design.mjs --update-baseline. Гейт красный, только если текущих findings стало БОЛЬШЕ снапшота (total / kind / file).",
   "updatedAt": "2026-09-28",
-  "total": 7779,
+  "total": 8574,
   "kinds": {
-    "tailwind-palette": 4371,
-    "hex": 753,
-    "px": 2562,
-    "time": 69,
-    "font-family": 24
+    "tailwind-palette": 4434,
+    "hex": 935,
+    "px": 3091,
+    "time": 85,
+    "font-family": 29
   },
   "files": {
     "admin-v2/src/App.jsx": 23,
@@ -89,12 +89,8 @@
     "userbot-v2/src/features/ton-checkout/TonConnectPayButton.jsx": 8,
     "userbot-v2/src/features/ton-checkout/ShopPurchasePaymentPanel.jsx": 10,
     "userbot-v2/src/features/ton-checkout/ManualTonPaymentCard.jsx": 38,
-    "userbot-v2/src/features/profile/ProfileTelegramCard.jsx": 16,
-    "userbot-v2/src/features/profile/ProfileIdentityCard.jsx": 33,
-    "userbot-v2/src/features/profile/ProfileWalletCard.jsx": 25,
     "userbot-v2/src/features/shop-storefront/ProxyStorefrontSection.jsx": 119,
     "userbot-v2/src/features/telegram/TelegramSidebarRow.jsx": 15,
-    "userbot-v2/src/features/billing/PlatformTierUpgradeCard.jsx": 26,
     "bots-v2/src/App.jsx": 21,
     "bots-v2/src/ui/AuthGate.jsx": 68,
     "bots-v2/src/ui/TonWalletSidebarRow.jsx": 15,
@@ -119,6 +115,17 @@
     "treasury-v2/src/pages/treasury/treasury.utils.js": 18,
     "treasury-v2/src/components/ui/badge.jsx": 1,
     "treasury-v2/src/features/ton-checkout/TonWalletSidebarRow.jsx": 15,
-    "treasury-v2/src/features/telegram/TelegramSidebarRow.jsx": 15
+    "treasury-v2/src/features/telegram/TelegramSidebarRow.jsx": 15,
+    "profile-v2/src/ui/AuthGate.jsx": 68,
+    "profile-v2/src/ui/ErrorBoundary.jsx": 3,
+    "profile-v2/src/styles/app.css": 704,
+    "profile-v2/src/styles/tailwind.css": 6,
+    "profile-v2/src/components/ui/badge.jsx": 1,
+    "profile-v2/src/features/ton-checkout/TonWalletChip.jsx": 5,
+    "profile-v2/src/features/ton-checkout/TonConnectPayButton.jsx": 8,
+    "profile-v2/src/features/profile/ProfileTelegramCard.jsx": 16,
+    "profile-v2/src/features/profile/ProfileIdentityCard.jsx": 33,
+    "profile-v2/src/features/profile/ProfileWalletCard.jsx": 25,
+    "profile-v2/src/features/billing/PlatformTierUpgradeCard.jsx": 26
   }
 }

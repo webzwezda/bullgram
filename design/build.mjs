@@ -4,7 +4,7 @@
  *
  * Читает design/tokens/*.json (единый источник, формат DTCG), резолвит алиасы {path}
  * и эммитит БАЙТ-ИДЕНТИЧНЫЕ копии в admin-v2/src/styles/tokens.css,
- * site-v2, userbot-v2, bots-v2 и treasury-v2 — один @theme-блок.
+ * site-v2, userbot-v2, bots-v2, treasury-v2 и profile-v2 — один @theme-блок.
  * Идентичность копий — часть доказательства «единого источника».
  *
  * Режимы:
@@ -30,6 +30,7 @@ const OUTPUTS = [
   path.join(ROOT, "userbot-v2", "src", "styles", "tokens.css"),
   path.join(ROOT, "bots-v2", "src", "styles", "tokens.css"),
   path.join(ROOT, "treasury-v2", "src", "styles", "tokens.css"),
+  path.join(ROOT, "profile-v2", "src", "styles", "tokens.css"),
 ];
 const THEME_CSS = path.join(ROOT, "admin-v2", "node_modules", "tailwindcss", "theme.css");
 
@@ -201,7 +202,7 @@ function generateCss(tree) {
   const head = [
     "/* GENERATED — не править руками, источник design/tokens, npm run tokens:build. */",
     "/* Проверка актуальности: npm run tokens:check (байт-сверка + гейт нулевой дельты с theme.css). */",
-    "/* Эммитится в admin-v2, site-v2, userbot-v2, bots-v2 и treasury-v2 — копии байт-идентичны. */",
+    "/* Эммитится в admin-v2, site-v2, userbot-v2, bots-v2, treasury-v2 и profile-v2 — копии байт-идентичны. */",
     "/*",
     " * Сознательно НЕ эммитится (см. design/README.md, «Маппинг токенов → Tailwind v4 @theme»):",
     " * - radius.*: admin-v2 (shadcn --radius: 0.625rem) и site-v2 держат per-app override радиуса",
