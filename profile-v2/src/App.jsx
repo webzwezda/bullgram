@@ -75,6 +75,9 @@ export function App() {
 
       <aside
         className={`sidebar bg-surface-card border-r border-border-default flex flex-col gap-6 p-5 sticky top-0 h-screen overflow-y-auto${mobileNavOpen ? ' sidebar--mobile-open' : ''}`}
+        // Инлайн-стиль как в userbot-v2/treasury-v2: `.sidebar` в app.css несёт
+        // тёмный градиент легаси-оболочки, инлайн перекрывает его в белый.
+        style={{ background: 'var(--color-surface-card)', color: 'var(--color-ink-strong)' }}
       >
         <NavLink
           to="/"
