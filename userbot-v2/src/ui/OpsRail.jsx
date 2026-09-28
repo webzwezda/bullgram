@@ -190,7 +190,12 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
         </>
       ) : null}
 
-      {showPaywall ? <UserbotsPromoCard /> : null}
+      {showPaywall ? (
+        <>
+          <UserbotsPromoCard />
+          <BotsPromoCard />
+        </>
+      ) : null}
     </aside>
   );
 }
