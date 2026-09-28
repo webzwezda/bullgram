@@ -962,7 +962,8 @@ export function UserbotCenterSection({
                 <div className="list-item__title">Подключи юзербота на странице «Подключение»</div>
                 <div className="list-item__meta">
                   Там живой onboarding: QR, импорт `.session/.json`, выбор прокси.{' '}
-                  <Link to="/connect" className="font-semibold text-action-primary hover:text-action-primary-hover">Перейти к подключению</Link>
+                  {/* `!` обязателен: unlayered `a { color: inherit }` в index.css перебивает цветовые утилиты на анкорах */}
+                  <Link to="/connect" className="font-semibold text-action-primary! hover:text-action-primary-hover!">Перейти к подключению</Link>
                 </div>
               </div>
             </div>
@@ -1547,7 +1548,7 @@ export function UserbotCenterSection({
 
             <Link
               to="/connect"
-              className="h-12 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-action-primary text-action-primary-text text-sm font-bold hover:bg-action-primary-hover transition-all shadow-sm whitespace-nowrap"
+              className="h-12 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-action-primary text-action-primary-text! text-sm font-bold hover:bg-action-primary-hover transition-all shadow-sm whitespace-nowrap"
             >
               <UserPlus className="w-4 h-4" />
               Подключить аккаунт
@@ -1658,7 +1659,7 @@ export function UserbotCenterSection({
             </p>
             <Link
               to="/connect"
-              className="mt-4 h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-action-primary text-action-primary-text text-sm font-bold hover:bg-action-primary-hover shadow-sm"
+              className="mt-4 h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-action-primary text-action-primary-text! text-sm font-bold hover:bg-action-primary-hover shadow-sm"
             >
               <UserPlus className="w-4 h-4" />
               Подключить аккаунт
