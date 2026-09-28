@@ -41,7 +41,7 @@ export function App() {
     {
       title: 'Агент и интеграции',
       items: [
-        { to: '/mcp', label: 'Агент', icon: Bot },
+        { to: '/mcp', label: 'MCP', icon: Bot },
         { to: '/api', label: 'API-ключи', icon: KeyRound },
       ]
     },
