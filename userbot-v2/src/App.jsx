@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Globe, Bot, KeyRound, ShoppingCart, User, UserPlus, MonitorSmartphone} from 'lucide-react';
+import { Globe, Bot, KeyRound, UserPlus, MonitorSmartphone} from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
@@ -15,14 +15,18 @@ const ConnectPage = lazy(() => import('./pages/ConnectPage.jsx'));
 const ProxyManagerPage = lazy(() => import('./pages/ProxyManagerPage.jsx').then((module) => ({ default: module.ProxyManagerPage })));
 const McpSettingsPage = lazy(() => import('./pages/McpSettingsPage.jsx').then((module) => ({ default: module.McpSettingsPage })));
 const ApiIntegrationsPage = lazy(() => import('./pages/ApiIntegrationsPage.jsx').then((module) => ({ default: module.ApiIntegrationsPage })));
-const PurchasesPage = lazy(() => import('./pages/PurchasesPage.jsx'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx').then((module) => ({ default: module.ProfilePage })));
 
-// Совместимый редирект: страница юзерботов поднята на корень /userbot,
-// query сохраняем (?userbot_id=, ?tg_user_id= — deep-links из уведомлений и CRM).
+// Совместимые редиректы: страница юзерботов поднята на корень /userbot
+// (?userbot_id=, ?tg_user_id= — deep-links из уведомлений и CRM), покупки
+// переехали в профиль (2026-09-28, страница /purchases удалена).
 function AccountsRedirect() {
   const { search } = useLocation();
   return <Navigate to={`/${search}`} replace />;
+}
+
+function PurchasesRedirect() {
+  return <Navigate to="/profile" replace />;
 }
 
 // Единый стиль пунктов сайдбара.
@@ -59,13 +63,6 @@ export function App() {
         { to: '/mcp', label: 'MCP', icon: Bot },
         { to: '/api', label: 'API-ключи', icon: KeyRound },
       ]
-    },
-    {
-      title: 'Аккаунт',
-      items: [
-        { to: '/purchases', label: 'Покупки', icon: ShoppingCart },
-        { to: '/profile', label: 'Профиль', icon: User },
-      ]
     }
   ];
   const navItems = navSections.flatMap((section) => section.items);
@@ -73,6 +70,7 @@ export function App() {
   const currentNavLabel = useMemo(() => {
     if (location.pathname === '/') return 'Telegram Web';
     if (location.pathname === '/connect') return 'Подключение';
+    if (location.pathname === '/profile') return 'Профиль';
     const exact = navItems.find((item) => item.to === location.pathname);
     if (exact) return exact.label;
     const prefix = navItems.find((item) => item.to !== '/' && location.pathname.startsWith(`${item.to}/`));
@@ -181,7 +179,7 @@ export function App() {
                   <Route path="/proxies" element={<ProxyManagerPage />} />
                   <Route path="/mcp" element={<McpSettingsPage />} />
                   <Route path="/api" element={<ApiIntegrationsPage />} />
-                  <Route path="/purchases" element={<PurchasesPage />} />
+                  <Route path="/purchases" element={<PurchasesRedirect />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="*" element={<UserbotsPage />} />
                 </Routes>

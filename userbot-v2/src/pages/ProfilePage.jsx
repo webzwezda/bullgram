@@ -1,6 +1,7 @@
 import { ProfileIdentityCard } from '../features/profile/ProfileIdentityCard.jsx';
 import { ProfileWalletCard } from '../features/profile/ProfileWalletCard.jsx';
 import { ProfileTelegramCard } from '../features/profile/ProfileTelegramCard.jsx';
+import { ProfilePurchasesCard } from '../features/profile/ProfilePurchasesCard.jsx';
 import { PlatformTierUpgradeCard } from '../features/billing/PlatformTierUpgradeCard.jsx';
 
 export function ProfilePage() {
@@ -11,6 +12,7 @@ export function ProfilePage() {
         <PlatformTierUpgradeCard />
         <ProfileWalletCard />
         <ProfileTelegramCard />
+        <ProfilePurchasesCard />
       </div>
     </section>
   );
