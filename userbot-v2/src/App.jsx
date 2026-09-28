@@ -1,7 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import {Rocket, Globe, Bot, KeyRound, ShoppingCart, User, UserPlus, MonitorSmartphone} from 'lucide-react';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Globe, Bot, KeyRound, ShoppingCart, User, UserPlus, MonitorSmartphone} from 'lucide-react';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { AuthGate } from './ui/AuthGate.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
@@ -26,8 +25,7 @@ function AccountsRedirect() {
   return <Navigate to={`/${search}`} replace />;
 }
 
-// Единый стиль пунктов сайдбара: обычные NavLink и внешний анкор «Telegram Web»
-// должны выглядеть идентично, поэтому классы объявлены здесь в одном экземпляре.
+// Единый стиль пунктов сайдбара.
 const NAV_ICON_CLASS = 'w-[18px] h-[18px] flex-shrink-0';
 
 function navItemClassName(isActive) {
@@ -43,22 +41,21 @@ function navItemClassName(isActive) {
 export function App() {
   const { user } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
+  // Список юзерботов (корень /) владелец назвал «Telegram Web» — он живёт
+  // рядом с MCP и API-ключами как рабочая поверхность агента.
   const navSections = [
     {
       title: 'Юзербот',
       items: [
-        { to: '/', label: 'Юзерботы', icon: Rocket },
         { to: '/connect', label: 'Подключение', icon: UserPlus },
         { to: '/proxies', label: 'Прокси', icon: Globe },
-        { label: 'Telegram Web', icon: MonitorSmartphone, external: true },
       ]
     },
     {
       title: 'Агент и интеграции',
       items: [
+        { to: '/', label: 'Telegram Web', icon: MonitorSmartphone },
         { to: '/mcp', label: 'MCP', icon: Bot },
         { to: '/api', label: 'API-ключи', icon: KeyRound },
       ]
@@ -71,10 +68,10 @@ export function App() {
       ]
     }
   ];
-  const navItems = navSections.flatMap((section) => section.items.filter((item) => !item.external));
+  const navItems = navSections.flatMap((section) => section.items);
 
   const currentNavLabel = useMemo(() => {
-    if (location.pathname === '/') return 'Юзерботы';
+    if (location.pathname === '/') return 'Telegram Web';
     if (location.pathname === '/connect') return 'Подключение';
     const exact = navItems.find((item) => item.to === location.pathname);
     if (exact) return exact.label;
@@ -85,35 +82,6 @@ export function App() {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/api/userbot-web/status', { method: 'GET' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (cancelled || !data) return;
-        setTelegramWebEnabled(Boolean(data.enabled));
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  function handleTelegramWebOpen(event) {
-    event.preventDefault();
-    setMobileNavOpen(false);
-    let storedId = '';
-    try {
-      storedId = window.localStorage.getItem('bullgram_tg_web_account') || '';
-    } catch {
-      storedId = '';
-    }
-    if (storedId) {
-      window.open(`/userbot/telegram-web/${storedId}`, '_blank', 'noopener');
-      return;
-    }
-    navigate('/');
-    toast('Telegram Web открывается для конкретного юзербота. Выбери аккаунт на витрине — и пункт запомнит его.');
-  }
 
   if (!user) {
     return (
@@ -167,22 +135,8 @@ export function App() {
                 {section.title}
               </div>
               <div className="flex flex-col gap-0.5">
-                {section.items.filter((item) => !item.external || telegramWebEnabled).map((item) => {
+                {section.items.map((item) => {
                   const Icon = item.icon;
-                  if (item.external) {
-                    return (
-                      <a
-                        key={item.label}
-                        href="#"
-                        onClick={handleTelegramWebOpen}
-                        title="Откроется для последнего выбранного аккаунта"
-                        className={navItemClassName(false)}
-                      >
-                        <Icon className={NAV_ICON_CLASS} />
-                        <span className="truncate">{item.label}</span>
-                      </a>
-                    );
-                  }
                   return (
                     <NavLink
                       key={item.to}

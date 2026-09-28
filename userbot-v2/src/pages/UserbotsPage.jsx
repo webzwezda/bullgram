@@ -162,13 +162,6 @@ function UserbotsPageContent() {
     });
   }, [openUserbotPurchases]);
 
-  // Пункт сайдбара «Telegram Web» открывает web-клиент для последнего
-  // выбранного на витрине живого юзербота.
-  useEffect(() => {
-    if (!selectedLiveUserbotId) return;
-    try { window.localStorage.setItem('bullgram_tg_web_account', String(selectedLiveUserbotId)); } catch {}
-  }, [selectedLiveUserbotId]);
-
   const buyerStorefrontSectionProps = {
     openPurchases: openUserbotPurchases,
     setSelectedOpenPurchaseId,
