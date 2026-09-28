@@ -3,10 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
-import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
-import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   canRestoreFromFiles,
@@ -25,15 +23,15 @@ import {
   userbotPurchaseAmountSummary
 } from './bots/bots-accounts.utils.js';
 import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.js';
-import { useListedShopUserbotsController } from './bots/useListedShopUserbotsController.js';
 import { useLiveUserbotsController } from './bots/useLiveUserbotsController.js';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
 
 // Витрина аккаунтов юзербот-режима (план 2026-09-26-userbot-product-split,
-// Фаза 3): центр управления (с чтением handoff-ключа
-// bullgram_userbot_center_handoff и query ?tg_user_id= / ?userbot_id=), витрина покупки,
-// лоты продавца, лоты платформы. Онбординг подключения переехал на /connect
-// (ConnectPage). Official-режим остался в paywall-кабине (/app/sales-bot).
+// Фаза 3): покупка аккаунта (UserbotStorefrontSection) и центр управления
+// (с чтением handoff-ключа bullgram_userbot_center_handoff и query
+// ?tg_user_id= / ?userbot_id=). Покупка показывается всем ролям. Онбординг
+// подключения и лоты продавца/платформы переехали на /connect (ConnectPage).
+// Official-режим остался в paywall-кабине (/app/sales-bot).
 
 function showUiMessage(text, tone = 'default') {
   if (tone === 'success') return toast.success(text);
@@ -51,7 +49,6 @@ function UserbotsPageContent() {
   const { accessToken, user, profilePlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
-  const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
   const { state, setState, reloadAccounts, patchLiveUserbot } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
@@ -85,17 +82,15 @@ function UserbotsPageContent() {
     bundledUserbotLots,
     canSellUserbotAssets,
     liveUserbots,
-    listedShopUserbots,
     openUserbotPurchases,
     selectedLiveUserbot,
-    selectedShopUserbot,
     usedUserbotProxyIds,
     userbots
   } = useBotsAccountsDerivedState({
     state,
     storefrontState,
     selectedLiveUserbotId,
-    selectedShopUserbotId,
+    selectedShopUserbotId: '',
     selectedOpenPurchaseId,
     profilePlan
   });
@@ -128,15 +123,6 @@ function UserbotsPageContent() {
     state,
     usedUserbotProxyIds,
     userbots,
-    showUiMessage
-  });
-
-  const {
-    deleteShopItem
-  } = useListedShopUserbotsController({
-    accessToken,
-    reloadAccounts,
-    setState,
     showUiMessage
   });
 
@@ -202,16 +188,6 @@ function UserbotsPageContent() {
     reloadAssets: reloadAccounts
   };
 
-  const listedShopUserbotsSectionProps = {
-    deleteShopItem,
-    formatWhen,
-    listedShopUserbots,
-    restrictedMarker,
-    selectedShopUserbot,
-    setSelectedShopUserbotId,
-    state
-  };
-
   const userbotCenterSectionProps = {
     selectedLiveUserbot,
     selectedLiveUserbotId,
@@ -274,22 +250,7 @@ function UserbotsPageContent() {
 
   return (
     <section className="page page--flush">
-      {state.proxySupport?.profile_role !== 'admin' ? (
-        <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
-      ) : null}
-
-      {canSellUserbotAssets ? (
-        <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
-      ) : null}
-
-      {state.proxySupport?.profile_role === 'admin' ? (
-        <AdminLotsSection
-          accessToken={accessToken}
-          types="bundle,userbot"
-          title="Юзерботы на витрине"
-          emptyText="Опубликованных лотов юзерботов сейчас нет."
-        />
-      ) : null}
+      <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
 
       <UserbotCenterSection {...userbotCenterSectionProps} />
     </section>
