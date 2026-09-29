@@ -485,6 +485,14 @@ function formatBillingEndDate(durationDays) {
 
 function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
   const isBilling = purchaseKind === 'billing';
+  const redirecting = isBilling && !processing && fulfillmentStatus === 'completed';
+
+  // Флоу владельца: Pro оплачен и аккаунт выдан → пользователь сам попадает в кабинет
+  useEffect(() => {
+    if (!redirecting) return;
+    const t = setTimeout(() => window.location.assign('/userbot'), 2500);
+    return () => clearTimeout(t);
+  }, [redirecting]);
 
   const title = isBilling ? 'Тариф Pro активирован' : processing ? 'Платёж получен' : 'Счёт оплачен';
   const description = isBilling ? (
@@ -512,7 +520,7 @@ function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
               {isBilling ? (
                 <p className="text-sm font-medium text-slate-500 mt-1">
                   {fulfillmentStatus === 'completed'
-                    ? 'Юзербот и прокси закреплены за вами — они уже в кабинете.'
+                    ? 'Юзербот и прокси закреплены за вами — открываем кабинет…'
                     : 'Юзербот и прокси из тарифа выдадутся автоматически и появятся в кабинете.'}
                 </p>
               ) : null}
@@ -525,7 +533,7 @@ function PaidView({ purchase, processing, purchaseKind, fulfillmentStatus }) {
               href="/userbot"
               className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors shadow-md shadow-indigo-200"
             >
-              Перейти в кабинет
+              Открыть свой аккаунт
               <ExternalLink className="w-4 h-4" />
             </a>
           ) : null}

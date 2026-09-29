@@ -76,6 +76,24 @@ function formatCountdown(value) {
   return hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+// Общий вход в оплату Pro: и кнопка героя, и кнопка в карточке тарифа
+async function createTonConnectOrder(accessToken) {
+  const data = await apiRequest('/api/billing/checkout/ton-connect', {
+    accessToken,
+    method: 'POST',
+    body: {}
+  });
+  if (!data?.order_id) throw new Error('Не получили order_id от сервера');
+  return data.order_id;
+}
+
+function checkoutErrorMessage(e) {
+  const status = e?.status || e?.statusCode;
+  if (!status) return 'Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.';
+  if (status >= 500) return 'Сервис оплаты недоступен. Напиши в поддержку.';
+  return e.message || 'Не удалось создать счёт';
+}
+
 function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessToken }) {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -139,22 +157,10 @@ function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessT
     setCreating(true);
     setError('');
     try {
-      const data = await apiRequest('/api/billing/checkout/ton-connect', {
-        accessToken,
-        method: 'POST',
-        body: {}
-      });
-      if (!data?.order_id) throw new Error('Не получили order_id от сервера');
-      navigate(`/pay/${data.order_id}`);
+      const orderId = await createTonConnectOrder(accessToken);
+      navigate(`/pay/${orderId}`);
     } catch (e) {
-      const status = e?.status || e?.statusCode;
-      if (!status) {
-        setError('Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.');
-      } else if (status >= 500) {
-        setError('Сервис оплаты недоступен. Напиши в поддержку.');
-      } else {
-        setError(e.message || 'Не удалось создать счёт');
-      }
+      setError(checkoutErrorMessage(e));
     } finally {
       setCreating(false);
     }
@@ -238,16 +244,80 @@ function PlanCard({ plan, children }) {
   );
 }
 
-function StartFreeButton({ user, login }) {
+// Главная кнопка страницы: «Получить аккаунт» = оплата Pro, аккаунт выдаётся после оплаты
+function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login }) {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+  const pillClass =
+    'group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary px-8 py-4 text-base font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5';
+
+  if (profilePlan === 'pro' || profilePlan === 'normal') {
+    return (
+      <a href="/userbot" className={pillClass}>
+        Мой аккаунт
+        <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
+      </a>
+    );
+  }
+
+  if (pendingOrder) {
+    return (
+      <button
+        type="button"
+        onClick={() => navigate(`/pay/${pendingOrder.id}`)}
+        className={pillClass}
+      >
+        Завершить оплату
+        <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
+      </button>
+    );
+  }
+
+  const onCreate = async () => {
+    if (!user) {
+      login();
+      return;
+    }
+    setCreating(true);
+    setError('');
+    try {
+      const orderId = await createTonConnectOrder(accessToken);
+      navigate(`/pay/${orderId}`);
+    } catch (e) {
+      setError(checkoutErrorMessage(e));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
-    <button
-      type="button"
-      onClick={() => (user ? window.location.assign('/userbot') : login('/userbot'))}
-      className="group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary px-8 py-4 text-base font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5"
-    >
-      Начать бесплатно
-      <ArrowRight className="w-5 h-5" strokeWidth={2.5} />
-    </button>
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={creating}
+        className={`${pillClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+      >
+        {creating ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Создаём счёт…
+          </>
+        ) : (
+          <>
+            Получить аккаунт
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
+          </>
+        )}
+      </button>
+      {error ? (
+        <div className="flex items-start gap-1.5 text-xs text-feedback-error-text">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -336,7 +406,13 @@ export function HomePage() {
           или Telegram Web.
         </p>
 
-        <StartFreeButton user={user} login={login} />
+        <GetAccountButton
+          user={user}
+          accessToken={accessToken}
+          profilePlan={profilePlan}
+          pendingOrder={pendingOrder}
+          login={login}
+        />
       </section>
 
       {/* Как это работает — 3 шага */}
@@ -479,10 +555,16 @@ export function HomePage() {
           Дай агенту Telegram — уже сегодня
         </h2>
         <div className="mt-10">
-          <StartFreeButton user={user} login={login} />
+          <GetAccountButton
+            user={user}
+            accessToken={accessToken}
+            profilePlan={profilePlan}
+            pendingOrder={pendingOrder}
+            login={login}
+          />
         </div>
         <p className="mt-6 text-pretty text-sm font-medium text-ink-muted">
-          Регистрация → подключаешь сессию → первый вызов MCP в тот же день. Оплата в TON, поддержка в Telegram.
+          Регистрация → оплата 10 TON → аккаунт и Pro выдаются автоматически. Поддержка в Telegram.
         </p>
         {/* Dogfood-цифра: 9 710 вызовов агента за 30 дней — реальная, из прод-базы
             (снята 2026-09-18); обновлять при следующем прогоне. Число каналов не
