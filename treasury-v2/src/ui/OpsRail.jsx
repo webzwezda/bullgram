@@ -46,7 +46,7 @@ function planMeta(plan) {
   if (plan === 'pro' || plan === 'normal') {
     return {
       title: 'Pro',
-      hint: 'Без лимитов',
+      hint: '',
       pillClass: 'bg-amber-100 text-amber-800 border-amber-200'
     };
   }
@@ -128,7 +128,7 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
             <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
               {currentPlan.title}
             </span>
-            <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span>
+            {currentPlan.hint ? <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span> : null}
           </div>
         </div>
 
