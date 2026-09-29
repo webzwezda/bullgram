@@ -98,7 +98,7 @@ export function TelegramSidebarRow() {
         {/* Профиль живёт в «Юзерботе» — внешняя ссылка (basename /bots не резолвит /profile) */}
         <a
           href="/userbot/profile"
-          className="flex-1 min-w-0 flex items-center justify-center gap-2 py-2 px-3 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition-colors truncate"
+          className="flex-1 min-w-0 flex items-center justify-center gap-2 py-2 px-3 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm truncate"
           title={state.manualTgId ? `TG ID: ${state.manualTgId} — открыть профиль` : 'Telegram привязан — открыть профиль'}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
@@ -108,7 +108,7 @@ export function TelegramSidebarRow() {
           <button
             type="button"
             onClick={copyTgId}
-            className="w-8 h-8 shrink-0 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
+            className="w-8 h-8 shrink-0 flex items-center justify-center bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors shadow-sm"
             title="Скопировать Telegram ID"
             aria-label="Скопировать Telegram ID"
           >
@@ -119,7 +119,7 @@ export function TelegramSidebarRow() {
           type="button"
           onClick={handleUnlink}
           disabled={unlinking}
-          className="w-8 h-8 shrink-0 flex items-center justify-center hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-xl transition-colors disabled:opacity-50"
+          className="w-8 h-8 shrink-0 flex items-center justify-center bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors shadow-sm disabled:opacity-50"
           title={state.canUnlink ? 'Отвязать Telegram' : 'Единственный способ входа — отвязка недоступна'}
           aria-label="Отвязать Telegram"
         >

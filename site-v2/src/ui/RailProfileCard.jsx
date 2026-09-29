@@ -69,9 +69,12 @@ export function RailProfileCard() {
           <Crown className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
         </div>
-        <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
-          {currentPlan.title}
-        </span>
+        <div className="flex flex-col items-end">
+          <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
+            {currentPlan.title}
+          </span>
+          {currentPlan.hint ? <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span> : null}
+        </div>
       </div>
 
       {/* Казна — деньги платформы, только для платформенного админа. */}
