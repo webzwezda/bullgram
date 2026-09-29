@@ -4,7 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { Bot, CreditCard, Pencil, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
+import { Bot, CreditCard, Landmark, Pencil, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
 
 function PromoCard({ href, icon: Icon, chipClass, iconClass, title, children }) {
   return (
@@ -66,7 +66,7 @@ function planMeta(plan) {
 //   не является ни одной из них.
 // Чек-листы онбординга сняты 2026-09-27: рельс это личный кабинет, не онбординг.
 export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBotsPromos = false, showAllPromos = false }) {
-  const { accessToken, user, login, logout, profilePlan } = useAuth();
+  const { accessToken, user, login, logout, profilePlan, profileRole } = useAuth();
   const [proFulfillmentPending, setProFulfillmentPending] = useState(0);
 
   useEffect(() => {
@@ -131,6 +131,17 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
             {currentPlan.hint ? <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span> : null}
           </div>
         </div>
+
+        {/* Казна — деньги платформы, только для платформенного админа. */}
+        {profileRole === 'admin' ? (
+          <a href="/treasury" className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4 transition-colors hover:bg-slate-100/70">
+            <div className="flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-slate-400" />
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Казна проекта</span>
+            </div>
+            <span className="text-slate-400 text-xs font-bold" aria-hidden="true">→</span>
+          </a>
+        ) : null}
 
         {user ? <TonWalletSidebarRow /> : null}
         {user ? <TelegramSidebarRow /> : null}
