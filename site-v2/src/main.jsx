@@ -8,20 +8,23 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 
 async function bootstrap() {
   try {
-    const [{ BrowserRouter }, { App }, { AuthProvider }] = await Promise.all([
+    const [{ BrowserRouter }, { App }, { AuthProvider }, { TonConnectProvider }] = await Promise.all([
       import('react-router-dom'),
       import('./App.jsx'),
-      import('./app/providers/AuthProvider.jsx')
+      import('./app/providers/AuthProvider.jsx'),
+      import('./app/providers/TonConnectProvider.jsx')
     ]);
 
     root.render(
       <React.StrictMode>
         <ErrorBoundary>
-          <AuthProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
-          </AuthProvider>
+          <TonConnectProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </AuthProvider>
+          </TonConnectProvider>
         </ErrorBoundary>
       </React.StrictMode>
     );

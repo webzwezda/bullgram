@@ -3,7 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Home, LayoutDashboard, FilePlus } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
-import { UserProfileCard } from './ui/UserProfileCard.jsx';
+import { RailProfileCard } from './ui/RailProfileCard.jsx';
 import { LoginCard } from './ui/LoginCard.jsx';
 
 const ROUTE_CHUNK_RELOAD_KEY = 'bullgram:route-chunk-reloaded';
@@ -141,7 +141,7 @@ export function App() {
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-2xl shadow-slate-950/15 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-72 lg:translate-x-0 lg:border-b-0 lg:shadow-none ${mobileNavOpen ? 'translate-x-0' : ''}`}>
 
         {user ? (
-          <UserProfileCard />
+          <RailProfileCard />
         ) : (
           <LoginCard />
         )}
