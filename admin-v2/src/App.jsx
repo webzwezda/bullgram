@@ -161,15 +161,15 @@ export function App() {
         <div className="px-3 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <a href="/" className="transition-colors hover:text-slate-700">
-              На сайт
-            </a>
-            <span className="text-slate-300">·</span>
-            <a href="/userbot/api" className="transition-colors hover:text-slate-700">
-              API
+              Home
             </a>
             <span className="text-slate-300">·</span>
             <a href="/userbot/mcp" className="transition-colors hover:text-slate-700">
               MCP
+            </a>
+            <span className="text-slate-300">·</span>
+            <a href="/userbot/api" className="transition-colors hover:text-slate-700">
+              API
             </a>
           </div>
         </div>
