@@ -52,6 +52,16 @@ export function RailProfileCard() {
           </span>
           <span className="block text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</span>
         </a>
+        {user ? (
+          <button
+            type="button"
+            onClick={logout}
+            title="Выйти"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            <LogOut className="w-4 h-4" strokeWidth={2.5} />
+          </button>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between mb-3">
@@ -78,15 +88,7 @@ export function RailProfileCard() {
       {user ? <TonWalletSidebarRow /> : null}
       {user ? <TelegramSidebarRow /> : null}
 
-      {user ? (
-        <button
-          onClick={logout}
-          className="w-full flex items-center justify-center gap-2 py-2 px-4 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition-colors"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          Выйти из системы
-        </button>
-      ) : null}
+
     </div>
   );
 }

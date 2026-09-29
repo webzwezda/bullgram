@@ -117,6 +117,17 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
             </span>
             <span className="block text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</span>
           </a>
+          {/* Выход — иконкой, как в старой карточке сайта (решение владельца, везде). */}
+          {user ? (
+            <button
+              type="button"
+              onClick={logout}
+              title="Выйти"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+            >
+              <LogOut className="w-4 h-4" strokeWidth={2.5} />
+            </button>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
@@ -146,15 +157,7 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
         {user ? <TonWalletSidebarRow /> : null}
         {user ? <TelegramSidebarRow /> : null}
 
-        {user ? (
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Выйти из системы
-          </button>
-        ) : (
+        {user ? null : (
           <div className="flex flex-col gap-1.5">
             <button
               onClick={() => login()}
