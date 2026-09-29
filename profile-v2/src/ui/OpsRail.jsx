@@ -4,7 +4,7 @@ import { apiRequest } from '../api/client.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { TonWalletSidebarRow } from '../features/ton-checkout/TonWalletSidebarRow.jsx';
 import { TelegramSidebarRow } from '../features/telegram/TelegramSidebarRow.jsx';
-import { Bot, CreditCard, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
+import { Bot, CreditCard, Pencil, Rocket, LogOut, LogIn, Crown, Send, AlertTriangle } from 'lucide-react';
 
 function PromoCard({ href, icon: Icon, chipClass, iconClass, title, children }) {
   return (
@@ -109,9 +109,13 @@ export function OpsRail({ showPaywall = true, showUserbotPromos = false, showBot
               {profileInitial}
             </div>
           )}
-          <a href="/userbot/profile" className="flex-1 min-w-0 block hover:opacity-80 transition-opacity">
-            <div className="text-sm font-bold text-slate-900 truncate hover:underline">{profileName}</div>
-            <div className="text-xs text-slate-500 truncate hover:underline">{profileEmail || 'Без email'}</div>
+          {/* Имя — явная ссылка на профиль: цвет, подчёркивание и иконка, чтобы читалось как кликабельное. */}
+          <a href="/profile/" className="group flex-1 min-w-0 block">
+            <span className="flex items-center gap-1 min-w-0 text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-colors">
+              <Pencil className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span className="truncate underline decoration-indigo-300 underline-offset-2 group-hover:decoration-indigo-500">{profileName}</span>
+            </span>
+            <span className="block text-xs text-slate-500 truncate">{profileEmail || 'Без email'}</span>
           </a>
         </div>
 
