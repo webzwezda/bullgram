@@ -64,7 +64,7 @@ export function RailProfileCard() {
         ) : null}
       </div>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
         <div className="flex items-center gap-2">
           <Crown className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
@@ -79,7 +79,7 @@ export function RailProfileCard() {
 
       {/* Казна — деньги платформы, только для платформенного админа. */}
       {profileRole === 'admin' ? (
-        <a href="/treasury" className="flex items-center justify-between px-2 py-2 -mx-2 rounded-xl hover:bg-slate-50 transition-colors mb-3">
+        <a href="/treasury" className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4 transition-colors hover:bg-slate-100/70">
           <div className="flex items-center gap-2">
             <Landmark className="w-4 h-4 text-slate-400" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Казна проекта</span>
