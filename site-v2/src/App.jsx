@@ -31,6 +31,7 @@ const PayPage = lazyRoute(() => import('./pages/PayPage.jsx').then((m) => ({ def
 const CreateInvoicePage = lazyRoute(() => import('./pages/CreateInvoicePage.jsx').then((m) => ({ default: m.CreateInvoicePage })));
 const CreatedInvoicePage = lazyRoute(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
 const AccessRequestPage = lazyRoute(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
+const GetAccountPage = lazyRoute(() => import('./pages/GetAccountPage.jsx').then((m) => ({ default: m.GetAccountPage })));
 
 // Переход в другое приложение (/userbot, /app) — полный page load: SPA-роутер
 // здесь не резолвит чужие пути, Navigate уходил бы в wildcard на главную.
@@ -99,6 +100,7 @@ export function App() {
         <Route path="/created/:id" element={<CreatedInvoicePage />} />
         <Route path="/quick-start" element={<Navigate to="/docs/quick-start/" replace />} />
         <Route path="/access-request" element={<AccessRequestPage />} />
+        <Route path="/get-account" element={<GetAccountPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
@@ -202,8 +204,6 @@ export function App() {
             <a href="/docs/quick-start/" className="transition-colors hover:text-slate-700">Docs</a>
             <span className="text-slate-300">·</span>
             <a href="/api/external/v1/docs" className="transition-colors hover:text-slate-700">API Docs</a>
-            <span className="text-slate-300">·</span>
-            <a href="/blog/" className="transition-colors hover:text-slate-700">Блог</a>
           </div>
         </div>
       </aside>
