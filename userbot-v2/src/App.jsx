@@ -161,7 +161,8 @@ export function App() {
             <a href="/userbot/api" className="transition-colors hover:text-slate-700">
               API
             </a>
-            <span className="text-slate-300">·</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500 mt-1.5">
             <a href="/docs/quick-start/" className="transition-colors hover:text-slate-700">
               Docs
             </a>
