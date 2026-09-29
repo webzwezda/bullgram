@@ -35,7 +35,7 @@ export function RailProfileCard() {
   const currentPlan = useMemo(() => planMeta(profilePlan), [profilePlan]);
 
   return (
-    <div className="bg-white border border-slate-200/60 rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mb-4">
+    <div className="px-3 mb-6">
       <div className="flex items-center gap-3 mb-4">
         {avatarUrl ? (
           <img src={avatarUrl} alt={profileName} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
@@ -54,22 +54,19 @@ export function RailProfileCard() {
         </a>
       </div>
 
-      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Crown className="w-4 h-4 text-slate-400" />
           <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Тариф</span>
         </div>
-        <div className="flex flex-col items-end">
-          <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
-            {currentPlan.title}
-          </span>
-          {currentPlan.hint ? <span className="text-xs text-slate-500 mt-1 font-medium">{currentPlan.hint}</span> : null}
-        </div>
+        <span className={`px-2 py-0.5 text-xs font-bold rounded-md border ${currentPlan.pillClass}`}>
+          {currentPlan.title}
+        </span>
       </div>
 
       {/* Казна — деньги платформы, только для платформенного админа. */}
       {profileRole === 'admin' ? (
-        <a href="/treasury" className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4 transition-colors hover:bg-slate-100/70">
+        <a href="/treasury" className="flex items-center justify-between px-2 py-2 -mx-2 rounded-xl hover:bg-slate-50 transition-colors mb-3">
           <div className="flex items-center gap-2">
             <Landmark className="w-4 h-4 text-slate-400" />
             <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Казна проекта</span>
@@ -84,7 +81,7 @@ export function RailProfileCard() {
       {user ? (
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200 transition-colors shadow-sm"
+          className="w-full flex items-center justify-center gap-2 py-2 px-4 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition-colors"
         >
           <LogOut className="w-3.5 h-3.5" />
           Выйти из системы
