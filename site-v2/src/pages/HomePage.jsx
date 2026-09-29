@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
-import { apiRequest } from '../api/client.js';
+import { createTonConnectOrder, checkoutErrorMessage } from '../features/ton-checkout/pro-order.js';
 
 const plans = [
   {
@@ -76,23 +76,8 @@ function formatCountdown(value) {
   return hh > 0 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-// Общий вход в оплату Pro: и кнопка героя, и кнопка в карточке тарифа
-async function createTonConnectOrder(accessToken) {
-  const data = await apiRequest('/api/billing/checkout/ton-connect', {
-    accessToken,
-    method: 'POST',
-    body: {}
-  });
-  if (!data?.order_id) throw new Error('Не получили order_id от сервера');
-  return data.order_id;
-}
-
-function checkoutErrorMessage(e) {
-  const status = e?.status || e?.statusCode;
-  if (!status) return 'Не удалось связаться с сервером. Проверь интернет и попробуй ещё раз.';
-  if (status >= 500) return 'Сервис оплаты недоступен. Напиши в поддержку.';
-  return e.message || 'Не удалось создать счёт';
-}
+// Общий вход в оплату Pro живёт в features/ton-checkout/pro-order.js
+// (используется кнопкой героя, карточкой тарифа и маршрутом /get-account)
 
 function ProCheckoutButton({ profilePlan, proEndsAt, pendingOrder, user, accessToken }) {
   const navigate = useNavigate();
@@ -276,7 +261,7 @@ function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login 
 
   const onCreate = async () => {
     if (!user) {
-      login();
+      login('/get-account');
       return;
     }
     setCreating(true);
