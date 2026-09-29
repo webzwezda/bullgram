@@ -171,6 +171,14 @@ export function App() {
             <a href="/userbot/api" className="transition-colors hover:text-slate-700">
               API
             </a>
+            <span className="text-slate-300">·</span>
+            <a href="/docs/quick-start/" className="transition-colors hover:text-slate-700">
+              Docs
+            </a>
+            <span className="text-slate-300">·</span>
+            <a href="/api/external/v1/docs" className="transition-colors hover:text-slate-700">
+              API Docs
+            </a>
           </div>
         </div>
       </aside>
