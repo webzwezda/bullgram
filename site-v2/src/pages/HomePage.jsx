@@ -526,7 +526,17 @@ export function HomePage() {
               </PlanCard>
             ))}
           </div>
-          <p className="mt-6 text-center text-sm font-medium leading-6 text-ink-muted">
+          <p className="mt-6 text-center text-pretty text-sm font-medium leading-6 text-ink-muted">
+            Людям с инвалидностью — тариф Normal бесплатно, без справок:{' '}
+            <a
+              href="/access-request"
+              className="font-bold text-action-primary underline decoration-2 underline-offset-2 hover:text-action-primary-hover"
+            >
+              заполнить короткую форму
+            </a>
+            .
+          </p>
+          <p className="mt-2 text-center text-sm font-medium leading-6 text-ink-muted">
             Вопрос по тарифам или нужен другой формат?{' '}
             <a
               href={SUPPORT_TELEGRAM}
