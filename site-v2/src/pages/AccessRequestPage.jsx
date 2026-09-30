@@ -3,10 +3,10 @@ import { CheckCircle2, Send } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 
-// Публичная форма заявки на доступ к Bullgram (режим Normal — без юзерботов
-// и прокси). Доступна без регистрации: заявка сохраняется и уходит админу
-// в Telegram. Сделана с расчётом на людей с ограниченными возможностями:
-// крупные поля, явные label, фокус-кольца, ошибки через role="alert".
+// Публичная форма заявки на тариф Normal (социальная помощь: инвалидность
+// или сложная жизненная ситуация). Доступна без регистрации: заявка
+// сохраняется и уходит админу в Telegram. Крупные поля, явные label,
+// фокус-кольца, ошибки через role="alert".
 
 export function AccessRequestPage() {
   const [name, setName] = useState('');
@@ -68,8 +68,8 @@ export function AccessRequestPage() {
           <h1 ref={successHeadingRef} tabIndex={-1} className="mt-4 text-2xl font-black tracking-tight text-slate-950 outline-none">Заявка отправлена</h1>
           <p className="mt-3 text-base font-medium leading-7 text-slate-600">
             Мы получили вашу заявку и напишем вам по указанному контакту —
-            обычно в течение 1–2 дней. Доступ подключим в режиме Normal —
-            работу с сайтом, с человеческой помощью в настройке.
+            обычно в течение 1–2 дней. Тариф Normal подключим вручную,
+            без справок.
           </p>
           <a
             href="/"
@@ -92,18 +92,12 @@ export function AccessRequestPage() {
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-12 sm:px-6">
       <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-        Особый доступ к Bullgram
+        Тариф Normal
       </h1>
       <p className="mt-4 text-base font-medium leading-7 text-slate-600">
-        Для людей с инвалидностью цифровые барьеры — не мелочь. Поэтому без справок,
-        очередей и автоматических отказов: заполните три поля — рассмотрим заявку лично
-        и подключим режим Normal — работу с сайтом, с человеческой помощью в настройке.
+        Людям с инвалидностью или в сложной жизненной ситуации мы предоставляем
+        тариф Normal бесплатно.
       </p>
-      <ul className="mt-4 space-y-1.5 text-sm font-semibold text-slate-500">
-        <li>— справки и документы не нужны;</li>
-        <li>— отвечаем лично, обычно в течение 1–2 дней;</li>
-        <li>— заявку видим только мы.</li>
-      </ul>
 
       <form
         onSubmit={onSubmit}
@@ -180,7 +174,7 @@ export function AccessRequestPage() {
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <label htmlFor="note" className="text-sm font-bold text-slate-700">
-              Ваша ситуация или пожелания <span className="font-medium text-slate-500">(по желанию)</span>
+              Опишите вашу ситуацию <span className="font-medium text-slate-500">(по желанию)</span>
             </label>
             <span className="shrink-0 text-[11px] font-medium text-slate-500" aria-hidden="true">
               {note.length} / 500
@@ -193,7 +187,7 @@ export function AccessRequestPage() {
             maxLength={500}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Например: пользуюсь скринридером, нужен крупный шрифт, важна поддержка без спешки"
+            placeholder="Например: глухой"
             aria-invalid={fieldErrors.note ? true : undefined}
             aria-describedby="note-hint"
             className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
