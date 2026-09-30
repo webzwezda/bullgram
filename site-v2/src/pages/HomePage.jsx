@@ -231,8 +231,9 @@ function PlanCard({ plan, children }) {
   );
 }
 
-// Главная кнопка страницы: «Получить аккаунт» = оплата Pro, аккаунт выдаётся после оплаты
-function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login }) {
+// Главная кнопка страницы: «Получить аккаунт» = оплата Pro, аккаунт выдаётся после оплаты.
+// label переопределяется в финальном CTA («Quick Start»)
+function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login, label = 'Получить аккаунт' }) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -293,7 +294,7 @@ function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login 
           </>
         ) : (
           <>
-            Получить аккаунт
+            {label}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
           </>
         )}
@@ -554,8 +555,17 @@ export function HomePage() {
             profilePlan={profilePlan}
             pendingOrder={pendingOrder}
             login={login}
+            label="Quick Start"
           />
         </div>
+        <p className="mt-6 text-sm font-medium text-ink-muted">
+          <a
+            href="/docs/quick-start/"
+            className="font-bold text-action-primary underline decoration-2 underline-offset-2 hover:text-action-primary-hover"
+          >
+            Подробный гид по настройке
+          </a>
+        </p>
       </section>
     </div>
   );
