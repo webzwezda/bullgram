@@ -4,8 +4,11 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
+  Braces,
   CheckCircle2,
+  Globe,
   Loader2,
+  PlugZap,
 } from 'lucide-react';
 import { SUPPORT_TELEGRAM } from '../contacts.js';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -306,6 +309,27 @@ function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login 
   );
 }
 
+const accessTools = [
+  {
+    icon: Braces,
+    name: 'REST API',
+    text: 'Вызывай аккаунты из кода: n8n, скрипты, бэкенды.',
+    path: '/userbot/api'
+  },
+  {
+    icon: PlugZap,
+    name: 'Bullgram MCP',
+    text: 'Подключи ИИ-агента: Claude, Cursor, любой MCP-клиент.',
+    path: '/userbot/mcp'
+  },
+  {
+    icon: Globe,
+    name: 'Telegram Web',
+    text: 'Работай руками: аккаунт прямо в браузере.',
+    path: '/userbot'
+  }
+];
+
 function McpExampleCard() {
   return (
     <div className="overflow-hidden rounded-2xl bg-slate-900 shadow-2xl shadow-black/40 ring-1 ring-white/10">
@@ -421,11 +445,11 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Интерфейс: MCP и REST API к живым сессиям */}
+      {/* Три инструмента доступа к живым аккаунтам */}
       <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">MCP и REST API</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">MCP · REST API · Telegram Web</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Живой интерфейс к живым аккаунтам
             </h2>
@@ -433,23 +457,27 @@ export function HomePage() {
               Инструменты читают группы и историю, ищут сообщения, шлют ЛС
               и управляют чатами — то, чего Bot API не умеет.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => (user ? window.location.assign('/app/api') : login('/app/api'))}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/15"
-              >
-                REST API
-                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-              </button>
-              <button
-                type="button"
-                onClick={() => (user ? window.location.assign('/app/mcp') : login('/app/mcp'))}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-surface-card px-5 py-3 text-sm font-bold text-ink-strong shadow-lg shadow-black/30 transition hover:bg-surface-subtle"
-              >
-                Bullgram MCP
-                <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
-              </button>
+            <div className="mt-7 flex flex-col gap-3">
+              {accessTools.map((tool) => {
+                const ToolIcon = tool.icon;
+                return (
+                  <button
+                    key={tool.name}
+                    type="button"
+                    onClick={() => (user ? window.location.assign(tool.path) : login(tool.path))}
+                    className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/10 px-4 py-3.5 text-left transition hover:bg-white/15"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+                      <ToolIcon className="h-5 w-5 text-indigo-300" strokeWidth={2.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-white">{tool.name}</span>
+                      <span className="block text-sm font-medium text-slate-400">{tool.text}</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.5} />
+                  </button>
+                );
+              })}
             </div>
           </div>
           <McpExampleCard />
