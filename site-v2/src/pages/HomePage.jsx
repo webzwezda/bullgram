@@ -445,47 +445,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Три инструмента доступа к живым аккаунтам */}
-      <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">Telegram Web · MCP · REST API</div>
-            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Живой интерфейс к живым аккаунтам
-            </h2>
-            <p className="mt-4 text-pretty text-base font-medium leading-7 text-slate-400">
-              Инструменты читают группы и историю, ищут сообщения, шлют ЛС
-              и управляют чатами.
-            </p>
-            <div className="mt-7 flex flex-col gap-3">
-              {accessTools.map((tool) => {
-                const ToolIcon = tool.icon;
-                return (
-                  <button
-                    key={tool.name}
-                    type="button"
-                    onClick={() => (user ? window.location.assign(tool.path) : login(tool.path))}
-                    className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/10 px-4 py-3.5 text-left transition hover:bg-white/15"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
-                      <ToolIcon className="h-5 w-5 text-indigo-300" strokeWidth={2.2} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-bold text-white">{tool.name}</span>
-                      <span className="block text-sm font-medium text-slate-400">{tool.text}</span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.5} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <McpExampleCard />
-        </div>
-      </section>
-
       {/* Тарифы (scroll-mt — чтобы якорь #tariffs не уезжал под липкую мобильную шапку) */}
-      <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 pt-16 sm:px-10 sm:pb-24 sm:pt-20 lg:px-16">
+      <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 sm:px-10 sm:pb-24 lg:px-16">
         <div className="mx-auto w-full max-w-5xl">
           <div className="mb-8">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Тарифы</div>
@@ -537,6 +498,45 @@ export function HomePage() {
             </a>
             .
           </p>
+        </div>
+      </section>
+
+      {/* Три инструмента доступа к живым аккаунтам */}
+      <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">Telegram Web · MCP · REST API</div>
+            <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Живой интерфейс к живым аккаунтам
+            </h2>
+            <p className="mt-4 text-pretty text-base font-medium leading-7 text-slate-400">
+              Инструменты читают группы и историю, ищут сообщения, шлют ЛС
+              и управляют чатами.
+            </p>
+            <div className="mt-7 flex flex-col gap-3">
+              {accessTools.map((tool) => {
+                const ToolIcon = tool.icon;
+                return (
+                  <button
+                    key={tool.name}
+                    type="button"
+                    onClick={() => (user ? window.location.assign(tool.path) : login(tool.path))}
+                    className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/10 px-4 py-3.5 text-left transition hover:bg-white/15"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+                      <ToolIcon className="h-5 w-5 text-indigo-300" strokeWidth={2.2} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-white">{tool.name}</span>
+                      <span className="block text-sm font-medium text-slate-400">{tool.text}</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.5} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <McpExampleCard />
         </div>
       </section>
 
