@@ -2,7 +2,7 @@
 // Перенесено из admin-v2/src/pages/QuickStartPage.jsx: сменились только
 // относительные импорты, имя компонента, заголовок страницы и внешний
 // указатель на выпуск API-токена (ключи теперь живут в «Юзерботе»).
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Eye, EyeOff, Loader2, Pause, Play, RefreshCcw, Save, Trash2, Zap, Copy, Plus, Lock, Globe, Shield, UserPlus, Clock, AlertTriangle, Settings, RefreshCw, Unlink, Bot, Code, FileText, Key, Layout, Inbox, ScrollText, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
@@ -105,15 +105,17 @@ function sortJournalRows(rows) {
   });
 }
 
-// target_channel_id — это tg_chat_id канала; конфиги каналов keyed по UUID.
-function findJournalChannel(configs, targetChannelId) {
-  const key = String(targetChannelId ?? '');
-  return Object.values(configs).find((c) => String(c.tgChatId) === key) || null;
+// target_channel_id — это tg_chat_id канала; конфиги каналов keyed по UUID,
+// поэтому ищем по подготовленному индексу tg_chat_id → конфиг (O(1) вместо
+// find по всем конфигам на каждую строку). Индекс хранит первый конфиг с таким
+// chat id — тот же результат, что давал .find по Object.values(configs).
+function findJournalChannel(channelByChatId, targetChannelId) {
+  return channelByChatId.get(String(targetChannelId ?? '')) || null;
 }
 
-function journalRowsByType(plannedItems, types, configs) {
+function journalRowsByType(plannedItems, types, channelByChatId) {
   return sortJournalRows(plannedItems.filter((it) => types.includes(it.media_type)))
-    .map((item) => ({ item, channel: findJournalChannel(configs, item.target_channel_id) }));
+    .map((item) => ({ item, channel: findJournalChannel(channelByChatId, item.target_channel_id) }));
 }
 
 // Одна строка на канал: «Запланировано N · при ~M/день хватит на K дн.»
@@ -797,6 +799,65 @@ export default function AutopostManagePage() {
     }
   }
 
+  // Журнал: индекс tg_chat_id → конфиг канала. Пересобирается только при смене
+  // конфигов, а не на каждый рендер (каждый символ в поле токена, realtime-refetch).
+  const journalChannelByChatId = useMemo(() => {
+    const byChatId = new Map();
+    for (const cfg of Object.values(channelConfigs)) {
+      const key = String(cfg.tgChatId);
+      if (!byChatId.has(key)) byChatId.set(key, cfg);
+    }
+    return byChatId;
+  }, [channelConfigs]);
+
+  // Отсечка 30-дневного окна провалов, квантованная до часа: в deps memo она
+  // меняется максимум раз в час, поэтому окно живое (дрейф ≤ 1 ч на 30 дней),
+  // а memo не пересчитывается на каждом рендере.
+  const failedJournalCutoffMs = Math.floor(Date.now() / (60 * 60 * 1000)) * (60 * 60 * 1000) - 30 * 24 * 60 * 60 * 1000;
+
+  // Журнал: вся производка (планы, провалы, строки по табам, счётчики, сводки)
+  // пересчитывается только при изменении входов. Хуки стоят ДО раннего return
+  // по loading — порядок хуков не должен зависеть от состояния загрузки.
+  const {
+    plannedJournalItems,
+    failedJournalCount,
+    latestFailedJournal,
+    mediaJournalRows,
+    checklistJournalRows,
+    textJournalRows,
+    journalTabCounts,
+    activeJournalRows,
+    mediaJournalSummary,
+    journalChecklistById
+  } = useMemo(() => {
+    // planned = queued|scheduled (клиентский фильтр по полному списку),
+    // failed — вне табов, только строка-предупреждение. Провалы старше 30 дней
+    // не считаем: протухший контент всё равно не переиздаётся, а баннер висит годами.
+    const planned = journalItems.filter((it) => JOURNAL_PLANNED_STATUSES.includes(it.status));
+    const failed = journalItems.filter((it) => (
+      it.status === 'failed' && new Date(it.created_at).getTime() > failedJournalCutoffMs
+    ));
+    const latestFailed = failed.reduce((acc, it) => (
+      !acc || new Date(it.created_at) > new Date(acc.created_at) ? it : acc
+    ), null);
+    const mediaRows = journalRowsByType(planned, JOURNAL_MEDIA_TYPES, journalChannelByChatId);
+    const checklistRows = journalRowsByType(planned, ['checklist'], journalChannelByChatId);
+    const textRows = journalRowsByType(planned, ['text'], journalChannelByChatId);
+    const tabRows = { media: mediaRows, checklists: checklistRows, text: textRows };
+    return {
+      plannedJournalItems: planned,
+      failedJournalCount: failed.length,
+      latestFailedJournal: latestFailed,
+      mediaJournalRows: mediaRows,
+      checklistJournalRows: checklistRows,
+      textJournalRows: textRows,
+      journalTabCounts: { media: mediaRows.length, checklists: checklistRows.length, text: textRows.length },
+      activeJournalRows: tabRows[journalTab] || [],
+      mediaJournalSummary: journalMediaSummaryLines(mediaRows),
+      journalChecklistById: new Map(journalChecklists.map((cl) => [String(cl.id), cl]))
+    };
+  }, [journalItems, journalChecklists, journalChannelByChatId, journalTab, failedJournalCutoffMs]);
+
   if (loading) return <LoadingState text="Загружаем автопостер..." />;
 
   // Определяем шаги онбординга
@@ -805,31 +866,6 @@ export default function AutopostManagePage() {
   const selectedBot = existingBots.find((b) => String(b.id) === String(selectedBotId)) || null;
   const botPaused = selectedBot ? selectedBot.is_active === false : false;
   const TIMEZONES = ['Europe/Moscow', 'Europe/Kaliningrad', 'Europe/Samara', 'Asia/Yekaterinburg', 'Asia/Omsk', 'Asia/Krasnoyarsk', 'Asia/Irkutsk', 'Asia/Yakutsk', 'Asia/Vladivostok', 'Asia/Magadan', 'Asia/Kamchatka', 'UTC'];
-
-  // Журнал: planned = queued|scheduled (клиентский фильтр по полному списку),
-  // failed — вне табов, только строка-предупреждение. Провалы старше 30 дней
-  // не считаем: протухший контент всё равно не переиздаётся, а баннер висит годами.
-  const plannedJournalItems = journalItems.filter((it) => JOURNAL_PLANNED_STATUSES.includes(it.status));
-  const FAILED_JOURNAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-  const failedJournalItems = journalItems.filter((it) => (
-    it.status === 'failed' && Date.now() - new Date(it.created_at).getTime() < FAILED_JOURNAL_WINDOW_MS
-  ));
-  const failedJournalCount = failedJournalItems.length;
-  const latestFailedJournal = failedJournalItems.reduce((acc, it) => (
-    !acc || new Date(it.created_at) > new Date(acc.created_at) ? it : acc
-  ), null);
-  const mediaJournalRows = journalRowsByType(plannedJournalItems, JOURNAL_MEDIA_TYPES, channelConfigs);
-  const checklistJournalRows = journalRowsByType(plannedJournalItems, ['checklist'], channelConfigs);
-  const textJournalRows = journalRowsByType(plannedJournalItems, ['text'], channelConfigs);
-  const journalTabCounts = {
-    media: mediaJournalRows.length,
-    checklists: checklistJournalRows.length,
-    text: textJournalRows.length
-  };
-  const journalTabRows = { media: mediaJournalRows, checklists: checklistJournalRows, text: textJournalRows };
-  const activeJournalRows = journalTabRows[journalTab] || [];
-  const mediaJournalSummary = journalMediaSummaryLines(mediaJournalRows);
-  const journalChecklistById = new Map(journalChecklists.map((cl) => [String(cl.id), cl]));
 
   return (
     <section className="page page--flush space-y-6">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, Send, ChevronRight, Eye, Lock, Database, FileText, AlertCircle, Clock, CheckCircle2, MoreHorizontal, RefreshCw, Users, Megaphone, MessageCircle } from 'lucide-react';
 import { apiRequest } from '../api/client.js';
@@ -72,7 +72,36 @@ function closeAllRowMenus() {
   }
 }
 
-function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutatingRowId }) {
+function canManageRow(row) {
+  return !!row?.tg_user_id;
+}
+
+const AudienceTable = memo(function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutatingRowId }) {
+  // Хуки стоят ДО раннего return по !target — порядок хуков не зависит от пропсов.
+  const members = target?.members || [];
+  const isPaid = !!target && (target.targetType === 'paid_channel' || target.targetType === 'paid_chat');
+
+  // Обогащение до 5000 участников считаем только при смене members/crmMap, а не
+  // на каждый рендер родителя (поиск, поллинг раз в минуту, флипы row-action).
+  // Счётчики «оплачено/просрочено/без оплаты» живут здесь же — вместе с rows.
+  const { enrichedRows, paidCount, freeCount, expiredCount } = useMemo(() => {
+    let paid = 0;
+    let free = 0;
+    let expired = 0;
+    let rows = members;
+    if (isPaid) {
+      rows = members.map((m) => {
+        const crm = crmMap.get(String(m.tg_user_id));
+        let paymentStatus = 'free';
+        if (crm?.status === 'active') { paymentStatus = 'paid'; paid++; }
+        else if (crm?.status === 'expired') { paymentStatus = 'expired'; expired++; }
+        else { free++; }
+        return { ...m, crm, paymentStatus };
+      });
+    }
+    return { enrichedRows: rows, paidCount: paid, freeCount: free, expiredCount: expired };
+  }, [members, crmMap, isPaid]);
+
   if (!target) {
     return (
       <div className="p-16 text-center flex flex-col items-center">
@@ -85,26 +114,8 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
     );
   }
 
-  const members = target.members || [];
   const targetType = target.targetType;
-  const isPaid = targetType === 'paid_channel' || targetType === 'paid_chat';
   const channelId = target.channelId;
-
-  let paidCount = 0;
-  let freeCount = 0;
-  let expiredCount = 0;
-  let enrichedRows = members;
-
-  if (isPaid) {
-    enrichedRows = members.map((m) => {
-      const crm = crmMap.get(String(m.tg_user_id));
-      let paymentStatus = 'free';
-      if (crm?.status === 'active') { paymentStatus = 'paid'; paidCount++; }
-      else if (crm?.status === 'expired') { paymentStatus = 'expired'; expiredCount++; }
-      else { freeCount++; }
-      return { ...m, crm, paymentStatus };
-    });
-  }
 
   return (
     <div className="overflow-hidden flex flex-col">
@@ -318,7 +329,7 @@ function AudienceTable({ target, syncingType, onSync, crmMap, onAction, mutating
       )}
     </div>
   );
-}
+});
 
 function openUserbotCenterHandoff(tgUserId, draftMessage = '', commonChatId = '') {
   if (!tgUserId) return;
@@ -715,7 +726,7 @@ export function CustomersPage() {
 
   useEffect(() => { loadAudience(); }, [loadAudience]);
 
-  async function syncAudience(targetType) {
+  const syncAudience = useCallback(async (targetType) => {
     const cid = audienceState.contourId;
     if (!cid) return;
     try {
@@ -738,13 +749,9 @@ export function CustomersPage() {
     } finally {
       setAudienceState((prev) => ({ ...prev, syncingType: null }));
     }
-  }
+  }, [accessToken, loadAudience, audienceState.contourId]);
 
-  function canManageRow(row) {
-    return !!row?.tg_user_id;
-  }
-
-  function resolveActionChannelId(row) {
+  const resolveActionChannelId = useCallback((row) => {
     if (row.channel_id) return String(row.channel_id);
 
     if (selectableChannels.length === 1) {
@@ -769,9 +776,9 @@ export function CustomersPage() {
     }
 
     return String(selectableChannels[pickedIndex].id);
-  }
+  }, [selectableChannels]);
 
-  async function runSubscriptionAction(row, action) {
+  const runSubscriptionAction = useCallback(async (row, action) => {
     if (!canManageRow(row)) return;
 
     const rowId = row.id ? String(row.id) : null;
@@ -871,7 +878,7 @@ export function CustomersPage() {
     } finally {
       setMutatingRowId(null);
     }
-  }
+  }, [accessToken, loadCustomers, resolveActionChannelId]);
 
   if (state.loading) {
     return <LoadingState text="Собираем клиентов..." />;
