@@ -536,17 +536,6 @@ export function HomePage() {
             </a>
             .
           </p>
-          <p className="mt-2 text-center text-sm font-medium leading-6 text-ink-muted">
-            Вопрос по тарифам или нужен другой формат?{' '}
-            <a
-              href={SUPPORT_TELEGRAM}
-              target="_blank"
-              rel="noreferrer"
-              className="font-bold text-action-primary underline decoration-2 underline-offset-2 hover:text-action-primary-hover"
-            >
-              Напиши в поддержку в Telegram
-            </a>
-          </p>
         </div>
       </section>
 
