@@ -377,14 +377,39 @@ export default function(supabase) {
             if (eventsError && !(eventsError.message || '').includes('customer_funnel_events')) throw eventsError;
             if (invoicesError) throw invoicesError;
 
+            // Индекс счетов строится один раз — проверка события O(1) вместо скана всех счетов на каждое событие.
+            // Ключи строковые, как в исходном сравнении String(a) !== String(b): 5 и "5" склеивались и раньше.
+            // Берём максимум created_at на пользователя (и на пользователя+тариф): «есть счёт после события» === «максимум >= событие».
+            const maxInvoiceMsByUser = new Map();
+            const maxInvoiceMsByUserTariff = new Map();
+            for (const invoice of invoices || []) {
+                const userKey = String(invoice.tg_user_id);
+                const invoiceMs = new Date(invoice.created_at).getTime();
+                if (!Number.isFinite(invoiceMs)) continue;
+
+                const userMax = maxInvoiceMsByUser.get(userKey);
+                if (userMax === undefined || invoiceMs > userMax) maxInvoiceMsByUser.set(userKey, invoiceMs);
+
+                if (invoice.tariff_id) {
+                    const tariffKey = String(invoice.tariff_id);
+                    let byTariff = maxInvoiceMsByUserTariff.get(userKey);
+                    if (!byTariff) {
+                        byTariff = new Map();
+                        maxInvoiceMsByUserTariff.set(userKey, byTariff);
+                    }
+                    const tariffMax = byTariff.get(tariffKey);
+                    if (tariffMax === undefined || invoiceMs > tariffMax) byTariff.set(tariffKey, invoiceMs);
+                }
+            }
+
             return dedupeAudience((events || [])
                 .filter(event => {
                     if (event.tariff_id && !tariffMap.has(event.tariff_id)) return false;
-                    return !(invoices || []).some(invoice => {
-                        if (String(invoice.tg_user_id) !== String(event.tg_user_id)) return false;
-                        if (event.tariff_id && String(invoice.tariff_id) !== String(event.tariff_id)) return false;
-                        return new Date(invoice.created_at).getTime() >= new Date(event.created_at).getTime();
-                    });
+                    const eventMs = new Date(event.created_at).getTime();
+                    const invoiceMaxMs = event.tariff_id
+                        ? maxInvoiceMsByUserTariff.get(String(event.tg_user_id))?.get(String(event.tariff_id))
+                        : maxInvoiceMsByUser.get(String(event.tg_user_id));
+                    return !(invoiceMaxMs !== undefined && eventMs <= invoiceMaxMs);
                 })
                 .map(event => {
                     const tariff = tariffMap.get(event.tariff_id) || null;

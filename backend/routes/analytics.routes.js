@@ -75,9 +75,11 @@ export default function (supabase) {
 
             let invoices = [];
             if (tariffIds.length > 0) {
+                // Проекция вместо select('*'): счётчики lifetime, строки нужны только
+                // с перечисленными полями — payload не растёт с шириной таблицы инвойсов.
                 const { data: ownerInvoices, error: invError } = await supabase
                     .from('invoices')
-                    .select('*, tariffs!inner(channel_id, title, is_trial, trial_label)')
+                    .select('id, amount, currency, status, reminded, created_at, tg_user_id, tariffs!inner(channel_id, title, is_trial, trial_label)')
                     .in('tariff_id', tariffIds)
                     .order('created_at', { ascending: false });
                 if (invError) throw invError;
@@ -195,35 +197,57 @@ export default function (supabase) {
                 }
             }
 
-            const [{ data: subscriptions, error: subsError }, { data: accessEvents, error: accessError }, { data: paymentEvents, error: paymentEventsError }] = await Promise.all([
+            const [subsResult, joinApprovedResult, inviteIssuedResult, autoConfirmedResult, manualConfirmedResult] = await Promise.all([
                 channelIds.length > 0
                     ? supabase
                         .from('subscriptions')
                         .select('id, tg_user_id, channel_id, status, expires_at, created_at, last_join_approved_at')
                         .in('channel_id', channelIds)
-                    : Promise.resolve({ data: [], error: null }),
+                    : Promise.resolve({ data: [] }),
+                // Счётчики событий — точными head-count запросами (как activeSubscribers выше):
+                // числа те же, но строки таблиц не покидают БД и не растут с историей.
                 channelIds.length > 0
                     ? supabase
                         .from('access_events')
-                        .select('id, channel_id, event_type, created_at')
+                        .select('id', { count: 'exact', head: true })
                         .eq('owner_id', userId)
-                    : Promise.resolve({ data: [], error: null }),
+                        .eq('event_type', 'join_approved')
+                    : Promise.resolve({ count: 0 }),
+                channelIds.length > 0
+                    ? supabase
+                        .from('access_events')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('owner_id', userId)
+                        .eq('event_type', 'invite_issued')
+                    : Promise.resolve({ count: 0 }),
                 supabase
                     .from('payment_events')
-                    .select('id, event_type, created_at')
+                    .select('id', { count: 'exact', head: true })
                     .eq('owner_id', userId)
+                    .eq('event_type', 'invoice_completed'),
+                supabase
+                    .from('payment_events')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('owner_id', userId)
+                    .in('event_type', ['admin_approved', 'ton_manual_confirmed'])
             ]);
 
-            if (subsError) throw subsError;
-            if (accessError) throw accessError;
-            if (paymentEventsError) {
-                // Проглатываем только «таблицы нет», остальное падает в catch роута
-                if (isUndefinedTableError(paymentEventsError)) {
-                    console.error('[analytics] payment_events недоступна:', paymentEventsError.message || paymentEventsError);
-                } else {
-                    throw paymentEventsError;
+            if (subsResult.error) throw subsResult.error;
+            if (joinApprovedResult.error) throw joinApprovedResult.error;
+            if (inviteIssuedResult.error) throw inviteIssuedResult.error;
+            for (const result of [autoConfirmedResult, manualConfirmedResult]) {
+                if (result.error) {
+                    // Проглатываем только «таблицы нет», остальное падает в catch роута
+                    if (!isUndefinedTableError(result.error)) throw result.error;
+                    console.error('[analytics] payment_events недоступна:', result.error.message || result.error);
                 }
             }
+
+            const subscriptions = subsResult.data || [];
+            let joinApprovedCount = joinApprovedResult.count || 0;
+            let inviteIssuedCount = inviteIssuedResult.count || 0;
+            let autoConfirmedPayments = autoConfirmedResult.count || 0;
+            let manualConfirmedPayments = manualConfirmedResult.count || 0;
 
             const now = Date.now();
             const monthAgoTs = now - (30 * 24 * 60 * 60 * 1000);
@@ -238,9 +262,6 @@ export default function (supabase) {
                 (invoices || []).filter(inv => inv.status === 'paid'),
                 channelIds
             );
-
-            const joinApprovedCount = (accessEvents || []).filter(event => event.event_type === 'join_approved').length;
-            const inviteIssuedCount = (accessEvents || []).filter(event => event.event_type === 'invite_issued').length;
 
             const paidNotJoinedCount = (subscriptions || []).filter(sub => sub.status === 'active' && !sub.last_join_approved_at).length;
             const expiredButStillInsideCount = (subscriptions || []).filter(sub => sub.status === 'expired' && sub.last_join_approved_at).length;
@@ -258,11 +279,6 @@ export default function (supabase) {
             const churnRate = recentSubscriptions.length > 0
                 ? Math.round((recentExpirations.length / recentSubscriptions.length) * 100)
                 : 0;
-            const autoConfirmedPayments = (paymentEvents || []).filter(event => event.event_type === 'invoice_completed').length;
-            const manualConfirmedPayments = (paymentEvents || []).filter(event =>
-                event.event_type === 'admin_approved' || event.event_type === 'ton_manual_confirmed'
-            ).length;
-
             // Считаем конверсию из неоплаченного счета в оплаченный
             const totalMyInvoices = paidInvoicesCount + pendingInvoicesCount;
             const conversion = totalMyInvoices > 0 ? Math.round((paidInvoicesCount / totalMyInvoices) * 100) : 0;

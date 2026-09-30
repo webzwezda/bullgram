@@ -114,13 +114,21 @@ export function registerNavigationHandlers(bot, { service, botId, sendMainMenu, 
                 return;
             }
 
+            // Один запрос на все каналы вместо .single() на каждую подписку.
+            const channelIds = [...new Set(subs.map(sub => sub.channel_id).filter(Boolean))];
+            const channelTitleById = new Map();
+            if (channelIds.length > 0) {
+                const { data: channels } = await service.supabase.from('channels').select('id, title').in('id', channelIds);
+                for (const ch of channels || []) channelTitleById.set(ch.id, ch.title);
+            }
+
             let message = `📭 <b>АКТИВНЫЕ ПОДПИСКИ</b>\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━\n`;
             for (const sub of subs) {
                 let channelName = 'Закрытый канал';
                 if (sub.channel_id) {
-                    const { data: ch } = await service.supabase.from('channels').select('title').eq('id', sub.channel_id).single();
-                    if (ch) channelName = ch.title;
+                    const title = channelTitleById.get(sub.channel_id);
+                    if (title !== undefined) channelName = title;
                 }
                 let expDate = '♾ Навсегда';
                 if (sub.expires_at) expDate = new Date(sub.expires_at).toLocaleDateString('ru-RU');
