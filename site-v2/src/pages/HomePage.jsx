@@ -556,22 +556,6 @@ export function HomePage() {
             login={login}
           />
         </div>
-        <p className="mt-6 text-pretty text-sm font-medium text-ink-muted">
-          Регистрация → оплата 10 TON → аккаунт и Pro выдаются автоматически. Поддержка в Telegram.
-        </p>
-        {/* Dogfood-цифра: 9 710 вызовов агента за 30 дней — реальная, из прод-базы
-            (снята 2026-09-18); обновлять при следующем прогоне. Число каналов не
-            называем — не верифицировано. */}
-        <p className="mx-auto mt-10 max-w-xl text-pretty text-sm font-medium leading-5 text-ink-muted">
-          Мы сами строим на Bullgram: наш крипто-контур каждый день делает ИИ-сводки по нашим
-          Telegram-каналам —{' '}
-          <span className="font-bold text-ink-strong">9 710 вызовов агента</span> за последние 30 дней.
-          Разбор n8n-флоу —{' '}
-          <a href="/blog/" className="font-semibold text-action-primary underline decoration-1 underline-offset-2 hover:text-action-primary-hover">
-            скоро в блоге
-          </a>
-          .
-        </p>
       </section>
     </div>
   );
