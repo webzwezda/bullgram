@@ -311,6 +311,12 @@ function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login 
 
 const accessTools = [
   {
+    icon: Globe,
+    name: 'Telegram Web',
+    text: 'Работай руками: аккаунт прямо в браузере.',
+    path: '/userbot'
+  },
+  {
     icon: Braces,
     name: 'REST API',
     text: 'Вызывай аккаунты из кода: n8n, скрипты, бэкенды.',
@@ -321,12 +327,6 @@ const accessTools = [
     name: 'Bullgram MCP',
     text: 'Подключи ИИ-агента: Claude, Cursor, любой MCP-клиент.',
     path: '/userbot/mcp'
-  },
-  {
-    icon: Globe,
-    name: 'Telegram Web',
-    text: 'Работай руками: аккаунт прямо в браузере.',
-    path: '/userbot'
   }
 ];
 
@@ -449,13 +449,13 @@ export function HomePage() {
       <section className="bg-slate-950 px-6 py-16 sm:px-10 sm:py-20 lg:px-16">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">MCP · REST API · Telegram Web</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-300">Telegram Web · MCP · REST API</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Живой интерфейс к живым аккаунтам
             </h2>
             <p className="mt-4 text-pretty text-base font-medium leading-7 text-slate-400">
               Инструменты читают группы и историю, ищут сообщения, шлют ЛС
-              и управляют чатами — то, чего Bot API не умеет.
+              и управляют чатами.
             </p>
             <div className="mt-7 flex flex-col gap-3">
               {accessTools.map((tool) => {
