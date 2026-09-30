@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowRight,
   Braces,
   CheckCircle2,
@@ -484,26 +483,8 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Серая зона — честно, без сюсюканья */}
-      <section className="bg-white px-6 pb-16 sm:px-10 sm:pb-20 lg:px-16">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="flex gap-4 rounded-2xl border border-feedback-warning-text/20 bg-feedback-warning-bg p-6 sm:p-7">
-            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-feedback-warning-text" strokeWidth={2.2} aria-hidden="true" />
-            <div>
-              <h3 className="text-base font-bold text-feedback-warning-text">Серая зона — говорим прямо</h3>
-              <p className="mt-2 text-pretty text-sm font-medium leading-6 text-ink-body">
-                Автоматизация личного Telegram-аккаунта официально не благословлена,
-                и агрессивная работа ловит лимиты и баны. Мы со своей стороны делаем всё,
-                чтобы аккаунты жили долго. Темп и аккуратность — на тебе: мы не делаем вид,
-                что это белая зона.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Тарифы (scroll-mt — чтобы якорь #tariffs не уезжал под липкую мобильную шапку) */}
-      <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 sm:px-10 lg:px-16 sm:pb-24">
+      <section id="tariffs" className="scroll-mt-24 bg-white px-6 pb-20 pt-16 sm:px-10 sm:pb-24 sm:pt-20 lg:px-16">
         <div className="mx-auto w-full max-w-5xl">
           <div className="mb-8">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Тарифы</div>
