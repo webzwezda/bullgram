@@ -46,17 +46,17 @@ const steps = [
   {
     n: '01',
     title: 'Подключи сессию',
-    text: 'Свою — файлом или QR. Или возьми готовый аккаунт из магазина — сразу рабочий.'
+    text: 'Свою или возьми готовый аккаунт.'
   },
   {
     n: '02',
-    title: 'Дай агенту доступ',
-    text: 'Интеграционный токен — в два клика. MCP-сервер и REST API работают с n8n, Claude и любым MCP-клиентом.'
+    title: 'Промпт для MCP-подключения',
+    text: 'Выпусти MCP-токен и скопируй готовый промпт своему агенту для MCP-соединения.'
   },
   {
     n: '03',
     title: 'Агент работает в Telegram',
-    text: 'Читает группы и историю, мониторит каналы, пишет в ЛС. Всё, чего не умеет Bot API.'
+    text: 'Читает группы и историю, мониторит каналы, пишет в ЛС.'
   }
 ];
 
@@ -406,7 +406,7 @@ export function HomePage() {
           <div className="mb-10 max-w-2xl">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Как это работает</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
-              Три шага — и агент в Telegram
+              Три шага — и твой агент в Telegram
             </h2>
           </div>
           <ol className="grid gap-5 sm:grid-cols-3">
