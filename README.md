@@ -141,7 +141,7 @@ cd /srv/bullgram && git checkout <tag> && ./scripts/deploy-pull.sh
 - restricted userbot снимается с продажи, dedicated proxy чистится
 - manual DM не включает автоматически retention, auto-kick fallback, inbox watch или broadcast — каждый сценарий за своим флагом
 
-Подробнее в `CLAUDE.md`.
+Подробнее в `AGENTS.md`.
 
 ---
 
@@ -167,8 +167,7 @@ bullgram/
 ├── userbot-web/     # vendored Ajaxy/telegram-tt + патчи
 ├── ops/             # deploy/rollback/infra скрипты
 ├── docs/            # design specs и references
-├── CLAUDE.md        # инструкции для AI-агентов
-├── AGENTS.md        # контракт для subagents
+├── AGENTS.md        # инструкции для AI-агентов
 └── LICENSE          # AGPL-3.0
 ```
 
@@ -178,7 +177,7 @@ bullgram/
 
 См. `CONTRIBUTING.md`. PR'ы принимаются под AGPL-3.0 — в PR нужно подтвердить согласие.
 
-По стилю: backend — ESM, kebab-case файлы; frontend — React hooks, функциональные компоненты. Подробности в `CLAUDE.md`.
+По стилю: backend — ESM, kebab-case файлы; frontend — React hooks, функциональные компоненты. Подробности в `AGENTS.md`.
 
 ## Security
 

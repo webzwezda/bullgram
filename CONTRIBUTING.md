@@ -4,7 +4,7 @@
 
 ## Перед стартом
 
-- Прочитай `README.md` для общего контекста и `CLAUDE.md` для рабочих правил.
+- Прочитай `README.md` для общего контекста и `AGENTS.md` для рабочих правил.
 - Backend — ESM, plain JavaScript (не TypeScript).
 - Node.js `22.22.0`, npm `10.x` (см. `.nvmrc`).
 - Userbot-автоматизация — `manual-by-default`. Любое новое risky-действие за фича-флагом (см. `USERBOT_*_ENABLED` в `backend/.env.example`).
@@ -91,8 +91,7 @@ PR смотрит мейнтейнер. Ожидаемый цикл — 1–3 д
 
 ## Литература внутри репо
 
-- `CLAUDE.md` — рабочие правила для AI-агентов (и людей тоже)
-- `AGENTS.md` — контракт для subagents
+- `AGENTS.md` — рабочие правила для AI-агентов (и людей тоже)
 - `backend/README.md` — backend-детали
 - `docs/autopost_design_spec.md` — design spec автопостера
 - `SECURITY.md` — куда слать security-баги

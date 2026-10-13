@@ -1,242 +1,202 @@
-# Repository Guidelines
+# Bullgram — Agent Instructions
+
+Last full factual audit: 2026-10-14. If this file contradicts the repository, the repository wins — and file a lesson in `docs/plans/LESSONS.md`.
+
+## Operating Discipline
+
+### 1. Plan Mode Default
+
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+
+- Use subagents liberally to keep the main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One tack per subagent for focused execution
+
+### 3. Self-Improvement Loop
+
+- After ANY correction from the owner: update `docs/plans/LESSONS.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until the mistake rate drops
+- Review `docs/plans/LESSONS.md` at session start for relevant rules
+
+### 4. Verification Before Done
+
+- Never mark a task complete without proving it works
+- Diff behavior between baseline and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the owner
+- Go fix failing CI without being told how
+
+## Task Management
+
+1. **Plan First**: write the plan to `docs/plans/PLAN.md` or another focused note under `docs/plans/` with checkable items
+2. **Verify Plan**: check in before starting implementation when the task is large enough to justify it
+3. **Track Progress**: mark plan items complete as work progresses
+4. **Explain Changes**: high-level summary as the work moves forward
+5. **Document Results**: add a short review section to the same `docs/plans/` note
+6. **Capture Lessons**: update `docs/plans/LESSONS.md` after any owner correction
+7. **One Backlog**: open items across all work live in `docs/plans/BACKLOG.md` — each item needs a solution, an owner, and a trigger; finished plan notes get a review section, stale ones get a SUPERSEDED header pointing at BACKLOG.md
+
+## Core Principles
+
+- **Simplicity First**: make every change as simple as possible. Touch minimal code.
+- **No Laziness**: find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: changes should only touch what is necessary. Avoid introducing bugs.
+
+---
 
 ## Project Structure & Module Organization
-This repository has six active runtimes plus supporting docs/archive material:
 
-- `backend/`: Express API for Telegram subscription management. Entry point is `backend/server.js`; HTTP routes are in `backend/routes/`, business logic in `backend/services/`, cron jobs in `backend/jobs/`, middleware in `backend/middlewares/`, and utilities in `backend/utils/`.
-- `admin-v2/`: paywall/ops admin application on React/Vite. Source lives in `admin-v2/src/`, build output in `admin-v2/dist/`.
-- `userbot-v2/`: приложение «Юзербот» — основная поверхность продукта для билдеров ИИ-агентов: юзерботы, прокси, MCP/API-токены, покупки, профиль. Source lives in `userbot-v2/src/`, build output in `userbot-v2/dist/`. Не путать с `userbot-web/` (вендорный форк telegram-tt, раздаётся nginx'ом как `/app/telegram-web/`).
-- `bots-v2/`: приложение «Боты» — хаб мелких ботов (`/bots`): Автопостер (первый модуль), здесь же появляются следующие мелкие BotFather-боты. Source lives in `bots-v2/src/`, build output in `bots-v2/dist/`.
-- `treasury-v2/`: приложение «Казна» — внутренний инструмент платформы (`/treasury`): учёт TON, резервы, выводы. Доступ только у платформенного админа. Source lives in `treasury-v2/src/`, build output in `treasury-v2/dist/`.
-- `profile-v2/`: приложение «Профиль» (`/profile`) — идентичность, кошелёк, Telegram-биндинг, тариф, покупки. Вынесено из userbot-v2 (2026-09-28), вне продуктового меню: `/userbot/profile` и `/userbot/purchases` — редиректы сюда. Source lives in `profile-v2/src/`, build output in `profile-v2/dist/`.
-- `site-v2/`: primary public product site on React/Vite. Source lives in `site-v2/src/`, build output in `site-v2/dist/`.
-- `archive/`: archived notes and local-only operator artifacts that are not part of the active runtime.
+Active runtimes (all v2):
 
-Runtime tech notes:
+- `backend/`: Express API for Telegram subscription management. Entry point `backend/server.js`; HTTP routes in `backend/routes/`, business logic in `backend/services/`, cron jobs in `backend/jobs/`, middleware in `backend/middlewares/`, utilities in `backend/utils/`. PM2 config lives at `backend/ecosystem.config.cjs` (not in the repo root).
+- `admin-v2/`: paywall/ops admin app on React/Vite (`/paywall`). Source `admin-v2/src/`, build `admin-v2/dist/`.
+- `userbot-v2/`: приложение «Юзербот» (`/userbot`) — основная поверхность для билдеров ИИ-агентов: юзерботы («Telegram Web»), прокси, MCP/API-ключи, магазин лотов. Не путать с `userbot-web/` (вендорный форк telegram-tt, раздаётся nginx'ом как `/userbot/telegram-web/` и легаси-алиасом `/app/telegram-web/`).
+- `bots-v2/`: приложение «Боты» (`/bots`) — хаб мелких BotFather-ботов; первый модуль — Автопостер.
+- `treasury-v2/`: приложение «Казна» (`/treasury`) — внутренний инструмент платформы: учёт TON, резервы, выводы. Доступ только у платформенного админа, вне продуктового меню.
+- `profile-v2/`: приложение «Профиль» (`/profile`) — идентичность, кошелёк, Telegram-биндинг, тариф, покупки. Вне продуктового меню.
+- `site-v2/`: primary public product site (`/`). React/Vite.
+- `docs-site/`: документация на Eleventy (11ty), деплой собирает её в `site-v2/dist/docs` (публичный путь `/docs/…`, вход — `/docs/quick-start/`). Контент в `docs-site/content/`.
+- `blog-site/`: блог, деплой собирает его в `site-v2/dist/blog` (публичный путь `/blog/…`).
+- `ops/`: платформенные скрипты (`ops/scripts/ci/run-all-gates.sh`, `deploy.sh`, `deploy-v2.sh`, `deploy-telegram-web.sh`, `rollback*.sh`, `ensure-mcp-tunnel.sh`, `supabase-mcp-tunnel.sh`), `ops/RESTORE.md` (инфраструктура и nginx-локации), `ops/systemd/`.
+- `archive/`: archived notes, не часть активного рантайма.
+- `design/`: дизайн-токены и гейты (см. Design System ниже).
+- nginx-конфигов в репо НЕТ — они накладываются на сервере руками (см. `ops/RESTORE.md`): SPA-fallback для `/paywall/`, `/userbot/`, `/bots/`, `/treasury/`, `/profile/`, 301 `/app/*` → `/paywall/*`, files-first раздача `/docs/…` и `/blog/…` из `site-v2/dist/`.
 
-- backend: Node.js, Express, Supabase (PostgreSQL + auth), Telegraf (official bots), GramJS (userbots), node-cron
-- `admin-v2`/`userbot-v2`/`bots-v2`/`treasury-v2`/`site-v2`: React + Vite; React Router v7 (admin-v2, userbot-v2, bots-v2, treasury-v2, profile-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui
-- admin-v2/userbot-v2/bots-v2 structure: `src/pages/` (feature routes), `src/ui/` (components), `src/api/` (backend calls); userbot-v2 и bots-v2 скопированы из admin-v2 — дизайн и общий кит байт-идентичны (гейт ui-sync)
-- multi-tenancy: all backend requests enforce `owner_id` for data isolation; each admin sees only their channels, bots, subscribers, orders, and settings
+Tech: backend — Node.js 22 (`.nvmrc`, npm 10.x), Express, Supabase (PostgreSQL + auth), Telegraf, GramJS (userbots), node-cron. Все фронтовые апп-и — React + Vite; React Router v7 (admin-v2, userbot-v2, bots-v2, treasury-v2, profile-v2) / v6 (site-v2); Tailwind CSS v4 + shadcn/ui.
 
-The project is now `v2-only` in active runtime:
+Multi-tenancy: all backend requests enforce `owner_id` for data isolation; each admin sees only their channels, bots, subscribers, orders, and settings.
 
-- `site-v2/` serves `/`
-- `userbot-v2/` serves `/userbot`
-- `bots-v2/` serves `/bots`
-- `treasury-v2/` serves `/treasury` (внутренний инструмент, вне продуктового меню)
-- `profile-v2/` serves `/profile` (кабинет аккаунта, вне продуктового меню)
-- `admin-v2/` serves `/paywall`
-- `backend/` serves the API
-
-Продуктовое разделение (2026-09-26/27, планы docs/plans/2026-09-26-userbot-product-split.md и docs/plans/2026-09-27-bots-app-split.md): «Юзербот» (`/userbot`) — управление юзерботами/прокси и подключение агентов; «Боты» (`/bots`) — мелкие BotFather-боты (Автопостер и следующие); paywall-кабина (`/paywall`, папка admin-v2) — продажа доступа, но она ПРОДОЛЖАЕТ использовать юзерботов (контурная ротация на `/paywall/sales-bot`, сканирование групп, авто-кик, retention, рассылки). Правило границы: управление юзерботами — в `/userbot`, мелкие боты — в `/bots`, paywall — в `/paywall`; все ходят в один backend API. Старые пути `/app/userbots`, `/app/proxies`, `/app/mcp`, `/app/api`, `/app/profile`, `/app/autopost` — редиректы в свои приложения; сам `/app/*` — 301 на `/paywall/*` (nginx), легаси `/app/telegram-web/` живёт алиасом.
+Product split rule (plans `docs/plans/2026-09-26-userbot-product-split.md`, `2026-09-27-bots-app-split.md`): управление юзерботами — в `/userbot`, мелкие боты — в `/bots`, paywall-продажи — в `/paywall`; все ходят в один backend API. Legacy-пути `/app/*` — 301 на `/paywall/*`; старые подпути (`/app/userbots`, `/app/proxies`, `/app/mcp`, `/app/api`, `/app/profile`, `/app/autopost`) — редиректы в свои v2-приложения.
 
 Do not reintroduce legacy `/admin` assumptions into active UI or product copy. Treat any reserve/legacy context as archived history, not as an active path.
 
-Current v2 product surfaces already in the repo:
+## Surfaces & Routing (current, verified 2026-10-14)
 
-- userbot product (`/userbot`): `dashboard` (`/userbot`), `userbots` (`/userbot/accounts`), `proxies` (`/userbot/proxies`), `agent MCP` (`/userbot/mcp`), `api keys` (`/userbot/api`), `purchases` (`/userbot/purchases`), `profile` (`/userbot/profile`)
-- bots product (`/bots`): `hub` (`/bots`), `autopost` (`/bots/autopost` — онбординг бота, каналы, журнал публикаций, админы); следующие мелкие боты добавляются сюда
-- paid-access ops (`/paywall`): `command center` (`/paywall`), `customers` (`/paywall/customers`), `broadcast` (`/paywall/broadcast`), `abandoned` (`/paywall/abandoned`), `retention` (`/paywall/retention`)
-- official bots (paywall): `sales-bot / official bot` (`/paywall/sales-bot`, включая контурную ротацию юзерботов)
-- ecosystem tooling: `bases` (`/paywall/bases`)
-- commerce: `referrals` (`/paywall/referrals`), `billing` (`/paywall/billing`)
-- platform internal: `treasury` (`/treasury`, казна проекта — отдельное приложение, вне меню)
-- key backend areas: `/api/userbot/*` (operations, health checks, manual actions), `/api/official-bot/*` (official bot management), `/api/mcp` (Bullgram MCP endpoint); full API docs in `backend/README.md`
-- `P2P` remains an active flow, but in the current v2 runtime it resolves through `shop`; treat `/p2p/create` and `/p2p/orders` as compatibility routes, not separate feature folders
+- **site-v2** (`/`): `HomePage`; `/get-account` (флоу «Получить аккаунт»: оплата Pro → выдача → авто-переход в кабинет); `/access-request` (соцпомощь: тариф Normal бесплатно для людей с инвалидностью); `/pay/:purchaseId`; `/create`, `/created/:id` (инвойсы); `/quick-start` → `/docs/quick-start/`; `/shop` → внешний редирект в витрину юзерботов; `/plan` и `/purchases` → редиректы в кабинет `/profile` (сквозь совместимые редиректы userbot-v2).
+- **userbot-v2** (`/userbot`): корень `/` = список юзерботов — владелец называет эту поверхность «Telegram Web» (дашборд слит со списком аккаунтов); `/connect` (подключение нового юзербота); `/proxies`; `/mcp` (Bullgram MCP-онбординг агентов); `/api` (API-ключи). Совместимые редиректы: `/accounts` и `/userbots` → `/` (с query), `/purchases` и `/profile` → `/profile/`. Витрина лотов магазина и TON-checkout живут внутри userbot-v2 (`src/features/shop-storefront/`, `src/features/ton-checkout/`, `src/components/shop/`).
+- **bots-v2** (`/bots`): хаб `/`; `/bots/autopost` — управление автопостером (онбординг бота, каналы, журнал публикаций, админы). Следующие мелкие боты добавляются сюда.
+- **admin-v2** (`/paywall`): корень `/` = «Бот продаж» (`OfficialBotsPage`, включая контурную ротацию юзерботов, сканирование групп, авто-кик) — command center как отдельная страница УДАЛЁН, `/sales-bot` → `/`; `/customers` (клиенты; туда же сведены `/crm`, `/orders`, `/access`, `/dossier`, `/analytics`); `/retention`; `/abandoned` (брошенные корзины); `/referrals`; `/bases`; `/broadcast` + `/broadcast/history`; `/billing` («Касса»; туда же сведены `/payments`, `/shop-receipts`). Казна в меню не выводится: `/treasury`, `/shop`, `/p2p/create`, `/p2p/orders` — внешние редиректы в `/treasury`. Прочие легаси-редиректы: `/autopost` → `/bots/autopost`, `/claw*` → `/userbot/mcp`, `/api`, `/integrations` → `/userbot/api`, `/mcp` → `/userbot/mcp`, `/proxies` → `/userbot/proxies`.
+- **treasury-v2** (`/treasury`): TreasuryPage, гейт по роли платформенного админа. P2P как отдельный флоу больше не существует — денежные инструменты сведены в казну.
+- **profile-v2** (`/profile`): ProfilePage на `/` и catch-all.
 
-Agent integration status:
+When adding admin features, wire the same scenario across the whole flow instead of creating isolated screens. The operational surfaces to check are: «Бот продаж» (`/paywall`), `/paywall/customers`, `/paywall/broadcast`, `/paywall/billing`, the shop storefront in `/userbot`, and `/treasury`.
 
-- `Bullgram MCP` is now the primary agent integration path
-- active endpoint: `POST /api/mcp`
-- active onboarding screen: `/userbot/mcp` (бывший `/app/claw`)
-- do not reintroduce temporary local bridge patterns for agent access when extending this area
-- prefer adding Bullgram tools and user-scoped MCP onboarding over DOM/browser-only agent hacks
+## Backend API Areas
 
-This project is an automated management system for a private Telegram group and its paid access workflow. Treat userbot, proxy, billing, CRM, referrals, and shop tooling as product infrastructure for that private-group business, not as anti-fraud evasion or botnet tooling.
+Key route zones (full list: `backend/server.js` mounts + `backend/README.md`): `/api/userbot` (operations, health checks, manual actions), `/api/official-bot`, `/api/mcp` (Bullgram MCP endpoint), `/api/autopost`, `/api/shop`, `/api/profile`, `/api/billing`, `/api/payment`, `/api/orders`, `/api/messaging` (DM-роутер), `/api/broadcast`, `/api/audience`, `/api/customers`, `/api/dashboard`, `/api/analytics`, `/api/access`, `/api/referral`, `/api/invoices`, `/api/public-invoices`, `/api/project-admin`, and **`/api/external/v1`** — внешний REST для агентов/интеграций с Scalar-документацией на `/api/external/v1/docs`. TonConnect manifest отдаётся с корня сайта (`/tonconnect-manifest.json`, монтируется без префикса `/api`). Full API docs: `backend/README.md`.
 
-Admin-facing UI copy may use blunt, colloquial Russian when it improves clarity for non-technical operators. This is an intentional product style choice, not a change in system purpose. Prefer short explanations in plain terms that tell the admin why a block matters and what to do next.
+## Build, Deploy, and Development Commands
 
-Keep new files inside the existing feature area. Follow the current naming pattern: kebab-case filenames such as `official-bot.routes.js` and `auto-kick.job.js`.
-
-## Build, Test, and Development Commands
-Install dependencies for the active runtimes:
+Install all active runtimes from the root:
 
 ```bash
-cd backend && npm install
-cd admin-v2 && npm install
-cd userbot-v2 && npm install
-cd bots-v2 && npm install
-cd site-v2 && npm install
+npm run install:active   # backend + 6 v2-аппов + userbot-web
+# при работе с доками/блогом: cd docs-site && npm install; cd blog-site && npm install
 ```
 
-Key commands:
+Key commands (root):
 
-- `cd backend && node server.js`: run the API locally from the backend folder.
-- `cd admin-v2 && npm run dev`: run the paywall admin app locally (URL `/paywall`).
-- `cd admin-v2 && npm run build`: build the paywall admin app.
-- `cd userbot-v2 && npm run dev`: run the «Юзербот» app locally.
-- `cd userbot-v2 && npm run build`: build the «Юзербот» app.
-- `cd bots-v2 && npm run dev`: run the «Боты» app locally.
-- `cd bots-v2 && npm run build`: build the «Боты» app.
-- `cd site-v2 && npm run dev`: run the public v2 site locally.
-- `cd site-v2 && npm run build`: build the public v2 site.
-- `npm run deploy`: deploy backend, then deploy `site-v2` and `admin-v2`.
-- `npm run deploy:v2`: deploy only `site-v2` and `admin-v2`.
-- `npm run tokens:build` / `npm run tokens:check`: regenerate and gate the design tokens (see Design System section).
-- `npm run check:design`: design-system quality gates (tokens / contrast / hardcodes-ratchet / axe / ui-sync).
-- `cd backend && npm run deploy`
+- `npm run build:v2`: build all six apps (site-v2, admin-v2, userbot-v2, bots-v2, treasury-v2, profile-v2)
+- `npm run build:site` / `build:admin` / `build:userbot-v2` / `build:bots-v2` — build a single app
+- `npm run ci` — all CI gates (`ops/scripts/ci/run-all-gates.sh`); `ci:source` / `ci:smoke` — subsets
+- `npm run tokens:build` / `tokens:check` / `check:design` — design-token pipeline and design gates
+- `npm run deploy` / `deploy:v2` / `deploy:telegram-web` — rsync-based emergency deploys (production-only)
+- `npm run rollback` / `rollback:v2` / `rollback:backend` — emergency rollbacks
+- Backend: `cd backend && node server.js`; backend tests — see Testing Guidelines; `cd backend && npm run deploy` (rsync fallback)
 
-The deploy scripts use `rsync` to a live server. Treat them as production-only commands.
-
-Primary deploy flow is push-to-main: GitHub Actions SSHes into prod and runs `scripts/deploy-pull.sh` — `git fetch` + `reset --hard origin/main` → conditional `npm install` (only when `package.json` changed) → `npm run build:v2` → `pm2 reload ecosystem.config.cjs --env production` → smoke HTTP check. `set -euo pipefail` aborts before the pm2 reload if the build fails.
+Primary deploy flow is push-to-main: GitHub Actions SSHes into prod and runs `scripts/deploy-pull.sh`: `git fetch` + `reset --hard origin/main` (PREV_HEAD сохраняется в `.git/deploy-prev-head`) → conditional `npm install` per changed `package.json` across **nine** runtimes (backend, six v2-аппов, docs-site, blog-site) → `npm run build:v2` → сборка docs-site → `site-v2/dist/docs` и blog-site → `site-v2/dist/blog` → `cd backend && pm2 reload ecosystem.config.cjs --env production` (fallback: `pm2 restart` + `pm2 save`) → smoke HTTP check на localhost:3000. `set -euo pipefail` aborts before the pm2 reload if the build fails.
 
 Rollback: `git revert` + push (CI redeploys the previous state), or on prod `cd /srv/bullgram && git checkout HEAD~1 && ./scripts/deploy-pull.sh`.
 
-The `rsync` npm scripts above are the emergency fallback for when CI is broken.
+**Dependency rule (owner decision after the 2026-09-30 sonner deploy failure): an npm dependency is added in the same commit as the code that uses it.** Never rely on conditional `npm install` on the server.
 
 ## Environment & Userbot Feature Flags
 
-Required: Node.js 22.22.0 (`see .nvmrc`), npm 10.x. Backend config lives in `backend/.env` (template: `backend/.env.example`); `admin-v2` and `site-v2` have no `.env` files.
+Backend config lives in `backend/.env` (template: `backend/.env.example`); `admin-v2` and `site-v2` have no `.env` files. Required: Node.js 22.22.0 (`.nvmrc`), npm 10.x.
 
-Userbot feature flags (all default to `false` unless explicitly enabled):
+Userbot feature flags (all default `false` unless explicitly enabled; полный список с квотами и тюнингом — `backend/.env.example`, документация — `backend/README.md`):
 
 ```env
 USERBOT_DM_ENABLED=false                    # Manual DM from admin UI
 USERBOT_INBOX_WATCH_ENABLED=false           # Background inbox watcher
 USERBOT_RETENTION_DM_ENABLED=false          # Retention DM fallback
+USERBOT_ABANDONED_DM_ENABLED=false          # DM по брошенным корзинам
 USERBOT_AUTO_KICK_FALLBACK_ENABLED=false    # Userbot fallback for kicks
 USERBOT_AUTO_KICK_DM_ENABLED=false          # DM after auto-kick
 USERBOT_BROADCAST_ENABLED=false             # Userbot-based broadcasts
+USERBOT_AUTO_JOIN_ENABLED=false             # Broadcast-джойны в группы
+USERBOT_AUTO_ADMIN_ENABLED=false            # Автоназначение админов
+USERBOT_GROUP_ADMIN_ENABLED=false           # group_create/invite/promote MCP-операции
+USERBOT_BOTFATHER_ENABLED=false             # Создание ботов через BotFather из MCP
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true # Auto-delete restricted accounts
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
+# тюнинг messaging-роутера: USERBOT_DM_HOURLY_CAP=20, USERBOT_DM_DAILY_CAP=50,
+# USERBOT_DM_JITTER_PERCENT=20, USERBOT_JOIN_PER_HOUR=4, USERBOT_JOIN_SLEEP_MS=45000
 ```
-
-## Coding Style & Naming Conventions
-The codebase uses ESM (`import`/`export`) and plain JavaScript on the backend, plus React/Vite for `admin-v2` and `site-v2`. Match the surrounding file’s indentation; existing files mix 2-space and 4-space indents. Prefer small route/service modules, descriptive function names, and early returns for request validation.
-
-When adding admin features, wire the same scenario across the whole flow instead of creating isolated screens. In practice this means: if you add a new operational state, consider whether it should also surface in `command center`, `orders`, `access`, `broadcast`, and `shop`.
-
-Current product focus:
-
-- `site-v2`: drive users into `Trial`, `Normal`, `P2P`, and `Seller` flows
-- `admin-v2`: guide users through `Launch`, `Operations`, and `Growth`
-- `Shop`: act as the main on-site checkout and package funnel
-- `P2P`: keep it a distinct working flow from asset marketplace logic
-- `Trial -> Normal -> Seller`: preserve and strengthen this upgrade path in UI and backend limits
-- site-v2 hero sells ONE outcome. Audience + wording decided by owner: since 2026-09-21 the product positioning is infrastructure for AI-agent and n8n builders («Дай своему ИИ-агенту Telegram-аккаунт», RU first, EN later) — for THIS technical audience naming MCP/API/proxies in the hero subline is correct and expected. The earlier 2026-09-12 rule (no technical features on the first screen, consumer framing «купил → получил готовое») applied to the consumer positioning and is superseded; the «one outcome, no feature dump» principle still stands. Autopost/paywall/shop stay OFF the homepage (separate landing later, owner decision 2026-09-21)
-
-If a feature depends on Telegram-specific constraints, explain that directly in the UI. In particular, any screen that offers manual outreach from a userbot should state that making the userbot an admin in a shared group/chat increases the chance of resolving the target and writing to them in private messages.
-
-For payment and plan UX:
-
-- `Payments / Requisites` should stay clean and first-run friendly
-- `Plans / Billing` should carry tariff, package, referral, and webhook complexity
-- do not leak internal trial/debug wording into user-facing forms when backend limits already enforce the rules
 
 ## Design System (`design/`)
 
-Built 2026-09-15/16 (plan: `docs/plans/2026-09-15-unified-design-system.md`). Both apps render colors/typography from one DTCG token source; UI guidelines live in root `DESIGN.md`; the single live backlog is `docs/plans/BACKLOG.md`.
+Built 2026-09-15/16 (plan: `docs/plans/2026-09-15-unified-design-system.md`). All apps render colors/typography from one DTCG token source; UI guidelines live in root `DESIGN.md`; the single live backlog is `docs/plans/BACKLOG.md`.
 
 - **Iron rule**: values in `design/tokens/color.primitives.json` are byte-equal to Tailwind v4 defaults (`admin-v2/node_modules/tailwindcss/theme.css`). Never edit a primitive to "fix" one screen — changing a primitive changes the whole product (SemVer MAJOR, record in `design/CHANGELOG.md`). New colors enter as semantic aliases on existing ramp steps.
-- **Semantic-first for new UI code**: `text-ink-*`, `bg-surface-*`, `border-border-*`, `bg-action-*`, `bg-feedback-*-bg/text` (mapping table in `design/README.md`; color semantics emit as `--color-*`, never `--text-*` — that namespace is font-size in v4). Legacy raw palette classes (`text-slate-500`…) still work — palette aliasing makes them token-driven — and the ratchet gate blocks growth; migrate a page's classes when you touch it.
+- **Semantic-first for new UI code**: `text-ink-*`, `bg-surface-*`, `border-border-*`, `bg-action-*`, `bg-feedback-*-bg/text` (mapping table in `design/README.md`; color semantics emit as `--color-*`, never `--text-*`). Legacy raw palette classes (`text-slate-500`…) still work — palette aliasing makes them token-driven — and the ratchet gate blocks growth; migrate a page's classes when you touch it.
+- **Six apps, not four**: `npm run tokens:build` regenerates byte-identical tokens.css in **admin-v2, site-v2, userbot-v2, bots-v2, treasury-v2, profile-v2**; the ui-sync gate and the hardcodes ratchet scan the same six `src` trees.
 - **Gates**: `npm run check:design` (tokens / contrast / hardcodes-ratchet / axe / ui-sync) must pass before push. `--update-baseline` is a conscious operation — justify it in the commit message.
-- **Pipeline**: `npm run tokens:build` regenerates byte-identical tokens.css in all four apps (`admin-v2`, `site-v2`, `userbot-v2`, `bots-v2`); `npm run tokens:check` must stay green (stale detect + zero-delta gate vs theme.css + completeness assert).
-- **Component canonical**: `admin-v2/src/components/ui/` is the source of truth for shared primitives (button/input/badge/card); site-v2 keeps byte-identical copies and the `ui-sync` gate fails on drift. Promote a component into the canonical kit only with ≥2 real usages.
-- **Fonts**: Manrope (all four apps) + JetBrains Mono are self-hosted woff2 from each app's `public/fonts/`; paywall URLs need the `/paywall/` prefix (vite `base: '/paywall/'`), «Юзербот» uses `/userbot/`, «Боты» uses `/bots/`, site uses `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
+- **Component canonical**: `admin-v2/src/components/ui/` is the source of truth for shared primitives (button/input/badge/card); other apps keep byte-identical copies and the `ui-sync` gate fails on drift. Cross-app shared files beyond the component kit: `src/ui/OpsRail.jsx` (пять аппов: промо-карты, карточка профиля, блок «Казна» по гейту платформенного админа) and `src/app/productTier.js` (admin-v2 + userbot-v2). Promote a component into the canonical kit only with ≥2 real usages.
+- **Fonts**: Manrope + JetBrains Mono self-hosted woff2 from each app's `public/fonts/`; vite `base` prefixes: `/paywall/`, `/userbot/`, `/bots/`, `/profile/`, `/treasury/`; site — `/`. Do not reintroduce font npm-packages — prod builds must not depend on conditional `npm install`.
 - **Critic ordering (standing owner rule)**: design-critic runs only after code-review AND deploy, on prod screenshots; visible waves also hand the critic a mobile (390px) frame and hover frames of key controls.
 
 ## Testing Guidelines
-There is no automated test suite configured yet for the product. Until one exists, verify changes manually:
 
-- admin/public v2: run `npm run build` in `admin-v2` or `site-v2` and test the affected route
-- backend: run `node server.js` and exercise the changed endpoint with the app or `curl`
-- backend autopost: `cd backend && npm run test:autopost`
-- after push: watch the GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; restart PM2 by hand only if you used the emergency rsync fallback
+Backend has real test suites now — run the matching one when you touch that area (`cd backend && npm run <script>`):
 
-If you add tests, place them next to the feature or under a dedicated `tests/` folder and wire them into `package.json`.
+- `test:autopost` — таймзоны/очередь/tier/reactions/bestof/checklists автопостера + userbot ops
+- `test:sales` — права админа в контуре продаж
+- `test:messaging` — DM-роутер (квоты, джиттер)
+- `test:broadcast` / `test:broadcast-cleanup` — broadcast-роутер и зачистка
+- `test:lifecycle` — lifecycle DM
+- `test:mcp` — Bullgram MCP shared/dispatch + внешний REST `/api/external/v1`
+- `test:contours` — контурный overview
 
-## Commit & Pull Request Guidelines
-Recent history follows Conventional Commits with short descriptions, often in Russian: `feat: ...`, `fix: ...`. Keep commits focused and use the same format.
+For UI: `npm run build` in the touched app, then verify on production per the Browser Doctrine below. If you add tests, place them next to the feature (`backend/test/test-*.js`) and wire them into `package.json`. After push: watch the GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; restart PM2 by hand only if you used the emergency rsync fallback.
 
-PRs should include a short summary, affected area (`frontend` or `backend`), linked issue/task, manual test notes, and screenshots for UI changes. For API changes, include sample request/response details and required `.env` updates.
+## Browser Doctrine (runtime checks)
 
-## Security & Configuration Tips
-Never commit `.env`, session files, or production credentials. Document new Supabase or Telegram variables in the relevant README when you introduce them. All API endpoints require a JWT token in the `Authorization: Bearer <token>` header. Telegram sessions are encrypted before database storage.
+- All runtime tests of site/admin changes run against the deployed production build (`https://bullgram.xyz`, apps at their v2 paths) in the owner's real Chrome — never against a local dev server or headless Chrome. This includes subagents: explicitly forbid dev servers and headless rendering in their prompts.
+- The browser path is the Playwright MCP server in extension mode plus the owner's «Playwright Extension» from the Chrome Web Store: the owner clicks Connect, the agent drives the owner's real Chrome tab with logged-in sessions. See `docs/plans/04-site-verification.md`.
+- Only use headless rendering when the owner explicitly asks for it; state the reason before doing so.
+- Not verifiable in the browser: real TON transactions, TonConnect confirmations, email delivery — verify those side effects in the database through Supabase MCP.
+- **cmux больше не используется** (owner decision 2026-10-14): no cmux panes, surfaces, or `cmux` CLI commands in any workflow. Do not reintroduce them.
 
-If you touch `shop`, preserve the current ownership-transfer model:
+## ZCode Workflow (orchestration)
 
-- two distinct money flows, never mix destinations: platform lots (proxies, bundles, platform userbots) accept TON on the **platform site wallet** — это наш админский кошелёк; a seller admin’s own paid-access flows (их официальный бот продаёт доступ в их приватные каналы/чаты) accept TON on **that admin’s `payment_settings.ton_wallet`** (owner decision 2026-09-15)
-- listed `userbot` assets are reserved from active operations until sold or delisted
-- post-purchase delivery is ownership transfer inside Bullgram, not a raw file drop
-
-For userbot operations, preserve the current safety/product rules:
-
-- all userbot onboarding must go through proxies
-- `1 proxy record = 1 userbot`
-- new userbots start in `safe-mode` (`runtime_status=pending_activation`) after QR/file import; background jobs must not touch them until manual activation
-- userbot automation must stay `manual-by-default`
-- manual DM flag must stay separate from retention, auto-kick fallback, inbox watcher, and broadcast flags
-- if Telegram `SpamBot` confirms a block, treat that as the source of truth even if a naive session check still passes
-- blocked/restricted userbot assets must not remain public in `shop`
-- dedicated managed proxy of a blocked/restricted userbot should be cleaned up from Bullgram when it is no longer shared
-- if a manual DM flow exists, the UI must warn that Telegram may only allow delivery when the userbot already knows the target or shares a group/chat with them, and that userbot admin rights in that shared group improve the odds
-
-When working with userbot client code, follow the GramJS lifecycle strictly: init the client with the decrypted session → disable the update loop (`client._updateLoop = async () => {}`) → `await client.connect()` → perform operations → `await client.disconnect()` in a `finally` block. This prevents memory leaks and hanging sessions.
-
-For Bullgram agent work:
-
-- treat `Bullgram MCP` as the source of truth for agent access to product data
-- treat `Supabase MCP` as the default path for database inspection and database operations
-- if a task needs to read, inspect, verify, or change database state, go through `Supabase MCP` first instead of ad-hoc SQL shells or direct database workarounds
-- first ship `read-only` and guided confirm flows; do not jump straight to free-form automation
-- onboarding copy should assume ordinary admins, not engineers
-- when adding new agent capabilities, prefer explicit tools like `summary`, `preview`, `import`, `status`, not vague generic "agent actions"
-
-## Supabase MCP And Tunnel
-
-The `supabase` MCP server (selfhosted-supabase-mcp, run via bun from `~/.local/share/selfhosted-supabase-mcp/`) is configured in `.mcp.json` (repo root, gitignored); Claude Code reads it directly and via the `.agents/mcp.json` symlink. Desktop ZCode ignores workspace `.mcp.json` files (verified 2026-09-12: `mcpServerCount:0` in session logs despite valid workspace configs) — its MCP servers live in the user config `~/.zcode/cli/config.json` under `mcp.servers` (`playwright`, `supabase`, `bullgram`). Keep the two files in sync when rotating secrets.
-
-The SSH tunnel to the self-hosted Supabase is managed by the macOS LaunchAgent `com.webzwezda.supabase-mcp-tunnel` in `~/Library/LaunchAgents/`: it starts at login, auto-restarts on failure, and forwards `127.0.0.1:8080` → Kong REST API plus `127.0.0.1:5432` → direct PostgreSQL (bypasses PgBouncer). Do not run `ops/scripts/ensure-mcp-tunnel.sh` manually while the LaunchAgent is loaded — it kills the agent's tunnel and they fight over the ports. Database access is `supabase_admin` with the service-role key: full read/write.
-
-## ZCode Workflow And cmux
-For ZCode work in this repo:
-
-- use the main ZCode session as the orchestrator
-- delegate scoped work to native ZCode subagents through the Agent tool:
-  - `Explore` for read-only discovery, code tracing, and context gathering
-  - `general-purpose` for scoped implementation slices, focused verification, and review passes
-- file-based ZCode subagents live at `~/.zcode/agents/*.md` (user scope; current set: `code-reviewer`, `design-critic`, `security-auditor`, `debugger`, `postgres-pro`, `deployment-engineer`, `test-engineer`, `mcp-developer`); there is no workspace-scope agent directory in the repo, so for anything not covered by a file-based agent use role-framed prompts (mapping below)
-- before starting non-trivial work, decide which slices go to subagents and which stay in the main session
-- when a task can be split into isolated slices, proactively assign those slices to subagents instead of keeping all implementation in the main session
-- the main ZCode session should spend most of its time on orchestration: scoping, task splitting, integration, conflict resolution, and final synthesis
-- push exploration, isolated implementation, focused verification, and review work down into subagents whenever the scope is clear
-- keep architecture decisions, cross-runtime integration, and final verification in the main ZCode session
-- do not split tightly coupled changes across multiple subagents without a clear merge plan
-- keep all delegated workers narrow: exact scope, allowed files, validation expected, and return format
-
-Default delegation bias:
-
-- if a task can be isolated, delegate it to a subagent
-- if multiple independent tasks exist, launch them in parallel
-- if a task is read-only discovery, use an `Explore` subagent
-- if a task is a bounded implementation slice, use a `general-purpose` subagent
-- if a task is a focused review or regression check, use a subagent
-- the main workflow should mainly coordinate and merge results instead of doing all detailed work
-
-Role framing for delegation prompts — these names are prompt frames for `general-purpose`/`Explore` subagents, not files:
-
-- `context-manager`: first delegate for repo context packaging, file/surface discovery, and handoff packets for other subagents
-- `backend-developer`: most scoped backend work in `backend/routes/`, `backend/services/`, `backend/jobs/`, and backend bug fixes
-- `frontend-developer`: most scoped UI work in `admin-v2/src/` and `site-v2/src/`
-- `mcp-developer`: Bullgram MCP work, `/api/mcp`, `/app/claw`, tool wiring, onboarding flow, and agent-facing integration changes
-- `reviewer`: default close-out review — regression, correctness, risk, and missing-test review
-- `code-reviewer`: second-pass implementation review when a change is large or touches risky code paths
-- `architect-reviewer`: boundary and coupling review for cross-runtime changes, workflow rewrites, or larger structural decisions
-- `api-designer`: backend/frontend contract design, request-response shape work, and tool contract cleanup
-- `documentation-engineer`: operator-facing docs, onboarding docs, and cleanup of internal guidance after implementation
-
-Required subagent return format (worker contract, applies to every delegated slice):
+- The main ZCode session is the orchestrator: task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, user-facing summary.
+- Delegate scoped work through the Agent tool: `Explore` for read-only discovery; `general-purpose` for scoped implementation slices, focused verification, and review passes.
+- File-based subagents live at `~/.zcode/agents/*.md` (user scope; current set: `code-reviewer`, `design-critic`, `security-auditor`, `debugger`, `postgres-pro`, `deployment-engineer`, `test-engineer`, `mcp-developer`); there is no workspace-scope agent directory in the repo, so for anything not covered by a file-based agent use role-framed prompts on `general-purpose`/`Explore`.
+- Role framing for delegation prompts: `context-manager` (repo context packaging, handoff packets), `backend-developer` (`backend/routes|services|jobs`, backend bugs), `frontend-developer` (`admin-v2/src`, `site-v2/src`, and the other v2 apps), `mcp-developer` (Bullgram MCP, `/userbot/mcp`, agent-facing integration), `reviewer` (default close-out review), `code-reviewer` (single-pass review of risky diffs), `architect-reviewer` (cross-runtime boundaries), `api-designer` (contracts), `documentation-engineer` (operator docs).
+- Delegation bias: isolated task → delegate; multiple independent tasks → parallel agents; read-only discovery → `Explore`; bounded implementation → `general-purpose`; risky change → review subagent before close-out. The main session coordinates and merges rather than doing all detailed work. Keep architecture decisions, cross-runtime integration, and final verification in the main session; do not split tightly coupled changes across subagents without a clear merge plan.
+- Keep delegated workers narrow: exact scope, allowed files, validation expected, return format. Workers never deploy, rollback, run destructive commands, or broaden architecture unless explicitly assigned.
+- Required subagent return format:
 
 ```
 Scope:
@@ -246,173 +206,56 @@ Risks:
 Needs:
 ```
 
-Bullgram-specific delegation defaults:
+- For close-out, pre-push, and on-demand reviews use the `code-reviewer` subagent for single-pass review, or the `code-review` skill (`.agents/skills/code-review/`) for full parallel multi-lens review.
 
-- start with a `context-manager`-framed `Explore` pass when the affected runtime or file ownership is not obvious
-- use `backend-developer` framing for most backend feature and bug work
-- use `frontend-developer` framing for most `admin-v2` and `site-v2` work
-- use `mcp-developer` framing for Bullgram MCP and the agent onboarding screen (`/userbot/mcp`)
-- use `reviewer` framing on nearly every risky change before final close-out
-- for close-out, pre-push, and on-demand reviews use the `code-reviewer` subagent (`~/.zcode/agents/code-reviewer.md`) for single-pass review, or the `code-review` skill (`.agents/skills/code-review/`) for full parallel multi-lens review — both instead of ad-hoc reviewer prompts
-- add `architect-reviewer` framing when touching cross-runtime flows or structural boundaries
+Workspace skills (`.agents/skills/`): `code-review`, `modern-web-guidance` (mandatory first step for HTML/CSS/client-side JS work), `systematic-debugging`, `test-driven-development`, `security-and-hardening`, `shipping-and-launch`, `supabase-postgres-best-practices` (read relevant rules before writing migration SQL). Standing rule: before hand-rolling a procedure, check whether a skill already covers it.
 
-Bullgram workflow:
+## Security & Configuration Tips
 
-- start by mapping whether the task belongs to `backend`, `admin-v2`, `site-v2`, or `Bullgram MCP`
-- if the task spans `backend` plus `admin-v2` or `site-v2`, treat it as a cross-runtime flow immediately and assign separate implementation and review slices
-- if a task changes an operational state, also check `command center`, `orders`, `access`, `broadcast`, and `shop`
-- treat `Bullgram MCP` as the primary agent integration path
-- treat `Supabase MCP` as the primary database access path
-- when the task is about database contents, schema, or data fixes, prefer `Supabase MCP` before touching direct Postgres access
-- preserve `Trial -> Normal -> Seller`
-- preserve `manual-by-default` userbot rules
-- never reintroduce legacy `/admin`
+Never commit `.env`, session files, or production credentials. Document new Supabase or Telegram variables in the relevant README when you introduce them. All API endpoints require a JWT token in the `Authorization: Bearer <token>` header. Telegram sessions are encrypted before database storage.
 
-Default operating sequence:
+Money rules (never mix destinations):
 
-- inspect the codebase locally first
-- delegate focused discovery when repository boundaries are unclear
-- delegate as much scoped implementation as practical to global subagents
-- either verify locally or delegate a focused verification pass, then reconcile the result in the main session
-- delegate focused review on risky or cross-runtime changes
-- summarize and reconcile subagent outputs, residual risks, and missing runtime checks
+- platform lots (proxies, bundles, platform userbots) sold in the `/userbot` storefront accept TON on the **platform site wallet** — наш админский кошелёк; учёт и выводы — в `/treasury`
+- a seller admin's own paid-access flows (их официальный бот продаёт доступ в их приватные каналы/чаты) accept TON on **that admin's `payment_settings.ton_wallet`** (owner decision 2026-09-15)
+- listed `userbot` assets are reserved from active operations until sold or delisted
+- post-purchase delivery is ownership transfer inside Bullgram, not a raw file drop
 
-For `cmux` usage:
+Userbot operation rules:
 
-- `cmux` is workspace infrastructure, not agent runtime; a pane, split, or browser surface is not a subagent
-- the cmux control socket only accepts processes started inside cmux — an external agent process gets `Access denied`
-- the ZCode desktop app runs outside cmux, so cmux CLI commands are unavailable from a desktop ZCode session; do not fight the socket, use the fallbacks below
-- the `tui` subcommand cannot run from the desktop-app bundle: its runtime package `@zcode/tui` ships only in a standalone CLI build that is not publicly distributed yet (404 on npm, official docs cover the desktop app only). If an official standalone ZCode CLI appears, launch it inside a cmux pane to restore full cmux control; until then, a desktop ZCode session always uses the Browser Use fallback
-- when running inside cmux: keep logs, dev servers, and browser surfaces visible via `cmux` while the main session coordinates work; use `cmux help` whenever the exact syntax or supported action is uncertain
-- this is especially relevant when the user asks to split the screen, open a new window or workspace, move focus, or open or call an agent in a neighboring window
+- all userbot onboarding goes through proxies; `1 proxy record = 1 userbot`
+- new userbots start in `safe-mode` (`runtime_status=pending_activation`) after QR/file import; background jobs must not touch them until manual activation
+- userbot automation stays `manual-by-default`
+- the manual DM flag stays separate from retention, auto-kick fallback, inbox watcher, and broadcast flags
+- if Telegram `SpamBot` confirms a block, that is the source of truth even if a naive session check still passes
+- blocked/restricted userbot assets must not remain public in the shop storefront; their dedicated managed proxy is cleaned up when it is no longer shared
+- any manual DM UI must warn that Telegram may only allow delivery when the userbot already knows the target or shares a group/chat with them, and that userbot admin rights in that shared group improve the odds
+- GramJS lifecycle: init client with the decrypted session → disable the update loop (`client._updateLoop = async () => {}`) → `await client.connect()` → perform operations → `await client.disconnect()` in a `finally` block
 
-Browser doctrine:
+## Bullgram MCP, Supabase MCP, And External REST
 
-- all runtime tests of site/admin changes must run against the deployed production build (`https://bullgram.xyz`, paywall at `/paywall`) after deploy, in the user's real Chrome — never against a local dev server or headless Chrome
-- the browser path for these tests is the Playwright MCP server in extension mode (`playwright` server in `.mcp.json`, `@playwright/mcp --extension`) plus the user's «Playwright Extension» from the Chrome Web Store: the user clicks Connect in the extension, and the agent drives the user's actual Chrome tab with their logged-in sessions
-- see `docs/plans/04-site-verification.md` for the standing verification rule; do not spin up dev servers for visual checks, including from subagents — forbid it explicitly in their prompts
-- inside cmux: use `cmux browser` and browser surfaces by default for site/admin runtime checks so the user can see the same browser state
-- only use headless rendering when the user explicitly asks for it; state the reason before doing so
+- `Bullgram MCP` (`POST /api/mcp`) is the primary agent integration path; onboarding screen: `/userbot/mcp`. Do not reintroduce temporary local bridge patterns or DOM/browser-only agent hacks; prefer adding user-scoped MCP tools with explicit names (`summary`, `preview`, `import`, `status`).
+- `/api/external/v1` is the external REST surface for agents/integrations (Scalar docs at `/api/external/v1/docs`) — keep its contract documented when you change it.
+- `Supabase MCP` is the default path for database inspection and operations: go through it before ad-hoc SQL shells or direct database workarounds.
+- Ship read-only and guided-confirm flows first; onboarding copy assumes ordinary admins, not engineers. First `read-only` and guided confirm flows, then free-form automation.
 
-cmux browser playbook (applies when the session runs inside cmux):
+Supabase tunnel: the self-hosted Supabase MCP server runs via bun from `~/.local/share/selfhosted-supabase-mcp/` (config in user `~/.zcode/cli/config.json` under `mcp.servers`; desktop ZCode ignores workspace `.mcp.json` files). The SSH tunnel is managed by the macOS LaunchAgent `com.webzwezda.supabase-mcp-tunnel`: `127.0.0.1:8080` → Kong REST, `127.0.0.1:5432` → direct PostgreSQL (bypasses PgBouncer). Не запускай туннельные скрипты (`ops/scripts/supabase-mcp-tunnel.sh`, `ops/scripts/ensure-mcp-tunnel.sh`) вручную, пока загружен LaunchAgent — они конфликтуют за порты (сам LaunchAgent запускает raw `ssh -L`). Database access is service-role level: full read/write.
 
-- `cmux browser open <url>` opens a surface; every later subcommand needs the surface handle: `cmux browser surface:N <subcommand>` (the number comes from the `open` response)
-- refs renumber after every snapshot/reload — re-snapshot before clicking, or address elements with CSS selectors through `eval`
-- only CSS selectors work in `click`; Playwright pseudo-classes like `button:has-text("...")` fail — find by text through `eval` instead
-- `eval` must return a primitive (string/number/boolean); wrap objects with `JSON.stringify((() => {...})())`
-- async side effects inside `eval` time out (~30s) — use deferred clicks: `setTimeout(() => btn.click(), 0); return "scheduled"`
-- React forms do not react to `fill`/`type` — set the value through the native prototype setter and dispatch an `input` event
-- not covered by browser checks: real TON transactions, TonConnect modal confirmation, email delivery; verify those side effects in the database through Supabase MCP
+## Coding Style & Naming Conventions
 
-Common terminal and `cmux` operations (when the session runs inside cmux):
+Backend: ESM (`import`/`export`), plain JavaScript. Frontend: React/Vite. Match the surrounding file's indentation (files mix 2-space and 4-space). Prefer small route/service modules, descriptive function names, early returns for request validation. Keep new files inside the existing feature area; kebab-case filenames (`official-bot.routes.js`, `auto-kick.job.js`).
 
-- use normal shell commands and `cmux` commands for terminal work
-- read terminal state with `cmux read-screen`
-- send text with `cmux send`
-- send special keys with `cmux send-key`
-- create splits, panes, and surfaces with `cmux new-split`, `cmux new-pane`, `cmux new-surface`
-- inspect workspace structure with `cmux tree`, `cmux list-panes`, `cmux list-pane-surfaces`
-- open browser surfaces with `cmux browser open`, navigate with `cmux browser goto`, inspect with `cmux browser snapshot`, and check runtime failures with `cmux browser console` and `cmux browser errors`
+Admin-facing UI copy may use blunt, colloquial Russian when it improves clarity for non-technical operators — intentional product style, not a change in system purpose. Prefer short explanations in plain terms that tell the admin why a block matters and what to do next.
 
-Plan and execution defaults:
+If a feature depends on Telegram-specific constraints, explain that directly in the UI.
 
-- enter plan mode for any non-trivial task with 3 or more steps or architectural decisions
-- if something goes sideways, stop and re-plan immediately instead of pushing through on a broken track
-- use plan mode for verification steps, not only for implementation
-- write detailed specs up front when ambiguity is likely
-- use subagents liberally to keep the main context clean
-- offload research, exploration, and parallel analysis to subagents
-- for complex problems, add parallel subagent compute instead of overloading the main session
-- keep one tack per subagent so execution stays focused
-- never mark a task complete without proving it works
-- diff behavior between baseline and changes when relevant
-- ask whether the result would pass staff-level review before closing
-- run tests, inspect logs, and demonstrate correctness before calling work done
-- for non-trivial changes, pause and ask whether there is a more elegant solution
-- if a fix feels hacky, replace it with the more elegant solution once the real constraints are clear
-- skip elegance passes for simple, obvious fixes where extra structure would be over-engineering
-- when given a bug report, default to fixing it directly without asking the user to hand-hold the process
-- use logs, errors, and failing tests as the path to root cause and resolution
+Payment/plan UX: `Payments / Requisites` stays clean and first-run friendly; tariff/package/referral/webhook complexity lives where the operation happens; do not leak internal trial/debug wording into user-facing forms when backend limits already enforce the rules.
 
-Task management defaults:
+## Current Product Focus & Owner Decisions
 
-- for non-trivial tasks, write the plan in `docs/plans/PLAN.md` or another focused note under `docs/plans/` with checkable items before implementation
-- check the plan before starting implementation when the task is large enough to justify it
-- mark plan items complete as work progresses
-- add a short review section to the same `docs/plans/` note after implementation and verification
-- open items across all work live in one file: `docs/plans/BACKLOG.md` — each item needs a solution, an owner, and a trigger; finished plan notes get a review section, stale ones get a SUPERSEDED header pointing at BACKLOG.md
-- explain changes at a high level as the work moves forward
-- after any user correction, capture the lesson in the active `docs/plans/` note or another focused note under `docs/plans/`, with a rule that prevents the same mistake
-- review relevant lessons from `docs/plans/` at the start of future work in this project when applicable
-
-Core execution principles:
-
-- simplicity first: make every change as simple as possible and touch the minimum necessary code
-- no laziness: find root causes and avoid temporary fixes
-- minimal impact: only change what is necessary and avoid introducing regressions
-
-## Available Skills
-
-Skills are instruction packs the main session loads through the Skill tool when a task matches their description (also callable as `/<name>`). They complement subagents: a subagent does isolated work in a fresh context, a skill injects a specialized procedure into the main session. Three scopes exist — workspace (`.agents/skills/` in this repo), user (`~/.zcode/skills/`), and official plugins — and all are available in every session.
-
-Workspace skills:
-
-- `code-review` (`.agents/skills/code-review/`): multi-lens parallel review — the main session validates the diff range, spawns independent read-only reviewer subagents (one per lens), and synthesizes one cited report. Use for full close-out review of large or risky diffs.
-- `modern-web-guidance` (`.agents/skills/modern-web-guidance/`): search over current web-platform best practices. Mandatory first step for any HTML/CSS or client-side JS work — run it before writing or reviewing frontend code.
-- `systematic-debugging` (`.agents/skills/systematic-debugging/`): four-phase root-cause procedure (investigate → pattern analysis → hypothesis testing → implementation). Read before forming any bug hypothesis; the `debugger` agent is wired to it.
-- `test-driven-development` (`.agents/skills/test-driven-development/`): red-green-refactor discipline with a companion `writing-good-tests.md`. The `test-engineer` agent is wired to it.
-- `security-and-hardening` (`.agents/skills/security-and-hardening/`): threat-model-first appsec methodology (STRIDE, abuse cases, OWASP Top 10 checklist in `references/`). The `security-auditor` agent is wired to it.
-- `shipping-and-launch` (`.agents/skills/shipping-and-launch/`): go/no-go release gates, staged rollout, rollback-plan template. The `deployment-engineer` agent is wired to it.
-- `supabase-postgres-best-practices` (`.agents/skills/supabase-postgres-best-practices/`): first-party Supabase rule library — 34 reference files (schema/query/lock/security) with incorrect-vs-correct SQL. Read the relevant rules before writing or reviewing migration SQL; the `postgres-pro` agent is wired to it.
-
-The five vendored skills above (installed 2026-09-13 from obra/superpowers, addyosmani/agent-skills, supabase/agent-skills — all MIT; see `_source.md` in each folder) are also wired into the matching file-based subagents in `~/.zcode/agents/` via `## Skills` sections. Subagents have no Skill tool: their wiring is "Read the SKILL.md and follow it".
-
-User-scope skills (`~/.zcode/skills/`) — a design-system suite, most useful for `admin-v2` and `site-v2` visual work:
-
-- generate: `brandkit`, `design-tokens`, `design-code`, `design-component`, `token-build`
-- evaluate: `design-review`, `design-qa`, `a11y-audit`, `performance`
-- direction: `apply-aesthetic`, `redesign`, `prototype`, `image-to-code`, `migrate-design-system`
-- upkeep: `figma-integration`, `governance`, `ux-writing`
-
-Plugin skills:
-
-- `browser-use` (`control-browser`, `web-gui-tester`): runtime checks of deployed site/admin per the browser doctrine above
-- `computer-use`: desktop control when a task leaves the browser
-- `document-skills` (`docx`, `pdf`, `pptx`, `xlsx`): document deliverables
-- `skill-creator`: create new skills or refine existing ones, including trigger wording
-- `zcode-guide` diagnostics (`diagnosing-skills`, `diagnosing-mcp`, `diagnosing-plugins`, `diagnosing-commands`, `diagnosing-hooks`, `zcode-configuration-guide`): first stop when a skill, MCP server, plugin, or slash command silently fails to load or trigger
-
-Standing rule: before hand-rolling a procedure, check whether a skill already covers it — if a task matches a skill's description, invoke the skill instead of improvising.
-
-## ZCode Orchestration Contract
-
-This block is the standing orchestration contract for this repo.
-
-- ZCode is the primary orchestrator for native ZCode subagents and any Claude terminal workers during Bullgram work.
-- Keep the distinction explicit:
-  - native ZCode subagents are delegated through the Agent tool (`Explore`, `general-purpose`);
-  - Claude workers are terminal processes coordinated through `cmux`;
-  - a `cmux` pane, split, browser surface, or terminal surface is not itself a subagent.
-- The existing rule "`cmux` is workspace infrastructure, not agent runtime" does not prohibit orchestration. It means the agent must not confuse terminal UI state with native subagent state.
-- For Claude work, prefer the project agent file `.claude/agents/bullgram-codex-worker.md` and launch Claude with `claude --agent bullgram-codex-worker` in a cmux pane when a bounded worker is useful.
-- For frontend/browser debugging inside cmux, use `cmux` browser surfaces as the default browser; outside cmux, use the native Browser Use skill. Keep browser evidence — screenshots, console output, runtime errors — attached to the session report.
-- Use `cmux help` whenever command syntax is uncertain. The main commands for orchestration are:
-  - `cmux tree`
-  - `cmux list-panes`
-  - `cmux list-pane-surfaces`
-  - `cmux new-split`
-  - `cmux new-pane`
-  - `cmux new-surface`
-  - `cmux send`
-  - `cmux send-key`
-  - `cmux read-screen`
-  - `cmux browser open`
-  - `cmux browser goto`
-  - `cmux browser snapshot`
-  - `cmux browser console`
-  - `cmux browser errors`
-  - `cmux browser screenshot`
-- ZCode owns task decomposition, prompt boundaries, worker selection, merge strategy, final diff review, verification, deployment decisions, and user-facing summary.
-- Workers should receive narrow prompts with exact scope, allowed files or write boundaries, expected validation, and required return format.
-- Do not let workers deploy, rollback, run destructive commands, or broaden architecture unless the main session explicitly assigns that scope.
-- When a worker or subagent finishes, the main session must read the result, inspect the diff locally, reconcile conflicts, run final checks, and only then report completion.
+- `site-v2` hero sells ONE outcome: infrastructure for AI-agent and n8n builders («Дай своему ИИ-агенту Telegram-аккаунт», RU first, EN later). For THIS technical audience naming MCP/API/proxies in the hero subline is correct and expected (owner decision 2026-09-21, superseding the 2026-09-12 consumer framing). The «one outcome, no feature dump» principle still stands. Autopost/paywall/shop stay OFF the homepage.
+- Секция доступа на главной — ровно три инструмента: REST API / Bullgram MCP / Telegram Web (Telegram Web первым; решение владельца 2026-09-30).
+- Соцпомощь: `/access-request` — форма для людей с инвалидностью (тариф Normal бесплатно); ссылка первой строкой под тарифами, поддержка Telegram — второй (BACKLOG §17, закрыт 2026-09-30).
+- Upgrade path `Trial -> Normal -> Seller` must be preserved and strengthened in UI and backend limits.
+- ProductMenu (BACKLOG §23) — глобальная навигация поверхностей в сайдбарах — черновик, запуск по слову владельца. Do not implement without the owner's go.
+- Known platform facts (BACKLOG §21-22): Supabase Realtime WS отвечает 403 на проде — живой пуш в журнале автопостера не работает, REST-поллинг ок; `autopost_bots.bot_token` хранится открытым текстом (осознанно); unlayered `a { color: inherit }` в index.css аппов ломает цветовые утилиты на анкорах (лечится `!`-суффиксом или переносом в `@layer base`).
