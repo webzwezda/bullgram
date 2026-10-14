@@ -23,7 +23,7 @@ const plans = [
     description: 'Подключи свою сессию и проверь, как агент работает с твоими группами.',
     action: 'Начать бесплатно',
     features: [
-      '1 юзербот',
+      'Подключение одного юзербота',
       '100 запросов к API и MCP',
       'своя сессия — файлом или QR'
     ]
@@ -232,7 +232,6 @@ function PlanCard({ plan, children }) {
 }
 
 // Главная кнопка страницы: «Получить аккаунт» = оплата Pro, аккаунт выдаётся после оплаты.
-// label переопределяется в финальном CTA («Quick Start»)
 function GetAccountButton({ user, accessToken, profilePlan, pendingOrder, login, label = 'Получить аккаунт' }) {
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
@@ -448,7 +447,7 @@ export function HomePage() {
           <div className="mb-8">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-action-primary">Тарифы</div>
             <h2 className="mt-3 text-balance text-3xl font-bold tracking-tight text-ink-strong sm:text-4xl">
-              Сколько стоит вход
+              Самое выгодное решение
             </h2>
           </div>
           <div className="grid gap-5 lg:grid-cols-2 lg:items-stretch">
@@ -546,23 +545,14 @@ export function HomePage() {
           Дай агенту Telegram — уже сегодня
         </h2>
         <div className="mt-10">
-          <GetAccountButton
-            user={user}
-            accessToken={accessToken}
-            profilePlan={profilePlan}
-            pendingOrder={pendingOrder}
-            login={login}
-            label="Quick Start"
-          />
-        </div>
-        <p className="mt-6 text-sm font-medium text-ink-muted">
           <a
             href="/docs/quick-start/"
-            className="font-bold text-action-primary underline decoration-2 underline-offset-2 hover:text-action-primary-hover"
+            className="group inline-flex items-center justify-center gap-2 rounded-full bg-action-primary px-8 py-4 text-base font-bold text-action-primary-text shadow-lg shadow-indigo-600/20 transition-all hover:bg-action-primary-hover hover:shadow-[0_8px_30px_rgba(79,70,229,0.24)] hover:-translate-y-0.5"
           >
-            Подробный гид по настройке
+            Quick Start
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" strokeWidth={2.5} />
           </a>
-        </p>
+        </div>
       </section>
     </div>
   );
