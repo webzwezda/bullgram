@@ -396,7 +396,7 @@ export function HomePage() {
               <circle cx="12" cy="12" r="11" fill="#0098EA" />
               <path d="M12 5.5 17.5 11 12 18.5 6.5 11 12 5.5Z" fill="#fff" />
             </svg>
-            <span className="text-[13px] font-bold tracking-wide text-ink-body uppercase">
+            <span className="text-xs font-bold tracking-wide text-ink-body uppercase">
               crypto friendly
             </span>
           </span>
