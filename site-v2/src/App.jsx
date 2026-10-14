@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Home, LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { RailProfileCard } from './ui/RailProfileCard.jsx';
@@ -48,8 +48,7 @@ const navSections = [
   {
     title: 'Навигация',
     items: [
-      { to: '/', label: 'Главная', icon: Home },
-      { href: '/userbot', label: 'Кабинет', icon: LayoutDashboard, external: true }
+      { href: '/userbot', label: 'userbot', icon: LayoutDashboard, external: true }
     ]
   }
 ];
