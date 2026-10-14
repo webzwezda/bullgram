@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Home, LayoutDashboard, FilePlus } from 'lucide-react';
+import { Home, LayoutDashboard } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { RailProfileCard } from './ui/RailProfileCard.jsx';
@@ -42,18 +42,14 @@ function ExternalRedirect({ to }) {
   return null;
 }
 
+// «Создать счёт» убран из навигации, пока флоу не готов к обычным пользователям;
+// страница /create доступна по прямому URL (решение владельца 2026-10-14).
 const navSections = [
   {
     title: 'Навигация',
     items: [
       { to: '/', label: 'Главная', icon: Home },
       { href: '/userbot', label: 'Кабинет', icon: LayoutDashboard, external: true }
-    ]
-  },
-  {
-    title: 'Сервис',
-    items: [
-      { to: '/create', label: 'Создать счёт', icon: FilePlus }
     ]
   }
 ];

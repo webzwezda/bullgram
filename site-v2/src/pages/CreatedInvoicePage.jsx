@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -34,7 +34,6 @@ function formatRemaining(expiresAt) {
 }
 
 export function CreatedInvoicePage() {
-  const navigate = useNavigate();
   const { id } = useParams();
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -157,15 +156,6 @@ export function CreatedInvoicePage() {
                 <p className="text-sm font-medium text-slate-500 mt-0.5">{error}</p>
               </div>
             </div>
-          </div>
-          <div className="p-5 sm:p-6 bg-white">
-            <button
-              type="button"
-              onClick={() => navigate('/create')}
-              className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors shadow-md shadow-indigo-200"
-            >
-              Создать новый счёт
-            </button>
           </div>
         </Card>
       </section>

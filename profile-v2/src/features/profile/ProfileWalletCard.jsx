@@ -11,7 +11,7 @@ function shortAddress(addr) {
 }
 
 export function ProfileWalletCard() {
-  const { accessToken } = useAuth();
+  const { accessToken, profileRole } = useAuth();
   const address = useTonAddress();
   const wallet = useTonWallet();
   const { open } = useTonConnectModal();
@@ -93,8 +93,13 @@ export function ProfileWalletCard() {
         <h3 className="text-lg font-black text-slate-900 tracking-tight">Кошелёк TON</h3>
         <p className="text-sm text-slate-500 mt-0.5">
           Кошелёк, с которого ты платишь за тарифы Bullgram. Адрес запоминается при подключении — бери его отсюда для оплаты вручную.
-          Это не касса: кошелёк для приёма оплат от твоих клиентов настраивается{' '}
-          <a href="/paywall/billing" className="link-action">в Кассе → Реквизиты</a> в кабинете paywall.
+          {/* Ссылка в paywall-кабину — только платформенному админу: поверхности ещё не готовы к пользователям. */}
+          {profileRole === 'admin' ? (
+            <>
+              {' '}Это не касса: кошелёк для приёма оплат от твоих клиентов настраивается{' '}
+              <a href="/paywall/billing" className="link-action">в Кассе → Реквизиты</a> в кабинете paywall.
+            </>
+          ) : null}
         </p>
       </div>
 

@@ -30,17 +30,27 @@ const UserbotsPromoCard = () => (
   </PromoCard>
 );
 
-const PaywallPromoCard = () => (
-  <PromoCard href="/paywall" icon={CreditCard} chipClass="bg-indigo-50 border-indigo-100" iconClass="text-indigo-600" title="Paywall">
-    Отдельное приложение продажи доступа: бот продаж, клиенты, рассылки и касса.
-  </PromoCard>
-);
+// Paywall и «Боты» — служебные поверхности, ещё не готовые к обычным пользователям:
+// промо-карты видит только платформенный админ (решение владельца 2026-10-14).
+const PaywallPromoCard = () => {
+  const { profileRole } = useAuth();
+  if (profileRole !== 'admin') return null;
+  return (
+    <PromoCard href="/paywall" icon={CreditCard} chipClass="bg-indigo-50 border-indigo-100" iconClass="text-indigo-600" title="Paywall">
+      Отдельное приложение продажи доступа: бот продаж, клиенты, рассылки и касса.
+    </PromoCard>
+  );
+};
 
-const BotsPromoCard = () => (
-  <PromoCard href="/bots" icon={Bot} chipClass="bg-blue-50 border-blue-100" iconClass="text-blue-600" title="Боты">
-    Хаб мелких ботов. Автопостер ведёт твои каналы: посты по расписанию и предложки.
-  </PromoCard>
-);
+const BotsPromoCard = () => {
+  const { profileRole } = useAuth();
+  if (profileRole !== 'admin') return null;
+  return (
+    <PromoCard href="/bots" icon={Bot} chipClass="bg-blue-50 border-blue-100" iconClass="text-blue-600" title="Боты">
+      Хаб мелких ботов. Автопостер ведёт твои каналы: посты по расписанию и предложки.
+    </PromoCard>
+  );
+};
 
 function planMeta(plan) {
   if (plan === 'pro' || plan === 'normal') {
