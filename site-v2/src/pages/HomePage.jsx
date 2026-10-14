@@ -391,16 +391,13 @@ export function HomePage() {
               Open Source
             </span>
           </a>
-          <span
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-border-default shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)]"
-            title="Принимаем оплату только в криптовалюте — TON"
-          >
+          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-border-default shadow-[0_2px_10px_-3px_rgba(79,70,229,0.1)]">
             <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="11" fill="#0098EA" />
               <path d="M12 5.5 17.5 11 12 18.5 6.5 11 12 5.5Z" fill="#fff" />
             </svg>
             <span className="text-[13px] font-bold tracking-wide text-ink-body uppercase">
-              Оплата в TON
+              crypto friendly
             </span>
           </span>
         </div>
