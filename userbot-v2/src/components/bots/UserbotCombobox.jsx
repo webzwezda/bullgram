@@ -1,10 +1,36 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { AlertCircle, ChevronDown, ShieldCheck } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
+
+const SAFE_MODE_RUNTIME_STATUS = 'pending_activation';
+
+function isSafeModeAccount(account) {
+  return String(account?.runtime_status || '').trim().toLowerCase() === SAFE_MODE_RUNTIME_STATUS;
+}
+
+// Индикатор режима аккаунта: щит = боевой контур, круг-алерт = safe-mode.
+// Иконки lucide (единственный источник иконок на сайте), цвета — только
+// семантические пары feedback-*, чтобы не растить hardcodes-ratchet файла.
+function AccountModeIcon({ account, iconClassName }) {
+  const safeMode = isSafeModeAccount(account);
+  const Icon = safeMode ? AlertCircle : ShieldCheck;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center shrink-0',
+        safeMode ? 'text-feedback-warning-text' : 'text-feedback-success-text'
+      )}
+      title={safeMode ? 'Safe mode — ждёт ручной активации' : 'Боевой режим'}
+    >
+      <Icon className={iconClassName || 'w-4 h-4'} aria-hidden="true" />
+      <span className="sr-only">{safeMode ? 'Safe mode' : 'Боевой режим'}</span>
+    </span>
+  );
+}
 
 function labelFor(account) {
   return account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
@@ -47,6 +73,7 @@ export function UserbotCombobox({
               {selectedAccount ? (selectedAccount.custom_label || labelFor(selectedAccount)) : placeholder}
             </span>
           )}
+          {selectedAccount ? <AccountModeIcon account={selectedAccount} /> : null}
           <ChevronDown className="ml-auto w-4 h-4 text-slate-400 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </PopoverTrigger>
@@ -81,6 +108,7 @@ export function UserbotCombobox({
                     ].filter(Boolean)}
                     className="rounded-lg"
                   >
+                    <AccountModeIcon account={account} iconClassName="w-4 h-4" />
                     {account.custom_label ? (
                       <div className="flex flex-col min-w-0">
                         <span className="font-semibold text-slate-950 truncate">{account.custom_label}</span>
