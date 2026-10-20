@@ -255,6 +255,7 @@ export function UserbotCenterSection({
   // не должен перезаписывать центр — тот же reqId-паттерн, что в CustomersPage.loadCustomers.
   const centerReqIdRef = useRef(0);
   const selectedBotIdRef = useRef(selectedLiveUserbotId);
+  const lastLoadKeyRef = useRef('');
   useEffect(() => {
     selectedBotIdRef.current = selectedLiveUserbotId;
   }, [selectedLiveUserbotId]);
@@ -440,9 +441,19 @@ export function UserbotCenterSection({
     let cancelled = false;
 
     async function loadCenter() {
-      // После handoff-загрузки не дергаем центр повторно для того же бота,
-      // но смена бота обязана перезагрузить центр — иначе остаются чужие диалоги.
-      if (initialHandoff && handoffLoadedBotRef.current === String(selectedLiveUserbotId || '')) return;
+      const botIdStr = String(selectedLiveUserbotId || '');
+      const loadKey = `${botIdStr}::${String(selectedLiveUserbot?.runtime_status || '')}`;
+      // После handoff-загрузки не дергаем центр повторно для того же бота
+      // в том же runtime-статусе, но смена бота или статуса (живая активация
+      // safe-mode аккаунта) обязана перезагрузить центр — иначе остаются
+      // чужие диалоги или пустой safe-mode ответ.
+      if (initialHandoff && handoffLoadedBotRef.current === loadKey) return;
+
+      // Активация только что сняла safe-mode: кэш диалогов этого аккаунта ещё
+      // пуст, поэтому тянем центр живым сканом — иначе центр останется пустым
+      // без видимой подсказки.
+      const scanAfterActivation = lastLoadKeyRef.current === `${botIdStr}::pending_activation`;
+      lastLoadKeyRef.current = loadKey;
 
       setState((prev) => ({
         ...prev,
@@ -455,12 +466,12 @@ export function UserbotCenterSection({
       try {
         const params = new URLSearchParams();
         if (selectedLiveUserbotId) params.set('userbot_id', selectedLiveUserbotId);
-        if (initialThreadUserId && !initialHandoff) params.set('scan', 'true');
+        if ((initialThreadUserId && !initialHandoff) || scanAfterActivation) params.set('scan', 'true');
         const query = params.toString() ? `?${params.toString()}` : '';
         const data = await apiRequest(`/api/userbot/ops-center${query}`, { accessToken });
         if (cancelled || reqId !== centerReqIdRef.current) return;
         applyCenterData(data, selectedLiveUserbotId, threadUserId || initialThreadUserId);
-        if (initialHandoff) handoffLoadedBotRef.current = String(selectedLiveUserbotId || '');
+        if (initialHandoff) handoffLoadedBotRef.current = loadKey;
       } catch (error) {
         if (cancelled || reqId !== centerReqIdRef.current) return;
         setState({
@@ -480,7 +491,10 @@ export function UserbotCenterSection({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, selectedLiveUserbotId]);
+    // runtime_status в deps: после живой активации safe-mode аккаунта статус
+    // меняется и центр перезагружается уже в боевом контуре (диалоги, группы),
+    // без ручного переключения аккаунта.
+  }, [accessToken, selectedLiveUserbotId, selectedLiveUserbot?.runtime_status]);
 
   useEffect(() => {
     if (!initialThreadUserId) return;

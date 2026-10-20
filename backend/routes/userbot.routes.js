@@ -13,6 +13,11 @@ import { ManagedProxyService } from '../services/managed-proxy.service.js';
 import { enforceOwnedProxyQuota, enforceUserbotQuota, getTierRules } from '../utils/product-tier.js';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
 import { cleanupRestrictedUserbotProxy, unpublishRestrictedUserbotListings } from '../utils/restricted-userbot-ops.js';
+import {
+    FRESH_IMPORT_RUNTIME_STATUS,
+    isFreshImportedUserbot,
+    resolveOpsCenterSelection
+} from '../utils/ops-center-selection.js';
 
 // Настраиваем загрузку файлов во временную папку сервера
 const upload = multer({
@@ -43,7 +48,6 @@ const MAX_MANAGED_PROXIES_GLOBAL = 512;
 const MAX_MANAGED_PROXY_BATCH = 100;
 const DEFAULT_ADMIN_PROXY_GROUP = 'shop_sale';
 const TRIAL_PROXY_LEASE_HOURS = 24;
-const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
 const USERBOT_PROFILE_SYNC_COOLDOWN_MS = 10 * 60 * 1000;
 const USERBOT_PROFILE_UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'userbot-profiles');
@@ -54,10 +58,6 @@ const USERBOT_HEALTH_INSPECT_TIMEOUT_MS = Number(process.env.USERBOT_HEALTH_INSP
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';
-}
-
-function isFreshImportedUserbot(userbot) {
-    return String(userbot?.runtime_status || '').trim().toLowerCase() === FRESH_IMPORT_RUNTIME_STATUS;
 }
 
 function buildCheckResponse(status, reason = null, details = null, extra = {}) {
@@ -3660,33 +3660,46 @@ export default function (supabase) {
                 return res.status(404).json({ error: 'Подключите Юзербота.' });
             }
 
-            if (requestedUserbotId && reservedUserbotIds.has(requestedUserbotId)) {
+            const selection = resolveOpsCenterSelection({ userbots, reservedUserbotIds, requestedUserbotId });
+
+            if (selection.kind === 'reserved') {
                 return res.status(409).json({
                     error: 'Этот юзербот сейчас выставлен в shop и выведен из рабочей Telegram-операционки. Сними его с витрины или выбери другой аккаунт.'
                 });
             }
 
-            const operationalUserbots = userbots.filter((item) =>
-                !reservedUserbotIds.has(String(item.id)) &&
-                !isFreshImportedUserbot(item)
-            );
-            if (operationalUserbots.length === 0) {
+            if (selection.kind === 'safe_mode') {
+                // Запрошен свежий импорт: живой скан до активации запрещён, но
+                // центр обязан отрисоваться — селектор, баннер safe-mode и кнопка
+                // «Выполнить активацию». Раньше здесь падал 404 «Выбранный юзербот
+                // не найден» и заменял весь центр ошибкой (баг 2026-10-20).
+                return res.json({
+                    success: true,
+                    safe_mode: true,
+                    scan_required: false,
+                    cache_source: 'safe_mode',
+                    selected_userbot_id: selection.userbot.id,
+                    selected_userbot_username: selection.userbot.tg_username || selection.userbot.tg_account_id || null,
+                    signal_config: buildUserbotCenterSignalConfig(paymentSettings, officialBots),
+                    userbots: selection.operationalUserbots.map(item => buildUserbotCenterAccount(item)),
+                    summary: buildUserbotCenterSummary([], []),
+                    groups: [],
+                    conversations: []
+                });
+            }
+
+            if (selection.kind === 'no_operational') {
                 return res.status(409).json({
                     error: 'Сейчас нет ни одного активированного юзербота для рабочего центра. Свежие импорты сначала нужно вручную активировать живой проверкой.'
                 });
             }
 
-            const preferredUserbot = requestedUserbotId
-                ? operationalUserbots.find(item => String(item.id) === requestedUserbotId)
-                : operationalUserbots[0];
-
-            if (!preferredUserbot) {
+            if (selection.kind === 'not_found') {
                 return res.status(404).json({ error: 'Выбранный юзербот не найден' });
             }
 
-            if (isFreshImportedUserbot(preferredUserbot)) {
-                return res.status(409).json({ error: FRESH_IMPORT_RUNTIME_REASON });
-            }
+            const preferredUserbot = selection.userbot;
+            const operationalUserbots = selection.operationalUserbots;
 
             const { data: linkedChannels } = await supabase
                 .from('channels')

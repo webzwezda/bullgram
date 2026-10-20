@@ -101,6 +101,12 @@ export function CampaignReplies({ accessToken, userbots, campaign }) {
       setState((prev) => ({ ...prev, progress: `Сканируем @${target.tg_username || 'юзербот'} (${i + 1}/${targets.length})...` }));
       try {
         const data = await apiRequest(`/api/userbot/ops-center?userbot_id=${target.id}&scan=true`, { accessToken });
+        if (data.safe_mode) {
+          // Статус списков живёт в стейте страницы: отправитель мог уйти в safe-mode
+          // уже после фильтра eligible выше — ops-center ответит пустым safe_mode.
+          errors.push(`@${target.tg_username || target.id}: аккаунт ушёл в safe-mode до ручной активации — пропущен`);
+          continue;
+        }
         // ops-center при падении выбранного юзербота может отсканить другого — верит только его ответ
         const userbotId = String(data.selected_userbot_id || target.id);
         const userbotName = data.selected_userbot_username || target.tg_username || 'юзербот';

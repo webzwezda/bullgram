@@ -59,7 +59,7 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 - `POST /api/userbot/send-message` - Ручное сообщение в личку, требует `manual_confirmed=true`
 - `POST /api/userbot/crm/import` - Массовый импорт пользователей
 - `GET /api/userbot/crm/presence` - Проверка присутствия в группах
-- `GET /api/userbot/ops-center` - Центр ручной triage по личкам и группам
+- `GET /api/userbot/ops-center` - Центр ручной triage по личкам и группам. Если в `userbot_id` передан свежий импорт (`pending_activation`), отвечает `200` с `safe_mode: true` и пустыми `groups`/`conversations` (без живого скана) — центр отрисовывает баннер safe-mode и кнопку активации.
 - `GET /api/userbot/error-events` - Журнал Telegram-ошибок и ограничений
 
 ### Официальные боты (`/api/official-bot`)
