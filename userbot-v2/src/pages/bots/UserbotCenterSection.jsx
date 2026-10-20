@@ -1571,14 +1571,11 @@ export function UserbotCenterSection({
             {(() => {
               const restrictedBadge = restrictedMarker(selectedLiveUserbot);
               const recoveryBadge = recoveryStatusBadge(recovery);
-              const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
-              const isSafeMode = runtimeStatus === 'pending_activation';
-              if (!restrictedBadge && !recoveryBadge && !isSafeMode) return null;
+              if (!restrictedBadge && !recoveryBadge) return null;
               return (
                 <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1 justify-center">
                   {restrictedBadge && <StatusBadge tone="error">{restrictedBadge.text}</StatusBadge>}
                   {recoveryBadge && <StatusBadge tone={recoveryBadge.tone || 'default'}>{recoveryBadge.text}</StatusBadge>}
-                  {isSafeMode && <StatusBadge tone="warning">Safe mode</StatusBadge>}
                 </div>
               );
             })()}
@@ -1592,13 +1589,30 @@ export function UserbotCenterSection({
               && ['restricted', 'dead_proxy', 'expired', 'error'].includes(runtimeStatus);
 
             if (isSafeMode) {
+              const activationBusy = checkingAccountId === String(selectedLiveUserbot.id)
+                || togglingSafeModeId === String(selectedLiveUserbot.id);
               return (
-                <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-                  <div>
-                    <h4 className="text-sm font-semibold text-amber-900">Режим Safe Mode</h4>
-                    <p className="text-sm text-amber-800 mt-0.5">Аккаунт ожидает живой активации перед входом в боевой контур.</p>
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-3">
+                  <div className="flex gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-amber-900">Режим Safe Mode</h4>
+                      <p className="text-sm text-amber-800 mt-0.5">Аккаунт ожидает живой активации перед входом в боевой контур.</p>
+                    </div>
                   </div>
+                  <Button
+                    className="w-full sm:w-auto rounded-xl shadow-sm"
+                    size="lg"
+                    onClick={() => checkAccount(selectedLiveUserbot)}
+                    disabled={activationBusy}
+                    variant="default"
+                  >
+                    {activationBusy ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Активация...</>
+                    ) : (
+                      'Выполнить активацию'
+                    )}
+                  </Button>
                 </div>
               );
             }
