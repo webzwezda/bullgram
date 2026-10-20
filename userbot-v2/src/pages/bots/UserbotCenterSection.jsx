@@ -1217,7 +1217,7 @@ export function UserbotCenterSection({
                   <div className="flex items-center justify-between">
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Автозамена прокси</label>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Переезд при падении основного</p>
+                      <p className="text-[11px] text-ink-muted mt-0.5">Переезд при падении основного</p>
                     </div>
                     <ModernSwitch
                       checked={!!binding?.allow_proxy_failover}
@@ -1648,11 +1648,14 @@ export function UserbotCenterSection({
             return (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shrink-0">
-                    <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 text-[10px] uppercase font-bold py-0.5 px-2 shrink-0">
+                    <ShieldCheck className="w-3 h-3 mr-1" aria-hidden="true" />
                     Боевой режим
                   </span>
-                  <p className="text-sm text-ink-muted truncate">Автоматика и живые Telegram-действия включены</p>
+                  <p className="text-sm text-ink-muted truncate">
+                    <span className="sm:hidden">Автоматика включена</span>
+                    <span className="hidden sm:inline">Автоматика и живые Telegram-действия включены</span>
+                  </p>
                 </div>
                 <Button
                   className="rounded-lg shrink-0"
