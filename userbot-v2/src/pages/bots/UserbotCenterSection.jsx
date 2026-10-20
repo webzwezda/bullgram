@@ -1048,7 +1048,7 @@ export function UserbotCenterSection({
                       ].filter(Boolean);
                       if (!parts.length) return null;
                       return (
-                        <p className="text-sm text-slate-500 mt-0.5 truncate">
+                        <p className="text-sm text-ink-muted mt-0.5 truncate">
                           {parts.join(' • ')}
                         </p>
                       );
@@ -1186,7 +1186,7 @@ export function UserbotCenterSection({
                 <h3 className="text-sm font-bold text-slate-900">Соединение</h3>
               </div>
 
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="bg-surface-subtle border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
                   <Select
@@ -1639,29 +1639,29 @@ export function UserbotCenterSection({
                 </div>
               );
             }
-            // Боевой контур: парный баннер к safe-mode — та же семантика через
-            // feedback-success (bg+text из одного набора), без сырых emerald-классов
-            // (ratchet-файл на базовой линии).
+            // Боевой контур: тихий статус-ряд по канону DESIGN.md — статус это
+            // Badge с feedback-парой, а не заливка-баннер: success-фон живёт для
+            // моментного фидбека («оплачено, сохранено»), нормальное состояние
+            // не кричит. Контейнер — как остальные белые карточки страницы.
             const combatBusy = checkingAccountId === String(selectedLiveUserbot.id)
               || togglingSafeModeId === String(selectedLiveUserbot.id);
             return (
-              <div className="rounded-xl bg-feedback-success-bg p-4 shadow-sm space-y-3">
-                <div className="flex gap-3">
-                  <ShieldCheck className="w-5 h-5 text-feedback-success-text shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-feedback-success-text">Боевой режим</h4>
-                    <p className="text-sm text-feedback-success-text mt-0.5 opacity-80">Аккаунт работает в боевом контуре. Перевод в Safe mode отключит автоматику и живые Telegram-действия до следующей ручной активации.</p>
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 shrink-0">
+                    <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
+                    Боевой режим
+                  </span>
+                  <p className="text-sm text-ink-muted truncate">Автоматика и живые Telegram-действия включены</p>
                 </div>
                 <Button
-                  className="w-full sm:w-auto rounded-xl shadow-sm"
-                  size="lg"
+                  className="rounded-lg shrink-0"
                   onClick={() => toggleSafeMode(selectedLiveUserbot)}
                   disabled={combatBusy}
-                  variant="default"
+                  variant="outline"
                 >
                   {combatBusy ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Переход в Safe mode...</>
+                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Переход...</>
                   ) : (
                     'Перейти в Safe mode'
                   )}
