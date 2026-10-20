@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2,
-  Network, Activity, KeyRound, AlertCircle, Settings2, Trash2, Tag, Send
+  Network, Activity, KeyRound, AlertCircle, Settings2, Trash2, Tag, Send,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1638,7 +1639,35 @@ export function UserbotCenterSection({
                 </div>
               );
             }
-            return null;
+            // Боевой контур: парный баннер к safe-mode — та же семантика через
+            // feedback-success (bg+text из одного набора), без сырых emerald-классов
+            // (ratchet-файл на базовой линии).
+            const combatBusy = checkingAccountId === String(selectedLiveUserbot.id)
+              || togglingSafeModeId === String(selectedLiveUserbot.id);
+            return (
+              <div className="rounded-xl bg-feedback-success-bg p-4 shadow-sm space-y-3">
+                <div className="flex gap-3">
+                  <ShieldCheck className="w-5 h-5 text-feedback-success-text shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-feedback-success-text">Боевой режим</h4>
+                    <p className="text-sm text-feedback-success-text mt-0.5 opacity-80">Аккаунт работает в боевом контуре. Перевод в Safe mode отключит автоматику и живые Telegram-действия до следующей ручной активации.</p>
+                  </div>
+                </div>
+                <Button
+                  className="w-full sm:w-auto rounded-xl shadow-sm"
+                  size="lg"
+                  onClick={() => toggleSafeMode(selectedLiveUserbot)}
+                  disabled={combatBusy}
+                  variant="default"
+                >
+                  {combatBusy ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Переход в Safe mode...</>
+                  ) : (
+                    'Перейти в Safe mode'
+                  )}
+                </Button>
+              </div>
+            );
           })()}
 
           <div className={`grid grid-cols-1 sm:grid-cols-2 ${TAB_OPTIONS.length > 2 ? 'lg:grid-cols-3' : ''} gap-3`}>
