@@ -7,6 +7,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 import { apiRequest } from '../../api/client.js';
@@ -1648,10 +1649,10 @@ export function UserbotCenterSection({
             return (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="inline-flex items-center bg-emerald-50 text-emerald-700 text-[10px] uppercase font-bold py-0.5 px-2 shrink-0">
-                    <ShieldCheck className="w-3 h-3 mr-1" aria-hidden="true" />
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-[10px] uppercase font-bold shrink-0">
+                    <ShieldCheck aria-hidden="true" />
                     Боевой режим
-                  </span>
+                  </Badge>
                   <p className="text-sm text-ink-muted truncate">
                     <span className="sm:hidden">Автоматика включена</span>
                     <span className="hidden sm:inline">Автоматика и живые Telegram-действия включены</span>
