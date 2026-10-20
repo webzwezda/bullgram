@@ -1594,23 +1594,25 @@ export function UserbotCenterSection({
               const activationBusy = checkingAccountId === String(selectedLiveUserbot.id)
                 || togglingSafeModeId === String(selectedLiveUserbot.id);
               return (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm space-y-3">
-                  <div className="flex gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-amber-900">Режим Safe Mode</h4>
-                      <p className="text-sm text-amber-800 mt-0.5">Аккаунт ожидает живой активации перед входом в боевой контур.</p>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 text-[10px] uppercase font-bold shrink-0">
+                      <AlertCircle aria-hidden="true" />
+                      Safe mode
+                    </Badge>
+                    <p className="text-sm text-ink-muted truncate">
+                      <span className="sm:hidden">Ждёт ручной активации</span>
+                      <span className="hidden sm:inline">Аккаунт ждёт живой активации перед входом в боевой контур</span>
+                    </p>
                   </div>
                   <Button
-                    className="w-full sm:w-auto rounded-xl shadow-sm"
-                    size="lg"
+                    className="rounded-lg shrink-0"
                     onClick={() => checkAccount(selectedLiveUserbot)}
                     disabled={activationBusy}
                     variant="default"
                   >
                     {activationBusy ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Активация...</>
+                      <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Активация...</>
                     ) : (
                       'Выполнить активацию'
                     )}
@@ -1833,7 +1835,7 @@ export function UserbotCenterSection({
                             ) : (
                               <button
                                 type="button"
-                                className="h-8 px-3 rounded-lg border border-rose-200 bg-white text-rose-600 text-[12px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                                className="h-8 px-3 rounded-lg border border-rose-200 bg-white text-rose-600 text-xs font-bold hover:bg-rose-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
                                 onClick={() => resetOneSession(item)}
                                 disabled={!canReset || isResetting || actionState.resettingAuthorizationHash !== ''}
                                 title={!canReset ? 'Эту сессию нельзя разлогинить отсюда' : ''}
