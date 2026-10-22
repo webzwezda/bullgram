@@ -16,6 +16,7 @@ import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
 import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
+import { UserbotConnectPanel } from './UserbotConnectPanel.jsx';
 
 function formatDate(value) {
   if (!value) return 'Нет данных';
@@ -105,13 +106,16 @@ export function UserbotCenterSection({
   restoreAccount,
   patchLiveUserbot,
   proxyLabel,
+  availableOnboardingProxies,
   availableBindingProxiesForAccount,
   availableFailoverProxiesForAccount,
   canRestoreFromFiles,
   defaultCheckLines,
   formatWhen,
   liveUserbots,
+  reloadAccounts,
   setSelectedLiveUserbotId,
+  userbotCount,
   deleteAccount,
   deletingAccountId,
   restrictedMarker,
@@ -125,6 +129,18 @@ export function UserbotCenterSection({
 }) {
   const location = useLocation();
   const sectionRef = useRef(null);
+  const [connectPanelOpen, setConnectPanelOpen] = useState(false);
+
+  // Кнопки «Подключить аккаунт» открывают инлайн-панель онбординга над
+  // карточкой аккаунта; повторный клик при открытом окне просто подводит
+  // скролл к нему, закрытие — крестик в панели.
+  function openConnectPanel() {
+    setConnectPanelOpen(true);
+    setTimeout(() => {
+      document.getElementById('userbot-connect-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
+
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1536,6 +1552,16 @@ export function UserbotCenterSection({
         </div>
       ) : null}
 
+      {connectPanelOpen ? (
+        <UserbotConnectPanel
+          availableOnboardingProxies={availableOnboardingProxies}
+          onClose={() => setConnectPanelOpen(false)}
+          proxyLabel={proxyLabel}
+          reloadAccounts={reloadAccounts}
+          userbotCount={userbotCount}
+        />
+      ) : null}
+
       {selectedLiveUserbot ? (
         <div className="relative bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
         <Button
@@ -1562,13 +1588,14 @@ export function UserbotCenterSection({
               sideOffset={4}
             />
 
-            <Link
-              to="/connect"
+            <button
+              type="button"
+              onClick={openConnectPanel}
               className="h-12 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-action-primary text-action-primary-text! text-sm font-bold hover:bg-action-primary-hover transition-all shadow-sm whitespace-nowrap"
             >
               <UserPlus className="w-4 h-4" />
               Подключить аккаунт
-            </Link>
+            </button>
 
             {(() => {
               const restrictedBadge = restrictedMarker(selectedLiveUserbot);
@@ -1720,13 +1747,14 @@ export function UserbotCenterSection({
             <p className="mt-1 text-sm text-slate-500 max-w-sm">
               Подключи аккаунт в разделе «Подключение» — и его профиль, прокси и проверка сессии появятся здесь.
             </p>
-            <Link
-              to="/connect"
+            <button
+              type="button"
+              onClick={openConnectPanel}
               className="mt-4 h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-action-primary text-action-primary-text! text-sm font-bold hover:bg-action-primary-hover shadow-sm"
             >
               <UserPlus className="w-4 h-4" />
               Подключить аккаунт
-            </Link>
+            </button>
           </div>
         </div>
       )}

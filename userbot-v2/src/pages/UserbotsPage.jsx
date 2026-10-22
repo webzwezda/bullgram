@@ -78,6 +78,7 @@ function UserbotsPageContent() {
   });
 
   const {
+    availableOnboardingProxies,
     bundledUserbotLot,
     bundledUserbotLots,
     canSellUserbotAssets,
@@ -206,13 +207,16 @@ function UserbotsPageContent() {
     restoreAccount,
     patchLiveUserbot,
     proxyLabel,
+    availableOnboardingProxies,
     availableBindingProxiesForAccount,
     availableFailoverProxiesForAccount,
     canRestoreFromFiles,
     defaultCheckLines,
     formatWhen,
     liveUserbots,
+    reloadAccounts,
     setSelectedLiveUserbotId,
+    userbotCount: userbots.length,
     deleteAccount,
     deletingAccountId: state.deletingAccountId,
     restrictedMarker,
