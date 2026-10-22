@@ -2,6 +2,19 @@
 
 Формат — SemVer: **MAJOR** (изменено/удалено значение примитива, переименован или удалён токен — меняет визуал продукта) / **MINOR** (новый токен, рампа, semantic-пара — аддитивно) / **PATCH** (доки, описания, гейты — значения не трогает).
 
+## [1.2.0] — 2026-10-22
+
+### Changed (волна кита: hover у Button, BACKLOG §24)
+- Канонический кит `components/ui/button.jsx` (байт-копии во всех шести аппах):
+  - `default`: hover `[a]:hover:bg-primary/80` → `hover:bg-primary/80` — hover больше
+    не скоупится на анкоры, настоящий `<button>` под курсором темнеет (раньше не
+    реагировал вовсе; замечено на safe-mode ряду `/userbot`)
+  - `outline`: light-hover `hover:bg-muted` → `hover:border-border-strong
+    hover:bg-surface-subtle-strong hover:text-foreground` — видимый сигнал даёт
+    потемнение бордера (slate-200 → slate-300, «кнопки-обводки» в описании токена) плюс
+    заливка slate-100; `aria-expanded:*` и `dark:*` не тронуты
+- baseline ratchet: без роста — из button.jsx удалён raw-класс `bg-muted`
+
 ## [1.1.0] — 2026-09-16
 
 ### Added (волна 6b)
