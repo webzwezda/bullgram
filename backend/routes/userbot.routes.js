@@ -1974,10 +1974,16 @@ export default function (supabase) {
                     proxyData.inventory_group = normalizedInventoryGroup;
                 }
 
-                result = await supabase.from('proxies').insert([proxyData]);
+                result = await supabase.from('proxies').insert([proxyData]).select('id');
             }
             if (result.error) throw result.error;
-            res.json({ success: true });
+            // proxy_ids нужен инлайн-панели на /userbot: она подставляет созданный
+            // прокси в шаг 1 подключения аккаунта. У update-ветки data === null —
+            // ключ не добавляется.
+            res.json({
+                success: true,
+                ...(Array.isArray(result.data) ? { proxy_ids: result.data.map((row) => row.id) } : {})
+            });
         } catch (error) {
             if (error?.code === '23505' || String(error?.message || '').includes('duplicate key')) {
                 return res.status(400).json({ error: 'Такой прокси уже добавлен' });

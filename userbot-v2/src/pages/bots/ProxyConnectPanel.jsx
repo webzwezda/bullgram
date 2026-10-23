@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Lock, Plus, Store, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
@@ -47,6 +47,16 @@ export function ProxyConnectPanel({ onClose, onCreated }) {
     proxies: [],
     support: null
   });
+  const panelRef = useRef(null);
+  const scrolledRef = useRef(false);
+
+  // Окно открывается над панелью подключения — после загрузки данных подводим
+  // к нему скролл один раз (обёртка рендерится всегда, цель существует).
+  useEffect(() => {
+    if (state.loading || scrolledRef.current) return;
+    scrolledRef.current = true;
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [state.loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,10 +193,6 @@ export function ProxyConnectPanel({ onClose, onCreated }) {
     }
   }
 
-  if (state.loading) {
-    return <LoadingState text="Тянем прокси и квоты..." />;
-  }
-
   const closeTrigger = (
     <Button
       variant="ghost"
@@ -200,8 +206,10 @@ export function ProxyConnectPanel({ onClose, onCreated }) {
   );
 
   return (
-    <div id="proxy-connect-panel" className="scroll-mt-4">
-      {isAdminCreate ? (
+    <div ref={panelRef} id="proxy-connect-panel" className="scroll-mt-4 mb-6">
+      {state.loading ? (
+        <LoadingState text="Тянем прокси и квоты..." />
+      ) : isAdminCreate ? (
         <div className={CARD_CLASS}>
           <div className="p-6 md:p-8 border-b border-slate-100">
             <div className="flex items-center gap-4">
