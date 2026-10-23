@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { UserPlus, Network, Smartphone, FolderArchive, QrCode, FileKey, FileJson, CheckCircle2, Fingerprint, Loader2, UploadCloud, MonitorSmartphone } from 'lucide-react';
+import { UserPlus, Network, Smartphone, FolderArchive, QrCode, FileKey, FileJson, CheckCircle2, Fingerprint, Loader2, UploadCloud, MonitorSmartphone, Plus } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -246,6 +246,10 @@ export function UserbotOnboardingSection({
   handleSessionFileChange,
   importSession,
   onboarding,
+  // Если передан — шаг 1 рисуется компактно (селект + кнопка «Подключить
+  // прокси»), как в инлайн-панели на /userbot. На /connect проп не передают,
+  // селект остаётся на всю ширину.
+  onConnectProxy,
   proxyLabel,
   startQrLogin,
   steps,
@@ -283,34 +287,54 @@ export function UserbotOnboardingSection({
           {/* Step 1: Proxy */}
           <div className="rounded-2xl bg-slate-50/50 p-4 border border-slate-100">
             <StepHeader number={steps.proxy} title="Выбор прокси" />
-            <Select
-              value={onboarding.proxyId || ''}
-              onValueChange={(value) => updateOnboarding({ proxyId: value })}
-            >
-              <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
-                <div className="flex items-center gap-2">
-                  <Network className="w-4 h-4 text-slate-400" />
-                  <SelectValue placeholder="Выбери живой прокси для подключения" />
+            {(() => {
+              const proxySelect = (
+                <Select
+                  value={onboarding.proxyId || ''}
+                  onValueChange={(value) => updateOnboarding({ proxyId: value })}
+                >
+                  <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Network className="w-4 h-4 text-slate-400" />
+                      <SelectValue placeholder="Выбери живой прокси для подключения" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {availableOnboardingProxies.map((proxy) => {
+                      const isFreeAndPurchased = proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0;
+                      return (
+                        <SelectItem key={proxy.id} value={proxy.id} className="rounded-lg py-2.5">
+                          <div className="flex items-center justify-between w-full pr-2 gap-4">
+                            <span>{proxyLabel(proxy)}</span>
+                            {isFreeAndPurchased && (
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 whitespace-nowrap ml-auto">
+                                Свободен
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              );
+
+              if (!onConnectProxy) return proxySelect;
+
+              return (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="flex-1 min-w-0">{proxySelect}</div>
+                  <button
+                    type="button"
+                    onClick={onConnectProxy}
+                    className="h-12 shrink-0 inline-flex items-center justify-center gap-2 px-4 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 transition-colors whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4 text-indigo-600" />
+                    Подключить прокси
+                  </button>
                 </div>
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                {availableOnboardingProxies.map((proxy) => {
-                  const isFreeAndPurchased = proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0;
-                  return (
-                    <SelectItem key={proxy.id} value={proxy.id} className="rounded-lg py-2.5">
-                      <div className="flex items-center justify-between w-full pr-2 gap-4">
-                        <span>{proxyLabel(proxy)}</span>
-                        {isFreeAndPurchased && (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 whitespace-nowrap ml-auto">
-                            Свободен
-                          </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+              );
+            })()}
           </div>
 
           {/* Step 2: Connect Method */}

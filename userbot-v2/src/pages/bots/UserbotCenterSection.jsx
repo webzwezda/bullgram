@@ -17,6 +17,7 @@ import { PlanBanner } from '../../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
 import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
 import { UserbotConnectPanel } from './UserbotConnectPanel.jsx';
+import { ProxyConnectPanel } from './ProxyConnectPanel.jsx';
 
 function formatDate(value) {
   if (!value) return 'Нет данных';
@@ -130,6 +131,8 @@ export function UserbotCenterSection({
   const location = useLocation();
   const sectionRef = useRef(null);
   const [connectPanelOpen, setConnectPanelOpen] = useState(false);
+  const [proxyPanelOpen, setProxyPanelOpen] = useState(false);
+  const [preferredProxyId, setPreferredProxyId] = useState('');
 
   // Кнопки «Подключить аккаунт» открывают инлайн-панель онбординга над
   // карточкой аккаунта; повторный клик при открытом окне просто подводит
@@ -139,6 +142,19 @@ export function UserbotCenterSection({
     setTimeout(() => {
       document.getElementById('userbot-connect-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 80);
+  }
+
+  // Прокси поднят: закрываем панель прокси, обновляем списки страницы и
+  // запоминаем созданный — панель аккаунта подставит его в шаг 1.
+  async function handleProxyCreated(proxyIds) {
+    setProxyPanelOpen(false);
+    try {
+      await reloadAccounts();
+    } finally {
+      if (Array.isArray(proxyIds) && proxyIds.length) {
+        setPreferredProxyId(String(proxyIds[0]));
+      }
+    }
   }
 
 
@@ -1552,10 +1568,19 @@ export function UserbotCenterSection({
         </div>
       ) : null}
 
+      {proxyPanelOpen ? (
+        <ProxyConnectPanel
+          onClose={() => setProxyPanelOpen(false)}
+          onCreated={handleProxyCreated}
+        />
+      ) : null}
+
       {connectPanelOpen ? (
         <UserbotConnectPanel
           availableOnboardingProxies={availableOnboardingProxies}
+          onConnectProxy={() => setProxyPanelOpen(true)}
           onClose={() => setConnectPanelOpen(false)}
+          preferredProxyId={preferredProxyId}
           proxyLabel={proxyLabel}
           reloadAccounts={reloadAccounts}
           userbotCount={userbotCount}

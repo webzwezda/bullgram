@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
@@ -24,7 +24,9 @@ const ONBOARDING_STEPS = { proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, a
 
 export function UserbotConnectPanel({
   availableOnboardingProxies,
+  onConnectProxy,
   onClose,
+  preferredProxyId,
   proxyLabel,
   reloadAccounts,
   userbotCount
@@ -62,6 +64,15 @@ export function UserbotConnectPanel({
     showUiMessage
   });
 
+  // Прокси, поднятый в соседней панели, подставляется в шаг 1, как только
+  // список прокси страницы его подтянул.
+  useEffect(() => {
+    if (!preferredProxyId) return;
+    if (onboarding.proxyId === preferredProxyId) return;
+    if (!availableOnboardingProxies.some((proxy) => String(proxy.id) === preferredProxyId)) return;
+    updateOnboarding({ proxyId: preferredProxyId });
+  }, [preferredProxyId, availableOnboardingProxies, onboarding.proxyId, updateOnboarding]);
+
   return (
     <div ref={panelRef} id="userbot-connect-panel" className="relative scroll-mt-4">
       <Button
@@ -82,6 +93,7 @@ export function UserbotConnectPanel({
         handleSessionFileChange={handleSessionFileChange}
         importSession={importSession}
         onboarding={onboarding}
+        onConnectProxy={onConnectProxy}
         proxyLabel={proxyLabel}
         startQrLogin={startQrLogin}
         steps={ONBOARDING_STEPS}
