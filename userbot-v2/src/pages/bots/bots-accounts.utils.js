@@ -108,7 +108,7 @@ export function restrictedMarker(account) {
 
   return {
     text: 'Проверка не прошла',
-    detail: 'Последняя проверка завершилась ошибкой — аккаунт в отстойнике до живой проверки.',
+    detail: 'Перепройди проверку — до неё аккаунт не продаётся.',
     className: 'pill pill--warning'
   };
 }

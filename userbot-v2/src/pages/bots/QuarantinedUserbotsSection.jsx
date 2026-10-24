@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, ShieldAlert } from 'lucide-react';
+import { Loader2, RefreshCw, ShieldAlert } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,18 +66,18 @@ export function QuarantinedUserbotsSection({
                 </div>
                 <div className="mt-1 text-xs text-ink-muted space-y-0.5">
                   {marker?.detail ? <div className="font-medium text-ink-body">{marker.detail}</div> : null}
-                  {account.runtime_error ? <div className="truncate max-w-xl">{account.runtime_error}</div> : null}
-                  <div>Проверялся: {formatWhen(account.last_checked_at)} · В продаже не участвует</div>
+                  {account.runtime_error ? <div>{account.runtime_error}</div> : null}
+                  <div>Проверялся: {formatWhen(account.last_checked_at)}</div>
                 </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="shrink-0 rounded-xl"
+                className="shrink-0 rounded-xl shadow-sm"
                 onClick={() => checkAccount(account)}
                 disabled={isChecking}
               >
-                {isChecking ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1.5 text-feedback-success-text" />}
+                {isChecking ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5 text-ink-muted" />}
                 Проверить Telegram
               </Button>
             </div>
