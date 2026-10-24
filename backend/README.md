@@ -199,6 +199,11 @@ USERBOT_BOTFATHER_ENABLED=false
 # auto-delete restricted userbots after quarantine window
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72
+
+# shop quarantine: periodic health check of userbots listed in published lots;
+# bad accounts (restricted/expired/dead_proxy/error) get their lots unpublished
+USERBOT_LISTED_HEALTH_CHECK_ENABLED=true
+USERBOT_LISTED_HEALTH_INTERVAL_MS=21600000
 ```
 
 `USERBOT_DM_ENABLED` включает только ручные действия из интерфейса.  

@@ -29,12 +29,20 @@ export async function transferShopAssets(supabase, purchase, item, assets) {
         if (asset.asset_type === 'userbot') {
             const { data: account, error: accountError } = await supabase
                 .from('tg_accounts')
-                .select('id, proxy_id')
+                .select('id, proxy_id, runtime_status')
                 .eq('id', asset.asset_id)
                 .eq('owner_id', sellerOwnerId)
                 .eq('account_type', 'userbot')
                 .single();
             if (accountError) throw accountError;
+
+            // Double-guard отстойника: route уже проверил статус, но между проверкой
+            // и трансфером аккаунт мог испортиться — передаём только живой аккаунт.
+            if (String(account.runtime_status || '').trim().toLowerCase() !== 'online') {
+                const error = new Error(`Аккаунт ${account.id} не в рабочем состоянии (${account.runtime_status || 'unknown'}) — передача отменена`);
+                error.quarantinedAssetId = account.id;
+                throw error;
+            }
 
             const updatePayload = {
                 owner_id: buyerOwnerId

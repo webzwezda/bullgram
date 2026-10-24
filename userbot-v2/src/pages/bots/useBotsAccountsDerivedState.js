@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { getProductTierRules } from '../../app/productTier.js';
 import {
+  isQuarantinedAccount,
   isOpenUserbotPurchase,
   isUserbotShopItem,
   normalizeOpenUserbotPurchaseGroup
@@ -55,6 +56,13 @@ export function useBotsAccountsDerivedState({
       return proxy?.is_working === false;
     });
   }, [liveUserbots, state.proxies]);
+
+  // Отстойник: проблемные аккаунты (бан/мёртвая сессия/мёртвый прокси/упавшая
+  // проверка). В продажу они не идут — гейты на бэкенде, здесь просто видимая
+  // полка, чтобы не терялись в общем списке.
+  const quarantinedUserbots = useMemo(() => {
+    return userbots.filter(isQuarantinedAccount);
+  }, [userbots]);
 
   const usedUserbotProxyIds = useMemo(() => {
     return new Set(
@@ -139,6 +147,7 @@ export function useBotsAccountsDerivedState({
     canSellUserbotAssets,
     channelsByBotId,
     deadProxyUserbots,
+    quarantinedUserbots,
     liveUserbots,
     listedShopUserbots,
     openUserbotPurchases,

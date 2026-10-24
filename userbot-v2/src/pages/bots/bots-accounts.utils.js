@@ -64,20 +64,52 @@ export function defaultCheckLines() {
   ];
 }
 
+export const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error'];
+
+export function isQuarantinedAccount(account) {
+  return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
+}
+
 export function restrictedMarker(account) {
-  if (account.runtime_status !== 'restricted') return null;
-  const errorText = String(account.runtime_error || '').toLowerCase();
-  if (errorText.includes('terms of service') || errorText.includes('blocked') || errorText.includes('spam')) {
+  const status = String(account?.runtime_status || '').trim().toLowerCase();
+  if (!QUARANTINE_STATUSES.includes(status)) return null;
+
+  if (status === 'restricted') {
+    const errorText = String(account.runtime_error || '').toLowerCase();
+    if (errorText.includes('terms of service') || errorText.includes('blocked') || errorText.includes('spam')) {
+      return {
+        text: 'Отлетел',
+        detail: 'Telegram подтвердил блокировку или spam-block.',
+        className: 'pill pill--danger'
+      };
+    }
     return {
-      text: 'Отлетел',
-      detail: 'Telegram подтвердил блокировку или spam-block.',
+      text: 'Ограничен',
+      detail: 'Аккаунт ограничен Telegram. В работу его пускать не надо.',
       className: 'pill pill--danger'
     };
   }
+
+  if (status === 'expired') {
+    return {
+      text: 'Сессия умерла',
+      detail: 'Сессия не отвечает или недействительна. Нужен свежий логин или восстановление из файлов.',
+      className: 'pill pill--danger'
+    };
+  }
+
+  if (status === 'dead_proxy') {
+    return {
+      text: 'Прокси мёртвый',
+      detail: 'Прокси аккаунта не работает — подними прокси или перепривяжи аккаунт.',
+      className: 'pill pill--danger'
+    };
+  }
+
   return {
-    text: 'Ограничен',
-    detail: 'Аккаунт ограничен Telegram. В работу его пускать не надо.',
-    className: 'pill pill--danger'
+    text: 'Проверка не прошла',
+    detail: 'Последняя проверка завершилась ошибкой — аккаунт в отстойнике до живой проверки.',
+    className: 'pill pill--warning'
   };
 }
 

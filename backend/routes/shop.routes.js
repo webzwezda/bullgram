@@ -349,6 +349,38 @@ async function createOrRefreshBuyerPurchase({
 
     const textServiceItem = isTextServiceItem(item);
 
+    // Отстойник: проблемный юзербот не бронируется, даже если лот ещё висит
+    // опубликованным (проверка устареть могла уже после публикации).
+    if (!textServiceItem) {
+        const { data: purchaseAssets, error: purchaseAssetsError } = await supabase
+            .from('shop_item_assets')
+            .select('asset_type, asset_id')
+            .eq('shop_item_id', item.id);
+        if (purchaseAssetsError) throw purchaseAssetsError;
+        const purchaseUserbotIds = (purchaseAssets || [])
+            .filter(asset => asset.asset_type === 'userbot')
+            .map(asset => String(asset.asset_id));
+
+        if (purchaseUserbotIds.length > 0) {
+            const { data: userbotRows, error: userbotRowsError } = await supabase
+                .from('tg_accounts')
+                .select('id, tg_username, runtime_status')
+                .in('id', purchaseUserbotIds);
+            if (userbotRowsError) throw userbotRowsError;
+            // pending_activation сюда тоже входит: аккаунт мог вернуться в safe-mode
+            // через восстановление из файлов после публикации лота.
+            const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation'];
+            const quarantined = (userbotRows || []).find(row =>
+                quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
+            );
+            if (quarantined) {
+                const blocked = new Error(`Аккаунт @${quarantined.tg_username || quarantined.id} сейчас проблемный (${quarantined.runtime_status}) — продажа лота приостановлена`);
+                blocked.statusCode = 400;
+                throw blocked;
+            }
+        }
+    }
+
     if (!textServiceItem) {
         const liveForeignPending = (itemPurchases || []).find(purchase =>
             String(purchase.buyer_owner_id) !== String(buyerOwnerId) &&
@@ -831,6 +863,44 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
                 ownership_transfer_status: 'completed'
             }
         };
+    }
+
+    // Отстойник: аккаунт испортился между бронью и оплатой. Платёж уже зачтён —
+    // фиксируем paid+failed (по образцу sold-race выше), чтобы у покупки осталась
+    // запись для ручного возврата, и не передаём проблемный аккаунт покупателю.
+    const userbotAssetIds = (assets || [])
+        .filter(asset => asset.asset_type === 'userbot')
+        .map(asset => String(asset.asset_id));
+    if (userbotAssetIds.length > 0) {
+        const { data: transferUserbots, error: transferUserbotsError } = await supabase
+            .from('tg_accounts')
+            .select('id, tg_username, runtime_status')
+            .in('id', userbotAssetIds);
+        if (transferUserbotsError) throw transferUserbotsError;
+        const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation'];
+        const quarantined = (transferUserbots || []).find(row =>
+            quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
+        );
+        if (quarantined) {
+            const reason = `Аккаунт @${quarantined.tg_username || quarantined.id} проблемный (${quarantined.runtime_status}) — передача не проведена, нужен возврат`;
+            await supabase
+                .from('shop_purchases')
+                .update({
+                    ownership_transfer_status: 'failed',
+                    ownership_transfer_error: reason,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', purchase.id);
+            return {
+                ok: false,
+                statusCode: 400,
+                body: {
+                    error: 'Оплата получена, но аккаунт в лоте оказался проблемным. Передача прав не проведена — свяжитесь с поддержкой для возврата.',
+                    status: 'paid',
+                    ownership_transfer_status: 'failed'
+                }
+            };
+        }
     }
 
     try {
@@ -1528,7 +1598,7 @@ export default function shopRoutes(supabase) {
             if (userbotIds.length > 0) {
                 const { data: rows, error } = await supabase
                     .from('tg_accounts')
-                    .select('id, proxy_id, runtime_status')
+                    .select('id, proxy_id, runtime_status, last_checked_at, tg_username')
                     .eq('owner_id', ownerId)
                     .eq('account_type', 'userbot')
                     .in('id', userbotIds);
@@ -1538,12 +1608,28 @@ export default function shopRoutes(supabase) {
                 }
 
                 // Мёртвые сессии тоже нельзя продавать: покупатель получит
-                // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted)
+                // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted).
+                // error — проверка не прошла (например, заморозка Telegram, когда
+                // getMe не укладывается в таймаут): такие тоже в отстойник.
+                const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error'];
                 const blockedUserbot = (rows || []).find(row =>
-                    ['restricted', 'pending_activation', 'expired', 'dead_proxy'].includes(String(row.runtime_status || '').trim().toLowerCase())
+                    quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
                 );
                 if (blockedUserbot) {
-                    return res.status(400).json({ error: 'Юзербот заблокирован, не активирован или недееспособен — публикация невозможна' });
+                    return res.status(400).json({ error: `Юзербот @${blockedUserbot.tg_username || blockedUserbot.id} проблемный (${blockedUserbot.runtime_status}) — публикация невозможна` });
+                }
+
+                // Публикуем только с живой проверкой: без этого аккаунт мог испортиться
+                // после последней проверки и отстойник об этом еще не знает.
+                if (String(status || '') === 'published') {
+                    const freshCutoffMs = 6 * 60 * 60 * 1000;
+                    const staleUserbot = (rows || []).find(row => {
+                        const checkedAt = row.last_checked_at ? new Date(row.last_checked_at).getTime() : 0;
+                        return !checkedAt || (Date.now() - checkedAt) > freshCutoffMs;
+                    });
+                    if (staleUserbot) {
+                        return res.status(400).json({ error: `У юзербота @${staleUserbot.tg_username || staleUserbot.id} устаревшая проверка — запусти «Проверить Telegram» и публикуй после неё` });
+                    }
                 }
 
                 const sharedUserbot = (rows || []).find(row => row.proxy_id && proxyHasMultipleUserbots(proxyUsageMap, row.proxy_id));

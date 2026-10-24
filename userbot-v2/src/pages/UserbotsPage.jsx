@@ -5,6 +5,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
+import { QuarantinedUserbotsSection } from './bots/QuarantinedUserbotsSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   canRestoreFromFiles,
@@ -84,6 +85,7 @@ function UserbotsPageContent() {
     canSellUserbotAssets,
     liveUserbots,
     openUserbotPurchases,
+    quarantinedUserbots,
     selectedLiveUserbot,
     usedUserbotProxyIds,
     userbots
@@ -250,6 +252,14 @@ function UserbotsPageContent() {
       <UserbotStorefrontSection {...buyerStorefrontSectionProps} />
 
       <UserbotCenterSection {...userbotCenterSectionProps} />
+
+      <QuarantinedUserbotsSection
+        quarantinedUserbots={quarantinedUserbots}
+        restrictedMarker={restrictedMarker}
+        formatWhen={formatWhen}
+        checkAccount={checkAccount}
+        checkingAccountId={state.checkingAccountId}
+      />
     </section>
   );
 }

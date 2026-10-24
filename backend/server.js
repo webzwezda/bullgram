@@ -54,6 +54,7 @@ import { startAutopostStuckEditingRecovery } from './jobs/autopost-stuck-editing
 import { startAutopostChecklistEventsCleanup } from './jobs/autopost-checklist-events-cleanup.job.js';
 import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
+import { startListedUserbotHealthCheck } from './jobs/listed-userbot-health.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
 import { startTelegramWebHealth } from './jobs/telegram-web-health.job.js';
 import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
@@ -365,6 +366,7 @@ httpServer.listen(PORT, async () => {
     } catch (e) { console.error('[Autopost] Ошибка запуска ботов:', e.message); }
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
+    startListedUserbotHealthCheck(supabase, { userbotService });
     startAudienceSync(supabase);
     const broadcastPreparationService = new BroadcastPreparationService(supabase);
     // сначала перепроверяем прокси (после ребута сервера они могли лежать), потом возобновляем зависшие подготовки
