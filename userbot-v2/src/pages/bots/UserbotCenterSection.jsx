@@ -503,7 +503,6 @@ export function UserbotCenterSection({
   }, [initialThreadUserId]);
 
   useEffect(() => {
-    setAuthorizationsState({ loading: false, error: '', rows: [] });
     setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
   }, [accessToken, selectedLiveUserbotId]);
 
