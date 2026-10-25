@@ -12,6 +12,7 @@ export function useBotsAccountsDerivedState({
   storefrontState,
   selectedLiveUserbotId,
   selectedShopUserbotId,
+  selectedQuarantinedUserbotId,
   selectedOpenPurchaseId,
   profilePlan
 }) {
@@ -33,14 +34,28 @@ export function useBotsAccountsDerivedState({
     return userbots.filter((account) => state.reservedUserbotIds.includes(String(account.id)));
   }, [state.reservedUserbotIds, userbots]);
 
+  const quarantinedUserbots = useMemo(() => {
+    return userbots.filter(isQuarantinedAccount);
+  }, [userbots]);
+
+  // Отстойник: проблемные аккаунты (бан/мёртвая сессия/мёртвый прокси/упавшая
+  // проверка). В продажу они не идут — гейты на бэкенде, здесь просто видимая
+  // полка, чтобы не терялись в общем списке.
   const liveUserbots = useMemo(() => {
-    return userbots.filter((account) => !state.reservedUserbotIds.includes(String(account.id)));
+    return userbots.filter((account) =>
+      !state.reservedUserbotIds.includes(String(account.id)) && !isQuarantinedAccount(account));
   }, [state.reservedUserbotIds, userbots]);
 
   const selectedLiveUserbot = useMemo(() => {
     if (!liveUserbots.length) return null;
     return liveUserbots.find((account) => String(account.id) === String(selectedLiveUserbotId)) || liveUserbots[0];
   }, [liveUserbots, selectedLiveUserbotId]);
+
+  const selectedQuarantinedUserbot = useMemo(() => {
+    if (!quarantinedUserbots.length) return null;
+    return quarantinedUserbots.find((account) => String(account.id) === String(selectedQuarantinedUserbotId))
+      || quarantinedUserbots[0];
+  }, [quarantinedUserbots, selectedQuarantinedUserbotId]);
 
   const selectedShopUserbot = useMemo(() => {
     if (!listedShopUserbots.length) return null;
@@ -56,13 +71,6 @@ export function useBotsAccountsDerivedState({
       return proxy?.is_working === false;
     });
   }, [liveUserbots, state.proxies]);
-
-  // Отстойник: проблемные аккаунты (бан/мёртвая сессия/мёртвый прокси/упавшая
-  // проверка). В продажу они не идут — гейты на бэкенде, здесь просто видимая
-  // полка, чтобы не терялись в общем списке.
-  const quarantinedUserbots = useMemo(() => {
-    return userbots.filter(isQuarantinedAccount);
-  }, [userbots]);
 
   const usedUserbotProxyIds = useMemo(() => {
     return new Set(
@@ -149,6 +157,7 @@ export function useBotsAccountsDerivedState({
     deadProxyUserbots,
     quarantinedUserbots,
     liveUserbots,
+    selectedQuarantinedUserbot,
     listedShopUserbots,
     openUserbotPurchases,
     planRules,

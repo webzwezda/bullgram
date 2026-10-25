@@ -50,6 +50,7 @@ function UserbotsPageContent() {
   const { accessToken, user, profilePlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
+  const [selectedQuarantinedUserbotId, setSelectedQuarantinedUserbotId] = useState('');
   const { state, setState, reloadAccounts, patchLiveUserbot } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
@@ -87,6 +88,7 @@ function UserbotsPageContent() {
     openUserbotPurchases,
     quarantinedUserbots,
     selectedLiveUserbot,
+    selectedQuarantinedUserbot,
     usedUserbotProxyIds,
     userbots
   } = useBotsAccountsDerivedState({
@@ -94,6 +96,7 @@ function UserbotsPageContent() {
     storefrontState,
     selectedLiveUserbotId,
     selectedShopUserbotId: '',
+    selectedQuarantinedUserbotId,
     selectedOpenPurchaseId,
     profilePlan
   });
@@ -255,6 +258,8 @@ function UserbotsPageContent() {
 
       <QuarantinedUserbotsSection
         quarantinedUserbots={quarantinedUserbots}
+        selectedQuarantinedUserbot={selectedQuarantinedUserbot}
+        setSelectedQuarantinedUserbotId={setSelectedQuarantinedUserbotId}
         restrictedMarker={restrictedMarker}
         formatWhen={formatWhen}
         checkAccount={checkAccount}
