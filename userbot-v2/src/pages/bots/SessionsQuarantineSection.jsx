@@ -146,12 +146,31 @@ export function SessionsQuarantineSection({
   const isChecking = account && String(account.id) === String(checkingAccountId || '');
   const isError = marker?.className?.includes('danger');
 
-  const tabBase = 'h-9 px-4 rounded-xl text-sm font-bold inline-flex items-center gap-2 transition-all border';
-  const tabActive = 'bg-surface-card border-border-default text-ink-strong shadow-sm';
-  const tabIdle = 'bg-transparent border-transparent text-ink-muted hover:text-ink-body';
+  const renderTabButton = (id, label, icon, count = null) => {
+    const active = activeTab === id;
+    return (
+      <Button
+        variant={active ? 'outline' : 'ghost'}
+        size="sm"
+        className={`h-9 rounded-xl ${active ? 'shadow-sm text-ink-strong' : 'text-ink-muted'}`}
+        onClick={() => setActiveTab(id)}
+      >
+        {icon}
+        {label}
+        {count !== null && count > 0 && (
+          <span
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-surface-card"
+            style={{ backgroundColor: 'var(--color-feedback-error-text)' }}
+          >
+            {count}
+          </span>
+        )}
+      </Button>
+    );
+  };
 
   return (
-    <Card className="border-0 shadow-lg ring-1 ring-border-default mb-6 bg-surface-card overflow-hidden rounded-2xl">
+    <Card className="border-0 shadow-lg ring-1 ring-border-default mt-6 mb-6 bg-surface-card overflow-hidden rounded-2xl">
       <div className="bg-surface-subtle/50 border-b border-border-default p-5 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -165,30 +184,8 @@ export function SessionsQuarantineSection({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={`${tabBase} ${activeTab === 'sessions' ? tabActive : tabIdle}`}
-              onClick={() => setActiveTab('sessions')}
-            >
-              <Smartphone className="w-4 h-4" />
-              Активные сессии
-            </button>
-            <button
-              type="button"
-              className={`${tabBase} ${activeTab === 'quarantine' ? tabActive : tabIdle}`}
-              onClick={() => setActiveTab('quarantine')}
-            >
-              <ShieldAlert className="w-4 h-4" />
-              Отстойник
-              {quarantinedUserbots.length > 0 && (
-                <span
-                  className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold text-surface-card"
-                  style={{ backgroundColor: 'var(--color-feedback-error-text)' }}
-                >
-                  {quarantinedUserbots.length}
-                </span>
-              )}
-            </button>
+            {renderTabButton('sessions', 'Активные сессии', <Smartphone className="w-4 h-4" />)}
+            {renderTabButton('quarantine', 'Отстойник', <ShieldAlert className="w-4 h-4" />, quarantinedUserbots.length)}
           </div>
         </div>
       </div>
