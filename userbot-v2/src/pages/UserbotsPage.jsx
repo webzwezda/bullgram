@@ -5,7 +5,7 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
-import { QuarantinedUserbotsSection } from './bots/QuarantinedUserbotsSection.jsx';
+import { SessionsQuarantineSection } from './bots/SessionsQuarantineSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   canRestoreFromFiles,
@@ -256,7 +256,9 @@ function UserbotsPageContent() {
 
       <UserbotCenterSection {...userbotCenterSectionProps} />
 
-      <QuarantinedUserbotsSection
+      <SessionsQuarantineSection
+        accessToken={accessToken}
+        selectedLiveUserbotId={selectedLiveUserbotId}
         quarantinedUserbots={quarantinedUserbots}
         selectedQuarantinedUserbot={selectedQuarantinedUserbot}
         setSelectedQuarantinedUserbotId={setSelectedQuarantinedUserbotId}

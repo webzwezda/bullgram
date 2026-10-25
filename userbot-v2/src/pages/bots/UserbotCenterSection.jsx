@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  UserPlus, Smartphone, RefreshCw, ExternalLink, User, LogOut, Loader2,
+  UserPlus, ExternalLink, User, Loader2,
   Network, Activity, KeyRound, AlertCircle, Settings2, Trash2, Tag, Send,
   ShieldCheck
 } from 'lucide-react';
@@ -258,15 +258,7 @@ export function UserbotCenterSection({
     sendingReply: false,
     joiningInvite: false,
     sendingDirect: false,
-    markingRead: false,
-    loadingAuthorizations: false,
-    resettingAuthorizations: false,
-    resettingAuthorizationHash: ''
-  });
-  const [authorizationsState, setAuthorizationsState] = useState({
-    loading: false,
-    error: '',
-    rows: []
+    markingRead: false
   });
   const [profileSyncState, setProfileSyncState] = useState({
     pulling: false,
@@ -348,31 +340,6 @@ export function UserbotCenterSection({
         error: error.message
       }));
       throw error;
-    }
-  }
-
-  async function loadAuthorizations() {
-    if (!accessToken || !selectedLiveUserbotId) {
-      setAuthorizationsState({ loading: false, error: '', rows: [] });
-      return;
-    }
-
-    setAuthorizationsState((prev) => ({ ...prev, loading: true, error: '' }));
-    try {
-      const query = new URLSearchParams({ userbot_id: selectedLiveUserbotId });
-      const data = await apiRequest(`/api/userbot/ops-center/authorizations?${query.toString()}`, { accessToken });
-      setAuthorizationsState({
-        loading: false,
-        error: '',
-        rows: data.authorizations || [],
-        loaded: true
-      });
-    } catch (error) {
-      setAuthorizationsState({
-        loading: false,
-        error: error.message,
-        rows: []
-      });
     }
   }
 
@@ -919,78 +886,6 @@ export function UserbotCenterSection({
       toast.error(`Ошибка отправки: ${error.message}`);
     } finally {
       setActionState((prev) => ({ ...prev, sendingDirect: false }));
-    }
-  }
-
-  async function resetOtherSessions() {
-    if (!selectedLiveUserbotId) {
-      toast.error('Сначала выбери юзербота.');
-      return;
-    }
-    if (!window.confirm('Разлогинить все остальные устройства этого Telegram-аккаунта и оставить только текущую серверную сессию?')) {
-      return;
-    }
-
-    setActionState((prev) => ({ ...prev, resettingAuthorizations: true }));
-    try {
-      const data = await apiRequest('/api/userbot/ops-center/authorizations/reset-others', {
-        accessToken,
-        method: 'POST',
-        body: {
-          userbot_id: selectedLiveUserbotId
-        }
-      });
-      setAuthorizationsState({
-        loading: false,
-        error: '',
-        rows: data.authorizations || []
-      });
-      toast.success(data.message || 'Остальные устройства разлогинены.');
-    } catch (error) {
-      toast.error(`Не получилось разлогинить остальные устройства: ${error.message}`);
-    } finally {
-      setActionState((prev) => ({ ...prev, resettingAuthorizations: false }));
-    }
-  }
-
-  async function resetOneSession(row) {
-    if (!selectedLiveUserbotId) {
-      toast.error('Сначала выбери юзербота.');
-      return;
-    }
-    if (!row?.hash) {
-      toast.error('У этой сессии нет hash — её нельзя разлогинить точечно.');
-      return;
-    }
-    if (row.current) {
-      toast.error('Текущую серверную сессию нельзя разлогинить.');
-      return;
-    }
-    const label = row.device_model || row.app_name || row.platform || 'устройство';
-    if (!window.confirm(`Разлогинить «${label}»? На этом устройстве придётся заново входить в Telegram.`)) {
-      return;
-    }
-
-    setActionState((prev) => ({ ...prev, resettingAuthorizationHash: row.hash }));
-    try {
-      const data = await apiRequest('/api/userbot/ops-center/authorizations/reset-one', {
-        accessToken,
-        method: 'POST',
-        body: {
-          userbot_id: selectedLiveUserbotId,
-          hash: row.hash
-        }
-      });
-      setAuthorizationsState({
-        loading: false,
-        error: '',
-        rows: data.authorizations || []
-      });
-      toast.success(data.message || 'Устройство разлогинено.');
-    } catch (error) {
-      toast.error(`Не получилось разлогинить устройство: ${error.message}`);
-    } finally {
-      setActionState((prev) => ({ ...prev, resettingAuthorizationHash: '' }));
     }
   }
 
@@ -1784,134 +1679,6 @@ export function UserbotCenterSection({
         </div>
       )}
 
-      {selectedLiveUserbotId ? (
-        <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden mt-6">
-          <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-bold text-slate-900">Активные сессии</h3>
-                <p className="text-xs font-medium text-slate-500 mt-0.5">
-                  Залогиненные устройства. Можно выкинуть все, кроме серверной сессии Bullgram.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-5 sm:p-6 space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="h-10 px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
-                onClick={loadAuthorizations}
-                disabled={authorizationsState.loading || !selectedLiveUserbotId}
-              >
-                {authorizationsState.loading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                )}
-                {authorizationsState.loading ? 'Тянем сессии...' : 'Показать сессии'}
-              </button>
-              <button
-                className="h-10 px-4 rounded-xl border border-rose-200 bg-white text-rose-600 text-[13px] font-bold hover:bg-rose-50 transition-all disabled:opacity-50 inline-flex items-center gap-2 shadow-sm"
-                onClick={resetOtherSessions}
-                disabled={actionState.resettingAuthorizations || !selectedLiveUserbotId || !authorizationsState.loaded}
-                title={authorizationsState.loaded ? undefined : 'Сначала покажи сессии — увидишь, кого разлогиниваешь'}
-              >
-                {actionState.resettingAuthorizations ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <LogOut className="w-3.5 h-3.5" />
-                )}
-                {actionState.resettingAuthorizations ? 'Чистим...' : 'Разлогинить остальные'}
-              </button>
-            </div>
-            {authorizationsState.error ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 font-medium">
-                {authorizationsState.error}
-              </div>
-            ) : authorizationsState.loading ? (
-              <div className="text-sm text-slate-500 font-medium">Тянем авторизации...</div>
-            ) : authorizationsState.rows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/40 px-4 py-8 text-center">
-                <div className="mx-auto w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-2">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <p className="text-sm font-medium text-slate-500">Нажми «Показать сессии», чтобы загрузить список.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto -mx-2 rounded-xl border border-slate-100">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Устройство</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Приложение</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Где</th>
-                      <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Последний движ</th>
-                      <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Действие</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {authorizationsState.rows.map((item) => {
-                      const isResetting = actionState.resettingAuthorizationHash === item.hash;
-                      const canReset = !item.current && !!item.hash;
-                      return (
-                        <tr key={item.hash || `${item.app_name}-${item.date_active}`} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
-                              {item.current ? 'Серверная сессия' : (item.device_model || item.platform || 'Устройство')}
-                              {item.current ? (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" />
-                                  Bullgram
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {item.current ? 'Текущая серверная сессия' : `${item.platform || ''} ${item.system_version || ''}`.trim()}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-800">{item.app_name || 'Telegram'}</div>
-                            <div className="text-xs text-slate-500">{item.app_version || '—'}{item.official_app ? ' • official' : ''}</div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-800">{item.country || '—'}</div>
-                            <div className="text-xs text-slate-500 font-mono">{item.ip || '—'}{item.region ? ` • ${item.region}` : ''}</div>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600">{formatDate(item.date_active || item.date_created)}</td>
-                          <td className="px-4 py-3 text-right">
-                            {item.current ? (
-                              <span className="text-xs text-slate-500 font-medium">нельзя</span>
-                            ) : (
-                              <button
-                                type="button"
-                                className="h-8 px-3 rounded-lg border border-rose-200 bg-white text-rose-600 text-xs font-bold hover:bg-rose-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-                                onClick={() => resetOneSession(item)}
-                                disabled={!canReset || isResetting || actionState.resettingAuthorizationHash !== ''}
-                                title={!canReset ? 'Эту сессию нельзя разлогинить отсюда' : ''}
-                              >
-                                {isResetting ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <LogOut className="w-3.5 h-3.5" />
-                                )}
-                                {isResetting ? '...' : 'Разлогинить'}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
