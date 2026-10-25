@@ -179,6 +179,16 @@ console.log('— transferShopAssets: double-guard отстойника —');
 
 {
     const supabase = makeMockSupabase(baseTables({
+        tg_accounts: baseTables().tg_accounts.map((row) => ({ ...row, runtime_status: 'frozen' }))
+    }));
+    const purchase = { buyer_owner_id: BUYER, seller_owner_id: OWNER };
+    const error = await capture(transferShopAssets(supabase, purchase, SELLER_ITEM, ASSETS));
+    assert(error, 'frozen: трансфер не проходит');
+    assert(supabase._tables.tg_accounts[0].owner_id === OWNER, 'frozen: владелец не сменился');
+}
+
+{
+    const supabase = makeMockSupabase(baseTables({
         tg_accounts: baseTables().tg_accounts.map((row) => ({ ...row, runtime_status: 'pending_activation' }))
     }));
     const purchase = { buyer_owner_id: BUYER, seller_owner_id: OWNER };
@@ -269,6 +279,20 @@ const userbotServiceStub = {};
     });
     assert(supabase._tables.shop_items[0].status === 'published', 'online: лот остаётся опубликованным');
     assert(supabase._tables.telegram_error_events.length === 0, 'online: без событий');
+}
+
+{
+    const supabase = makeMockSupabase(baseTables());
+    await runListedHealthCheck(supabase, userbotServiceStub, {
+        checkFn: async () => ({ status: 'frozen', reason: 'Аккаунт заморожен Telegram: read-only.' })
+    });
+    assert(supabase._tables.shop_items[0].status === 'draft', 'frozen: лот снят');
+    assert(supabase._tables.tg_accounts[0].runtime_status === 'frozen', 'frozen: статус записан');
+    const events = supabase._tables.telegram_error_events;
+    assert(events.length === 1 && events[0].restriction_kind === 'account_frozen', 'frozen: событие account_frozen');
+    assert(events[0].is_restriction === false, 'frozen: не is_restriction (пурж не должен сработать)');
+    assert(supabase._tables.proxies.length === 1, 'frozen: прокси сохранён');
+    assert(supabase._tables.tg_accounts.length === 1, 'frozen: аккаунт сохранён');
 }
 
 {

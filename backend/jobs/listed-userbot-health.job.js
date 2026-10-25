@@ -9,7 +9,7 @@ const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 25_000;
 const DEFAULT_INSPECT_TIMEOUT_MS = 35_000;
-const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error'];
+const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen'];
 
 function listedHealthCheckEnabled() {
     return String(process.env.USERBOT_LISTED_HEALTH_CHECK_ENABLED || '').trim().toLowerCase() !== 'false';
@@ -196,6 +196,26 @@ export async function runListedHealthCheck(supabase, userbotService, { checkFn =
                 await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || 'account_restricted');
                 await cleanupRestrictedUserbotProxy(supabase, new ManagedProxyService(), account.owner_id, account);
                 console.error('[ListedUserbotHealth] restricted — лот снят:', {
+                    userbot_id: account.id,
+                    username: account.tg_username,
+                    reason: result.reason
+                });
+            } else if (status === 'frozen') {
+                // Заморозка: сессию и прокси храним (идёт апелляция), пуржа для
+                // frozen не существует — снимаем только с витрины.
+                await logTelegramErrorEvent(supabase, {
+                    owner_id: account.owner_id,
+                    userbot_id: account.id,
+                    event_source: 'userbot_health',
+                    event_type: 'health_check',
+                    restriction_kind: 'account_frozen',
+                    severity: 'danger',
+                    is_restriction: false,
+                    happened_at: checkedAt,
+                    error_message: result.reason || 'Аккаунт заморожен Telegram (автопроверка лота).'
+                });
+                await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || 'account_frozen');
+                console.error('[ListedUserbotHealth] frozen — лот снят, аккаунт и прокси сохранены:', {
                     userbot_id: account.id,
                     username: account.tg_username,
                     reason: result.reason

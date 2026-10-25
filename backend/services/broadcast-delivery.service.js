@@ -12,7 +12,7 @@ import { isActorEligible } from './messaging-router.service.js';
 const BLOCKED_BY_USER_KINDS = ['privacy_restricted', 'user_blocked', 'peer_invalid'];
 // Причины неэлигибельности, которые не рассосутся сами: актёр мёртв до ручного разбора.
 // Зеркало BLOCKED_USERBOT_STATUSES из messaging-router.service.js (там множество не экспортировано).
-const PERMANENT_USERBOT_STATUSES = ['pending_activation', 'restricted', 'expired', 'error'];
+const PERMANENT_USERBOT_STATUSES = ['pending_activation', 'restricted', 'expired', 'error', 'frozen'];
 // flood-пауза истекает сама — из-за неё кампанию не убиваем, только ждём.
 const TRANSIENT_PAUSE_REASON = 'flood_wait';
 

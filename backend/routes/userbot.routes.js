@@ -3322,19 +3322,24 @@ export default function (supabase) {
                     await unpublishRestrictedUserbotListings(supabase, req.user.id, account.id, health.reason || 'account_restricted');
                     await cleanupRestrictedUserbotProxy(supabase, managedProxyService, req.user.id, account);
                 }
+                // Заморозка: аккаунт жив, сессия нужна для апелляции — снимаем с
+                // витрины, но прокси и аккаунт не трогаем (пуржа для frozen нет).
+                if (String(health.status || '') === 'frozen') {
+                    await unpublishRestrictedUserbotListings(supabase, req.user.id, account.id, health.reason || 'account_frozen');
+                }
                 res.json(buildCheckResponse(
                     health.status,
                     health.reason || null,
                     health.details || null
                 ));
-                if (['restricted', 'expired', 'error'].includes(String(health.status || ''))) {
+                if (['restricted', 'expired', 'error', 'frozen'].includes(String(health.status || ''))) {
                     await logTelegramErrorEvent(supabase, {
                         owner_id: req.user.id,
                         userbot_id: account.id,
                         event_source: 'userbot_health',
                         event_type: 'health_check',
                         restriction_kind: health.status === 'restricted' ? 'account_restricted' : (health.status || 'error'),
-                        severity: health.status === 'restricted' ? 'danger' : 'warning',
+                        severity: ['restricted', 'frozen'].includes(health.status) ? 'danger' : 'warning',
                         is_restriction: health.status === 'restricted',
                         error_message: health.reason || 'Проблема при health-check.',
                         meta: {
@@ -3361,7 +3366,9 @@ export default function (supabase) {
                     || normalizedCheckError.includes('CONNECTION')
                 );
                 const isDegradedAfterAlive = getMeOk && isInspectTimeout;
-                const nextStatus = isConnectFailure ? 'dead_proxy'
+                const isFrozenDetected = normalizedCheckError.includes('FROZEN_METHOD_INVALID');
+                const nextStatus = isFrozenDetected ? 'frozen'
+                    : isConnectFailure ? 'dead_proxy'
                     : (isSessionInvalid ? 'expired'
                         : (isDegradedAfterAlive ? 'online'
                             : (isInspectTimeout ? 'error' : 'expired')));

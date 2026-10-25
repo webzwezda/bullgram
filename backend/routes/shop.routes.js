@@ -369,7 +369,7 @@ async function createOrRefreshBuyerPurchase({
             if (userbotRowsError) throw userbotRowsError;
             // pending_activation сюда тоже входит: аккаунт мог вернуться в safe-mode
             // через восстановление из файлов после публикации лота.
-            const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation'];
+            const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen'];
             const quarantined = (userbotRows || []).find(row =>
                 quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
             );
@@ -877,7 +877,7 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
             .select('id, tg_username, runtime_status')
             .in('id', userbotAssetIds);
         if (transferUserbotsError) throw transferUserbotsError;
-        const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation'];
+        const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen'];
         const quarantined = (transferUserbots || []).find(row =>
             quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
         );
@@ -1611,7 +1611,7 @@ export default function shopRoutes(supabase) {
                 // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted).
                 // error — проверка не прошла (например, заморозка Telegram, когда
                 // getMe не укладывается в таймаут): такие тоже в отстойник.
-                const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error'];
+                const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error', 'frozen'];
                 const blockedUserbot = (rows || []).find(row =>
                     quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
                 );

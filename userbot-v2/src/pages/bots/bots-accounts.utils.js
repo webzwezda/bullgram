@@ -11,6 +11,7 @@ export function formatWhen(value) {
 export function summarizeCheckStatus(result = {}, fallbackAccount = null) {
   const status = String(result?.status || fallbackAccount?.runtime_status || '').trim().toLowerCase();
   if (status === 'online') return { tone: 'success', title: 'Сессия жива' };
+  if (status === 'frozen') return { tone: 'error', title: 'Заморожен Telegram' };
   if (status === 'restricted') return { tone: 'error', title: 'Есть ограничения Telegram' };
   if (status === 'expired') return { tone: 'error', title: 'Сессия умерла' };
   if (status === 'dead_proxy' || status === 'inactive_proxy') return { tone: 'error', title: 'Прокси мертвый' };
@@ -64,7 +65,7 @@ export function defaultCheckLines() {
   ];
 }
 
-export const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error'];
+export const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen'];
 
 export function isQuarantinedAccount(account) {
   return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
@@ -73,6 +74,14 @@ export function isQuarantinedAccount(account) {
 export function restrictedMarker(account) {
   const status = String(account?.runtime_status || '').trim().toLowerCase();
   if (!QUARANTINE_STATUSES.includes(status)) return null;
+
+  if (status === 'frozen') {
+    return {
+      text: 'Заморожен Telegram',
+      detail: 'Read-only: читать можно, действовать нет. Продажа закрыта, сессия хранится — апелляция через @SpamBot в Telegram Web.',
+      className: 'pill pill--danger'
+    };
+  }
 
   if (status === 'restricted') {
     const errorText = String(account.runtime_error || '').toLowerCase();

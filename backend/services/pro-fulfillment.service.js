@@ -38,7 +38,8 @@ async function isUserbotTransferable(supabase, userbotId) {
         .maybeSingle();
     if (error) throw error;
     if (!account) return false;
-    return String(account.runtime_status || '') !== 'restricted';
+    // frozen — заморозка Telegram (read-only): передавать покупателю тоже нельзя.
+    return !['restricted', 'frozen'].includes(String(account.runtime_status || '').trim().toLowerCase());
 }
 
 async function finalizeFulfillment(supabase, order, fulfillmentStatus, extra) {

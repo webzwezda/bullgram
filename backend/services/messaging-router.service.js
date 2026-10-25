@@ -22,7 +22,7 @@ const FLOOD_PAUSE_PADDING_MS = 30 * 1000;
 const FLAGGED_PAUSE_MS = 24 * HOUR_MS;
 
 // Те же маркеры недоступности, что в contour isUserbotEligible (BLOCKED_USERBOT_STATUSES).
-const BLOCKED_USERBOT_STATUSES = new Set(['restricted', 'expired', 'error']);
+const BLOCKED_USERBOT_STATUSES = new Set(['restricted', 'expired', 'error', 'frozen']);
 
 // Фразы из getDirectMessageError (userbot.service.js): он возвращает готовый русский текст,
 // исходные Telegram-маркеры до classifyTelegramError не доживают.

@@ -1616,6 +1616,28 @@ export class UserbotService {
         return result;
     }
 
+    // Заморозка Telegram (account frozen, read-only) не видна в getMe: чтения
+    // работают, а флагов заморозки в профиле нет. Пассивное чтение SpamBot тоже
+    // может промахнуться (хвост диалога — апелляция, а не вердикт). Но любой
+    // «пишущий» метод замороженный аккаунт отклоняет ровно с FROZEN_METHOD_INVALID —
+    // этим и щупаем: readHistory по себе с max_id=0 не меняет ничего.
+    async probeFrozenState(client) {
+        try {
+            await client.invoke(new Api.messages.ReadHistory({
+                peer: new Api.InputPeerSelf(),
+                maxId: 0
+            }));
+            return false;
+        } catch (error) {
+            const text = String(error?.errorMessage || error?.message || error || '');
+            if (text.includes('FROZEN_METHOD_INVALID')) {
+                return true;
+            }
+            // Прочие ошибки (сеть, лимиты) — не признак заморозки.
+            return false;
+        }
+    }
+
     async inspectAccountHealth(client, options = {}) {
         const me = await client.getMe();
         if (!me) {
@@ -1632,6 +1654,20 @@ export class UserbotService {
 
         if (me.deleted) {
             return { status: 'restricted', reason: 'Аккаунт удален или Telegram больше не считает его живым.' };
+        }
+
+        const frozen = await this.probeFrozenState(client);
+        if (frozen) {
+            return {
+                status: 'frozen',
+                reason: 'Аккаунт заморожен Telegram: read-only, действия запрещены. Апелляция — через @SpamBot.',
+                details: buildHealthDetails({
+                    session: 'alive',
+                    restriction: 'restricted',
+                    restrictionReason: 'Аккаунт заморожен Telegram (read-only).',
+                    spambotState: 'not_checked'
+                })
+            };
         }
 
         const restrictionReason = Array.isArray(me.restrictionReason)
