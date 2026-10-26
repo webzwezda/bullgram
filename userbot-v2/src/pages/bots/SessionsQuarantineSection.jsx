@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  AlertCircle, ExternalLink, Loader2, LogOut, RefreshCw, ShieldAlert, Smartphone
+  AlertCircle, ExternalLink, Loader2, LogOut, RefreshCw, ShieldAlert, Smartphone, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -42,7 +42,9 @@ export function SessionsQuarantineSection({
   restrictedMarker,
   formatWhen,
   checkAccount,
-  checkingAccountId
+  checkingAccountId,
+  deleteAccount,
+  deletingAccountId
 }) {
   const [activeTab, setActiveTab] = useState('sessions');
   const [authorizationsState, setAuthorizationsState] = useState({
@@ -144,7 +146,17 @@ export function SessionsQuarantineSection({
   const account = selectedQuarantinedUserbot;
   const marker = account ? restrictedMarker(account) : null;
   const isChecking = account && String(account.id) === String(checkingAccountId || '');
+  const isDeleting = account && String(account.id) === String(deletingAccountId || '');
   const isError = marker?.className?.includes('danger');
+
+  // Удаление только аккаунта: DELETE /api/userbot/:id не трогает прокси —
+  // он остаётся в инвентаре и может быть перепривязан.
+  function deleteQuarantinedAccount() {
+    const label = account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
+    deleteAccount(account, {
+      confirmMessage: `Удалить аккаунт ${label} из отстойника? Сессия удалится безвозвратно. Прокси останется в инвентаре — его можно привязать к другому аккаунту.`
+    });
+  }
 
   const renderTabButton = (id, label, icon, count = null) => {
     const active = activeTab === id;
@@ -347,7 +359,7 @@ export function SessionsQuarantineSection({
                       size="sm"
                       className="rounded-xl shadow-sm"
                       onClick={() => checkAccount(account)}
-                      disabled={isChecking}
+                      disabled={isChecking || isDeleting}
                     >
                       {isChecking ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5 text-ink-muted" />}
                       Проверить Telegram
@@ -361,6 +373,17 @@ export function SessionsQuarantineSection({
                     >
                       <ExternalLink className="w-4 h-4 mr-1.5 text-ink-muted" />
                       Telegram Web
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="rounded-xl"
+                      onClick={deleteQuarantinedAccount}
+                      disabled={isChecking || isDeleting}
+                      title="Удалить аккаунт; прокси останется в инвентаре"
+                    >
+                      {isDeleting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+                      {isDeleting ? 'Удаляем...' : 'Удалить аккаунт'}
                     </Button>
                   </div>
                 </div>

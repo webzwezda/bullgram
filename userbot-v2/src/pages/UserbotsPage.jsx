@@ -266,6 +266,8 @@ function UserbotsPageContent() {
         formatWhen={formatWhen}
         checkAccount={checkAccount}
         checkingAccountId={state.checkingAccountId}
+        deleteAccount={deleteAccount}
+        deletingAccountId={state.deletingAccountId}
       />
     </section>
   );

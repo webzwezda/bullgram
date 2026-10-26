@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, ChevronDown, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ChevronDown, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { QUARANTINE_STATUSES } from '../../pages/bots/bots-accounts.utils.js';
 
 const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -12,22 +13,31 @@ function isSafeModeAccount(account) {
   return String(account?.runtime_status || '').trim().toLowerCase() === SAFE_MODE_RUNTIME_STATUS;
 }
 
-// Индикатор режима аккаунта: щит = боевой контур, круг-алерт = safe-mode.
+function isQuarantinedAccount(account) {
+  return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
+}
+
+// Индикатор режима аккаунта: щит = боевой контур, круг-алерт = safe-mode,
+// щит-алерт (красный) = отстойник — заморозка/бан/мёртвая сессия/упавшая проверка.
 // Иконки lucide (единственный источник иконок на сайте), цвета — только
 // семантические пары feedback-*, чтобы не растить hardcodes-ratchet файла.
 function AccountModeIcon({ account, iconClassName }) {
   const safeMode = isSafeModeAccount(account);
-  const Icon = safeMode ? AlertCircle : ShieldCheck;
+  const quarantined = !safeMode && isQuarantinedAccount(account);
+  const Icon = quarantined ? ShieldAlert : (safeMode ? AlertCircle : ShieldCheck);
+  const tone = quarantined
+    ? 'text-feedback-error-text'
+    : (safeMode ? 'text-feedback-warning-text' : 'text-feedback-success-text');
+  const title = quarantined
+    ? 'В отстойнике — продажа закрыта'
+    : (safeMode ? 'Safe mode — ждёт ручной активации' : 'Боевой режим');
   return (
     <span
-      className={cn(
-        'inline-flex items-center shrink-0',
-        safeMode ? 'text-feedback-warning-text' : 'text-feedback-success-text'
-      )}
-      title={safeMode ? 'Safe mode — ждёт ручной активации' : 'Боевой режим'}
+      className={cn('inline-flex items-center shrink-0', tone)}
+      title={title}
     >
       <Icon className={iconClassName || 'w-4 h-4'} aria-hidden="true" />
-      <span className="sr-only">{safeMode ? 'Safe mode' : 'Боевой режим'}</span>
+      <span className="sr-only">{title}</span>
     </span>
   );
 }

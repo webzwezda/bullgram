@@ -150,8 +150,9 @@ export function useLiveUserbotsController({
     }
   }
 
-  async function deleteAccount(account) {
-    if (!window.confirm(`Удалить ${account.account_type === 'userbot' ? 'юзербота' : 'бота'} и освободить его контур?`)) {
+  async function deleteAccount(account, { confirmMessage } = {}) {
+    const fallbackMessage = `Удалить ${account.account_type === 'userbot' ? 'юзербота' : 'бота'} и освободить его контур?`;
+    if (!window.confirm(confirmMessage || fallbackMessage)) {
       return;
     }
 
