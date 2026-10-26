@@ -94,6 +94,7 @@ function makeMockSupabase(tablesInit = {}, { tableErrors = {} } = {}) {
                 select(c = '*', _opts = {}) { cols = String(c || '*'); return builder; },
                 eq(col, val) { filters.push([col, 'eq', val]); return builder; },
                 ne(col, val) { filters.push([col, 'ne', val]); return builder; },
+                neq(col, val) { filters.push([col, 'ne', val]); return builder; },
                 in(col, vals) { filters.push([col, 'in', vals]); return builder; },
                 lt(col, val) { filters.push([col, 'lt', val]); return builder; },
                 not(col, op, val) {
@@ -126,6 +127,7 @@ function makeMockSupabase(tablesInit = {}, { tableErrors = {} } = {}) {
                     const ub = {
                         eq(col, val) { filters.push([col, 'eq', val]); return ub; },
                         ne(col, val) { filters.push([col, 'ne', val]); return ub; },
+                        neq(col, val) { filters.push([col, 'ne', val]); return ub; },
                         in(col, vals) { filters.push([col, 'in', vals]); return ub; },
                         lt(col, val) { filters.push([col, 'lt', val]); return ub; },
                         select() { return ub; },

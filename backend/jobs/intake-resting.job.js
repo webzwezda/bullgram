@@ -226,7 +226,7 @@ export async function runIntakeRestingCheck(supabase, userbotService, { checkFn 
                     .eq('owner_id', account.owner_id)
                     .eq('account_type', 'userbot')
                     .eq('tg_account_id', result.me.id.toString())
-                    .ne('id', account.id)
+                    .neq('id', account.id)
                     .limit(1);
                 const duplicate = duplicates?.[0] || null;
                 if (duplicate) {
