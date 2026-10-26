@@ -56,6 +56,7 @@ import { startUserbotInboxWatch } from './jobs/userbot-inbox.job.js';
 import { startRestrictedUserbotCleanup } from './jobs/restricted-userbot-cleanup.job.js';
 import { startListedUserbotHealthCheck } from './jobs/listed-userbot-health.job.js';
 import { startIntakeRestingCheck } from './jobs/intake-resting.job.js';
+import { startSoldFilesPurge } from './jobs/sold-files-purge.job.js';
 import { startAudienceSync } from './jobs/audience-sync.job.js';
 import { startTelegramWebHealth } from './jobs/telegram-web-health.job.js';
 import { startTonReserveWatch } from './jobs/ton-reserve-watch.job.js';
@@ -371,6 +372,8 @@ httpServer.listen(PORT, async () => {
     // Отстой свежепринятых пачек аккаунтов (intake): первый живой контакт,
     // identity + health для pending_activation-аккаунтов платформенных админов.
     startIntakeRestingCheck(supabase, { userbotService });
+    // Пурж проданных «в файлы» аккаунтов после окна выдачи (account shop).
+    startSoldFilesPurge(supabase);
     startAudienceSync(supabase);
     const broadcastPreparationService = new BroadcastPreparationService(supabase);
     // сначала перепроверяем прокси (после ребута сервера они могли лежать), потом возобновляем зависшие подготовки

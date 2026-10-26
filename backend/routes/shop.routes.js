@@ -5,10 +5,18 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { toNano } from '@ton/core';
-import { authenticateUser } from '../middlewares/auth.middleware.js';
+import { authenticateUser, optionalAuthenticateUser } from '../middlewares/auth.middleware.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
 import { tonToNanoString } from '../utils/ton.js';
+import { getShopFilesMaxDownloads, getShopFilesWindowHours } from '../utils/shop-files.js';
+import {
+    ACCOUNT_LOT_NOT_READY_MESSAGE,
+    buildAccountDeliveryView,
+    findUnsellableAccountLot,
+    loadAccountLotLabel,
+    prepareShopArchiveDelivery
+} from '../services/shop-delivery.service.js';
 import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { transferShopAssets } from '../services/shop-transfer.service.js';
@@ -100,6 +108,7 @@ function normalizeItem(row) {
         payment_methods: normalizePaymentMethods(row?.payment_methods),
         offer_code: normalizeOfferCode(row.offer_code) || inferOfferCodeFromLegacyItem(row),
         transfer_mode: row.transfer_mode || 'ownership_transfer',
+        delivery_mode: row.delivery_mode || null,
         created_at: row.created_at,
         updated_at: row.updated_at
     };
@@ -156,6 +165,11 @@ function isMissingPaymentMethodsColumn(error) {
 function isMissingSalesChannelColumn(error) {
     const message = error?.message || '';
     return message.includes('sales_channel');
+}
+
+function isMissingDeliveryModeColumn(error) {
+    const message = error?.message || '';
+    return message.includes('delivery_mode');
 }
 
 function buildShopMemo() {
@@ -272,7 +286,9 @@ async function expireStalePendingPurchases(supabase, purchases) {
             status: 'expired',
             updated_at: new Date().toISOString()
         })
-        .in('id', staleIds);
+        .in('id', staleIds)
+        // CAS: между селектом и апдейтом покупка могла стать paid — не гасим её.
+        .eq('status', 'pending');
 
     if (error) throw error;
     return staleIds;
@@ -297,7 +313,7 @@ async function checkShopTonPayment({ memo, expectedAmountTon, wallet, senderWall
 
 
 
-async function createOrRefreshBuyerPurchase({
+export async function createOrRefreshBuyerPurchase({
     supabase,
     buyerOwnerId,
     itemId,
@@ -364,17 +380,24 @@ async function createOrRefreshBuyerPurchase({
         if (purchaseUserbotIds.length > 0) {
             const { data: userbotRows, error: userbotRowsError } = await supabase
                 .from('tg_accounts')
-                .select('id, tg_username, runtime_status')
+                .select('id, tg_username, runtime_status, last_checked_at, health_summary, custom_label')
                 .in('id', purchaseUserbotIds);
             if (userbotRowsError) throw userbotRowsError;
             // pending_activation сюда тоже входит: аккаунт мог вернуться в safe-mode
             // через восстановление из файлов после публикации лота.
+            // Аккаунт-лоты (intake): pending_activation со свежей чистой проверкой —
+            // продаваемый сток, а не карантин (см. shop-delivery.service).
+            const isAccountLot = item.item_type === 'account';
             const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen'];
-            const quarantined = (userbotRows || []).find(row =>
-                quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
-            );
+            const quarantined = isAccountLot
+                ? findUnsellableAccountLot(userbotRows)
+                : (userbotRows || []).find(row =>
+                    quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
+                );
             if (quarantined) {
-                const blocked = new Error(`Аккаунт @${quarantined.tg_username || quarantined.id} сейчас проблемный (${quarantined.runtime_status}) — продажа лота приостановлена`);
+                const blocked = new Error(isAccountLot
+                    ? ACCOUNT_LOT_NOT_READY_MESSAGE
+                    : `Аккаунт @${quarantined.tg_username || quarantined.id} сейчас проблемный (${quarantined.runtime_status}) — продажа лота приостановлена`);
                 blocked.statusCode = 400;
                 throw blocked;
             }
@@ -404,6 +427,23 @@ async function createOrRefreshBuyerPurchase({
             const paid = new Error('Этот лот уже оплачен другим покупателем и ждет передачи прав.');
             paid.statusCode = 400;
             throw paid;
+        }
+
+        // Два анонима на одном лоте: String(null)===String(null) делает чужую
+        // бронь «своей» — второй гость получил бы тот же UUID и качал архив
+        // после чужой оплаты (ревью P2). Живая анонимная бронь = лот занят.
+        if (buyerOwnerId === null) {
+            const liveAnonPending = (itemPurchases || []).find(purchase =>
+                purchase.buyer_owner_id === null &&
+                purchase.status === 'pending' &&
+                !isPendingPurchaseExpired(purchase)
+            );
+            if (liveAnonPending) {
+                const expiresAt = getPendingPurchaseExpiry(liveAnonPending.created_at);
+                const busy = new Error(`Лот уже забронирован до ${expiresAt.toLocaleString('ru-RU')}. Если бронь не вы — повторите через пару минут.`);
+                busy.statusCode = 400;
+                throw busy;
+            }
         }
     }
 
@@ -684,7 +724,7 @@ function proxyHasUserbot(usageMap, proxyId) {
     return (usageMap.get(String(proxyId)) || []).length > 0;
 }
 
-async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = null, enforceSellerOwnerId = null, senderWallet = null } = {}) {
+export async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = null, enforceSellerOwnerId = null, senderWallet = null, paymentCheckFn = null } = {}) {
     if (!purchase) {
         return {
             ok: false,
@@ -721,11 +761,29 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
         };
     }
 
+    // Файловая выдача уже оформлена: повторная проверка оплаты не должна
+    // перезапускать выдачу и не должна попадать в sold-race (лот уже помечен
+    // sold, а ownership_transfer_status у files-выдачи остаётся pending —
+    // передача прав для неё не существует).
+    if (purchase.status === 'paid' && purchase.payload?.delivery?.mode === 'files') {
+        return {
+            ok: true,
+            statusCode: 200,
+            body: {
+                success: true,
+                status: 'paid',
+                ownership_transfer_status: purchase.ownership_transfer_status || 'pending'
+            }
+        };
+    }
+
     const paymentMethod = normalizePaymentMethod(purchase.payload?.payment_method);
 
     const memo = purchase.payload?.memo;
     const wallet = purchase.payload?.seller_wallet || siteWallet();
-    const isPaid = await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet, senderWallet });
+    const isPaid = paymentCheckFn
+        ? await paymentCheckFn({ purchase })
+        : await checkShopTonPayment({ memo, expectedAmountTon: purchase.amount_ton, wallet, senderWallet });
 
     // Платёж мог прийти после истечения брони. Деньги уже на кошельке сайта —
     // сначала ищем платёж и только потом решаем, истекла ли покупка.
@@ -868,21 +926,31 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     // Отстойник: аккаунт испортился между бронью и оплатой. Платёж уже зачтён —
     // фиксируем paid+failed (по образцу sold-race выше), чтобы у покупки осталась
     // запись для ручного возврата, и не передаём проблемный аккаунт покупателю.
+    const isAccountLotItem = item.item_type === 'account';
+    const accountDeliveryMode = isAccountLotItem
+        ? String(item.delivery_mode || 'transfer').trim().toLowerCase()
+        : null;
     const userbotAssetIds = (assets || [])
         .filter(asset => asset.asset_type === 'userbot')
         .map(asset => String(asset.asset_id));
     if (userbotAssetIds.length > 0) {
         const { data: transferUserbots, error: transferUserbotsError } = await supabase
             .from('tg_accounts')
-            .select('id, tg_username, runtime_status')
+            .select('id, tg_username, runtime_status, last_checked_at, health_summary, custom_label')
             .in('id', userbotAssetIds);
         if (transferUserbotsError) throw transferUserbotsError;
+        // Аккаунт-лоты (intake): pending_activation со свежей чистой проверкой —
+        // продаваемый сток, а не карантин (см. shop-delivery.service).
         const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen'];
-        const quarantined = (transferUserbots || []).find(row =>
-            quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
-        );
+        const quarantined = isAccountLotItem
+            ? findUnsellableAccountLot(transferUserbots)
+            : (transferUserbots || []).find(row =>
+                quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
+            );
         if (quarantined) {
-            const reason = `Аккаунт @${quarantined.tg_username || quarantined.id} проблемный (${quarantined.runtime_status}) — передача не проведена, нужен возврат`;
+            const reason = isAccountLotItem
+                ? `Аккаунт ${quarantined.custom_label || quarantined.id} не готов к выдаче (${quarantined.runtime_status}) — передача не проведена, нужен возврат`
+                : `Аккаунт @${quarantined.tg_username || quarantined.id} проблемный (${quarantined.runtime_status}) — передача не проведена, нужен возврат`;
             await supabase
                 .from('shop_purchases')
                 .update({
@@ -903,16 +971,92 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
         }
     }
 
-    try {
-        await transferShopAssets(supabase, purchase, item, assets || []);
+    // Аккаунт-лоты: файловая выдача (files, либо hybrid у анонимного покупателя —
+    // покупка без JWT всегда остаётся files-delivery). Трансфера нет: архив
+    // качается по квоте с публичной страницы покупки, нашу копию аккаунта
+    // после окна удалит джоба sold-files-purge.
+    if (isAccountLotItem && (accountDeliveryMode === 'files' || (accountDeliveryMode === 'hybrid' && !purchase.buyer_owner_id))) {
+        const delivery = {
+            mode: 'files',
+            downloads: [],
+            downloads_max: getShopFilesMaxDownloads(),
+            window_hours: getShopFilesWindowHours(),
+            purged_at: null,
+            sha256: null,
+            size_bytes: null
+        };
+
+        await supabase
+            .from('shop_items')
+            .update({ status: 'sold', visibility: 'private', updated_at: nowIso })
+            .eq('id', item.id);
 
         await supabase
             .from('shop_purchases')
             .update({
-                ownership_transfer_status: 'completed',
-                ownership_transfer_error: null,
-                updated_at: new Date().toISOString()
+                delivered_at: nowIso,
+                payload: { ...(purchase.payload || {}), delivery },
+                updated_at: nowIso
             })
+            .eq('id', purchase.id);
+
+        return {
+            ok: true,
+            statusCode: 200,
+            body: {
+                success: true,
+                status: 'paid',
+                ownership_transfer_status: purchase.ownership_transfer_status || 'pending'
+            }
+        };
+    }
+
+    // Страховочный предохранитель (ревью P0): трансфер на buyer_owner_id=NULL
+    // создаёт осиротевшие строки. Не-аккаунтный лот анонимно купить нельзя
+    // (гейт в purchase-anon), аккаунтный без покупателя ушёл в files-ветку
+    // выше — сюда без покупателя дойти не должно, но если дошло: paid+failed.
+    if (!purchase.buyer_owner_id) {
+        const reason = 'Анонимная оплата лота без покупателя — передача прав невозможна, нужен возврат';
+        await supabase
+            .from('shop_purchases')
+            .update({
+                ownership_transfer_status: 'failed',
+                ownership_transfer_error: reason,
+                updated_at: nowIso
+            })
+            .eq('id', purchase.id);
+        return {
+            ok: false,
+            statusCode: 400,
+            body: {
+                error: 'Оплата получена, но у покупки нет покупателя для передачи прав. Свяжитесь с поддержкой для возврата.',
+                status: 'paid',
+                ownership_transfer_status: 'failed'
+            }
+        };
+    }
+
+    try {
+        await transferShopAssets(supabase, purchase, item, assets || []);
+
+        const completionPatch = {
+            ownership_transfer_status: 'completed',
+            ownership_transfer_error: null,
+            updated_at: new Date().toISOString()
+        };
+        if (isAccountLotItem && accountDeliveryMode === 'hybrid') {
+            // Гибрид: аккаунт передан покупателю, архив остаётся downloadable
+            // бессрочно — это данные покупателя, пуржа для них нет.
+            completionPatch.delivered_at = completionPatch.updated_at;
+            completionPatch.payload = {
+                ...(purchase.payload || {}),
+                delivery: { mode: 'hybrid', transferred: true }
+            };
+        }
+
+        await supabase
+            .from('shop_purchases')
+            .update(completionPatch)
             .eq('id', purchase.id);
 
         return {
@@ -947,6 +1091,179 @@ async function runShopPurchaseCheck(supabase, purchase, { enforceBuyerOwnerId = 
     }
 }
 
+
+// Массовое выставление аккаунтов (intake-сток) на витрину: один опубликованный
+// лот item_type='account' на каждый актив. Падение одного аккаунта не мешает
+// остальным — собираем per-asset результаты.
+export async function createAccountLotsBatch(supabase, { ownerId, assetIds, priceTon, title, description = null, deliveryMode = 'hybrid' }) {
+    const ids = Array.from(new Set(
+        (Array.isArray(assetIds) ? assetIds : [])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+    ));
+    if (!ids.length) {
+        const error = new Error('Выбери хотя бы один аккаунт');
+        error.statusCode = 400;
+        throw error;
+    }
+    if (!String(title || '').trim()) {
+        const error = new Error('Название лотов обязательно');
+        error.statusCode = 400;
+        throw error;
+    }
+    const normalizedPriceTon = Number(priceTon || 0);
+    if (!(normalizedPriceTon > 0)) {
+        const error = new Error('Укажи цену лота в TON');
+        error.statusCode = 400;
+        throw error;
+    }
+    // Пачкой выставляем только выдачу в духе витрины: hybrid/files. Ручной
+    // 'transfer' остаётся сценарием одиночных лотов через POST /admin/items.
+    const normalizedDeliveryMode = ['hybrid', 'files'].includes(String(deliveryMode || '').trim().toLowerCase())
+        ? String(deliveryMode).trim().toLowerCase()
+        : 'hybrid';
+
+    const { data: accountRows, error: accountsError } = await supabase
+        .from('tg_accounts')
+        .select('id, custom_label, runtime_status, last_checked_at, health_summary')
+        .eq('owner_id', ownerId)
+        .eq('account_type', 'userbot')
+        .in('id', ids);
+    if (accountsError) throw accountsError;
+    const accountById = new Map((accountRows || []).map((row) => [String(row.id), row]));
+
+    const { data: existingItems, error: existingItemsError } = await supabase
+        .from('shop_items')
+        .select('id')
+        .eq('owner_id', ownerId)
+        .in('status', ['draft', 'published']);
+    if (existingItemsError) {
+        if (isMissingShopTables(existingItemsError)) {
+            const error = new Error('Сначала примени SQL под shop foundation');
+            error.statusCode = 400;
+            throw error;
+        }
+        throw existingItemsError;
+    }
+
+    const listedAssetKeys = new Set();
+    if ((existingItems || []).length > 0) {
+        const { data: existingAssets, error: existingAssetsError } = await supabase
+            .from('shop_item_assets')
+            .select('shop_item_id, asset_type, asset_id')
+            .in('shop_item_id', (existingItems || []).map((item) => item.id));
+        if (existingAssetsError) throw existingAssetsError;
+        for (const asset of existingAssets || []) {
+            listedAssetKeys.add(`${asset.asset_type}:${asset.asset_id}`);
+        }
+    }
+
+    // files-выдача после продажи удаляет нашу копию аккаунта: разрешаем её
+    // только для приёмочного стока (restore source с intake_batch_id) — иначе
+    // проданный «в файлы» рабочий юзербот был бы уничтожен пуржем (ревью P2).
+    let intakeAssetIds = new Set();
+    if (normalizedDeliveryMode === 'files') {
+        const { data: intakeSources, error: intakeSourcesError } = await supabase
+            .from('userbot_restore_sources')
+            .select('account_id')
+            .in('account_id', ids)
+            .not('intake_batch_id', 'is', null);
+        if (intakeSourcesError) throw intakeSourcesError;
+        intakeAssetIds = new Set((intakeSources || []).map((row) => String(row.account_id)));
+    }
+
+    const results = [];
+    let created = 0;
+
+    for (const assetId of ids) {
+        const account = accountById.get(assetId);
+        if (!account) {
+            results.push({ asset_id: assetId, status: 'failed', error: 'Аккаунт не найден или чужой' });
+            continue;
+        }
+        if (findUnsellableAccountLot([account])) {
+            results.push({ asset_id: assetId, status: 'failed', error: ACCOUNT_LOT_NOT_READY_MESSAGE });
+            continue;
+        }
+        if (listedAssetKeys.has(`userbot:${assetId}`)) {
+            results.push({ asset_id: assetId, status: 'failed', error: 'Аккаунт уже выставлен в другом лоте' });
+            continue;
+        }
+        if (normalizedDeliveryMode === 'files' && !intakeAssetIds.has(String(assetId))) {
+            results.push({
+                asset_id: assetId,
+                status: 'failed',
+                error: 'Файловая выдача доступна только для стока приёмки. Для подключённого юзербота используйте режим «Кабинет + архив» (hybrid).'
+            });
+            continue;
+        }
+
+        const itemPayload = {
+            owner_id: ownerId,
+            title: String(title).trim(),
+            description: description || null,
+            post_purchase_message: null,
+            item_type: 'account',
+            price_ton: normalizedPriceTon,
+            status: 'published',
+            visibility: 'public',
+            sales_channel: 'both',
+            preview_text: 'Телеграм-аккаунт с полным комплектом: сессия, tdata и пароль 2FA.',
+            payment_methods: ['ton'],
+            offer_code: null,
+            transfer_mode: 'ownership_transfer',
+            delivery_mode: normalizedDeliveryMode
+        };
+
+        const { data: savedItem, error: insertError } = await supabase
+            .from('shop_items')
+            .insert(itemPayload)
+            .select('id')
+            .single();
+        let itemId = savedItem?.id || null;
+        if (insertError) {
+            if (isMissingPaymentMethodsColumn(insertError) || isMissingSalesChannelColumn(insertError) || isMissingDeliveryModeColumn(insertError)) {
+                const legacyPayload = { ...itemPayload };
+                delete legacyPayload.payment_methods;
+                delete legacyPayload.sales_channel;
+                delete legacyPayload.delivery_mode;
+                const legacy = await supabase
+                    .from('shop_items')
+                    .insert(legacyPayload)
+                    .select('id')
+                    .single();
+                if (legacy.error) {
+                    results.push({ asset_id: assetId, status: 'failed', error: 'Не удалось создать лот' });
+                    continue;
+                }
+                itemId = legacy.data?.id || null;
+            } else {
+                results.push({ asset_id: assetId, status: 'failed', error: 'Не удалось создать лот' });
+                continue;
+            }
+        }
+
+        const { error: assetInsertError } = await supabase
+            .from('shop_item_assets')
+            .insert([{
+                shop_item_id: itemId,
+                asset_type: 'userbot',
+                asset_id: account.id,
+                label: account.custom_label || null,
+                sort_order: 0
+            }]);
+        if (assetInsertError) {
+            await supabase.from('shop_items').delete().eq('id', itemId);
+            results.push({ asset_id: assetId, status: 'failed', error: 'Не удалось привязать аккаунт к лоту' });
+            continue;
+        }
+
+        created += 1;
+        results.push({ asset_id: assetId, item_id: itemId, status: 'ok' });
+    }
+
+    return { created, results };
+}
 
 export default function shopRoutes(supabase) {
     const router = express.Router();
@@ -1078,7 +1395,7 @@ export default function shopRoutes(supabase) {
             return res.status(403).json({ error: 'Обзор витрины доступен только администратору проекта.' });
         }
 
-        const allowedTypes = ['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer'];
+        const allowedTypes = ['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer', 'account'];
         const itemTypes = String(req.query.types || '')
             .split(',')
             .map((value) => value.trim())
@@ -1449,19 +1766,31 @@ export default function shopRoutes(supabase) {
             transfer_mode,
             payment_methods,
             sales_channel,
+            delivery_mode,
             assets = []
         } = req.body;
         const normalizedItemType = String(item_type || '').trim();
         const normalizedOfferCode = normalizeOfferCode(offer_code);
         const adminSeller = isAdminSeller(req.profile);
         const textServiceItem = isTextServiceItem(normalizedItemType, transfer_mode);
+        const isAccountItem = normalizedItemType === 'account';
 
         if (!title || !String(title).trim()) {
             return res.status(400).json({ error: 'Название лота обязательно' });
         }
 
-        if (!['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer'].includes(normalizedItemType)) {
+        if (!['proxy', 'userbot', 'bundle', 'channel_audience_asset', 'text_offer', 'account'].includes(normalizedItemType)) {
             return res.status(400).json({ error: 'Неверный тип товара' });
+        }
+
+        // Аккаунт-лоты: режим выдачи (hybrid по умолчанию; null в БД = легаси-трансфер).
+        let normalizedDeliveryMode = null;
+        if (isAccountItem) {
+            const rawDeliveryMode = String(delivery_mode || '').trim().toLowerCase();
+            if (rawDeliveryMode && !['hybrid', 'files', 'transfer'].includes(rawDeliveryMode)) {
+                return res.status(400).json({ error: 'Неверный delivery_mode: допускаются hybrid, files, transfer' });
+            }
+            normalizedDeliveryMode = rawDeliveryMode || 'hybrid';
         }
 
         if (!adminSeller && normalizedItemType !== 'text_offer') {
@@ -1598,7 +1927,7 @@ export default function shopRoutes(supabase) {
             if (userbotIds.length > 0) {
                 const { data: rows, error } = await supabase
                     .from('tg_accounts')
-                    .select('id, proxy_id, runtime_status, last_checked_at, tg_username')
+                    .select('id, proxy_id, runtime_status, last_checked_at, tg_username, custom_label, health_summary')
                     .eq('owner_id', ownerId)
                     .eq('account_type', 'userbot')
                     .in('id', userbotIds);
@@ -1607,28 +1936,38 @@ export default function shopRoutes(supabase) {
                     return res.status(400).json({ error: 'В лоте есть чужие или несуществующие юзерботы' });
                 }
 
-                // Мёртвые сессии тоже нельзя продавать: покупатель получит
-                // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted).
-                // error — проверка не прошла (например, заморозка Telegram, когда
-                // getMe не укладывается в таймаут): такие тоже в отстойник.
-                const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error', 'frozen'];
-                const blockedUserbot = (rows || []).find(row =>
-                    quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
-                );
-                if (blockedUserbot) {
-                    return res.status(400).json({ error: `Юзербот @${blockedUserbot.tg_username || blockedUserbot.id} проблемный (${blockedUserbot.runtime_status}) — публикация невозможна` });
-                }
+                if (isAccountItem) {
+                    // Аккаунт-лоты (intake): pending_activation со свежей чистой
+                    // проверкой — продаваемый сток, а не карантин. Остальные
+                    // плохие статусы и устаревшая проверка — в отстойник.
+                    const blockedAccount = findUnsellableAccountLot(rows);
+                    if (blockedAccount) {
+                        return res.status(400).json({ error: ACCOUNT_LOT_NOT_READY_MESSAGE });
+                    }
+                } else {
+                    // Мёртвые сессии тоже нельзя продавать: покупатель получит
+                    // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted).
+                    // error — проверка не прошла (например, заморозка Telegram, когда
+                    // getMe не укладывается в таймаут): такие тоже в отстойник.
+                    const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error', 'frozen'];
+                    const blockedUserbot = (rows || []).find(row =>
+                        quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
+                    );
+                    if (blockedUserbot) {
+                        return res.status(400).json({ error: `Юзербот @${blockedUserbot.tg_username || blockedUserbot.id} проблемный (${blockedUserbot.runtime_status}) — публикация невозможна` });
+                    }
 
-                // Публикуем только с живой проверкой: без этого аккаунт мог испортиться
-                // после последней проверки и отстойник об этом еще не знает.
-                if (String(status || '') === 'published') {
-                    const freshCutoffMs = 6 * 60 * 60 * 1000;
-                    const staleUserbot = (rows || []).find(row => {
-                        const checkedAt = row.last_checked_at ? new Date(row.last_checked_at).getTime() : 0;
-                        return !checkedAt || (Date.now() - checkedAt) > freshCutoffMs;
-                    });
-                    if (staleUserbot) {
-                        return res.status(400).json({ error: `У юзербота @${staleUserbot.tg_username || staleUserbot.id} устаревшая проверка — запусти «Проверить Telegram» и публикуй после неё` });
+                    // Публикуем только с живой проверкой: без этого аккаунт мог испортиться
+                    // после последней проверки и отстойник об этом еще не знает.
+                    if (String(status || '') === 'published') {
+                        const freshCutoffMs = 6 * 60 * 60 * 1000;
+                        const staleUserbot = (rows || []).find(row => {
+                            const checkedAt = row.last_checked_at ? new Date(row.last_checked_at).getTime() : 0;
+                            return !checkedAt || (Date.now() - checkedAt) > freshCutoffMs;
+                        });
+                        if (staleUserbot) {
+                            return res.status(400).json({ error: `У юзербота @${staleUserbot.tg_username || staleUserbot.id} устаревшая проверка — запусти «Проверить Telegram» и публикуй после неё` });
+                        }
                     }
                 }
 
@@ -1704,7 +2043,8 @@ export default function shopRoutes(supabase) {
                 preview_text: preview_text || null,
                 payment_methods: normalizedPaymentMethods,
                 offer_code: normalizedOfferCode,
-                transfer_mode: transfer_mode || 'ownership_transfer'
+                transfer_mode: transfer_mode || 'ownership_transfer',
+                delivery_mode: isAccountItem ? normalizedDeliveryMode : null
             };
 
             let savedItem = null;
@@ -1717,9 +2057,10 @@ export default function shopRoutes(supabase) {
                     .select('*')
                     .single();
                 if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
+                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error) || isMissingDeliveryModeColumn(error)) {
                         const legacyPayload = { ...itemPayload };
                         delete legacyPayload.payment_methods;                        delete legacyPayload.sales_channel;
+                        delete legacyPayload.delivery_mode;
                         const legacy = await supabase
                             .from('shop_items')
                             .update(legacyPayload)
@@ -1750,9 +2091,10 @@ export default function shopRoutes(supabase) {
                     .select('*')
                     .single();
                 if (error) {
-                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error)) {
+                    if (isMissingPaymentMethodsColumn(error) || isMissingSalesChannelColumn(error) || isMissingDeliveryModeColumn(error)) {
                         const legacyPayload = { ...itemPayload };
                         delete legacyPayload.payment_methods;                        delete legacyPayload.sales_channel;
+                        delete legacyPayload.delivery_mode;
                         const legacy = await supabase
                             .from('shop_items')
                             .insert(legacyPayload)
@@ -1943,6 +2285,36 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка массового выставления прокси:', error);
             res.status(500).json({ error: 'Ошибка массового выставления прокси' });
+        }
+    });
+
+    // Массовое выставление аккаунтов из приёмки: один опубликованный лот на
+    // аккаунт, гейты те же, что у одиночного создания. Упавший аккаунт не
+    // мешает остальным — результаты по каждому в ответе.
+    router.post('/admin/account-lots/batch', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+
+        try {
+            if (!isAdminSeller(req.profile)) {
+                return res.status(403).json({ error: 'Выставлять аккаунты платформы может только пользователь с role admin.' });
+            }
+
+            const { created, results } = await createAccountLotsBatch(supabase, {
+                ownerId,
+                assetIds: req.body?.asset_ids,
+                priceTon: req.body?.price_ton,
+                title: req.body?.title,
+                description: req.body?.description || null,
+                deliveryMode: req.body?.delivery_mode
+            });
+
+            res.json({ success: true, created, results });
+        } catch (error) {
+            if (error.statusCode) {
+                return res.status(error.statusCode).json({ error: error.message });
+            }
+            console.error('Ошибка массового выставления аккаунтов:', error);
+            res.status(500).json({ error: 'Ошибка массового выставления аккаунтов' });
         }
     });
 
@@ -2225,10 +2597,48 @@ export default function shopRoutes(supabase) {
                 };
             }
 
+            // Витрина аккаунт-лотов: маска + свежесть последней проверки.
+            // Наружу идут только эти поля — никаких tg_phone/username/tg_account_id.
+            const accountPreviewByItem = new Map();
+            const previewAssetToItem = new Map();
+            for (const item of visibleItems) {
+                if (item.item_type !== 'account') continue;
+                for (const asset of (assetsByItem.get(item.id) || [])) {
+                    if (asset.asset_type === 'userbot') {
+                        previewAssetToItem.set(String(asset.asset_id), item.id);
+                    }
+                }
+            }
+            const previewAccountIds = Array.from(previewAssetToItem.keys());
+            if (previewAccountIds.length > 0) {
+                const { data: previewAccounts, error: previewError } = await supabase
+                    .from('tg_accounts')
+                    .select('id, custom_label, runtime_status, last_checked_at, health_summary')
+                    .in('id', previewAccountIds);
+                if (previewError) throw previewError;
+                for (const account of previewAccounts || []) {
+                    const itemId = previewAssetToItem.get(String(account.id));
+                    if (!itemId) continue;
+                    accountPreviewByItem.set(String(itemId), {
+                        label: account.custom_label || null,
+                        last_checked_at: account.last_checked_at || null,
+                        health_status: String(account.runtime_status || '').trim().toLowerCase(),
+                        spambot_state: String(account.health_summary?.spambot_state || 'not_checked')
+                    });
+                }
+            }
+
             res.json({
                 items: visibleItems.map(item => ({
                     ...normalizeItem(item),
-                    assets: assetsByItem.get(item.id) || [],
+                    // asset_id аккаунт-лота — это UUID tg_accounts: наружу не отдаём
+                    // (ревью P1), карточке хватает account_preview.
+                    assets: item.item_type === 'account'
+                        ? []
+                        : (assetsByItem.get(item.id) || []),
+                    ...(item.item_type === 'account'
+                        ? { account_preview: accountPreviewByItem.get(item.id) || null }
+                        : {}),
                     available_payment_methods: buildAvailablePaymentMethods(item),
                     active_reservation: reservationByItem.get(item.id) || null
                 })),
@@ -2527,6 +2937,72 @@ export default function shopRoutes(supabase) {
         }
     });
 
+    // Анонимная покупка лота (публичная витрина сайта, без регистрации):
+    // JWT опционален — есть покупатель, пишем buyer_owner_id, нет — null
+    // (такая покупка при оплате останется files-delivery, даже если лот hybrid).
+    router.post('/public/purchase-anon', optionalAuthenticateUser, async (req, res) => {
+        const ip = req.ip || 'unknown';
+        if (!checkRateLimit(publicPurchaseHitsByIp, ip)) {
+            return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+        }
+
+        const buyerOwnerId = req.user?.id ?? null;
+        const { item_id } = req.body || {};
+
+        if (!item_id) {
+            return res.status(400).json({ error: 'Не передан item_id' });
+        }
+
+        try {
+            // Анонимная витрина волны 2 продаёт только аккаунты: files/hybrid
+            // выдача построена вокруг архивов. Не-аккаунтный лот без JWT упал бы
+            // в трансфер на buyer_owner_id=NULL (ревью: P0) — гейтим заранее.
+            const { data: anonItem, error: anonItemError } = await supabase
+                .from('shop_items')
+                .select('item_type, status, visibility')
+                .eq('id', item_id)
+                .maybeSingle();
+            if (anonItemError) throw anonItemError;
+            if (!anonItem || anonItem.status !== 'published' || !['public', 'unlisted'].includes(anonItem.visibility || '')) {
+                return res.status(400).json({ error: 'Лот не найден или уже не продаётся' });
+            }
+            if (anonItem.item_type !== 'account') {
+                return res.status(400).json({ error: 'Сейчас без регистрации продаются только аккаунты. Прокси и паки — из кабинета /userbot.' });
+            }
+
+            const paymentMethod = normalizePaymentMethod(null);
+            const {
+                purchase,
+                item,
+                wallet,
+                amountTon,
+                memo
+            } = await createOrRefreshBuyerPurchase({
+                supabase,
+                buyerOwnerId,
+                itemId: item_id,
+                paymentMethod
+            });
+
+            res.json({
+                success: true,
+                purchase_id: purchase.id,
+                amount_ton: amountTon,
+                amount_nanoton: tonToNanoString(amountTon),
+                payment_method: paymentMethod,
+                seller_wallet: wallet,
+                memo,
+                item_type: item.item_type,
+                expires_at: getPendingPurchaseExpiry(purchase.created_at).toISOString(),
+                network: detectNetwork(),
+                ...(await buildManualPaymentLinks(wallet, amountTon, memo))
+            });
+        } catch (error) {
+            console.error('Ошибка создания анонимной shop purchase:', error);
+            res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка создания покупки' });
+        }
+    });
+
     router.post('/public/purchase/batch', authenticateUser, async (req, res) => {
         const buyerOwnerId = req.user.id;
         const itemIds = Array.isArray(req.body?.item_ids) ? req.body.item_ids.map((value) => String(value || '').trim()).filter(Boolean) : [];
@@ -2769,9 +3245,12 @@ export default function shopRoutes(supabase) {
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     const publicViewHitsByIp = new Map();
     const publicVerifyHitsByIp = new Map();
+    const publicPurchaseHitsByIp = new Map();
+    const publicDownloadHitsByIp = new Map();
     const PUBLIC_RATE_LIMIT_RPM = 60;
+    const PUBLIC_DOWNLOAD_RATE_LIMIT_RPM = 10;
 
-    function checkRateLimit(map, ip) {
+    function checkRateLimit(map, ip, limitRpm = PUBLIC_RATE_LIMIT_RPM) {
         const now = Date.now();
         const windowStart = now - 60_000;
         for (const [key, hits] of map) {
@@ -2780,7 +3259,7 @@ export default function shopRoutes(supabase) {
             else map.delete(key);
         }
         const hits = map.get(ip) || [];
-        if (hits.length >= PUBLIC_RATE_LIMIT_RPM) return false;
+        if (hits.length >= limitRpm) return false;
         hits.push(now);
         map.set(ip, hits);
         return true;
@@ -2800,7 +3279,7 @@ export default function shopRoutes(supabase) {
         try {
             const { data: purchase, error } = await supabase
                 .from('shop_purchases')
-                .select('id, status, amount_ton, created_at, payload, shop_item_id, seller_owner_id')
+                .select('id, status, amount_ton, created_at, payload, shop_item_id, seller_owner_id, buyer_owner_id, delivered_at')
                 .eq('id', purchaseId)
                 .maybeSingle();
             if (error) throw error;
@@ -2819,9 +3298,21 @@ export default function shopRoutes(supabase) {
 
             const { data: itemRes } = await supabase
                 .from('shop_items')
-                .select('title')
+                .select('title, item_type, delivery_mode')
                 .eq('id', purchase.shop_item_id)
                 .maybeSingle();
+
+            // Аккаунт-лоты: публичный блок выдачи (квота/окно/целостность архива).
+            let delivery = null;
+            if (itemRes?.item_type === 'account') {
+                delivery = buildAccountDeliveryView({
+                    status: purchase.status,
+                    deliveredAt: purchase.delivered_at,
+                    itemDeliveryMode: itemRes.delivery_mode,
+                    payloadDelivery: purchase.payload?.delivery || null,
+                    label: await loadAccountLotLabel(supabase, purchase.shop_item_id)
+                });
+            }
 
             const memo = purchase.payload?.memo;
             const amountNano = tonToNanoString(purchase.amount_ton);
@@ -2843,7 +3334,8 @@ export default function shopRoutes(supabase) {
                 expires_at: expiresAt,
                 item_title: itemRes?.title || 'Заказ',
                 ton_uri: tonUri,
-                ton_qr: purchase.payload?.ton_qr || null
+                ton_qr: purchase.payload?.ton_qr || null,
+                delivery
             });
         } catch (error) {
             console.error('Ошибка public-view shop purchase:', error);
@@ -2883,6 +3375,45 @@ export default function shopRoutes(supabase) {
         } catch (error) {
             console.error('Ошибка verify-public shop purchase:', error);
             res.status(error.statusCode || 500).json({ error: error.message || 'Ошибка проверки оплаты' });
+        }
+    });
+
+    // Выдача архива аккаунта (account shop delivery): публичный роут — bearer
+    // здесь сам UUID покупки со страницы оплаты, JWT не нужен. В архиве только
+    // содержимое blob'ов восстановления и README — никаких tg_phone/username.
+    router.get('/public/purchase/:purchaseId/download', async (req, res) => {
+        const { purchaseId } = req.params;
+        if (!UUID_RE.test(String(purchaseId))) {
+            return res.status(400).json({ error: 'Некорректный ID счёта' });
+        }
+
+        try {
+            const { data: purchase, error } = await supabase
+                .from('shop_purchases')
+                .select('id, status, shop_item_id, buyer_owner_id, delivered_at, payload')
+                .eq('id', purchaseId)
+                .maybeSingle();
+            if (error) throw error;
+            if (!purchase) return res.status(404).json({ error: 'Счёт не найден' });
+
+            const ip = req.ip || 'unknown';
+            const result = await prepareShopArchiveDelivery(supabase, purchase, {
+                ip,
+                rateCheck: () => checkRateLimit(publicDownloadHitsByIp, ip, PUBLIC_DOWNLOAD_RATE_LIMIT_RPM)
+            });
+
+            if (!result.ok) {
+                return res.status(result.statusCode).json({ error: result.error });
+            }
+
+            const { buffer, basename, sha256 } = result.archive;
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', `attachment; filename="${basename}.zip"`);
+            res.setHeader('X-Archive-Sha256', sha256);
+            return res.send(buffer);
+        } catch (error) {
+            console.error('Ошибка выдачи архива shop purchase:', error);
+            return res.status(500).json({ error: 'Ошибка выдачи архива' });
         }
     });
 

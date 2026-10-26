@@ -293,6 +293,16 @@ Callback URL для Robokassa:
 - Прогресс: строка в `account_import_batches` (`status/total/processed/failed/items`), обновляется после каждого айтема; UI поллит `GET /api/userbot/intake/batch/:id`.
 - Миграция: `backend/sql/account-shop-intake.sql` (новая таблица `account_import_batches`, колонки `tdata_*`/`two_fa_secret_encrypted`/`intake_batch_id` в `userbot_restore_sources`, `health_summary` в `tg_accounts`). Применить через Supabase MCP до деплоя.
 
+### Продажа аккаунтов: витрина и выдача файлов (account shop delivery)
+
+Лоты `item_type='account'` продаются на публичной витрине `/shop` (site-v2, без регистрации) за TON на платформенный кошелёк. Режимы выдачи — колонка `shop_items.delivery_mode`:
+
+- `hybrid` (по умолчанию) — покупатель без JWT получает архив; под JWT аккаунт + прокси передаются ему в кабинет (`shop-transfer.service`, принимает `pending_activation` со свежей чистой проверкой) + Telegram Web после активации; архив качается бессрочно (данные покупателя, пуржа нет).
+- `files` — только архив: квота `SHOP_FILES_MAX_DOWNLOADS` (10) в окне `SHOP_FILES_DOWNLOAD_WINDOW_HOURS` (168 ч) со страницы `/pay/:purchaseId` (UUID покупки — ключ доступа, rate-limit по IP, sha256 + размер на странице). По истечении окна джоба `jobs/sold-files-purge.job.js` (`USERBOT_SOLD_FILES_PURGE_ENABLED`, интервал `USERBOT_SOLD_FILES_PURGE_INTERVAL_MS`, default 1h) удаляет нашу копию: restore source + `tg_accounts` + прокси (release 3proxy-слота). Восстановление невозможно — честно показывается покупателю.
+- `transfer` — легаси-поведение, только передача прав.
+
+Ключевые маршруты: `POST /api/shop/public/purchase-anon` (покупка без регистрации; с Bearer — сразу трансфер), `GET /api/shop/public/purchase/:id/download` (публичный, только после оплаты), `POST /api/shop/admin/account-lots/batch` (выставить пачкой, admin). Гейты здоровья аккаунт-лотов: статусы `restricted/frozen/expired/dead_proxy/error` запрещены; `pending_activation` продаётся только со свежей (≤6 ч) проверкой и `health_summary.status='online'`. При исполнении оплаты аккаунт-лот штампует `shop_purchases.delivered_at` + `payload.delivery` (mode/downloads/sha256/окно). Миграция: `backend/sql/account-shop-delivery.sql` (`delivery_mode`, `delivered_at` + partial index) — применить через Supabase MCP до деплоя.
+
 ## Запуск
 
 **Development:**

@@ -92,7 +92,7 @@ Do not reintroduce legacy `/admin` assumptions into active UI or product copy. T
 
 ## Surfaces & Routing (current, verified 2026-10-14)
 
-- **site-v2** (`/`): `HomePage`; `/get-account` (флоу «Получить аккаунт»: оплата Pro → выдача → авто-переход в кабинет); `/access-request` (соцпомощь: тариф Normal бесплатно для людей с инвалидностью); `/pay/:purchaseId`; `/create`, `/created/:id` (инвойсы); `/quick-start` → `/docs/quick-start/`; `/shop` → внешний редирект в витрину юзерботов; `/plan` и `/purchases` → редиректы в кабинет `/profile` (сквозь совместимые редиректы userbot-v2).
+- **site-v2** (`/`): `HomePage`; `/get-account` (флоу «Получить аккаунт»: оплата Pro → выдача → авто-переход в кабинет); `/access-request` (соцпомощь: тариф Normal бесплатно для людей с инвалидностью); `/pay/:purchaseId`; `/create`, `/created/:id` (инвойсы); `/quick-start` → `/docs/quick-start/`; `/shop` — публичная витрина магазина аккаунтов (без регистрации, TON на платформенный кошелёк; без JWT продаются только account-лоты, files/hybrid выдача); `/plan` и `/purchases` → редиректы в кабинет `/profile` (сквозь совместимые редиректы userbot-v2).
 - **userbot-v2** (`/userbot`): корень `/` = список юзерботов — владелец называет эту поверхность «Telegram Web» (дашборд слит со списком аккаунтов); `/connect` (подключение нового юзербота); `/proxies`; `/mcp` (Bullgram MCP-онбординг агентов); `/api` (API-ключи). Совместимые редиректы: `/accounts` и `/userbots` → `/` (с query), `/purchases` и `/profile` → `/profile/`. Витрина лотов магазина и TON-checkout живут внутри userbot-v2 (`src/features/shop-storefront/`, `src/features/ton-checkout/`, `src/components/shop/`).
 - **bots-v2** (`/bots`): хаб `/`; `/bots/autopost` — управление автопостером (онбординг бота, каналы, журнал публикаций, админы). Следующие мелкие боты добавляются сюда.
 - **admin-v2** (`/paywall`): корень `/` = «Бот продаж» (`OfficialBotsPage`, включая контурную ротацию юзерботов, сканирование групп, авто-кик) — command center как отдельная страница УДАЛЁН, `/sales-bot` → `/`; `/customers` (клиенты; туда же сведены `/crm`, `/orders`, `/access`, `/dossier`, `/analytics`); `/retention`; `/abandoned` (брошенные корзины); `/referrals`; `/bases`; `/broadcast` + `/broadcast/history`; `/billing` («Касса»; туда же сведены `/payments`, `/shop-receipts`). Казна в меню не выводится: `/treasury`, `/shop`, `/p2p/create`, `/p2p/orders` — внешние редиректы в `/treasury`. Прочие легаси-редиректы: `/autopost` → `/bots/autopost`, `/claw*` → `/userbot/mcp`, `/api`, `/integrations` → `/userbot/api`, `/mcp` → `/userbot/mcp`, `/proxies` → `/userbot/proxies`.
@@ -151,7 +151,9 @@ USERBOT_BOTFATHER_ENABLED=false             # Создание ботов чер
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true # Auto-delete restricted accounts
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
 USERBOT_INTAKE_RESTING_ENABLED=true         # Отлёжка приёмочного стока (health-check safe-mode аккаунтов из пачек, только intake_batch_id-сток)
+USERBOT_SOLD_FILES_PURGE_ENABLED=true       # Продувка копий аккаунтов, проданных «в файлы», после окна выдачи
 # тюнинг отлёжки: USERBOT_INTAKE_RESTING_INTERVAL_MS=43200000, USERBOT_INTAKE_RESTING_SLEEP_MS=25000
+# тюнинг выдачи магазина аккаунтов: SHOP_FILES_MAX_DOWNLOADS=10, SHOP_FILES_DOWNLOAD_WINDOW_HOURS=168
 # тюнинг messaging-роутера: USERBOT_DM_HOURLY_CAP=20, USERBOT_DM_DAILY_CAP=50,
 # USERBOT_DM_JITTER_PERCENT=20, USERBOT_JOIN_PER_HOUR=4, USERBOT_JOIN_SLEEP_MS=45000
 ```

@@ -1,3 +1,5 @@
+import { isTransferableAccountLot } from './shop-delivery.service.js';
+
 export async function transferShopAssets(supabase, purchase, item, assets) {
     const buyerOwnerId = purchase.buyer_owner_id;
     const sellerOwnerId = purchase.seller_owner_id;
@@ -29,7 +31,7 @@ export async function transferShopAssets(supabase, purchase, item, assets) {
         if (asset.asset_type === 'userbot') {
             const { data: account, error: accountError } = await supabase
                 .from('tg_accounts')
-                .select('id, proxy_id, runtime_status')
+                .select('id, proxy_id, runtime_status, last_checked_at, health_summary')
                 .eq('id', asset.asset_id)
                 .eq('owner_id', sellerOwnerId)
                 .eq('account_type', 'userbot')
@@ -38,7 +40,9 @@ export async function transferShopAssets(supabase, purchase, item, assets) {
 
             // Double-guard отстойника: route уже проверил статус, но между проверкой
             // и трансфером аккаунт мог испортиться — передаём только живой аккаунт.
-            if (String(account.runtime_status || '').trim().toLowerCase() !== 'online') {
+            // Аккаунт-лоты (intake): pending_activation со свежей чистой проверкой —
+            // продаваемый сток, а не карантин (гейт в shop-delivery.service).
+            if (!isTransferableAccountLot(account)) {
                 const error = new Error(`Аккаунт ${account.id} не в рабочем состоянии (${account.runtime_status || 'unknown'}) — передача отменена`);
                 error.quarantinedAssetId = account.id;
                 throw error;

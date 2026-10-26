@@ -8,6 +8,7 @@
     "pull": "DEPLOY_HOST=${DEPLOY_HOST:?required} rsync -avz --delete --exclude='node_modules' --exclude='.git' --exclude='_site' --exclude='.env' --exclude='.env.backup-*' --exclude='logs' --exclude='uploads' \"${DEPLOY_USER:-root}@${DEPLOY_HOST}\":/var/www/backend/ ./",
     "test:autopost": "node test/test-autopost-timezone.js && node test/test-autopost-tz-bounds.js && node test/test-autopost-queue.js && node test/test-autopost-tier.js && node test/test-autopost-reactions.js && node test/test-autopost-bestof.js && node test/test-autopost-checklists.js && node test/test-autopost-checklist-ops.js && node test/test-userbot-ops.js && node test/test-ops-center-selection.js",
     "test:sales": "node test/test-contour-admin-rights.js && node test/test-shop-quarantine.js",
+    "test:shop-delivery": "node test/test-shop-delivery.js",
     "test:intake": "node test/test-account-intake.js",
     "test:messaging": "node test/test-messaging-router.js",
     "test:broadcast": "node test/test-broadcast-router.js",

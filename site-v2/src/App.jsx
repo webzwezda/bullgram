@@ -32,6 +32,7 @@ const CreateInvoicePage = lazyRoute(() => import('./pages/CreateInvoicePage.jsx'
 const CreatedInvoicePage = lazyRoute(() => import('./pages/CreatedInvoicePage.jsx').then((m) => ({ default: m.CreatedInvoicePage })));
 const AccessRequestPage = lazyRoute(() => import('./pages/AccessRequestPage.jsx').then((m) => ({ default: m.AccessRequestPage })));
 const GetAccountPage = lazyRoute(() => import('./pages/GetAccountPage.jsx').then((m) => ({ default: m.GetAccountPage })));
+const ShopPage = lazyRoute(() => import('./pages/ShopPage.jsx').then((m) => ({ default: m.ShopPage })));
 
 // Переход в другое приложение (/userbot, /app) — полный page load: SPA-роутер
 // здесь не резолвит чужие пути, Navigate уходил бы в wildcard на главную.
@@ -67,6 +68,7 @@ export function App() {
     if (location.pathname === '/') return 'Главная';
     if (location.pathname.startsWith('/pay')) return 'Оплата счёта';
     if (location.pathname.startsWith('/created')) return 'Счёт создан';
+    if (location.pathname.startsWith('/shop')) return 'Магазин';
     const current = navItems.find((item) => item.to && item.to !== '/' && location.pathname.startsWith(item.to));
     return current?.label || 'Bullgram';
   }, [location.pathname, navItems]);
@@ -85,7 +87,7 @@ export function App() {
     >
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/shop" element={<ExternalRedirect to="/userbot/accounts" />} />
+        <Route path="/shop" element={<ShopPage />} />
         <Route path="/purchases" element={<ExternalRedirect to="/userbot/purchases" />} />
         <Route path="/plan" element={<ExternalRedirect to="/userbot/profile" />} />
         <Route path="/pay" element={<PayLayout />}>
