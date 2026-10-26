@@ -21,6 +21,10 @@ export const INTAKE_MISSING_MIGRATION_MESSAGE = 'Сначала примени S
 
 function isMissingRecoveryTableError(error) {
     const raw = String(error?.message || error || '').toLowerCase();
+    // «schema cache» = PostgREST ещё не увидел свежие ALTER'ы (лечится
+    // `notify pgrst, 'reload schema'`), миграция при этом стоит — подменять
+    // это на «примени SQL» нельзя, скрывает настоящую причину.
+    if (raw.includes('schema cache')) return false;
     return raw.includes('userbot_restore_sources') && (
         raw.includes('does not exist')
         || raw.includes('relation')

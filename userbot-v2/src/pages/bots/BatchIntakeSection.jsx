@@ -7,19 +7,36 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { collectDataTransferEntries, useAccountIntake } from './useAccountIntake.js';
 
-// Градиентная иконка секции — паттерн DESIGN.md §4: он сознательно не токенизирован
-// (два шага одной рампы + тень того же шага), поэтому raw-классы здесь разрешены.
-const SECTION_ICON_CLASS = 'from-indigo-500 to-indigo-600 shadow-indigo-500/20'; // ds-allow-hardcode
-
-// Feedback-пары статусов (фон+текст из одного набора, см. design/tokens/color.semantic.json).
-const ITEM_TONES = {
-  queued: { badge: 'bg-surface-subtle text-ink-muted border-border-default', label: 'В очереди' },
-  ok: { badge: 'bg-feedback-success-bg text-feedback-success-text border-feedback-success-bg', label: 'Готово' },
-  failed: { badge: 'bg-feedback-error-bg text-feedback-error-text border-feedback-error-bg', label: 'Ошибка' }
+// Пары фонов+текста из одного набора (DESIGN.md «Feedback»): у бейджа — только bg+text,
+// каноничный баннер — видимый бордер + подложка пары + двухтоновый текст.
+const BADGE_TONES = {
+  queued: 'bg-surface-subtle text-ink-muted',
+  ok: 'bg-feedback-success-bg text-feedback-success-text',
+  failed: 'bg-feedback-error-bg text-feedback-error-text'
 };
 
-function itemToneFor(status) {
-  return ITEM_TONES[status] || ITEM_TONES.queued;
+const BADGE_LABELS = {
+  queued: 'В очереди',
+  ok: 'Готово',
+  failed: 'Ошибка'
+};
+
+function badgeToneFor(status) {
+  return {
+    className: BADGE_TONES[status] || BADGE_TONES.queued,
+    label: BADGE_LABELS[status] || BADGE_LABELS.queued
+  };
+}
+
+// Каноничный баннер состояния: конструкция как у qr-баннера онбординга —
+// скруглённый блок с бордером, подложкой feedback-пары и иконкой тона.
+function StatusBanner({ tone, icon, children }) {
+  return (
+    <div className="p-4 flex gap-3 items-start rounded-2xl border border-border-default bg-surface-card shadow-sm">
+      <span className={`shrink-0 mt-0.5 ${tone}`}>{icon}</span>
+      <div className="pt-0.5 text-sm font-medium text-ink-body">{children}</div>
+    </div>
+  );
 }
 
 function pluralizeRu(count, one, few, many) {
@@ -81,30 +98,29 @@ export function BatchIntakeSection({
   }
 
   return (
-    <Card className="mb-6 rounded-2xl">
-      <div className="bg-surface-subtle border-b border-border-default p-5 sm:p-6">
+    <Card className="border-0 shadow-lg ring-1 ring-border-default mb-6 bg-surface-card overflow-hidden rounded-2xl">
+      <div className="bg-surface-subtle/50 border-b border-border-default p-5 sm:p-6">
         <div className="flex items-center gap-4">
-          <div className={`flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg ${SECTION_ICON_CLASS}`}>
-            <Layers className="size-6" />
+          <div className="w-12 h-12 rounded-2xl bg-action-primary flex items-center justify-center text-surface-card shrink-0">
+            <Layers className="w-6 h-6" />
           </div>
           <div>
             <h2 className="flex items-center gap-2 text-xl font-bold text-ink-strong">
               Партия аккаунтов
-              {isProcessing ? <Loader2 className="size-5 animate-spin text-ink-muted" /> : null}
+              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin text-ink-muted" /> : null}
             </h2>
-            <p className="mt-0.5 text-sm text-ink-muted">
+            <p className="text-sm text-ink-muted mt-0.5">
               Скинь сразу много паков — zip-архивы или папки. Пачка разберётся на отдельные аккаунты автоматически.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-4 p-6">
+      <div className="p-5 sm:p-6 space-y-4">
         {intake.error ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-feedback-error-bg bg-feedback-error-bg p-4 text-sm font-medium text-feedback-error-text">
-            <AlertCircle className="mt-0.5 size-5 shrink-0" />
-            <div className="pt-0.5">{intake.error}</div>
-          </div>
+          <StatusBanner tone="text-feedback-error-text" icon={<AlertCircle className="w-5 h-5" />}>
+            {intake.error}
+          </StatusBanner>
         ) : null}
 
         <div
@@ -116,12 +132,12 @@ export function BatchIntakeSection({
           onDrop={handleDrop}
           className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
             isDragging
-              ? 'border-action-primary bg-feedback-info-bg'
-              : 'border-border-default bg-surface-subtle'
+              ? 'border-action-primary bg-surface-subtle'
+              : 'border-border-default bg-surface-subtle/50'
           }`}
         >
-          <div className="mb-3 flex size-14 items-center justify-center rounded-full border border-border-default bg-surface-card shadow-sm">
-            <FolderUp className="size-7 text-ink-faint" />
+          <div className="w-14 h-14 rounded-full bg-surface-card border border-border-default flex items-center justify-center mb-3">
+            <FolderUp className="w-7 h-7 text-ink-faint" />
           </div>
           <p className="text-sm font-semibold text-ink-body">Перетащи сюда zip-архивы или папки с аккаунтами</p>
           <p className="mt-1 max-w-md text-sm text-ink-muted">
@@ -130,20 +146,12 @@ export function BatchIntakeSection({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => filesInputRef.current?.click()}
-            disabled={isProcessing}
-          >
-            <FileUp data-icon="inline-start" />
+          <Button variant="outline" onClick={() => filesInputRef.current?.click()} disabled={isProcessing}>
+            <FileUp className="w-4 h-4 mr-2" />
             Выбрать файлы
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => folderInputRef.current?.click()}
-            disabled={isProcessing}
-          >
-            <FolderOpen data-icon="inline-start" />
+          <Button variant="outline" onClick={() => folderInputRef.current?.click()} disabled={isProcessing}>
+            <FolderOpen className="w-4 h-4 mr-2" />
             Выбрать папку
           </Button>
         </div>
@@ -172,7 +180,7 @@ export function BatchIntakeSection({
         />
 
         {selectedFiles.length ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border-default bg-surface-subtle/50 px-4 py-3">
             <span className="text-sm font-semibold text-ink-body">
               {selectedFiles.length} {pluralizeRu(selectedFiles.length, 'файл', 'файла', 'файлов')} ·{' '}
               {archiveCount} {pluralizeRu(archiveCount, 'архив', 'архива', 'архивов')}
@@ -184,12 +192,12 @@ export function BatchIntakeSection({
               <Button onClick={startIntake} disabled={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <Loader2 className="animate-spin" data-icon="inline-start" />
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Отправляю...
                   </>
                 ) : (
                   <>
-                    <UploadCloud data-icon="inline-start" />
+                    <UploadCloud className="w-4 h-4 mr-2" />
                     Отправить в приёмку
                   </>
                 )}
@@ -199,56 +207,59 @@ export function BatchIntakeSection({
         ) : null}
 
         {intake.rejected.length ? (
-          <div className="rounded-2xl border border-feedback-warning-bg bg-feedback-warning-bg p-4">
-            <p className="text-sm font-semibold text-feedback-warning-text">
-              Пропущено при приёмке: {intake.rejected.length}
-            </p>
-            <ul className="mt-2 space-y-1">
-              {intake.rejected.map((row, index) => (
-                <li key={`${row.name}-${index}`} className="text-sm text-feedback-warning-text">
-                  <span className="font-mono tabular-nums">{row.name}</span> — {row.reason}
-                </li>
-              ))}
-            </ul>
+          <div className="p-4 flex gap-3 items-start rounded-2xl border border-border-default bg-feedback-warning-bg">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-feedback-warning-text" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink-body">
+                Пропущено при приёмке: {intake.rejected.length}
+              </p>
+              <ul className="mt-2 space-y-1">
+                {intake.rejected.map((row, index) => (
+                  <li key={`${row.name}-${index}`} className="text-sm text-ink-muted">
+                    <span className="font-mono tabular-nums">{row.name}</span> — {row.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         ) : null}
 
         {batch ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {batch.status === 'completed' ? (
-              <div className="flex items-start gap-3 rounded-2xl border border-feedback-info-bg bg-feedback-info-bg p-4 text-sm font-medium text-feedback-info-text">
-                <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-                <div className="pt-0.5">
-                  Аккаунты добавлены в safe-mode. Отлёжка запустится автоматически; состояние — в разделе «Гигиена аккаунтов».
-                </div>
-              </div>
+              <StatusBanner tone="text-feedback-success-text" icon={<CheckCircle2 className="w-5 h-5" />}>
+                Аккаунты добавлены в safe-mode. Отлёжка запустится автоматически; состояние — в разделе «Гигиена аккаунтов».
+              </StatusBanner>
             ) : null}
             {isBatchFailed && batch.error ? (
-              <div className="flex items-start gap-3 rounded-2xl border border-feedback-error-bg bg-feedback-error-bg p-4 text-sm font-medium text-feedback-error-text">
-                <AlertCircle className="mt-0.5 size-5 shrink-0" />
-                <div className="pt-0.5">{batch.error}</div>
-              </div>
+              <StatusBanner tone="text-feedback-error-text" icon={<AlertCircle className="w-5 h-5" />}>
+                {batch.error}
+              </StatusBanner>
             ) : null}
 
             {batchItems.length ? (
-              <div className="rounded-2xl border border-border-default bg-surface-subtle p-4">
+              <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-ink-muted">Разбор пачки</span>
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-body">
-                    {batch.status === 'processing' ? <Loader2 className="size-4 animate-spin" /> : null}
+                  <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
+                    Разбор пачки
+                  </span>
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-body tabular-nums">
+                    {batch.status === 'processing' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                     Готово {batchDone} из {batchTotal}
                   </span>
                 </div>
                 <ul className="max-h-80 space-y-1.5 overflow-y-auto">
                   {batchItems.map((item) => {
-                    const tone = itemToneFor(item.status);
+                    const tone = badgeToneFor(item.status);
                     return (
                       <li key={item.key} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
                         <div className="flex items-center gap-3">
                           <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-body">
                             {item.label}
                           </span>
-                          <Badge variant="outline" className={tone.badge}>{tone.label}</Badge>
+                          <Badge variant="secondary" className={`text-[10px] uppercase font-bold py-0.5 px-2 ${tone.className}`}>
+                            {tone.label}
+                          </Badge>
                         </div>
                         {item.error ? (
                           <div className="mt-1 text-xs text-ink-muted">{item.error}</div>
@@ -263,7 +274,7 @@ export function BatchIntakeSection({
             {!isProcessing ? (
               <div>
                 <Button variant="outline" onClick={resetIntake}>
-                  <UploadCloud data-icon="inline-start" />
+                  <UploadCloud className="w-4 h-4 mr-2" />
                   Загрузить ещё
                 </Button>
               </div>
