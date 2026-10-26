@@ -5,6 +5,7 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import { getProductTierRules } from '../app/productTier.js';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
+import { BatchIntakeSection } from './bots/BatchIntakeSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
@@ -37,7 +38,7 @@ function userbotBatchTitleFor(count, firstItem) {
 }
 
 function ConnectPageContent() {
-  const { accessToken, user, profilePlan } = useAuth();
+  const { accessToken, user, profilePlan, profileRole } = useAuth();
   const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
   const { state, setState, reloadAccounts } = useBotsAccountsData({
     accessToken,
@@ -196,6 +197,15 @@ function ConnectPageContent() {
         {...onboardingSectionProps}
         steps={{ proxy: 1, connect: 2, fingerprint: 3, authFiles: 3, authQr: 4 }}
       />
+
+      {/* Партия аккаунтов — приёмка пачек, только платформенный админ. */}
+      {profileRole === 'admin' ? (
+        <BatchIntakeSection
+          accessToken={accessToken}
+          reloadAccounts={reloadAccounts}
+          showUiMessage={showUiMessage}
+        />
+      ) : null}
 
       {canSellUserbotAssets ? (
         <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />

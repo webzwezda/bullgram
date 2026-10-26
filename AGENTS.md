@@ -150,6 +150,8 @@ USERBOT_GROUP_ADMIN_ENABLED=false           # group_create/invite/promote MCP-о
 USERBOT_BOTFATHER_ENABLED=false             # Создание ботов через BotFather из MCP
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true # Auto-delete restricted accounts
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72    # Quarantine window
+USERBOT_INTAKE_RESTING_ENABLED=true         # Отлёжка приёмочного стока (health-check safe-mode аккаунтов из пачек, только intake_batch_id-сток)
+# тюнинг отлёжки: USERBOT_INTAKE_RESTING_INTERVAL_MS=43200000, USERBOT_INTAKE_RESTING_SLEEP_MS=25000
 # тюнинг messaging-роутера: USERBOT_DM_HOURLY_CAP=20, USERBOT_DM_DAILY_CAP=50,
 # USERBOT_DM_JITTER_PERCENT=20, USERBOT_JOIN_PER_HOUR=4, USERBOT_JOIN_SLEEP_MS=45000
 ```

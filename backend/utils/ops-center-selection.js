@@ -4,6 +4,10 @@
 
 export const FRESH_IMPORT_RUNTIME_STATUS = 'pending_activation';
 
+// Текст для runtime_error свежего импорта (safe-mode до ручной активации).
+// Жил в userbot.routes.js, переехал сюда к статусу — intake-сервису нужен тот же.
+export const FRESH_IMPORT_RUNTIME_REASON = 'Свежий импорт. Аккаунт в safe-mode: автоматика и живые Telegram-действия отключены до ручной активации.';
+
 export function isFreshImportedUserbot(userbot) {
     return String(userbot?.runtime_status || '').trim().toLowerCase() === FRESH_IMPORT_RUNTIME_STATUS;
 }

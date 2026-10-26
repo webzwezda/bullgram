@@ -61,6 +61,9 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 - `GET /api/userbot/crm/presence` - Проверка присутствия в группах
 - `GET /api/userbot/ops-center` - Центр ручной triage по личкам и группам. Если в `userbot_id` передан свежий импорт (`pending_activation`), отвечает `200` с `safe_mode: true` и пустыми `groups`/`conversations` (без живого скана) — центр отрисовывает баннер safe-mode и кнопку активации.
 - `GET /api/userbot/error-events` - Журнал Telegram-ошибок и ограничений
+- `POST /api/userbot/intake/batch` - Приёмка пачек аккаунтов (только платформенный админ): zip/папки с комплектами `.session + .json (+ tdata + заметка с паролем 2FA)`, без Telegram-подключения
+- `GET /api/userbot/intake/batches` - Журнал приёмки: последние 20 партий (зависшие `processing` старше часа помечаются `failed`)
+- `GET /api/userbot/intake/batch/:id` - Полная строка партии с per-pack статусами (`items`)
 
 ### Официальные боты (`/api/official-bot`)
 
@@ -204,6 +207,12 @@ RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72
 # bad accounts (restricted/expired/dead_proxy/error) get their lots unpublished
 USERBOT_LISTED_HEALTH_CHECK_ENABLED=true
 USERBOT_LISTED_HEALTH_INTERVAL_MS=21600000
+
+# account intake resting: первый живой контакт свежепринятых пачек аккаунтов
+# (pending_activation у платформенных админов): identity + health, карантин bad-статусов
+USERBOT_INTAKE_RESTING_ENABLED=true
+USERBOT_INTAKE_RESTING_INTERVAL_MS=43200000
+USERBOT_INTAKE_RESTING_SLEEP_MS=25000
 ```
 
 `USERBOT_DM_ENABLED` включает только ручные действия из интерфейса.  
@@ -271,6 +280,18 @@ Callback URL для Robokassa:
 - `GET /api/userbot/qr-status` не должен ронять `500` на transient QR/auth гонках. Для незавершённого или уже очищенного QR он должен возвращать `pending` или `not_found`.
 - Для боевых аккаунтов безопаснее путь `.session + .json`, потому что там берётся родной fingerprint из `.json`.
 - `tdata`, `Password2FA.txt`, `Accounts.txt` и прочие соседние файлы через сайт не поддержаны.
+
+### Приёмка пачек аккаунтов (account shop intake)
+
+Массовая приёмка готовых Telegram-аккаунтов для платформенного админа — `POST /api/userbot/intake/batch` (role=admin, `MAX_INTAKE_BATCH = 100` аккаунтов за раз).
+
+- Вход: поле `files` (multer, до 400 файлов по 30 МБ) — zip-архивы и/или loose-файлы; поле `paths` — JSON-массив относительных путей (для папок).
+- Пачка = `<basename>.session` + `<basename>.json` + опционально `<basename>/tdata/` + опционально текстовая заметка с паролем 2FA (utf8 или CP1251, ищем строку со словом «пароль»). Парсер один: `services/account-pack.service.js`.
+- Валидация без Telegram: sqlite-заголовок `.session`, `app_id/app_hash` из `.json`, извлечение строки сессии. Неполные пачки (`.session` без `.json` и наоборот) отклоняются с понятной ошибкой.
+- На каждую пачку поднимается один managed-прокси (`inventory_group=self_use`, лимиты те же, что у ручной выдачи: 512 на сервер / 256 на админа), аккаунт вставляется в `tg_accounts` в safe-mode (`runtime_status=pending_activation`), blob'ы восстановления (session/json/tdata/пароль 2FA) пишутся в `userbot_restore_sources` зашифрованными.
+- Никакого Telegram-подключения во время приёмки: первый живой контакт делает фоновая джоба `jobs/intake-resting.job.js` («отстой») — заполняет `tg_account_id`/профиль, пишет `health_summary`, bad-статусы (restricted/frozen/expired/dead_proxy/error) отправляет в карантин как в магазинном отстойнике. Safe-mode не снимает.
+- Прогресс: строка в `account_import_batches` (`status/total/processed/failed/items`), обновляется после каждого айтема; UI поллит `GET /api/userbot/intake/batch/:id`.
+- Миграция: `backend/sql/account-shop-intake.sql` (новая таблица `account_import_batches`, колонки `tdata_*`/`two_fa_secret_encrypted`/`intake_batch_id` в `userbot_restore_sources`, `health_summary` в `tg_accounts`). Применить через Supabase MCP до деплоя.
 
 ## Запуск
 

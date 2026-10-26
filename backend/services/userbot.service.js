@@ -541,11 +541,20 @@ export class UserbotService {
         try {
             const header = Buffer.alloc(16);
             await handle.read(header, 0, header.length, 0);
-            if (header.toString('utf8', 0, 15) !== 'SQLite format 3') {
-                throw new Error('Файл `.session` не похож на SQLite Telegram session.');
-            }
+            this.validateSessionSqliteBuffer(header);
         } finally {
             await handle.close();
+        }
+    }
+
+    // Проверка sqlite-заголовка прямо на буфере (intake пачек читает файлы в
+    // память и не хочет писать их на диск). Общая логика с validateSessionSqliteFile.
+    validateSessionSqliteBuffer(buffer) {
+        if (!Buffer.isBuffer(buffer) || buffer.length <= 0) {
+            throw new Error('Файл `.session` пустой или недоступен.');
+        }
+        if (buffer.toString('utf8', 0, 15) !== 'SQLite format 3') {
+            throw new Error('Файл `.session` не похож на SQLite Telegram session.');
         }
     }
 
@@ -565,24 +574,59 @@ export class UserbotService {
         return normalized;
     }
 
-    async saveRecoverySource({ accountId, ownerId, tgAccountId, sessionFilePath, sessionOriginalName, jsonFilePath = null, jsonOriginalName = null, fingerprint = null }) {
-        const sessionBuffer = await fs.readFile(sessionFilePath);
+    async saveRecoverySource({
+        accountId,
+        ownerId,
+        tgAccountId,
+        sessionFilePath,
+        sessionOriginalName,
+        jsonFilePath = null,
+        jsonOriginalName = null,
+        fingerprint = null,
+        sessionBuffer = null,
+        jsonBuffer = null,
+        tdataZipBuffer = null,
+        tdataFilename = null,
+        twoFaSecret = null,
+        intakeBatchId = null
+    }) {
+        const resolvedSessionBuffer = Buffer.isBuffer(sessionBuffer) ? sessionBuffer : await fs.readFile(sessionFilePath);
         const normalizedFingerprint = this._normalizeFingerprint(fingerprint);
+
+        let jsonBlob = null;
+        if (jsonFilePath) {
+            jsonBlob = await fs.readFile(jsonFilePath, 'utf8');
+        } else if (Buffer.isBuffer(jsonBuffer) && jsonBuffer.length > 0) {
+            jsonBlob = jsonBuffer.toString('utf8');
+        }
 
         const payload = {
             owner_id: ownerId,
             account_id: accountId,
-            tg_account_id: String(tgAccountId),
+            tg_account_id: tgAccountId == null ? null : String(tgAccountId),
             source_type: 'session_bundle',
             session_filename: sessionOriginalName || 'sessionFile.session',
-            session_blob_encrypted: encrypt(sessionBuffer.toString('base64')),
+            session_blob_encrypted: encrypt(resolvedSessionBuffer.toString('base64')),
             json_filename: jsonOriginalName || null,
-            json_blob_encrypted: jsonFilePath ? encrypt(JSON.stringify(normalizedFingerprint)) : null,
+            json_blob_encrypted: jsonBlob ? encrypt(JSON.stringify(normalizedFingerprint)) : null,
             fingerprint: normalizedFingerprint,
             updated_at: new Date().toISOString(),
             last_restore_status: 'ready',
             last_restore_error: null
         };
+
+        // Новые колонки попадают в апсерт только со значением: иначе повторный
+        // импорт старым одиночным роутом затёр бы сохранённые tdata/2FA пачки.
+        if (Buffer.isBuffer(tdataZipBuffer) && tdataZipBuffer.length > 0) {
+            payload.tdata_blob_encrypted = encrypt(tdataZipBuffer.toString('base64'));
+            payload.tdata_filename = tdataFilename || null;
+        }
+        if (twoFaSecret) {
+            payload.two_fa_secret_encrypted = encrypt(twoFaSecret);
+        }
+        if (intakeBatchId) {
+            payload.intake_batch_id = intakeBatchId;
+        }
 
         const { error } = await this.supabase
             .from('userbot_restore_sources')
