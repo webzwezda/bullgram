@@ -196,6 +196,12 @@ export async function processIntakeBatch({
                         intakeBatchId: batchId
                     });
                 } catch (restoreError) {
+                    // Оригинал всегда в лог: классификация по подстрокам хрупка
+                    // (23502 NOT NULL тоже содержит «relation»/«column»).
+                    console.error('[Intake] recovery source failed:', {
+                        account_id: accountRow.id,
+                        error: restoreError?.message || restoreError
+                    });
                     if (isMissingRecoveryTableError(restoreError)) {
                         // Blob'ы восстановления обязательны: без них аккаунт в
                         // системе не живёт — откатываем айтем целиком.

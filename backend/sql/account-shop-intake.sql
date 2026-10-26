@@ -29,6 +29,11 @@ alter table public.userbot_restore_sources
 alter table public.userbot_restore_sources
     add column if not exists intake_batch_id uuid;
 
+-- Приёмка вставляет restore source до первого getMe: tg_account_id ещё
+-- неизвестен и заполняется джобой отлёжки (миграция 20261026204500).
+alter table public.userbot_restore_sources
+    alter column tg_account_id drop not null;
+
 alter table public.tg_accounts
     add column if not exists health_summary jsonb;
 
