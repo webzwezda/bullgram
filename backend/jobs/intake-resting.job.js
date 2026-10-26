@@ -110,8 +110,22 @@ async function loadPendingActivationAccounts(supabase) {
 }
 
 async function checkIntakeAccount(supabase, userbotService, account, proxy) {
+    // Полное зеркало loadOwnedProxy (userbot.routes.js): без provision_source/
+    // force_ipv6 не срабатывает форс IPv6-DC (_shouldUseIpv6TelegramDc), и сессия
+    // продавца уходит на IPv4-адрес, недостижимый с IPv6-only managed-слота —
+    // getMe висит до таймаута.
     const proxyData = proxy
-        ? { proxy_host: proxy.host, proxy_port: proxy.port, proxy_username: proxy.username, proxy_password: proxy.password }
+        ? {
+            proxy_host: proxy.host,
+            proxy_port: proxy.port,
+            proxy_username: proxy.username,
+            proxy_password: proxy.password,
+            provision_source: proxy.provision_source,
+            inventory_group: proxy.inventory_group,
+            is_working: proxy.is_working,
+            last_check_ip: proxy.last_check_ip,
+            force_ipv6: proxy.is_working === true && (!proxy.last_check_ip || String(proxy.last_check_ip).includes(':'))
+        }
         : undefined;
 
     if (proxy && proxy.is_working === false) {
@@ -188,7 +202,7 @@ export async function runIntakeRestingCheck(supabase, userbotService, { checkFn 
             if (account.proxy_id) {
                 const { data: proxyRow, error: proxyError } = await supabase
                     .from('proxies')
-                    .select('host, port, username, password, is_working')
+                    .select('host, port, username, password, is_working, last_check_ip, provision_source, inventory_group')
                     .eq('id', account.proxy_id)
                     .maybeSingle();
                 if (proxyError) throw proxyError;

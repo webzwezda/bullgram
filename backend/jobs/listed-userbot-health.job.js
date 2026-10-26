@@ -86,8 +86,20 @@ function classifyCheckFailure(rawError, connectOk) {
 }
 
 async function checkUserbotHealth(supabase, userbotService, account, proxy) {
+    // Полное зеркало loadOwnedProxy: force_ipv6 обязателен для managed-слотов,
+    // иначе сессия идёт на IPv4-DC мимо IPv6-only прокси (см. intake-resting.job.js).
     const proxyData = proxy
-        ? { proxy_host: proxy.host, proxy_port: proxy.port, proxy_username: proxy.username, proxy_password: proxy.password }
+        ? {
+            proxy_host: proxy.host,
+            proxy_port: proxy.port,
+            proxy_username: proxy.username,
+            proxy_password: proxy.password,
+            provision_source: proxy.provision_source,
+            inventory_group: proxy.inventory_group,
+            is_working: proxy.is_working,
+            last_check_ip: proxy.last_check_ip,
+            force_ipv6: proxy.is_working === true && (!proxy.last_check_ip || String(proxy.last_check_ip).includes(':'))
+        }
         : undefined;
 
     if (proxy && proxy.is_working === false) {
@@ -160,7 +172,7 @@ export async function runListedHealthCheck(supabase, userbotService, { checkFn =
             if (account.proxy_id) {
                 const { data: proxyRow, error: proxyError } = await supabase
                     .from('proxies')
-                    .select('host, port, username, password, is_working')
+                    .select('host, port, username, password, is_working, last_check_ip, provision_source, inventory_group')
                     .eq('id', account.proxy_id)
                     .maybeSingle();
                 if (proxyError) throw proxyError;
