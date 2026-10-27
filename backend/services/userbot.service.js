@@ -764,8 +764,15 @@ export class UserbotService {
             )
         );
 
+        // Слот `mp_<seq>` генерирует только наш managed-провижинер (IPv6-only):
+        // юзернейм опознаёт его даже там, где прокси-джойн не передал
+        // provision_source (ручная проверка, QR, telegram-web) — иначе сессия
+        // с IPv4-адресом из .session уходит в чёрную дыру и getMe висит.
+        const managedSlotUsername = /^mp_\d+$/.test(username);
+
         return (
-            (provisionSource === 'manual_admin' && /^mp_\d+$/.test(username)) ||
+            (provisionSource === 'manual_admin' && managedSlotUsername) ||
+            managedSlotUsername ||
             healthSuggestsIpv6Only
         );
     }
