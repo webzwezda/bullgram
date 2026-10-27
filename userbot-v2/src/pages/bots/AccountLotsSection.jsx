@@ -139,7 +139,7 @@ export function AccountLotsSection({
             </div>
             <p className="text-sm text-ink-muted font-semibold">Готовых к продаже аккаунтов нет</p>
             <p className="mt-1 text-xs text-ink-muted">
-              Импортируй пачку на /connect — после отлёжки и свежей проверки аккаунты появятся здесь.
+              Импортируй пачку карточкой выше — после отлёжки и свежей проверки аккаунты появятся здесь.
             </p>
           </div>
         ) : (

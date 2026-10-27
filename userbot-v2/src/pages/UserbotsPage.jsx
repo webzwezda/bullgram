@@ -6,7 +6,6 @@ import { LoadingState } from '../ui/LoadingState.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { UserbotCenterSection } from './bots/UserbotCenterSection.jsx';
 import { SessionsQuarantineSection } from './bots/SessionsQuarantineSection.jsx';
-import { AccountLotsSection } from './bots/AccountLotsSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   canRestoreFromFiles,
@@ -48,7 +47,7 @@ function userbotBatchTitleFor(count, firstItem) {
 
 // Shared inventory data lives in hooks; page still owns userbot mutations and selection sync.
 function UserbotsPageContent() {
-  const { accessToken, user, profilePlan, profileRole } = useAuth();
+  const { accessToken, user, profilePlan } = useAuth();
   const [searchParams] = useSearchParams();
   const [selectedLiveUserbotId, setSelectedLiveUserbotId] = useState('');
   const [selectedQuarantinedUserbotId, setSelectedQuarantinedUserbotId] = useState('');
@@ -270,16 +269,6 @@ function UserbotsPageContent() {
         deleteAccount={deleteAccount}
         deletingAccountId={state.deletingAccountId}
       />
-
-      {/* Продажа аккаунтов пачкой — только платформенный админ (Wave 2 приёмки). */}
-      {profileRole === 'admin' ? (
-        <AccountLotsSection
-          accessToken={accessToken}
-          accounts={liveUserbots}
-          reloadAccounts={reloadAccounts}
-          showUiMessage={showUiMessage}
-        />
-      ) : null}
     </section>
   );
 }

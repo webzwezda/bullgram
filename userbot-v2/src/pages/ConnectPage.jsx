@@ -6,6 +6,7 @@ import { getProductTierRules } from '../app/productTier.js';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
 import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { BatchIntakeSection } from './bots/BatchIntakeSection.jsx';
+import { AccountLotsSection } from './bots/AccountLotsSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
@@ -80,6 +81,7 @@ function ConnectPageContent() {
     bundledUserbotLots,
     canSellUserbotAssets,
     listedShopUserbots,
+    liveUserbots,
     openUserbotPurchases,
     selectedShopUserbot
   } = useBotsAccountsDerivedState({
@@ -202,6 +204,16 @@ function ConnectPageContent() {
       {profileRole === 'admin' ? (
         <BatchIntakeSection
           accessToken={accessToken}
+          reloadAccounts={reloadAccounts}
+          showUiMessage={showUiMessage}
+        />
+      ) : null}
+
+      {/* Продажа аккаунтов пачкой — рядом с приёмкой: импорт → отлёжка → витрина. */}
+      {profileRole === 'admin' ? (
+        <AccountLotsSection
+          accessToken={accessToken}
+          accounts={liveUserbots}
           reloadAccounts={reloadAccounts}
           showUiMessage={showUiMessage}
         />
