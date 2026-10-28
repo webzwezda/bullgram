@@ -200,7 +200,7 @@ export function ShopPage() {
   }, [accessToken, navigate]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-balance text-2xl font-black tracking-tight text-ink-strong sm:text-3xl">

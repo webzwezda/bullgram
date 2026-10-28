@@ -61,6 +61,7 @@ export function App() {
   const isPayRoute = location.pathname.startsWith('/pay');
   const isCreateRoute = location.pathname === '/create' || location.pathname.startsWith('/created');
   const isAccessRequestRoute = location.pathname.startsWith('/access-request');
+  const isShopRoute = location.pathname.startsWith('/shop');
   const { user } = useAuth();
   const navItems = navSections.flatMap((section) => section.items);
 
@@ -205,8 +206,8 @@ export function App() {
         </div>
       </aside>
 
-      <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
-        {isHomeRoute ? (
+      <main className={`flex-1 overflow-x-hidden flex flex-col w-full ${isHomeRoute || isShopRoute ? '' : 'p-4 sm:p-6 lg:p-8'}`}>
+        {isHomeRoute || isShopRoute ? (
           appRoutes
         ) : (isPayRoute || isCreateRoute || isAccessRequestRoute) ? (
           appRoutes
