@@ -12,6 +12,7 @@ import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   formatWhen,
+  isQuarantinedAccount,
   isUserbotPurchase,
   isUserbotShopItem,
   proxyLabel,
@@ -101,6 +102,18 @@ function ConnectPageContent() {
       Boolean(state.recoveryMap?.[String(account.id)]?.intake_batch_id)
     )),
     [liveUserbots, state.recoveryMap]
+  );
+
+  // Карантинный сток в карточке не показываем, но молча терять его нельзя:
+  // считаем и объясняем строкой «лежат в отстойнике» (вопрос владельца
+  // «почему только два?» — сигнал, что это надо видеть в интерфейсе).
+  const quarantinedIntakeCount = useMemo(
+    () => (state.accounts || []).filter((account) => (
+      account.account_type === 'userbot'
+      && isQuarantinedAccount(account)
+      && Boolean(state.recoveryMap?.[String(account.id)]?.intake_batch_id)
+    )).length,
+    [state.accounts, state.recoveryMap]
   );
 
   const {
@@ -224,6 +237,7 @@ function ConnectPageContent() {
         <AccountLotsSection
           accessToken={accessToken}
           accounts={intakeStockUserbots}
+          quarantinedIntakeCount={quarantinedIntakeCount}
           reloadAccounts={reloadAccounts}
           showUiMessage={showUiMessage}
         />

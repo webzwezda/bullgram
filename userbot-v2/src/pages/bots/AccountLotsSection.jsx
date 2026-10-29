@@ -1,4 +1,4 @@
-import { AlertCircle, Check, CheckCircle2, Loader2, Store } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Loader2, ShieldAlert, Store } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -83,6 +83,7 @@ function ResultBadge({ status }) {
 export function AccountLotsSection({
   accessToken,
   accounts,
+  quarantinedIntakeCount = 0,
   reloadAccounts,
   showUiMessage
 }) {
@@ -215,6 +216,17 @@ export function AccountLotsSection({
                     );
                   })}
                 </ul>
+              </div>
+            ) : null}
+
+            {quarantinedIntakeCount > 0 ? (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-border-default bg-surface-subtle/50 px-4 py-3 text-xs text-ink-muted">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-feedback-error-text" aria-hidden="true" />
+                <span>
+                  Ещё {pluralizeRu(quarantinedIntakeCount, 'аккаунт', 'аккаунта', 'аккаунтов')} стока{' '}
+                  {pluralizeRu(quarantinedIntakeCount, 'лежит', 'лежат', 'лежат')} в отстойнике — продажа закрыта.
+                  Разбор и апелляции: «Гигиена аккаунтов» на /userbot.
+                </span>
               </div>
             ) : null}
 
