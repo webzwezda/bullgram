@@ -77,10 +77,12 @@ function classifyCheckFailure(rawError, connectOk) {
     return { status: 'error', reason: message || 'Проверка сессии не прошла.' };
 }
 
-// Цели: юзерботы платформенных админов в safe-mode ИЗ ПРИЁМКИ (у restore source
-// проставлен intake_batch_id). Ручные dormant-импорты админа джоба не трогает:
-// их не подключаем и статус не переписываем. Админ-ids грузим отдельно —
-// джоба ходит по всем владельцам приёмки, а не по одному.
+// Цели: весь приёмочный сток платформенных админов (restore source с
+// intake_batch_id) — и safe-mode (pending_activation), и активированный
+// ('online'): витрина требует свежую проверку ≤6ч, и «боевой» сток без
+// перепроверки протухал бы в карточке продажи навсегда. Ручные dormant-импорты
+// админа без паков джоба не трогает. Админ-ids грузим отдельно — джоба ходит
+// по всем владельцам приёмки, а не по одному.
 async function loadPendingActivationAccounts(supabase) {
     const { data: sources, error: sourcesError } = await supabase
         .from('userbot_restore_sources')
@@ -102,7 +104,7 @@ async function loadPendingActivationAccounts(supabase) {
         .from('tg_accounts')
         .select('id, owner_id, tg_account_id, tg_username, runtime_status, session_data, proxy_id, last_checked_at')
         .eq('account_type', 'userbot')
-        .eq('runtime_status', 'pending_activation')
+        .in('runtime_status', ['pending_activation', 'online'])
         .in('owner_id', adminIds)
         .in('id', intakeAccountIds);
     if (accountsError) throw accountsError;
@@ -255,19 +257,19 @@ export async function runIntakeRestingCheck(supabase, userbotService, { checkFn 
             };
 
             if (status === 'online') {
-                // Safe-mode сохраняем: pending_activation не «активируется» тут —
-                // только вручную живой проверкой с activate=true. Guard по статусу
-                // не даёт джобе откатить параллельную ручную активацию.
+                // Healthy-сток сохраняет свой статус: safe-mode остаётся safe-mode
+                // (активация только вручную), «боевой» — боевым. Guard по исходному
+                // статусу не даёт джобе откатить параллельную ручную активацию.
                 await supabase
                     .from('tg_accounts')
                     .update({
                         ...baseUpdate,
-                        runtime_status: 'pending_activation',
+                        runtime_status: account.runtime_status,
                         runtime_error: null
                     })
                     .eq('id', account.id)
                     .eq('owner_id', account.owner_id)
-                    .eq('runtime_status', 'pending_activation');
+                    .eq('runtime_status', account.runtime_status);
                 console.log('[IntakeResting] ok', {
                     account_id: account.id,
                     tg_account_id: account.tg_account_id || baseUpdate.tg_account_id || null
