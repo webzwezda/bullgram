@@ -93,6 +93,16 @@ function ConnectPageContent() {
     profilePlan
   });
 
+  // Продажа аккаунтов — только приёмочный сток: у аккаунта сохранены файлы
+  // сессий (restore source из пачки) и он прошёл отлёжку. Рабочие юзерботы
+  // без паков в витрину аккаунтов не попадают.
+  const intakeStockUserbots = useMemo(
+    () => (liveUserbots || []).filter((account) => (
+      Boolean(state.recoveryMap?.[String(account.id)]?.intake_batch_id)
+    )),
+    [liveUserbots, state.recoveryMap]
+  );
+
   const {
     currentQrFingerprintProfile,
     fingerprintProfiles,
@@ -213,7 +223,7 @@ function ConnectPageContent() {
       {profileRole === 'admin' ? (
         <AccountLotsSection
           accessToken={accessToken}
-          accounts={liveUserbots}
+          accounts={intakeStockUserbots}
           reloadAccounts={reloadAccounts}
           showUiMessage={showUiMessage}
         />

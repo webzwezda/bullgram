@@ -3042,7 +3042,7 @@ export default function (supabase) {
         try {
             const { data, error } = await supabase
                 .from('userbot_restore_sources')
-                .select('account_id, source_type, session_filename, json_filename, updated_at, last_restored_at, last_restore_status, last_restore_error')
+                .select('account_id, source_type, session_filename, json_filename, updated_at, last_restored_at, last_restore_status, last_restore_error, intake_batch_id')
                 .eq('owner_id', req.user.id);
 
             if (error) {
