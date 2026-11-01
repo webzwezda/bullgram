@@ -2210,7 +2210,10 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
                     .from('shop_items')
                     .select('id, title, status')
                     .eq('owner_id', ownerId)
-                    .in('status', ['draft', 'published']);
+                    .in('status', ['draft', 'published', 'sold']);
+                // 'sold' тоже блокирует: files-продажа в течение окна выдачи
+                // ещё держит нашу копию аккаунта — без этого её можно
+                // выставить и продать второй раз (double-sell).
                 if (existingItemsError) throw existingItemsError;
 
                 let existingAssets = [];
