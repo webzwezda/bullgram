@@ -2438,7 +2438,33 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
 
             const allRows = rows || [];
             await sweepStaleScans(supabase, ownerId, allRows);
-            res.json({ scan: allRows[0] || null });
+
+            const latest = allRows[0] || null;
+            if (latest && Array.isArray(latest.items) && latest.items.length > 0) {
+                // Флаг «уже выставлен»: у аккаунта есть активный лот (draft/published).
+                // Скан — снапшот во времени; без флага выставленные аккаунты
+                // вечно выглядели бы готовыми к продаже (жалоба владельца).
+                const scanAccountIds = latest.items
+                    .map((item) => String(item.account_id || ''))
+                    .filter(Boolean);
+                if (scanAccountIds.length > 0) {
+                    const { data: listedAssets, error: listedError } = await supabase
+                        .from('shop_item_assets')
+                        .select('asset_id, shop_items!inner(id, status, owner_id)')
+                        .eq('asset_type', 'userbot')
+                        .in('asset_id', scanAccountIds)
+                        .in('shop_items.status', ['draft', 'published'])
+                        .eq('shop_items.owner_id', ownerId);
+                    if (listedError) throw listedError;
+                    const listedIds = new Set((listedAssets || []).map((row) => String(row.asset_id)));
+                    latest.items = latest.items.map((item) => ({
+                        ...item,
+                        listed: listedIds.has(String(item.account_id))
+                    }));
+                }
+            }
+
+            res.json({ scan: latest });
         } catch (error) {
             console.error('Ошибка чтения скана аккаунтов для продажи:', error);
             res.status(500).json({ error: 'Ошибка чтения скана аккаунтов для продажи' });

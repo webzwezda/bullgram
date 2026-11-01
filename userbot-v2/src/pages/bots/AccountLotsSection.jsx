@@ -74,15 +74,22 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
     isStarting,
     stale,
     error: scanError,
-    startScan
+    startScan,
+    refreshScan
   } = useSaleScan({ accessToken, showUiMessage });
 
   const scanItems = useMemo(() => (Array.isArray(scan?.items) ? scan.items : []), [scan]);
   // Группы результатов — только у завершённого скана: пока скан идёт, айтемы
   // дописываются порциями (queued-строки без вердикта) и рано показывать их.
   const isScanCompleted = Boolean(scan) && scan.status !== 'processing';
+  // Уже выставленные (есть активный лот) уезжают из «Живых» — иначе после
+  // выставления карточка вечно предлагала продать то, что уже на витрине.
   const sellableItems = useMemo(
-    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true) : []),
+    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true && item?.listed !== true) : []),
+    [isScanCompleted, scanItems]
+  );
+  const listedItems = useMemo(
+    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true && item?.listed === true) : []),
     [isScanCompleted, scanItems]
   );
   const problemItems = useMemo(
@@ -109,6 +116,13 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
   } = useAccountLots({ accessToken, items: sellableItems, showUiMessage });
 
   const createdCount = results.filter((row) => row.status === 'ok').length;
+
+  // После выставления перечитываем скан: backend проставит listed,
+  // и живые уедут в «Уже на витрине».
+  async function submitAndRefresh() {
+    await submitBatch();
+    await refreshScan();
+  }
 
   return (
     <Card className="border-0 shadow-lg ring-1 ring-border-default mb-6 bg-surface-card overflow-hidden rounded-2xl">
@@ -236,6 +250,36 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
               </ul>
             </div>
 
+            {listedItems.length ? (
+              <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 opacity-80">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
+                    Уже на витрине
+                  </span>
+                  <span className="text-sm font-semibold text-ink-muted tabular-nums">
+                    {listedItems.length}
+                  </span>
+                </div>
+                <ul className="space-y-1.5">
+                  {listedItems.map((item) => (
+                    <li key={String(item.account_id)} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
+                      <div className="flex items-center gap-3">
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-muted">
+                          {item.label || item.account_id}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className="bg-feedback-success-bg text-feedback-success-text text-xs uppercase font-bold py-0.5 px-2 shrink-0"
+                        >
+                          На витрине
+                        </Badge>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label htmlFor="account-lot-price" className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
@@ -262,7 +306,7 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={submitBatch} disabled={isSubmitting || !selectedCount}>
+              <Button onClick={submitAndRefresh} disabled={isSubmitting || !selectedCount}>
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

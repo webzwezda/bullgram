@@ -120,6 +120,20 @@ export function useSaleScan({ accessToken, showUiMessage }) {
 
   // Последний скан персистентен: при монтировании показываем его, а идущий —
   // подхватываем поллингом (строка скана переживает перезагрузку страницы).
+  // refreshScan — тот же GET по требованию: после выставления лотов карточка
+  // перечитывает флаги listed, чтобы живые уезжали в «Уже на витрине».
+  async function refreshScan() {
+    if (!accessToken) return;
+    try {
+      const result = await apiRequest(SCAN_ENDPOINT, { accessToken });
+      const latest = result?.scan || null;
+      setScan(latest);
+      if (latest?.status === 'processing') startPolling();
+    } catch {
+      // Не дотянулись — карточка остаётся как была.
+    }
+  }
+
   useEffect(() => {
     if (didLoadRef.current || !accessToken) return;
     didLoadRef.current = true;
@@ -182,6 +196,7 @@ export function useSaleScan({ accessToken, showUiMessage }) {
     isStarting,
     stale,
     error,
-    startScan
+    startScan,
+    refreshScan
   };
 }
