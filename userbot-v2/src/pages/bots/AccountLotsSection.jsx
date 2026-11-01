@@ -1,14 +1,13 @@
-import { AlertCircle, Check, CheckCircle2, Loader2, ShieldAlert, Store } from 'lucide-react';
+import {
+  AlertCircle, Archive, Check, CheckCircle2, Loader2, ScanSearch, ShieldAlert, Store
+} from 'lucide-react';
+import { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  accountLotLabel,
-  formatCheckedAgo,
-  notReadyMeta,
-  useAccountLots
-} from './useAccountLots.js';
+import { formatCheckedAgo, useAccountLots } from './useAccountLots.js';
+import { scanVerdictMeta, useSaleScan } from './useSaleScan.js';
 
 // Идиомы карточки — как у BatchIntakeSection: плоский icon-box, баннер с
 // бордером и feedback-парой, бейджи variant="secondary" парой bg+text.
@@ -78,18 +77,38 @@ function ResultBadge({ status }) {
   );
 }
 
-// Партия аккаунтов → продажа: выставить проверенные аккаунты из приёмки на
-// витрину пачкой (одна цена → N публичных лотов). Только платформенный админ.
-export function AccountLotsSection({
-  accessToken,
-  accounts,
-  quarantinedIntakeCount = 0,
-  reloadAccounts,
-  showUiMessage
-}) {
+// Партия аккаунтов → продажа: кнопка запускает живой скан сессий по всем
+// хранилищам, из его результатов админ выбирает живые и выставляет на витрину
+// пачкой (одна цена → N публичных лотов). Только платформенный админ.
+export function AccountLotsSection({ accessToken, showUiMessage }) {
   const {
-    sellableAccounts,
-    notReadyAccounts,
+    scan,
+    isScanning,
+    isStarting,
+    stale,
+    error: scanError,
+    startScan
+  } = useSaleScan({ accessToken, showUiMessage });
+
+  const scanItems = useMemo(() => (Array.isArray(scan?.items) ? scan.items : []), [scan]);
+  // Группы результатов — только у завершённого скана: пока скан идёт, айтемы
+  // дописываются порциями (queued-строки без вердикта) и рано показывать их.
+  const isScanCompleted = Boolean(scan) && scan.status !== 'processing';
+  const sellableItems = useMemo(
+    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true) : []),
+    [isScanCompleted, scanItems]
+  );
+  const problemItems = useMemo(
+    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable !== true) : []),
+    [isScanCompleted, scanItems]
+  );
+  const quarantinedCount = useMemo(
+    () => problemItems.filter((item) => item?.in_quarantine === true).length,
+    [problemItems]
+  );
+  const orphansCount = isScanCompleted ? Number(scan?.orphans || 0) : 0;
+
+  const {
     selectedIds,
     selectedCount,
     toggleSelected,
@@ -106,7 +125,7 @@ export function AccountLotsSection({
     results,
     submitError,
     submitBatch
-  } = useAccountLots({ accessToken, accounts, reloadAccounts, showUiMessage });
+  } = useAccountLots({ accessToken, items: sellableItems, showUiMessage });
 
   const createdCount = results.filter((row) => row.status === 'ok').length;
 
@@ -120,7 +139,7 @@ export function AccountLotsSection({
           <div>
             <h2 className="text-xl font-bold text-ink-strong">Продажа аккаунтов</h2>
             <p className="text-sm text-ink-muted mt-0.5">
-              Отметь проверенные аккаунты из приёмки, назначь одну цену — они встанут на витрину отдельными лотами.
+              Найди аккаунты живой проверкой сессий, отметь живые — они встанут на витрину отдельными лотами.
             </p>
           </div>
         </div>
@@ -133,31 +152,85 @@ export function AccountLotsSection({
           </StatusBanner>
         ) : null}
 
-        {!sellableAccounts.length ? (
-          <div className="p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-12 h-12 bg-surface-subtle rounded-full flex items-center justify-center mb-3">
-              <Store className="w-6 h-6 text-ink-faint" />
-            </div>
-            <p className="text-sm text-ink-muted font-semibold">Готовых к продаже аккаунтов нет</p>
-            <p className="mt-1 text-xs text-ink-muted">
-              Импортируй пачку карточкой выше — после отлёжки и свежей проверки аккаунты появятся здесь.
-            </p>
+        {scanError ? (
+          <StatusBanner tone="text-feedback-error-text" icon={<AlertCircle className="w-5 h-5" />}>
+            {scanError}
+          </StatusBanner>
+        ) : null}
+
+        {scan?.status === 'failed' && scan.error && scan.error !== scanError ? (
+          <StatusBanner tone="text-feedback-error-text" icon={<AlertCircle className="w-5 h-5" />}>
+            {scan.error}
+          </StatusBanner>
+        ) : null}
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={startScan} disabled={isScanning || isStarting}>
+              {isScanning || isStarting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {isStarting
+                    ? 'Запускаю...'
+                    : `Проверяю ${Number(scan?.processed || 0)} из ${Number(scan?.total || 0)}`}
+                </>
+              ) : (
+                <>
+                  <ScanSearch className="w-4 h-4 mr-2" />
+                  Найти аккаунты для продажи
+                </>
+              )}
+            </Button>
+            {isScanning ? (
+              <span className="text-xs text-ink-muted">Живая проверка: ~30–60 сек на аккаунт</span>
+            ) : null}
           </div>
-        ) : (
+
+          {!scan ? (
+            <div className="p-8 text-center flex flex-col items-center justify-center">
+              <div className="w-12 h-12 bg-surface-subtle rounded-full flex items-center justify-center mb-3">
+                <Store className="w-6 h-6 text-ink-faint" />
+              </div>
+              <p className="text-sm text-ink-muted font-semibold">
+                Нажми «Найти аккаунты» — проверю сессии во всех хранилищах: боевые, safe-mode, отстойник.
+              </p>
+              <p className="mt-1 text-xs text-ink-muted">Живая проверка: ~30–60 сек на аккаунт</p>
+            </div>
+          ) : null}
+        </div>
+
+        {isScanCompleted && !scanItems.length && !orphansCount ? (
+          <p className="text-sm text-ink-muted">
+            Скан ничего не нашёл — импортируй пачку карточкой выше и прогони скан заново.
+          </p>
+        ) : null}
+
+        {stale ? (
+          <div>
+            <Badge
+              variant="secondary"
+              className="bg-feedback-warning-bg text-feedback-warning-text text-xs font-bold py-0.5 px-2"
+            >
+              Проверка устарела — прогони скан заново
+            </Badge>
+          </div>
+        ) : null}
+
+        {sellableItems.length ? (
           <>
             <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                  Аккаунты из приёмки
+                  Живые — можно выставлять
                 </span>
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-body tabular-nums">
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Выбрано {selectedCount} из {sellableAccounts.length}
+                  Выбрано {selectedCount} из {sellableItems.length}
                 </span>
               </div>
               <ul className="max-h-80 space-y-1.5 overflow-y-auto">
-                {sellableAccounts.map((account) => {
-                  const id = String(account.id);
+                {sellableItems.map((item) => {
+                  const id = String(item.account_id);
                   const checked = selectedIds.has(id);
                   return (
                     <li key={id} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
@@ -166,14 +239,14 @@ export function AccountLotsSection({
                           checked={checked}
                           disabled={isSubmitting}
                           onToggle={() => toggleSelected(id)}
-                          label={`Выбрать ${accountLotLabel(account)}`}
+                          label={`Выбрать ${item.label || id}`}
                         />
                         <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-body">
-                          {accountLotLabel(account)}
+                          {item.label || id}
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-muted">
                           <span className="w-2 h-2 rounded-full bg-feedback-success-text shrink-0" />
-                          Проверен {formatCheckedAgo(account.last_checked_at)}
+                          Проверен {formatCheckedAgo(item.checked_at)}
                         </span>
                       </div>
                     </li>
@@ -181,54 +254,6 @@ export function AccountLotsSection({
                 })}
               </ul>
             </div>
-
-            {notReadyAccounts.length ? (
-              <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 opacity-80">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                    Не готов к продаже
-                  </span>
-                  <span className="text-sm font-semibold text-ink-muted tabular-nums">
-                    {notReadyAccounts.length}
-                  </span>
-                </div>
-                <ul className="max-h-60 space-y-1.5 overflow-y-auto">
-                  {notReadyAccounts.map((account) => {
-                    const meta = notReadyMeta(account);
-                    return (
-                      <li key={String(account.id)} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
-                        <div className="flex items-center gap-3">
-                          <RowCheckbox
-                            checked={false}
-                            disabled
-                            onToggle={() => {}}
-                            label={`${accountLotLabel(account)} — не готов к продаже`}
-                          />
-                          <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-muted">
-                            {accountLotLabel(account)}
-                          </span>
-                          <span className={`flex shrink-0 items-center gap-1.5 text-xs ${meta.textClass}`}>
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dotClass}`} />
-                            {meta.reason}
-                          </span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-            {quarantinedIntakeCount > 0 ? (
-              <div className="flex items-start gap-2.5 rounded-2xl border border-border-default bg-surface-subtle/50 px-4 py-3 text-xs text-ink-muted">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-feedback-error-text" aria-hidden="true" />
-                <span>
-                  Ещё {pluralizeRu(quarantinedIntakeCount, 'аккаунт', 'аккаунта', 'аккаунтов')} стока{' '}
-                  {pluralizeRu(quarantinedIntakeCount, 'лежит', 'лежат', 'лежат')} в отстойнике — продажа закрыта.
-                  Разбор и апелляции: «Гигиена аккаунтов» на /userbot.
-                </span>
-              </div>
-            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -330,7 +355,59 @@ export function AccountLotsSection({
               ) : null}
             </div>
           </>
-        )}
+        ) : null}
+
+        {problemItems.length ? (
+          <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 opacity-80">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
+                Проблемные
+              </span>
+              <span className="text-sm font-semibold text-ink-muted tabular-nums">
+                {problemItems.length}
+              </span>
+            </div>
+            <ul className="max-h-60 space-y-1.5 overflow-y-auto">
+              {problemItems.map((item, index) => {
+                const meta = scanVerdictMeta(item);
+                return (
+                  <li
+                    key={item.account_id || `${item.label}-${index}`}
+                    className="rounded-lg border border-border-default bg-surface-card px-3 py-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-muted">
+                        {item.label || item.account_id}
+                      </span>
+                      <span className={`flex shrink-0 items-center gap-1.5 text-xs ${meta.textClass}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dotClass}`} />
+                        {meta.label}
+                      </span>
+                    </div>
+                    {item.reason ? (
+                      <div className="mt-1 text-xs text-ink-muted">{item.reason}</div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            {quarantinedCount ? (
+              <div className="mt-3 flex items-start gap-2.5 text-xs text-ink-muted">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-feedback-error-text" aria-hidden="true" />
+                <span>Карантинные лежат в отстойнике — Гигиена аккаунтов на /userbot.</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {orphansCount > 0 ? (
+          <div className="flex items-start gap-2.5 rounded-2xl border border-border-default bg-surface-subtle/50 px-4 py-3 text-xs text-ink-muted">
+            <Archive className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" aria-hidden="true" />
+            <span>
+              Архивов без аккаунта: {orphansCount} — восстановить можно через Restore в кабинете.
+            </span>
+          </div>
+        ) : null}
 
         {results.length ? (
           <div className="space-y-4">

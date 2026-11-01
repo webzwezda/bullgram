@@ -1,59 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client.js';
-import { saleTitleForAccount, summarizeCheckStatus } from './bots-accounts.utils.js';
+import { saleTitleForAccount } from './bots-accounts.utils.js';
 
-// Партия аккаунтов → продажа (Wave 2 приёмки): выбор проверенных аккаунтов из
-// intake-запаса и публикация пачкой публичных лотов магазина. Фильтр «похоже,
-// готово к продаже» здесь только преднастройка UI: гейт по-настоящему делает
-// бэкенд (нездоровым/устаревшим аккаунтам он вернёт status='failed').
+// Партия аккаунтов → продажа: выбор живых аккаунтов из результатов скана
+// (useSaleScan отдаёт только sellable-строки) и публикация пачкой публичных
+// лотов магазина. Финальный гейт всё равно делает бэкенд при выставлении —
+// нездоровым/устаревшим аккаунтам он вернёт status='failed'.
 
-const FRESH_CHECK_WINDOW_MS = 6 * 60 * 60 * 1000;
-const SELLABLE_RUNTIME_STATUSES = new Set(['pending_activation', 'online']);
 const DEFAULT_LOT_TITLE = 'Telegram-аккаунт';
 
-function checkedAtAgeMs(account) {
-  const ts = new Date(account?.last_checked_at || '').getTime();
-  return Number.isFinite(ts) ? Date.now() - ts : Number.POSITIVE_INFINITY;
-}
-
-// «Похоже, готов к продаже»: safe-mode или рабочий статус + живая проверка
-// здоровья + проверка свежее окна отлёжки. Остальное — в приглушённую группу.
-export function isSellableForSale(account) {
-  const runtimeStatus = String(account?.runtime_status || '').trim().toLowerCase();
-  return SELLABLE_RUNTIME_STATUSES.has(runtimeStatus)
-    && account?.health_summary?.status === 'online'
-    && checkedAtAgeMs(account) <= FRESH_CHECK_WINDOW_MS;
-}
-
-// Причина «не готов к продаже» + тон точки и текста рядом с ней.
-export function notReadyMeta(account) {
-  const age = checkedAtAgeMs(account);
-  if (age === Number.POSITIVE_INFINITY) {
-    return {
-      reason: 'Проверка ещё не запускалась',
-      dotClass: 'bg-ink-faint',
-      textClass: 'text-ink-muted'
-    };
-  }
-  if (age > FRESH_CHECK_WINDOW_MS) {
-    return {
-      reason: 'Проверка устарела',
-      dotClass: 'bg-feedback-warning-text',
-      textClass: 'text-feedback-warning-text'
-    };
-  }
-  const health = String(account?.health_summary?.status || '').trim().toLowerCase();
-  if (health !== 'online') {
-    return {
-      reason: health ? `Проверка здоровья: ${health}` : 'Проверка здоровья ещё не готова',
-      dotClass: 'bg-feedback-error-text',
-      textClass: 'text-ink-muted'
-    };
-  }
+// Строка скана → кандидат в лоты (та же форма, что раньше приходила из
+// state.accounts): id = account_id уходит в batch как asset_id.
+function scanItemToCandidate(item) {
   return {
-    reason: summarizeCheckStatus(account).title,
-    dotClass: 'bg-ink-faint',
-    textClass: 'text-ink-muted'
+    id: item.account_id,
+    custom_label: item.label,
+    runtime_status: item.verdict,
+    last_checked_at: item.checked_at,
+    health_summary: { status: 'online' }
   };
 }
 
@@ -67,37 +31,39 @@ export function formatCheckedAgo(value) {
   return formatter.format(-Math.round(minutes / 60), 'hour');
 }
 
-export function accountLotLabel(account) {
+function accountLotLabel(account) {
   return account?.custom_label || saleTitleForAccount(account);
 }
 
-export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMessage }) {
-  const sellableAccounts = useMemo(() => accounts.filter(isSellableForSale), [accounts]);
-  const notReadyAccounts = useMemo(
-    () => accounts.filter((account) => !isSellableForSale(account)),
-    [accounts]
+export function useAccountLots({ accessToken, items, showUiMessage }) {
+  const candidates = useMemo(
+    () => (Array.isArray(items) ? items : [])
+      .filter((item) => item?.account_id)
+      .map(scanItemToCandidate),
+    [items]
   );
 
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   // Идентификаторы, которые мы уже когда-то предвыбрали: авто-выбор ставится
-  // только на новые sellable-аккаунты, чтобы фоновое обновление (каждую минуту)
-  // не возвращало снятые вручную галочки.
-  const seenSellableIdsRef = useRef(new Set());
+  // только на новые sellable-кандидаты, чтобы обновление данных не возвращало
+  // снятые вручную галочки. Новый скан меняет список целиком — старый выбор
+  // обрезается до живых строк, свежие результаты предвыбираются заново.
+  const seenCandidateIdsRef = useRef(new Set());
 
   useEffect(() => {
-    const sellableIds = sellableAccounts.map((account) => String(account.id));
-    const sellableSet = new Set(sellableIds);
-    const seen = seenSellableIdsRef.current;
-    const freshIds = sellableIds.filter((id) => !seen.has(id));
+    const candidateIds = candidates.map((account) => String(account.id));
+    const candidateSet = new Set(candidateIds);
+    const seen = seenCandidateIdsRef.current;
+    const freshIds = candidateIds.filter((id) => !seen.has(id));
     if (freshIds.length) {
       freshIds.forEach((id) => seen.add(id));
     }
     setSelectedIds((prev) => {
-      const next = new Set([...prev].filter((id) => sellableSet.has(id)));
+      const next = new Set([...prev].filter((id) => candidateSet.has(id)));
       freshIds.forEach((id) => next.add(id));
       return next;
     });
-  }, [sellableAccounts]);
+  }, [candidates]);
 
   function toggleSelected(id) {
     const key = String(id);
@@ -125,8 +91,8 @@ export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMe
   const [submitError, setSubmitError] = useState('');
 
   const selectedCount = useMemo(
-    () => sellableAccounts.filter((account) => selectedIds.has(String(account.id))).length,
-    [sellableAccounts, selectedIds]
+    () => candidates.filter((account) => selectedIds.has(String(account.id))).length,
+    [candidates, selectedIds]
   );
 
   async function submitBatch() {
@@ -135,7 +101,7 @@ export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMe
       showUiMessage('Укажи цену лота в TON — одно число больше нуля.', 'error');
       return;
     }
-    const assetIds = sellableAccounts
+    const assetIds = candidates
       .filter((account) => selectedIds.has(String(account.id)))
       .map((account) => String(account.id));
     if (!assetIds.length) {
@@ -166,7 +132,7 @@ export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMe
         body: payload
       });
 
-      const labelById = new Map(accounts.map((account) => [String(account.id), accountLotLabel(account)]));
+      const labelById = new Map(candidates.map((account) => [String(account.id), accountLotLabel(account)]));
       const rows = (Array.isArray(data?.results) ? data.results : []).map((row) => ({
         ...row,
         label: labelById.get(String(row.asset_id)) || String(row.asset_id)
@@ -183,7 +149,6 @@ export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMe
           failed ? 'default' : 'success'
         );
       }
-      await reloadAccounts?.();
     } catch (error) {
       const message = error.message || 'Не удалось выставить лоты.';
       setSubmitError(message);
@@ -194,8 +159,7 @@ export function useAccountLots({ accessToken, accounts, reloadAccounts, showUiMe
   }
 
   return {
-    sellableAccounts,
-    notReadyAccounts,
+    candidates,
     selectedIds,
     selectedCount,
     toggleSelected,

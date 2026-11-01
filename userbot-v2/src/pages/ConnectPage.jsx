@@ -12,7 +12,6 @@ import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
   formatWhen,
-  isQuarantinedAccount,
   isUserbotPurchase,
   isUserbotShopItem,
   proxyLabel,
@@ -82,7 +81,6 @@ function ConnectPageContent() {
     bundledUserbotLots,
     canSellUserbotAssets,
     listedShopUserbots,
-    liveUserbots,
     openUserbotPurchases,
     selectedShopUserbot
   } = useBotsAccountsDerivedState({
@@ -93,28 +91,6 @@ function ConnectPageContent() {
     selectedOpenPurchaseId,
     profilePlan
   });
-
-  // Продажа аккаунтов — только приёмочный сток: у аккаунта сохранены файлы
-  // сессий (restore source из пачки) и он прошёл отлёжку. Рабочие юзерботы
-  // без паков в витрину аккаунтов не попадают.
-  const intakeStockUserbots = useMemo(
-    () => (liveUserbots || []).filter((account) => (
-      Boolean(state.recoveryMap?.[String(account.id)]?.intake_batch_id)
-    )),
-    [liveUserbots, state.recoveryMap]
-  );
-
-  // Карантинный сток в карточке не показываем, но молча терять его нельзя:
-  // считаем и объясняем строкой «лежат в отстойнике» (вопрос владельца
-  // «почему только два?» — сигнал, что это надо видеть в интерфейсе).
-  const quarantinedIntakeCount = useMemo(
-    () => (state.accounts || []).filter((account) => (
-      account.account_type === 'userbot'
-      && isQuarantinedAccount(account)
-      && Boolean(state.recoveryMap?.[String(account.id)]?.intake_batch_id)
-    )).length,
-    [state.accounts, state.recoveryMap]
-  );
 
   const {
     currentQrFingerprintProfile,
@@ -232,13 +208,10 @@ function ConnectPageContent() {
         />
       ) : null}
 
-      {/* Продажа аккаунтов пачкой — рядом с приёмкой: импорт → отлёжка → витрина. */}
+      {/* Продажа аккаунтов пачкой — рядом с приёмкой: скан → выбор живых → витрина. */}
       {profileRole === 'admin' ? (
         <AccountLotsSection
           accessToken={accessToken}
-          accounts={intakeStockUserbots}
-          quarantinedIntakeCount={quarantinedIntakeCount}
-          reloadAccounts={reloadAccounts}
           showUiMessage={showUiMessage}
         />
       ) : null}

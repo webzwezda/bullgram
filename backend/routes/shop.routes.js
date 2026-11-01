@@ -20,6 +20,15 @@ import {
 import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { transferShopAssets } from '../services/shop-transfer.service.js';
+import {
+    SALE_SCAN_MISSING_MIGRATION_MESSAGE,
+    findActiveScan,
+    isMissingScanTableError,
+    loadScanCandidates,
+    runSaleScan,
+    scanItemLabel,
+    sweepStaleScans
+} from '../services/sale-scan.service.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = Number(process.env.SHOP_PENDING_PURCHASE_TTL_MINUTES || 30);
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');
@@ -1265,7 +1274,9 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
     return { created, results };
 }
 
-export default function shopRoutes(supabase) {
+// userbotService нужен скану «Найти аккаунты для продажи» — живая проверка
+// сессий идёт тем же UserbotService-синглтоном, что у джобы отлёжки.
+export default function shopRoutes(supabase, { userbotService = null } = {}) {
     const router = express.Router();
 
     router.get(['/admin/assets', '/seller/assets'], authenticateUser, async (req, res) => {
@@ -2315,6 +2326,120 @@ export default function shopRoutes(supabase) {
             }
             console.error('Ошибка массового выставления аккаунтов:', error);
             res.status(500).json({ error: 'Ошибка массового выставления аккаунтов' });
+        }
+    });
+
+    // Скан «Найти аккаунты для продажи»: обходит ВЕСЬ сток админа с restore
+    // source (любой runtime_status, включая карантин), по каждому делает живую
+    // проверку сессии (тот же код, что у джобы отлёжки) и применяет вердикт с
+    // карантинными эффектами. Один активный скан на владельца; прогресс
+    // пишется после каждого айтема, UI поллит GET /admin/account-lots/scan.
+    router.post('/admin/account-lots/scan', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+
+        try {
+            if (!isAdminSeller(req.profile)) {
+                return res.status(403).json({ error: 'Скан аккаунтов для продажи доступен только пользователю с role admin.' });
+            }
+            if (!userbotService) {
+                return res.status(500).json({ error: 'Скан недоступен: userbotService не сконфигурирован.' });
+            }
+
+            const { data: existingScans, error: listError } = await supabase
+                .from('account_sale_scans')
+                .select('id, status, updated_at')
+                .eq('owner_id', ownerId)
+                .order('created_at', { ascending: false });
+            if (listError) {
+                if (isMissingScanTableError(listError)) {
+                    return res.status(400).json({ error: SALE_SCAN_MISSING_MIGRATION_MESSAGE });
+                }
+                throw listError;
+            }
+            await sweepStaleScans(supabase, ownerId, existingScans || []);
+            if (findActiveScan(existingScans || [])) {
+                return res.status(409).json({ error: 'Скан уже идёт — дождись завершения' });
+            }
+
+            const { accounts, orphanCount } = await loadScanCandidates(supabase, ownerId);
+            if (!accounts.length) {
+                return res.status(400).json({ error: 'Аккаунтов с сохранёнными файлами сессий не найдено' });
+            }
+
+            const { data: scanRow, error: insertError } = await supabase
+                .from('account_sale_scans')
+                .insert({
+                    owner_id: ownerId,
+                    status: 'processing',
+                    total: accounts.length,
+                    processed: 0,
+                    failed: 0,
+                    orphans: orphanCount,
+                    items: accounts.map((account) => ({
+                        account_id: account.id,
+                        label: scanItemLabel(account),
+                        status: 'queued'
+                    }))
+                })
+                .select('id')
+                .single();
+            if (insertError) {
+                // 23505 = partial unique index «один processing-скан на владельца»:
+                // гонка двух одновременных POST прошла findActiveScan до инсерта.
+                if (String(insertError.code || '') === '23505') {
+                    return res.status(409).json({ error: 'Скан уже идёт — дождись завершения' });
+                }
+                throw insertError;
+            }
+
+            // Fire-and-forget: прогресс пишется в строку скана после каждого
+            // айтема, ответ не ждёт обхода (~30-60 сек на аккаунт). Кандидаты
+            // передаём из POST — без перечитывания между двумя запросами.
+            runSaleScan(supabase, userbotService, {
+                ownerId,
+                scanId: scanRow.id,
+                candidates: accounts,
+                orphanCount
+            }).catch((scanError) => {
+                console.error('Продажа аккаунтов: фоновый скан упал:', scanError);
+            });
+
+            res.json({ success: true, scan_id: scanRow.id, total: accounts.length });
+        } catch (error) {
+            console.error('Ошибка запуска скана аккаунтов для продажи:', error);
+            res.status(500).json({ error: 'Ошибка запуска скана аккаунтов для продажи' });
+        }
+    });
+
+    // Последний скан владельца (полная строка с items и orphans). Зависшие
+    // processing-строки старше часа свипом помечаются failed — скан умер
+    // вместе с перезапуском сервера (fire-and-forget не переживает pm2 reload).
+    router.get('/admin/account-lots/scan', authenticateUser, async (req, res) => {
+        const ownerId = req.user.id;
+
+        try {
+            if (!isAdminSeller(req.profile)) {
+                return res.status(403).json({ error: 'Скан аккаунтов для продажи доступен только пользователю с role admin.' });
+            }
+
+            const { data: rows, error } = await supabase
+                .from('account_sale_scans')
+                .select('*')
+                .eq('owner_id', ownerId)
+                .order('created_at', { ascending: false });
+            if (error) {
+                if (isMissingScanTableError(error)) {
+                    return res.status(400).json({ error: SALE_SCAN_MISSING_MIGRATION_MESSAGE });
+                }
+                throw error;
+            }
+
+            const allRows = rows || [];
+            await sweepStaleScans(supabase, ownerId, allRows);
+            res.json({ scan: allRows[0] || null });
+        } catch (error) {
+            console.error('Ошибка чтения скана аккаунтов для продажи:', error);
+            res.status(500).json({ error: 'Ошибка чтения скана аккаунтов для продажи' });
         }
     });
 

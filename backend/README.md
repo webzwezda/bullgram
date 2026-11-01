@@ -303,6 +303,19 @@ Callback URL для Robokassa:
 
 Ключевые маршруты: `POST /api/shop/public/purchase-anon` (покупка без регистрации; с Bearer — сразу трансфер), `GET /api/shop/public/purchase/:id/download` (публичный, только после оплаты), `POST /api/shop/admin/account-lots/batch` (выставить пачкой, admin). Гейты здоровья аккаунт-лотов: статусы `restricted/frozen/expired/dead_proxy/error` запрещены; `pending_activation` продаётся только со свежей (≤6 ч) проверкой и `health_summary.status='online'`. При исполнении оплаты аккаунт-лот штампует `shop_purchases.delivered_at` + `payload.delivery` (mode/downloads/sha256/окно). Миграция: `backend/sql/account-shop-delivery.sql` (`delivery_mode`, `delivered_at` + partial index) — применить через Supabase MCP до деплоя.
 
+### Продажа аккаунтов: скан «Найти аккаунты для продажи» (account sale scan)
+
+Кнопка на карточке «Продажа аккаунтов» вместо авто-списка: админ запускает фоновый скан, который обходит **весь** его юзербот-сток с restore source — любые `runtime_status` (`online`, `pending_activation`, `restricted`, `frozen`, `expired`, `dead_proxy`, `error` — «все места», включая отстойник) — и делает по каждому живую проверку сессии на месте: ровно тот же код, что у джобы отлёжки приёмки (`services/intake-stock.service.js`: `checkStockAccount` + `applyStockVerdict`), а не чтение старых статусов.
+
+- `POST /api/shop/admin/account-lots/scan` (admin) — создаёт строку `account_sale_scans` (status=`processing`, `total`, queued `items`) и fire-and-forget запускает обход (`services/sale-scan.service.js`). Ответ не ждёт обхода: `{ success, scan_id, total }`. Повторный запуск при активном скане — `409 «Скан уже идёт»`; нет кандидатов — `400`; нет таблицы — `400 «Сначала примени SQL под account sale scan.»`.
+- `GET /api/shop/admin/account-lots/scan` (admin) — последний скан владельца полной строкой (`{ scan }` или `{ scan: null }`): `status/total/processed/failed/orphans/items`. Зависшие `processing` старше часа (по `updated_at`) свипом помечаются `failed «Прерван перезапуском сервера.»` — в POST и в GET.
+- Проверки строго последовательные, анти-флуд пауза между айтемами `USERBOT_INTAKE_RESTING_SLEEP_MS` (25 с; живой чек занимает ~30–60 сек на аккаунт — пачка из 10 идёт ~8 минут). Прогресс (`processed/failed/items`) пишется в строку скана после **каждого** айтема — UI поллит GET.
+- Статусы пишутся честно, с теми же карантинными эффектами, что у отлёжки: restricted → событие `telegram_error_events` (`event_source='sale_scan'`) + снятие лотов с витрины + чистка прокси; frozen → событие + снятие с витрины, прокси храним; expired/dead_proxy/error → статус + причина. Выздоровевший healthy-сток сохраняет свой статус (safe-mode не снимается автоматически). Скан ничего не удаляет и restore source только читает; гейт публикации (свежесть ≤6 ч, health) не ослабляется — он остаётся единственной точкой истины при выставлении.
+- Айтем скана: `{ account_id, label, status: ok|failed, verdict, reason, checked_at, in_quarantine, sellable }`; вердикт `no_proxy` («К аккаунту не привязан прокси…») ставится без Telegram-подключения. `sellable=true` — `online` либо `pending_activation` со свежей чистой проверкой; `in_quarantine` — вердикт из `restricted/frozen/expired/dead_proxy/error`.
+- `orphans` — restore sources без строки `tg_accounts` (блобы после пуржа): информационный счётчик, кандидатами не становятся (v1; восстановление через Restore на `/userbot`).
+- Новых env нет: переиспользуются `USERBOT_INTAKE_RESTING_SLEEP_MS` и health-таймауты (`USERBOT_HEALTH_CONNECT_TIMEOUT_MS` / `USERBOT_HEALTH_INSPECT_TIMEOUT_MS`). Новая джоба/интервал не заводятся — скан строго по кнопке.
+- Миграция: `backend/sql/account-sale-scan.sql` (таблица `account_sale_scans` + индекс по `owner_id, created_at desc`, RLS без политик) — применить через Supabase MCP до деплоя.
+
 ## Запуск
 
 **Development:**

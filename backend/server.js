@@ -196,7 +196,7 @@ app.use('/api/audience', audienceRoutes(supabase));
 app.use('/api/customers', customersRoutes(supabase));
 app.use('/api/dashboard', dashboardRoutes(supabase));
 app.use('/api/referrals', referralRoutes(supabase));
-app.use('/api/shop', shopRoutes(supabase));
+app.use('/api/shop', shopRoutes(supabase, { userbotService }));
 app.use('/api/invoices', invoicePublicRoutes(supabase, getBotById));
 app.use('/api/public-invoices', publicInvoiceRoutes(supabase));
 app.use('/api/public/telegram-oidc', telegramOauthRoutes());
