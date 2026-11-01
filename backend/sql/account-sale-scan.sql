@@ -46,3 +46,15 @@ notify pgrst, 'reload schema';
 create unique index if not exists account_sale_scans_owner_active_idx
     on public.account_sale_scans (owner_id)
     where status = 'processing';
+
+-- Два независимых скана: 'unlisted' (кандидаты на витрину) и 'listed'
+-- (проверка уже выставленных). Активный скан — один на владельца+скоуп
+-- (миграция 20261102090000).
+alter table public.account_sale_scans
+    add column if not exists scope text not null default 'unlisted';
+
+drop index if exists account_sale_scans_owner_active_idx;
+
+create unique index if not exists account_sale_scans_owner_scope_active_idx
+    on public.account_sale_scans (owner_id, scope)
+    where status = 'processing';

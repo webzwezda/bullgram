@@ -1,7 +1,7 @@
 import {
-  AlertCircle, Archive, Check, CheckCircle2, Loader2, ScanSearch, ShieldAlert, Store
+  AlertCircle, Archive, Check, CheckCircle2, Loader2, ScanSearch, ShieldAlert, ShieldCheck, Store
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -76,7 +76,15 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
     error: scanError,
     startScan,
     refreshScan
-  } = useSaleScan({ accessToken, showUiMessage });
+  } = useSaleScan({ accessToken, showUiMessage, scope: 'unlisted' });
+
+  // Отдельный скан для уже выставленных в магазине: их сессии проверяются
+  // независимо от поиска кандидатов — с ростом витрины это разные объёмы.
+  const listedScan = useSaleScan({ accessToken, showUiMessage, scope: 'listed' });
+
+  // Только что выставленные: скан-снапшот всё ещё содержит их как sellable —
+  // прячем локально до следующего скана (бэкенд-гейт и так не даст продать дважды).
+  const [locallyListedIds, setLocallyListedIds] = useState(() => new Set());
 
   const scanItems = useMemo(() => (Array.isArray(scan?.items) ? scan.items : []), [scan]);
   // Группы результатов — только у завершённого скана: пока скан идёт, айтемы
@@ -85,12 +93,12 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
   // Уже выставленные (есть активный лот) уезжают из «Живых» — иначе после
   // выставления карточка вечно предлагала продать то, что уже на витрине.
   const sellableItems = useMemo(
-    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true && item?.listed !== true) : []),
-    [isScanCompleted, scanItems]
-  );
-  const listedItems = useMemo(
-    () => (isScanCompleted ? scanItems.filter((item) => item?.sellable === true && item?.listed === true) : []),
-    [isScanCompleted, scanItems]
+    () => (isScanCompleted ? scanItems.filter((item) => (
+      item?.sellable === true
+      && item?.listed !== true
+      && !locallyListedIds.has(String(item.account_id))
+    )) : []),
+    [isScanCompleted, scanItems, locallyListedIds]
   );
   const problemItems = useMemo(
     () => (isScanCompleted ? scanItems.filter((item) => item?.sellable !== true) : []),
@@ -121,6 +129,13 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
   // и живые уедут в «Уже на витрине».
   async function submitAndRefresh() {
     await submitBatch();
+    setLocallyListedIds((prev) => {
+      const next = new Set(prev);
+      for (const row of results) {
+        if (row.status === 'ok') next.add(String(row.asset_id));
+      }
+      return next;
+    });
     await refreshScan();
   }
 
@@ -250,35 +265,83 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
               </ul>
             </div>
 
-            {listedItems.length ? (
-              <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 opacity-80">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                    Уже на витрине
-                  </span>
-                  <span className="text-sm font-semibold text-ink-muted tabular-nums">
-                    {listedItems.length}
-                  </span>
-                </div>
-                <ul className="space-y-1.5">
-                  {listedItems.map((item) => (
-                    <li key={String(item.account_id)} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
-                      <div className="flex items-center gap-3">
-                        <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-muted">
-                          {item.label || item.account_id}
-                        </span>
-                        <Badge
-                          variant="secondary"
-                          className="bg-feedback-success-bg text-feedback-success-text text-xs uppercase font-bold py-0.5 px-2 shrink-0"
-                        >
-                          На витрине
-                        </Badge>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+            <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
+                  Уже на витрине
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={listedScan.startScan}
+                  disabled={listedScan.isScanning || listedScan.isStarting}
+                >
+                  {listedScan.isScanning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Проверяю {Number(listedScan.scan?.processed || 0)} из {Number(listedScan.scan?.total || 0)}
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      Проверить выставленные
+                    </>
+                  )}
+                </Button>
               </div>
-            ) : null}
+
+              {listedScan.error ? (
+                <p className="text-sm font-medium text-feedback-error-text">{listedScan.error}</p>
+              ) : null}
+
+              {listedScan.stale ? (
+                <div className="mb-2">
+                  <Badge
+                    variant="secondary"
+                    className="bg-feedback-warning-bg text-feedback-warning-text text-xs font-bold py-0.5 px-2"
+                  >
+                    Проверка устарела — прогони скан заново
+                  </Badge>
+                </div>
+              ) : null}
+
+              {(() => {
+                const items = Array.isArray(listedScan.scan?.items) ? listedScan.scan.items : [];
+                if (!items.length) {
+                  return (
+                    <p className="text-xs font-medium text-ink-muted">
+                      Живая проверка сессий у всех лотов витрины: замороженные и ограниченные сразу
+                      увидишь здесь. Проверка идёт по ~30–60 сек на аккаунт.
+                    </p>
+                  );
+                }
+                return (
+                  <ul className="max-h-80 space-y-1.5 overflow-y-auto">
+                    {items.map((item) => {
+                      const meta = scanVerdictMeta(item);
+                      const healthy = item.verdict === 'online' || item.verdict === 'pending_activation';
+                      return (
+                        <li key={String(item.account_id)} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
+                          <div className="flex items-center gap-3">
+                            <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-body">
+                              {item.label || item.account_id}
+                            </span>
+                            <span className={`flex shrink-0 items-center gap-1.5 text-xs ${meta.textClass}`}>
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dotClass}`} />
+                              {healthy
+                                ? `Проверен ${formatCheckedAgo(item.checked_at)}`
+                                : meta.label}
+                            </span>
+                          </div>
+                          {!healthy && item.reason ? (
+                            <div className="mt-1 text-xs text-ink-muted">{item.reason}</div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">

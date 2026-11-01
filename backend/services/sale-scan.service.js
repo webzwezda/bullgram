@@ -51,7 +51,28 @@ export function scanItemLabel(account) {
 // tg_accounts (любой статус). orphans — restore sources без строки аккаунта
 // (блобы после пуржа): считаются один раз, кандидатами не становятся (v1).
 // POST и раннер зовут один хелпер, чтобы выборка не разъехалась.
-export async function loadScanCandidates(supabase, ownerId) {
+// Активный лот = draft/published с этим userbot-активом. Скоуп 'listed'
+// сканирует именно их, 'unlisted' — всё остальное.
+async function loadActiveLotAssetIds(supabase, ownerId) {
+    const { data: activeItems, error } = await supabase
+        .from('shop_items')
+        .select('id')
+        .eq('owner_id', ownerId)
+        .in('status', ['draft', 'published']);
+    if (error) throw error;
+    const itemIds = (activeItems || []).map((row) => row.id);
+    if (!itemIds.length) return new Set();
+
+    const { data: listedAssets, error: assetsError } = await supabase
+        .from('shop_item_assets')
+        .select('asset_id')
+        .eq('asset_type', 'userbot')
+        .in('shop_item_id', itemIds);
+    if (assetsError) throw assetsError;
+    return new Set((listedAssets || []).map((row) => String(row.asset_id)));
+}
+
+export async function loadScanCandidates(supabase, ownerId, scope = 'unlisted') {
     const { data: sources, error: sourcesError } = await supabase
         .from('userbot_restore_sources')
         .select('account_id')
@@ -71,8 +92,15 @@ export async function loadScanCandidates(supabase, ownerId) {
 
     const rows = accounts || [];
     const foundIds = new Set(rows.map((row) => String(row.id)));
+    const activeLotIds = await loadActiveLotAssetIds(supabase, ownerId);
+
+    if (scope === 'listed') {
+        // Выставленные — это живые аккаунты с активным лотом; orphan-блобы
+        // (источник без аккаунта) к этому скоупу отношения не имеют.
+        return { accounts: rows.filter((row) => activeLotIds.has(String(row.id))), orphanCount: 0 };
+    }
     const orphanCount = sourceAccountIds.filter((accountId) => !foundIds.has(accountId)).length;
-    return { accounts: rows, orphanCount };
+    return { accounts: rows.filter((row) => !activeLotIds.has(String(row.id))), orphanCount };
 }
 
 // Свип зависших processing-сканов владельца: старше часа без обновлений —

@@ -2366,15 +2366,21 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
                 return res.status(409).json({ error: 'Скан уже идёт — дождись завершения' });
             }
 
-            const { accounts, orphanCount } = await loadScanCandidates(supabase, ownerId);
+            const rawScope = String(req.body?.scope || '').trim().toLowerCase();
+            const scope = ['unlisted', 'listed'].includes(rawScope) ? rawScope : 'unlisted';
+
+            const { accounts, orphanCount } = await loadScanCandidates(supabase, ownerId, scope);
             if (!accounts.length) {
-                return res.status(400).json({ error: 'Аккаунтов с сохранёнными файлами сессий не найдено' });
+                return res.status(400).json({ error: scope === 'listed'
+                    ? 'Выставленных аккаунтов с сохранёнными файлами сессий не найдено'
+                    : 'Аккаунтов с сохранёнными файлами сессий не найдено' });
             }
 
             const { data: scanRow, error: insertError } = await supabase
                 .from('account_sale_scans')
                 .insert({
                     owner_id: ownerId,
+                    scope,
                     status: 'processing',
                     total: accounts.length,
                     processed: 0,
@@ -2427,10 +2433,14 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
                 return res.status(403).json({ error: 'Скан аккаунтов для продажи доступен только пользователю с role admin.' });
             }
 
+            const rawScope = String(req.query.scope || '').trim().toLowerCase();
+            const scope = ['unlisted', 'listed'].includes(rawScope) ? rawScope : 'unlisted';
+
             const { data: rows, error } = await supabase
                 .from('account_sale_scans')
                 .select('*')
                 .eq('owner_id', ownerId)
+                .eq('scope', scope)
                 .order('created_at', { ascending: false });
             if (error) {
                 if (isMissingScanTableError(error)) {
@@ -2442,32 +2452,7 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
             const allRows = rows || [];
             await sweepStaleScans(supabase, ownerId, allRows);
 
-            const latest = allRows[0] || null;
-            if (latest && Array.isArray(latest.items) && latest.items.length > 0) {
-                // Флаг «уже выставлен»: у аккаунта есть активный лот (draft/published).
-                // Скан — снапшот во времени; без флага выставленные аккаунты
-                // вечно выглядели бы готовыми к продаже (жалоба владельца).
-                const scanAccountIds = latest.items
-                    .map((item) => String(item.account_id || ''))
-                    .filter(Boolean);
-                if (scanAccountIds.length > 0) {
-                    const { data: listedAssets, error: listedError } = await supabase
-                        .from('shop_item_assets')
-                        .select('asset_id, shop_items!inner(id, status, owner_id)')
-                        .eq('asset_type', 'userbot')
-                        .in('asset_id', scanAccountIds)
-                        .in('shop_items.status', ['draft', 'published'])
-                        .eq('shop_items.owner_id', ownerId);
-                    if (listedError) throw listedError;
-                    const listedIds = new Set((listedAssets || []).map((row) => String(row.asset_id)));
-                    latest.items = latest.items.map((item) => ({
-                        ...item,
-                        listed: listedIds.has(String(item.account_id))
-                    }));
-                }
-            }
-
-            res.json({ scan: latest });
+            res.json({ scan: allRows[0] || null });
         } catch (error) {
             console.error('Ошибка чтения скана аккаунтов для продажи:', error);
             res.status(500).json({ error: 'Ошибка чтения скана аккаунтов для продажи' });

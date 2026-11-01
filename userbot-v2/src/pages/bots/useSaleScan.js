@@ -52,7 +52,7 @@ export function isScanStale(scan) {
   return Date.now() - Math.max(...stamps) > STALE_AFTER_MS;
 }
 
-export function useSaleScan({ accessToken, showUiMessage }) {
+export function useSaleScan({ accessToken, showUiMessage, scope = 'unlisted' }) {
   const [scan, setScan] = useState(null);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState('');
@@ -82,7 +82,7 @@ export function useSaleScan({ accessToken, showUiMessage }) {
     let failedAttempts = 0;
     pollTimerRef.current = window.setInterval(async () => {
       try {
-        const result = await apiRequest(SCAN_ENDPOINT, { accessToken });
+        const result = await apiRequest(`${SCAN_ENDPOINT}?scope=${scope}`, { accessToken });
         failedAttempts = 0;
         const next = result?.scan;
         if (!next) return;
@@ -125,7 +125,7 @@ export function useSaleScan({ accessToken, showUiMessage }) {
   async function refreshScan() {
     if (!accessToken) return;
     try {
-      const result = await apiRequest(SCAN_ENDPOINT, { accessToken });
+      const result = await apiRequest(`${SCAN_ENDPOINT}?scope=${scope}`, { accessToken });
       const latest = result?.scan || null;
       setScan(latest);
       if (latest?.status === 'processing') startPolling();
@@ -140,7 +140,7 @@ export function useSaleScan({ accessToken, showUiMessage }) {
     let cancelled = false;
     (async () => {
       try {
-        const result = await apiRequest(SCAN_ENDPOINT, { accessToken });
+        const result = await apiRequest(`${SCAN_ENDPOINT}?scope=${scope}`, { accessToken });
         if (cancelled) return;
         const latest = result?.scan || null;
         setScan(latest);
@@ -166,7 +166,8 @@ export function useSaleScan({ accessToken, showUiMessage }) {
     try {
       const result = await apiRequest(SCAN_ENDPOINT, {
         accessToken,
-        method: 'POST'
+        method: 'POST',
+        body: { scope }
       });
       setScan({
         id: result?.scan_id,
