@@ -119,7 +119,14 @@ export async function checkStockAccount(supabase, userbotService, account, proxy
             'Telegram не ответил на подключение за отведенное время.'
         );
         connectOk = true;
-        me = await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
+        // getMe иногда флакует таймаутом на живой сессии (QA-прогон sale-scan:
+        // 1 из 2 сканов дал ложный error). Один повтор перед вердиктом.
+        try {
+            me = await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
+        } catch (getMeError) {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            me = await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
+        }
         getMeOk = true;
         const health = await withTimeout(
             userbotService.inspectAccountHealth(client, { userbotId: account.id }),
@@ -203,14 +210,20 @@ export async function applyStockVerdict(supabase, userbotService, {
     };
 
     if (status === 'online') {
-        // Healthy-сток сохраняет свой статус: safe-mode остаётся safe-mode
-        // (активация только вручную), «боевой» — боевым. Guard по исходному
-        // статусу не даёт откатить параллельную ручную активацию.
+        // Живая проверка доказала, что сессия отвечает — статус становится
+        // правдивым: safe-mode сохраняется (активация только вручную),
+        // всё остальное (в т.ч. «выздоровевший» error от флакнувшей проверки)
+        // поднимается в online, иначе восстановление невозможно навсегда
+        // (QA-прогон sale-scan 2026-11-01: error-снапшот консервировался).
+        // Guard по исходному статусу не даёт перезаписать параллельную смену.
+        const healthyStatus = account.runtime_status === 'pending_activation'
+            ? 'pending_activation'
+            : 'online';
         await supabase
             .from('tg_accounts')
             .update({
                 ...baseUpdate,
-                runtime_status: account.runtime_status,
+                runtime_status: healthyStatus,
                 runtime_error: null
             })
             .eq('id', account.id)
@@ -218,9 +231,9 @@ export async function applyStockVerdict(supabase, userbotService, {
             .eq('runtime_status', account.runtime_status);
         console.log('[IntakeStock] ok', {
             account_id: account.id,
-            verdict_status: account.runtime_status
+            verdict_status: healthyStatus
         });
-        return { verdictStatus: account.runtime_status, quarantined: false };
+        return { verdictStatus: healthyStatus, quarantined: false };
     }
 
     if (status === 'restricted') {
