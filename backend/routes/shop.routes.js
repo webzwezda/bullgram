@@ -6,6 +6,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { toNano } from '@ton/core';
 import { authenticateUser, optionalAuthenticateUser } from '../middlewares/auth.middleware.js';
+import { buildAccountLotTitle } from '../utils/phone-country.js';
 import { loadReservedAssetMap } from '../utils/shop-reservations.js';
 import { ensureShopSellerAllowed, getTierRules } from '../utils/product-tier.js';
 import { tonToNanoString } from '../utils/ton.js';
@@ -1115,11 +1116,9 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
         error.statusCode = 400;
         throw error;
     }
-    if (!String(title || '').trim()) {
-        const error = new Error('Название лотов обязательно');
-        error.statusCode = 400;
-        throw error;
-    }
+    // Название генерируется сервером на аккаунт (страна по телефону + срок
+    // отлёжки); явный title остаётся как override для тестов/особых случаев.
+    const explicitTitle = String(title || '').trim();
     const normalizedPriceTon = Number(priceTon || 0);
     if (!(normalizedPriceTon > 0)) {
         const error = new Error('Укажи цену лота в TON');
@@ -1134,7 +1133,7 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
 
     const { data: accountRows, error: accountsError } = await supabase
         .from('tg_accounts')
-        .select('id, custom_label, runtime_status, last_checked_at, health_summary')
+        .select('id, custom_label, runtime_status, last_checked_at, health_summary, tg_phone, created_at')
         .eq('owner_id', ownerId)
         .eq('account_type', 'userbot')
         .in('id', ids);
@@ -1209,7 +1208,10 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
 
         const itemPayload = {
             owner_id: ownerId,
-            title: String(title).trim(),
+            title: explicitTitle || buildAccountLotTitle({
+                phone: account.tg_phone,
+                createdAt: account.created_at
+            }),
             description: description || null,
             post_purchase_message: null,
             item_type: 'account',

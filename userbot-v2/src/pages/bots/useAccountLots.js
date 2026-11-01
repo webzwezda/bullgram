@@ -7,7 +7,6 @@ import { saleTitleForAccount } from './bots-accounts.utils.js';
 // лотов магазина. Финальный гейт всё равно делает бэкенд при выставлении —
 // нездоровым/устаревшим аккаунтам он вернёт status='failed'.
 
-const DEFAULT_LOT_TITLE = 'Telegram-аккаунт';
 
 // Строка скана → кандидат в лоты (та же форма, что раньше приходила из
 // state.accounts): id = account_id уходит в batch как asset_id.
@@ -83,9 +82,6 @@ export function useAccountLots({ accessToken, items, showUiMessage }) {
   }
 
   const [priceTon, setPriceTon] = useState('');
-  const [title, setTitle] = useState(DEFAULT_LOT_TITLE);
-  const [description, setDescription] = useState('');
-  const [deliveryMode, setDeliveryMode] = useState('hybrid');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState([]);
   const [submitError, setSubmitError] = useState('');
@@ -117,14 +113,13 @@ export function useAccountLots({ accessToken, items, showUiMessage }) {
     setSubmitError('');
     setResults([]);
     try {
+      // Название генерирует сервер (страна по телефону + срок отлёжки);
+      // режим выдачи не выбираем — что получит покупатель, решается тем,
+      // купил он анонимно или под логином (гибрид).
       const payload = {
         asset_ids: assetIds,
-        price_ton: price,
-        title: title.trim() || DEFAULT_LOT_TITLE,
-        delivery_mode: deliveryMode
+        price_ton: price
       };
-      const trimmedDescription = description.trim();
-      if (trimmedDescription) payload.description = trimmedDescription;
 
       const data = await apiRequest('/api/shop/admin/account-lots/batch', {
         accessToken,
@@ -166,12 +161,6 @@ export function useAccountLots({ accessToken, items, showUiMessage }) {
     clearSelection,
     priceTon,
     setPriceTon,
-    title,
-    setTitle,
-    description,
-    setDescription,
-    deliveryMode,
-    setDeliveryMode,
     isSubmitting,
     results,
     submitError,

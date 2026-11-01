@@ -29,19 +29,6 @@ function pluralizeRu(count, one, few, many) {
   return many;
 }
 
-const DELIVERY_MODES = [
-  {
-    value: 'hybrid',
-    label: 'Гибрид (по умолчанию)',
-    hint: 'Вошедший покупатель получает аккаунт в кабинет и Telegram Web, любой покупатель может скачать архив.'
-  },
-  {
-    value: 'files',
-    label: 'Только архив',
-    hint: 'Покупатель получает только архив с файлами, аккаунт ему не передаётся.'
-  }
-];
-
 // Чекбокс на кнопке кита: в ките нет Checkbox-примитива, сырой <input> запрещён.
 function RowCheckbox({ checked, disabled, onToggle, label }) {
   return (
@@ -115,12 +102,6 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
     clearSelection,
     priceTon,
     setPriceTon,
-    title,
-    setTitle,
-    description,
-    setDescription,
-    deliveryMode,
-    setDeliveryMode,
     isSubmitting,
     results,
     submitError,
@@ -273,66 +254,12 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
                   disabled={isSubmitting}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="account-lot-title" className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                  Название лота
-                </label>
-                <Input
-                  id="account-lot-title"
-                  type="text"
-                  placeholder="Telegram-аккаунт"
-                  className="h-11 bg-surface-subtle"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  disabled={isSubmitting}
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <label htmlFor="account-lot-description" className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                  Описание (необязательно)
-                </label>
-                <Input
-                  id="account-lot-description"
-                  type="text"
-                  placeholder="Что получит покупатель"
-                  className="h-11 bg-surface-subtle"
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  disabled={isSubmitting}
-                />
-              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                Как покупатель получает аккаунт
-              </span>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {DELIVERY_MODES.map((mode) => {
-                  const active = deliveryMode === mode.value;
-                  return (
-                    <Button
-                      key={mode.value}
-                      type="button"
-                      variant="outline"
-                      aria-pressed={active}
-                      onClick={() => setDeliveryMode(mode.value)}
-                      disabled={isSubmitting}
-                      className={`h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left ${
-                        active
-                          ? 'border-action-primary bg-surface-subtle'
-                          : 'border-border-default bg-surface-card'
-                      }`}
-                    >
-                      <span className={`text-sm font-bold ${active ? 'text-ink-strong' : 'text-ink-body'}`}>
-                        {mode.label}
-                      </span>
-                      <span className="text-xs font-normal text-ink-muted">{mode.hint}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
+            <p className="text-xs font-medium text-ink-muted">
+              Название лота сгенерируется само — страна по номеру и срок отлёжки. Анонимный покупатель
+              получит архив с файлами; вошедший под логином — ещё и аккаунт в кабинет с Telegram Web.
+            </p>
 
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={submitBatch} disabled={isSubmitting || !selectedCount}>
