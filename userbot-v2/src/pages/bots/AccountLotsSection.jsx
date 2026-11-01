@@ -265,6 +265,55 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
               </ul>
             </div>
 
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label htmlFor="account-lot-price" className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
+                  Цена лота, TON — одна на всех выбранных
+                </label>
+                <Input
+                  id="account-lot-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="Например 12"
+                  className="h-11 bg-surface-subtle tabular-nums"
+                  value={priceTon}
+                  onChange={(event) => setPriceTon(event.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs font-medium text-ink-muted">
+              Название лота сгенерируется само — страна по номеру и срок отлёжки. Анонимный покупатель
+              получит архив с файлами; вошедший под логином — ещё и аккаунт в кабинет с Telegram Web.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={submitAndRefresh} disabled={isSubmitting || !selectedCount}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Выставляю...
+                  </>
+                ) : (
+                  <>
+                    <Store className="w-4 h-4 mr-2" />
+                    Выставить {selectedCount} {pluralizeRu(selectedCount, 'аккаунт', 'аккаунта', 'аккаунтов')}
+                  </>
+                )}
+              </Button>
+              {selectedCount ? (
+                <Button variant="ghost" onClick={clearSelection} disabled={isSubmitting}>
+                  Снять выделение
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+
             <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
@@ -342,54 +391,6 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
                 );
               })()}
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label htmlFor="account-lot-price" className="text-xs uppercase tracking-widest font-semibold text-ink-muted">
-                  Цена лота, TON — одна на всех выбранных
-                </label>
-                <Input
-                  id="account-lot-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder="Например 12"
-                  className="h-11 bg-surface-subtle tabular-nums"
-                  value={priceTon}
-                  onChange={(event) => setPriceTon(event.target.value)}
-                  disabled={isSubmitting}
-                />
-              </div>
-            </div>
-
-            <p className="text-xs font-medium text-ink-muted">
-              Название лота сгенерируется само — страна по номеру и срок отлёжки. Анонимный покупатель
-              получит архив с файлами; вошедший под логином — ещё и аккаунт в кабинет с Telegram Web.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={submitAndRefresh} disabled={isSubmitting || !selectedCount}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Выставляю...
-                  </>
-                ) : (
-                  <>
-                    <Store className="w-4 h-4 mr-2" />
-                    Выставить {selectedCount} {pluralizeRu(selectedCount, 'аккаунт', 'аккаунта', 'аккаунтов')}
-                  </>
-                )}
-              </Button>
-              {selectedCount ? (
-                <Button variant="ghost" onClick={clearSelection} disabled={isSubmitting}>
-                  Снять выделение
-                </Button>
-              ) : null}
-            </div>
-          </>
-        ) : null}
 
         {problemItems.length ? (
           <div className="rounded-2xl border border-border-default bg-surface-subtle/50 p-4 opacity-80">
