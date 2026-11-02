@@ -296,7 +296,7 @@ export function UserbotCenterSection({
   const [labelDraft, setLabelDraft] = useState('');
   const [labelAccountId, setLabelAccountId] = useState('');
   const [labelSaving, setLabelSaving] = useState(false);
-  const [openPanels, setOpenPanels] = useState({ connection: true, session: true });
+  const [openPanels, setOpenPanels] = useState({ connection: false, session: false });
 
   function togglePanel(key) {
     setOpenPanels((prev) => ({ ...prev, [key]: !prev[key] }));
