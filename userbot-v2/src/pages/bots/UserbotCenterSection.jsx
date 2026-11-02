@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   UserPlus, ExternalLink, User, Loader2,
   Network, Activity, KeyRound, AlertCircle, Settings2, Trash2, Tag, Send,
-  ShieldCheck
+  ShieldCheck, ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +85,26 @@ function ModernSwitch({ checked, onChange, disabled, activeColor = 'bg-indigo-60
         }`}
       />
     </button>
+  );
+}
+
+function CollapsiblePanelHeader({ icon: Icon, iconClassName, title, open, onToggle }) {
+  return (
+    <h3 className="mb-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-1 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-lg hover:opacity-80 transition-opacity"
+      >
+        <Icon className={iconClassName} aria-hidden="true" />
+        <span className="text-sm font-bold text-slate-900">{title}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={`ml-auto w-4 h-4 text-ink-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+    </h3>
   );
 }
 
@@ -276,6 +296,11 @@ export function UserbotCenterSection({
   const [labelDraft, setLabelDraft] = useState('');
   const [labelAccountId, setLabelAccountId] = useState('');
   const [labelSaving, setLabelSaving] = useState(false);
+  const [openPanels, setOpenPanels] = useState({ connection: true, session: true });
+
+  function togglePanel(key) {
+    setOpenPanels((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   // Гард от гонок: ответ старого запроса (бот переключили / запустили более свежий reload)
   // не должен перезаписывать центр — тот же reqId-паттерн, что в CustomersPage.loadCustomers.
@@ -1106,13 +1131,16 @@ export function UserbotCenterSection({
           </div>
         </div>
 
-          <div className="p-6 md:p-8 border-t border-slate-100 grid gap-6 lg:grid-cols-2">
+          <div className="p-6 md:p-8 border-t border-slate-100 grid gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <Network className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-sm font-bold text-slate-900">Соединение</h3>
-              </div>
-
+              <CollapsiblePanelHeader
+                icon={Network}
+                iconClassName="w-4 h-4 text-indigo-500"
+                title="Соединение"
+                open={openPanels.connection}
+                onToggle={() => togglePanel('connection')}
+              />
+              {openPanels.connection ? (
               <div className="bg-surface-subtle border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
@@ -1182,14 +1210,18 @@ export function UserbotCenterSection({
                   )}
                 </div>
               </div>
+              ) : null}
             </div>
 
             <div>
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <Activity className="w-4 h-4 text-emerald-500" />
-                <h3 className="text-sm font-bold text-slate-900">Состояние сессии</h3>
-              </div>
-
+              <CollapsiblePanelHeader
+                icon={Activity}
+                iconClassName="w-4 h-4 text-emerald-500"
+                title="Состояние сессии"
+                open={openPanels.session}
+                onToggle={() => togglePanel('session')}
+              />
+              {openPanels.session ? (
               <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
@@ -1229,6 +1261,7 @@ export function UserbotCenterSection({
                   ))}
                 </div>
               </div>
+              ) : null}
             </div>
           </div>
 
