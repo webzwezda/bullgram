@@ -274,7 +274,7 @@ export async function runSaleScan(supabase, userbotService, { ownerId, scanId, c
                             label: items[index].label,
                             status: 'ok',
                             verdict: String(result.status || 'error'),
-                            reason: result.reason || null,
+                            reason: 'Живая сессия, но нет tdata-архива — продажа невозможна.',
                             checked_at: checkedAt,
                             has_tdata: false,
                             rest_hours: Math.round(accountRestHours(account.created_at) * 10) / 10,
