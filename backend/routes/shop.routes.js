@@ -18,11 +18,13 @@ import {
     loadAccountLotLabel,
     prepareShopArchiveDelivery
 } from '../services/shop-delivery.service.js';
+import { accountSaleRuleState } from '../utils/account-sale-rules.js';
 import { verifyPaymentOnce } from '../services/ton-connect-verify.service.js';
 import { claimPaid, markExpired } from '../services/payment-claim.service.js';
 import { transferShopAssets } from '../services/shop-transfer.service.js';
 import {
     SALE_SCAN_MISSING_MIGRATION_MESSAGE,
+    attachListedItemIds,
     findActiveScan,
     isMissingScanTableError,
     loadScanCandidates,
@@ -1140,6 +1142,19 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
     if (accountsError) throw accountsError;
     const accountById = new Map((accountRows || []).map((row) => [String(row.id), row]));
 
+    // Полное правило продажи (решение владельца 2026-11-03): tdata-блоб +
+    // отлёжка + свежая проверка. Без restore source с tdata аккаунт не
+    // выставляется вообще — покупатель обязан получить полный комплект.
+    const { data: ruleSources, error: ruleSourcesError } = await supabase
+        .from('userbot_restore_sources')
+        .select('account_id, tdata_blob_encrypted')
+        .eq('owner_id', ownerId)
+        .in('account_id', ids);
+    if (ruleSourcesError) throw ruleSourcesError;
+    const hasTdataByAccountId = new Map(
+        (ruleSources || []).map((row) => [String(row.account_id), Boolean(row.tdata_blob_encrypted)])
+    );
+
     const { data: existingItems, error: existingItemsError } = await supabase
         .from('shop_items')
         .select('id')
@@ -1189,8 +1204,17 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
             results.push({ asset_id: assetId, status: 'failed', error: 'Аккаунт не найден или чужой' });
             continue;
         }
-        if (findUnsellableAccountLot([account])) {
-            results.push({ asset_id: assetId, status: 'failed', error: ACCOUNT_LOT_NOT_READY_MESSAGE });
+        // Гейт правила продажи — поглощает прежний fresh-check: тот же текст
+        // для плохих статусов, честные причины для tdata/отлёжки.
+        const rule = accountSaleRuleState({
+            runtime_status: account.runtime_status,
+            last_checked_at: account.last_checked_at,
+            health_summary: account.health_summary,
+            created_at: account.created_at,
+            has_tdata: hasTdataByAccountId.get(String(assetId)) === true
+        });
+        if (!rule.sellable) {
+            results.push({ asset_id: assetId, status: 'failed', error: rule.reasons[0] || ACCOUNT_LOT_NOT_READY_MESSAGE });
             continue;
         }
         if (listedAssetKeys.has(`userbot:${assetId}`)) {
@@ -2334,10 +2358,11 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
         }
     });
 
-    // Скан «Найти аккаунты для продажи»: обходит ВЕСЬ сток админа с restore
-    // source (любой runtime_status, включая карантин), по каждому делает живую
-    // проверку сессии (тот же код, что у джобы отлёжки) и применяет вердикт с
-    // карантинными эффектами. Один активный скан на владельца; прогресс
+    // Скан «Найти аккаунты для продажи»: обходит ВЕСЬ юзербот-сток админа
+    // (любой runtime_status, включая карантин; рабочие QR-импорты без restore
+    // source тоже), по каждому делает живую проверку сессии (тот же код, что
+    // у джобы отлёжки) и применяет вердикт с карантинными эффектами + правило
+    // продажи (tdata/отлёжка). Один активный скан на владельца; прогресс
     // пишется после каждого айтема, UI поллит GET /admin/account-lots/scan.
     router.post('/admin/account-lots/scan', authenticateUser, async (req, res) => {
         const ownerId = req.user.id;
@@ -2372,8 +2397,8 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
             const { accounts, orphanCount } = await loadScanCandidates(supabase, ownerId, scope);
             if (!accounts.length) {
                 return res.status(400).json({ error: scope === 'listed'
-                    ? 'Выставленных аккаунтов с сохранёнными файлами сессий не найдено'
-                    : 'Аккаунтов с сохранёнными файлами сессий не найдено' });
+                    ? 'Выставленных юзерботов не найдено'
+                    : 'Юзерботов для скана не найдено — подключи или импортируй аккаунты' });
             }
 
             const { data: scanRow, error: insertError } = await supabase
@@ -2452,7 +2477,11 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
             const allRows = rows || [];
             await sweepStaleScans(supabase, ownerId, allRows);
 
-            res.json({ scan: allRows[0] || null });
+            // listed_item_id по текущим публичным лотам: карточка умеет «Снять»
+            // и прячет строки, чей лот уже снят/продан (см. attachListedItemIds).
+            const scan = await attachListedItemIds(supabase, ownerId, allRows[0] || null);
+
+            res.json({ scan });
         } catch (error) {
             console.error('Ошибка чтения скана аккаунтов для продажи:', error);
             res.status(500).json({ error: 'Ошибка чтения скана аккаунтов для продажи' });

@@ -6,8 +6,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { apiRequest } from '../../api/client.js';
 import { formatCheckedAgo, useAccountLots } from './useAccountLots.js';
-import { scanVerdictMeta, useSaleScan } from './useSaleScan.js';
+import { ruleFailReason, scanVerdictMeta, useSaleScan } from './useSaleScan.js';
 
 // Идиомы карточки — как у BatchIntakeSection: плоский icon-box, баннер с
 // бордером и feedback-парой, бейджи variant="secondary" парой bg+text.
@@ -75,7 +76,8 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
     stale,
     error: scanError,
     startScan,
-    refreshScan
+    refreshScan,
+    removeScanItem
   } = useSaleScan({ accessToken, showUiMessage, scope: 'unlisted' });
 
   // Отдельный скан для уже выставленных в магазине: их сессии проверяются
@@ -139,6 +141,31 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
     await refreshScan();
   }
 
+  // «Снять» = удалить лот витрины (draft-тупик из ревью P1 исключён): без
+  // покупок лот удаляется и аккаунт сразу возвращается в кандидаты; с
+  // покупками роут честно откажет (окно выдачи/возврат — вручную).
+  const [removingAccountId, setRemovingAccountId] = useState('');
+  async function removeListedItem(item) {
+    const itemId = item?.listed_item_id;
+    if (!itemId || !accessToken || removingAccountId) return;
+    const label = item.label || 'аккаунт';
+    if (!window.confirm(`Удалить лот «${label}» с витрины? Аккаунт вернётся в список кандидатов.`)) return;
+    setRemovingAccountId(String(item.account_id || ''));
+    try {
+      await apiRequest(`/api/shop/admin/items/${itemId}`, {
+        accessToken,
+        method: 'DELETE'
+      });
+      listedScan.removeScanItem(String(item.account_id));
+      showUiMessage('Лот удалён — аккаунт снова в списке кандидатов.', 'success');
+      await refreshScan();
+    } catch (error) {
+      showUiMessage(error.message || 'Не удалось удалить лот с витрины.', 'error');
+    } finally {
+      setRemovingAccountId('');
+    }
+  }
+
   return (
     <Card className="border-0 shadow-lg ring-1 ring-border-default mb-6 bg-surface-card overflow-hidden rounded-2xl">
       <div className="bg-surface-subtle/50 border-b border-border-default p-5 sm:p-6">
@@ -149,7 +176,8 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
           <div>
             <h2 className="text-xl font-bold text-ink-strong">Продажа аккаунтов</h2>
             <p className="text-sm text-ink-muted mt-0.5">
-              Найди аккаунты живой проверкой сессий, отметь живые — они встанут на витрину отдельными лотами.
+              Единственное место продажи аккаунтов: скан живых сессий, витрина и снятие лотов — всё здесь.
+              Продать можно только аккаунт с tdata-архивом, свежей проверкой и отлёжкой.
             </p>
           </div>
         </div>
@@ -354,7 +382,11 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
               ) : null}
 
               {(() => {
-                const items = Array.isArray(listedScan.scan?.items) ? listedScan.scan.items : [];
+                // Только строки с публичным лотом (listed_item_id от GET-скана):
+                // снятые/проданные лоты исчезают отсюда сразу после refreshScan,
+                // без нового скана.
+                const items = (Array.isArray(listedScan.scan?.items) ? listedScan.scan.items : [])
+                  .filter((item) => item?.listed_item_id);
                 if (!items.length) {
                   return (
                     <p className="text-xs font-medium text-ink-muted">
@@ -368,6 +400,7 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
                     {items.map((item) => {
                       const meta = scanVerdictMeta(item);
                       const healthy = item.verdict === 'online' || item.verdict === 'pending_activation';
+                      const isRemoving = removingAccountId === String(item.account_id);
                       return (
                         <li key={String(item.account_id)} className="rounded-lg border border-border-default bg-surface-card px-3 py-2">
                           <div className="flex items-center gap-3">
@@ -380,6 +413,15 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
                                 ? `Проверен ${formatCheckedAgo(item.checked_at)}`
                                 : meta.label}
                             </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0 h-7 px-2 text-xs"
+                              disabled={Boolean(removingAccountId)}
+                              onClick={() => removeListedItem(item)}
+                            >
+                              {isRemoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Снять'}
+                            </Button>
                           </div>
                           {!healthy && item.reason ? (
                             <div className="mt-1 text-xs text-ink-muted">{item.reason}</div>
@@ -405,6 +447,11 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
             <ul className="max-h-60 space-y-1.5 overflow-y-auto">
               {problemItems.map((item, index) => {
                 const meta = scanVerdictMeta(item);
+                // Правило продажи не пройдено при живом вердикте: причина
+                // правила («Нет tdata-архива» / «Отлёжка…») — главный текст,
+                // вердикт-подпись глушим. Старые сканы без rule-полей рендерим
+                // как раньше (treat as ok).
+                const ruleReason = ruleFailReason(item);
                 return (
                   <li
                     key={item.account_id || `${item.label}-${index}`}
@@ -414,12 +461,12 @@ export function AccountLotsSection({ accessToken, showUiMessage }) {
                       <span className="min-w-0 flex-1 truncate font-mono text-xs tabular-nums text-ink-muted">
                         {item.label || item.account_id}
                       </span>
-                      <span className={`flex shrink-0 items-center gap-1.5 text-xs ${meta.textClass}`}>
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${meta.dotClass}`} />
-                        {meta.label}
+                      <span className={`flex shrink-0 items-center gap-1.5 text-xs ${ruleReason ? 'text-ink-muted' : meta.textClass}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${ruleReason ? 'bg-ink-faint' : meta.dotClass}`} />
+                        {ruleReason || meta.label}
                       </span>
                     </div>
-                    {item.reason ? (
+                    {!ruleReason && item.reason ? (
                       <div className="mt-1 text-xs text-ink-muted">{item.reason}</div>
                     ) : null}
                   </li>

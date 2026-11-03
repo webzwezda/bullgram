@@ -38,6 +38,18 @@ export function scanVerdictMeta(item) {
   return meta;
 }
 
+// Айтем, не прошедший правило продажи (tdata/отлёжка) при живом вердикте:
+// бэкенд кладёт причину правила в reason и sellable=false. В «Проблемных»
+// такой строке показываем причину как главный текст, а вердикт-подпись
+// глушим. Старые сканы без правила (healthy ⇒ sellable=true) сюда не
+// попадают — поведение прежнее.
+export function ruleFailReason(item) {
+  if (!item || item.sellable !== false || !item.reason) return null;
+  const verdict = String(item?.verdict || '').trim().toLowerCase();
+  const healthyVerdict = verdict === 'online' || verdict === 'pending_activation';
+  return healthyVerdict ? String(item.reason) : null;
+}
+
 // Свежесть последнего завершённого скана: гейт публикации на бэкенде — 6ч,
 // карточка предупреждает тем же окном. Берём свежайший checked_at айтемов,
 // иначе updated_at скана.
@@ -189,6 +201,14 @@ export function useSaleScan({ accessToken, showUiMessage, scope = 'unlisted' }) 
     }
   }
 
+  // Удаление строки из локального состояния (после успешного «Снять»,
+  // пока снапшот скана ещё содержит айтем).
+  function removeScanItem(accountId) {
+    setScan((prev) => (prev && Array.isArray(prev.items)
+      ? { ...prev, items: prev.items.filter((item) => String(item.account_id) !== String(accountId)) }
+      : prev));
+  }
+
   const stale = useMemo(() => isScanStale(scan), [scan]);
 
   return {
@@ -198,6 +218,7 @@ export function useSaleScan({ accessToken, showUiMessage, scope = 'unlisted' }) 
     stale,
     error,
     startScan,
-    refreshScan
+    refreshScan,
+    removeScanItem
   };
 }

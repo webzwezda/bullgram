@@ -19,16 +19,14 @@ import {
     maskLabelForPublic
 } from '../utils/shop-files.js';
 
-const ACCOUNT_FRESH_CHECK_WINDOW_MS = 6 * 60 * 60 * 1000;
+import {
+    ACCOUNT_NOT_READY_MESSAGE,
+    isFreshHealthyAccount
+} from '../utils/account-sale-rules.js';
 
-export const ACCOUNT_LOT_NOT_READY_MESSAGE = 'Аккаунт не готов к продаже: запусти проверку Telegram (Гигиена аккаунтов)';
+export const ACCOUNT_LOT_NOT_READY_MESSAGE = ACCOUNT_NOT_READY_MESSAGE;
 export const ARCHIVE_EXPIRED_MESSAGE = 'Срок выдачи истёк, архив удалён с серверов';
 export const NOT_PAID_MESSAGE = 'Оплата ещё не подтверждена';
-
-function isFreshAccountCheck(row) {
-    const checkedAt = row?.last_checked_at ? new Date(row.last_checked_at).getTime() : 0;
-    return Boolean(checkedAt) && (Date.now() - checkedAt) <= ACCOUNT_FRESH_CHECK_WINDOW_MS;
-}
 
 function accountHealthStatus(row) {
     return String(row?.health_summary?.status || '').trim().toLowerCase();
@@ -38,13 +36,11 @@ function accountHealthStatus(row) {
 // отлёжка недавно подтвердила online; 'online' тоже требует свежей проверки —
 // без неё аккаунт мог испортиться, а отстойник об этом ещё не знает.
 // Всё остальное (restricted/frozen/expired/dead_proxy/error и неизвестное) — карантин.
+// Семантика живёт в utils/account-sale-rules.js (единый источник правил);
+// tdata/отлёжку из полного правила владельца здесь НЕ проверяем — это гейт
+// уже выставленных лотов (бронь/выдача), комплект проверен при выставлении.
 function isSellableAccountLot(row) {
-    const status = String(row?.runtime_status || '').trim().toLowerCase();
-    if (status === 'online') return isFreshAccountCheck(row);
-    if (status === 'pending_activation') {
-        return accountHealthStatus(row) === 'online' && isFreshAccountCheck(row);
-    }
-    return false;
+    return isFreshHealthyAccount(row);
 }
 
 export function findUnsellableAccountLot(rows) {
@@ -57,7 +53,7 @@ export function isTransferableAccountLot(account) {
     const status = String(account?.runtime_status || '').trim().toLowerCase();
     if (status === 'online') return true;
     if (status !== 'pending_activation') return false;
-    return accountHealthStatus(account) === 'online' && isFreshAccountCheck(account);
+    return accountHealthStatus(account) === 'online' && isFreshHealthyAccount(account);
 }
 
 function buildArchiveReadme(basename) {

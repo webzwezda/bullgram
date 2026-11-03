@@ -57,6 +57,7 @@ const OWNER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BUYER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ACC1 = '11111111-1111-4111-8111-111111111111';
 const ACC2 = '12121212-1212-4121-8121-121212121212';
+const ACC3 = '14141414-1414-4141-8141-141414141414';
 const ACC_BAD = '13131313-1313-4131-8131-131313131313';
 const PROXY_ID = '22222222-2222-4222-8222-222222222222';
 const PROXY2_ID = '23232323-2323-4232-8232-232323232323';
@@ -180,6 +181,8 @@ function accountRow(overrides = {}) {
         last_checked_at: FRESH_ISO,
         health_summary: { status: 'online' },
         proxy_id: PROXY_ID,
+        // Отлёжка по умолчанию давно пройдена (правило продажи 2026-11-03).
+        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
         ...overrides
     };
 }
@@ -319,15 +322,20 @@ console.log('— Batch-выставление аккаунтов —');
         tg_accounts: [
             accountRow({ id: ACC1 }),
             accountRow({ id: ACC2, custom_label: '+44…777' }),
+            accountRow({ id: ACC3, custom_label: '+66…333' }),
             accountRow({ id: ACC_BAD, custom_label: '+55…111', runtime_status: 'frozen' })
         ],
         shop_items: [],
         shop_item_assets: [],
-        userbot_restore_sources: []
+        // Правило продажи: tdata-блоб обязателен — у ACC3 источника нет.
+        userbot_restore_sources: [
+            restoreSourceRow({ account_id: ACC1 }),
+            restoreSourceRow({ account_id: ACC2 })
+        ]
     }));
     const result = await createAccountLotsBatch(supabase, {
         ownerId: OWNER,
-        assetIds: [ACC1, ACC2, ACC_BAD],
+        assetIds: [ACC1, ACC2, ACC3, ACC_BAD],
         priceTon: 5,
         title: 'Аккаунт из приёмки',
         deliveryMode: 'hybrid'
@@ -336,6 +344,8 @@ console.log('— Batch-выставление аккаунтов —');
     const statusByAsset = Object.fromEntries(result.results.map((row) => [row.asset_id, row.status]));
     assert(statusByAsset[ACC1] === 'ok' && statusByAsset[ACC2] === 'ok' && statusByAsset[ACC_BAD] === 'failed', 'batch: ok/ok/failed по активам');
     assert(result.results.find((row) => row.asset_id === ACC_BAD).error === ACCOUNT_LOT_NOT_READY_MESSAGE, 'batch: frozen дал ошибку гейта');
+    assert(statusByAsset[ACC3] === 'failed', 'batch: без restore source выставить нельзя');
+    assert(result.results.find((row) => row.asset_id === ACC3).error === 'Нет tdata-архива', 'batch: без tdata — честная причина «Нет tdata-архива»');
     const items = supabase._tables.shop_items;
     assert(items.length === 2, 'batch: ровно 2 лота в БД');
     assert(items.every((item) =>
@@ -361,7 +371,7 @@ console.log('— Batch: автоназвание (страна по телефо
         ],
         shop_items: [],
         shop_item_assets: [],
-        userbot_restore_sources: []
+        userbot_restore_sources: [restoreSourceRow()]
     }));
     const result = await createAccountLotsBatch(supabase, {
         ownerId: OWNER,

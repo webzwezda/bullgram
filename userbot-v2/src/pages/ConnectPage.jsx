@@ -4,27 +4,24 @@ import { useAuth } from '../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { getProductTierRules } from '../app/productTier.js';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
-import { ListedShopUserbotsSection } from './bots/ListedShopUserbotsSection.jsx';
 import { BatchIntakeSection } from './bots/BatchIntakeSection.jsx';
 import { AccountLotsSection } from './bots/AccountLotsSection.jsx';
 import { UserbotOnboardingSection } from './bots/UserbotOnboardingSection.jsx';
 import { UserbotStorefrontSection } from './bots/UserbotStorefrontSection.jsx';
 import { useBotsAccountsData } from './bots/useBotsAccountsData.js';
 import {
-  formatWhen,
   isUserbotPurchase,
   isUserbotShopItem,
-  proxyLabel,
-  restrictedMarker
+  proxyLabel
 } from './bots/bots-accounts.utils.js';
 import { useBotsAccountsDerivedState } from './bots/useBotsAccountsDerivedState.js';
-import { useListedShopUserbotsController } from './bots/useListedShopUserbotsController.js';
 import { useUserbotOnboarding } from './bots/useUserbotOnboarding.js';
 import { useShopStorefront } from '../features/shop-storefront/useShopStorefront.js';
 
 // Страница «Подключение» (композиция 2026-09-28): покупка аккаунта → онбординг
-// (прокси → способ входа → авторизация) → лоты продавца («Выставлены в Shop»)
-// и лоты платформы («Юзерботы на витрине»). Подключённый аккаунт появляется
+// (прокси → способ входа → авторизация). Продажа аккаунтов — одна карточка
+// «Продажа аккаунтов» (скан → витрина → снятие), секция «Выставлены в Shop»
+// убрана 2026-11-03 (слияние складов). Подключённый аккаунт появляется
 // в витрине Юзерботов на /. Магазинный слой зеркалит UserbotsPage.
 
 function showUiMessage(text, tone = 'default') {
@@ -40,8 +37,10 @@ function userbotBatchTitleFor(count, firstItem) {
 
 function ConnectPageContent() {
   const { accessToken, user, profilePlan, profileRole } = useAuth();
-  const [selectedShopUserbotId, setSelectedShopUserbotId] = useState('');
-  const { state, setState, reloadAccounts } = useBotsAccountsData({
+  // Селектор «выбрать юзербот на витрине» остался от убранной секции
+  // «Выставлены в Shop»: производное состояние ждёт его — держим пустым.
+  const [selectedShopUserbotId] = useState('');
+  const { state, reloadAccounts } = useBotsAccountsData({
     accessToken,
     ownerId: user?.id
   });
@@ -79,10 +78,7 @@ function ConnectPageContent() {
     availableOnboardingProxies,
     bundledUserbotLot,
     bundledUserbotLots,
-    canSellUserbotAssets,
-    listedShopUserbots,
-    openUserbotPurchases,
-    selectedShopUserbot
+    openUserbotPurchases
   } = useBotsAccountsDerivedState({
     state,
     storefrontState,
@@ -108,15 +104,6 @@ function ConnectPageContent() {
     planRules,
     userbotCount: userbotsCount,
     reloadAccounts,
-    showUiMessage
-  });
-
-  const {
-    deleteShopItem
-  } = useListedShopUserbotsController({
-    accessToken,
-    reloadAccounts,
-    setState,
     showUiMessage
   });
 
@@ -168,16 +155,6 @@ function ConnectPageContent() {
     reloadAssets: reloadAccounts
   };
 
-  const listedShopUserbotsSectionProps = {
-    deleteShopItem,
-    formatWhen,
-    listedShopUserbots,
-    restrictedMarker,
-    selectedShopUserbot,
-    setSelectedShopUserbotId,
-    state
-  };
-
   if (state.loading) {
     return <LoadingState text="Тянем прокси, профили и лоты..." />;
   }
@@ -216,16 +193,12 @@ function ConnectPageContent() {
         />
       ) : null}
 
-      {canSellUserbotAssets ? (
-        <ListedShopUserbotsSection {...listedShopUserbotsSectionProps} />
-      ) : null}
-
       {state.proxySupport?.profile_role === 'admin' ? (
         <AdminLotsSection
           accessToken={accessToken}
-          types="bundle,userbot"
-          title="Юзерботы на витрине"
-          emptyText="Опубликованных лотов юзерботов сейчас нет."
+          types="bundle"
+          title="Наборы (Pro-стартовые комплекты)"
+          emptyText="Наборов сейчас нет."
         />
       ) : null}
     </section>

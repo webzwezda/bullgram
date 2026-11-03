@@ -2,13 +2,16 @@
 // Кнопка на карточке «Продажа аккаунтов» (POST /api/shop/admin/account-lots/scan)
 // создаёт строку account_sale_scans и fire-and-forget запускает runSaleScan:
 //
-//   1. кандидаты — ВСЕ юзерботы админа с restore source (любой runtime_status:
-//      online, pending_activation, restricted, frozen, expired, dead_proxy,
-//      error — «все места», включая отстойник); сортировка: сначала не
+//   1. кандидаты — ВСЕ юзерботы админа (любой runtime_status: online,
+//      pending_activation, restricted, frozen, expired, dead_proxy, error —
+//      «все места», включая отстойник; рабочие QR-импорты без restore source
+//      тоже — has_tdata=false для правила продажи); сортировка: сначала не
 //      проверявшиеся давно;
 //   2. по каждому — живая проверка checkStockAccount + applyStockVerdict (тот
 //      же код, что у джобы отлёжки приёмки): статусы пишутся честно, с
 //      карантинными эффектами (restricted → чистка прокси, unpublish);
+//      sellable требует полного правила владельца (tdata + отлёжка +
+//      свежесть, utils/account-sale-rules.js);
 //   3. прогресс (processed/failed/items) пишется в строку скана после КАЖДОГО
 //      айтема — UI поллит GET /admin/account-lots/scan;
 //   4. проверки строго последовательные с анти-флуд паузой
@@ -18,6 +21,7 @@
 // Скан ничего не удаляет (кроме карантинных эффектов restricted, как у
 // отлёжки), restore source только читает, работает по одному владельцу.
 import { applyStockVerdict, checkStockAccount, getIntakeRestingSleepMs, QUARANTINE_STATUSES } from './intake-stock.service.js';
+import { accountRestHours, accountSaleRuleState } from '../utils/account-sale-rules.js';
 
 export const SALE_SCAN_MISSING_MIGRATION_MESSAGE = 'Сначала примени SQL под account sale scan.';
 
@@ -47,12 +51,15 @@ export function scanItemLabel(account) {
     return account?.custom_label || account?.tg_username || account?.tg_account_id || String(account?.id || '');
 }
 
-// Кандидаты скана по одному владельцу: restore sources админа + их
-// tg_accounts (любой статус). orphans — restore sources без строки аккаунта
-// (блобы после пуржа): считаются один раз, кандидатами не становятся (v1).
-// POST и раннер зовут один хелпер, чтобы выборка не разъехалась.
-// Активный лот = draft/published с этим userbot-активом. Скоуп 'listed'
-// сканирует именно их, 'unlisted' — всё остальное.
+// Кандидаты скана по одному владельцу: ВСЕ юзерботы админа (волна B —
+// объединение складов: и паковые, и рабочие QR-импорты без restore source),
+// любой статус. Каждому кандидату проставляется has_tdata (по
+// userbot_restore_sources.tdata_blob_encrypted) — без tdata правило продажи
+// честно уводит аккаунт в «Проблемные» с «Нет tdata-архива». orphans —
+// restore sources без строки аккаунта (блобы после пуржа): считаются один
+// раз, кандидатами не становятся. Активный лот = draft/published с этим
+// userbot-активом. Скоуп 'listed' сканирует именно их, 'unlisted' — всё
+// остальное. POST и раннер зовут один хелпер, чтобы выборка не разъехалась.
 async function loadActiveLotAssetIds(supabase, ownerId) {
     const { data: activeItems, error } = await supabase
         .from('shop_items')
@@ -75,22 +82,27 @@ async function loadActiveLotAssetIds(supabase, ownerId) {
 export async function loadScanCandidates(supabase, ownerId, scope = 'unlisted') {
     const { data: sources, error: sourcesError } = await supabase
         .from('userbot_restore_sources')
-        .select('account_id')
+        .select('account_id, tdata_blob_encrypted')
         .eq('owner_id', ownerId);
     if (sourcesError) throw sourcesError;
+    const hasTdataByAccountId = new Map(
+        (sources || []).map((row) => [String(row.account_id), Boolean(row.tdata_blob_encrypted)])
+    );
     const sourceAccountIds = Array.from(new Set((sources || []).map((row) => String(row.account_id))));
-    if (!sourceAccountIds.length) return { accounts: [], orphanCount: 0 };
 
     const { data: accounts, error: accountsError } = await supabase
         .from('tg_accounts')
-        .select('id, owner_id, tg_account_id, tg_username, custom_label, runtime_status, session_data, proxy_id, last_checked_at, health_summary')
+        .select('id, owner_id, tg_account_id, tg_username, custom_label, runtime_status, session_data, proxy_id, last_checked_at, health_summary, created_at, tg_phone')
         .eq('account_type', 'userbot')
         .eq('owner_id', ownerId)
-        .in('id', sourceAccountIds)
         .order('last_checked_at', { ascending: true, nullsFirst: true });
     if (accountsError) throw accountsError;
 
-    const rows = accounts || [];
+    const rows = (accounts || []).map((row) => ({
+        ...row,
+        has_tdata: hasTdataByAccountId.get(String(row.id)) === true,
+        has_source: hasTdataByAccountId.has(String(row.id))
+    }));
     const foundIds = new Set(rows.map((row) => String(row.id)));
     const activeLotIds = await loadActiveLotAssetIds(supabase, ownerId);
 
@@ -101,6 +113,59 @@ export async function loadScanCandidates(supabase, ownerId, scope = 'unlisted') 
     }
     const orphanCount = sourceAccountIds.filter((accountId) => !foundIds.has(accountId)).length;
     return { accounts: rows.filter((row) => !activeLotIds.has(String(row.id))), orphanCount };
+}
+
+function isMissingShopTablesError(error) {
+    const code = error?.code || '';
+    const message = String(error?.message || error || '');
+    return code === '42P01' || message.includes('shop_items') || message.includes('shop_item_assets');
+}
+
+// Обогащение GET-скана: каждому айтему — listed_item_id (id его ПУБЛИЧНОГО
+// лота, status='published'). Карточка по нему показывает кнопку «Снять» и
+// прячет строки, чей лот уже снят/продан: после «Снять» лот уходит в draft
+// (unpublish-эндпоинт), refreshed GET приходит без listed_item_id — строка
+// исчезает из «Уже на витрине» без нового скана. Черновики — не витрина,
+// поэтому enrich именно по published, а не по всем активным лотам.
+// БД без shop-таблиц — скан отдаём как есть (обогащать нечем).
+export async function attachListedItemIds(supabase, ownerId, scan) {
+    if (!scan || !Array.isArray(scan.items) || !scan.items.length) return scan;
+
+    const { data: publishedItems, error: itemsError } = await supabase
+        .from('shop_items')
+        .select('id')
+        .eq('owner_id', ownerId)
+        .eq('item_type', 'account')
+        .eq('status', 'published');
+    if (itemsError) {
+        if (!isMissingShopTablesError(itemsError)) throw itemsError;
+        return scan;
+    }
+    const itemIds = (publishedItems || []).map((row) => row.id);
+
+    const listedByAssetId = new Map();
+    if (itemIds.length) {
+        const { data: assets, error: assetsError } = await supabase
+            .from('shop_item_assets')
+            .select('shop_item_id, asset_id')
+            .eq('asset_type', 'userbot')
+            .in('shop_item_id', itemIds);
+        if (assetsError) {
+            if (!isMissingShopTablesError(assetsError)) throw assetsError;
+            return scan;
+        }
+        for (const asset of assets || []) {
+            listedByAssetId.set(String(asset.asset_id), asset.shop_item_id);
+        }
+    }
+
+    return {
+        ...scan,
+        items: scan.items.map((item) => ({
+            ...item,
+            listed_item_id: listedByAssetId.get(String(item.account_id)) || null
+        }))
+    };
 }
 
 // Свип зависших processing-сканов владельца: старше часа без обновлений —
@@ -190,11 +255,41 @@ export async function runSaleScan(supabase, userbotService, { ownerId, scanId, c
                         verdict: 'no_proxy',
                         reason: 'К аккаунту не привязан прокси — проверка сессии невозможна.',
                         checked_at: checkedAt,
+                        has_tdata: account.has_tdata === true,
+                        rest_hours: Math.round(accountRestHours(account.created_at) * 10) / 10,
                         in_quarantine: false,
                         sellable: false
                     };
                 } else {
                     const result = await checkFn(supabase, userbotService, account, proxy);
+
+                    // Боевые QR-импорты без restore source — report-only: вердикт
+                    // показываем в списке, но статусы в базе не трогаем (флак
+                    // таймаута не должен помечать рабочий аккаунт error'ом),
+                    // карантинные эффекты не применяем. Они всё равно не
+                    // продаваемы: has_tdata=false валит правило.
+                    if (account.has_source === false) {
+                        item = {
+                            account_id: account.id,
+                            label: items[index].label,
+                            status: 'ok',
+                            verdict: String(result.status || 'error'),
+                            reason: result.reason || null,
+                            checked_at: checkedAt,
+                            has_tdata: false,
+                            rest_hours: Math.round(accountRestHours(account.created_at) * 10) / 10,
+                            in_quarantine: false,
+                            sellable: false
+                        };
+                        items[index] = item;
+                        processed += 1;
+                        await persistScan({ processed, failed, items });
+                        if (index < accounts.length - 1) {
+                            await doSleep(sleepMs);
+                        }
+                        continue;
+                    }
+
                     const { verdictStatus } = await applyVerdict(account, result, checkedAt);
 
                     // Перечитываем строку: вердикт применён с optimistic guard,
@@ -207,15 +302,33 @@ export async function runSaleScan(supabase, userbotService, { ownerId, scanId, c
                     if (freshError) throw freshError;
                     const verdict = String(freshRow?.runtime_status || verdictStatus || account.runtime_status || 'error');
                     const healthStatus = freshRow?.health_summary?.status || null;
+                    const healthyVerdict = verdict === 'online' || (verdict === 'pending_activation' && healthStatus === 'online');
+                    // Полное правило владельца (tdata + отлёжка + свежесть):
+                    // чек только что прошёл — свежесть считаем от checkedAt;
+                    // created_at/has_tdata берём из кандидата на момент запуска.
+                    const rule = accountSaleRuleState({
+                        runtime_status: verdict,
+                        last_checked_at: checkedAt,
+                        health_summary: freshRow?.health_summary || null,
+                        created_at: account.created_at || null,
+                        has_tdata: account.has_tdata === true
+                    });
                     item = {
                         account_id: account.id,
                         label: items[index].label,
                         status: 'ok',
                         verdict,
-                        reason: result.reason || null,
+                        // Живой вердикт, но правило не пройдено → причиной
+                        // становится правило («Нет tdata-архива» / «Отлёжка…»),
+                        // а не текст проверки.
+                        reason: healthyVerdict && !rule.sellable
+                            ? rule.reasons[0]
+                            : (result.reason || null),
                         checked_at: checkedAt,
+                        has_tdata: account.has_tdata === true,
+                        rest_hours: Math.round(accountRestHours(account.created_at) * 10) / 10,
                         in_quarantine: QUARANTINE_STATUSES.includes(verdict),
-                        sellable: verdict === 'online' || (verdict === 'pending_activation' && healthStatus === 'online')
+                        sellable: healthyVerdict && rule.sellable
                     };
                 }
             } catch (error) {
@@ -226,6 +339,8 @@ export async function runSaleScan(supabase, userbotService, { ownerId, scanId, c
                     verdict: 'error',
                     reason: String(error?.message || error || 'Проверка сессии не прошла.'),
                     checked_at: checkedAt,
+                    has_tdata: account.has_tdata === true,
+                    rest_hours: Math.round(accountRestHours(account.created_at) * 10) / 10,
                     // Ошибка проверки — не карантин: в базе аккаунт не тронут
                     // (ревью волны: in_quarantine только по факту вердикта).
                     in_quarantine: false,
