@@ -2729,9 +2729,21 @@ export class UserbotService {
                 return waitForBotFatherReply(client, peer, afterId, stepTimeoutMs, label);
             };
 
-            await sendStep('/newbot', 'botFatherCreateBot.step1');
-            await sendStep(name, 'botFatherCreateBot.step2');
+            const assertNotRefusal = (reply, step) => {
+                const refusal = isBotFatherRefusal(reply);
+                if (refusal) {
+                    throw new MCPError(
+                        ERROR_CODES.INVALID_PARAMS,
+                        `BotFather отказал на шаге ${step}: ${refusal}`,
+                        {}
+                    );
+                }
+            };
+
+            assertNotRefusal(await sendStep('/newbot', 'botFatherCreateBot.step1'), '/newbot');
+            assertNotRefusal(await sendStep(name, 'botFatherCreateBot.step2'), 'имя');
             const reply = await sendStep(username, 'botFatherCreateBot.step3');
+            assertNotRefusal(reply, 'юзернейм');
 
             if (/taken|unavailable/i.test(reply)) {
                 throw new MCPError(
@@ -3136,6 +3148,24 @@ function assertFeatureEnabled(envName, featureLabel) {
 
 // Токен бота из ответа BotFather: «123456789:AA...long-secret...».
 const BOTFATHER_MENU_SIGNATURE = 'I can help you create and manage Telegram bots';
+
+/**
+ * Отказ BotFather, после которого диалог бессмысленно продолжать:
+ * лимит 20 ботов на аккаунт, прочие «Sorry, you can't …».
+ * Возвращаем короткую причину для INVALID_PARAMS или null.
+ */
+export function isBotFatherRefusal(rawValue = '') {
+    const text = String(rawValue || '');
+    const limitMatch = text.match(/you can't add more than (\d+) bots/i);
+    if (limitMatch) {
+        return `Лимит Telegram: у аккаунта уже ${limitMatch[1]} ботов — удалите или передайте одного из них (/mybots → /deletebot), затем повторите.`;
+    }
+    if (/^Sorry, you can't/i.test(text.trim())) {
+        return text.slice(0, 200);
+    }
+    return null;
+}
+
 
 /**
  * Приветствие-меню, которое BotFather досылает при первом контакте.

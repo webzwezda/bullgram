@@ -12,7 +12,7 @@
  *
  * Запуск: node test/test-userbot-entity-resolution.js
  */
-import { isBotFatherGreeting, findPeerByDialogPages } from '../services/userbot.service.js';
+import { isBotFatherGreeting, isBotFatherRefusal, findPeerByDialogPages } from '../services/userbot.service.js';
 
 let failures = 0;
 let passes = 0;
@@ -105,5 +105,15 @@ function makeDialog(entityId, lastMessageId) {
 
 // ---------- итог ----------
 
+// ---------- isBotFatherRefusal ----------
+
+console.log('isBotFatherRefusal');
+
+const REFUSAL_20 = "Sorry, you can't add more than 20 bots. To create a new bot, delete one of your bots or transfer ownership of one of your bots to a different person.";
+assertEqual(isBotFatherRefusal(REFUSAL_20), 'Лимит Telegram: у аккаунта уже 20 ботов — удалите или передайте одного из них (/mybots → /deletebot), затем повторите.', 'лимит 20 ботов → ясная причина');
+assertEqual(isBotFatherRefusal("Sorry, you can't do that right now."), "Sorry, you can't do that right now.", 'прочий отказ → сырой текст');
+assertEqual(isBotFatherRefusal('Done! Congratulations on your new bot.'), null, 'успех → null');
+assertEqual(isBotFatherRefusal('Alright, a new bot. How are we going to call it?'), null, 'промпт имени → null');
+assertEqual(isBotFatherRefusal(''), null, 'пустая строка → null');
+
 console.log(`\n${passes} passed, ${failures} failed`);
-process.exit(failures ? 1 : 0);
