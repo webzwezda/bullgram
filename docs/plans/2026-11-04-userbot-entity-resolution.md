@@ -51,4 +51,9 @@ push-to-main → GitHub Actions → deploy-pull.sh → pm2 reload. Live-вери
 
 ## Review
 
-(filled after deploy)
+- Deployed: 7f29a49 (entity-resolution) + 68f650c (refusal-детект). Live-верификация юзерботом webzwezda:
+  fetch_messages по DM (wiki master) работает — им и поставлен диагноз; botfather_create_bot теперь на шаге
+  /newbot мгновенно возвращает «Лимит Telegram: у аккаунта уже 20 ботов» вместо таймаута после трёх шагов.
+- Реальный блокер создания бота через webzwezda — жёсткий лимит Telegram (20 ботов/аккаунт), не код.
+- Попутно найдено: greeting-гонка BotFather (фильтр в waitForBotFatherReply), отсутствие fallback-резолва
+  у read-методов (исправлено), lessons в docs/plans/LESSONS.md.
