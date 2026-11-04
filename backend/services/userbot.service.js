@@ -1409,6 +1409,37 @@ export class UserbotService {
         return client.getInputEntity(candidate);
     }
 
+    async findPeerByIteratingDialogs(client, normalizedId, options = {}) {
+        return findPeerByDialogPages(client, normalizedId, {
+            ...options,
+            normalize: (dialog) => this.normalizeInputPeer(client, dialog)
+        });
+    }
+
+    /**
+     * Резолв peer для read-операций (fetch/search messages). Свежая сессия юзербота
+     * имеет пустой кэш сущностей GramJS — голый getInputEntity падает
+     * («Could not find the input entity»), поэтому DM идёт через
+     * resolveDirectMessageTarget (кэш access_hash + пагинация диалогов),
+     * а чаты/каналы — getInputEntity с fallback на пагинацию диалогов.
+     */
+    async resolveChatPeerForRead(client, userbot, chatId) {
+        const id = normalizeChatIdInput(chatId);
+        const chatIdNum = Number(id);
+        if (Number.isFinite(chatIdNum) && chatIdNum > 0) {
+            const dm = await this.resolveDirectMessageTarget(client, userbot, chatIdNum, {});
+            if (dm?.peer) return dm.peer;
+            throw new Error(`Юзербот не знает этот TG ID (${id}): нет кэша access_hash, диалога в сессии и общего чата.`);
+        }
+        try {
+            return await client.getInputEntity(id);
+        } catch (error) {
+            const viaDialogs = await this.findPeerByIteratingDialogs(client, id);
+            if (viaDialogs) return viaDialogs;
+            throw error;
+        }
+    }
+
     async resolveDirectMessageTarget(client, userbot, tgUserId, options = {}) {
         const normalizedId = String(tgUserId || '').trim();
         if (!normalizedId) return null;
@@ -1484,11 +1515,10 @@ export class UserbotService {
         }
 
         try {
-            const dialogs = await client.getDialogs({ limit: 80 });
-            const dialog = (dialogs || []).find(item => String(item?.entity?.id || '') === normalizedId);
-            if (dialog) {
+            const dialogPeer = await this.findPeerByIteratingDialogs(client, normalizedId);
+            if (dialogPeer) {
                 return {
-                    peer: await this.normalizeInputPeer(client, dialog),
+                    peer: dialogPeer,
                     source: 'dialogs'
                 };
             }
@@ -2088,8 +2118,9 @@ export class UserbotService {
 
         const client = await this.createAuthorizedClient(userbot);
         try {
+            const peer = await this.resolveChatPeerForRead(client, userbot, id);
             const messages = await withTimeout(
-                client.getMessages(id, {
+                client.getMessages(peer, {
                     limit: pageLimit + 1,
                     offsetId,
                     offsetDate,
@@ -2134,8 +2165,9 @@ export class UserbotService {
 
         const client = await this.createAuthorizedClient(userbot);
         try {
+            const peer = await this.resolveChatPeerForRead(client, userbot, id);
             const messages = await withTimeout(
-                client.getMessages(id, {
+                client.getMessages(peer, {
                     limit: pageLimit + 1,
                     offsetId,
                     search: String(query || '')
@@ -3103,8 +3135,50 @@ function assertFeatureEnabled(envName, featureLabel) {
 }
 
 // Токен бота из ответа BotFather: «123456789:AA...long-secret...».
-export function parseBotFatherToken(rawValue = '') {
-    const match = String(rawValue || '').match(/(\d{6,10}:[A-Za-z0-9_-]{30,})/);
+const BOTFATHER_MENU_SIGNATURE = 'I can help you create and manage Telegram bots';
+
+/**
+ * Приветствие-меню, которое BotFather досылает при первом контакте.
+ * Может приехать ПОСЛЕ нашего /newbot и перехватить окно ответа,
+ * поэтому waitForBotFatherReply его отфильтровывает.
+ */
+export function isBotFatherGreeting(rawValue = '') {
+    const text = String(rawValue || '');
+    if (!text) return false;
+    if (text.includes(BOTFATHER_MENU_SIGNATURE)) return true;
+    // Командное меню нового диалога: перечисление /newbot + /mybots.
+    return text.includes('/newbot') && text.includes('/mybots');
+}
+
+/**
+ * Резолв peer пагинацией по диалогам. Свежая сессия юзербота имеет пустой
+ * кэш сущностей GramJS — getInputEntity падает («Could not find the input
+ * entity»). Итерация по диалогам и находит peer, и заселяет кэш сессии
+ * для последующих вызовов. Кап — 10 страниц по 100 диалогов.
+ */
+export async function findPeerByDialogPages(client, normalizedId, { maxTotal = 600, normalize } = {}) {
+    const target = String(normalizedId || '').trim();
+    if (!target) return null;
+    let offsetId;
+    let seen = 0;
+    for (let page = 0; page < 10; page++) {
+        const dialogs = await client.getDialogs({ limit: 100, ...(offsetId ? { offsetId } : {}) });
+        if (!dialogs?.length) return null;
+        for (const dialog of dialogs) {
+            seen++;
+            if (String(dialog?.entity?.id || '') === target) {
+                return normalize ? await normalize(dialog) : dialog.entity;
+            }
+        }
+        const last = dialogs[dialogs.length - 1];
+        const lastId = Number(last?.id || 0);
+        if (!lastId || (offsetId !== undefined && lastId >= offsetId) || seen >= maxTotal) return null;
+        offsetId = lastId;
+    }
+    return null;
+}
+
+export function parseBotFatherToken(rawValue = '') {    const match = String(rawValue || '').match(/(\d{6,10}:[A-Za-z0-9_-]{30,})/);
     return match ? match[1] : null;
 }
 
@@ -3154,7 +3228,9 @@ async function waitForBotFatherReply(client, peer, afterId, timeoutMs, label) {
             30_000,
             `${label}.poll`
         );
-        const fresh = (messages || []).find(m => m?.out === false && Number(m?.id || 0) > afterId);
+        const fresh = (messages || []).find(m => m?.out === false
+            && Number(m?.id || 0) > afterId
+            && !isBotFatherGreeting(m?.message));
         if (fresh) {
             return String(fresh?.message || '').trim();
         }
