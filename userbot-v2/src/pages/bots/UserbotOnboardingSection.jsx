@@ -253,6 +253,7 @@ export function UserbotOnboardingSection({
   proxyLabel,
   startQrLogin,
   steps,
+  submitQrPassword,
   switchFingerprintMode,
   updateOnboarding
 }) {
@@ -452,6 +453,35 @@ export function UserbotOnboardingSection({
                         <><QrCode className="w-5 h-5 mr-2" /> Сгенерировать QR-код</>
                       )}
                     </Button>
+                  </div>
+                )}
+                {onboarding.qrPasswordRequired && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-6 space-y-3">
+                    <h4 className="text-base font-bold text-slate-900">Облачный пароль (2FA)</h4>
+                    <p className="text-sm text-slate-500">
+                      Скан принят, но аккаунт защищен облачным паролем — Telegram требует его для завершения входа на новом устройстве.
+                    </p>
+                    {onboarding.qrPasswordHint ? (
+                      <p className="text-sm text-slate-500">Подсказка Telegram: <b>{onboarding.qrPasswordHint}</b></p>
+                    ) : null}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Input
+                        type="password"
+                        placeholder="Облачный пароль"
+                        value={onboarding.qrPasswordValue}
+                        onChange={(event) => updateOnboarding({ qrPasswordValue: event.target.value })}
+                        className="h-11 sm:max-w-xs"
+                      />
+                      <Button
+                        onClick={submitQrPassword}
+                        className="h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200 px-6"
+                      >
+                        Завершить вход
+                      </Button>
+                    </div>
+                    {onboarding.qrPasswordError ? (
+                      <p className="text-sm font-medium text-rose-600">{onboarding.qrPasswordError}</p>
+                    ) : null}
                   </div>
                 )}
               </div>

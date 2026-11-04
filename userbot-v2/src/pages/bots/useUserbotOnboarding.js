@@ -15,6 +15,10 @@ function buildInitialOnboardingState() {
     qrCodeUrl: '',
     qrStatus: '',
     qrStatusTone: 'default',
+    qrPasswordRequired: false,
+    qrPasswordValue: '',
+    qrPasswordHint: '',
+    qrPasswordError: '',
     isGeneratingQr: false,
     isImporting: false,
     customFingerprintLabel: 'Мой профиль',
@@ -140,10 +144,26 @@ export function useUserbotOnboarding({
           updateOnboarding({
             qrStatus: `Аккаунт подключен в safe-mode. Профиль входа: ${profileLabel}. Сейчас подтянем его в список, а в работу его введешь отдельной живой активацией.`,
             qrCodeUrl: '',
+            qrPasswordRequired: false,
+            qrPasswordError: '',
             qrStatusTone: 'success'
           });
           showUiMessage('Аккаунт подключен через QR.', 'success');
           await reloadAccounts();
+        }
+        if (result.status === '2fa_required') {
+          // Скан принят, но аккаунт под облачным паролем: Telegram требует
+          // auth.checkPassword с нового клиента. Показываем форму пароля.
+          stopQrPolling();
+          updateOnboarding({
+            qrPasswordRequired: true,
+            qrPasswordValue: '',
+            qrPasswordHint: result.password_hint || '',
+            qrPasswordError: result.password_error || '',
+            qrStatus: 'Скан принят. Аккаунт защищен облачным паролем — введи его, чтобы завершить вход.',
+            qrStatusTone: 'default'
+          });
+          return;
         }
         if (result.status === 'pending' && result.qr_code && result.qr_code !== lastQrImageRef.current) {
           // Токен QR живёт ~30 секунд, сервер ротирует код: подменяем картинку,
@@ -159,14 +179,21 @@ export function useUserbotOnboarding({
           stopQrPolling();
           updateOnboarding({
             qrStatus: result.error || 'QR-вход не прошел. Сгенерируй QR заново.',
-            qrStatusTone: 'error'
+            qrStatusTone: 'error',
+            qrPasswordRequired: false,
+            qrPasswordError: ''
           });
           showUiMessage(result.error || 'QR-вход не прошел. Сгенерируй QR заново.', 'error');
         }
       } catch (error) {
         if (String(error.message).includes('404')) {
           stopQrPolling();
-          updateOnboarding({ qrStatus: 'QR больше не активен. Сгенерируй новый.', qrStatusTone: 'error' });
+          updateOnboarding({
+            qrStatus: 'QR больше не активен. Сгенерируй новый.',
+            qrStatusTone: 'error',
+            qrPasswordRequired: false,
+            qrPasswordError: ''
+          });
           showUiMessage('QR больше не активен. Сгенерируй новый.', 'error');
           return;
         }
@@ -187,6 +214,32 @@ export function useUserbotOnboarding({
       });
       showUiMessage('QR-ожидание истекло.', 'error');
     }, 3 * 60 * 1000);
+  }
+
+  async function submitQrPassword() {
+    const password = String(onboarding.qrPasswordValue || '').trim();
+    if (!password) {
+      updateOnboarding({ qrPasswordError: 'Введи облачный пароль.' });
+      return;
+    }
+    try {
+      await apiRequest('/api/userbot/qr-password', {
+        accessToken,
+        method: 'POST',
+        body: { password }
+      });
+      updateOnboarding({
+        qrPasswordError: '',
+        qrPasswordValue: '',
+        qrStatus: 'Проверяем пароль в Telegram...',
+        qrStatusTone: 'default'
+      });
+      // Пароль принят: дальше либо authorized (поллинг добьет success),
+      // либо 2fa_required снова — с «Неверный пароль» от сервера.
+      pollQrStatus();
+    } catch (error) {
+      updateOnboarding({ qrPasswordError: error.message || 'Не удалось передать пароль. Попробуй еще раз.' });
+    }
   }
 
   useEffect(() => () => {
@@ -262,7 +315,11 @@ export function useUserbotOnboarding({
       isGeneratingQr: true,
       qrCodeUrl: '',
       qrStatus: '',
-      qrStatusTone: 'default'
+      qrStatusTone: 'default',
+      qrPasswordRequired: false,
+      qrPasswordValue: '',
+      qrPasswordHint: '',
+      qrPasswordError: ''
     });
 
     try {
@@ -380,6 +437,7 @@ export function useUserbotOnboarding({
     importSession,
     onboarding,
     startQrLogin,
+    submitQrPassword,
     switchFingerprintMode,
     updateOnboarding
   };

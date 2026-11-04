@@ -31,3 +31,47 @@ export async function runQrAuthWithRotation(startCycle, {
         }
     }
 }
+
+// Гейт облачного пароля (2FA). После принятого скана Telegram требует
+// auth.checkPassword с НОВОГО клиента (SESSION_PASSWORD_NEEDED →
+// signInWithPassword); пароль приходит от владельца отдельным HTTP-запросом,
+// поэтому авторизация паркуется на deferred-промисе, пока он не придет.
+// Один гейт на QR-сессию: каждый запрос пароля (в т.ч. повторный после
+// PASSWORD_HASH_INVALID) создает новый deferred, старый остается одноразовым.
+export function createQrPasswordGate() {
+    let pending = null;
+    let hint = '';
+    let error = null;
+
+    return {
+        // Паркует цикл авторизации: вызывается коллбеком password GramJS.
+        request(nextHint = '') {
+            hint = String(nextHint || '');
+            let resolve;
+            const promise = new Promise((res) => { resolve = res; });
+            pending = { promise, resolve };
+            return promise;
+        },
+        // POST /qr-password: отдает пароль в авторизацию. false = запроса нет
+        // (повторный сабмит или сабмит вне парковки).
+        submit(password) {
+            if (!pending) return false;
+            const { resolve } = pending;
+            pending = null;
+            resolve(String(password || ''));
+            return true;
+        },
+        hasRequest() {
+            return !!pending;
+        },
+        setError(value) {
+            error = value ? String(value) : null;
+        },
+        getHint() {
+            return hint;
+        },
+        getError() {
+            return error;
+        }
+    };
+}

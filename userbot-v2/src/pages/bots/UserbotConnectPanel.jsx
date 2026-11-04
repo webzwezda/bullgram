@@ -54,6 +54,7 @@ export function UserbotConnectPanel({
     importSession,
     onboarding,
     startQrLogin,
+    submitQrPassword,
     switchFingerprintMode,
     updateOnboarding
   } = useUserbotOnboarding({
@@ -97,6 +98,7 @@ export function UserbotConnectPanel({
         proxyLabel={proxyLabel}
         startQrLogin={startQrLogin}
         steps={ONBOARDING_STEPS}
+        submitQrPassword={submitQrPassword}
         switchFingerprintMode={switchFingerprintMode}
         updateOnboarding={updateOnboarding}
       />

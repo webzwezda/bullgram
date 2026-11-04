@@ -18,7 +18,7 @@ import {
   sanitizeParticipant
 } from '../shared/content-sanitizer.js';
 import { getPeerFromCache } from '../utils/peer-cache.js';
-import { runQrAuthWithRotation } from '../utils/qr-auth.js';
+import { runQrAuthWithRotation, createQrPasswordGate } from '../utils/qr-auth.js';
 
 const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -1132,6 +1132,12 @@ export class UserbotService {
             );
         };
 
+        // 2FA: после принятого скана Telegram требует auth.checkPassword с
+        // нового клиента. Без коллбека password GramJS сразу умирает с
+        // «Account has 2FA enabled.» (регрессия 2026-11-04) — теперь авторизация
+        // паркуется на гейте, пароль приходит через POST /qr-password.
+        const passwordGate = createQrPasswordGate();
+
         const qrSession = {
             client,
             promise: null,
@@ -1140,7 +1146,8 @@ export class UserbotService {
             authState: 'pending',
             authError: null,
             createdAt: Date.now(),
-            currentQrCode: null
+            currentQrCode: null,
+            passwordGate
         };
 
         // Создаем Promise который резолвится когда QR код будет готов
@@ -1188,8 +1195,20 @@ export class UserbotService {
                     onError: (error) => {
                         console.error('[QR-GENERATE] onError callback:', error.message);
                         fatalError = error;
+                        // Неверный 2FA-пароль: signInWithPassword уходит на
+                        // следующий виток и снова запрашивает пароль — покажем
+                        // ошибку на форме ввода.
+                        if (String(error?.errorMessage || error?.message || '').includes('PASSWORD_HASH_INVALID')) {
+                            passwordGate.setError('Неверный пароль. Попробуй еще раз.');
+                        }
                     },
-                    qrCode: qrCodeCallback
+                    qrCode: qrCodeCallback,
+                    // Парковка: Telegram ждет auth.checkPassword, мы — пароль
+                    // владельца из /qr-password.
+                    password: async (hint) => {
+                        qrSession.authState = '2fa_required';
+                        return passwordGate.request(hint);
+                    }
                 }),
                 { maxRestarts: QR_TOKEN_RESTART_LIMIT }
             );

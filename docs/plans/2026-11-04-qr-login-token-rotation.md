@@ -39,7 +39,37 @@
 - Перевод сырых ошибок в UI-копирайт: после ротации AUTH_TOKEN_EXPIRED до
   экрана больше не доходит (лимит 60 перезапусков — теоретический хвост).
 
-## Review (2026-11-04)
+## Волна 2: 2FA «Account has 2FA enabled.» (тот же день)
+
+После ротации владелец дошёл до скана — и упёрся в 2FA. Первопричина: после
+принятого скана Telegram для аккаунтов с облачным паролем отвечает
+SESSION_PASSWORD_NEEDED, GramJS зовёт коллбек `password` — мы его не передавали,
+`signInWithPassword` умирал с заготовленной «Account has 2FA enabled.»
+(node_modules/telegram/client/auth.js:332). С 2FA-аккаунтами QR-вход был
+невозможен в принципе.
+
+- [x] `utils/qr-auth.js`: `createQrPasswordGate()` — парковка авторизации на
+      deferred-промисе, одноразовый сабмит, hint/error-акцессоры.
+- [x] `generateQR`: коллбек `password` (парковка через гейт),
+      PASSWORD_HASH_INVALID → ошибка на форме, authState `2fa_required`.
+- [x] `routes/userbot.routes.js`: `/qr-status` отдаёт `2fa_required` +
+      hint/error; новый `POST /qr-password` (404 без парковки, 409 повтор).
+- [x] Фронт: форма облачного пароля под QR (UserbotOnboardingSection), ветка
+      `2fa_required` в поллинге, `submitQrPassword` через панель в секцию.
+- [x] Тесты гейта в `test-qr-auth.js`.
+
+## Review (волна 2)
+
+- `test:qr-auth` (гейт: парковка/сабмит/повтор после неверного пароля) —
+  зелёный; `test:mcp` / `test:intake` / `test:sale-scan` — зелёные.
+- `node --check` services/userbot.service.js, routes/userbot.routes.js,
+  utils/qr-auth.js.
+- `npm run build:userbot-v2` — зелёная.
+- Ограничение: реальный вход с 2FA проверяется только на проде (нужен живой
+  аккаунт с облачным паролем) — по документации Telegram auth-API
+  SESSION_PASSWORD_NEEDED → GetPassword → CheckPassword ровно этот путь.
+
+## Review (волна 1)
 
 Сделано всё из списка изменений. Проверки:
 

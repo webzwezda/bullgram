@@ -2689,6 +2689,16 @@ export default function (supabase) {
                     error: sessionData.authError || 'QR-вход не прошел. Сгенерируй QR заново.'
                 });
             }
+            if (sessionData.authState === '2fa_required') {
+                // Скан принят, Telegram ждет auth.checkPassword — фронт покажет
+                // форму облачного пароля, ответ придет в POST /qr-password.
+                const gate = sessionData.passwordGate;
+                return res.json({
+                    status: '2fa_required',
+                    password_hint: gate?.getHint() || '',
+                    password_error: gate?.getError() || null
+                });
+            }
             if (sessionData.authState !== 'authorized') {
                 // Токен QR ротируется каждые ~30с: отдаём свежую картинку,
                 // фронт подменяет QR на экране, пока владелец ещё не отсканил.
@@ -2764,6 +2774,32 @@ export default function (supabase) {
 
             return res.status(500).json({ error: 'Не удалось проверить статус QR-входа. Попробуй сгенерировать QR заново.' });
         }
+    });
+
+    // Облачный пароль (2FA) для QR-входа: скан уже принят, авторизация
+    // запаркована на гейте — отдаем пароль в signInWithPassword.
+    router.post('/qr-password', authenticateUser, async (req, res) => {
+        await userbotService.sweepStaleQrSessions();
+
+        const sessionData = userbotService.qrSessions.get(req.user.id);
+        if (!sessionData || sessionData.authState !== '2fa_required') {
+            return res.status(404).json({
+                error: 'Нет активного запроса пароля. Отсканируй QR — Telegram сам попросит пароль, если он нужен.'
+            });
+        }
+
+        const password = String(req.body?.password || '').trim();
+        if (!password) {
+            return res.status(400).json({ error: 'Введи облачный пароль (2FA) этого аккаунта.' });
+        }
+
+        const accepted = sessionData.passwordGate?.submit(password);
+        if (!accepted) {
+            return res.status(409).json({ error: 'Пароль уже принят, ждем ответ Telegram.' });
+        }
+
+        sessionData.authState = 'pending';
+        return res.json({ status: 'checking' });
     });
 
     // ==========================================

@@ -10,7 +10,7 @@
  * Запуск: node test/test-qr-auth.js
  */
 import assert from 'node:assert';
-import { isQrTokenExpiredError, runQrAuthWithRotation } from '../utils/qr-auth.js';
+import { createQrPasswordGate, isQrTokenExpiredError, runQrAuthWithRotation } from '../utils/qr-auth.js';
 
 let failures = 0;
 let passes = 0;
@@ -97,6 +97,34 @@ console.log('— runQrAuthWithRotation: старт-цикл, который са
     });
     assert.strictEqual(result, 'token-3', 'последний токен победил');
     assert.deepStrictEqual(tokens, ['token-1', 'token-2', 'token-3'], 'токены ротировались по порядку');
+}
+
+console.log('— createQrPasswordGate: парковка, сабмит, повторный запрос после неверного пароля —');
+
+{
+    const gate = createQrPasswordGate();
+    assert.strictEqual(gate.hasRequest(), false, 'без парковки запроса нет');
+
+    const parked = gate.request(' qwerty ');
+    assert.strictEqual(gate.hasRequest(), true, 'авторизация запаркована');
+    assert.strictEqual(gate.getHint(), ' qwerty ', 'подсказка Telegram сохранена');
+
+    assert.strictEqual(gate.submit('my-cloud-password'), true, 'первый сабмит принят');
+    assert.strictEqual(await parked, 'my-cloud-password', 'пароль дошел до авторизации');
+    assert.strictEqual(gate.hasRequest(), false, 'после сабмита запроса нет');
+    assert.strictEqual(gate.submit('again'), false, 'повторный сабмит отвергается');
+
+    // Неверный пароль: onError ставит ошибку, цикл идет на новый виток —
+    // request() создает свежий deferred и НЕ стирает ошибку (ее покажет форма).
+    gate.setError('Неверный пароль. Попробуй еще раз.');
+    const parkedAgain = gate.request('');
+    assert.strictEqual(gate.getHint(), '', 'новая подсказка перезаписала старую');
+    assert.strictEqual(gate.getError(), 'Неверный пароль. Попробуй еще раз.', 'ошибка пережила повторный запрос');
+    gate.submit('correct-password');
+    assert.strictEqual(await parkedAgain, 'correct-password', 'второй парковке дошел исправный пароль');
+
+    gate.setError(null);
+    assert.strictEqual(gate.getError(), null, 'ошибку можно сбросить');
 }
 
 console.log(failures === 0 ? `\nВсе проверки ротации QR-логина прошли (${passes} шт.)` : `\nПровалено проверок: ${failures}`);
