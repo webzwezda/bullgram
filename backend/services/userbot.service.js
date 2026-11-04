@@ -2257,9 +2257,20 @@ export class UserbotService {
 
         const client = await this.createAuthorizedClient(userbot);
         try {
-            const target = isDm
-                ? await this.resolveDirectMessageTarget(client, userbot, chatIdNum, {})
-                : id;
+            let target = id;
+            if (isDm) {
+                // resolveDirectMessageTarget возвращает { peer, source } — в sendMessage
+                // нужен именно peer, иначе GramJS бросает «Cannot cast [object Object]».
+                const resolved = await this.resolveDirectMessageTarget(client, userbot, chatIdNum, {});
+                if (!resolved?.peer) {
+                    throw new MCPError(
+                        ERROR_CODES.INVALID_PARAMS,
+                        `Юзербот не знает этот TG ID (${id}): нет кэша access_hash, диалога в сессии и общего чата.`,
+                        {}
+                    );
+                }
+                target = resolved.peer;
+            }
 
             const sent = await withTimeout(
                 client.sendMessage(target, {
