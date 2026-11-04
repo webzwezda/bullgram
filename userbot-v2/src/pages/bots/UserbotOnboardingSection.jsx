@@ -489,22 +489,6 @@ export function UserbotOnboardingSection({
           </div>
         </div>
       </Card>
-
-      {onboarding.qrStatus && (
-        <div className={`mb-6 p-4 flex gap-3 items-start rounded-2xl border text-sm font-medium shadow-sm animate-in slide-in-from-bottom-2 ${
-          onboarding.qrStatusTone === 'success'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            : onboarding.qrStatusTone === 'warning'
-              ? 'border-amber-200 bg-amber-50 text-amber-800'
-              : onboarding.qrStatusTone === 'error'
-                ? 'border-rose-200 bg-rose-50 text-rose-800'
-                : 'border-slate-200 bg-white text-slate-700'
-        }`}>
-          {onboarding.qrStatusTone === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />}
-          {onboarding.qrStatusTone === 'warning' && <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />}
-          <div className="pt-0.5">{onboarding.qrStatus}</div>
-        </div>
-      )}
     </>
   );
 }

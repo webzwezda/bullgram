@@ -13,8 +13,6 @@ function buildInitialOnboardingState() {
     fingerprintMode: 'preset',
     connectMethod: 'qr',
     qrCodeUrl: '',
-    qrStatus: '',
-    qrStatusTone: 'default',
     qrPasswordRequired: false,
     qrPasswordValue: '',
     qrPasswordHint: '',
@@ -133,7 +131,6 @@ export function useUserbotOnboarding({
 
   async function pollQrStatus() {
     stopQrPolling();
-    updateOnboarding({ qrStatus: '', qrStatusTone: 'default' });
     showUiMessage('Ждем скан и вход...');
 
     qrPollingIntervalRef.current = window.setInterval(async () => {
@@ -143,37 +140,31 @@ export function useUserbotOnboarding({
           stopQrPolling();
           const profileLabel = result.fingerprint_profile_label || currentQrFingerprintProfile(onboarding.qrFingerprintProfileId).label;
           updateOnboarding({
-            qrStatus: `Аккаунт подключен в safe-mode. Профиль входа: ${profileLabel}. Сейчас подтянем его в список, а в работу его введешь отдельной живой активацией.`,
             qrCodeUrl: '',
             qrPasswordRequired: false,
-            qrPasswordError: '',
-            qrStatusTone: 'success'
+            qrPasswordError: ''
           });
-          showUiMessage('Аккаунт подключен через QR.', 'success');
+          showUiMessage(`Аккаунт подключен в safe-mode. Профиль входа: ${profileLabel}.`, 'success');
           await reloadAccounts();
         }
         if (result.status === '2fa_required') {
           // Скан принят, но аккаунт под облачным паролем: Telegram требует
-          // auth.checkPassword с нового клиента. Показываем форму пароля.
+          // auth.checkPassword с нового клиента. Тост + форма пароля.
           stopQrPolling();
           updateOnboarding({
             qrPasswordRequired: true,
             qrPasswordValue: '',
             qrPasswordHint: result.password_hint || '',
-            qrPasswordError: result.password_error || '',
-            qrStatus: 'Скан принят. Аккаунт защищен облачным паролем — введи его, чтобы завершить вход.',
-            qrStatusTone: 'default'
+            qrPasswordError: result.password_error || ''
           });
+          showUiMessage('Скан принят. Аккаунт защищен облачным паролем — введи его, чтобы завершить вход.');
           return;
         }
         if (result.status === 'generating') {
           // Сессия еще поднимается через прокси, первого токена нет.
           if (!qrGeneratingNoticeRef.current) {
             qrGeneratingNoticeRef.current = true;
-            updateOnboarding({
-              qrStatus: 'Поднимаю сессию через прокси — QR появится здесь. Обычно до 30 секунд.',
-              qrStatusTone: 'default'
-            });
+            showUiMessage('Поднимаю сессию через прокси — QR появится здесь. Обычно до 30 секунд.');
           }
           return;
         }
@@ -182,19 +173,16 @@ export function useUserbotOnboarding({
           // пока владелец ещё не отсканил, иначе скан попадёт в протухший QR.
           const isFirstQr = !lastQrImageRef.current;
           lastQrImageRef.current = result.qr_code;
-          updateOnboarding({
-            qrCodeUrl: result.qr_code,
-            qrStatus: isFirstQr
-              ? 'QR готов. Сканируй его в Telegram — код сам обновится, если истечет.'
-              : 'Обновили QR — старый код истёк. Сканируй свежий.',
-            qrStatusTone: isFirstQr ? 'success' : 'default'
-          });
+          updateOnboarding({ qrCodeUrl: result.qr_code });
+          if (isFirstQr) {
+            showUiMessage('QR готов. Сканируй его в Telegram — код сам обновится, если истечет.', 'success');
+          } else {
+            showUiMessage('Обновили QR — старый код истёк. Сканируй свежий.');
+          }
         }
         if (result.status === 'failed') {
           stopQrPolling();
           updateOnboarding({
-            qrStatus: result.error || 'QR-вход не прошел. Сгенерируй QR заново.',
-            qrStatusTone: 'error',
             qrPasswordRequired: false,
             qrPasswordError: ''
           });
@@ -204,8 +192,6 @@ export function useUserbotOnboarding({
         if (String(error.message).includes('404')) {
           stopQrPolling();
           updateOnboarding({
-            qrStatus: 'QR больше не активен. Сгенерируй новый.',
-            qrStatusTone: 'error',
             qrPasswordRequired: false,
             qrPasswordError: ''
           });
@@ -213,21 +199,13 @@ export function useUserbotOnboarding({
           return;
         }
         stopQrPolling();
-        updateOnboarding({
-          qrStatus: error.message || 'Не удалось проверить статус QR. Остановили ожидание, чтобы не долбить API бесконечно.',
-          qrStatusTone: 'error'
-        });
-        showUiMessage(error.message || 'Не удалось проверить статус QR.', 'error');
+        showUiMessage(error.message || 'Не удалось проверить статус QR. Остановили ожидание, чтобы не долбить API бесконечно.', 'error');
       }
     }, 3000);
 
     qrPollingTimeoutRef.current = window.setTimeout(() => {
       stopQrPolling();
-      updateOnboarding({
-        qrStatus: 'QR-ожидание истекло. Сгенерируй новый код, если вход так и не завершился.',
-        qrStatusTone: 'error'
-      });
-      showUiMessage('QR-ожидание истекло.', 'error');
+      showUiMessage('QR-ожидание истекло. Сгенерируй новый код, если вход так и не завершился.', 'error');
     }, 3 * 60 * 1000);
   }
 
@@ -245,12 +223,11 @@ export function useUserbotOnboarding({
       });
       updateOnboarding({
         qrPasswordError: '',
-        qrPasswordValue: '',
-        qrStatus: 'Проверяем пароль в Telegram...',
-        qrStatusTone: 'default'
+        qrPasswordValue: ''
       });
       // Пароль принят: дальше либо authorized (поллинг добьет success),
       // либо 2fa_required снова — с «Неверный пароль» от сервера.
+      showUiMessage('Проверяем пароль в Telegram...');
       pollQrStatus();
     } catch (error) {
       updateOnboarding({ qrPasswordError: error.message || 'Не удалось передать пароль. Попробуй еще раз.' });
@@ -321,8 +298,6 @@ export function useUserbotOnboarding({
     updateOnboarding({
       isGeneratingQr: true,
       qrCodeUrl: '',
-      qrStatus: '',
-      qrStatusTone: 'default',
       qrPasswordRequired: false,
       qrPasswordValue: '',
       qrPasswordHint: '',
@@ -346,20 +321,12 @@ export function useUserbotOnboarding({
         }
       });
       if (result.success) {
-        updateOnboarding({
-          qrStatus: 'Поднимаю сессию через прокси — QR появится здесь. Обычно до 30 секунд.',
-          qrStatusTone: 'default'
-        });
+        // Генерация в фоне: картинку и статусы принесет поллинг.
         pollQrStatus();
       } else {
-        updateOnboarding({ qrStatus: 'QR не запустился. Попробуй еще раз.', qrStatusTone: 'error' });
-        showUiMessage('QR не запустился от Telegram.', 'error');
+        showUiMessage('QR не запустился. Попробуй еще раз.', 'error');
       }
     } catch (error) {
-      updateOnboarding({
-        qrStatus: normalizeOnboardingErrorMessage(error),
-        qrStatusTone: 'error'
-      });
       showUiMessage(normalizeOnboardingErrorMessage(error), 'error');
     } finally {
       updateOnboarding({ isGeneratingQr: false });
@@ -388,9 +355,7 @@ export function useUserbotOnboarding({
     }
 
     updateOnboarding({
-      isImporting: true,
-      qrStatus: '',
-      qrStatusTone: 'default'
+      isImporting: true
     });
     try {
       const formData = new FormData();
@@ -421,17 +386,11 @@ export function useUserbotOnboarding({
         sessionFile: null,
         sessionFileName: '',
         jsonFile: null,
-        jsonFileName: '',
-        qrStatus: '',
-        qrStatusTone: 'default'
+        jsonFileName: ''
       });
       showUiMessage('Аккаунт импортирован в safe-mode.', 'success');
       await reloadAccounts();
     } catch (error) {
-      updateOnboarding({
-        qrStatus: normalizeOnboardingErrorMessage(error),
-        qrStatusTone: 'error'
-      });
       showUiMessage(normalizeOnboardingErrorMessage(error), 'error');
     } finally {
       updateOnboarding({ isImporting: false });
