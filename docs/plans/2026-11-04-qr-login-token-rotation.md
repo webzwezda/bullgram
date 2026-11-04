@@ -58,6 +58,31 @@ SESSION_PASSWORD_NEEDED, GramJS зовёт коллбек `password` — мы е
       `2fa_required` в поллинге, `submitQrPassword` через панель в секцию.
 - [x] Тесты гейта в `test-qr-auth.js`.
 
+## Волна 3: 504 на qr-start, вечная генерация, спам analytics.ton.org, confirm-попап
+
+- [x] **504/вечная генерация**: generateQR держал HTTP-запрос до 90с внутреннего
+      таймаута — nginx отрубал раньше с 504, а фронт крутил спиннер. Теперь
+      генерация целиком в фоне (`_runQrGeneration`): qr-start отвечает мгновенно
+      (`qr_pending: true`), прогресс через `/qr-status`: `generating` →
+      `pending`+`qr_code` → `authorized`/`failed`/`2fa_required`. Connect
+      ограничен 25с (`USERBOT_HEALTH_CONNECT_TIMEOUT_MS`), часовой watchdog 90с
+      на первый QR — честный failed без гейтвея в цепочке.
+- [x] **Confirm-попап удалён**: вместо window.confirm — тост «Генерирую QR,
+      подожди ~30 сек...» (просьба владельца).
+- [x] **analytics.ton.org (connection refused)**: у TonConnect SDK 3.0.2
+      (`@tonconnect/sdk` `AnalyticsSettings`) есть режим `analytics.mode:'off'`
+      — включён во всех трёх провайдерах (userbot-v2 TonConnectProvider,
+      site-v2 TonConnectProvider, site-v2 PayLayout).
+- [x] Побочный фикс волны 2: ignorable-ошибка при парковке 2FA больше не
+      сбрасывает authState в pending (ломало /qr-password).
+
+## Review (волна 3)
+
+- `node --check` services/userbot.service.js, routes/userbot.routes.js;
+  test:mcp / test:intake / test:qr-auth — зелёные.
+- `build:userbot-v2`, `build:site` — зелёные.
+- Финальная верификация QR — только живым сканом на проде (владелец).
+
 ## Review (волна 2)
 
 - `test:qr-auth` (гейт: парковка/сабмит/повтор после неверного пароля) —

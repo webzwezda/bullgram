@@ -2663,7 +2663,7 @@ export default function (supabase) {
                 save_as_preset: !!save_as_preset,
                 preset_label: normalizedCustomFingerprint?.label || ''
             }, req.user.id);
-            console.log('[QR-ROUTE] QR успешно сгенерирован');
+            console.log('[QR-ROUTE] QR-сессия запущена, генерация идет в фоне');
             res.json(result);
         } catch (error) {
             console.error('[QR-ROUTE] ❌ ОШИБКА при генерации QR:', error.message);
@@ -2700,13 +2700,13 @@ export default function (supabase) {
                 });
             }
             if (sessionData.authState !== 'authorized') {
+                if (!sessionData.currentQrCode) {
+                    // Клиент еще поднимается через прокси, первого токена нет.
+                    return res.json({ status: 'generating' });
+                }
                 // Токен QR ротируется каждые ~30с: отдаём свежую картинку,
                 // фронт подменяет QR на экране, пока владелец ещё не отсканил.
-                const pendingPayload = { status: 'pending' };
-                if (sessionData.currentQrCode) {
-                    pendingPayload.qr_code = sessionData.currentQrCode;
-                }
-                return res.json(pendingPayload);
+                return res.json({ status: 'pending', qr_code: sessionData.currentQrCode });
             }
 
             const savedSession = sessionData.client?.session?.save?.() || '';

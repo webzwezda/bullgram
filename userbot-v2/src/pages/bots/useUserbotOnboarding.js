@@ -47,6 +47,7 @@ export function useUserbotOnboarding({
   const qrPollingIntervalRef = useRef(null);
   const qrPollingTimeoutRef = useRef(null);
   const lastQrImageRef = useRef(null);
+  const qrGeneratingNoticeRef = useRef(false);
   const [onboarding, setOnboarding] = useState(buildInitialOnboardingState);
   const [fingerprintProfilesState, setFingerprintProfilesState] = useState({
     loading: false,
@@ -165,14 +166,28 @@ export function useUserbotOnboarding({
           });
           return;
         }
+        if (result.status === 'generating') {
+          // Сессия еще поднимается через прокси, первого токена нет.
+          if (!qrGeneratingNoticeRef.current) {
+            qrGeneratingNoticeRef.current = true;
+            updateOnboarding({
+              qrStatus: 'Поднимаю сессию через прокси — QR появится здесь. Обычно до 30 секунд.',
+              qrStatusTone: 'default'
+            });
+          }
+          return;
+        }
         if (result.status === 'pending' && result.qr_code && result.qr_code !== lastQrImageRef.current) {
           // Токен QR живёт ~30 секунд, сервер ротирует код: подменяем картинку,
           // пока владелец ещё не отсканил, иначе скан попадёт в протухший QR.
+          const isFirstQr = !lastQrImageRef.current;
           lastQrImageRef.current = result.qr_code;
           updateOnboarding({
             qrCodeUrl: result.qr_code,
-            qrStatus: 'Обновили QR — старый код истёк. Сканируй свежий.',
-            qrStatusTone: 'default'
+            qrStatus: isFirstQr
+              ? 'QR готов. Сканируй его в Telegram — код сам обновится, если истечет.'
+              : 'Обновили QR — старый код истёк. Сканируй свежий.',
+            qrStatusTone: isFirstQr ? 'success' : 'default'
           });
         }
         if (result.status === 'failed') {
@@ -300,16 +315,8 @@ export function useUserbotOnboarding({
       showUiMessage('Сначала выбери живой прокси. Юзерботы теперь подключаются только через прокси.', 'error');
       return;
     }
-    const selectedQrFingerprint = currentQrFingerprintProfile(onboarding.qrFingerprintProfileId);
     const usingCustomFingerprint = onboarding.fingerprintMode === 'custom';
     const customFingerprint = usingCustomFingerprint ? buildCustomFingerprintPayload() : null;
-    const fingerprintLabel = usingCustomFingerprint
-      ? (customFingerprint.label || 'Свой профиль')
-      : selectedQrFingerprint.label;
-
-    if (!window.confirm(`Сгенерировать QR через выбранный прокси и профиль "${fingerprintLabel}"? Это живая Telegram-авторизация. После входа аккаунт сохранится в safe-mode, без автозапуска рабочих действий, а fingerprint закрепится за этой сессией.`)) {
-      return;
-    }
 
     updateOnboarding({
       isGeneratingQr: true,
@@ -321,8 +328,14 @@ export function useUserbotOnboarding({
       qrPasswordHint: '',
       qrPasswordError: ''
     });
+    lastQrImageRef.current = null;
+    qrGeneratingNoticeRef.current = false;
+    // Подтверждение перед живой авторизацией переехало из window.confirm в тост.
+    showUiMessage('Генерирую QR, подожди ~30 сек — сессия поднимается через прокси...');
 
     try {
+      // Генерация идет в фоне на сервере: qr-start отвечает сразу, картинка и
+      // статус приходят поллингом (generating → pending с qr_code → success).
       const result = await apiRequest('/api/userbot/qr-start', {
         accessToken,
         method: 'POST',
@@ -332,18 +345,15 @@ export function useUserbotOnboarding({
           custom_fingerprint: customFingerprint
         }
       });
-      const profileLabel = result.fingerprint_profile_label || fingerprintLabel;
-      lastQrImageRef.current = result.qrCode || null;
-      updateOnboarding({
-        qrCodeUrl: result.qrCode || '',
-        qrStatus: result.qrCode ? `QR готов. Сканируй его в Telegram. Профиль входа: ${profileLabel}.` : 'QR не пришел.',
-        qrStatusTone: result.qrCode ? 'success' : 'error'
-      });
-      if (!result.qrCode) {
-        showUiMessage('QR не пришел от Telegram.', 'error');
-      }
-      if (result.qrCode) {
+      if (result.success) {
+        updateOnboarding({
+          qrStatus: 'Поднимаю сессию через прокси — QR появится здесь. Обычно до 30 секунд.',
+          qrStatusTone: 'default'
+        });
         pollQrStatus();
+      } else {
+        updateOnboarding({ qrStatus: 'QR не запустился. Попробуй еще раз.', qrStatusTone: 'error' });
+        showUiMessage('QR не запустился от Telegram.', 'error');
       }
     } catch (error) {
       updateOnboarding({

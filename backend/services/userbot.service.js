@@ -26,6 +26,15 @@ const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 const QR_SESSION_TTL_MS = 20 * 60 * 1000;
 // Перезапусков выдачи токена QR (токен живёт ~30с, окно сессии 20 минут).
 const QR_TOKEN_RESTART_LIMIT = 60;
+// Часы на выдачу первого QR в фоновой задаче: после — честный failed в qr-status.
+const QR_GENERATE_TIMEOUT_MS = 90 * 1000;
+
+// Верхняя граница на connect к Telegram при генерации QR (та же ручка, что у
+// health-check'ей: медленный прокси не должен висеть минутами).
+function getQrConnectTimeoutMs() {
+    const raw = Number(process.env.USERBOT_HEALTH_CONNECT_TIMEOUT_MS || 25_000);
+    return Number.isFinite(raw) && raw > 0 ? raw : 25_000;
+}
 
 const DEFAULT_FINGERPRINT = Object.freeze({
     api_id: 4,
@@ -1110,19 +1119,6 @@ export class UserbotService {
         this.prepareServiceClient(client);
         this._forceManagedIpv6Dc(client, proxyData);
 
-        try {
-            console.log('[QR-GENERATE] Подключаемся к Telegram...');
-            await this.connectWithProxyFallback(client, proxyData);
-            await this._verifyTelegramRpc(client);
-            console.log('[QR-GENERATE] ✅ Подключение успешно!');
-        } catch (connectError) {
-            console.error('[QR-GENERATE] ❌ Ошибка подключения:', connectError.message);
-            if (String(connectError?.message || '').includes('Telegram RPC check timed out')) {
-                throw new Error('Прокси открыл TCP до Telegram, но не тянет нормальный MTProto/QR поток. Такой прокси не подходит для QR и юзерботов.');
-            }
-            throw connectError;
-        }
-
         const isIgnorableQrAuthError = (error) => {
             const raw = String(error?.errorMessage || error?.message || '');
             return (
@@ -1140,7 +1136,6 @@ export class UserbotService {
 
         const qrSession = {
             client,
-            promise: null,
             proxyData,
             fingerprint,
             authState: 'pending',
@@ -1150,125 +1145,131 @@ export class UserbotService {
             passwordGate
         };
 
-        // Создаем Promise который резолвится когда QR код будет готов
-        const waitForQr = new Promise((resolve, reject) => {
-            let qrGenerated = false;
-            let fatalError = null;
-            let timeoutId = null;
-            let tokenSeq = 0;
+        // Сессия в карте сразу: qr-start отвечает мгновенно, прогресс (и ошибки)
+        // владелец видит через /qr-status. Генерация — в фоновой задаче ниже.
+        this.qrSessions.set(userId, qrSession);
 
-            // Токен QR ротируется каждые ~30 секунд: GramJS дергает коллбек на
-            // каждом цикле опроса. Первый код резолвит waitForQr (уходит в ответ
-            // qr-start), все последующие складываем в qrSession.currentQrCode —
-            // их забирает /qr-status. Иначе на экране навсегда висит первый,
-            // заведомо протухший QR.
-            const qrCodeCallback = async (code) => {
-                const seq = ++tokenSeq;
-                console.log('[QR-GENERATE] qrCode callback получен, генерируем изображение...');
-                try {
-                    const qrUrl = `tg://login?token=${code.token.toString('base64url')}`;
-                    const qrImageBase64 = await QRCode.toDataURL(qrUrl);
-                    console.log('[QR-GENERATE] ✅ QR изображение готово, размер:', qrImageBase64.length);
-                    if (seq === tokenSeq) {
-                        qrSession.currentQrCode = qrImageBase64;
-                    }
-                    if (!qrGenerated) {
-                        qrGenerated = true;
-                        if (timeoutId) clearTimeout(timeoutId);
-                        resolve(qrImageBase64);
-                    }
-                } catch (err) {
-                    console.error('[QR-GENERATE] Ошибка генерации QR изображения:', err);
-                    if (timeoutId) clearTimeout(timeoutId);
-                    reject(err);
-                }
-            };
+        void this._runQrGeneration(client, proxyData, fingerprint, qrSession);
 
-            // Токен QR живёт ~30 секунд, а грамджсовский цикл опроса (30с) не
-            // ловит AUTH_TOKEN_EXPIRED — helper падает целиком, если владелец не
-            // успел сканировать. Перезапускаем авторизацию: свежий
-            // ExportLoginToken даст новый токен, коллбек обновит QR на экране.
-            // Иначе владелец получает сырой «AUTH_TOKEN_EXPIRED», просто не
-            // успев достать телефон (регрессия 2026-11-04).
-            const authPromise = runQrAuthWithRotation(
-                () => client.signInUserWithQrCode({ apiId: fingerprint.api_id, apiHash: fingerprint.api_hash }, {
-                    onError: (error) => {
-                        console.error('[QR-GENERATE] onError callback:', error.message);
-                        fatalError = error;
-                        // Неверный 2FA-пароль: signInWithPassword уходит на
-                        // следующий виток и снова запрашивает пароль — покажем
-                        // ошибку на форме ввода.
-                        if (String(error?.errorMessage || error?.message || '').includes('PASSWORD_HASH_INVALID')) {
-                            passwordGate.setError('Неверный пароль. Попробуй еще раз.');
-                        }
-                    },
-                    qrCode: qrCodeCallback,
-                    // Парковка: Telegram ждет auth.checkPassword, мы — пароль
-                    // владельца из /qr-password.
-                    password: async (hint) => {
-                        qrSession.authState = '2fa_required';
-                        return passwordGate.request(hint);
-                    }
-                }),
-                { maxRestarts: QR_TOKEN_RESTART_LIMIT }
-            );
+        return {
+            success: true,
+            qr_pending: true,
+            fingerprint_profile_id: fingerprint.profileId || selectedProfile?.id || null,
+            fingerprint_profile_label: fingerprint.profileLabel || selectedProfile?.label || null
+        };
+    }
 
-            authPromise
-                .then(() => {
-                    qrSession.authState = 'authorized';
-                    qrSession.authError = null;
-                })
-                .catch((error) => {
-                    const raw = String(error?.errorMessage || error?.message || error || '');
-                    qrSession.authError = raw;
-                    if (isIgnorableQrAuthError(error)) {
-                        console.warn('[QR-GENERATE] Игнорируем фоновую ошибку QR auth flow:', raw);
-                        if (!fatalError) {
-                            fatalError = error;
-                        }
-                        qrSession.authState = 'pending';
-                        return;
-                    }
-
-                    console.error('[QR-GENERATE] signInUserWithQrCode promise rejected:', raw);
-                    if (!fatalError) {
-                        fatalError = error;
-                    }
-                    qrSession.authState = 'failed';
-                });
-
-            // Через свежеподнятый прокси Telegram может отдавать QR не мгновенно.
-            // Даем больше времени, чтобы не сносить живой контур ложным таймаутом.
-            timeoutId = setTimeout(() => {
-                if (!qrGenerated) {
-                    console.error('[QR-GENERATE] ❌ Таймаут 90 секунд - QR не сгенерирован');
-                    if (fatalError) {
-                        reject(new Error(`Telegram не отдал QR вовремя. Последняя ошибка: ${fatalError.message}`));
-                        return;
-                    }
-                    reject(new Error('Таймаут генерации QR кода (90 сек). Прокси живой, но Telegram не успел отдать QR. Попробуйте еще раз или проверьте задержки на прокси.'));
-                }
-            }, 90000);
-
-            // Не даем promise жить без обработчика и засорять лог unhandled rejection.
-            void authPromise.catch(() => {});
-        });
-
+    /**
+     * Фоновая часть QR-входа: connect → RPC-check → signInUserWithQrCode.
+     * Прогресс и вердикты пишет в qrSession; HTTP-запрос qr-start не блокирует
+     * (иначе медленный прокси доводил запрос до 504 nginx, регрессия 2026-11-04).
+     */
+    async _runQrGeneration(client, proxyData, fingerprint, qrSession) {
+        let fatalError = null;
         try {
-            const qrCode = await waitForQr;
-            qrSession.promise = waitForQr;
-            this.qrSessions.set(userId, qrSession);
-            return {
-                success: true,
-                qrCode: qrCode,
-                fingerprint_profile_id: fingerprint.profileId || selectedProfile?.id || null,
-                fingerprint_profile_label: fingerprint.profileLabel || selectedProfile?.label || null
-            };
-        } catch (error) {
-            // При ошибке отключаем клиент
-            try { await client.disconnect(); } catch(e) {}
-            throw error;
+            console.log('[QR-GENERATE] Подключаемся к Telegram...');
+            await withTimeout(
+                this.connectWithProxyFallback(client, proxyData),
+                getQrConnectTimeoutMs(),
+                'Telegram не ответил на подключение за отведенное время.'
+            );
+            await this._verifyTelegramRpc(client);
+            console.log('[QR-GENERATE] ✅ Подключение успешно!');
+        } catch (connectError) {
+            const message = String(connectError?.message || connectError || '');
+            console.error('[QR-GENERATE] ❌ Ошибка подключения:', message);
+            qrSession.authState = 'failed';
+            qrSession.authError = message.includes('Telegram RPC check timed out')
+                ? 'Прокси открыл TCP до Telegram, но не тянет нормальный MTProto/QR поток. Такой прокси не подходит для QR и юзерботов.'
+                : (message || 'Прокси не смог подключиться к Telegram. Проверь прокси и попробуй еще раз.');
+            try { await client.disconnect(); } catch (e) {}
+            return;
         }
+
+        // Токен QR ротируется каждые ~30 секунд: GramJS дергает коллбек на
+        // каждом цикле опроса. Все картинки складываем в qrSession.currentQrCode —
+        // их забирает /qr-status, иначе на экране висит заведомо протухший QR.
+        let tokenSeq = 0;
+        const qrCodeCallback = async (code) => {
+            const seq = ++tokenSeq;
+            console.log('[QR-GENERATE] qrCode callback получен, генерируем изображение...');
+            try {
+                const qrUrl = `tg://login?token=${code.token.toString('base64url')}`;
+                const qrImageBase64 = await QRCode.toDataURL(qrUrl);
+                console.log('[QR-GENERATE] ✅ QR изображение готово, размер:', qrImageBase64.length);
+                if (seq === tokenSeq) {
+                    qrSession.currentQrCode = qrImageBase64;
+                }
+            } catch (err) {
+                console.error('[QR-GENERATE] Ошибка генерации QR изображения:', err);
+                qrSession.authState = 'failed';
+                qrSession.authError = 'Не удалось отрисовать QR-код. Попробуй сгенерировать заново.';
+                try { await client.disconnect(); } catch (e) {}
+            }
+        };
+
+        // Токен QR живёт ~30 секунд, а грамджсовский цикл опроса (30с) не
+        // ловит AUTH_TOKEN_EXPIRED — helper падает целиком, если владелец не
+        // успел сканировать. Перезапускаем авторизацию: свежий
+        // ExportLoginToken даст новый токен, коллбек обновит QR на экране.
+        // Иначе владелец получает сырой «AUTH_TOKEN_EXPIRED», просто не
+        // успев достать телефон (регрессия 2026-11-04).
+        const authPromise = runQrAuthWithRotation(
+            () => client.signInUserWithQrCode({ apiId: fingerprint.api_id, apiHash: fingerprint.api_hash }, {
+                onError: (error) => {
+                    console.error('[QR-GENERATE] onError callback:', error.message);
+                    fatalError = error;
+                    // Неверный 2FA-пароль: signInWithPassword уходит на
+                    // следующий виток и снова запрашивает пароль — покажем
+                    // ошибку на форме ввода.
+                    if (String(error?.errorMessage || error?.message || '').includes('PASSWORD_HASH_INVALID')) {
+                        qrSession.passwordGate.setError('Неверный пароль. Попробуй еще раз.');
+                    }
+                },
+                qrCode: qrCodeCallback,
+                // Парковка: Telegram ждет auth.checkPassword, мы — пароль
+                // владельца из /qr-password.
+                password: async (hint) => {
+                    qrSession.authState = '2fa_required';
+                    return qrSession.passwordGate.request(hint);
+                }
+            }),
+            { maxRestarts: QR_TOKEN_RESTART_LIMIT }
+        );
+
+        authPromise
+            .then(() => {
+                qrSession.authState = 'authorized';
+                qrSession.authError = null;
+            })
+            .catch((error) => {
+                const raw = String(error?.errorMessage || error?.message || error || '');
+                qrSession.authError = raw;
+                if (isIgnorableQrAuthError(error)) {
+                    console.warn('[QR-GENERATE] Игнорируем фоновую ошибку QR auth flow:', raw);
+                    return;
+                }
+
+                console.error('[QR-GENERATE] signInUserWithQrCode promise rejected:', raw);
+                qrSession.authState = 'failed';
+            });
+
+        // Не даем promise жить без обработчика и засорять лог unhandled rejection.
+        void authPromise.catch(() => {});
+
+        // Через свежеподнятый прокси Telegram может отдавать QR не мгновенно.
+        // Даем до 90 секунд, дальше честный failed — но уже без 504: qr-start
+        // давно ответил, статус смотрят поллингом.
+        setTimeout(() => {
+            if (!qrSession.currentQrCode && qrSession.authState === 'pending') {
+                console.error('[QR-GENERATE] ❌ Таймаут 90 секунд - QR не сгенерирован');
+                qrSession.authState = 'failed';
+                qrSession.authError = fatalError
+                    ? `Telegram не отдал QR вовремя. Последняя ошибка: ${fatalError.message}`
+                    : 'Таймаут генерации QR кода (90 сек). Прокси живой, но Telegram не успел отдать QR. Попробуйте еще раз или проверьте задержки на прокси.';
+                try { client.disconnect(); } catch (e) {}
+            }
+        }, QR_GENERATE_TIMEOUT_MS);
     }
 
     getQRStatus(userId) {
