@@ -47,6 +47,8 @@ registerOperation('bullgram_userbot_botfather_create_bot', {
     'Возвращает bot_username и bot_token — это свежие credentials владельца. ' +
     'Мини-инструкция: связка с bullgram_autopost_bot_init — создал бота → сразу регистрируй его автопостером, передав полученный bot_token; никому токен не пересылай и в логи не пиши. ' +
     'Если юзернейм занят — BotFather ответит «taken», получишь INVALID_PARAMS: придумай другой юзернейм (обязательно на "bot") и повтори. ' +
+    'Отказы BotFather (лимит аккаунта «more than 20 bots» и другие «Sorry, you can\'t…») — тоже INVALID_PARAMS с причиной, шаги не повторяются впустую. ' +
+    'Таймаут ответа → TELEGRAM_ERROR «повтори операцию чуть позже». ' +
     'Операция выключена без флага USERBOT_BOTFATHER_ENABLED в backend/.env.',
   inputSchema: {
     type: 'object',
@@ -58,7 +60,7 @@ registerOperation('bullgram_userbot_botfather_create_bot', {
       bot_username: {
         type: 'string',
         pattern: '^[a-z][a-z0-9_]{4,31}bot$',
-        description: 'Юзернейм будущего бота, строго на "bot" (например, my_shop_bot). Регистр приводится к нижнему.'
+        description: 'Юзернейм будущего бота, строго на "bot" (например, my_shop_bot). Регистр приводится к нижнему. Отказ BotFather (юзернейм занят; лимит аккаунта — 20 ботов) → INVALID_PARAMS с причиной.'
       }
     }
   },
