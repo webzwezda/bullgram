@@ -120,7 +120,7 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 - `bullgram_userbot_chat_read` — `POST /userbots/{userbot_id}/chats/{chat_id}/read` — отметить чат прочитанным
 - `bullgram_userbot_user_resolve` — `POST /userbots/{userbot_id}/resolve` — живой резолв по `username` | `tg_user_id` (ровно один), отдаёт `access_hash` для invite/promote
 
-Волна 1 там же: `group_create`, `member_invite`, `member_promote`, `group_invite_link` (гейт `USERBOT_GROUP_ADMIN_ENABLED`), `botfather_create_bot` (гейт `USERBOT_BOTFATHER_ENABLED`) и `bot_init` в autopost.
+Волна 1 там же: `group_create`, `member_invite`, `member_promote`, `group_invite_link` (гейт `USERBOT_GROUP_ADMIN_ENABLED`), `botfather_create_bot` (гейт `USERBOT_BOTFATHER_ENABLED`; отказы BotFather — «taken», лимит аккаунта 20 ботов и другие «Sorry, you can't…» — отдают INVALID_PARAMS с причиной сразу на первом шаге) и `bot_init` в autopost.
 
 ## Установка
 
