@@ -52,6 +52,9 @@ function makeMockSupabase({ tokens = [], tgAccounts = [], profile = null } = {})
       eq(col, val) { state.filters[col] = val; return this; },
       neq(col, val) { state.filters[col+'_neq'] = val; return this; },
       is(col, val) { if (val === null) state.filters[col+'_is_null'] = true; return this; },
+      // postgrest .not(col, 'is', null) — нужен фильтру отлёжки в loadIntakeStockUserbotIds;
+      // для моковых таблиц ниже фильтр не влияет, важно что метод существует.
+      not(col, op, val) { if (op === 'is' && val === null) state.filters[col+'_not_null'] = true; return this; },
       order() { return this; },
       limit() { return this; },
       maybeSingle() { return Promise.resolve(resolveQuery()); },

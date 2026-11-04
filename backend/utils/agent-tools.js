@@ -1,4 +1,5 @@
 import { loadReservedUserbotIds } from './shop-reservations.js';
+import { loadIntakeStockUserbotIds } from './intake-stock-reservations.js';
 import { getTierRules } from './product-tier.js';
 
 export const DEFAULT_ADMIN_PROXY_GROUP = 'shop_sale';
@@ -235,6 +236,7 @@ export async function buildAgentInfraPayload({ supabase, user, profile }) {
     const inventoryGroupSupported = await supportsProxyInventoryGroup(supabase);
     const tierRules = getTierRules(profile);
     const reservedUserbotIds = await loadReservedUserbotIds(supabase, user.id);
+    const intakeStockUserbotIds = await loadIntakeStockUserbotIds(supabase, user.id);
 
     const [{ data: proxies, error: proxiesError }, { data: accounts, error: accountsError }] = await Promise.all([
         supabase
@@ -256,13 +258,20 @@ export async function buildAgentInfraPayload({ supabase, user, profile }) {
 
     const allProxies = proxies || [];
     const allAccounts = accounts || [];
+    // Витринные (published) и приёмочный сток не считаем «боевыми» ботами агента
+    // — каждый со своим честным счётчиком в summary.
     const liveUserbots = allAccounts.filter((item) =>
         item.account_type === 'userbot' &&
-        !reservedUserbotIds.has(String(item.id))
+        !reservedUserbotIds.has(String(item.id)) &&
+        !intakeStockUserbotIds.has(String(item.id))
     );
     const reservedUserbots = allAccounts.filter((item) =>
         item.account_type === 'userbot' &&
         reservedUserbotIds.has(String(item.id))
+    );
+    const intakeStockUserbots = allAccounts.filter((item) =>
+        item.account_type === 'userbot' &&
+        intakeStockUserbotIds.has(String(item.id))
     );
 
     return {
@@ -280,6 +289,7 @@ export async function buildAgentInfraPayload({ supabase, user, profile }) {
             userbot_online: liveUserbots.filter((item) => item.runtime_status === 'online').length,
             userbot_problem: liveUserbots.filter((item) => ['dead_proxy', 'expired', 'error', 'restricted'].includes(item.runtime_status)).length,
             userbot_reserved_for_shop: reservedUserbots.length,
+            userbot_intake_stock: intakeStockUserbots.length,
             max_owned_proxies: tierRules.maxOwnedProxies,
             max_userbots: tierRules.maxUserbots,
             can_buy_assets: !!tierRules.canBuyAssets

@@ -4,6 +4,7 @@
 import { registerOperation } from '../../../shared/operations.js';
 import { MCPError, ERROR_CODES } from '../../../shared/errors.js';
 import { loadReservedUserbotIds } from '../../../utils/shop-reservations.js';
+import { loadIntakeStockUserbotIds } from '../../../utils/intake-stock-reservations.js';
 
 export async function listUserbotsHandler({ supabase, req, args }) {
   if (!req?.user?.id) {
@@ -23,7 +24,12 @@ export async function listUserbotsHandler({ supabase, req, args }) {
 
   let reservedIds = new Set();
   if (!includeReserved) {
+    // Прячем два непродуктовых множества: витринные лоты (published) и
+    // приёмочный сток из отлёжки (intake_batch_id) — агент не должен видеть
+    // склад владельца как его «боевые» боты.
     reservedIds = await loadReservedUserbotIds(supabase, req.user.id);
+    const intakeStockIds = await loadIntakeStockUserbotIds(supabase, req.user.id);
+    intakeStockIds.forEach((id) => reservedIds.add(id));
   }
 
   const items = (accounts || [])
@@ -52,7 +58,7 @@ registerOperation('bullgram_userbot_list', {
   requiresIntegrationToken: true,
   rateLimitClass: 'read',
   title: 'List userbots',
-  description: 'Lists userbot accounts owned by the token owner. Reserved-for-shop accounts are excluded by default.',
+  description: 'Lists userbot accounts owned by the token owner. Reserved-for-shop and intake-resting (shop stock) accounts are excluded by default.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

@@ -9,8 +9,14 @@
 // аккаунты для продажи». Здесь только расписание и свои цели:
 //
 //   - цели: приёмочный сток с restore source (intake_batch_id) в статусах
-//     pending_activation/online, не проверявшийся последний час;
-//   - дубликаты, restricted/frozen/expired/dead_proxy/error — см. сервис;
+//     pending_activation/online плюс «лечимые» карантинные error/dead_proxy,
+//     не проверявшийся последний час;
+//   - error/dead_proxy дочекиваем специально: сетевой флак проверки (таймаут
+//     getMe на живой сессии) раньше консервировался навсегда — джоба цели
+//     больше не видела, аккаунт «отлетал» до ручного скана (paintsmall,
+//     регрессия 2026-11-04);
+//   - дубликаты, restricted/frozen/expired — см. сервис (односторонние/
+//     апелляционные, автоматом не поднимаем);
 //   - НИЧЕГО не удаляем и не публикуем здесь.
 import { applyStockVerdict, checkStockAccount, getIntakeRestingSleepMs } from '../services/intake-stock.service.js';
 
@@ -30,12 +36,17 @@ function getIntervalMs() {
 }
 
 // Цели: весь приёмочный сток платформенных админов (restore source с
-// intake_batch_id) — и safe-mode (pending_activation), и активированный
-// ('online'): витрина требует свежую проверку ≤6ч, и «боевой» сток без
-// перепроверки протухал бы в карточке продажи навсегда. Ручные dormant-импорты
-// админа без паков джоба не трогает. Админ-ids грузим отдельно — джоба ходит
-// по всем владельцам приёмки, а не по одному.
-async function loadPendingActivationAccounts(supabase) {
+// intake_batch_id) — safe-mode (pending_activation), активированный ('online')
+// и лечимый карантин (error/dead_proxy от флакнувшей проверки или умершего
+// прокси — восстанавливаем автоматически, живая проверка поднимет в online).
+// restricted/frozen/expired не целим: они односторонние/апелляционные. Витрина
+// требует свежую проверку ≤6ч, и «боевой» сток без перепроверки протухал бы в
+// карточке продажи навсегда. Ручные dormant-импорты админа без паков джоба не
+// трогает. Админ-ids грузим отдельно — джоба ходит по всем владельцам приёмки,
+// а не по одному.
+const INTAKE_RESTING_TARGET_STATUSES = ['pending_activation', 'online', 'error', 'dead_proxy'];
+
+async function loadIntakeStockAccounts(supabase) {
     const { data: sources, error: sourcesError } = await supabase
         .from('userbot_restore_sources')
         .select('account_id')
@@ -56,7 +67,7 @@ async function loadPendingActivationAccounts(supabase) {
         .from('tg_accounts')
         .select('id, owner_id, tg_account_id, tg_username, runtime_status, session_data, proxy_id, last_checked_at')
         .eq('account_type', 'userbot')
-        .in('runtime_status', ['pending_activation', 'online'])
+        .in('runtime_status', INTAKE_RESTING_TARGET_STATUSES)
         .in('owner_id', adminIds)
         .in('id', intakeAccountIds);
     if (accountsError) throw accountsError;
@@ -64,7 +75,7 @@ async function loadPendingActivationAccounts(supabase) {
 }
 
 export async function runIntakeRestingCheck(supabase, userbotService, { checkFn = checkStockAccount, sleepFn = null } = {}) {
-    const accounts = await loadPendingActivationAccounts(supabase);
+    const accounts = await loadIntakeStockAccounts(supabase);
     if (!accounts.length) return;
 
     const minCheckAgeMs = 60 * 60 * 1000;

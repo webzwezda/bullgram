@@ -120,11 +120,20 @@ export async function checkStockAccount(supabase, userbotService, account, proxy
         );
         connectOk = true;
         // getMe иногда флакует таймаутом на живой сессии (QA-прогон sale-scan:
-        // 1 из 2 сканов дал ложный error). Один повтор перед вердиктом.
+        // 1 из 2 сканов дал ложный error; paintsmall циклил error→online→error,
+        // 2026-11-04). Ретрай на НОВОМ соединении: таймаут почти всегда значит,
+        // что коннект через прокси подгнил, и второй getMe по тому же сокету
+        // флакует так же.
         try {
             me = await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
         } catch (getMeError) {
             await new Promise((resolve) => setTimeout(resolve, 3000));
+            await client.disconnect().catch(() => {});
+            await withTimeout(
+                userbotService.connectWithProxyFallback(client, proxyData),
+                getConnectTimeoutMs(),
+                'Telegram не ответил на подключение за отведенное время.'
+            );
             me = await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
         }
         getMeOk = true;
