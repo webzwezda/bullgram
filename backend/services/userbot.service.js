@@ -18,11 +18,14 @@ import {
   sanitizeParticipant
 } from '../shared/content-sanitizer.js';
 import { getPeerFromCache } from '../utils/peer-cache.js';
+import { runQrAuthWithRotation } from '../utils/qr-auth.js';
 
 const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
 
 // Брошенный QR держит подключённый клиент. Чистим такие сессии при каждом qr-start/qr-status.
 const QR_SESSION_TTL_MS = 20 * 60 * 1000;
+// Перезапусков выдачи токена QR (токен живёт ~30с, окно сессии 20 минут).
+const QR_TOKEN_RESTART_LIMIT = 60;
 
 const DEFAULT_FINGERPRINT = Object.freeze({
     api_id: 4,
@@ -1136,7 +1139,8 @@ export class UserbotService {
             fingerprint,
             authState: 'pending',
             authError: null,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            currentQrCode: null
         };
 
         // Создаем Promise который резолвится когда QR код будет готов
@@ -1144,28 +1148,51 @@ export class UserbotService {
             let qrGenerated = false;
             let fatalError = null;
             let timeoutId = null;
+            let tokenSeq = 0;
 
-            const authPromise = client.signInUserWithQrCode({ apiId: fingerprint.api_id, apiHash: fingerprint.api_hash }, {
-                onError: (error) => {
-                    console.error('[QR-GENERATE] onError callback:', error.message);
-                    fatalError = error;
-                },
-                qrCode: async (code) => {
-                    console.log('[QR-GENERATE] qrCode callback получен, генерируем изображение...');
-                    try {
-                        const qrUrl = `tg://login?token=${code.token.toString('base64url')}`;
-                        const qrImageBase64 = await QRCode.toDataURL(qrUrl);
-                        console.log('[QR-GENERATE] ✅ QR изображение готово, размер:', qrImageBase64.length);
+            // Токен QR ротируется каждые ~30 секунд: GramJS дергает коллбек на
+            // каждом цикле опроса. Первый код резолвит waitForQr (уходит в ответ
+            // qr-start), все последующие складываем в qrSession.currentQrCode —
+            // их забирает /qr-status. Иначе на экране навсегда висит первый,
+            // заведомо протухший QR.
+            const qrCodeCallback = async (code) => {
+                const seq = ++tokenSeq;
+                console.log('[QR-GENERATE] qrCode callback получен, генерируем изображение...');
+                try {
+                    const qrUrl = `tg://login?token=${code.token.toString('base64url')}`;
+                    const qrImageBase64 = await QRCode.toDataURL(qrUrl);
+                    console.log('[QR-GENERATE] ✅ QR изображение готово, размер:', qrImageBase64.length);
+                    if (seq === tokenSeq) {
+                        qrSession.currentQrCode = qrImageBase64;
+                    }
+                    if (!qrGenerated) {
                         qrGenerated = true;
                         if (timeoutId) clearTimeout(timeoutId);
                         resolve(qrImageBase64);
-                    } catch (err) {
-                        console.error('[QR-GENERATE] Ошибка генерации QR изображения:', err);
-                        if (timeoutId) clearTimeout(timeoutId);
-                        reject(err);
                     }
+                } catch (err) {
+                    console.error('[QR-GENERATE] Ошибка генерации QR изображения:', err);
+                    if (timeoutId) clearTimeout(timeoutId);
+                    reject(err);
                 }
-            });
+            };
+
+            // Токен QR живёт ~30 секунд, а грамджсовский цикл опроса (30с) не
+            // ловит AUTH_TOKEN_EXPIRED — helper падает целиком, если владелец не
+            // успел сканировать. Перезапускаем авторизацию: свежий
+            // ExportLoginToken даст новый токен, коллбек обновит QR на экране.
+            // Иначе владелец получает сырой «AUTH_TOKEN_EXPIRED», просто не
+            // успев достать телефон (регрессия 2026-11-04).
+            const authPromise = runQrAuthWithRotation(
+                () => client.signInUserWithQrCode({ apiId: fingerprint.api_id, apiHash: fingerprint.api_hash }, {
+                    onError: (error) => {
+                        console.error('[QR-GENERATE] onError callback:', error.message);
+                        fatalError = error;
+                    },
+                    qrCode: qrCodeCallback
+                }),
+                { maxRestarts: QR_TOKEN_RESTART_LIMIT }
+            );
 
             authPromise
                 .then(() => {

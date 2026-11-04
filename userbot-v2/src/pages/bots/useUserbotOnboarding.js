@@ -42,6 +42,7 @@ export function useUserbotOnboarding({
 }) {
   const qrPollingIntervalRef = useRef(null);
   const qrPollingTimeoutRef = useRef(null);
+  const lastQrImageRef = useRef(null);
   const [onboarding, setOnboarding] = useState(buildInitialOnboardingState);
   const [fingerprintProfilesState, setFingerprintProfilesState] = useState({
     loading: false,
@@ -143,6 +144,16 @@ export function useUserbotOnboarding({
           });
           showUiMessage('Аккаунт подключен через QR.', 'success');
           await reloadAccounts();
+        }
+        if (result.status === 'pending' && result.qr_code && result.qr_code !== lastQrImageRef.current) {
+          // Токен QR живёт ~30 секунд, сервер ротирует код: подменяем картинку,
+          // пока владелец ещё не отсканил, иначе скан попадёт в протухший QR.
+          lastQrImageRef.current = result.qr_code;
+          updateOnboarding({
+            qrCodeUrl: result.qr_code,
+            qrStatus: 'Обновили QR — старый код истёк. Сканируй свежий.',
+            qrStatusTone: 'default'
+          });
         }
         if (result.status === 'failed') {
           stopQrPolling();
@@ -265,6 +276,7 @@ export function useUserbotOnboarding({
         }
       });
       const profileLabel = result.fingerprint_profile_label || fingerprintLabel;
+      lastQrImageRef.current = result.qrCode || null;
       updateOnboarding({
         qrCodeUrl: result.qrCode || '',
         qrStatus: result.qrCode ? `QR готов. Сканируй его в Telegram. Профиль входа: ${profileLabel}.` : 'QR не пришел.',

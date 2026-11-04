@@ -2690,7 +2690,13 @@ export default function (supabase) {
                 });
             }
             if (sessionData.authState !== 'authorized') {
-                return res.json({ status: 'pending' });
+                // Токен QR ротируется каждые ~30с: отдаём свежую картинку,
+                // фронт подменяет QR на экране, пока владелец ещё не отсканил.
+                const pendingPayload = { status: 'pending' };
+                if (sessionData.currentQrCode) {
+                    pendingPayload.qr_code = sessionData.currentQrCode;
+                }
+                return res.json(pendingPayload);
             }
 
             const savedSession = sessionData.client?.session?.save?.() || '';
