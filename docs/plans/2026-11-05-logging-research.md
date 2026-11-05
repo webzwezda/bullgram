@@ -241,3 +241,14 @@ Telegram: github.com/gram-js/gramjs/issues/24 (репо заархивирова
 Фронт: developer.mozilla.org/en-US/docs/Web/API/Window/error_event · blog.sentry.security/abusing-exposed-sourcemaps · glitchtip.com/blog/2026-02-03-glitchtip-6-released · glitchtip.com/documentation/install · bugsink.com/blog/glitchtip-vs-sentry-vs-bugsink
 
 Аудит и OTel: axonbuild.com/blog/audit-logging-best-practices · sonarsource.com/resources/library/audit-logging · opentelemetry.io/docs/specs/otel/logs · github.com/open-telemetry/opentelemetry-js-contrib/issues/3292 · uptrace.dev/opentelemetry/logs
+
+## Ревью (фазы 0-1, 2026-11-06)
+
+Внедрено и проверено на проде:
+
+- **Фаза 0**: pm2-logrotate установлен (10MB × 14, gzip, ежедневно, `pm2 conf` проверен); старые out/error.log (71MB) заархивированы в `logs/archive/*.pre-jsonl.log.gz`; `pm2 flush` выполнен; `ecosystem.config.cjs` — `log_date_format` убран, файлы `app.out.jsonl`/`app.err.jsonl`, `kill_timeout 5000`.
+- **Фаза 1**: `backend/utils/logger.js` (фабрика pino: redact, safeErr, sanitizeConsoleArg, installConsoleShim) + `backend/test/test-logger.js` (9 проверок, `npm run test:logging`); server.js — pinoHttp (reqId, silent <400), глобальные хендлеры, стартовые логи, console-shim; auth.middleware — `owner_id` child; userbot.service — убраны оба дампа с паролями прокси; autopost/logger.js — мигрирован на фабрику (API прежний, `LOG_LEVEL` + фолбэк `AUTOPST_LOG_LEVEL`); RESTORE.md — секция «Логи».
+- **Локально**: `test:logging` ✓, `test:lifecycle` ✓ (canary console.error чист), `test:autopost` ✓ (вся цепочка).
+- **Прод (коммит 683927f, деплой success)**: `pm2 delete+start+save` применён (reload не перечитывает ecosystem — учтено для будущих смен pm2-конфига); файлы пишутся, **0 не-JSON строк**, стартовые строки/флаги в JSON; внешний запрос вернул `x-request-id`, строка `request completed` в логе с reqId; error-строки сериализуются без секретов (пример: lifecycle bot_launch_failed, err {type,message,code,stack}); grep паролей по новым логам — чисто; API живой (2 аккаунт-лота на /shop), процесс online.
+- Отклонение от плана: pinoHttp-лог для ≥400 пишет полный `res.headers` (частично санитизируется pino-http: authorization/cookie вырезаны). Наблюдаем; при необходимости — кастомный serializer в фазе 3.
+- Дальше: фазы 2-5 по BACKLOG §28 (джобы → миграция console.* с ratchet-гейтом → фронт-capture).
