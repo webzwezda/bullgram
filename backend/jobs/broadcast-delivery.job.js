@@ -33,6 +33,7 @@ import {
     planCampaignFinalization,
     isDeliverableCampaignStatus
 } from '../services/broadcast-delivery.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const TICK_INTERVAL_MS = 30_000;
 const STALE_HEARTBEAT_MS = 10 * 60_000;
@@ -420,5 +421,5 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         interval_ms: TICK_INTERVAL_MS,
         stale_heartbeat_ms: STALE_HEARTBEAT_MS
     });
-    setInterval(runOnce, TICK_INTERVAL_MS);
+    setInterval(wrapJobTick('broadcast-delivery', runOnce), TICK_INTERVAL_MS);
 };

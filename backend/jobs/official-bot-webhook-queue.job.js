@@ -1,5 +1,6 @@
 import { OfficialBotService } from '../services/official-bot.service.js';
 import { decrypt } from '../utils/crypto.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 50;
@@ -133,6 +134,6 @@ export const startOfficialBotWebhookQueue = (supabase) => {
         }
     }
 
-    setInterval(processBatch, POLL_INTERVAL_MS);
+    setInterval(wrapJobTick('official-bot-webhook-queue', processBatch), POLL_INTERVAL_MS);
     console.log(`[WebhookQueue] Процессор запущен (интервал ${POLL_INTERVAL_MS}ms, батч ${BATCH_SIZE})`);
 };

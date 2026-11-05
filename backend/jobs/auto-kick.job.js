@@ -6,6 +6,7 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 function isUserbotAutoKickDmEnabled() {
     return String(process.env.USERBOT_AUTO_KICK_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -88,7 +89,7 @@ export const startAutoKick = (supabase, getBotFunction, { messagingRouter: messa
         ) || null;
     }
 
-    setInterval(async () => {
+    setInterval(wrapJobTick('auto-kick', async () => {
         const now = new Date().toISOString();
         try {
             const { data: expiredSubs, error } = await supabase
@@ -198,5 +199,5 @@ export const startAutoKick = (supabase, getBotFunction, { messagingRouter: messa
                 }
             }
         } catch (err) { console.error('Ошибка в AutoKick Cron:', err.message); }
-    }, 5 * 60 * 1000);
+    }), 5 * 60 * 1000);
 };

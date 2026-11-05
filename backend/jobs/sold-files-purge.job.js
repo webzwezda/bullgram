@@ -11,6 +11,7 @@
 import { cleanupRestrictedUserbotProxy } from '../utils/restricted-userbot-ops.js';
 import { ManagedProxyService } from '../services/managed-proxy.service.js';
 import { getShopFilesWindowHours } from '../utils/shop-files.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 3_600_000;
 const MIN_INTERVAL_MS = 300_000;
@@ -154,5 +155,5 @@ export const startSoldFilesPurge = (supabase) => {
     };
 
     run();
-    setInterval(run, intervalMs);
+    setInterval(wrapJobTick('sold-files-purge', run), intervalMs);
 };

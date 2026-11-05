@@ -1,4 +1,5 @@
 import { OfficialBotService } from '../services/official-bot.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000;
 const MIN_INTERVAL_MS = 2 * 60 * 1000;
@@ -124,5 +125,5 @@ export function startReferralSettlementRetry(supabase, getBotFunction) {
     });
 
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('referral-settlement-retry', runOnce), intervalMs);
 }

@@ -1,4 +1,5 @@
 import { purgeRestrictedUserbotAccount } from '../utils/restricted-userbot-ops.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_RESTRICTED_USERBOT_TTL_HOURS = 72;
 const DEFAULT_RESTRICTED_USERBOT_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -76,5 +77,5 @@ export const startRestrictedUserbotCleanup = (supabase) => {
     });
 
     runCleanup();
-    setInterval(runCleanup, intervalMs);
+    setInterval(wrapJobTick('restricted-userbot-cleanup', runCleanup), intervalMs);
 };

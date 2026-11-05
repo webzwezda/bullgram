@@ -11,6 +11,7 @@
  * План: docs/plans/2026-09-17-autopost-checklists.md (Фаза 4).
  */
 import { log } from '../services/autopost/logger.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_RETENTION_DAYS = 90;
 const MIN_RETENTION_DAYS = 7;
@@ -48,5 +49,5 @@ export const startAutopostChecklistEventsCleanup = (supabase) => {
         retention_days: retentionDays
     });
     runCleanup();
-    setInterval(runCleanup, TICK_INTERVAL_MS);
+    setInterval(wrapJobTick('autopost-checklist-events-cleanup', runCleanup), TICK_INTERVAL_MS);
 };

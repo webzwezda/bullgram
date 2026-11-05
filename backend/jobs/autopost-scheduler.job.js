@@ -5,13 +5,14 @@
 
 import { log } from '../services/autopost/logger.js';
 import { getFloodWaitSeconds } from '../services/autopost/sender.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopostService) => {
     // In-flight mutex по botId. Без него setInterval мог стартовать новый тик
     // поверх предыдущего, если публикация затянулась — пост мог уйти в канал дважды.
     const inFlight = new Set();
 
-    setInterval(async () => {
+    setInterval(wrapJobTick('autopost-scheduler', async () => {
         try {
             const { data: bots, error: botsError } = await supabase
                 .from('autopost_bots')
@@ -36,7 +37,7 @@ export const startAutopostScheduler = (supabase, getAutopostBotFunction, autopos
         } catch (err) {
             log.error('scheduler', 'tick_failed', { err: err.message });
         }
-    }, 5 * 60 * 1000);
+    }), 5 * 60 * 1000);
 
     async function processBot(botConfig) {
         const now = new Date().toISOString();

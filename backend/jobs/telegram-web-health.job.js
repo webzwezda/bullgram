@@ -8,6 +8,8 @@
 // Trigger: every TELEGRAM_WEB_HEALTH_INTERVAL_MS (default 5 min).
 // Window:  TELEGRAM_WEB_HEALTH_WINDOW_MS (default 5 min, same as interval).
 
+import { wrapJobTick } from '../utils/job-runner.js';
+
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_WINDOW_MS = 5 * 60 * 1000;
 const DEFAULT_ERROR_THRESHOLD = 1;
@@ -77,7 +79,7 @@ export const startTelegramWebHealth = (supabase) => {
         }
     };
 
-    const timer = setInterval(runCheck, intervalMs);
+    const timer = setInterval(wrapJobTick('telegram-web-health', runCheck), intervalMs);
     if (timer.unref) timer.unref();
     // Don't fire immediately on boot — let the first interval tick.
     console.log(`[TelegramWebHealth] started: interval=${Math.round(intervalMs / 1000)}s window=${Math.round(windowMs / 1000)}s threshold=${threshold}`);

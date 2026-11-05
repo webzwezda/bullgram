@@ -1,4 +1,5 @@
 import { ManagedProxyService } from '../services/managed-proxy.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
 const START_DELAY_MS = 20 * 1000;
@@ -55,6 +56,6 @@ export function startManagedProxyReconcile(supabase) {
   };
 
   setTimeout(() => runOnce('startup'), START_DELAY_MS);
-  const timer = setInterval(() => runOnce('interval'), intervalMs);
+  const timer = setInterval(wrapJobTick('managed-proxy-reconcile', () => runOnce('interval')), intervalMs);
   return timer;
 }

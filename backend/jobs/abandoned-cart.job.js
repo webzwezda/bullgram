@@ -6,6 +6,7 @@
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 function isUserbotAbandonedDmEnabled() {
     return String(process.env.USERBOT_ABANDONED_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -98,7 +99,7 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
     }
 
     let running = false;
-    setInterval(async () => {
+    setInterval(wrapJobTick('abandoned-cart', async () => {
         // Предыдущий тик ещё не закончился — пропускаем
         if (running) return;
         running = true;
@@ -412,5 +413,5 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
         } finally {
             running = false;
         }
-    }, 15 * 60 * 1000); // Проверка каждые 15 минут
+    }), 15 * 60 * 1000); // Проверка каждые 15 минут
 };

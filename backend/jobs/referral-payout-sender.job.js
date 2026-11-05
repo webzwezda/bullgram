@@ -1,5 +1,6 @@
 import { processReferralPayoutSenderBatch } from '../services/referral-payout-sender.service.js';
 import { getTonReserveSenderConfig } from '../services/ton-reserve-sender.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 60_000;
 const MIN_INTERVAL_MS = 30_000;
@@ -43,7 +44,7 @@ export function startReferralPayoutSender(supabase) {
     };
 
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('referral-payout-sender', runOnce), intervalMs);
     console.log('[ReferralPayoutSender] started', {
         interval_ms: intervalMs,
         endpoint: config.endpoint,

@@ -4,6 +4,7 @@ import { decrypt } from '../utils/crypto.js';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
 import { cleanupRestrictedUserbotProxy, unpublishRestrictedUserbotListings } from '../utils/restricted-userbot-ops.js';
 import { ManagedProxyService } from '../services/managed-proxy.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
@@ -285,5 +286,5 @@ export const startListedUserbotHealthCheck = (supabase, { userbotService } = {})
     };
 
     run();
-    setInterval(run, intervalMs);
+    setInterval(wrapJobTick('listed-userbot-health', run), intervalMs);
 };

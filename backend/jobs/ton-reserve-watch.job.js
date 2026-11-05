@@ -5,6 +5,7 @@ import {
     recordReferralReserveDeposit
 } from '../services/referral-reserve.service.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_TONCENTER_API_BASE = 'https://toncenter.com/api/v2';
 const DEFAULT_TONAPI_API_BASE = 'https://tonapi.io/v2';
@@ -333,5 +334,5 @@ export function startTonReserveWatch(supabase) {
     });
 
     runOnce();
-    setInterval(runOnce, pollIntervalMs);
+    setInterval(wrapJobTick('ton-reserve-watch', runOnce), pollIntervalMs);
 }

@@ -1,3 +1,5 @@
+import { wrapJobTick } from '../utils/job-runner.js';
+
 const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 90;
 
@@ -32,5 +34,5 @@ export function startPublicInvoicesCleanup(supabase) {
 
     console.log('[PublicInvoicesCleanup] started', { interval_ms: intervalMs, retention_days: retentionDays });
     runCleanup();
-    setInterval(runCleanup, intervalMs);
+    setInterval(wrapJobTick('public-invoices-cleanup', runCleanup), intervalMs);
 }

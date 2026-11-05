@@ -1,4 +1,5 @@
 import React from 'react';
+import { reportCaughtError } from './log-capture.js';
 
 // После деплоя открытая вкладка держит старый index-*.js и лениво тянет чанк со старым хэшем —
 // сервер отдаёт 404 и страница падает. Одна перезагрузка тянет новый index с новыми чанками,
@@ -34,6 +35,8 @@ export class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    // Репортим до console.error: render-ошибка не доходит до window listeners.
+    reportCaughtError(error, info);
     console.error('Unhandled render error:', error, info);
     if (isStaleChunkError(error)) {
       reloadOnceForNewBuild();

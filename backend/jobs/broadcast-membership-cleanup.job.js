@@ -30,6 +30,7 @@ import { Api } from 'telegram';
 import { UserbotService } from '../services/userbot.service.js';
 import { toBotApiChatId } from '../services/chat-admin-rights.service.js';
 import { withTimeout } from '../shared/utils.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const TICK_INTERVAL_MS = 60_000;
 const MAX_ROWS_PER_TICK = 20;
@@ -526,5 +527,5 @@ export const startBroadcastMembershipCleanupJob = (supabase, deps = {}) => {
         max_rows_per_tick: MAX_ROWS_PER_TICK,
         pace_ms: PACE_MS
     });
-    setInterval(runOnce, TICK_INTERVAL_MS);
+    setInterval(wrapJobTick('broadcast-membership-cleanup', runOnce), TICK_INTERVAL_MS);
 };

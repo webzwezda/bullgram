@@ -1,5 +1,6 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const TARGET_FIELDS = {
     public_channel: 'public_channel_id',
@@ -218,7 +219,7 @@ export const startAudienceSync = (supabase) => {
 
     setTimeout(() => {
         runSync();
-        setInterval(runSync, MS_PER_DAY);
+        setInterval(wrapJobTick('audience-sync', runSync), MS_PER_DAY);
     }, initialDelay);
 
     console.log(`[audience-sync] first run in ${Math.round(initialDelay / 60000)} minutes`);

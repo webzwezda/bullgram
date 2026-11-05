@@ -1,4 +1,5 @@
 import { refreshTonExchangeRates } from '../services/crypto-rates.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
@@ -40,5 +41,5 @@ export function startCryptoRatesRefresh(supabase) {
 
     console.log('[CryptoRates] started', { interval_ms: intervalMs });
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('crypto-rates', runOnce), intervalMs);
 }

@@ -17,7 +17,7 @@
     "tokens:check": "node design/build.mjs --check",
     "check:design": "node design/check-design.mjs",
     "ci": "./ops/scripts/ci/run-all-gates.sh",
-    "ci:source": "./ops/scripts/ci/run-all-gates.sh 01 02 06",
+    "ci:source": "./ops/scripts/ci/run-all-gates.sh 01 02 06 07",
     "ci:smoke": "./ops/scripts/ci/run-all-gates.sh 03 04 05",
     "mcp:supabase:tunnel": "./ops/scripts/supabase-mcp-tunnel.sh",
     "deploy": "./ops/scripts/deploy.sh",

@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import { Button } from '../components/ui/button.jsx';
+import { reportCaughtError } from './log-capture.js';
 
 // После деплоя открытая вкладка держит старый index-*.js и лениво тянет чанк со старым хэшем —
 // сервер отдаёт 404 и раздел падает. Лечится одной перезагрузкой (новый index подтянет новые
@@ -35,6 +36,8 @@ export class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
+    // Репортим до console.error: render-ошибка не доходит до window listeners.
+    reportCaughtError(error, info);
     console.error('[ErrorBoundary]', error, info);
     if (isStaleChunkError(error)) {
       reloadOnceForNewBuild();

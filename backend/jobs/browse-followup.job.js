@@ -8,6 +8,7 @@
  */
 
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 export const startBrowseFollowup = (supabase, getBotFunction) => {
     // Лог отправок дожима; owner_id в access_events обязателен (NOT NULL) — без него только консоль
@@ -28,7 +29,7 @@ export const startBrowseFollowup = (supabase, getBotFunction) => {
         }
     }
 
-    setInterval(async () => {
+    setInterval(wrapJobTick('browse-followup', async () => {
         const now = new Date();
         const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString();
         const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
@@ -238,5 +239,5 @@ export const startBrowseFollowup = (supabase, getBotFunction) => {
         } catch (err) {
             console.error('Ошибка в cron browse follow-up:', err.message);
         }
-    }, 15 * 60 * 1000);
+    }), 15 * 60 * 1000);
 };

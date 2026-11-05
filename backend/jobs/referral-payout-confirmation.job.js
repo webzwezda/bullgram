@@ -1,4 +1,5 @@
 import { processReferralPayoutConfirmations } from '../services/referral-payout-confirmation.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 2 * 60 * 1000;
 const MIN_INTERVAL_MS = 60 * 1000;
@@ -43,7 +44,7 @@ export function startReferralPayoutConfirmation(supabase) {
     };
 
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('referral-payout-confirmation', runOnce), intervalMs);
     console.log('[ReferralPayoutConfirmation] started', {
         interval_ms: intervalMs
     });

@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 GATES_DIR="$ROOT/ops/scripts/ci"
 
 # Default order — matters: cheap source checks first, network checks last.
-default_gates=(01 02 06 03 04 05)
+default_gates=(01 02 06 07 03 04 05)
 
 if [ "$#" -gt 0 ]; then
   gates=("$@")

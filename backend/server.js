@@ -9,6 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { pinoHttp } from 'pino-http';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
 import { logger, installConsoleShim } from './utils/logger.js';
+import { optionalAuthenticateUser } from './middlewares/auth.middleware.js';
+import clientLogRoutes from './routes/client-log.routes.js';
 
 // Импортируем роуты
 import userbotRoutes from './routes/userbot.routes.js';
@@ -175,6 +177,10 @@ app.use(pinoHttp({
 app.use(express.json());
 app.use(cors({ origin: corsOrigins }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Приёмник клиентских ошибок SPA (публичный, rate-limit внутри роута):
+// docs/plans/2026-11-05-logging-research.md §5.7.
+app.use('/api/log', clientLogRoutes({ attachUser: optionalAuthenticateUser }));
 
 // ==========================================
 // HTTP + WEBSOCKET SERVER (для MTProto bridge)

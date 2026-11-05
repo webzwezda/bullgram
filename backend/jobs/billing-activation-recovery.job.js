@@ -3,6 +3,7 @@ import {
     recordBillingEvent
 } from '../services/bullgram-billing.service.js';
 import { fulfillProOrderBundle } from '../services/pro-fulfillment.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
 const MIN_INTERVAL_MS = 60_000;
@@ -163,5 +164,5 @@ export function startBillingActivationRecovery(supabase) {
         grace_ms: getGracePeriodMs()
     });
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('billing-activation-recovery', runOnce), intervalMs);
 }

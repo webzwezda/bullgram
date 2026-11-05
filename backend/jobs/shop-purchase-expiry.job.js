@@ -1,6 +1,8 @@
 // Активное истечение pending-покупок shop. Без этой джобы строки остаются
 // status='pending' до первого write-запроса: лот дольше положенного числится
 // забронированным, а у покупателя висит «ждёт оплату».
+import { wrapJobTick } from '../utils/job-runner.js';
+
 const DEFAULT_INTERVAL_MS = 60 * 1000;
 const DEFAULT_TTL_MINUTES = 30;
 
@@ -36,6 +38,6 @@ export function startShopPurchaseExpiry(supabase) {
 
     console.log('[ShopPurchaseExpiry] started', { interval_ms: intervalMs, ttl_minutes: ttlMinutes });
     runExpiry();
-    setInterval(runExpiry, intervalMs);
+    setInterval(wrapJobTick('shop-purchase-expiry', runExpiry), intervalMs);
 }
 

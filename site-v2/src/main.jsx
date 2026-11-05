@@ -3,10 +3,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './styles/tailwind.css';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
+import { installLogCapture } from './ui/log-capture.js';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 async function bootstrap() {
+  installLogCapture();
   try {
     const [{ BrowserRouter }, { App }, { AuthProvider }, { TonConnectProvider }] = await Promise.all([
       import('react-router-dom'),

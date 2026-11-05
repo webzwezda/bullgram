@@ -6,15 +6,21 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App.jsx';
 import { AuthProvider } from './app/providers/AuthProvider.jsx';
 import { TonConnectProvider } from './app/providers/TonConnectProvider.jsx';
+import { installLogCapture } from './ui/log-capture.js';
+import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 import './styles/tailwind.css';
 import './styles/app.css';
+
+installLogCapture();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <TonConnectProvider>
       <AuthProvider>
         <BrowserRouter basename="/bots">
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </BrowserRouter>
       </AuthProvider>
     </TonConnectProvider>

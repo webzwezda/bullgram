@@ -18,6 +18,8 @@
     "test:lifecycle": "node test/test-lifecycle-dm.js",
     "test:mcp": "node test/test-mcp-shared.js && node test/test-mcp-dispatch.js && node test/test-external-rest.js && node test/test-mcp-userbot-list.js",
     "test:logging": "node test/test-logger.js",
+    "test:jobs": "node test/test-job-runner.js",
+    "test:client-log": "node test/test-client-log.js",
     "test:contours": "node test/test-contours-overview.js",
     "test:entity": "node test/test-userbot-entity-resolution.js"
   },

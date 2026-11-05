@@ -7,6 +7,7 @@ import { Telegraf } from 'telegraf';
 import { decrypt } from '../utils/crypto.js';
 import { SalesContourService } from '../services/sales-contour.service.js';
 import { ContourAdminRightsService } from '../services/contour-admin-rights.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12 часов
 const SERIAL_DELAY_MS = 1000; // 1 секунда паузы между проверками
@@ -187,6 +188,6 @@ export const startBotRightsMonitor = (supabase) => {
     };
     setTimeout(() => {
         runGuarded();
-        setInterval(runGuarded, CHECK_INTERVAL_MS);
+        setInterval(wrapJobTick('bot-rights-monitor', runGuarded), CHECK_INTERVAL_MS);
     }, 5 * 60 * 1000);
 };

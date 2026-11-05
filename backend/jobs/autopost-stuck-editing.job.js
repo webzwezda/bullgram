@@ -13,11 +13,13 @@
  * их вместе (по post_batch_id), processedBatches Set предотвращает дубль-запросы.
  */
 
+import { wrapJobTick } from '../utils/job-runner.js';
+
 const STUCK_THRESHOLD_MINUTES = 10;
 const TICK_INTERVAL_MS = 60 * 1000;
 
 export const startAutopostStuckEditingRecovery = (supabase, service) => {
-    setInterval(async () => {
+    setInterval(wrapJobTick('autopost-stuck-editing', async () => {
         try {
             const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MINUTES * 60 * 1000).toISOString();
 
@@ -148,5 +150,5 @@ export const startAutopostStuckEditingRecovery = (supabase, service) => {
         } catch (err) {
             console.error('[Autopost stuck-editing] Ошибка cron:', err.message);
         }
-    }, TICK_INTERVAL_MS);
+    }), TICK_INTERVAL_MS);
 };

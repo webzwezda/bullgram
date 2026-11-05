@@ -19,6 +19,7 @@
 //     апелляционные, автоматом не поднимаем);
 //   - НИЧЕГО не удаляем и не публикуем здесь.
 import { applyStockVerdict, checkStockAccount, getIntakeRestingSleepMs } from '../services/intake-stock.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
@@ -151,5 +152,5 @@ export const startIntakeRestingCheck = (supabase, { userbotService } = {}) => {
     };
 
     run();
-    setInterval(run, intervalMs);
+    setInterval(wrapJobTick('intake-resting', run), intervalMs);
 };

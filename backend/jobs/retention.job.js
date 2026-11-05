@@ -2,6 +2,7 @@ import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 // Хелперы доставки переехали в общий util (единственный источник; до этого дублировались здесь и в abandoned-cart.job.js)
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
 import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 function isUserbotRetentionDmEnabled() {
     return String(process.env.USERBOT_RETENTION_DM_ENABLED || '').trim().toLowerCase() === 'true';
@@ -111,7 +112,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
     }
 
     let running = false;
-    setInterval(async () => {
+    setInterval(wrapJobTick('retention', async () => {
         // Предыдущий тик ещё не закончился — пропускаем
         if (running) return;
         running = true;
@@ -363,5 +364,5 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
         } catch (err) { console.error('Ошибка в Cron-напоминаниях:', err.message); } finally {
             running = false;
         }
-    }, 5 * 60 * 1000);
+    }), 5 * 60 * 1000);
 };

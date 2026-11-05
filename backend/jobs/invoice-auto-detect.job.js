@@ -4,6 +4,7 @@ import {
     matchInvoice
 } from '../services/ton-connect-verify.service.js';
 import { tonToNano } from '../utils/ton.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const DEFAULT_INTERVAL_MS = 30_000;
 const MIN_INTERVAL_MS = 10_000;
@@ -248,5 +249,5 @@ export function startInvoiceAutoDetect(supabase, getBotById) {
 
     console.log('[InvoiceAutoDetect] started', { interval_ms: intervalMs });
     runOnce();
-    setInterval(runOnce, intervalMs);
+    setInterval(wrapJobTick('invoice-auto-detect', runOnce), intervalMs);
 }

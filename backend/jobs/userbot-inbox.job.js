@@ -1,5 +1,6 @@
 import { UserbotService } from '../services/userbot.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
+import { wrapJobTick } from '../utils/job-runner.js';
 
 const publicAppOrigin = String(process.env.PUBLIC_APP_ORIGIN || 'https://bullgram.xyz').replace(/\/$/, '');
 
@@ -45,7 +46,7 @@ export const startUserbotInboxWatch = (supabase, getBotFunction) => {
         process.env.TG_API_HASH
     );
 
-    setInterval(async () => {
+    setInterval(wrapJobTick('userbot-inbox', async () => {
         try {
             const { data: paymentSettings, error: settingsError } = await supabase
                 .from('payment_settings')
@@ -157,5 +158,5 @@ export const startUserbotInboxWatch = (supabase, getBotFunction) => {
         } catch (error) {
             console.error('Ошибка cron userbot inbox watch:', error.message);
         }
-    }, 3 * 60 * 1000);
+    }), 3 * 60 * 1000);
 };
