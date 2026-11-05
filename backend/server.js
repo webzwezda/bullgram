@@ -5,7 +5,10 @@ import cors from 'cors';
 import path from 'path';
 import http from 'http';
 import { WebSocketServer } from 'ws';
+import { randomUUID } from 'node:crypto';
+import { pinoHttp } from 'pino-http';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
+import { logger, installConsoleShim } from './utils/logger.js';
 
 // Импортируем роуты
 import userbotRoutes from './routes/userbot.routes.js';
@@ -103,13 +106,20 @@ function envFlag(name) {
 }
 
 // ==========================================
-// ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК ОШИБОК
+// ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК ОШИБОК + CONSOLE-SHIM
 // ==========================================
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection:', reason);
+// Shim ставим в entry-точке: весь легаси console.* (мигрируется поэтапно,
+// BACKLOG §28 фаза 3) попадает в JSONL и проходит санитизацию секретов.
+// Тесты импортируют модули напрямую — там console остаётся чистым.
+installConsoleShim();
+
+process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled Rejection');
 });
 process.on('uncaughtException', (error) => {
-    console.error('[FATAL] Uncaught Exception:', error);
+    // Поведение «процесс не падает» сохранено (решение владельца — открытый
+    // вопрос №2 в docs/plans/2026-11-05-logging-research.md).
+    logger.fatal({ err: error }, '[FATAL] Uncaught Exception');
 });
 
 // ==========================================
@@ -121,12 +131,12 @@ let shuttingDown = false;
 async function gracefulShutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`[Shutdown] Получен ${signal}, корректно завершаем работу…`);
+    logger.info({ signal }, '[Shutdown] Получен сигнал, корректно завершаем работу');
     try {
         stopAllAutopostBots();
-        console.log('[Shutdown] Autopost polling-боты остановлены');
+        logger.info('[Shutdown] Autopost polling-боты остановлены');
     } catch (e) {
-        console.error('[Shutdown] Ошибка остановки autopost-ботов:', e.message);
+        logger.error({ err: e }, '[Shutdown] Ошибка остановки autopost-ботов');
     }
     // Даём Time Telegram-клиентам закрыться чисто
     setTimeout(() => process.exit(0), 1500);
@@ -139,6 +149,29 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // ==========================================
 const app = express();
 app.set('trust proxy', 1);
+
+// HTTP-логирование: request-id на каждый запрос, успешные (<400) — silent.
+// Политика уровней и форматы: docs/plans/2026-11-05-logging-research.md §5.
+app.use(pinoHttp({
+    logger,
+    genReqId: (req, res) => {
+        const incoming = req.headers['x-request-id'];
+        const id = typeof incoming === 'string' && incoming.length > 0 && incoming.length <= 64
+            ? incoming
+            : randomUUID();
+        res.setHeader('X-Request-Id', id);
+        return id;
+    },
+    customLogLevel: (req, res, err) => {
+        if (err || res.statusCode >= 500) return 'error';
+        if (res.statusCode >= 400) return 'warn';
+        return 'silent';
+    },
+    serializers: {
+        req: (req) => ({ method: req.method, url: req.url })
+    }
+}));
+
 app.use(express.json());
 app.use(cors({ origin: corsOrigins }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -300,7 +333,7 @@ app.post('/api/payment-settings', authenticateUser, async (req, res) => {
         if (error) throw error;
         res.json({ success: true, settings: data || legacyPayload });
     } catch (err) {
-        console.error('Ошибка сохранения настроек:', err.message);
+        logger.error({ err }, 'Ошибка сохранения настроек');
         res.status(500).json({ error: 'Ошибка базы данных при сохранении' });
     }
 });
@@ -326,8 +359,8 @@ app.get('/api/payment-settings', authenticateUser, async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 httpServer.listen(PORT, async () => {
-    console.log(`✅ Бэкенд запущен на порту ${PORT}`);
-    console.log('[UserbotAutomation]', {
+    logger.info({ port: PORT }, '✅ Бэкенд запущен');
+    logger.info({
         manual_dm_enabled: envFlag('USERBOT_DM_ENABLED'),
         retention_dm_enabled: envFlag('USERBOT_RETENTION_DM_ENABLED'),
         auto_kick_dm_enabled: envFlag('USERBOT_AUTO_KICK_DM_ENABLED'),
@@ -343,7 +376,7 @@ httpServer.listen(PORT, async () => {
         referral_payout_confirmation_enabled: String(process.env.REFERRAL_PAYOUT_CONFIRMATION_ENABLED || 'true').trim().toLowerCase() !== 'false',
         managed_proxy_reconcile_enabled: String(process.env.MANAGED_PROXY_RECONCILE_ENABLED || 'true').trim().toLowerCase() !== 'false',
         billing_activation_recovery_enabled: String(process.env.BILLING_ACTIVATION_RECOVERY_ENABLED || 'true').trim().toLowerCase() !== 'false'
-    });
+    }, '[UserbotAutomation] флаги');
 
     // Запускаем всех ботов из БД
     await initAllBots(supabase);
@@ -365,7 +398,7 @@ httpServer.listen(PORT, async () => {
         for (const ab of autopostBots || []) {
             autopostService.startBot(ab.id, ab.bot_token);
         }
-    } catch (e) { console.error('[Autopost] Ошибка запуска ботов:', e.message); }
+    } catch (e) { logger.error({ err: e }, '[Autopost] Ошибка запуска ботов'); }
     startUserbotInboxWatch(supabase, getBotById);
     startRestrictedUserbotCleanup(supabase);
     startListedUserbotHealthCheck(supabase, { userbotService });
@@ -380,9 +413,9 @@ httpServer.listen(PORT, async () => {
     runProxyBootSweep(supabase)
         .then(() => broadcastPreparationService.resumeStuckPreparations())
         .catch(err => {
-            console.error('[ProxyBootSweep] failed:', err?.message || err);
+            logger.error({ err }, '[ProxyBootSweep] failed');
             broadcastPreparationService.resumeStuckPreparations().catch(resumeErr => {
-                console.error('[BroadcastPreparation] resume failed:', resumeErr?.message || resumeErr);
+                logger.error({ err: resumeErr }, '[BroadcastPreparation] resume failed');
             });
         });
     startTelegramWebHealth(supabase);

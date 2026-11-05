@@ -14,10 +14,13 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000
       },
-      log_date_format: 'YYYY-MM-DD HH:mm Z',
-      error_file: './logs/error.log',
-      out_file: './logs/out.log',
-      merge_logs: true
+      // log_date_format убран: его timestamp-префикс ломает JSONL-строки pino
+      // (docs/plans/2026-11-05-logging-research.md §5.3). Время — поле "time"
+      // внутри JSON. Ротация: pm2-logrotate (10M x 14, gzip) — настроен на сервере.
+      error_file: './logs/app.err.jsonl',
+      out_file: './logs/app.out.jsonl',
+      merge_logs: true,
+      kill_timeout: 5000
     }
   ]
 };

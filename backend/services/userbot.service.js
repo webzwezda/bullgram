@@ -9,6 +9,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import crypto from 'crypto';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
+import { logger } from '../utils/logger.js';
 import { MCPError, ERROR_CODES } from '../shared/errors.js';
 import { withTimeout } from '../shared/utils.js';
 import { encodeCursor, decodeCursor } from '../shared/pagination.js';
@@ -488,7 +489,9 @@ export class UserbotService {
             if (ignoreAuthKeyErrors && (raw.includes('AUTH_KEY_UNREGISTERED') || raw.includes('SESSION_REVOKED'))) {
                 return;
             }
-            console.error('[GramJS _errorHandler]', error);
+            // err проходит через safeErr-сериализатор: SocksClientError.options
+            // с userId/password прокси в лог не попадает (инцидент 2026-11-04).
+            logger.error({ raw: raw.slice(0, 300), err: error }, '[GramJS _errorHandler]');
         };
 
         return client;
@@ -1113,7 +1116,13 @@ export class UserbotService {
 
         const clientConfig = this._getClientConfig(proxyConfig, 5, fingerprint, proxyData);
 
-        console.log('[QR-GENERATE] Создаем TelegramClient с proxyConfig:', proxyConfig);
+        // Санитизированный лог вместо дампа proxyConfig (там username/password прокси).
+        logger.info({
+            has_proxy: Boolean(proxyConfig),
+            proxy_host: proxyData?.host ?? null,
+            proxy_port: proxyData?.port ?? null,
+            has_auth: Boolean(proxyConfig?.username && proxyConfig?.password)
+        }, '[QR-GENERATE] Создаем TelegramClient');
 
         const client = new TelegramClient(new StringSession(''), fingerprint.api_id, fingerprint.api_hash, clientConfig);
         this.prepareServiceClient(client);

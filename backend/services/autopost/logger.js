@@ -1,43 +1,33 @@
 /**
- * Структурированный логгер для автопостера.
- * Эмитит одну строку JSON в stdout — удобно для grep/journalctl/loki.
+ * Структурированный логгер автопостера — обёртка над общей фабрикой
+ * backend/utils/logger.js (pino, JSONL). План: docs/plans/2026-11-05-logging-research.md.
  *
- * log.info('scheduler', 'post_published', { botId, itemId, channelId })
- *   → {"ts":"2026-06-23T12:00:00.000Z","level":"info","module":"scheduler","event":"post_published","botId":"…","itemId":"…"}
+ * API прежний: log.info('scheduler', 'post_published', { botId, itemId })
+ *   → {"level":"info","time":"…","module":"scheduler","event":"post_published","msg":"post_published","botId":"…"}
  *
- * Уровни: debug (по умолчанию подавляется, включить AUTOSTRUCT_LOG_LEVEL=debug),
- * info, warn, error.
+ * Отличие от старого формата: поле времени `time` вместо `ts`, уровень —
+ * строка-лейбл (число раньше), err сериализуется в {type,message,code,stack≤5}.
+ *
+ * Уровень: LOG_LEVEL (общий), легаси-фолбэк AUTOPST_LOG_LEVEL. debug по умолчанию
+ * подавлен.
  */
 
-const LEVELS = ['debug', 'info', 'warn', 'error'];
-const configuredLevel = String(process.env.AUTOPST_LOG_LEVEL || 'info').toLowerCase();
-const minIndex = LEVELS.indexOf(configuredLevel === 'warning' ? 'warn' : configuredLevel);
-const minLevelIdx = minIndex === -1 ? 1 : minIndex; // default to info
+import { createLogger } from '../../utils/logger.js';
+
+const legacyLevel = String(process.env.AUTOPST_LOG_LEVEL || '').trim().toLowerCase();
+
+const logger = createLogger({
+    level: legacyLevel || undefined
+});
 
 function emit(level, module, event, fields) {
-    if (LEVELS.indexOf(level) < minLevelIdx) return;
-    const line = JSON.stringify({
-        ts: new Date().toISOString(),
-        level,
-        module,
-        event,
-        ...fields
-    });
-    if (level === 'error') {
-        process.stderr.write(line + '\n');
-    } else {
-        process.stdout.write(line + '\n');
-    }
+    const payload = { module, event, ...(fields || {}) };
+    logger[level](payload, event);
 }
 
 export const log = {
     debug: (module, event, fields = {}) => emit('debug', module, event, fields),
     info: (module, event, fields = {}) => emit('info', module, event, fields),
     warn: (module, event, fields = {}) => emit('warn', module, event, fields),
-    error: (module, event, fields = {}) => emit('error', module, event, {
-        ...(fields || {}),
-        ...(fields?.err instanceof Error
-            ? { err: fields.err.message, stack: fields.err.stack }
-            : (fields?.err ? { err: String(fields.err) } : {}))
-    })
+    error: (module, event, fields = {}) => emit('error', module, event, fields)
 };

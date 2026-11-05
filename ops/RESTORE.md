@@ -49,6 +49,18 @@ npm --prefix docs-site install
   Блог (`blog-site/`) собирается туда же в `dist/blog`, отдаётся на `/blog/`
   (nginx-блок по образцу `/docs`)
 - **Архивы**: `/var/www/_archive/` (бывшие блог/курсы), `/root/nginx-backups/`
+- **Логи бэкенда**: JSONL (pino) → `/srv/bullgram/backend/logs/app.out.jsonl`
+  (stdout, уровни info/warn/error) и `app.err.jsonl` (stderr). Пишет сам процесс,
+  файлы ведёт pm2; ротация — модуль `pm2-logrotate` (10MB × 14, gzip,
+  ежедневно, `pm2 conf pm2-logrotate`). Арочная история до перехода на JSONL
+  (2026-11-06): `logs/archive/*.pre-jsonl.log.gz`.
+  Чтение: `tail -f /srv/bullgram/backend/logs/app.out.jsonl | jq 'select(.level=="error")'`;
+  по арендатору — `jq 'select(.owner_id=="…")'`; по запросу — `jq 'select(.reqId=="…")'`.
+  Успешные HTTP-запросы (<400) не логируются. Секреты (token/session/password/)
+  цензурируются в `backend/utils/logger.js`; домен-аудит — в БД (`telegram_error_events`,
+  `billing_events`, `mcp_tool_log` и др.), не в файлах. Детали и план миграции
+  console.* — `docs/plans/2026-11-05-logging-research.md`.
+  После пересоздания машины: `pm2 install pm2-logrotate && pm2 set pm2-logrotate:max_size 10M && pm2 set pm2-logrotate:retain 14 && pm2 set pm2-logrotate:compress true && pm2 set pm2-logrotate:rotateInterval '0 0 * * *'`
 
 ## 4. Локальное окружение (опционально, для Supabase MCP)
 

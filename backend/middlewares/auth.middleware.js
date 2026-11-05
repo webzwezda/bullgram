@@ -19,6 +19,9 @@ export const authenticateUser = async (req, res, next) => {
 
     if (error || !user) return res.status(401).json({ error: 'Недействительный токен' });
     req.user = user;
+    // Tenant-разметка логов: owner_id только из аутентифицированного контекста
+    // (docs/plans/2026-11-05-logging-research.md §5.5).
+    if (req.log) req.log = req.log.child({ owner_id: user.id });
     try {
         req.profile = await loadProfileForUser(supabase, user);
         next();
@@ -45,5 +48,6 @@ export const optionalAuthenticateUser = async (req, res, next) => {
     } catch {
         req.user = null;
     }
+    if (req.user && req.log) req.log = req.log.child({ owner_id: req.user.id });
     next();
 };
