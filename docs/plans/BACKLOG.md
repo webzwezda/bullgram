@@ -23,3 +23,7 @@
 ## §29. Ретеншн audit-таблиц: 9 из 10 растут без чистки
 
 Решение: pg_cron-чистка по классам событий — деньги (`billing_events`, `payment_events`) годы, безопасность (`telegram_error_events`, `telegram_web_audit`) 1-2 года, остальное (`access_events`, `userbot_join_log`, `customer_funnel_events`, `referral_events`?) 90d; `userbot_send_log` не чистить произвольно (ledger квот messaging-роутера — чистка согласовать с окнами квот). Образец уже есть: `mcp_audit_log_cleanup` (90d, backend/sql/mcp-audit-cleanup-cron.sql). Владелец: платформа. Триггер: старт фазы 1 логирования или первый деградейшн БД по размеру таблиц.
+
+## §30. Красный тест test-sale-scan: фикстура без item_type (предсуществующий)
+
+Решение: проверка «public-лот: listed_item_id проставлен» падает и на чистом HEAD до разрезки волны 12 — фикстура теста кладёт `shop_items` без `item_type: 'account'`, а сервис `attachListedItemIds` после report-only коммитов (aef6973/06aa4aa) фильтрует `.eq('item_type', 'account')`. Разрезка сохранила поведение побайтно; чинить фикс-файл теста (добавить `item_type`) или сервис — решение владельца. Владелец: платформа. Триггер: следующий прогон `npm run test:sale-scan` (уже красный) или правка sale-scan-контура.
