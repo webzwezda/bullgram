@@ -306,7 +306,7 @@ check:design, прод-страницы автопостера и реферал
 - [x] Волна 2 (фронт мелочь, 11) — 2026-11-06, см. «Ревью волны 2»
 - [x] Волна 3 (backend роуты, 6) — 2026-11-06, см. «Ревью волны 3»
 - [x] Волна 4 (backend сервисы, 5) — 2026-11-06, см. «Ревью волны 4»
-- [ ] Волна 5 (userbot.routes, 1 → ~20)
+- [x] Волна 5 (userbot.routes, 1 → ~20) — 2026-11-06, см. «Ревью волны 5»
 - [ ] Волна 6 (shop.routes, 1 → ~15)
 - [ ] Волна 7 (userbot.service, 1 → ~14)
 - [ ] Волна 8 (фронт средние, 5)
@@ -449,3 +449,34 @@ contour-admin-rights/shared.js (кросс-сервисная leaf-зависи�
 Тонкий запас: sales-contour.service.js 1584 Б.
 
 Из зоны лимита вышло: 5 (итого 33). Осталось в очереди: 26.
+
+## Ревью волны 5 (2026-11-06, коммиты 25281ff, eb58907, c51428f)
+
+Сделано: МОНСТР backend/routes/userbot.routes.js (229114 Б, 4913 строк) →
+**фасад 379 Б** (`export { default } from './userbot/index.js'`, server.js не
+меняется) + агрегатор index.js (4113 Б, 16 register-вызовов) + **23 модуля**
+(4 helpers + constants.js + 18 роут-модулей, 816–18240 Б). Три
+последовательные стадии: helpers → первая половина фабрики → вторая половина
++ агрегатор; две промежуточные коммит-стадии через утверждённый `--no-verify`,
+финал — штатно через хук.
+
+Проверки: фабрика байт-идентична после стадии 1; тела всех модулей байт-в-байт
+против git show HEAD; порядок регистрации 43→43 маршрутов — динамическая
+сверка обходом router.stack в двух процессах, совпадение поэлементно
+(DELETE /proxies/:id раньше DELETE /:id сохранена); multer-инстансы уехали со
+своими зонами (по одному); proxyCheckCooldown Map — единственная в
+helpers-proxy.js; цикл routes⇄helpers разорван через constants.js; сканы
+«используется ↔ импортирован» чисты; тесты: test:autopost (19, вкл.
+test-userbot-ops через роуты), test:contours (12), test:intake, test:qr-auth,
+test:entity (23), test:messaging (76), test:mcp; gate-07 596→596; ci:source
+4/4; деплой success; прод: 5 userbot-эндпоинтов 401, pm2 online, level≥50
+ноль, /userbot/proxies в реальном Chrome — 0 ошибок консоли.
+
+Отмечено: зона proxies-crud в реальности 21.9К — разрезана на proxies-crud +
+proxies-check (порядок сохранён); мелкие GET /fingerprint-profiles и
+/recovery-status встроены в qr.js/lifecycle.js первыми роутами; мёртвая
+константа TRIAL_PROXY_LEASE_HOURS удалена (grep по backend — ноль
+использований); 2 ловушки пойманы сканами до коммита (isMissingRecoveryTable в
+main, FRESH_IMPORT_RUNTIME_REASON в health-check).
+
+Из зоны лимита вышло: 1 (итого 34). Осталось в очереди: 25.
