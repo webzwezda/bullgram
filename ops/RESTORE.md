@@ -24,6 +24,7 @@ npm --prefix docs-site install
 | `backend/.env` | сервер: `/srv/bullgram/backend/.env`, или менеджер паролей |
 | `.mcp.json` (Supabase MCP, Bullgram MCP токен) | менеджер паролей / старая машина |
 | SSH-ключ к прод-серверу (`srv` = `root@64.188.70.180`) | старая машина `~/.ssh/`, либо добавить новый ключ на сервер |
+| Ключ шифрования бэкапов БД | сервер `/opt/backups/.dumpkey` + офлайн-копия у владельца (wiki `infrastructure/bullgram-backup-dumpkey.txt`); на NAS ключа НЕТ — /sata читается гостём через Samba |
 
 ## 3. Сервер (только на нём, в репо не хранится)
 
@@ -76,3 +77,38 @@ curl -s https://bullgram.xyz/api/external/v1/health                       # JSON
 ```
 
 Деплой: `git push` в `main` → GitHub Actions → `scripts/deploy-pull.sh`.
+
+## 6. Бэкапы БД (с 2026-11-07, волна 1 плана укрепления)
+
+Две копии дампа Supabase (Postgres, контейнер `supabase-db`):
+
+| Копия | Где | Формат | Ретеншн |
+|---|---|---|---|
+| Локальная | srv: `/backups/postgres/*.dump` | plaintext `pg_dump -Fc` | 14 суток |
+| Off-site | ORICO NAS: `/sata/bullgram-backups/*.dump.enc` (в chroot: `/media/bullgram-backups/`) | aes-256-cbc + pbkdf2-600k поверх -Fc | 30 суток |
+
+Цепочка: cron srv `0 4 * * *` (Asia/Vladivostok) → `/opt/backups/pg-dump.sh` (pg_dump → sanity-check ≥1MB → шифрование `openssl enc -aes-256-cbc -pbkdf2 -iter 600000` ключом `/opt/backups/.dumpkey` → `/opt/backups/publish/`, держит 3 свежих `.enc`) → cron NAS-chroot `30 18 * * *` UTC (= 04:30 +10) → `/opt/bullgram-backup/pull-backup.sh` (rsync выделенным restrict-ключом, лог `/var/log/bullgram-pull.log`, prune 30 суток). DMS-пинги healthchecks.io закомментированы в обоих скриптах (включить при 1.4). Детали NAS: wiki `infrastructure/orico-nas-cd3510.md`.
+
+Восстановление БД из NAS-копии:
+
+```bash
+# 1. расшифровать офлайн-ключом (на любой машине, openssl 1.1.1+)
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+  -in bullgram-YYYY-MM-DD_HHMM.dump.enc -out restored.dump \
+  -pass file:/путь/к/bullgram-backup-dumpkey.txt
+# 2. проверить читаемость и состав
+pg_restore -l restored.dump | less
+# 3. развернуть (ОСТОРОЖНО: --clean пересоздаёт объекты; перед боевым restore —
+#    стоп трафика pm2 + консультация postgres-pro правил; впервые делаем на драйлле)
+docker cp restored.dump supabase-db:/tmp/restored.dump
+docker exec supabase-db pg_restore -U postgres -d postgres --clean --if-exists /tmp/restored.dump
+```
+
+Ежемесячный smoke (календарь владельца): взять свежий `.enc` с NAS, расшифровать офлайн-ключом, `pg_restore -l | tail -1` вернул TOC, размер dump ≈ 100+MB.
+
+### Drill log
+
+| Дата | Что делали | Результат |
+|---|---|---|
+| 2026-11-07 | Приёмочный тест цепочки: pg-dump → .enc → ручной pull на NAS (111MB, 14с) → расшифровка офлайн-ключом на Mac → sha256 == plaintext-дампу → `pg_restore -l` (1728 TOC-записей) | OK |
+| (пусто) | Полный restore в чистую БД | — |

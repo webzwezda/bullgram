@@ -132,6 +132,8 @@ jq -r 'select(.time > (now - 86400 | todateiso8601) and .level=="error") | .msg'
 
 ## Связанные места
 
+- Дежурный runbook по сигнатурам: `docs/dev/runbooks.md` (на него ссылается
+  лог-дайджест `/opt/alerts/log-digest.sh` на srv)
 - Исследование и план: `docs/plans/2026-11-05-logging-research.md`
 - Бэклог внедрения: `docs/plans/BACKLOG.md` §28 (логирование), §29 (ретеншн аудит-таблиц)
 - Инфра-восстановление: `ops/RESTORE.md` — секция «Логи»
