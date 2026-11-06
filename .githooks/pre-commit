@@ -24,6 +24,11 @@ IGNORE_RE=(
     '(^|/)(dist|build|node_modules|vendor|coverage|_archive)/'
     '\.(min\.js|min\.css|map|woff2?|ttf|otf|png|jpe?g|gif|webp|ico|avif|pdf|zip|gz|tgz|sqlite3?|session)$'
     '(^|/)tokens\.css$'
+    # Утверждено владельцем 2026-11-06: исторические документы не режем,
+    # общие байт-в-байт стили (ui-sync) не режем:
+    '(^|/)docs/plans/'
+    '(^|/)LICENSE($|\.)'
+    '(^|/)src/styles/app\.css$'
 )
 
 fail=0
