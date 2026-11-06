@@ -1,15 +1,12 @@
-import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
 // Хелперы доставки переехали в общий util (единственный источник; до этого дублировались здесь и в abandoned-cart.job.js)
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
-import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
+import { MessagingRouter } from '../services/messaging-router.service.js';
 import { wrapJobTick } from '../utils/job-runner.js';
+import { loadRetentionPool, markReminderSent, logReminderEvent } from './retention/helpers.js';
+import { buildReminderContent } from './retention/reminder-text.js';
 
 function isUserbotRetentionDmEnabled() {
     return String(process.env.USERBOT_RETENTION_DM_ENABLED || '').trim().toLowerCase() === 'true';
-}
-
-function isOperationalUserbot(account) {
-    return String(account?.runtime_status || '').trim().toLowerCase() !== 'pending_activation';
 }
 
 /**
@@ -20,96 +17,6 @@ function isOperationalUserbot(account) {
 
 export const startRetention = (supabase, getBotFunction, { messagingRouter: messagingRouterOverride } = {}) => {
     const messagingRouter = messagingRouterOverride || new MessagingRouter({ supabase });
-
-    // Контурный пул бота: активные связки official_bot ↔ юзербот (те же акторы, что показывает
-    // контурный UI), без shop-резерва и неэлигибельных акторов. Чинит рассинхрон
-    // «UI обещает контурного хелпера, job шлёт новейшим юзерботом».
-    async function loadContourPool(ownerId, botId) {
-        const [reservedUserbotIds, bindingsResponse] = await Promise.all([
-            loadReservedUserbotIds(supabase, ownerId),
-            supabase
-                .from('official_bot_userbot_bindings')
-                .select('userbot_id')
-                .eq('bot_id', botId)
-                .eq('is_active', true)
-        ]);
-        if (bindingsResponse.error) throw bindingsResponse.error;
-
-        const userbotIds = [...new Set((bindingsResponse.data || []).map((row) => String(row.userbot_id)))].filter(Boolean);
-        if (userbotIds.length === 0) return [];
-
-        const { data, error } = await supabase
-            .from('tg_accounts')
-            .select('*, proxies(is_working)')
-            .eq('owner_id', ownerId)
-            .eq('account_type', 'userbot')
-            .in('id', userbotIds);
-        if (error) throw error;
-
-        const now = new Date();
-        return (data || []).filter((account) =>
-            !reservedUserbotIds.has(String(account.id)) && isActorEligible(account, { now })
-        );
-    }
-
-    // Пул ретеншн-фолбэка: контурные акторы бота; пусто — последний рабочий юзербот пулом из одного
-    async function loadRetentionPool(ownerId, botId) {
-        if (botId) {
-            try {
-                const contourPool = await loadContourPool(ownerId, botId);
-                if (contourPool.length > 0) return contourPool;
-            } catch (poolErr) {
-                console.error('[Напоминание] Не собрали контурный пул, падаем на последний юзербот:', poolErr?.message || poolErr);
-            }
-        }
-        const latest = await loadLatestUserbot(ownerId);
-        return latest ? [latest] : [];
-    }
-
-    async function loadLatestUserbot(ownerId) {
-        const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
-        const { data, error } = await supabase
-            .from('tg_accounts')
-            .select('*, proxies(is_working)')
-            .eq('owner_id', ownerId)
-            .eq('account_type', 'userbot')
-            .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        return (data || []).find(account =>
-            !reservedUserbotIds.has(String(account.id)) &&
-            isOperationalUserbot(account) &&
-            !(account.proxy_id && account.proxies?.is_working === false)
-        ) || null;
-    }
-
-    // Политика маркировки: last_reminder_sent_at ставится только по финальному исходу — доставлено ботом/юзерботом или дефинитивный скип; транзиентные ошибки не маркируем, чтобы следующий тик повторил попытку
-    async function markReminderSent(subscriptionId) {
-        const { error } = await supabase
-            .from('subscriptions')
-            .update({ last_reminder_sent_at: new Date().toISOString() })
-            .eq('id', subscriptionId);
-        if (error) {
-            // Не промаркировали — следующий тик отправит повторно, поэтому сбой должен быть виден в логах
-            console.error('[Напоминание] Не поставили last_reminder_sent_at:', error.message);
-        }
-    }
-
-    async function logReminderEvent(sub, ownerId, botId, payload) {
-        try {
-            await supabase.from('access_events').insert({
-                owner_id: ownerId,
-                channel_id: sub.channel_id || null,
-                subscription_id: sub.id,
-                tg_user_id: String(sub.tg_user_id),
-                event_source: 'retention',
-                event_type: 'retention_reminder',
-                payload
-            });
-        } catch (logErr) {
-            console.error('[Напоминание] Не записали access_event:', logErr?.message || logErr);
-        }
-    }
 
     let running = false;
     setInterval(wrapJobTick('retention', async () => {
@@ -148,95 +55,8 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                     const botId = sub.channels.bot_id;
                     const bot = getBotFunction(botId);
 
-                    let sourceTariff = null;
-                    let upsellTariff = null;
-                    let lastPaidTariff = null;
-                    try {
-                        // Скоуп по владельцу: чужие инвойсы и тарифы не должны влиять на текст и deep-link
-                        const { data: recentInvoices } = await supabase
-                            .from('invoices')
-                            .select('id, tariff_id, paid_at, tariffs!inner(id, title, is_trial, upsell_tariff_id, price, currency)')
-                            .eq('tg_user_id', sub.tg_user_id)
-                            .eq('status', 'paid')
-                            .eq('tariffs.owner_id', ownerId)
-                            .order('paid_at', { ascending: false })
-                            .limit(20);
-
-                        sourceTariff = (recentInvoices || []).find(invoice =>
-                            invoice.tariffs &&
-                            invoice.tariffs.is_trial
-                        )?.tariffs || null;
-
-                        lastPaidTariff = (recentInvoices || []).find(invoice =>
-                            invoice.tariffs && !invoice.tariffs.is_trial
-                        )?.tariffs || null;
-
-                        if (sourceTariff?.upsell_tariff_id) {
-                            const { data } = await supabase
-                                .from('tariffs')
-                                .select('id, title, price, currency')
-                                .eq('id', sourceTariff.upsell_tariff_id)
-                                .eq('owner_id', ownerId)
-                                .maybeSingle();
-                            upsellTariff = data || null;
-                        }
-                    } catch (e) {
-                        // Не валим удержание, если пробный сценарий не прочитался
-                    }
-
-                    // 1. Берем кастомный текст админа из базы
-                    const { data: settings } = await supabase.from('payment_settings').select('reminder_text').eq('owner_id', ownerId).single();
-
-                    // Дефолтный текст, если админ ничего не написал (жирный в legacy Markdown — одиночная *, двойная ** ломает parse_mode)
-                    const defaultText = sourceTariff?.is_trial && upsellTariff
-                        ? `⏳ *Пробник почти закончился*\n\nТвой доступ в «*{channel_name}*» скоро сгорит.\n\nЕсли хочешь остаться дальше, переходи в основной тариф:\n*{upsell_tariff_name}* — *{upsell_price} {upsell_currency}*\n\n👉 {renewal_link}`
-                        : `⏳ *Привет!*\n\nТвой доступ в закрытый канал «*{channel_name}*» закончится менее чем через 24 часа.\n\nЧтобы не потерять доступ, продли в один клик:\n👉 {renewal_link}\n\n_Если уже оплатил — просто проигнорируй это сообщение._`;
-
-                    let rawText = (settings && settings.reminder_text) ? settings.reminder_text : defaultText;
-
-                    // Определяем тариф для продления и строим deep-link
-                    let renewalTariffId = null;
-                    if (sourceTariff?.is_trial && upsellTariff) {
-                        renewalTariffId = upsellTariff.id;
-                    } else if (lastPaidTariff?.id) {
-                        renewalTariffId = lastPaidTariff.id;
-                    }
-
-                    let botUsername = null;
-                    try {
-                        if (bot?.botInfo?.username) {
-                            botUsername = bot.botInfo.username;
-                        } else if (bot) {
-                            const me = await bot.telegram.getMe();
-                            botUsername = me?.username || null;
-                        }
-                    } catch (e) {
-                        // не критично
-                    }
-
-                    let renewalLink = null;
-                    if (botUsername) {
-                        renewalLink = renewalTariffId
-                            ? `https://t.me/${botUsername}?start=buy_${renewalTariffId}`
-                            : `https://t.me/${botUsername}`;
-                    } else {
-                        // Нет юзернейма бота — убираем строку со ссылкой, чтобы не отправить литеральный {renewal_link}
-                        console.warn(`[Напоминание] botUsername недоступен, убираем ссылку на продление из текста (subscription ${sub.id})`);
-                        rawText = rawText
-                            .split('\n')
-                            .filter(line => !line.includes('{renewal_link}'))
-                            .join('\n')
-                            .replace(/\n{3,}/g, '\n\n')
-                            .trim();
-                    }
-
-                    // Меняем плейсхолдеры на реальные значения
-                    const messageText = rawText
-                        .replaceAll('{channel_name}', sub.channels.title)
-                        .replaceAll('{upsell_tariff_name}', upsellTariff?.title || 'основной тариф')
-                        .replaceAll('{upsell_price}', upsellTariff?.price || '')
-                        .replaceAll('{upsell_currency}', upsellTariff?.currency || '')
-                        .replaceAll('{renewal_link}', renewalLink || '');
+                    const { sourceTariff, upsellTariff, renewalTariffId, botUsername, renewalLink, messageText } =
+                        await buildReminderContent(supabase, sub, ownerId, bot);
 
                     // 2. Пробуем отправить официальным ботом (с inline-кнопкой)
                     const sendMessageOptions = { parse_mode: 'Markdown' };
@@ -260,7 +80,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
 
                     if (botOutcome === 'delivered') {
                         console.log(`[Напоминание] Успешно отправлено ботом юзеру ${sub.tg_user_id}${plainUsed ? ' (plain-text после parse-ошибки)' : ''}`);
-                        await logReminderEvent(sub, ownerId, botId, {
+                        await logReminderEvent(supabase, sub, ownerId, botId, {
                             delivered_by: 'bot',
                             parse_fallback: plainUsed,
                             bot_id: botId || null,
@@ -277,7 +97,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                     } else if (botOutcome === 'undeliverable') {
                         // Текст не ушёл даже plain-text'ом — дефинитивный исход, маркируем
                         console.warn(`[Напоминание] Не смогли доставить даже plain-text'ом для ${sub.tg_user_id}:`, botError?.message || botError);
-                        await logReminderEvent(sub, ownerId, botId, {
+                        await logReminderEvent(supabase, sub, ownerId, botId, {
                             delivered_by: 'failed',
                             bot_id: botId || null,
                             reason: 'plain_text_retry_failed',
@@ -288,7 +108,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                     }
 
                     if (botOutcome === 'delivered' || botOutcome === 'undeliverable') {
-                        await markReminderSent(sub.id);
+                        await markReminderSent(supabase, sub.id);
                         continue;
                     }
 
@@ -297,15 +117,15 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                         try {
                             if (!isUserbotRetentionDmEnabled()) {
                                 console.log(`[Напоминание] USERBOT_RETENTION_DM_ENABLED=false, пропускаем ЛС через юзербота для ${sub.tg_user_id}`);
-                                await logReminderEvent(sub, ownerId, botId, {
+                                await logReminderEvent(supabase, sub, ownerId, botId, {
                                     delivered_by: 'skipped',
                                     bot_id: botId || null,
                                     reason: bot ? 'userbot_dm_disabled' : 'no_bot_and_userbot_dm_disabled'
                                 });
                                 // Дефинитивный скип — маркируем, чтобы не обрабатывать подписку каждый тик
-                                await markReminderSent(sub.id);
+                                await markReminderSent(supabase, sub.id);
                             } else {
-                                const pool = await loadRetentionPool(ownerId, botId);
+                                const pool = await loadRetentionPool(supabase, ownerId, botId);
                                 if (pool.length > 0) {
                                     // Юзербот шлёт без parse_mode — сырые ** и _ ушли бы подписчику литералами
                                     const result = await messagingRouter.deliver({
@@ -321,7 +141,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                                     if (result.status === 'sent') {
                                         const actor = pool.find((account) => String(account.id) === String(result.actorId));
                                         console.log(`[Напоминание] Доставлено через Юзербота юзеру ${sub.tg_user_id}`);
-                                        await logReminderEvent(sub, ownerId, botId, {
+                                        await logReminderEvent(supabase, sub, ownerId, botId, {
                                             delivered_by: 'userbot',
                                             bot_id: botId || null,
                                             userbot_id: result.actorId || null,
@@ -330,11 +150,11 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                                             source_tariff_id: sourceTariff?.id || null,
                                             upsell_tariff_id: upsellTariff?.id || null
                                         });
-                                        await markReminderSent(sub.id);
+                                        await markReminderSent(supabase, sub.id);
                                     } else {
                                         // Роутер не дотянулся (пауза/квота/ошибка Telegram) — транзиентно, не маркируем
                                         console.warn(`[Напоминание] Юзербот-пул не доставил для ${sub.tg_user_id}: ${result.errorKind} ${result.errorText || ''}`);
-                                        await logReminderEvent(sub, ownerId, botId, {
+                                        await logReminderEvent(supabase, sub, ownerId, botId, {
                                             delivered_by: 'failed',
                                             bot_id: botId || null,
                                             error_kind: result.errorKind || 'unknown',
@@ -349,7 +169,7 @@ export const startRetention = (supabase, getBotFunction, { messagingRouter: mess
                         } catch (ubErr) {
                             // Ошибка юзербота — транзиентная, не маркируем
                             console.error(`[Напоминание] Ошибка Юзербота:`, ubErr.message);
-                            await logReminderEvent(sub, ownerId, botId, {
+                            await logReminderEvent(supabase, sub, ownerId, botId, {
                                 delivered_by: 'failed',
                                 bot_id: botId || null,
                                 error: ubErr?.message || 'unknown'
