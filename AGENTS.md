@@ -1,5 +1,11 @@
 # Bullgram — Agent Instructions
 
+**Правило сеанса: при старте каждой новой сессии первым делом прочитай
+[`SCHEMA.md`](SCHEMA.md)** — индекс внутренней инженерной документации
+(гайды «как устроено и как пользоваться»; сейчас там логер:
+`docs/dev/logging.md`). Правило действует независимо от задачи — до неё
+докрутишься за минуту, а незнание конвенций дорого стоит проекту.
+
 Last full factual audit: 2026-10-14. If this file contradicts the repository, the repository wins — and file a lesson in `docs/plans/LESSONS.md`.
 
 ## Operating Discipline
