@@ -308,7 +308,7 @@ check:design, прод-страницы автопостера и реферал
 - [x] Волна 4 (backend сервисы, 5) — 2026-11-06, см. «Ревью волны 4»
 - [x] Волна 5 (userbot.routes, 1 → ~20) — 2026-11-06, см. «Ревью волны 5»
 - [x] Волна 6 (shop.routes, 1 → ~15) — 2026-11-06, см. «Ревью волны 6»
-- [ ] Волна 7 (userbot.service, 1 → ~14)
+- [x] Волна 7 (userbot.service, 1 → ~14) — 2026-11-06, см. «Ревью волны 7»
 - [ ] Волна 8 (фронт средние, 5)
 - [ ] Волна 9 (userbot-v2 крупные, 2)
 - [ ] Волна 10 (admin-v2 крупные, 3)
@@ -505,3 +505,29 @@ test:shop-delivery, test:sale-scan зелёные; gate-07 596→596; ci:source 
 верификация догнана координатором вручную (включая сверку порядка).
 
 Из зоны лимита вышло: 1 (итого 35). Осталось в очереди: 24.
+
+## Ревью волны 7 (2026-11-06, коммиты 2a4c519, 05a9282)
+
+Сделано: МОНСТР backend/services/userbot.service.js (146812 Б, 3447 строк) →
+**фасад 2550 Б** (mixin-цепочка из 12 + constructor + 4 named реэкспорта; 21
+импортёр по старому пути не меняются, вкл. 2 ленивых await import) + 4
+leaf-модуля (constants/telegram-errors/helpers/botfather-lib — весь
+не-методный код) + **12 mixin-файлов** (2550→16954 Б). Две стадии,
+промежуточный --no-verify, финал штатно.
+
+Одобренная обвязка (§7.3b, mixin-композиция): методы дословны, 83/83
+byte-equal (вкл. JSDoc), прототип 1:1 без дублей (рантайм-сверка в двух
+процессах), this.X-скан 46 имён clean. Единственная обвязка — `super()` первой
+строкой constructor (требование ES-классов при extends, behavior идентичен,
+отмечено комментарием). dialogs порезан на dialogs+resolvers (>19К).
+botFatherCreateBotInFlight Map — единственная, в botfather-lib; метод
+импортирует её оттуда. Hoisted-функции хвоста стали ES-импортами листьев
+(живые биндинги, behavior идентичен).
+
+Проверки: node --check 13/13; import-smoke: typeof UserbotService function,
+new UserbotService(null) не бросает, дым по 5 методам; тесты: test:autopost
+(19, вкл. userbot-ops), test:entity (23), test:messaging (76), test:intake,
+test:qr-auth, test:mcp, test:lifecycle (36); gate-07 596→596; ci:source 4/4;
+деплой success; прод: pm2 online, level≥50 ноль, userbot-эндпоинты 401/200.
+
+Из зоны лимита вышло: 1 (итого 36). Осталось в очереди: 23 (все фронт).
