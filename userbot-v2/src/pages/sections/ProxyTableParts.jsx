@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 import { PROXY_TABLE_PAGE_SIZE, formatTon } from './proxyShared.js';
 
 export function ProxySaleToolbar({ saleProxies, allSaleSelected, toggleAllSaleSelection, listingSale, selectedSaleCount, salePriceTon, setSalePriceTon, listSelectedForSale }) {

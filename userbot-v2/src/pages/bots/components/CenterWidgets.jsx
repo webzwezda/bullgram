@@ -1,3 +1,5 @@
+import { ChevronDown } from 'lucide-react';
+
 export function StatusBadge({ tone, children, className = '' }) {
   const colorMap = {
     success: 'bg-emerald-100 text-emerald-800 border-emerald-200',
