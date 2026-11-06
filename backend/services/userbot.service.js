@@ -21,183 +21,52 @@ import {
 import { getPeerFromCache } from '../utils/peer-cache.js';
 import { runQrAuthWithRotation, createQrPasswordGate } from '../utils/qr-auth.js';
 
-const FAILOVER_COOLDOWN_MS = 15 * 60 * 1000;
+// Стадия 1 разрезки монстра (план §7.3b): не-методный код переехал в
+// leaf-модули services/userbot/*; методы класса не тронуты и зовут эти имена
+// через ES-импорты (раньше — hoisted function declarations, поведение идентично).
+import {
+  FAILOVER_COOLDOWN_MS,
+  QR_SESSION_TTL_MS,
+  QR_TOKEN_RESTART_LIMIT,
+  QR_GENERATE_TIMEOUT_MS,
+  getQrConnectTimeoutMs,
+  DEFAULT_FINGERPRINT,
+  QR_FINGERPRINT_PROFILES,
+  DEFAULT_QR_FINGERPRINT_PROFILE_ID,
+  TELEGRAM_DC_IPV6,
+  PROMOTE_ADMIN_RIGHTS_PRESETS
+} from './userbot/constants.js';
+import {
+  isTimeoutLikeTelegramError,
+  describeTelegramError,
+  detectSpamBlockReason,
+  buildHealthDetails,
+  wrapTelegramError
+} from './userbot/telegram-errors.js';
+import {
+  clampLimit,
+  normalizeChatIdInput,
+  normalizeMessageIdInput,
+  randomPositiveLong,
+  safeDisconnect,
+  matchesDialogType,
+  normalizeTelegramDate
+} from './userbot/helpers.js';
+import {
+  assertFeatureEnabled,
+  assertUserbotOperatable,
+  waitForBotFatherReply,
+  isBotFatherRefusal,
+  findPeerByDialogPages,
+  parseBotFatherToken,
+  parseTelegramInviteLink,
+  botFatherCreateBotInFlight
+} from './userbot/botfather-lib.js';
 
-// Брошенный QR держит подключённый клиент. Чистим такие сессии при каждом qr-start/qr-status.
-const QR_SESSION_TTL_MS = 20 * 60 * 1000;
-// Перезапусков выдачи токена QR (токен живёт ~30с, окно сессии 20 минут).
-const QR_TOKEN_RESTART_LIMIT = 60;
-// Часы на выдачу первого QR в фоновой задаче: после — честный failed в qr-status.
-const QR_GENERATE_TIMEOUT_MS = 90 * 1000;
-
-// Верхняя граница на connect к Telegram при генерации QR (та же ручка, что у
-// health-check'ей: медленный прокси не должен висеть минутами).
-function getQrConnectTimeoutMs() {
-    const raw = Number(process.env.USERBOT_HEALTH_CONNECT_TIMEOUT_MS || 25_000);
-    return Number.isFinite(raw) && raw > 0 ? raw : 25_000;
-}
-
-const DEFAULT_FINGERPRINT = Object.freeze({
-    api_id: 4,
-    api_hash: '014b35b6184100b085b0d0572f9b5103',
-    deviceModel: 'Samsung SM-A515F',
-    systemVersion: 'SDK 32',
-    appVersion: '12.3.0 (63772)',
-    systemLangCode: 'en-gb',
-    langCode: 'en'
-});
-
-const QR_FINGERPRINT_PROFILES = Object.freeze({
-    bullgram_android_a52: Object.freeze({
-        id: 'bullgram_android_a52',
-        label: 'Bullgram Android A52',
-        note: 'Рекомендуемый профиль Bullgram для QR-логина.',
-        fingerprint: Object.freeze({
-            api_id: 4,
-            api_hash: '014b35b6184100b085b0d0572f9b5103',
-            deviceModel: 'Samsung SM-A525F',
-            systemVersion: 'SDK 33',
-            appVersion: '12.3.0 (63772)',
-            systemLangCode: 'en-us',
-            langCode: 'en'
-        })
-    }),
-    bullgram_android_redmi_note_11: Object.freeze({
-        id: 'bullgram_android_redmi_note_11',
-        label: 'Bullgram Redmi Note 11',
-        note: 'Альтернативный Android-профиль Bullgram с русской локалью.',
-        fingerprint: Object.freeze({
-            api_id: 4,
-            api_hash: '014b35b6184100b085b0d0572f9b5103',
-            deviceModel: 'Redmi Note 11',
-            systemVersion: 'SDK 32',
-            appVersion: '12.3.0 (63772)',
-            systemLangCode: 'ru-ru',
-            langCode: 'ru'
-        })
-    }),
-    bullgram_android_a34: Object.freeze({
-        id: 'bullgram_android_a34',
-        label: 'Bullgram Android A34',
-        note: 'Запасной Android-профиль Bullgram для QR-логина.',
-        fingerprint: Object.freeze({
-            api_id: 4,
-            api_hash: '014b35b6184100b085b0d0572f9b5103',
-            deviceModel: 'Samsung SM-A346B',
-            systemVersion: 'SDK 34',
-            appVersion: '12.3.0 (63772)',
-            systemLangCode: 'en-gb',
-            langCode: 'en'
-        })
-    }),
-    bullgram_iphone_13: Object.freeze({
-        id: 'bullgram_iphone_13',
-        label: 'Bullgram iPhone 13',
-        note: 'Стабильный iPhone-профиль Bullgram для QR-логина.',
-        fingerprint: Object.freeze({
-            api_id: 4,
-            api_hash: '014b35b6184100b085b0d0572f9b5103',
-            deviceModel: 'iPhone 13',
-            systemVersion: 'iOS 17.4',
-            appVersion: '12.3 (30231)',
-            systemLangCode: 'en-us',
-            langCode: 'en'
-        })
-    }),
-    bullgram_iphone_15_pro: Object.freeze({
-        id: 'bullgram_iphone_15_pro',
-        label: 'Bullgram iPhone 15 Pro',
-        note: 'Свежий iPhone-профиль Bullgram для QR-логина.',
-        fingerprint: Object.freeze({
-            api_id: 4,
-            api_hash: '014b35b6184100b085b0d0572f9b5103',
-            deviceModel: 'iPhone 15 Pro',
-            systemVersion: 'iOS 17.5',
-            appVersion: '12.3 (30231)',
-            systemLangCode: 'en-us',
-            langCode: 'en'
-        })
-    })
-});
-
-const DEFAULT_QR_FINGERPRINT_PROFILE_ID = 'bullgram_android_a52';
-
-const TELEGRAM_DC_IPV6 = Object.freeze({
-    1: '2001:b28:f23d:f001::a',
-    2: '2001:67c:4e8:f002::a',
-    3: '2001:b28:f23d:f003::a',
-    4: '2001:67c:4e8:f004::a',
-    5: '2001:b28:f23f:f005::a'
-});
-
-function isTimeoutLikeTelegramError(error) {
-    const raw = String(
-        error?.errorMessage
-        || error?.message
-        || error?.description
-        || error
-        || ''
-    ).toUpperCase();
-
-    return raw.includes('TIMEOUT')
-        || raw.includes('TIMED OUT')
-        || raw.includes('ETIMEDOUT')
-        || raw.includes('TIMEOUTERROR')
-        || raw.includes('CONNECTION')
-        || raw.includes('SOCKS')
-        || raw.includes('NETWORK');
-}
-
-function describeTelegramError(error) {
-    return {
-        message: String(error?.errorMessage || error?.message || error?.description || error || '').trim() || null,
-        code: error?.code || null,
-        name: error?.name || null
-    };
-}
-
-function detectSpamBlockReason(messages = []) {
-    const texts = (messages || [])
-        .filter((message) => !message?.out)
-        .map((message) => String(message?.message || '').trim())
-        .filter(Boolean);
-
-    for (const text of texts) {
-        const normalized = text.toLowerCase();
-        if (
-            normalized.includes('your account was blocked')
-            || normalized.includes('violations of the telegram terms of service')
-            || normalized.includes('confirmed by our moderators')
-            || normalized.includes('spam')
-            || normalized.includes('your account is free as a bird')
-            || normalized.includes('good news, no limits are currently applied')
-        ) {
-            return text;
-        }
-    }
-
-    return '';
-}
-
-function buildHealthDetails({
-    session = 'unknown',
-    restriction = 'unknown',
-    restrictionReason = '',
-    spambotState = 'not_checked',
-    spambotReason = '',
-    spambotSource = ''
-} = {}) {
-    return {
-        session,
-        restriction,
-        restriction_reason: restrictionReason || '',
-        spambot: {
-            state: spambotState,
-            reason: spambotReason || '',
-            source: spambotSource || ''
-        }
-    };
-}
+// Named-экспорты для 21 импортёра по старому пути (test-userbot-ops,
+// test-userbot-entity-resolution и др.). isBotFatherGreeting фасадом внутри
+// не используется — только ре-экспорт; остальные три и импортируются, и ре-экспортятся.
+export { isBotFatherRefusal, isBotFatherGreeting, findPeerByDialogPages, parseBotFatherToken } from './userbot/botfather-lib.js';
 
 /**
  * Сервис для работы с юзерботами (GramJS)
@@ -3144,304 +3013,4 @@ export class UserbotService {
             .maybeSingle();
         return data || null;
     }
-}
-
-// ============================================================
-// Local helpers — pure functions for Plan 01 Phase 4 userbot helpers
-// ============================================================
-
-// ============================================================
-// Волна 1 userbot-ops: чистые хелперы (план 2026-09-17).
-// ============================================================
-
-// Флаги-kill-switch для опасных операций (дефолт false — доктрина userbot-флагов).
-function assertFeatureEnabled(envName, featureLabel) {
-    const enabled = String(process.env[envName] || '').trim().toLowerCase() === 'true';
-    if (!enabled) {
-        throw new MCPError(
-            ERROR_CODES.TOOL_DISABLED,
-            `${featureLabel}: операция выключена на этом сервере. Включи ${envName} в .env (true) и перезапусти backend.`,
-            {}
-        );
-    }
-}
-
-// Токен бота из ответа BotFather: «123456789:AA...long-secret...».
-const BOTFATHER_MENU_SIGNATURE = 'I can help you create and manage Telegram bots';
-
-/**
- * Отказ BotFather, после которого диалог бессмысленно продолжать:
- * лимит 20 ботов на аккаунт, прочие «Sorry, you can't …».
- * Возвращаем короткую причину для INVALID_PARAMS или null.
- */
-export function isBotFatherRefusal(rawValue = '') {
-    const text = String(rawValue || '');
-    const limitMatch = text.match(/you can't add more than (\d+) bots/i);
-    if (limitMatch) {
-        return `Лимит Telegram: у аккаунта уже ${limitMatch[1]} ботов — удалите или передайте одного из них (/mybots → /deletebot), затем повторите.`;
-    }
-    if (/^Sorry, you can't/i.test(text.trim())) {
-        return text.slice(0, 200);
-    }
-    return null;
-}
-
-
-/**
- * Приветствие-меню, которое BotFather досылает при первом контакте.
- * Может приехать ПОСЛЕ нашего /newbot и перехватить окно ответа,
- * поэтому waitForBotFatherReply его отфильтровывает.
- */
-export function isBotFatherGreeting(rawValue = '') {
-    const text = String(rawValue || '');
-    if (!text) return false;
-    if (text.includes(BOTFATHER_MENU_SIGNATURE)) return true;
-    // Командное меню нового диалога: перечисление /newbot + /mybots.
-    return text.includes('/newbot') && text.includes('/mybots');
-}
-
-/**
- * Резолв peer пагинацией по диалогам. Свежая сессия юзербота имеет пустой
- * кэш сущностей GramJS — getInputEntity падает («Could not find the input
- * entity»). Итерация по диалогам и находит peer, и заселяет кэш сессии
- * для последующих вызовов. Кап — 10 страниц по 100 диалогов.
- */
-export async function findPeerByDialogPages(client, normalizedId, { maxTotal = 600, normalize } = {}) {
-    const target = String(normalizedId || '').trim();
-    if (!target) return null;
-    let offsetId;
-    let seen = 0;
-    for (let page = 0; page < 10; page++) {
-        const dialogs = await client.getDialogs({ limit: 100, ...(offsetId ? { offsetId } : {}) });
-        if (!dialogs?.length) return null;
-        for (const dialog of dialogs) {
-            seen++;
-            if (String(dialog?.entity?.id || '') === target) {
-                return normalize ? await normalize(dialog) : dialog.entity;
-            }
-        }
-        const last = dialogs[dialogs.length - 1];
-        const lastId = Number(last?.id || 0);
-        if (!lastId || (offsetId !== undefined && lastId >= offsetId) || seen >= maxTotal) return null;
-        offsetId = lastId;
-    }
-    return null;
-}
-
-export function parseBotFatherToken(rawValue = '') {    const match = String(rawValue || '').match(/(\d{6,10}:[A-Za-z0-9_-]{30,})/);
-    return match ? match[1] : null;
-}
-
-// Права для channels.EditAdmin. Имена флагов сверены с api.d.ts
-// (telegram 2.26.22) class ChatAdminRights: changeInfo/postMessages/editMessages/
-// deleteMessages/banUsers/inviteUsers/pinMessages/addAdmins/anonymous/manageCall/
-// other/manageTopics/postStories/editStories/deleteStories. Bot-API-имена
-// (canManageChat, canPromoteMembers) в MTProto-схеме отсутствуют: право
-// «назначать админов» — это addAdmins. 'revoke' = пустые права (разжать).
-const PROMOTE_ADMIN_RIGHTS_PRESETS = Object.freeze({
-    all: Object.freeze({
-        changeInfo: true,
-        postMessages: true,
-        editMessages: true,
-        deleteMessages: true,
-        banUsers: true,
-        inviteUsers: true,
-        pinMessages: true,
-        addAdmins: true
-    }),
-    post_only: Object.freeze({ postMessages: true }),
-    revoke: Object.freeze({})
-});
-
-const BOTFATHER_STEP_TIMEOUT_MS = 20_000;
-
-// Ин-флайт-гард botFatherCreateBot: параллельный вызов на одном юзерботе путает
-// baseline и ответы шагов — второй запуск отклоняем, пока первый не дойдёт до finally.
-const botFatherCreateBotInFlight = new Map();
-
-function botFatherSleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Поллинг DM-диалога с BotFather: ждём ВХОДЯЩЕЕ сообщение с id > afterId (в GramJS
-// custom Message нет поля incoming — входящие опознаём по флагу out === false,
-// свои исходящие не берём). Таймаут шага — TELEGRAM_ERROR.
-async function waitForBotFatherReply(client, peer, afterId, timeoutMs, label) {
-    const timeout = Number(timeoutMs) > 0 ? Number(timeoutMs) : BOTFATHER_STEP_TIMEOUT_MS;
-    const interval = Math.min(1500, Math.max(50, Math.floor(timeout / 4)));
-    const deadline = Date.now() + timeout;
-
-    while (Date.now() < deadline) {
-        await botFatherSleep(interval);
-        const messages = await withTimeout(
-            client.getMessages(peer, { limit: 5 }),
-            30_000,
-            `${label}.poll`
-        );
-        const fresh = (messages || []).find(m => m?.out === false
-            && Number(m?.id || 0) > afterId
-            && !isBotFatherGreeting(m?.message));
-        if (fresh) {
-            return String(fresh?.message || '').trim();
-        }
-    }
-
-    throw new MCPError(
-        ERROR_CODES.TELEGRAM_ERROR,
-        'BotFather не ответил вовремя — повтори операцию чуть позже.',
-        { auditStatus: 'telegram_error' }
-    );
-}
-
-function parseTelegramInviteLink(rawValue = '') {
-    const value = String(rawValue || '').trim();
-    if (!value) return null;
-
-    const stripped = value
-        .replace(/^@/, '')
-        .replace(/^(https?:\/\/)?t\.me\//i, '')
-        .replace(/^(https?:\/\/)?telegram\.me\//i, '')
-        .replace(/\/+$/, '')
-        .trim();
-
-    const plusMatch = value.match(/(?:https?:\/\/)?t\.me\/\+([A-Za-z0-9_-]+)/i)
-        || value.match(/^@(?:joinchat)\+(.+)$/i);
-    if (plusMatch) {
-        return { kind: 'invite_hash', value: plusMatch[1] };
-    }
-
-    const joinchatMatch = value.match(/(?:https?:\/\/)?t\.me\/joinchat\/([A-Za-z0-9_-]+)/i);
-    if (joinchatMatch) {
-        return { kind: 'invite_hash', value: joinchatMatch[1] };
-    }
-
-    const sMatch = value.match(/(?:https?:\/\/)?t\.me\/s\/([A-Za-z0-9_]{5,})/i);
-    if (sMatch) {
-        return { kind: 'username', value: sMatch[1] };
-    }
-
-    const privatePermalinkMatch = value.match(/(?:https?:\/\/)?t\.me\/c\/(\d+)/i);
-    if (privatePermalinkMatch) {
-        return { kind: 'private_permalink', value: privatePermalinkMatch[1] };
-    }
-
-    const usernameFromUrlMatch = value.match(/(?:https?:\/\/)?t\.me\/([A-Za-z][A-Za-z0-9_]{4,})\/?$/i);
-    if (usernameFromUrlMatch) {
-        return { kind: 'username', value: usernameFromUrlMatch[1] };
-    }
-
-    if (!/\s/.test(value) && /^[A-Za-z][A-Za-z0-9_]{4,}$/.test(stripped)) {
-        return { kind: 'username', value: stripped };
-    }
-
-    return null;
-}
-
-function assertUserbotOperatable(userbot) {
-    if (!userbot?.id) {
-        throw new MCPError(ERROR_CODES.NOT_FOUND, 'Userbot not found.', {});
-    }
-    if (userbot.account_type && userbot.account_type !== 'userbot') {
-        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `Account ${userbot.id} is not a userbot.`, {});
-    }
-    if (userbot.runtime_status === 'pending_activation') {
-        throw new MCPError(
-            ERROR_CODES.SAFE_MODE_BLOCKED,
-            `Userbot ${userbot.id} is in safe-mode (pending_activation). Activate it at /userbot/accounts first.`,
-            {}
-        );
-    }
-    if (userbot.runtime_status === 'restricted') {
-        throw new MCPError(
-            ERROR_CODES.ACCOUNT_RESTRICTED,
-            `Userbot ${userbot.id} is restricted by Telegram.`,
-            {}
-        );
-    }
-}
-
-function clampLimit(value, min, max) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return min;
-    return Math.min(max, Math.max(min, Math.floor(n)));
-}
-
-function normalizeChatIdInput(value) {
-    if (value == null) {
-        throw new MCPError(ERROR_CODES.INVALID_PARAMS, 'Argument "chat_id" is required.', {});
-    }
-    const str = String(value).trim();
-    if (!/^-?\d+$/.test(str)) {
-        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `chat_id "${str}" is not a valid Telegram chat ID.`, {});
-    }
-    return str;
-}
-
-// Волна 2 userbot-ops: id сообщения — положительное целое (GramJS ждёт int).
-function normalizeMessageIdInput(value) {
-    const n = Number(value);
-    if (!Number.isInteger(n) || n <= 0) {
-        throw new MCPError(ERROR_CODES.INVALID_PARAMS, `message_id "${value}" is not a valid Telegram message ID.`, {});
-    }
-    return n;
-}
-
-// Положительный 63-битный long для randomId в messages.ForwardMessages.
-function randomPositiveLong() {
-    return BigInt(`0x${crypto.randomBytes(8).toString('hex')}`) >> 1n;
-}
-
-async function safeDisconnect(client) {
-    if (!client) return;
-    try {
-        await withTimeout(client.disconnect(), 5_000, 'client.disconnect');
-    } catch (e) {
-        console.error('[UserbotService] disconnect failed:', e.message);
-    }
-}
-
-async function wrapTelegramError(supabase, userbot, error, operationName) {
-    if (error instanceof MCPError) return error;
-    let eventId = null;
-    try {
-        const recorded = await logTelegramErrorEvent(supabase, {
-            userbot_id: userbot?.id,
-            owner_id: userbot?.owner_id,
-            event_type: 'external_tool_error',
-            error_code: String(error?.errorMessage || error?.code || '').slice(0, 100) || null,
-            error_message: String(error?.message || error || '').slice(0, 1000),
-            source: operationName
-        });
-        eventId = recorded?.id || null;
-    } catch (logErr) {
-        console.error(`[UserbotService] ${operationName}: failed to log Telegram error:`, logErr.message);
-    }
-    const secondsMatch = String(error?.message || '').match(/(\d+)\s*(?:seconds|секунд)/i);
-    const retryAfterSec = secondsMatch ? Number(secondsMatch[1]) : null;
-    return new MCPError(
-        ERROR_CODES.TELEGRAM_ERROR,
-        `Telegram error in ${operationName}: ${error?.errorMessage || error?.message || 'unknown'}`,
-        {
-            auditStatus: 'telegram_error',
-            telegramErrorEventId: eventId,
-            retryAfterSec,
-            details: { operation: operationName, event_id: eventId }
-        }
-    );
-}
-
-function matchesDialogType(dialog, type) {
-    if (!type) return true;
-    return dialog.kind === type;
-}
-
-function normalizeTelegramDate(value) {
-    if (!value) return null;
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'number') {
-        const date = new Date(value * 1000);
-        return Number.isNaN(date.getTime()) ? null : date.toISOString();
-    }
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
