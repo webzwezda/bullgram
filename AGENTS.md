@@ -64,6 +64,15 @@ Last full factual audit: 2026-10-14. If this file contradicts the repository, th
 
 ---
 
+## Internal Engineering Docs
+
+Постоянные гайды «как устроено и как пользоваться» — `docs/dev/`, индекс —
+корневой `SCHEMA.md` (сейчас: `docs/dev/logging.md` — логер, формат JSONL,
+чтение логов на проде, правила для нового кода). Новая постоянная тема — новый
+файл в `docs/dev/` + строка в `SCHEMA.md`; разовые планы — `docs/plans/`.
+
+---
+
 ## Project Structure & Module Organization
 
 Active runtimes (all v2):
