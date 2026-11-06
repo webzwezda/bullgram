@@ -170,7 +170,9 @@ app.use(pinoHttp({
         return 'silent';
     },
     serializers: {
-        req: (req) => ({ method: req.method, url: req.url })
+        // id обязателен: без него строки request completed не коррелируют с
+        // x-request-id ответа и с mcp_tool_log.request_id.
+        req: (req) => ({ id: req.id, method: req.method, url: req.url })
     }
 }));
 
