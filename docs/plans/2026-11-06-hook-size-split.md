@@ -304,7 +304,7 @@ check:design, прод-страницы автопостера и реферал
 
 - [x] Волна 1 (backend мелочь, 11) — 2026-11-06, см. «Ревью волны 1»
 - [x] Волна 2 (фронт мелочь, 11) — 2026-11-06, см. «Ревью волны 2»
-- [ ] Волна 3 (backend роуты, 6)
+- [x] Волна 3 (backend роуты, 6) — 2026-11-06, см. «Ревью волны 3»
 - [ ] Волна 4 (backend сервисы, 5)
 - [ ] Волна 5 (userbot.routes, 1 → ~20)
 - [ ] Волна 6 (shop.routes, 1 → ~15)
@@ -380,3 +380,45 @@ ChannelAudienceSection с реальными данными) — 0 ошибок 
 `return (…)` в OpenPurchasesList.
 
 Из зоны лимита вышло: 11 (итого 22). Осталось в очереди: 37.
+
+## Ревью волны 3 (2026-11-06, коммиты ed10b3a…14b8d0e)
+
+Сделано: 6 средних роутов разрезаны на 23 файла (6 исходников 5.2–17.8 КБ + 17
+новых подмодулей 1.5–18.7 КБ). Хук прошёл все 8 коммитов штатно. 3
+параллельных агента; паттерн register(router, ctx/deps), фасады с named
+реэкспортами (getBotById/initAllBots/buildActorRightsByTarget по старому пути —
+server.js и customers.routes не тронуты).
+
+Уроки волны 1 сработали: скан швов в обе стороны поймал у агентов 4 реальные
+ловушки ДО коммита (неэкспортированный getReserveAccountByOwner, отсутствующий
+supabase в сигнатуре restoreReferralBalance, потерянные ключи деструктуризации
+dashboard — упали бы ReferenceError на каждом GET, не тот файл для импорта
+loadReservedUserbotIds). Порядок регистрации сверен сравнением стеков:
+referral 10/10, official-bot 23/23 (contours раньше /:accountId*, add раньше
+/:accountId/token), channel-audiences 5/5, autopost/broadcast — порядок
+GET→preview→send→cancel сохранён.
+
+Проверки: node --check 23/23; import-smoke всех фабрик и подмодулей; тесты —
+test:mcp, test:contours (12), test:broadcast (75), test:autopost (19),
+test:broadcast-cleanup (92), test:sale-scan, test:sales, test:messaging (76),
+test:lifecycle (36) — все зелёные; gate-07 baseline обновлён осознанно
+(596 → 596); ci:source 4/4 PASS; деплой success; прод: pm2 online, JSON-ошибок
+level≥50 после рестарта ноль, смоук эндпоинтов /api/dashboard,
+/api/channel-audiences, /api/autopost/bots, /api/broadcast/campaigns,
+/api/referrals, /api/official-bot/contours — 401 (смонтированы, auth живой),
+/health 200; прод в реальном Chrome: /paywall/ (Бот продаж: боты, юзерботы,
+площадки) и /paywall/referrals (Резервный фонд с живыми данными через новый
+overview.js) — 0 ошибок консоли.
+
+Отклонения от карты §5 (все ради лимита/ацикличности, задокументированы
+агентами): referral — buildReserveRefundSummary/enrichReserveRefundPayload/
+getReserveAccountByOwner в ton-payloads (иначе циклы), overview вынесен в
+отдельный файл; official-bot — bot-management.js создан (родитель с зоной C
+был бы 34.7К); autopost — admin-routes.js вынесен (родитель после C+D был бы
+24.4К); broadcast — cancel остался в родителе (C+D = 19.9К в один файл).
+Тонкие запасы: referral/overview.js 1279 Б, bot-management.js 1895 Б,
+build-audience.js/campaign-routes.js ~2.2К — при будущем росте этих зон
+потребуется своя под-разрезка. proFulfillment-запрос в dashboard теперь
+исполняется в лоадере до агрегации (независимый read-only — поведение то же).
+
+Из зоны лимита вышло: 6 (итого 28). Осталось в очереди: 31.
