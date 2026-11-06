@@ -307,7 +307,7 @@ check:design, прод-страницы автопостера и реферал
 - [x] Волна 3 (backend роуты, 6) — 2026-11-06, см. «Ревью волны 3»
 - [x] Волна 4 (backend сервисы, 5) — 2026-11-06, см. «Ревью волны 4»
 - [x] Волна 5 (userbot.routes, 1 → ~20) — 2026-11-06, см. «Ревью волны 5»
-- [ ] Волна 6 (shop.routes, 1 → ~15)
+- [x] Волна 6 (shop.routes, 1 → ~15) — 2026-11-06, см. «Ревью волны 6»
 - [ ] Волна 7 (userbot.service, 1 → ~14)
 - [ ] Волна 8 (фронт средние, 5)
 - [ ] Волна 9 (userbot-v2 крупные, 2)
@@ -480,3 +480,28 @@ proxies-check (порядок сохранён); мелкие GET /fingerprint-p
 main, FRESH_IMPORT_RUNTIME_REASON в health-check).
 
 Из зоны лимита вышло: 1 (итого 34). Осталось в очереди: 25.
+
+## Ревью волны 6 (2026-11-06, коммиты 7844e85, c88fece)
+
+Сделано: МОНСТР backend/routes/shop.routes.js (162013 Б, 3592 строк) →
+**фасад 664 Б** (default + 3 named по старым путям, server.js и
+test-shop-delivery не меняются) + агрегатор index.js (3862 Б) + **15 модулей**
+(4 stage-1: helpers/purchase-core/purchase-check/lots-batch; 9 register-зон +
+items-create-helpers). Две стадии, промежуточный --no-verify, финал штатно.
+mkdirSync side-effect — один, в helpers.js; мёртвый receiptUpload перенесён
+как есть.
+
+Одобренная обвязка (§7.3a, POST items ~387 строк): части тела хендлера
+вынесены в функции items-create-helpers.js (18851 Б) без изменения логики —
+куски тела дословны внутри функций.
+
+Проверки: node --check 15/15; фасад резолвит default + 3 named; порядок
+маршрутов 18/18 — статическая сверка HEAD-фабрики против index.js+модулей;
+rate-limit карты публичных роутов остались per-factory-instance; тесты:
+test:shop-delivery, test:sale-scan зелёные; gate-07 596→596; ci:source 4/4;
+деплой success; прод: /shop 200, /api/shop/public/items 200 (публичный каталог
+через параметризованный listVisibleShopItems), pm2 online, level≥50 ноль.
+Агент стадии 2 упёрся в таймаут координации — работа была завершена,
+верификация догнана координатором вручную (включая сверку порядка).
+
+Из зоны лимита вышло: 1 (итого 35). Осталось в очереди: 24.
