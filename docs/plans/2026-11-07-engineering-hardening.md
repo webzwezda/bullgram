@@ -28,24 +28,29 @@
 Цель: данные перестают быть в одном экземпляре; о проблемах узнаём из Telegram,
 а не открывая логи. Всё с нулевой постоянной RAM, 0 ₽ (B2 free до 10 ГБ).
 
-- [ ] 1.1 Ghost-диск: локализовать ~30G (du 16.5G vs df 51G). Порядок из в.7:
+- [x] 1.1 Ghost-диск: локализован 2026-11-07 — ghost-а НЕ БЫЛО: du-vs-df расхождение = containerd 14G (docker-образы на корневой ФС) + /home 19G (n8nuser 13G: supabase-репо 4.2G/живой стек в docker/, paperclip 2.6G/node_modules при inactive-сервисе, hermes-кэши; anna 6.1G: .hermes 4.1G). Очищены кэши (~2.5G): 91%→87%. Кандидаты на решение владельца: paperclip/node_modules 2.1G (inactive), anna/.hermes 4.1G, supabase/apps 695M (du 16.5G vs df 51G). Порядок из в.7:
       `journalctl --disk-usage` → vacuum + SystemMaxUse=500M; `lsof +L1 | grep deleted`;
       `docker system df -v` → prune; логи контейнеров без ротации; `df -i`.
       Критерий: базовая занятость / ≤ 70%.
 - [ ] 1.2 Диск-алерт: cron `0 * * * *`, df-порог 80%/90% → Telegram, дедуп 6ч
       (конфиг в.7). Критерий: тестовый прогон с фейковым порогом дошёл до чата.
-- [ ] 1.3 pg_dump nightly: `/opt/backups/pg-dump.sh` (в.1: docker exec supabase-db
+- [x] 1.3 pg_dump nightly (готово 2026-11-07): `/opt/backups/pg-dump.sh` (в.1: docker exec supabase-db
       pg_dump -Fc → /backups/postgres, ретеншн 14 суток, sanity-check размера
       ≥1MB), cron `0 4 * * *`. Критерий: ручной прогон + `pg_restore -l` читает дамп.
 - [ ] 1.4 healthchecks.io: аккаунт (действие владельца), 5 чеков, Telegram-интеграция;
       пинги в конце скриптов 1.3/1.5/1.6/1.8 (DMS: тишина = сбой). Критерий:
       отключённый скрипт → алерт через grace-период.
-- [ ] 1.5 restic → B2 off-site: бакет + application key на бакет (действие
-      владельца), `RESTIC_PASSWORD` в .env + офлайн-копия владельцу, init, первый
-      backup + `forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune`,
-      cron после дампа. Набор путей из чек-листа в.3 (БД-дампы, supabase storage
-      volume, n8n volume, .env всех стеков, nginx, letsencrypt, pm2, crontab-дамп).
-      Критерий: `restic ls latest` показывает все пути; тестовое извлечение одного файла.
+- [ ] 1.5 Off-site → **ORICO NAS вместо B2** (решение владельца 2026-11-07,
+      заметка infrastructure/orico-nas-cd3510): pull-модель — NAS (192.168.10.124,
+      chroot Debian SSH:2222, 3TB /sata, outbound-интернет есть) сам забирает дамп
+      с VDS по SSH (dedicated key в authorized_keys srv), rsync →
+      /sata/bullgram-backups/. ОБЯЗАТЕЛЬНО шифрование дампа перед выкладкой
+      (openssl enc -aes-256-cbc -pbkdf2, ключ-файл /opt/backups/.dumpkey + офлайн
+      копия владельцу): /sata гостем читается через Samba Full_Disk, в дампе
+      bot-токены открытым текстом. Cron в chroot NAS (поставить cron + старт в
+      start_debian.sh) 1×/сутки после 04:00 + DMS-пинг из chroot. Ретеншн 30 суток.
+      Критерий: свежий .enc на NAS расшифровывается офлайн-ключом и pg_restore -l читает.
+      Роль B2/restic — не отменяется, откладывается (третья копия позже, по желанию).
 - [ ] 1.6 Log-дайджест: cron `0 */4 * * *` → Telegram. **Поправки Д-6 обязательны**:
       уровни строковые (`select .level=="error"`), путь
       `/srv/bullgram/backend/logs/app.out.jsonl`, фильтр шума (404-скан
