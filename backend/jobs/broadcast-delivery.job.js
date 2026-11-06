@@ -29,15 +29,18 @@ import {
     createBroadcastDeliverySender,
     senderTypeUsesUserbot,
     isPureUserbotSenderType,
-    hasDeliverableActor,
-    planCampaignFinalization,
-    isDeliverableCampaignStatus
+    hasDeliverableActor
 } from '../services/broadcast-delivery.service.js';
 import { wrapJobTick } from '../utils/job-runner.js';
+import {
+    claimNextCampaign,
+    loadPendingDeliveries,
+    failAllPending,
+    isCampaignStillOurs,
+    finalizeCampaign
+} from './broadcast-delivery/campaign-ops.js';
 
 const TICK_INTERVAL_MS = 30_000;
-const STALE_HEARTBEAT_MS = 10 * 60_000;
-const DELIVERY_PAGE_SIZE = 1000;
 
 function isOperationalUserbot(account) {
     return String(account?.runtime_status || '').trim().toLowerCase() !== 'pending_activation';
@@ -92,64 +95,6 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
 
     let running = false;
 
-    async function claimNextCampaign() {
-        // 1) Свежие queued — самые старые первыми
-        const { data: queued, error: queuedError } = await supabase
-            .from('broadcast_campaigns')
-            .select('id, owner_id, message_text, status, meta')
-            .eq('status', 'queued')
-            .order('created_at', { ascending: true })
-            .limit(1);
-        if (queuedError) {
-            console.error('[BroadcastDelivery] Ошибка выборки queued-кампаний:', queuedError.message);
-            return null;
-        }
-        let candidate = queued?.[0] || null;
-
-        // 2) Reaper: 'sending' с протухшим heartbeat — кампания пережила смерть процесса
-        if (!candidate) {
-            const { data: sending, error: sendingError } = await supabase
-                .from('broadcast_campaigns')
-                .select('id, owner_id, message_text, status, meta')
-                .eq('status', 'sending')
-                .order('created_at', { ascending: true })
-                .limit(20);
-            if (sendingError) {
-                console.error('[BroadcastDelivery] Ошибка выборки sending-кампаний:', sendingError.message);
-                return null;
-            }
-            const now = Date.now();
-            candidate = (sending || []).find(campaign => {
-                const heartbeatAt = campaign.meta?.delivery_heartbeat_at ? Date.parse(campaign.meta.delivery_heartbeat_at) : 0;
-                return now - heartbeatAt > STALE_HEARTBEAT_MS;
-            }) || null;
-        }
-
-        if (!candidate) return null;
-
-        // Claim условным апдейтом: если 0 строк — кампанию забрал кто-то другой
-        // или её успели отменить ('cancelled' не claim'аем), пропускаем
-        const nowIso = new Date().toISOString();
-        const claimedMeta = {
-            ...(candidate.meta || {}),
-            delivery_started_at: candidate.meta?.delivery_started_at || nowIso,
-            delivery_heartbeat_at: nowIso
-        };
-        const { data: claimed, error: claimError } = await supabase
-            .from('broadcast_campaigns')
-            .update({ status: 'sending', meta: claimedMeta })
-            .eq('id', candidate.id)
-            .in('status', ['queued', 'sending'])
-            .select('id');
-        if (claimError) {
-            console.error(`[BroadcastDelivery] Ошибка claim кампании ${candidate.id}:`, claimError.message);
-            return null;
-        }
-        if (!claimed || claimed.length === 0) return null;
-
-        return { ...candidate, meta: claimedMeta };
-    }
-
     // Юзерботы, выбранные для кампании. Пока кампания ждала в очереди, их могли продать
     // в shop или сломать — в работу берём только живых (правило: проданные активы не оперируют).
     async function loadSelectedUserbots(ownerId, userbotIds) {
@@ -175,96 +120,6 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
             );
     }
 
-    async function loadPendingDeliveries(campaignId) {
-        const rows = [];
-        let from = 0;
-        while (true) {
-            const { data, error } = await supabase
-                .from('broadcast_deliveries')
-                .select('id, tg_user_id, channel_id, delivery_status, meta')
-                .eq('campaign_id', campaignId)
-                .eq('delivery_status', 'pending')
-                .order('created_at', { ascending: true })
-                .range(from, from + DELIVERY_PAGE_SIZE - 1);
-            if (error) throw error;
-            if (!data || data.length === 0) break;
-            rows.push(...data);
-            if (data.length < DELIVERY_PAGE_SIZE) break;
-            from += DELIVERY_PAGE_SIZE;
-        }
-        return rows;
-    }
-
-    async function failAllPending(campaignId, reason) {
-        const { error } = await supabase
-            .from('broadcast_deliveries')
-            .update({ delivery_status: 'failed', error_text: reason })
-            .eq('campaign_id', campaignId)
-            .eq('delivery_status', 'pending');
-        if (error) {
-            console.error(`[BroadcastDelivery] Не пометили pending-доставки кампании ${campaignId} как failed:`, error.message);
-        }
-    }
-
-    // Отмена посреди кампании: статус читаем перед каждым получателем.
-    // Ошибка чтения — не повод рвать доставку, считаем что кампания ещё наша.
-    async function isCampaignStillOurs(campaignId) {
-        const { data, error } = await supabase
-            .from('broadcast_campaigns')
-            .select('status')
-            .eq('id', campaignId)
-            .maybeSingle();
-        if (error) return true;
-        return isDeliverableCampaignStatus(data?.status);
-    }
-
-    // Финал по фактическому состоянию БД, а не по локальным счётчикам.
-    // Статус пишем только из 'sending': отмена кампании всегда выигрывает у финализации.
-    async function finalizeCampaign(campaign, meta) {
-        try {
-            const { data: rows, error } = await supabase
-                .from('broadcast_deliveries')
-                .select('delivery_status')
-                .eq('campaign_id', campaign.id);
-            if (error) throw error;
-
-            const decision = planCampaignFinalization(rows || [], meta);
-
-            if (decision.action === 'wait') {
-                if (decision.refreshHeartbeat) {
-                    console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: ${decision.counts.pending} доставок остались pending — вернёмся следующим тиком`);
-                    await supabase
-                        .from('broadcast_campaigns')
-                        .update({ meta: decision.meta })
-                        .eq('id', campaign.id)
-                        .eq('status', 'sending');
-                } else {
-                    console.warn(`[BroadcastDelivery] Кампания ${campaign.id}: доставок ещё нет, ждём вставки из /send`);
-                }
-                return;
-            }
-
-            const { data: finalized, error: finalizeError } = await supabase
-                .from('broadcast_campaigns')
-                .update({
-                    status: decision.status,
-                    sent_at: decision.meta.delivery_finished_at,
-                    meta: decision.meta
-                })
-                .eq('id', campaign.id)
-                .in('status', ['sending'])
-                .select('id');
-            if (finalizeError) throw finalizeError;
-            if (finalized && finalized.length > 0) {
-                console.log(`[BroadcastDelivery] Кампания ${campaign.id} завершена: ${decision.status}, sent=${decision.counts.sent}, failed=${decision.counts.failed}`);
-            } else {
-                console.log(`[BroadcastDelivery] Кампания ${campaign.id}: финализация пропущена — статус уже не 'sending' (отменена?)`);
-            }
-        } catch (error) {
-            console.error(`[BroadcastDelivery] Не финализировали кампанию ${campaign.id}:`, error?.message || error);
-        }
-    }
-
     async function deliverCampaign(campaign) {
         const meta = { ...(campaign.meta || {}) };
         const ownerId = campaign.owner_id;
@@ -273,7 +128,7 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         // Нормализация как в /send: юзербот-рассылка — не быстрее 5 секунд между получателями
         const delayMs = senderTypeUsesUserbot(senderType) ? Math.max(5000, requestedDelayMs) : requestedDelayMs;
 
-        const pending = await loadPendingDeliveries(campaign.id);
+        const pending = await loadPendingDeliveries(supabase, campaign.id);
 
         // Чисто-юзерботная кампания без единого живого актёра (пул пуст, все в карантине/
         // бане или на длинной паузе) — ждать нечего, честно роняем кампанию. flood-паузы
@@ -282,7 +137,7 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         if (pending.length > 0 && isPureUserbotSenderType(senderType) && !hasDeliverableActor(selectedUserbots)) {
             const queueError = 'Нет доступных юзерботов: все на паузе или в карантине. Разберите юзерботов и перезапустите рассылку.';
             console.error(`[BroadcastDelivery] Кампания ${campaign.id}: ${queueError} Помечаем ${pending.length} доставок как failed`);
-            await failAllPending(campaign.id, queueError);
+            await failAllPending(supabase, campaign.id, queueError);
             await supabase
                 .from('broadcast_campaigns')
                 .update({ status: 'failed', meta: { ...meta, queue_error: queueError } })
@@ -310,7 +165,7 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         try {
             for (let index = 0; index < pending.length; index++) {
                 // Отмена/чужой статус — прекращаем доставку сразу, строки остаются как есть
-                if (!(await isCampaignStillOurs(campaign.id))) {
+                if (!(await isCampaignStillOurs(supabase, campaign.id))) {
                     console.log(`[BroadcastDelivery] Кампания ${campaign.id}: доставка остановлена — статус изменился (отмена?)`);
                     break;
                 }
@@ -397,7 +252,7 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
             await recordDmOutcomes(supabase, ownerId, dmSentIds, dmBlockedByUser).catch(error => {
                 console.error('[BroadcastDelivery] Ошибка записи DM-исходов:', error?.message || error);
             });
-            await finalizeCampaign(campaign, meta);
+            await finalizeCampaign(supabase, campaign, meta);
         }
     }
 
@@ -407,7 +262,7 @@ export const startBroadcastDeliveryJob = (supabase, getBotById) => {
         running = true;
 
         try {
-            const campaign = await claimNextCampaign();
+            const campaign = await claimNextCampaign(supabase);
             if (!campaign) return; // кампаний нет — тихий выход
             await deliverCampaign(campaign);
         } catch (err) {
