@@ -29,6 +29,11 @@ IGNORE_RE=(
     '(^|/)docs/plans/'
     '(^|/)LICENSE($|\.)'
     '(^|/)src/styles/app\.css$'
+    # Утверждено владельцем 2026-11-06 (сессия разрезки): операционная
+    # API-дока и DTCG-источник токенов (резка ломает пайплайн tokens:build) —
+    # не агентский контент, формула токенов неприменима:
+    '(^|/)backend/README\.md$'
+    '(^|/)design/tokens/color\.primitives\.json$'
 )
 
 fail=0
