@@ -1,334 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiRequest } from '../../api/client.js';
-import { ensureContourAdminRights, fetchContourJoinAllStatus, startContourJoinAll } from '../../api/official-bot.js';
+import { useSalesContourActions } from './useSalesContourActions.js';
+import {
+  asArray,
+  buildDraft,
+  getContourConfig,
+  getContourPayloadEntry,
+  normalizeContourTarget,
+  resolveChannelOptions,
+  resolveRightsByTarget,
+  resolveUserbotOptions,
+  toId,
+} from './useSalesContourOptions.js';
 
-const JOIN_ALL_CONFIRM_TEXT = 'Юзербот вступит в площадки контура и получит в них права админа. Telegram может не дать вступить без приглашения — тогда площадка не подключится, и её нужно будет добавить вручную. Это занимает до минуты. Продолжить?';
-const JOIN_ALL_POLL_INTERVAL_MS = 3000;
-const JOIN_ALL_POLL_TIMEOUT_MS = 10 * 60 * 1000;
-const JOIN_ALL_STALLED_TEXT = 'Вступление зависло, попробуй ещё раз';
-const JOIN_ALL_ERROR_TEXT = 'Ошибка вступления в группы';
-const ENSURE_ADMIN_ERROR_TEXT = 'Не удалось выдать права';
-
-function normalizeUserbotMode(value) {
-  return value === 'single' || value === 'pool' ? value : 'none';
-}
-
-function normalizeContourTarget(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw || raw === 'paid' || raw === 'closed_channel' || raw === 'access_channel') return 'paid_channel';
-  if (raw === 'public' || raw === 'open_chat') return 'public_chat';
-  if (raw === 'open_channel') return 'public_channel';
-  if (raw === 'closed_chat' || raw === 'access_chat') return 'paid_chat';
-  if (['public_channel', 'public_chat', 'paid_channel', 'paid_chat'].includes(raw)) return raw;
-  return 'paid_channel';
-}
-
-function toId(value) {
-  return String(value || '').trim();
-}
-
-function asArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function readFirstValue(source, keys) {
-  for (const key of keys) {
-    if (source?.[key] !== undefined && source[key] !== null) {
-      return source[key];
-    }
-  }
-  return undefined;
-}
-
-function readFirstObject(source, keys) {
-  for (const key of keys) {
-    const value = source?.[key];
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      return value;
-    }
-  }
-  return null;
-}
-
-function normalizeNullableBoolean(value) {
-  if (typeof value === 'boolean') return value;
-  if (value === 1 || value === '1') return true;
-  if (value === 0 || value === '0') return false;
-
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) return null;
-  if (['true', 'yes', 'ok', 'allowed', 'admin', 'administrator'].includes(normalized)) return true;
-  if (['false', 'no', 'blocked', 'denied'].includes(normalized)) return false;
-  return null;
-}
-
-function normalizeStatusKey(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
-}
-
-function dedupeStrings(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const normalized = String(item || '').trim();
-    if (!normalized || seen.has(normalized)) return false;
-    seen.add(normalized);
-    return true;
-  });
-}
-
-function isChatTarget(target) {
-  const chatType = String(target?.chat_type || target?.type || target?.chatType || '').toLowerCase();
-  return chatType === 'group' || chatType === 'supergroup';
-}
-
-function isChannelTarget(target) {
-  const chatType = String(target?.chat_type || target?.type || target?.chatType || '').toLowerCase();
-  return chatType === 'channel';
-}
-
-function extractFirstArray(source, keys) {
-  for (const key of keys) {
-    if (Array.isArray(source?.[key])) {
-      return source[key];
-    }
-  }
-  return [];
-}
-
-function getContourPayloadEntry(payload, botId) {
-  const normalizedBotId = toId(botId);
-  if (!normalizedBotId || !payload) return null;
-
-  if (payload.byBotId && typeof payload.byBotId === 'object') {
-    const direct = payload.byBotId[normalizedBotId];
-    if (direct) return direct;
-  }
-
-  const candidates = [
-    payload?.bots,
-    payload?.items,
-    payload?.contours,
-    payload?.rows,
-    payload?.data,
-    Array.isArray(payload) ? payload : null
-  ];
-
-  const entries = candidates.find(Array.isArray) || [];
-  return entries.find((entry) => {
-    const entryBotId = toId(
-      entry?.bot_id
-        || entry?.official_bot_id
-        || entry?.account_id
-        || entry?.bot?.id
-        || entry?.account?.id
-        || entry?.id
-    );
-
-    return entryBotId === normalizedBotId;
-  }) || null;
-}
-
-function getContourConfig(entry) {
-  if (!entry || typeof entry !== 'object') return null;
-  return entry.contour || entry.sales_contour || entry.config || entry.settings || null;
-}
-
-function normalizeChannelOption(item) {
-  const id = toId(item?.id || item?.channel_id || item?.value || item?.tg_chat_id);
-  if (!id) return null;
-  const username = String(item?.username || item?.tg_username || '').trim().replace(/^@/, '');
-  const visibility = String(item?.visibility || (username ? 'public' : 'unknown')).trim().toLowerCase();
-
-  return {
-    id,
-    title: String(item?.title || item?.label || item?.name || item?.tg_chat_id || id).trim(),
-    chatType: String(item?.chat_type || item?.type || '').toLowerCase(),
-    tgChatId: String(item?.tg_chat_id || item?.chat_id || '').trim(),
-    username,
-    visibility: ['public', 'private', 'unknown'].includes(visibility) ? visibility : 'unknown',
-    lastVisibilityCheckAt: item?.last_visibility_check_at || item?.lastVisibilityCheckAt || null
-  };
-}
-
-function normalizeUserbotOption(item) {
-  const id = toId(item?.id || item?.account_id || item?.value || item?.tg_account_id);
-  if (!id) return null;
-
-  const username = String(item?.tg_username || item?.username || '').trim().replace(/^@/, '');
-  const title = username
-    ? `@${username}`
-    : `userbot-${String(item?.tg_account_id || id)}`;
-  const eligible = item?.eligible_for_contour !== false;
-  const reason = String(item?.availability_reason || item?.reason || '').trim();
-
-  return {
-    id,
-    title,
-    eligible,
-    reason,
-    label: !eligible && reason ? `${title} — ${reason}` : title,
-    runtimeStatus: item?.runtime_status || ''
-  };
-}
-
-function dedupeOptions(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const id = toId(item?.id);
-    if (!id || seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-}
-
-function resolveChannelOptions({ entry, fallbackChannels, targetKind = 'channel' }) {
-  const contour = getContourConfig(entry);
-  const chatOnly = targetKind === 'chat';
-  const optionKeys = chatOnly
-    ? ['paid_chat_options', 'public_chat_options', 'public_chats', 'eligible_public_chats', 'chat_options', 'eligible_chats']
-    : ['public_channel_options', 'paid_channel_options', 'paid_channels', 'eligible_paid_channels', 'channel_options', 'eligible_channels', 'channels'];
-  const rawOptions = [
-    ...extractFirstArray(entry, optionKeys),
-    ...extractFirstArray(contour, optionKeys),
-    ...fallbackChannels
-  ];
-
-  const options = dedupeOptions(rawOptions.map(normalizeChannelOption).filter(Boolean));
-  if (!chatOnly) return options.filter((option) => isChannelTarget(option));
-  return options.filter((option) => isChatTarget(option));
-}
-
-function resolveUserbotOptions({ entry, fallbackUserbots, payload }) {
-  const contour = getContourConfig(entry);
-  const rawOptions = [
-    ...extractFirstArray(entry, ['userbots', 'eligible_userbots', 'userbot_options']),
-    ...extractFirstArray(contour, ['userbots', 'eligible_userbots', 'userbot_options']),
-    ...extractFirstArray(payload, ['userbots', 'eligible_userbots', 'userbot_options']),
-    ...fallbackUserbots
-  ];
-
-  return dedupeOptions(rawOptions.map(normalizeUserbotOption).filter(Boolean));
-}
-
-function extractResponseRoot(payload) {
-  return readFirstObject(payload, ['result', 'data', 'payload']) || payload || {};
-}
-
-function collectApiWarnings(source) {
-  const warningArrays = [
-    ...asArray(source?.warnings),
-    ...asArray(source?.issues),
-    ...asArray(source?.notices)
-  ];
-
-  return warningArrays
-    .map((item) => (typeof item === 'string' ? item : item?.message || item?.text || item?.warning || ''))
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
-}
-
-function createEmptyRightsResult(target) {
-  return {
-    target: normalizeContourTarget(target),
-    status: '',
-    adminStatus: '',
-    isAdmin: null,
-    channelId: '',
-    checkedAt: '',
-    canInviteUsers: null,
-    canRestrictMembers: null,
-    canPromoteMembers: null,
-    canManageChat: null,
-    warnings: [],
-    message: ''
-  };
-}
-
-function normalizeRightsResult(payload, fallbackTarget) {
-  const root = extractResponseRoot(payload);
-  const rights = readFirstObject(root, ['rights', 'permissions', 'admin_rights', 'adminRights']) || root;
-
-  return {
-    target: normalizeContourTarget(readFirstValue(root, ['target', 'chat_target']) || fallbackTarget),
-    status: normalizeStatusKey(readFirstValue(root, ['status', 'check_status'])) || 'checked',
-    adminStatus: String(readFirstValue(root, ['admin_status', 'adminStatus']) || '').trim(),
-    isAdmin: normalizeNullableBoolean(readFirstValue(root, ['is_admin', 'isAdmin']) ?? readFirstValue(rights, ['is_admin', 'isAdmin'])),
-    channelId: toId(readFirstValue(root, ['channel_id', 'channelId']) || root?.channel?.id || root?.cached_rights?.channel_id || root?.cachedRights?.channelId),
-    checkedAt: String(readFirstValue(root, ['checked_at', 'checkedAt']) || root?.cached_rights?.checked_at || root?.cachedRights?.checkedAt || '').trim(),
-    canInviteUsers: normalizeNullableBoolean(readFirstValue(rights, ['can_invite_users', 'canInviteUsers'])),
-    canRestrictMembers: normalizeNullableBoolean(readFirstValue(rights, ['can_restrict_members', 'canRestrictMembers'])),
-    canPromoteMembers: normalizeNullableBoolean(readFirstValue(rights, ['can_promote_members', 'canPromoteMembers'])),
-    canManageChat: normalizeNullableBoolean(readFirstValue(rights, ['can_manage_chat', 'canManageChat'])),
-    warnings: dedupeStrings([
-      ...collectApiWarnings(root),
-      ...collectApiWarnings(rights)
-    ]),
-    message: String(readFirstValue(root, ['message', 'text', 'detail']) || '').trim()
-  };
-}
-
-function resolveRightsByTarget(entry) {
-  const source = readFirstObject(entry, ['rights_by_target', 'rightsByTarget', 'cached_rights_by_target', 'cachedRightsByTarget']) || {};
-  return Object.entries(source).reduce((acc, [target, value]) => {
-    const normalizedTarget = normalizeContourTarget(target);
-    acc[normalizedTarget] = normalizeRightsResult(value, normalizedTarget);
-    return acc;
-  }, {});
-}
-
-function pickSingleOption(currentValue, options, excludeId) {
-  if (currentValue) return currentValue;
-  const available = (Array.isArray(options) ? options : []).filter((option) => {
-    const optionId = toId(option?.id);
-    if (!optionId) return false;
-    if (excludeId && optionId === toId(excludeId)) return false;
-    return true;
-  });
-  return available.length === 1 ? toId(available[0].id) : '';
-}
-
-function buildDraft({ entry, publicChannelOptions, paidChannelOptions, publicChatOptions, paidChatOptions, userbotOptions }) {
-  const contour = getContourConfig(entry);
-  const eligibleUserbotOptions = userbotOptions.filter((option) => option.eligible !== false);
-  const contourPublicChannelId = toId(contour?.public_channel_id || contour?.publicChannelId || entry?.public_channel_id);
-  const contourPaidChannelId = toId(contour?.paid_channel_id || contour?.paidChannelId || entry?.paid_channel_id);
-  const contourPublicChatId = toId(contour?.public_chat_id || contour?.publicChatId || entry?.public_chat_id);
-  const contourPaidChatId = toId(contour?.paid_chat_id || contour?.paidChatId || entry?.paid_chat_id);
-  const userbotMode = normalizeUserbotMode(contour?.userbot_mode || contour?.userbotMode || entry?.userbot_mode);
-  const selectedUserbotId = toId(contour?.selected_userbot_id || contour?.selectedUserbotId || entry?.selected_userbot_id);
-  const selectedUserbotIds = asArray(
-    contour?.selected_userbot_ids
-      || contour?.selectedUserbotIds
-      || entry?.selected_userbot_ids
-  ).map(toId).filter(Boolean);
-
-  // Авто-выбор: если слот пустой и остался ровно один доступный вариант — берем его.
-  // Пары (каналы/чаты) обрабатываем последовательно, чтобы public и paid не получили один и тот же ID.
-  let publicChannelId = contourPublicChannelId;
-  let paidChannelId = contourPaidChannelId;
-  let publicChatId = contourPublicChatId;
-  let paidChatId = contourPaidChatId;
-
-  publicChannelId = pickSingleOption(publicChannelId, publicChannelOptions, paidChannelId);
-  paidChannelId = pickSingleOption(paidChannelId, paidChannelOptions, publicChannelId);
-  publicChannelId = pickSingleOption(publicChannelId, publicChannelOptions, paidChannelId);
-
-  publicChatId = pickSingleOption(publicChatId, publicChatOptions, paidChatId);
-  paidChatId = pickSingleOption(paidChatId, paidChatOptions, publicChatId);
-  publicChatId = pickSingleOption(publicChatId, publicChatOptions, paidChatId);
-
-  return {
-    publicChannelId: publicChannelId || '',
-    paidChannelId: paidChannelId || '',
-    publicChatId: publicChatId || '',
-    paidChatId: paidChatId || '',
-    userbotMode,
-    selectedUserbotId: selectedUserbotId || (userbotMode === 'single' && eligibleUserbotOptions.length === 1 ? eligibleUserbotOptions[0].id : ''),
-    selectedUserbotIds
-  };
-}
-
+// Композитор контроллера контура продаж: стейт черновиков и прав, резолв опций,
+// автосборка черновика и сохранение контура. Сайд-эффект-кластер (проверка прав,
+// join-all, ротация юзерботов, «Выдать максимум прав») — в useSalesContourActions.js,
+// чистые хелперы — в useSalesContourOptions.js. Возвращаемый API не меняется.
 export function useSalesContourController({
   accessToken,
   accounts,
@@ -453,6 +142,29 @@ export function useSalesContourController({
   const checkingBotRightsTarget = checkingRightsKey.startsWith(`${selectedBotId}:`)
     ? checkingRightsKey.slice(`${selectedBotId}:`.length)
     : '';
+
+  const {
+    verifyBotRightsSilent,
+    contourInfoPending,
+    refreshContourInfo,
+    userbotActiveMap,
+    togglingUserbotId,
+    toggleUserbotActive,
+    joinAllPending,
+    triggerJoinAll,
+    ensureAdminPending,
+    ensureAdminRights,
+  } = useSalesContourActions({
+    accessToken,
+    selectedOfficialBot,
+    selectedBotId,
+    draft,
+    dirtyBotIds,
+    setBotRightsByKey,
+    reloadAccounts,
+    showUiMessage,
+    contourEntry,
+  });
 
   useEffect(() => {
     if (!selectedBotId || dirtyBotIds[selectedBotId]) return;
@@ -610,47 +322,6 @@ export function useSalesContourController({
     }
   }
 
-  // Тихая проверка прав одного слота (без тостов): { ok: true } или { ok: false, error }.
-  async function verifyBotRightsSilent(normalizedTarget) {
-    const targetFieldByKey = {
-      public_channel: 'publicChannelId',
-      public_chat: 'publicChatId',
-      paid_channel: 'paidChannelId',
-      paid_chat: 'paidChatId'
-    };
-    if (!draft[targetFieldByKey[normalizedTarget]]) {
-      return { ok: true, skipped: true };
-    }
-
-    const key = `${selectedBotId}:${normalizedTarget}`;
-    try {
-      const result = await apiRequest('/api/official-bot/contours/check-rights', {
-        accessToken,
-        method: 'POST',
-        body: {
-          bot_id: selectedOfficialBot.id,
-          target: normalizedTarget
-        }
-      });
-
-      setBotRightsByKey((prev) => ({
-        ...prev,
-        [key]: normalizeRightsResult(result, normalizedTarget)
-      }));
-      return { ok: true };
-    } catch (error) {
-      setBotRightsByKey((prev) => ({
-        ...prev,
-        [key]: {
-          ...createEmptyRightsResult(normalizedTarget),
-          status: 'error',
-          message: error.message
-        }
-      }));
-      return { ok: false, error };
-    }
-  }
-
   async function checkBotRights(target = botRightsTarget) {
     if (!selectedOfficialBot?.id) return;
 
@@ -669,242 +340,6 @@ export function useSalesContourController({
       showUiMessage('Права бота проверены.', 'success');
     } else {
       showUiMessage(error?.message || 'Не удалось проверить права', 'error');
-    }
-  }
-
-  // «Обновить информацию»: по каждой площадке сохранённого контура — refresh из
-  // Telegram (title/username/visibility + авто-перенос слота) и тихая проверка прав
-  // бота. Итог — одним тостом, без спама по каждой площадке.
-  const [contourInfoPending, setContourInfoPending] = useState(false);
-
-  async function refreshContourInfo() {
-    const botId = selectedOfficialBot?.id;
-    if (!botId || contourInfoPending) return;
-    if (dirtyBotIds[selectedBotId]) {
-      toast.warning('Сначала сохрани изменения контура');
-      return;
-    }
-
-    const slotFields = {
-      public_channel: 'publicChannelId',
-      public_chat: 'publicChatId',
-      paid_channel: 'paidChannelId',
-      paid_chat: 'paidChatId'
-    };
-    const slotLabels = {
-      public_channel: 'открытый канал',
-      public_chat: 'открытый чат',
-      paid_channel: 'закрытый канал',
-      paid_chat: 'закрытый чат'
-    };
-    const slots = Object.entries(slotFields)
-      .map(([target, field]) => ({ target, channelId: draft[field] || null }))
-      .filter((slot) => slot.channelId);
-    if (!slots.length) {
-      toast.warning('В контуре нет привязанных площадок');
-      return;
-    }
-
-    setContourInfoPending(true);
-    const failed = [];
-    const moved = [];
-    try {
-      for (const slot of slots) {
-        try {
-          const data = await apiRequest(`/api/official-bot/channels/${slot.channelId}/refresh`, {
-            accessToken,
-            method: 'POST'
-          });
-          const change = data?.contourChange;
-          if (change?.from && change?.to) {
-            moved.push(`${slotLabels[change.from] || change.from} → ${slotLabels[change.to] || change.to}`);
-          }
-        } catch (error) {
-          failed.push(slotLabels[slot.target]);
-          continue;
-        }
-        const { ok } = await verifyBotRightsSilent(slot.target);
-        if (!ok) failed.push(`${slotLabels[slot.target]} (права)`);
-      }
-      await reloadAccounts();
-
-      if (failed.length === 0) {
-        toast.success(`Обновлено площадок: ${slots.length}${moved.length ? `. Переносы: ${moved.join('; ')}` : ''}`);
-      } else {
-        toast.error(`Не обновилось: ${failed.join(', ')}`);
-      }
-    } finally {
-      setContourInfoPending(false);
-    }
-  }
-
-  const [userbotActiveMap, setUserbotActiveMap] = useState({});
-  const [togglingUserbotId, setTogglingUserbotId] = useState('');
-  const [joinAllPending, setJoinAllPending] = useState(false);
-  const joinAllInFlightRef = useRef(false);
-  const joinAllPollTimerRef = useRef(null);
-  const joinAllPollCancelledRef = useRef(false);
-
-  // «Выдать максимум прав»: держим pending-стейт для спиннера; результат — только тостом.
-  const [ensureAdminPending, setEnsureAdminPending] = useState(false);
-  const ensureAdminInFlightRef = useRef(false);
-
-  // При unmount во время фонового join-all гасим таймер поллинга; pending-стейт умрёт вместе с компонентом.
-  useEffect(() => () => stopJoinAllPolling(), []);
-
-  useEffect(() => {
-    const rawBindings = contourEntry?.userbot_bindings || [];
-    const map = {};
-    for (const b of rawBindings) {
-      map[String(b.userbot_id)] = b.is_active;
-    }
-    setUserbotActiveMap(map);
-  }, [contourEntry]);
-
-  async function toggleUserbotActive(userbotId, isActive) {
-    if (!selectedOfficialBot?.id || togglingUserbotId) return;
-    setTogglingUserbotId(String(userbotId));
-    setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: isActive }));
-    try {
-      await apiRequest('/api/official-bot/contours/userbot-active', {
-        accessToken,
-        method: 'PATCH',
-        body: {
-          bot_id: selectedOfficialBot.id,
-          userbot_id: userbotId,
-          is_active: isActive
-        }
-      });
-      if (isActive) {
-        const joinStarted = triggerJoinAll();
-        if (!joinStarted) {
-          // Тумблер включён, но подтверждение отклонено или join-all уже занят —
-          // без подсказки выглядит, будто вступление уже пошло.
-          toast.info('Вступление в площадки не запущено — перещёлкни тумблер «Участвует в ротации» ещё раз и подтверди.');
-        }
-      }
-      showUiMessage(isActive ? 'Юзербот включён в ротацию.' : 'Юзербот приостановлен.', 'success');
-    } catch (err) {
-      console.error('[toggleUserbotActive] PATCH failed:', err?.message);
-      setUserbotActiveMap((prev) => ({ ...prev, [String(userbotId)]: !isActive }));
-      showUiMessage(err?.message || 'Не удалось переключить юзербота.', 'error');
-    } finally {
-      setTogglingUserbotId('');
-    }
-  }
-
-  function stopJoinAllPolling() {
-    // Cancelled-ref глушит и висящий в await fetch tick: без него unmount во время
-    // запроса планировал бы новый таймер уже после очистки, и поллинг жил до дедлайна.
-    joinAllPollCancelledRef.current = true;
-    if (joinAllPollTimerRef.current) {
-      clearTimeout(joinAllPollTimerRef.current);
-      joinAllPollTimerRef.current = null;
-    }
-  }
-
-  function resetJoinAllState() {
-    joinAllInFlightRef.current = false;
-    setJoinAllPending(false);
-  }
-
-  // Поллинг статуса фонового join-all: рекурсивный setTimeout, предохранитель по дедлайну.
-  // Одиночные сетевые сбои статуса не роняют процесс — ждём до дедлайна.
-  function pollJoinAllStatus(botId, deadline) {
-    joinAllPollCancelledRef.current = false;
-    const tick = async () => {
-      try {
-        const data = await fetchContourJoinAllStatus(accessToken, botId);
-        if (joinAllPollCancelledRef.current) return;
-        const status = String(data?.status || '').trim();
-
-        if (status === 'done') {
-          stopJoinAllPolling();
-          toast.success(data?.result?.summary || 'Готово');
-          reloadAccounts();
-          resetJoinAllState();
-          return;
-        }
-
-        if (status === 'error') {
-          stopJoinAllPolling();
-          toast.error(data?.result?.message || JOIN_ALL_ERROR_TEXT);
-          resetJoinAllState();
-          return;
-        }
-      } catch (err) {
-        console.error('join-all status poll failed:', err?.message);
-        if (joinAllPollCancelledRef.current) return;
-      }
-
-      if (Date.now() >= deadline) {
-        stopJoinAllPolling();
-        toast.error(JOIN_ALL_STALLED_TEXT);
-        resetJoinAllState();
-        return;
-      }
-
-      joinAllPollTimerRef.current = setTimeout(tick, JOIN_ALL_POLL_INTERVAL_MS);
-    };
-
-    tick();
-  }
-
-  // Возвращает true, если join-all реально запущен (или уже идёт и мы следим),
-  // false — если отклонили подтверждение или сработал in-flight guard.
-  function triggerJoinAll() {
-    const botId = selectedOfficialBot?.id;
-    // In-flight guard: join-all исполняется в фоне, повторные клики и параллельный поллинг стакать нельзя.
-    if (!botId || joinAllInFlightRef.current) return false;
-    if (!window.confirm(JOIN_ALL_CONFIRM_TEXT)) return false;
-
-    joinAllInFlightRef.current = true;
-    setJoinAllPending(true);
-
-    startContourJoinAll(accessToken, botId)
-      .then(() => {
-        pollJoinAllStatus(botId, Date.now() + JOIN_ALL_POLL_TIMEOUT_MS);
-      })
-      .catch((err) => {
-        // 409 join_all_already_running — не ошибка: задача уже идёт (наш прошлый или чужой запуск), следим за ней.
-        const alreadyRunning = err?.code === 'join_all_already_running';
-
-        if (alreadyRunning) {
-          toast.info('Вступление уже идёт, следим за статусом');
-          pollJoinAllStatus(botId, Date.now() + JOIN_ALL_POLL_TIMEOUT_MS);
-          return;
-        }
-
-        console.error('join-all failed:', err?.message);
-        toast.error(err?.message || JOIN_ALL_ERROR_TEXT);
-        resetJoinAllState();
-      });
-    return true;
-  }
-
-  // «Выдать права»: синхронно выдаём/подтверждаем права админа актёрам контура на бэке.
-  // Запрос может висеть до минуты (серийные вызовы Telegram) — просто крутим спиннер, поллинг не нужен.
-  async function ensureAdminRights() {
-    const botId = selectedOfficialBot?.id;
-    if (!botId || ensureAdminInFlightRef.current) return;
-    if (dirtyBotIds[selectedBotId]) {
-      toast.warning('Сначала сохрани изменения контура');
-      return;
-    }
-
-    ensureAdminInFlightRef.current = true;
-    setEnsureAdminPending(true);
-
-    try {
-      const data = await ensureContourAdminRights(accessToken, botId);
-      const summary = String(data?.summary || '').trim();
-      toast.success(summary || 'Права выданы');
-    } catch (err) {
-      console.error('ensure-admin failed:', err?.message);
-      toast.error(err?.message || ENSURE_ADMIN_ERROR_TEXT);
-    } finally {
-      ensureAdminInFlightRef.current = false;
-      setEnsureAdminPending(false);
     }
   }
 
