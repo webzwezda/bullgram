@@ -1,151 +1,45 @@
-import { Api } from 'telegram';
+// Фасад подготовки рассылок: CRUD/lifecycle живут здесь, phase-логика и
+// общие хелперы — в broadcast-preparation/* (разрезка под pre-commit лимит).
+// Публичные имена модуля не менялись: PreparationError, toMarkedChatId,
+// resolveMarkedChatId, recordPreparationJoin, BroadcastPreparationService.
 import { UserbotService } from './userbot.service.js';
-import { ChatAdminRightsService } from './chat-admin-rights.service.js';
 import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
-import { upsertPeerCacheBatch } from '../utils/peer-cache.js';
-import { classifyTelegramError } from '../utils/telegram-error-events.js';
-import { withTimeout } from '../shared/utils.js';
+import {
+    PreparationError,
+    ACTIVE_STATUSES,
+    normalizeExternalTargets,
+    chunk,
+    scanUserbotDialogs as scanUserbotDialogsImpl,
+    loadItems as loadItemsImpl,
+    loadMemberSourceChannels as loadMemberSourceChannelsImpl,
+    loadOwnerChannels as loadOwnerChannelsImpl,
+    loadPeerCacheForPool as loadPeerCacheForPoolImpl,
+    phaseScan as phaseScanImpl
+} from './broadcast-preparation/phase-scan.js';
+import { phaseJoin as phaseJoinImpl } from './broadcast-preparation/phase-join.js';
+import {
+    countRecentJoins as countRecentJoinsImpl,
+    buildJoinTargets as buildJoinTargetsImpl,
+    tryGrantAdminRights as tryGrantAdminRightsImpl,
+    scanChatParticipants as scanChatParticipantsImpl,
+    applyConfirmedTouchpoints as applyConfirmedTouchpointsImpl,
+    phaseRecompute as phaseRecomputeImpl,
+    getStatus as getStatusImpl,
+    listMembers as listMembersImpl,
+    addJoinTargets as addJoinTargetsImpl,
+    recheck as recheckImpl,
+    cancel as cancelImpl
+} from './broadcast-preparation/phase-recompute.js';
 
-const ACTIVE_STATUSES = new Set(['pending', 'scanning', 'joining', 'recomputing']);
+export { PreparationError };
+
+// Чистые хелперы живут в broadcast-preparation/phase-join.js — фасад только
+// реэкспортирует их (локальная привязка фасаду не нужна).
+export { toMarkedChatId, resolveMarkedChatId, recordPreparationJoin } from './broadcast-preparation/phase-join.js';
+
 const PREPARABLE_AUDIENCE_TYPES = new Set(['channel_audience_members', 'client_base_members', 'manual_list']);
 
 const runningPreparations = new Set();
-const scanChatIdsCache = new Map(); // preparationId -> Map(userbotId, Set<chat_id из диалогов>)
-
-export class PreparationError extends Error {
-    constructor(statusCode, message) {
-        super(message);
-        this.statusCode = statusCode;
-    }
-}
-
-function envFlag(name) {
-    return String(process.env[name] || '').trim().toLowerCase() === 'true';
-}
-
-function joinsPerHour() {
-    const value = Number(process.env.USERBOT_JOIN_PER_HOUR);
-    return Number.isFinite(value) && value > 0 ? value : 4;
-}
-
-function joinSleepMs() {
-    const value = Number(process.env.USERBOT_JOIN_SLEEP_MS);
-    return Number.isFinite(value) && value >= 5000 ? value : 45000;
-}
-
-function parseFloodWaitSeconds(error) {
-    const raw = String(error?.errorMessage || error?.message || error?.description || '');
-    const match = raw.match(/FLOOD_WAIT_(\d+)/i) || raw.match(/RETRY AFTER (\d+)/i);
-    return match ? Number(match[1]) : null;
-}
-
-function chunk(list, size) {
-    const result = [];
-    for (let i = 0; i < (list || []).length; i += size) {
-        result.push(list.slice(i, i + size));
-    }
-    return result;
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function jitter(baseMs) {
-    return Math.round(baseMs * (0.85 + Math.random() * 0.3));
-}
-
-function isAutoJoinEnabled() {
-    return envFlag('USERBOT_AUTO_JOIN_ENABLED');
-}
-
-function isAutoAdminEnabled() {
-    return envFlag('USERBOT_AUTO_ADMIN_ENABLED');
-}
-
-function normalizeExternalTargets(rawList = []) {
-    const seen = new Set();
-    const targets = [];
-    for (const raw of rawList || []) {
-        const value = String(raw || '').trim();
-        if (!value) continue;
-        const key = value.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        targets.push({ raw: value, kind: 'unknown', chat_id: null, title: null, status: 'pending', error: null });
-    }
-    return targets;
-}
-
-function touchpoint(via, userbotId, options = {}) {
-    return {
-        userbot_id: userbotId,
-        via,
-        chat_id: options.chatId || null,
-        confirmed: via !== 'shared_chat'
-    };
-}
-
-// channels.tg_chat_id хранится в MARKED-форме ('-100{id}' для каналов/supergroups, '-{id}' для
-// basic-групп), а Telegram (joinChatByInvite) отдаёт голые положительные id. Cleanup сверяет
-// recorded tg_chat_id с channels.tg_chat_id — в join-строку пишем только marked, иначе протекция
-// не матчится и cleanup выкинет юзербота из собственного канала владельца.
-export function toMarkedChatId(kind, rawId) {
-    const value = String(rawId ?? '').trim();
-    if (!value || value === 'null') return null;
-    if (value.startsWith('-')) return value; // уже marked — оставляем как есть
-    return String(kind) === 'group' ? `-${value}` : `-100${value}`;
-}
-
-// Приоритет: 1) target.chat_id уже marked (пришёл из channels) — берём его;
-// 2) иначе выводим из joined.kind; 3) защита от двойного маркирования — внутри toMarkedChatId.
-export function resolveMarkedChatId(targetChatId, kind, rawId) {
-    const target = String(targetChatId ?? '').trim();
-    if (target.startsWith('-')) return target;
-    return toMarkedChatId(kind, rawId);
-}
-
-// Факт join'а «ради кампании» — источник истины для cleanup
-// (jobs/broadcast-membership-cleanup.job.js): кто записан здесь — выходит по окончании
-// рассылки. Всё, что не записано (старые membership, известные диалоги), cleanup не трогает.
-// chatId ждём уже в MARKED-форме (см. resolveMarkedChatId в phaseJoin).
-// Ошибка записи не должна ломать join-флоу — warn + continue.
-export async function recordPreparationJoin(supabase, { ownerId, preparationId, userbotId, chatId, chatTitle = null, grantedAdmin = false }) {
-    try {
-        const tgChatId = String(chatId ?? '').trim();
-        if (!tgChatId || tgChatId === 'null') return;
-        const { data: existing } = await supabase
-            .from('broadcast_preparation_joins')
-            .select('id, granted_admin')
-            .eq('preparation_id', preparationId)
-            .eq('userbot_id', String(userbotId))
-            .eq('tg_chat_id', tgChatId)
-            .limit(1)
-            .maybeSingle();
-        if (existing) {
-            if (grantedAdmin && !existing.granted_admin) {
-                await supabase
-                    .from('broadcast_preparation_joins')
-                    .update({ granted_admin: true })
-                    .eq('id', existing.id);
-            }
-            return;
-        }
-        const { error: insertError } = await supabase.from('broadcast_preparation_joins').insert({
-            owner_id: ownerId,
-            preparation_id: preparationId,
-            userbot_id: String(userbotId),
-            tg_chat_id: tgChatId,
-            chat_title: chatTitle || null,
-            granted_admin: !!grantedAdmin
-        });
-        if (insertError) {
-            console.warn(`[broadcast-preparation] не записали join ${preparationId}/${userbotId}:`, insertError.message || insertError);
-        }
-    } catch (error) {
-        console.warn(`[broadcast-preparation] не записали join ${preparationId}/${userbotId}:`, error?.message || error);
-    }
-}
 
 export class BroadcastPreparationService {
     constructor(supabase) {
@@ -422,742 +316,83 @@ export class BroadcastPreparationService {
             .eq('id', preparationId);
     }
 
+    // --- Скан-фаза и загрузчики: broadcast-preparation/phase-scan.js ---
+
+    async scanUserbotDialogs(userbot) {
+        return scanUserbotDialogsImpl(this, userbot);
+    }
+
     async loadItems(preparationId) {
-        const rows = [];
-        let from = 0;
-        while (true) {
-            const { data } = await this.supabase
-                .from('broadcast_preparation_items')
-                .select('id, tg_user_id, username, display_name, reachable_by, status')
-                .eq('preparation_id', preparationId)
-                .order('id', { ascending: true })
-                .range(from, from + 999);
-            if (!data || data.length === 0) break;
-            rows.push(...data);
-            if (data.length < 1000) break;
-            from += 1000;
-        }
-        return rows;
+        return loadItemsImpl(this, preparationId);
     }
 
     async loadMemberSourceChannels(ownerId, preparation) {
-        // Возвращает Map<tg_user_id, string[] channel_uuid> по актуальной аудитории
-        const audienceType = preparation.audience_type;
-        const map = new Map();
-
-        const fillByTgIds = async (tgIds) => {
-            for (const part of chunk(tgIds, 500)) {
-                const { data } = await this.supabase
-                    .from('channel_audience_members')
-                    .select('tg_user_id, source_channel_ids')
-                    .eq('owner_id', ownerId)
-                    .in('tg_user_id', part);
-                for (const row of data || []) {
-                    map.set(String(row.tg_user_id), Array.isArray(row.source_channel_ids) ? row.source_channel_ids : []);
-                }
-            }
-        };
-
-        if (audienceType === 'channel_audience_members') {
-            const { data } = await this.supabase
-                .from('channel_audience_members')
-                .select('tg_user_id, source_channel_ids')
-                .eq('owner_id', ownerId)
-                .eq('base_id', preparation.base_id)
-                .eq('is_bot', false);
-            for (const row of data || []) {
-                map.set(String(row.tg_user_id), Array.isArray(row.source_channel_ids) ? row.source_channel_ids : []);
-            }
-        } else if (audienceType === 'client_base_members') {
-            const { data: members } = await this.supabase
-                .from('client_base_members')
-                .select('tg_user_id')
-                .eq('owner_id', ownerId)
-                .eq('base_id', preparation.base_id);
-            await fillByTgIds((members || []).map(member => String(member.tg_user_id)));
-        } else if (audienceType === 'manual_list') {
-            await fillByTgIds((preparation.manual_tg_user_ids || []).map(String));
-        }
-
-        return map;
+        return loadMemberSourceChannelsImpl(this, ownerId, preparation);
     }
 
     async loadOwnerChannels(ownerId) {
-        const { data, error } = await this.supabase
-            .from('channels')
-            .select('id, title, tg_chat_id, username, visibility')
-            .eq('owner_id', ownerId)
-            .not('tg_chat_id', 'is', null);
-        if (error) throw error;
-        return data || [];
-    }
-
-    async scanUserbotDialogs(userbot) {
-        const client = await this.userbotService.createAuthorizedClient(userbot);
-        try {
-            const dialogs = await withTimeout(client.getDialogs({ limit: 300 }), 120_000, 'Скан диалогов');
-            const dialogUserIds = new Set();
-            const chatIds = new Set();
-            const peerCacheEntries = [];
-
-            for (const dialog of dialogs || []) {
-                const entity = dialog?.entity;
-                if (!entity) continue;
-
-                if (entity.className === 'User') {
-                    const tgUserId = String(entity.id);
-                    dialogUserIds.add(tgUserId);
-                    if (entity.accessHash != null) {
-                        peerCacheEntries.push({
-                            owner_id: userbot.owner_id,
-                            userbot_id: userbot.id,
-                            tg_user_id: tgUserId,
-                            access_hash: entity.accessHash.toString(),
-                            username: entity.username || null,
-                            source: 'dialogs'
-                        });
-                    }
-                } else if (entity.className === 'Channel' || entity.className === 'Chat' ||
-                    entity.className === 'ChannelForbidden' || entity.className === 'ChatForbidden') {
-                    if (dialog.id != null) chatIds.add(String(dialog.id));
-                }
-            }
-
-            await upsertPeerCacheBatch(this.supabase, peerCacheEntries);
-            return { dialogUserIds, chatIds };
-        } finally {
-            await client.disconnect();
-        }
+        return loadOwnerChannelsImpl(this, ownerId);
     }
 
     async loadPeerCacheForPool(userbotIds, memberIds) {
-        const peerCache = [];
-        for (const userbotId of userbotIds) {
-            for (const part of chunk(memberIds, 500)) {
-                const { data } = await this.supabase
-                    .from('userbot_peer_cache')
-                    .select('userbot_id, tg_user_id, access_hash')
-                    .eq('userbot_id', String(userbotId))
-                    .in('tg_user_id', part)
-                    .not('access_hash', 'is', null);
-                if (data) peerCache.push(...data);
-            }
-        }
-        return peerCache;
+        return loadPeerCacheForPoolImpl(this, userbotIds, memberIds);
     }
 
     async phaseScan(preparation) {
-        const ownerId = preparation.owner_id;
-        await this.setStatus(preparation.id, 'scanning');
-        const pool = await this.loadPoolUserbots(ownerId, preparation.userbot_ids);
-
-        const scanResults = new Map(); // userbot_id -> {dialogUserIds, chatIds}
-        let done = 0;
-        for (const userbot of pool) {
-            try {
-                scanResults.set(userbot.id, await this.scanUserbotDialogs(userbot));
-            } catch (error) {
-                await this.updatePhaseDetail(preparation.id, {
-                    scan: { done, total: pool.length },
-                    errors: [`Скан диалогов @${userbot.tg_username || userbot.id}: ${String(error?.message || error).slice(0, 200)}`]
-                });
-            }
-            done += 1;
-            await this.updatePhaseDetail(preparation.id, { scan: { done, total: pool.length } });
-        }
-
-        if (scanResults.size === 0) {
-            throw new PreparationError(400, 'Ни один юзербот из пула не отдал диалоги');
-        }
-
-        const knownChats = new Map();
-        for (const [userbotId, scan] of scanResults.entries()) {
-            knownChats.set(String(userbotId), scan.chatIds);
-        }
-        scanChatIdsCache.set(preparation.id, knownChats);
-
-        // Persist скана в phase_detail: in-memory кэш умирает вместе с процессом (рестарт
-        // посреди подготовки / упавший скан), а phaseJoin не должен вступать вслепую без него.
-        const persistedScan = {};
-        for (const [userbotId, chatIds] of knownChats.entries()) {
-            persistedScan[String(userbotId)] = [...chatIds].map(String);
-        }
-        await this.updatePhaseDetail(preparation.id, { scanned_chats: persistedScan });
-
-        // peer cache + пересечение
-        const items = await this.loadItems(preparation.id);
-        const memberIds = items.map(item => item.tg_user_id);
-        const memberSet = new Set(memberIds);
-        const peerCacheRows = await this.loadPeerCacheForPool([...scanResults.keys()], memberIds);
-        const peerCacheSet = new Set(peerCacheRows.map(row => `${row.userbot_id}:${row.tg_user_id}`));
-
-        const sourceChannelMap = await this.loadMemberSourceChannels(ownerId, preparation);
-        const ownerChannels = await this.loadOwnerChannels(ownerId);
-        const channelByUuid = new Map(ownerChannels.map(channel => [String(channel.id), channel]));
-
-        // tg_chat_id -> список каналов (для touchpoints)
-        const memberChatIds = new Map(); // tg_user_id -> Set<marked tg_chat_id>
-        for (const [tgUserId, channelUuids] of sourceChannelMap.entries()) {
-            if (!memberSet.has(tgUserId)) continue;
-            const chatIdSet = new Set();
-            for (const channelUuid of channelUuids || []) {
-                const channel = channelByUuid.get(String(channelUuid));
-                if (channel?.tg_chat_id) chatIdSet.add(String(channel.tg_chat_id));
-            }
-            if (chatIdSet.size > 0) memberChatIds.set(tgUserId, chatIdSet);
-        }
-
-        const updates = [];
-        for (const item of items) {
-            const touchpoints = [];
-            for (const [userbotId, scan] of scanResults.entries()) {
-                if (scan.dialogUserIds.has(item.tg_user_id)) {
-                    touchpoints.push(touchpoint('dialog', userbotId));
-                    continue;
-                }
-                if (peerCacheSet.has(`${userbotId}:${item.tg_user_id}`)) {
-                    touchpoints.push(touchpoint('access_hash', userbotId));
-                    continue;
-                }
-                const chats = memberChatIds.get(item.tg_user_id);
-                if (chats) {
-                    for (const chatId of chats) {
-                        if (scan.chatIds.has(chatId)) {
-                            touchpoints.push(touchpoint('shared_chat', userbotId, { chatId }));
-                            break;
-                        }
-                    }
-                }
-            }
-            updates.push({
-                preparation_id: preparation.id,
-                tg_user_id: item.tg_user_id,
-                reachable_by: touchpoints,
-                status: touchpoints.length > 0 ? 'reachable' : 'unreachable'
-            });
-        }
-
-        for (const part of chunk(updates, 500)) {
-            await this.supabase
-                .from('broadcast_preparation_items')
-                .upsert(part, { onConflict: 'preparation_id,tg_user_id' });
-        }
-
-        const hasJoinWork = isAutoJoinEnabled();
-        await this.setStatus(preparation.id, hasJoinWork ? 'joining' : 'recomputing');
-        if (!hasJoinWork) {
-            await this.updatePhaseDetail(preparation.id, {
-                note: 'USERBOT_AUTO_JOIN_ENABLED выключен — вступления пропущены, только скан'
-            });
-        }
-        return hasJoinWork;
+        return phaseScanImpl(this, preparation);
     }
 
+    // --- Join-поддержка: broadcast-preparation/phase-recompute.js ---
+
     async countRecentJoins(userbotId) {
-        const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { count, error } = await this.supabase
-            .from('userbot_join_log')
-            .select('id', { count: 'exact', head: true })
-            .eq('userbot_id', String(userbotId))
-            .gte('created_at', since);
-        if (error) return Infinity;
-        return count || 0;
+        return countRecentJoinsImpl(this, userbotId);
     }
 
     async buildJoinTargets(preparation) {
-        const targets = [];
-
-        for (const external of preparation.external_targets || []) {
-            if (external.status !== 'pending') continue;
-            targets.push({ raw: external.raw, scope: 'external', index: (preparation.external_targets || []).indexOf(external) });
-        }
-
-        if (preparation.audience_type === 'channel_audience_members' && preparation.base_id) {
-            const { data: links } = await this.supabase
-                .from('channel_audience_channels')
-                .select('channel_id, channels(id, title, tg_chat_id, username)')
-                .eq('base_id', preparation.base_id);
-            for (const link of links || []) {
-                const channel = link.channels;
-                if (!channel) continue;
-                if (!channel.username) {
-                    await this.updatePhaseDetail(preparation.id, {
-                        errors: [`«${channel.title}» — приватный канал без ссылки-инвайта, юзерботу не вступить. Добавь группу вручную по ссылке.`]
-                    });
-                    continue;
-                }
-                targets.push({
-                    raw: `https://t.me/${channel.username}`,
-                    scope: 'owner',
-                    chat_id: channel.tg_chat_id ? String(channel.tg_chat_id) : null,
-                    title: channel.title
-                });
-            }
-        } else if (preparation.audience_type === 'client_base_members' || preparation.audience_type === 'manual_list') {
-            // вступаем в каналы-источники получателей: где человек замечен в аудиториях, там и ищем общий чат
-            const sourceMap = await this.loadMemberSourceChannels(preparation.owner_id, preparation);
-            const neededIds = new Set();
-            for (const list of sourceMap.values()) {
-                for (const id of list || []) neededIds.add(String(id));
-            }
-            if (neededIds.size > 0) {
-                const { data: channels } = await this.supabase
-                    .from('channels')
-                    .select('id, title, tg_chat_id, username')
-                    .eq('owner_id', preparation.owner_id)
-                    .in('id', [...neededIds]);
-                for (const channel of channels || []) {
-                    if (!channel.username) {
-                        await this.updatePhaseDetail(preparation.id, {
-                            errors: [`«${channel.title}» — приватный канал без ссылки-инвайта, юзерботу не вступить. Добавь группу вручную по ссылке.`]
-                        });
-                        continue;
-                    }
-                    targets.push({
-                        raw: `https://t.me/${channel.username}`,
-                        scope: 'owner',
-                        chat_id: channel.tg_chat_id ? String(channel.tg_chat_id) : null,
-                        title: channel.title
-                    });
-                }
-            }
-        }
-
-        return targets;
+        return buildJoinTargetsImpl(this, preparation);
     }
 
-    // CHAT_ADMIN_REQUIRED: пытаемся выдать юзерботу админ-права — сначала через официального бота, потом через юзербота-админа из пула
     async tryGrantAdminRights(preparation, pool, userbot, chatId, rawLink) {
-        if (!isAutoAdminEnabled()) return false;
-        try {
-            const rights = new ChatAdminRightsService(this.supabase);
-
-            let tgUserId = String(userbot.tg_account_id || '').trim();
-            if (!tgUserId || tgUserId === 'null') {
-                const client = await this.userbotService.createAuthorizedClient(userbot);
-                try {
-                    tgUserId = String((await client.getMe()).id);
-                } finally {
-                    await client.disconnect();
-                }
-            }
-
-            const bot = await rights.findPromoterBot(preparation.owner_id, chatId);
-            if (bot) {
-                const promoted = await rights.grantAdminViaBot(bot.bot, chatId, tgUserId);
-                if (promoted.ok) {
-                    await this.updatePhaseDetail(preparation.id, {
-                        note: `${rawLink}: админ-права выданы ботом @${bot.bot.tg_username || 'official'} — сканируем участников.`
-                    });
-                    return true;
-                }
-                await this.updatePhaseDetail(preparation.id, {
-                    admin_hints: [`${rawLink}: бот @${bot.bot.tg_username || 'official'} не смог выдать права (${promoted.description}) — пробуем юзербота-админа.`]
-                });
-            }
-
-            const candidates = (pool || []).filter(candidate => String(candidate.id) !== String(userbot.id));
-            const viaUserbot = await rights.findPromoterUserbot(this.userbotService, candidates, rawLink, chatId, tgUserId);
-            if (viaUserbot) {
-                await this.updatePhaseDetail(preparation.id, {
-                    note: `${rawLink}: админ-права выданы юзерботом @${viaUserbot.userbot.tg_username || viaUserbot.userbot.id} — сканируем участников.`
-                });
-                return true;
-            }
-
-            await this.updatePhaseDetail(preparation.id, {
-                admin_hints: [`${rawLink}: выдать админ-права некому — ни официальный бот, ни юзерботы пула не админы этого чата. Выдай права руками и нажми «Проверить снова».`]
-            });
-            return false;
-        } catch (error) {
-            console.error(`[broadcast-preparation] auto-admin ${rawLink} failed:`, error?.message || error);
-            return false;
-        }
+        return tryGrantAdminRightsImpl(this, preparation, pool, userbot, chatId, rawLink);
     }
 
     async scanChatParticipants(userbot, chatId, accessHash = null) {
-        const client = await this.userbotService.createAuthorizedClient(userbot);
-        try {
-            // сырой положительный id канала свежий клиент не разрезолвит (PeerUser) — ходим через access_hash из вступления
-            const entity = accessHash
-                ? new Api.InputPeerChannel({
-                    channelId: String(chatId).replace(/^-100/, ''),
-                    accessHash: String(accessHash)
-                })
-                : chatId;
-            const participants = await withTimeout(client.getParticipants(entity, { limit: 5000 }), 120_000, 'Скан участников группы');
-            await upsertPeerCacheBatch(this.supabase, (participants || [])
-                .filter(participant => participant?.accessHash != null)
-                .map(participant => ({
-                    owner_id: userbot.owner_id,
-                    userbot_id: userbot.id,
-                    tg_user_id: String(participant.id),
-                    access_hash: participant.accessHash.toString(),
-                    username: participant.username || null,
-                    source: 'get_participants'
-                })));
-            return new Set((participants || []).map(participant => String(participant.id)));
-        } finally {
-            await client.disconnect();
-        }
+        return scanChatParticipantsImpl(this, userbot, chatId, accessHash);
     }
 
     async applyConfirmedTouchpoints(preparationId, userbotId, confirmedUserIds, via, chatId) {
-        if (!confirmedUserIds || confirmedUserIds.size === 0) return;
-        const items = await this.loadItems(preparationId);
-        const updates = [];
-        for (const item of items) {
-            if (!confirmedUserIds.has(item.tg_user_id)) continue;
-            const existing = Array.isArray(item.reachable_by) ? item.reachable_by : [];
-            const already = existing.some(tp => tp.userbot_id === userbotId && tp.confirmed);
-            if (already) continue;
-            updates.push({
-                preparation_id: preparationId,
-                tg_user_id: item.tg_user_id,
-                reachable_by: [...existing.filter(tp => !(tp.userbot_id === userbotId && !tp.confirmed)), touchpoint(via, userbotId, { chatId })],
-                status: 'reachable'
-            });
-        }
-        for (const part of chunk(updates, 500)) {
-            await this.supabase
-                .from('broadcast_preparation_items')
-                .upsert(part, { onConflict: 'preparation_id,tg_user_id' });
-        }
+        return applyConfirmedTouchpointsImpl(this, preparationId, userbotId, confirmedUserIds, via, chatId);
     }
+
+    // --- Join-фаза: broadcast-preparation/phase-join.js ---
 
     async phaseJoin(preparation) {
-        const ownerId = preparation.owner_id;
-        await this.setStatus(preparation.id, 'joining');
-
-        const rawPool = await this.loadPoolUserbots(ownerId, preparation.userbot_ids);
-        const targets = await this.buildJoinTargets(preparation);
-        const externalTargets = preparation.external_targets || [];
-        const knownChats = scanChatIdsCache.get(preparation.id);
-
-        // Сканные диалоги должны переживать рестарт процесса: объединяем in-memory кэш
-        // с persisted-набором из phase_detail.scanned_chats (пишет phaseScan).
-        // null = скана нет вовсе → юзербот не вступаем вслепую: он может уже быть
-        // участником цели, и после join'а cleanup выкинет его, хотя тот был там раньше.
-        const persistedScan = preparation.phase_detail?.scanned_chats || {};
-        const knownChatsFor = (userbotId) => {
-            const cached = knownChats?.get(String(userbotId));
-            const persisted = persistedScan[String(userbotId)];
-            if (!cached && !(Array.isArray(persisted) || persisted instanceof Set)) return null;
-            const merged = new Set([...(persisted || [])].map(String));
-            for (const id of cached || []) merged.add(String(id));
-            return merged;
-        };
-        const pool = [];
-        for (const userbot of rawPool) {
-            if (knownChatsFor(userbot.id) === null) {
-                console.warn(`[broadcast-preparation] ${preparation.id}: для @${userbot.tg_username || userbot.id} нет скана диалогов — не вступаем вслепую, юзербот пропущен`);
-                continue;
-            }
-            pool.push(userbot);
-        }
-
-        const pausedUntil = new Map(); // userbot_id -> ts
-        const joinStates = new Map(); // `${scope}:${raw}:${userbot_id}` -> 'done' | 'failed'
-        let joinsDone = 0;
-        const totalOps = targets.length * pool.length;
-
-        let rounds = 0;
-        while (rounds < 200) {
-            const current = await this.getPreparationRow(null, preparation.id);
-            if (!current || current.status !== 'joining') return;
-
-            let progressed = false;
-            let allDone = true;
-
-            for (const target of targets) {
-                if (target.raw == null && target.scope === 'owner') {
-                    continue; // приватный канал без юзернейма — обработаем отдельно ниже
-                }
-                for (const userbot of pool) {
-                    const key = `${target.scope}:${target.raw}:${userbot.id}`;
-                    if (joinStates.get(key) === 'done' || joinStates.get(key) === 'failed') continue;
-                    allDone = false;
-
-                    // JoinChannel идемпотентен: повторный вызов не падает USER_ALREADY_PARTICIPANT, но жжёт квоту —
-                    // если по скану диалогов (кэш ∪ persisted) юзербот уже в канале, отмечаем done без похода в Telegram
-                    if (target.scope === 'owner' && target.chat_id && knownChatsFor(userbot.id)?.has(String(target.chat_id))) {
-                        joinStates.set(key, 'done');
-                        joinsDone += 1;
-                        progressed = true;
-                        await this.updatePhaseDetail(preparation.id, { joins: { done: joinsDone, total: totalOps } });
-                        continue;
-                    }
-
-                    const pauseTs = pausedUntil.get(userbot.id) || 0;
-                    if (Date.now() < pauseTs) continue;
-                    if ((await this.countRecentJoins(userbot.id)) >= joinsPerHour()) continue;
-
-                    try {
-                        const joined = await this.userbotService.joinChatByInvite(userbot, { inviteLink: target.raw });
-                        joinStates.set(key, 'done');
-                        joinsDone += 1;
-                        progressed = true;
-                        await this.supabase.from('userbot_join_log').insert({ userbot_id: userbot.id, target: target.raw });
-
-                        const chatId = joined?.chat_id ? String(joined.chat_id) : target.chat_id;
-                        const accessHash = joined?.access_hash || null;
-                        // успешный join именно в этот прогон — записываем для cleanup
-                        // (USER_ALREADY_PARTICIPANT и skip по скану диалогов НЕ пишем: там юзербот был раньше);
-                        // tg_chat_id приводим к MARKED-форме channels.tg_chat_id, иначе протекция cleanup не матчится
-                        const markedChatId = resolveMarkedChatId(target.chat_id, joined?.kind, chatId);
-                        await recordPreparationJoin(this.supabase, {
-                            ownerId,
-                            preparationId: preparation.id,
-                            userbotId: userbot.id,
-                            chatId: markedChatId,
-                            chatTitle: joined?.title || target.title || null
-                        });
-                        if (chatId) {
-                            try {
-                                const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
-                                await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
-                            } catch (scanError) {
-                                const scanMessage = String(scanError?.message || scanError);
-                                if (scanMessage.toUpperCase().includes('CHAT_ADMIN_REQUIRED') && chatId) {
-                                    const granted = await this.tryGrantAdminRights(preparation, pool, userbot, chatId, target.raw);
-                                    if (granted) {
-                                        // админку выдали в этом прогоне — cleanup учтёт granted_admin
-                                        await recordPreparationJoin(this.supabase, {
-                                            ownerId,
-                                            preparationId: preparation.id,
-                                            userbotId: userbot.id,
-                                            chatId: markedChatId,
-                                            chatTitle: joined?.title || target.title || null,
-                                            grantedAdmin: true
-                                        });
-                                        try {
-                                            const confirmed = await this.scanChatParticipants(userbot, chatId, accessHash);
-                                            await this.applyConfirmedTouchpoints(preparation.id, userbot.id, confirmed, 'access_hash', chatId);
-                                        } catch (retryError) {
-                                            await this.updatePhaseDetail(preparation.id, {
-                                                errors: [`Повторный скан участников ${target.raw}: ${String(retryError?.message || retryError).slice(0, 200)}`]
-                                            });
-                                        }
-                                    } else {
-                                        await this.updatePhaseDetail(preparation.id, {
-                                            admin_hints: [`Скан участников ${target.raw}: Telegram отдаёт список участников канала только админам. Сделай юзербота админом этого канала и нажми «Проверить снова» — точка касания сейчас считается по общему чату.`]
-                                        });
-                                    }
-                                } else {
-                                    await this.updatePhaseDetail(preparation.id, {
-                                        errors: [`Скан участников ${target.raw}: ${scanMessage.slice(0, 200)}`]
-                                    });
-                                }
-                            }
-                        }
-
-                        if (target.scope === 'external' && target.index != null) {
-                            const nextExternals = [...externalTargets];
-                            nextExternals[target.index] = {
-                                ...nextExternals[target.index],
-                                kind: joined?.kind || 'unknown',
-                                chat_id: chatId,
-                                title: joined?.title || null,
-                                status: 'joined'
-                            };
-                            await this.supabase
-                                .from('broadcast_preparations')
-                                .update({ external_targets: nextExternals, updated_at: new Date().toISOString() })
-                                .eq('id', preparation.id);
-                        }
-                    } catch (error) {
-                        const message = String(error?.message || error?.errorMessage || error);
-                        const classification = classifyTelegramError(error);
-                        const floodSeconds = parseFloodWaitSeconds(error);
-
-                        if (message.toUpperCase().includes('USER_ALREADY_PARTICIPANT')) {
-                            joinStates.set(key, 'done');
-                            joinsDone += 1;
-                            progressed = true;
-                            await this.updatePhaseDetail(preparation.id, { joins: { done: joinsDone, total: totalOps } });
-                            continue;
-                        }
-                        if (floodSeconds) {
-                            pausedUntil.set(userbot.id, Date.now() + Math.min(floodSeconds, 3600) * 1000 + 30_000);
-                            await this.updatePhaseDetail(preparation.id, {
-                                joins: { done: joinsDone, total: totalOps },
-                                errors: [`Flood wait @${userbot.tg_username || userbot.id}: пауза ${floodSeconds}с на ${target.raw}`]
-                            });
-                            continue;
-                        }
-                        joinStates.set(key, 'failed');
-                        progressed = true;
-                        await this.updatePhaseDetail(preparation.id, {
-                            joins: { done: joinsDone, total: totalOps },
-                            errors: [`Вступление ${target.raw} через @${userbot.tg_username || userbot.id}: ${message.slice(0, 200)}`]
-                        });
-                        if (classification.restriction_kind === 'account_flagged' || classification.restriction_kind === 'session_revoked') {
-                            pausedUntil.set(userbot.id, Date.now() + 24 * 60 * 60 * 1000);
-                        }
-                        if (target.scope === 'external' && target.index != null) {
-                            const nextExternals = [...externalTargets];
-                            nextExternals[target.index] = {
-                                ...nextExternals[target.index],
-                                status: 'failed',
-                                error: message.slice(0, 300)
-                            };
-                            await this.supabase
-                                .from('broadcast_preparations')
-                                .update({ external_targets: nextExternals, updated_at: new Date().toISOString() })
-                                .eq('id', preparation.id);
-                        }
-                    }
-
-                    await this.updatePhaseDetail(preparation.id, { joins: { done: joinsDone, total: totalOps } });
-                    await sleep(jitter(joinSleepMs()));
-                }
-            }
-
-            if (allDone) break;
-
-            const stillPending = Array.from(joinStates.entries()).filter(([, state]) => state !== 'done' && state !== 'failed').length;
-            const deferredKeys = targets.length * pool.length - Array.from(joinStates.values()).filter(state => state === 'done' || state === 'failed').length;
-            if (!progressed && deferredKeys > 0) {
-                const minPause = Math.min(...Array.from(pausedUntil.values()).filter(ts => ts > Date.now()).concat(Date.now() + 10 * 60 * 1000));
-                const waitMs = Math.min(Math.max(minPause - Date.now(), 30_000), 10 * 60 * 1000);
-                await this.updatePhaseDetail(preparation.id, {
-                    joins: { done: joinsDone, total: totalOps },
-                    note: `Ждём квоту на вступления (${stillPending || deferredKeys} осталось) — пауза ${Math.round(waitMs / 60000)} мин`
-                });
-                await sleep(waitMs);
-            } else if (!progressed) {
-                break;
-            }
-
-            rounds += 1;
-        }
-
-        await this.setStatus(preparation.id, 'recomputing');
+        return phaseJoinImpl(this, preparation);
     }
 
+    // --- Recompute и публичные операции: broadcast-preparation/phase-recompute.js ---
+
     async phaseRecompute(preparation) {
-        const items = await this.loadItems(preparation.id);
-        const perUserbot = new Map();
-
-        let confirmed = 0;
-        let probable = 0;
-        let unreachable = 0;
-
-        for (const item of items) {
-            const touchpoints = Array.isArray(item.reachable_by) ? item.reachable_by : [];
-            const isReachable = touchpoints.length > 0;
-            const isConfirmed = touchpoints.some(tp => tp.confirmed);
-
-            if (isConfirmed) confirmed += 1;
-            else if (isReachable) probable += 1;
-            else unreachable += 1;
-
-            for (const tp of touchpoints) {
-                const key = String(tp.userbot_id);
-                perUserbot.set(key, (perUserbot.get(key) || 0) + 1);
-            }
-        }
-
-        const total = items.length;
-        const coverage = total > 0 ? Math.round(((confirmed + probable) / total) * 100) : 0;
-
-        // подсказки про админ-права всплывают только в финале и только когда есть кому помогло бы
-        const { data: row } = await this.supabase
-            .from('broadcast_preparations')
-            .select('phase_detail')
-            .eq('id', preparation.id)
-            .single();
-        const current = row?.phase_detail || {};
-        const adminHints = Array.isArray(current.admin_hints) ? [...new Set(current.admin_hints)] : [];
-        // при полном покрытии подсказки про админ-права неактуальны — вычищаем в том числе старые из errors
-        const withoutHints = (current.errors || []).filter(message => !adminHints.includes(message));
-        const mergedErrors = [...new Set([...withoutHints, ...(unreachable > 0 ? adminHints : [])])].slice(-30);
-
-        await this.supabase
-            .from('broadcast_preparations')
-            .update({
-                status: 'ready',
-                stats: {
-                    total,
-                    confirmed,
-                    probable,
-                    unreachable,
-                    coverage_pct: coverage,
-                    per_userbot: Object.fromEntries(perUserbot)
-                },
-                phase_detail: { ...current, errors: mergedErrors, admin_hints: [] },
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', preparation.id)
-            .eq('status', 'recomputing');
+        return phaseRecomputeImpl(this, preparation);
     }
 
     async getStatus(ownerId, preparationId) {
-        const preparation = await this.getPreparationRow(ownerId, preparationId);
-        if (!preparation) throw new PreparationError(404, 'Подготовка не найдена');
-        return preparation;
+        return getStatusImpl(this, ownerId, preparationId);
     }
 
-    async listMembers(ownerId, preparationId, { filter, limit = 50, offset = 0 } = {}) {
-        const preparation = await this.getPreparationRow(ownerId, preparationId);
-        if (!preparation) throw new PreparationError(404, 'Подготовка не найдена');
-
-        let query = this.supabase
-            .from('broadcast_preparation_items')
-            .select('tg_user_id, username, display_name, reachable_by, status, last_error', { count: 'exact' })
-            .eq('preparation_id', preparationId)
-            .order('status', { ascending: true })
-            .range(offset, offset + limit - 1);
-        if (filter === 'unreachable') query = query.eq('status', 'unreachable');
-        if (filter === 'reachable') query = query.eq('status', 'reachable');
-
-        const { data, count } = await query;
-        return { members: data || [], total: count || 0 };
+    async listMembers(ownerId, preparationId, opts = {}) {
+        return listMembersImpl(this, ownerId, preparationId, opts);
     }
 
     async addJoinTargets(ownerId, preparationId, rawTargets = []) {
-        const preparation = await this.getPreparationRow(ownerId, preparationId);
-        if (!preparation) throw new PreparationError(404, 'Подготовка не найдена');
-        if (!['ready', 'failed'].includes(preparation.status)) {
-            throw new PreparationError(400, 'Добавлять группы можно только к завершённой подготовке');
-        }
-
-        const fresh = normalizeExternalTargets(rawTargets);
-        if (fresh.length === 0) throw new PreparationError(400, 'Список групп пуст');
-
-        await this.supabase
-            .from('broadcast_preparations')
-            .update({
-                external_targets: [...(preparation.external_targets || []), ...fresh],
-                status: 'joining',
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', preparationId);
-
-        this.kick(preparationId);
-        return { status: 'joining', added: fresh.length };
+        return addJoinTargetsImpl(this, ownerId, preparationId, rawTargets);
     }
 
     async recheck(ownerId, preparationId) {
-        const preparation = await this.getPreparationRow(ownerId, preparationId);
-        if (!preparation) throw new PreparationError(404, 'Подготовка не найдена');
-        if (!['ready', 'failed'].includes(preparation.status)) {
-            throw new PreparationError(400, 'Перепроверка доступна только для завершённой подготовки');
-        }
-
-        await this.setStatus(preparationId, 'scanning');
-        this.kick(preparationId);
-        return { status: 'scanning' };
+        return recheckImpl(this, ownerId, preparationId);
     }
 
     async cancel(ownerId, preparationId) {
-        const preparation = await this.getPreparationRow(ownerId, preparationId);
-        if (!preparation) throw new PreparationError(404, 'Подготовка не найдена');
-        if (!ACTIVE_STATUSES.has(preparation.status)) {
-            throw new PreparationError(400, 'Эта подготовка уже не активна');
-        }
-        await this.setStatus(preparationId, 'cancelled');
-        scanChatIdsCache.delete(preparationId);
-        return { status: 'cancelled' };
+        return cancelImpl(this, ownerId, preparationId);
     }
 }
