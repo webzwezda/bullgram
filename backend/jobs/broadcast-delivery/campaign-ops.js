@@ -8,7 +8,7 @@ import {
     isDeliverableCampaignStatus
 } from '../../services/broadcast-delivery.service.js';
 
-const STALE_HEARTBEAT_MS = 10 * 60_000;
+export const STALE_HEARTBEAT_MS = 10 * 60_000;
 const DELIVERY_PAGE_SIZE = 1000;
 
 export async function claimNextCampaign(supabase) {

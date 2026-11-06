@@ -37,7 +37,8 @@ import {
     loadPendingDeliveries,
     failAllPending,
     isCampaignStillOurs,
-    finalizeCampaign
+    finalizeCampaign,
+    STALE_HEARTBEAT_MS
 } from './broadcast-delivery/campaign-ops.js';
 
 const TICK_INTERVAL_MS = 30_000;
