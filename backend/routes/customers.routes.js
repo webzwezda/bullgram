@@ -1,224 +1,24 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { OfficialBotService } from '../services/official-bot.service.js';
-import { getBotById } from './official-bot.routes.js';
-
-function latestBy(list = [], keyFn, dateField = 'created_at') {
-    const map = new Map();
-
-    for (const item of list) {
-        const key = keyFn(item);
-        if (!key) continue;
-
-        const prev = map.get(key);
-        const itemDate = new Date(item?.[dateField] || item?.issued_at || 0).getTime();
-        const prevDate = new Date(prev?.[dateField] || prev?.issued_at || 0).getTime();
-
-        if (!prev || itemDate >= prevDate) {
-            map.set(key, item);
-        }
-    }
-
-    return map;
-}
-
-function emptyListResult() {
-    return Promise.resolve({ data: [], error: null });
-}
-
-// «Таблицы нет» — единственная ошибка выборки, которую можно проглотить (код 42P01,
-// фолбэк для старых PostgREST-ответов — текст 'does not exist'). Остальное падает.
-function isUndefinedTableError(error) {
-    if (!error) return false;
-    if (error.code === '42P01') return true;
-    return String(error.message || '').includes('does not exist');
-}
-
-// Аддитивные капы для фронта: честно сообщает, где сработал лимит выборки.
-// count берется из count:'exact' на том же запросе; если count не пришел —
-// truncated:false, total:null.
-function buildLimitCap(resp, limit) {
-    const total = typeof resp?.count === 'number' ? resp.count : null;
-    const rows = Array.isArray(resp?.data) ? resp.data.length : 0;
-
-    return {
-        limit,
-        total,
-        truncated: total === null ? false : total > rows
-    };
-}
-
-function buildPersonDisplayName(profile = {}) {
-    const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
-    if (fullName) return fullName;
-    if (profile.display_name) return String(profile.display_name).trim();
-    return null;
-}
-
-function buildFunnelPersonProfile(event = {}) {
-    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : {};
-    const first_name = payload.first_name || null;
-    const last_name = payload.last_name || null;
-    const display_name = payload.display_name || null;
-    const username = payload.username || null;
-
-    return {
-        first_name,
-        last_name,
-        display_name: buildPersonDisplayName({ first_name, last_name, display_name }),
-        username
-    };
-}
-
-function normalizeUuidLike(value) {
-    const raw = String(value || '').trim();
-    return raw || null;
-}
-
-function detectAccessSource(eventSource = null, payload = {}, accessNote = '') {
-    const source = String(eventSource || '').trim().toLowerCase();
-    const note = String(accessNote || '').toLowerCase();
-    const eventPayload = payload && typeof payload === 'object' ? payload : {};
-    const payloadSource = String(eventPayload.source || '').trim().toLowerCase();
-
-    if (
-        source === 'customers_manual_admin_removed'
-        || source === 'customers_manual_action'
-        || eventPayload.removal_kind === 'manual_admin_removed'
-        || (source === 'manual_batch' && payloadSource === 'customers')
-        || note.includes('удален админом вручную из customers')
-    ) {
-        return { key: 'manual_admin_removed', label: 'Удален админом вручную' };
-    }
-
-    if (
-        source === 'customers_direct_access'
-        || eventPayload.issued_via === 'customers_direct_access'
-        || note.includes('доступ выдан вручную из customers')
-    ) {
-        return { key: 'customers_direct_access', label: 'Выдан вручную из Customers' };
-    }
-
-    if (source === 'gift_code' || source === 'admin_gift' || eventPayload.gift_code_id || eventPayload.gift_code || note.includes('подарочному коду')) {
-        return { key: 'gift_code', label: 'Подарочный код' };
-    }
-
-    if (source === 'official_bot' || source === 'manual_ton' || source === 'manual_rub' || note.includes('join request')) {
-        return { key: 'payment', label: 'Оплата' };
-    }
-
-    return { key: 'unknown', label: null };
-}
-
-function isManualAdminRemoval(eventSource = null, payload = {}, accessNote = '') {
-    return detectAccessSource(eventSource, payload, accessNote).key === 'manual_admin_removed';
-}
+import {
+    latestBy,
+    emptyListResult,
+    isUndefinedTableError,
+    buildLimitCap,
+    buildPersonDisplayName,
+    buildFunnelPersonProfile,
+    normalizeUuidLike,
+    detectAccessSource,
+    isManualAdminRemoval
+} from './customers/access-source.js';
+import { registerDirectAccessRoute } from './customers/direct-access.js';
 
 export default function customersRoutes(supabase) {
     const router = express.Router();
     const officialBotService = new OfficialBotService(supabase);
 
-    router.post('/direct-access', authenticateUser, async (req, res) => {
-        try {
-            const ownerId = req.user.id;
-            const tgUserId = String(req.body?.tg_user_id || '').trim();
-            const channelId = normalizeUuidLike(req.body?.channel_id);
-            const durationRaw = String(req.body?.duration_days || '').trim().toLowerCase();
-
-            if (!tgUserId) {
-                return res.status(400).json({ error: 'Не передан Telegram ID' });
-            }
-
-            if (!channelId) {
-                return res.status(400).json({ error: 'Не передан канал для выдачи доступа' });
-            }
-
-            const durationDays = durationRaw === 'forever' ? 0 : Number(durationRaw || 0);
-            if (!(durationRaw === 'forever' || Number.isFinite(durationDays))) {
-                return res.status(400).json({ error: 'Некорректный срок доступа' });
-            }
-
-            const { data: channel, error: channelError } = await supabase
-                .from('channels')
-                .select('id, owner_id, title, tg_chat_id, bot_id, chat_type')
-                .eq('id', channelId)
-                .eq('owner_id', ownerId)
-                .single();
-
-            if (channelError || !channel) {
-                return res.status(404).json({ error: 'Канал не найден' });
-            }
-
-            if (!channel.bot_id) {
-                return res.status(400).json({ error: 'У канала не привязан официальный бот' });
-            }
-
-            const bot = getBotById(channel.bot_id);
-            if (!bot) {
-                return res.status(409).json({ error: 'Официальный бот не запущен. Перезапусти его в BotFather.' });
-            }
-
-            const result = await officialBotService.issueDirectChannelAccess({
-                bot,
-                ownerId,
-                targetTgUserId: tgUserId,
-                channel,
-                durationDays,
-                eventSource: 'customers_direct_access',
-                accessNote: durationRaw === 'forever'
-                    ? 'Доступ выдан вручную из Customers навсегда'
-                    : `Доступ выдан вручную из Customers на ${durationDays} дней`,
-                payload: {
-                    source: 'customers',
-                    issued_via: 'customers_direct_access',
-                    duration_days: durationRaw === 'forever' ? 'forever' : durationDays
-                }
-            });
-
-            if (result?.error) {
-                return res.status(400).json({ error: result.error });
-            }
-
-            let dmSent = false;
-            let dmError = null;
-            try {
-                const durationText = durationRaw === 'forever' ? 'Навсегда' : `${durationDays} дней`;
-                const lines = [
-                    'Тебе выдали доступ в Bullgram.',
-                    '',
-                    `Канал: ${channel.title || 'закрытый канал'}`,
-                    `Срок: ${durationText}`
-                ];
-
-                if (result.expiresAt) {
-                    lines.push(`До: ${new Date(result.expiresAt).toLocaleDateString('ru-RU')}`);
-                }
-
-                lines.push('', 'Ссылка на вход:', result.inviteLink, '', 'Ссылка работает через запрос на вступление и закреплена за твоим аккаунтом.');
-
-                await bot.telegram.sendMessage(tgUserId, lines.join('\n'), {
-                    disable_web_page_preview: true
-                });
-                dmSent = true;
-            } catch (error) {
-                dmError = error.message || 'Не удалось отправить ЛС';
-            }
-
-            res.json({
-                success: true,
-                subscription_id: result.subscriptionId || null,
-                invite_link: result.inviteLink || null,
-                channel_id: channel.id,
-                channel_title: channel.title || null,
-                expires_at: result.expiresAt || null,
-                dm_sent: dmSent,
-                dm_error: dmError
-            });
-        } catch (error) {
-            console.error('Ошибка direct access из Customers:', error);
-            res.status(500).json({ error: 'Не получилось выдать доступ из Customers' });
-        }
-    });
+    registerDirectAccessRoute(router, supabase, officialBotService);
 
     router.get('/workbench', authenticateUser, async (req, res) => {
         try {
