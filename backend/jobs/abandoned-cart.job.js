@@ -4,99 +4,13 @@
  */
 
 import { deliverViaBot, stripMarkdownDecor } from '../utils/bot-send.js';
-import { loadReservedUserbotIds } from '../utils/shop-reservations.js';
-import { MessagingRouter, isActorEligible } from '../services/messaging-router.service.js';
+import { MessagingRouter } from '../services/messaging-router.service.js';
 import { wrapJobTick } from '../utils/job-runner.js';
-
-function isUserbotAbandonedDmEnabled() {
-    return String(process.env.USERBOT_ABANDONED_DM_ENABLED || '').trim().toLowerCase() === 'true';
-}
+import { loadAbandonedPool, logAbandonedEvent, markReminded } from './abandoned-cart/helpers.js';
+import { deliverViaUserbotFallback } from './abandoned-cart/userbot-fallback.js';
 
 export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: messagingRouterOverride } = {}) => {
     const messagingRouter = messagingRouterOverride || new MessagingRouter({ supabase });
-
-    // Контурный пул бота: активные связки official_bot ↔ юзербот, без shop-резерва и неэлигибельных акторов
-    async function loadContourPool(ownerId, botId) {
-        const [reservedUserbotIds, bindingsResponse] = await Promise.all([
-            loadReservedUserbotIds(supabase, ownerId),
-            supabase
-                .from('official_bot_userbot_bindings')
-                .select('userbot_id')
-                .eq('bot_id', botId)
-                .eq('is_active', true)
-        ]);
-        if (bindingsResponse.error) throw bindingsResponse.error;
-
-        const userbotIds = [...new Set((bindingsResponse.data || []).map((row) => String(row.userbot_id)))].filter(Boolean);
-        if (userbotIds.length === 0) return [];
-
-        const { data, error } = await supabase
-            .from('tg_accounts')
-            .select('*, proxies(is_working)')
-            .eq('owner_id', ownerId)
-            .eq('account_type', 'userbot')
-            .in('id', userbotIds);
-        if (error) throw error;
-
-        const now = new Date();
-        return (data || []).filter((account) =>
-            !reservedUserbotIds.has(String(account.id)) && isActorEligible(account, { now })
-        );
-    }
-
-    // Пул дожима: контурные акторы бота; пусто — весь элигибельный пул владельца (связок могло не быть вовсе)
-    async function loadAbandonedPool(ownerId, botId) {
-        if (botId) {
-            try {
-                const contourPool = await loadContourPool(ownerId, botId);
-                if (contourPool.length > 0) return contourPool;
-            } catch (poolErr) {
-                console.error('[Брошенная корзина] Не собрали контурный пул, берём весь пул владельца:', poolErr?.message || poolErr);
-            }
-        }
-
-        const reservedUserbotIds = await loadReservedUserbotIds(supabase, ownerId);
-        const { data, error } = await supabase
-            .from('tg_accounts')
-            .select('*, proxies(is_working)')
-            .eq('owner_id', ownerId)
-            .eq('account_type', 'userbot');
-        if (error) throw error;
-
-        const now = new Date();
-        return (data || []).filter((account) =>
-            !reservedUserbotIds.has(String(account.id)) && isActorEligible(account, { now })
-        );
-    }
-
-
-    // Политика маркировки: reminded/reminded_at ставятся только по финальному исходу — доставлено ботом или дефинитивный скип; транзиентные ошибки не маркируем, чтобы следующий тик повторил попытку (сумма счёта не мутируется, ретрай безопасен)
-    async function markReminded(invoiceId) {
-        const { error } = await supabase
-            .from('invoices')
-            .update({ reminded: true, reminded_at: new Date().toISOString() })
-            .eq('id', invoiceId);
-        if (error) {
-            // Не промаркировали — следующий тик отправит повторно, поэтому сбой должен быть виден в логах
-            console.error('[Брошенная корзина] Не поставили reminded/reminded_at:', error.message);
-        }
-    }
-
-    async function logAbandonedEvent(invoice, ownerId, channelId, payload) {
-        try {
-            await supabase.from('access_events').insert({
-                owner_id: ownerId,
-                channel_id: channelId,
-                invoice_id: invoice.id,
-                tg_user_id: String(invoice.tg_user_id),
-                event_source: 'abandoned',
-                event_type: 'abandoned_reminder',
-                payload
-            });
-        } catch (logErr) {
-            console.error('[Брошенная корзина] Не записали access_event:', logErr?.message || logErr);
-        }
-    }
 
     let running = false;
     setInterval(wrapJobTick('abandoned-cart', async () => {
@@ -141,13 +55,13 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
 
                     if (!channel) {
                         // Канал удалён — дефинитивный скип
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'skipped',
                             bot_id: null,
                             tariff_id: invoice.tariff_id || null,
                             reason: 'channel_missing'
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
@@ -171,26 +85,26 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
                     // Если юзер уже пересоздал счет или уже подписан — просто "глушим" этот старый счет
                     if ((newerInvoices && newerInvoices.length > 0) || activeSub) {
                         const skipReason = activeSub ? 'already_subscribed' : 'newer_invoice_exists';
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'skipped',
                             bot_id: channel.bot_id,
                             tariff_id: invoice.tariff_id || null,
                             reason: skipReason
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
                     const bot = getBotFunction(channel.bot_id);
                     if (!bot) {
                         // Бот не поднят — дефинитивный скип с логом, а не молчаливый ретрай каждый тик
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'skipped',
                             bot_id: channel.bot_id || null,
                             tariff_id: invoice.tariff_id || null,
                             reason: 'bot_missing'
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
@@ -252,14 +166,14 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
                     if (!currentInvoice || currentInvoice.status !== 'pending') {
                         const currentStatus = currentInvoice?.status || 'deleted';
                         console.log(`[Брошенная корзина] Счёт ${invoice.id} сменил статус (${currentStatus}) между выборкой и отправкой, пропускаем дожим`);
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'skipped',
                             bot_id: channel.bot_id || null,
                             tariff_id: invoice.tariff_id || null,
                             reason: 'status_changed',
                             status: currentStatus
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
@@ -278,7 +192,7 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
 
                     if (result.status === 'delivered') {
                         console.log(`[Брошенная корзина] Успешный дожим (скидка ${discountPercent}%) юзеру ${invoice.tg_user_id}${result.plainUsed ? ' (plain-text после parse-ошибки)' : ''}`);
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'bot',
                             parse_fallback: result.plainUsed,
                             bot_id: channel.bot_id,
@@ -290,106 +204,40 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
                             discounted_amount: discountedPrice,
                             currency
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
                     if (result.status === 'undeliverable') {
                         // Текст не ушёл даже plain-text'ом — дефинитивный исход, маркируем
                         console.warn(`[Брошенная корзина] Не доставили даже plain-text'ом юзеру ${invoice.tg_user_id}:`, result.error?.message || result.error);
-                        await logAbandonedEvent(invoice, ownerId, channelId, {
+                        await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                             delivered_by: 'failed',
                             bot_id: channel.bot_id,
                             tariff_id: invoice.tariff_id || null,
                             reason: 'plain_text_retry_failed',
                             error: result.error?.message || 'unknown'
                         });
-                        await markReminded(invoice.id);
+                        await markReminded(supabase, invoice.id);
                         continue;
                     }
 
                     if (result.status === 'blocked') {
-                        if (!isUserbotAbandonedDmEnabled()) {
-                            // Флаг выключен — как раньше: блокировка бота финальна, ретраить нечего
-                            console.warn(`[Брошенная корзина] Бот заблокирован у юзера ${invoice.tg_user_id}, маркируем без ретрая`);
-                            await logAbandonedEvent(invoice, ownerId, channelId, {
-                                delivered_by: 'skipped',
-                                bot_id: channel.bot_id,
-                                tariff_id: invoice.tariff_id || null,
-                                discount_percent: discountPercent,
-                                reason: 'bot_blocked'
-                            });
-                            await markReminded(invoice.id);
-                            continue;
-                        }
-
-                        // Флаг включён: добираем юзерботом из контурного пула бота (или всего пула владельца)
-                        try {
-                            const pool = await loadAbandonedPool(ownerId, channel.bot_id);
-                            if (pool.length === 0) {
-                                console.warn(`[Брошенная корзина] Бот заблокирован, юзерботов нет у owner ${ownerId} — маркируем без ретрая`);
-                                await logAbandonedEvent(invoice, ownerId, channelId, {
-                                    delivered_by: 'failed',
-                                    bot_id: channel.bot_id,
-                                    tariff_id: invoice.tariff_id || null,
-                                    discount_percent: discountPercent,
-                                    error_kind: 'pool_exhausted',
-                                    error: 'Нет доступных юзерботов для фолбэка.'
-                                });
-                                await markReminded(invoice.id);
-                                continue;
-                            }
-
-                            // Юзербот шлёт без parse_mode и без кнопок — тот же plain-text каркас, что у retention
-                            const userbotResult = await messagingRouter.deliver({
-                                ownerId,
-                                tgUserId: invoice.tg_user_id.toString(),
-                                text: `🔔 Системное уведомление!\nМой бот не смог до тебя достучаться, пишу лично.\n\n${stripMarkdownDecor(messageText)}`,
-                                pool,
-                                eventSource: 'abandoned'
-                            });
-
-                            if (userbotResult.status === 'sent') {
-                                const actor = pool.find((account) => String(account.id) === String(userbotResult.actorId));
-                                console.log(`[Брошенная корзина] Дожим ушёл через Юзербота юзеру ${invoice.tg_user_id}`);
-                                await logAbandonedEvent(invoice, ownerId, channelId, {
-                                    delivered_by: 'userbot',
-                                    bot_id: channel.bot_id,
-                                    userbot_id: userbotResult.actorId || null,
-                                    userbot_username: actor?.tg_username || null,
-                                    tariff_id: invoice.tariff_id || null,
-                                    discount_percent: discountPercent,
-                                    message_text: messageText
-                                });
-                            } else {
-                                console.warn(`[Брошенная корзина] Юзербот-пул не доставил юзеру ${invoice.tg_user_id}: ${userbotResult.errorKind} ${userbotResult.errorText || ''}`);
-                                await logAbandonedEvent(invoice, ownerId, channelId, {
-                                    delivered_by: 'failed',
-                                    bot_id: channel.bot_id,
-                                    tariff_id: invoice.tariff_id || null,
-                                    discount_percent: discountPercent,
-                                    error_kind: userbotResult.errorKind || 'unknown',
-                                    error: userbotResult.errorText || 'unknown'
-                                });
-                            }
-                            // Финальный исход (доставили или нет) — маркируем, бесконечного ретрая нет
-                            await markReminded(invoice.id);
-                        } catch (ubErr) {
-                            // Упал сам фолбэк (не отправка) — транзиентно, не маркируем
-                            console.error(`[Брошенная корзина] Ошибка юзербот-фолбэка:`, ubErr?.message || ubErr);
-                            await logAbandonedEvent(invoice, ownerId, channelId, {
-                                delivered_by: 'failed',
-                                bot_id: channel.bot_id,
-                                tariff_id: invoice.tariff_id || null,
-                                error: ubErr?.message || 'unknown'
-                            });
-                        }
+                        await deliverViaUserbotFallback(
+                            {
+                                messagingRouter,
+                                loadAbandonedPool: (ownerId, botId) => loadAbandonedPool(supabase, ownerId, botId),
+                                logAbandonedEvent: (inv, oId, chId, payload) => logAbandonedEvent(supabase, inv, oId, chId, payload),
+                                markReminded: (invoiceId) => markReminded(supabase, invoiceId)
+                            },
+                            { invoice, ownerId, channelId, channel, discountPercent, messageText }
+                        );
                         continue;
                     }
 
                     // transient — не финальный исход: не маркируем, следующий тик повторит попытку
                     console.warn(`[Брошенная корзина] Транзиентная ошибка доставки (${result.status}) юзеру ${invoice.tg_user_id}:`, result.error?.message || result.error);
-                    await logAbandonedEvent(invoice, ownerId, channelId, {
+                    await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                         delivered_by: result.status === 'blocked' ? 'blocked' : 'failed',
                         bot_id: channel.bot_id,
                         tariff_id: invoice.tariff_id || null,
@@ -400,7 +248,7 @@ export const startAbandonedCart = (supabase, getBotFunction, { messagingRouter: 
                 } catch (invErr) {
                     // Ошибка одного счёта не должна ронять остаток батча; не маркируем — ретрай следующим тиком
                     console.error(`[Брошенная корзина] Ошибка обработки счёта ${invoice.id}:`, invErr?.message || invErr);
-                    await logAbandonedEvent(invoice, ownerId, channelId, {
+                    await logAbandonedEvent(supabase, invoice, ownerId, channelId, {
                         delivered_by: 'failed',
                         bot_id: null,
                         tariff_id: invoice.tariff_id || null,
