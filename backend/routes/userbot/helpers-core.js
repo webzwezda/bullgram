@@ -2,8 +2,8 @@
 // загрузка/валидация юзерботов, dead-proxy и expired-session сообщения,
 // дата/сигналы, invite-ссылки, operational-загрузка с автофейловером.
 // Вынесено дословно из userbot.routes.js на стадии 1 разрезки (2026-11-06).
-// USERBOT_PROFILE_SYNC_COOLDOWN_MS / USERBOT_PROFILE_UPLOADS_DIR остаются
-// объявленными в userbot.routes.js и импортируются оттуда.
+// USERBOT_PROFILE_SYNC_COOLDOWN_MS / USERBOT_PROFILE_UPLOADS_DIR с стадии 2a
+// объявлены в ./constants.js (общая копия, без цикла через userbot.routes.js).
 import fs from 'fs';
 import path from 'path';
 import { UserbotService } from '../../services/userbot.service.js';
@@ -12,7 +12,7 @@ import {
     FRESH_IMPORT_RUNTIME_REASON,
     isFreshImportedUserbot
 } from '../../utils/ops-center-selection.js';
-import { USERBOT_PROFILE_SYNC_COOLDOWN_MS, USERBOT_PROFILE_UPLOADS_DIR } from '../userbot.routes.js';
+import { USERBOT_PROFILE_SYNC_COOLDOWN_MS, USERBOT_PROFILE_UPLOADS_DIR } from './constants.js';
 
 function isUserbotDmEnabled() {
     return String(process.env.USERBOT_DM_ENABLED || '').trim().toLowerCase() === 'true';

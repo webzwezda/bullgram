@@ -3,7 +3,7 @@
 // реконсилиация истёкших лиз, выборка свободных site_free_pool / shop_sale прокси).
 // Вынесено дословно из userbot.routes.js на стадии 1 разрезки (2026-11-06).
 import { getTierRules } from '../../utils/product-tier.js';
-import { DEFAULT_ADMIN_PROXY_GROUP } from '../userbot.routes.js';
+import { DEFAULT_ADMIN_PROXY_GROUP } from './constants.js';
 import { supportsProxyInventoryGroup, supportsProxyProvisionSource } from './helpers-proxy.js';
 
 async function loadFreeProxyClaimState(supabase, ownerId) {

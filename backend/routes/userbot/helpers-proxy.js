@@ -3,11 +3,10 @@
 // проверка managed-proxy, классификаторы колонок миграций и подсчёты
 // эксклюзивного назначения «1 прокси = 1 юзербот».
 // Вынесено дословно из userbot.routes.js на стадии 1 разрезки (2026-11-06).
-// DEFAULT_ADMIN_PROXY_GROUP / MAX_MANAGED_PROXY_BATCH остаются объявленными
-// в userbot.routes.js и импортируются оттуда (используются только внутри функций,
-// поэтому циклический импорт безопасен).
+// DEFAULT_ADMIN_PROXY_GROUP / MAX_MANAGED_PROXY_BATCH с стадии 2a объявлены
+// в ./constants.js (общая копия, без цикла через userbot.routes.js).
 import { MANAGED_PROXY_PENDING_MARKER } from '../../utils/proxy-batch.js';
-import { DEFAULT_ADMIN_PROXY_GROUP, MAX_MANAGED_PROXY_BATCH } from '../userbot.routes.js';
+import { DEFAULT_ADMIN_PROXY_GROUP, MAX_MANAGED_PROXY_BATCH } from './constants.js';
 
 function normalizeProxyProtocol(value = '') {
     const raw = String(value || '').trim().toLowerCase();
