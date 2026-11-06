@@ -8,8 +8,11 @@ console.log('— attachListedItemIds: public-лот → listed_item_id, draft/п
 {
     const supabase = makeMockSupabase({
         shop_items: [
-            { id: 'item-pub', owner_id: OWNER, status: 'published' },
-            { id: 'item-draft', owner_id: OWNER, status: 'draft' }
+            // item_type: 'account' обязателен — attachListedItemIds фильтрует
+            // .eq('item_type', 'account') (report-only, aef6973): резать
+            // listed_item_id теперь имеют право только аккаунт-лоты.
+            { id: 'item-pub', owner_id: OWNER, item_type: 'account', status: 'published' },
+            { id: 'item-draft', owner_id: OWNER, item_type: 'account', status: 'draft' }
         ],
         shop_item_assets: [
             { shop_item_id: 'item-pub', asset_type: 'userbot', asset_id: 'acc-live' },
