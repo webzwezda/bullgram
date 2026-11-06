@@ -111,3 +111,43 @@ export function generateTempId() {
 export function memberDisplayName(member) {
   return member?.display_name || member?.username || `TG ${member?.tg_user_id}`;
 }
+
+export const BUFFER_STORAGE_KEY = 'bases_new_buffer_v1';
+export const PENDING_BASE_STORAGE_KEY = 'bases_new_pending_base_v1';
+
+export function loadBuffer() {
+  try {
+    const raw = window.sessionStorage.getItem(BUFFER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveBuffer(items) {
+  try {
+    window.sessionStorage.setItem(BUFFER_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // sessionStorage overflow — ignore, buffer is best-effort
+  }
+}
+
+// F5 в состоянии «дозалить» не должен терять созданную базу — иначе останется
+// осиротевшая пустая база, а повтор «Сохранить» наделает дубль.
+export function loadPendingBaseId() {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_BASE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingBaseId(id) {
+  try {
+    if (id) window.sessionStorage.setItem(PENDING_BASE_STORAGE_KEY, JSON.stringify(id));
+    else window.sessionStorage.removeItem(PENDING_BASE_STORAGE_KEY);
+  } catch {
+    // best-effort
+  }
+}
