@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Pre-commit: блокирует staged-файлы больше 5000 токенов (формула владельца:
+# 1 токен = 4 байта → лимит 20 000 байт). Большие файлы заставляют агентов
+# разбивать работу на части — один коммит = обозримая порция.
+#
+# Проверяются ТОЛЬКО staged-файлы (git diff --cached), по размеру staged-блоба.
+# Исключения (не агентский контент, формула к ним неприменима):
+#   - lock-файлы (package-lock.json, yarn.lock, …);
+#   - сгенерированный код и сборка (dist/, build/, *.min.*, tokens.css, …);
+#   - бинарные файлы (git numstat помечает их «- -»).
+#
+# Активация после clone: git config core.hooksPath .githooks
+# Осознанный обход: git commit --no-verify (обосновать в сообщении коммита)
+# или добавить паттерн в IGNORE_RE ниже — той же строкой, с объяснением.
+
+set -euo pipefail
+
+LIMIT_TOKENS=5000
+LIMIT_BYTES=$(( LIMIT_TOKENS * 4 ))
+
+# fnmatch-паттерны пропуска (ERE по полному пути)
+IGNORE_RE=(
+    '(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|composer\.lock|Gemfile\.lock|Cargo\.lock|poetry\.lock|bun\.lockb)$'
+    '(^|/)(dist|build|node_modules|vendor|coverage|_archive)/'
+    '\.(min\.js|min\.css|map|woff2?|ttf|otf|png|jpe?g|gif|webp|ico|avif|pdf|zip|gz|tgz|sqlite3?|session)$'
+    '(^|/)tokens\.css$'
+)
+
+fail=0
+
+# Бинарные staged-файлы: numstat печатает «- -» вместо +/- строк.
+binary_list=$(git diff --cached --numstat --diff-filter=ACMR | awk -F'\t' '$1=="-" {print $NF}')
+
+while IFS= read -r -d '' path; do
+    skip=0
+    for re in "${IGNORE_RE[@]}"; do
+        if [[ "$path" =~ $re ]]; then
+            skip=1
+            break
+        fi
+    done
+    if [ "$skip" -eq 1 ]; then
+        continue
+    fi
+
+    # Бинарный? (формула байт/4 осмысленна только для текста)
+    if printf '%s\n' "$binary_list" | grep -Fxq -- "$path"; then
+        continue
+    fi
+
+    # Размер staged-блоба (не рабочей копии — коммитится именно индекс)
+    size=$(git cat-file -s ":$path" 2>/dev/null || wc -c < "$path")
+
+    if [ "$size" -gt "$LIMIT_BYTES" ]; then
+        tokens=$(( size / 4 ))
+        over=$(( tokens - LIMIT_TOKENS ))
+        {
+            echo "✗ pre-commit: файл больше лимита агентского коммита"
+            echo "  файл:     $path"
+            printf '  размер:   %s байт ≈ %s токенов (лимит %s токенов = %s байт), превышение ~%s токенов\n' \
+                "$size" "$tokens" "$LIMIT_TOKENS" "$LIMIT_BYTES" "$over"
+            echo ""
+            echo "  Раздели файл, прежде чем коммитить:"
+            echo "   1. Вынеси самостоятельные секции (константы, хелперы, типы, компоненты)"
+            echo "      в отдельные модули и закоммить их ПЕРВЫМ, отдельным коммитом."
+            echo "   2. Новый большой файл → несколько файлов по зонам ответственности;"
+            echo "      каждый промежуточный коммит обязан быть рабочим (node --check / build)."
+            echo "   3. Большое изменение существующего файла → серия частичных коммитов:"
+            printf "      git add -p '%s'   # добавляй логические куски по очереди\n" "$path"
+            echo "   4. Файл легитимно огромен (генерируемый/данные/выгрузка)? Тогда осознанно:"
+            echo "      git commit --no-verify с обоснованием в сообщении коммита,"
+            echo "      либо добавь паттерн в IGNORE_RE в .githooks/pre-commit."
+        } >&2
+        fail=1
+    fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+exit "$fail"

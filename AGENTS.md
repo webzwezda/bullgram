@@ -145,6 +145,8 @@ Rollback: `git revert` + push (CI redeploys the previous state), or on prod `cd 
 
 **Dependency rule (owner decision after the 2026-09-30 sonner deploy failure): an npm dependency is added in the same commit as the code that uses it.** Never rely on conditional `npm install` on the server.
 
+**Pre-commit hook (`.githooks/pre-commit`, активация после clone: `git config core.hooksPath .githooks`)**: блокирует staged-файлы больше 5000 токенов (20KB; формула владельца — 1 токен = 4 байта) и требует разбивать работу на части. Исключения: lock-файлы, сгенерированный код, бинари. Осознанный обход — `--no-verify` с обоснованием в коммите или паттерн в `IGNORE_RE` хука.
+
 ## Environment & Userbot Feature Flags
 
 Backend config lives in `backend/.env` (template: `backend/.env.example`); `admin-v2` and `site-v2` have no `.env` files. Required: Node.js 22.22.0 (`.nvmrc`), npm 10.x.
