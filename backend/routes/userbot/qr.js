@@ -1,6 +1,7 @@
 // QR-подключение юзербота (стадия 2a разрезки userbot.routes.js).
 // Зона: POST /qr-start, GET /qr-status, POST /qr-password.
-// GET /fingerprint-profiles остаётся в главном файле (вне карты стадии 2a).
+// GET /fingerprint-profiles переехал сюда на финальной стадии 2b — первым
+// роутом, как в исходном порядке регистрации главного файла.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { encrypt } from '../../utils/crypto.js';
 import { enforceUserbotQuota } from '../../utils/product-tier.js';
@@ -17,6 +18,20 @@ import { reconcileExpiredTrialProxyLease } from './helpers-lease.js';
 
 export function registerQr(router, ctx) {
     const { supabase, userbotService } = ctx;
+
+    // ==========================================
+    // 3. ГЕНЕРАЦИЯ QR (Классический метод)
+    // ==========================================
+    router.get('/fingerprint-profiles', authenticateUser, async (req, res) => {
+        try {
+            const profiles = await userbotService.listQrFingerprintProfiles(req.user.id);
+            res.json({ profiles });
+        } catch (error) {
+            console.error('[USERBOT_FINGERPRINT_PROFILES] failed:', error?.message || error);
+            res.status(500).json({ error: 'Не удалось загрузить fingerprint-пресеты.' });
+        }
+    });
+
     router.post('/qr-start', authenticateUser, async (req, res) => {
         try {
             await userbotService.sweepStaleQrSessions();

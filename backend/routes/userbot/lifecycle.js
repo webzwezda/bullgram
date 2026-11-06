@@ -1,7 +1,8 @@
 // Жизненный цикл юзербота: удаление, восстановление, safe-mode, метка
 // (стадия 2a разрезки userbot.routes.js).
 // Зона: DELETE /:id, POST /restore/:id, POST /safe-mode/:id, PATCH /custom-label/:id.
-// GET /recovery-status остаётся в главном файле между зонами (вне карты стадии 2a).
+// GET /recovery-status переехал сюда на финальной стадии 2b — первым роутом,
+// как в исходном порядке регистрации главного файла (после registerProfile).
 // Критично: registerLifecycle зовётся ПОСЛЕ registerProxiesCheck —
 // DELETE /proxies/:id должен матчиться раньше дженерика DELETE /:id.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
@@ -21,6 +22,30 @@ import { ensureExclusiveProxyAssignment, ensureUserbotNotOwnedByAnotherAdmin } f
 
 export function registerLifecycle(router, ctx) {
     const { supabase, userbotService } = ctx;
+
+    router.get('/recovery-status', authenticateUser, async (req, res) => {
+        try {
+            const { data, error } = await supabase
+                .from('userbot_restore_sources')
+                .select('account_id, source_type, session_filename, json_filename, updated_at, last_restored_at, last_restore_status, last_restore_error, intake_batch_id')
+                .eq('owner_id', req.user.id);
+
+            if (error) {
+                if (isMissingRecoveryTable(error)) {
+                    return res.json({ support: { recovery: false }, rows: [] });
+                }
+                throw error;
+            }
+
+            res.json({
+                support: { recovery: true },
+                rows: data || []
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message || 'Ошибка загрузки recovery status' });
+        }
+    });
+
     router.delete('/:id', authenticateUser, async (req, res) => {
         try {
             try {
