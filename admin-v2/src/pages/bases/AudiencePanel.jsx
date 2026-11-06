@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Users, RefreshCw, ChevronRight, Rocket, AlertCircle, Plus, Send } from 'lucide-react';
+import { Users, ChevronRight, Rocket, AlertCircle } from 'lucide-react';
 import { apiRequest } from '../../api/client.js';
-import { MEMBER_FILTERS, filterAudienceMembers } from './shared.js';
-import { AudienceMembersTable } from './AudienceMembersTable.jsx';
+import { filterAudienceMembers } from './shared.js';
+import { ChannelsGrid } from './ChannelsGrid.jsx';
+import { ChannelAudienceSection } from './ChannelAudienceSection.jsx';
 
 function needsUserbotRecovery(message = '') {
   const value = String(message || '').toLowerCase();
@@ -349,13 +350,6 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, tar
     );
   }
 
-  const statCards = [
-    { label: 'Людей в базе', value: memberSummary.total || 0, color: 'text-slate-900' },
-    { label: 'Активно платят', value: memberSummary.active_paid || 0, color: (memberSummary.active_paid || 0) > 0 ? 'text-emerald-600' : 'text-slate-500' },
-    { label: 'Без подписки', value: memberSummary.free_riders || 0, color: (memberSummary.free_riders || 0) > 0 ? 'text-rose-600' : 'text-slate-500' },
-    { label: 'Неполное покрытие', value: coverageStats.partial, color: coverageStats.partial > 0 ? 'text-amber-600' : 'text-slate-500' }
-  ];
-
   return (
     <div className="bg-white border border-slate-200/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden">
       {(metaError || membersError) && (
@@ -385,211 +379,36 @@ export function AudiencePanel({ accessToken, onAddToBase, addToBaseDisabled, tar
         </div>
       </section>
 
-      <section className="p-6 md:p-8 border-b border-slate-100">
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4">Каналы и группы</h3>
-        {channelsForBot.length === 0 ? (
-          <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
-            У этого бота пока нет каналов. Создайте канал на странице «Бот продаж».
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {channelsForBot.map((ch) => {
-              const active = String(ch.id) === String(channelId);
-              const base = bases.find((b) => b.id === ch.linked_base_id);
-              const count = base?.stats?.humans || 0;
-              const hasAudience = !!ch.linked_base_id;
-              const rightsChips = hasAudience && contourChipsByChannel
-                ? contourChipsByChannel.get(String(ch.id)) || null
-                : null;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => { setChannelId(ch.id); setFilter('humans'); setSearch(''); }}
-                  className={`p-4 rounded-2xl border text-left transition-all ${
-                    active ? 'border-slate-900 bg-slate-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'
-                  }`}
-                >
-                  <div className="text-sm font-black text-slate-900 truncate mb-1">{ch.title}</div>
-                  <div className="text-xs text-slate-500 font-medium">
-                    {hasAudience ? `${count} чел.` : 'База не создана'}
-                  </div>
-                  {rightsChips ? (
-                    !rightsChips.anyOk ? (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        <span className="inline-flex items-center rounded-md border border-border-default bg-feedback-warning-bg px-1.5 py-0.5 text-xs font-bold text-left text-feedback-warning-text">
-                          админа нет — рассылка может не дотянуться
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="mt-1.5 flex flex-wrap gap-1">
-                        {rightsChips.chips.slice(0, 3).map((chip, chipIdx) => (
-                          <span
-                            key={`${chip.label}-${chipIdx}`}
-                            className={`inline-flex items-center rounded-md border border-border-default px-1.5 py-0.5 text-xs font-bold ${
-                              chip.ok
-                                ? 'bg-feedback-success-bg text-feedback-success-text'
-                                : 'bg-feedback-warning-bg text-feedback-warning-text'
-                            }`}
-                          >
-                            {chip.ok ? `${chip.label}: админ ✓` : `${chip.label}: не админ`}
-                          </span>
-                        ))}
-                        {rightsChips.chips.length > 3 ? (
-                          <span className="inline-flex items-center rounded-md border border-border-default bg-surface-subtle px-1.5 py-0.5 text-xs font-bold text-ink-muted">
-                            +{rightsChips.chips.length - 3}
-                          </span>
-                        ) : null}
-                      </div>
-                    )
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <ChannelsGrid
+        channelsForBot={channelsForBot}
+        bases={bases}
+        channelId={channelId}
+        contourChipsByChannel={contourChipsByChannel}
+        onSelectChannel={(ch) => { setChannelId(ch.id); setFilter('humans'); setSearch(''); }}
+      />
 
-      {selectedChannel ? (
-        selectedChannel.linked_base_id ? (
-          <Fragment>
-            <section className="p-6 md:p-8 border-b border-slate-100">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {statCards.map((card, idx) => (
-                  <div key={idx} className="bg-slate-50/50 border border-slate-100 p-6 rounded-3xl">
-                    <div className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-2">{card.label}</div>
-                    <div className={`text-3xl font-black tracking-tighter ${card.color}`}>{card.value}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="p-6 md:p-8 border-b border-slate-100">
-              <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500">Участники канала</h3>
-                <div className="flex flex-wrap items-center gap-2">
-                  {targetLabel ? (
-                    <span className="inline-flex items-center bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1 text-[11px] font-bold">
-                      Куда попадёт «В базу»: {targetLabel}
-                    </span>
-                  ) : null}
-                  <span className="text-xs font-bold text-slate-500">
-                    {filteredMembers.length} показываем
-                    {(memberSummary.total || members.length) > filteredMembers.length ? ` · ${memberSummary.total || members.length} всего` : ''}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {MEMBER_FILTERS.map((item) => {
-                  const active = filter === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setFilter(item.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                        active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 mb-4">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Имя, @username или TG ID"
-                  className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-slate-400"
-                />
-              </div>
-
-              {membersLoading && members.length === 0 ? (
-                <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
-                  Грузим участников...
-                </div>
-              ) : (
-                <AudienceMembersTable
-                  members={filteredMembers}
-                  onCopyToBase={onAddToBase}
-                  addToBaseDisabled={addToBaseDisabled}
-                />
-              )}
-            </section>
-
-            <section className="p-6 md:p-8">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4">Синк из групп через юзербота</h3>
-              {userbots.length === 0 ? (
-                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 text-amber-800">
-                  <div className="font-bold mb-1">Нет подключённого юзербота</div>
-                  <div className="text-sm opacity-90 mb-3">
-                    Без юзербота синк из групп недоступен. Подключите аккаунт в приложении «Юзербот».
-                  </div>
-                  <a href="/userbot/accounts" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 !text-white hover:bg-slate-700 transition-colors">
-                    Открыть Юзерботы <ChevronRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              ) : (
-                <Fragment>
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <select
-                      value={selectedUserbotId}
-                      onChange={(event) => setSelectedUserbotId(event.target.value)}
-                      className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-slate-400 max-w-[320px]"
-                    >
-                      {userbots.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.tg_username ? `@${u.tg_username}` : `ID ${u.tg_account_id}`}
-                          {u.proxy_country ? ` · ${u.proxy_country}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={syncBase}
-                      disabled={!activeBaseId || syncing}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                      {syncing ? 'Синхронизация...' : 'Запустить синк'}
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-                    Берёт актуальных участников из привязанных каналов и групп, сопоставляет с подписками и обновляет покрытие базы. Безопасно запускать повторно — старые записи не удаляются, только обновляется <code className="px-1 bg-slate-100 rounded">present_now</code>.
-                  </p>
-                </Fragment>
-              )}
-            </section>
-          </Fragment>
-        ) : (
-          <section className="p-6 md:p-8">
-            <div className="p-5 rounded-2xl bg-amber-50/60 border border-amber-200">
-              <div className="font-bold text-amber-800 mb-1">У этого канала ещё нет базы аудитории</div>
-              <div className="text-sm text-amber-700 mb-4">
-                Создайте базу и привяжите канал, чтобы синкать участников через юзербота.
-              </div>
-              <button
-                type="button"
-                onClick={createAudienceForChannel}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Создать аудиторию для канала
-              </button>
-            </div>
-          </section>
-        )
-      ) : (
-        <section className="p-6 md:p-8">
-          <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-sm text-slate-500 font-medium">
-            Выберите канал выше, чтобы увидеть участников.
-          </div>
-        </section>
-      )}
+      <ChannelAudienceSection
+        selectedChannel={selectedChannel}
+        memberSummary={memberSummary}
+        coverageStats={coverageStats}
+        filteredMembers={filteredMembers}
+        filter={filter}
+        onFilterChange={setFilter}
+        search={search}
+        onSearchChange={setSearch}
+        targetLabel={targetLabel}
+        membersLoading={membersLoading}
+        membersTotal={members.length}
+        onAddToBase={onAddToBase}
+        addToBaseDisabled={addToBaseDisabled}
+        userbots={userbots}
+        selectedUserbotId={selectedUserbotId}
+        onUserbotChange={setSelectedUserbotId}
+        syncing={syncing}
+        activeBaseId={activeBaseId}
+        onSync={syncBase}
+        onCreateAudience={createAudienceForChannel}
+      />
     </div>
   );
 }
