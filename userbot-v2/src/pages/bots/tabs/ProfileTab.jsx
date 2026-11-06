@@ -45,6 +45,7 @@ export function ProfileTab({
   hasUnsavedChanges,
   saveAllChanges,
   bindingAccountId,
+  checkAccount,
 }) {
     if (!selectedLiveUserbot) return null;
     const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
@@ -234,6 +235,7 @@ export function ProfileTab({
               isSafeMode={isSafeMode}
               accountCheckReport={accountCheckReport}
               defaultCheckLines={defaultCheckLines}
+              checkAccount={checkAccount}
             />
           </div>
 

@@ -387,6 +387,7 @@ export default function AutopostManagePage() {
             channelConfigs={channelConfigs}
             createdBot={createdBot}
             journalApiRef={journalApiRef}
+            askConfirm={askConfirm}
           />
           <AdminsPanel
             admins={admins}

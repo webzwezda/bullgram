@@ -321,6 +321,7 @@ export function UserbotCenterSection({
               selectedLiveUserbot={selectedLiveUserbot}
               selectedUserbot={selectedUserbot}
               selectedLiveUserbotId={selectedLiveUserbotId}
+              checkAccount={checkAccount}
               recovery={recovery}
               profileSyncState={profileSyncState}
               telegramWebEnabled={telegramWebEnabled}

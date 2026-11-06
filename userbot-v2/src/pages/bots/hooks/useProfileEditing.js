@@ -182,7 +182,7 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     }
   }
   async function saveAllChanges() {
-    if (!accessToken || !selectedLiveUserbotId || !selectedLiveUserbot) return;
+    if (!accessToken || !selectedLiveUserbotId || !selectedUserbot) return;
     if (!hasUnsavedChanges) return;
 
     const parts = [];

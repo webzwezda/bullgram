@@ -88,7 +88,7 @@ export function ConnectionPanel({ open, onToggle, binding, updateBinding, select
   );
 }
 
-export function SessionPanel({ open, onToggle, isCombatMode, toggleSafeMode, selectedLiveUserbot, checkingAccountId, togglingSafeModeId, isSafeMode, accountCheckReport, defaultCheckLines }) {
+export function SessionPanel({ open, onToggle, isCombatMode, toggleSafeMode, selectedLiveUserbot, checkingAccountId, togglingSafeModeId, isSafeMode, accountCheckReport, defaultCheckLines, checkAccount }) {
   return (
             <div>
               <CollapsiblePanelHeader

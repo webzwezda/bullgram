@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import multer from 'multer';
 import { toNano } from '@ton/core';
 import { tonToNanoString } from '../../utils/ton.js';
+import { verifyPaymentOnce } from '../../services/ton-connect-verify.service.js';
 
 const SHOP_PENDING_PURCHASE_TTL_MINUTES = Number(process.env.SHOP_PENDING_PURCHASE_TTL_MINUTES || 30);
 const SHOP_RECEIPTS_DIR = path.join(process.cwd(), 'uploads', 'shop-receipts');

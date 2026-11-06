@@ -33,6 +33,7 @@ import {
     loadContourRights,
     loadContours,
     loadFirstContourUserbot,
+    loadContourRuntimeContext,
     loadFullUserbotAccount,
     loadOwnedChannels,
     loadOwnedOfficialBots,

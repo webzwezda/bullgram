@@ -17,7 +17,7 @@ import {
   journalTimeLabel
 } from '../utils/journal.js';
 
-export default function JournalPanel({ botId, accessToken, channelConfigs, createdBot, journalApiRef }) {
+export default function JournalPanel({ botId, accessToken, channelConfigs, createdBot, journalApiRef, askConfirm }) {
   // «Журнал публикаций» — только наблюдение за запланированным контентом.
   // Управление (создание/правка/отмена) сознательно не здесь: план ведёт агент.
   const [journalItems, setJournalItems] = useState([]);
