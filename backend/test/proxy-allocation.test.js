@@ -8,11 +8,20 @@
 // username); (c) гонка (claim update вернул 0) → race_lost, аккаунт не тронут;
 // (d) пул пуст → pool_empty + alert('proxy_pool_exhausted'); (e) дедуп алерта:
 // повторный вызов notifyPlatformAlert в пределах 1ч не шлёт повторно.
+//
+// Плюс превентивный claim-путь роутов (qr-start / import-session-file без
+// proxy_id): claimFreeManagedSlot (flag_off / pool_empty+алерт / race_lost /
+// успех со всеми полями слота), releaseFreeManagedSlot (возврат в пул только
+// своего слота) и buildProxyDataFromManagedSlot (зеркало loadOwnedProxy,
+// force_ipv6=true для свежего слота).
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import {
     allocateManagedProxyForAccount,
-    PROXY_POOL_EXHAUSTED_ALERT_KEY
+    PROXY_POOL_EXHAUSTED_ALERT_KEY,
+    buildProxyDataFromManagedSlot,
+    claimFreeManagedSlot,
+    releaseFreeManagedSlot
 } from '../services/proxy-allocation.service.js';
 import {
     notifyPlatformAlert,
@@ -218,5 +227,173 @@ describe('allocateManagedProxyForAccount', () => {
             if (prevChat === undefined) delete process.env.TG_ADMIN_CHAT_ID; else process.env.TG_ADMIN_CHAT_ID = prevChat;
             __resetPlatformAlertDedupForTests();
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Превентивный claim ДО подключения к Telegram (qr.js / sessions.js без proxy_id)
+// ---------------------------------------------------------------------------
+const FULL_SLOT = {
+    id: 'p-1',
+    username: 'mp_1',
+    host: '2001:db8::10',
+    port: 25101,
+    password: 'slot-pass',
+    provision_source: 'manual_admin',
+    inventory_group: 'self_use',
+    is_working: true,
+    last_check_ip: null,
+    last_check_country: null,
+    last_check_city: null,
+    owner_id: null
+};
+
+describe('claimFreeManagedSlot', () => {
+    beforeEach(disableFlag);
+    afterEach(disableFlag);
+
+    it('flag off → flag_off, БД не тронута', async () => {
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT }] });
+
+        const result = await claimFreeManagedSlot(db, OWNER);
+
+        assert.deepStrictEqual(result, { claimed: false, reason: 'flag_off' });
+        assert.strictEqual(db.calls.length, 0, 'ни одного запроса в БД при выключенном флаге');
+        assert.strictEqual(db.tables.proxies[0].owner_id, null, 'слот остался в пуле');
+    });
+
+    it('свободный слот → claimed:true, слот заклеймлен, все поля на месте', async () => {
+        enableFlag();
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT }] });
+
+        const result = await claimFreeManagedSlot(db, OWNER, { alert: () => { throw new Error('alert must not fire on success'); } });
+
+        assert.strictEqual(result.claimed, true);
+        assert.strictEqual(result.slot.id, 'p-1');
+        assert.strictEqual(result.slot.host, '2001:db8::10');
+        assert.strictEqual(result.slot.port, 25101);
+        assert.strictEqual(result.slot.username, 'mp_1');
+        assert.strictEqual(result.slot.password, 'slot-pass');
+        assert.strictEqual(result.slot.provision_source, 'manual_admin');
+        assert.strictEqual(result.slot.inventory_group, 'self_use');
+        assert.strictEqual(result.slot.is_working, true);
+        assert.strictEqual(result.slot.last_check_ip, null);
+        assert.strictEqual(db.tables.proxies[0].owner_id, OWNER, 'условный update записал owner_id');
+    });
+
+    it('берётся младший mp_* по username, чужие занятые не трогаются', async () => {
+        enableFlag();
+        const db = makeMockSupabase({
+            proxies: [
+                { ...FULL_SLOT, id: 'p-2', username: 'mp_2', owner_id: 'someone-else' },
+                { ...FULL_SLOT, id: 'p-1', username: 'mp_1' }
+            ]
+        });
+
+        const result = await claimFreeManagedSlot(db, OWNER);
+
+        assert.strictEqual(result.claimed, true);
+        assert.strictEqual(result.slot.id, 'p-1', 'выбран младший свободный');
+        assert.strictEqual(db.tables.proxies.find((row) => row.id === 'p-2').owner_id, 'someone-else', 'чужой слот не тронут');
+    });
+
+    it('пул пуст → pool_empty + alert вызван', async () => {
+        enableFlag();
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT, owner_id: 'someone-else' }] });
+        const alertCalls = [];
+
+        const result = await claimFreeManagedSlot(db, OWNER, { alert: (key) => alertCalls.push(key) });
+
+        assert.deepStrictEqual(result, { claimed: false, reason: 'pool_empty' });
+        assert.deepStrictEqual(alertCalls, [PROXY_POOL_EXHAUSTED_ALERT_KEY]);
+    });
+
+    it('гонка (claim update вернул 0) → race_lost, слот остаётся у соперника', async () => {
+        enableFlag();
+        const db = makeMockSupabase({
+            proxies: [{ ...FULL_SLOT }],
+            onAfterSelect: ({ table }) => {
+                if (table === 'proxies') db.tables.proxies[0].owner_id = 'rival-owner';
+            }
+        });
+
+        const result = await claimFreeManagedSlot(db, OWNER);
+
+        assert.deepStrictEqual(result, { claimed: false, reason: 'race_lost' });
+        assert.strictEqual(db.tables.proxies[0].owner_id, 'rival-owner');
+    });
+});
+
+describe('releaseFreeManagedSlot', () => {
+    it('свой слот → released:true, owner_id сброшен в пул', async () => {
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT, owner_id: OWNER }] });
+
+        const result = await releaseFreeManagedSlot(db, OWNER, 'p-1');
+
+        assert.deepStrictEqual(result, { released: true });
+        assert.strictEqual(db.tables.proxies[0].owner_id, null, 'слот вернулся в пул');
+    });
+
+    it('чужой слот → released:false, слот не тронут', async () => {
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT, id: 'p-9', owner_id: 'other-owner' }] });
+
+        const result = await releaseFreeManagedSlot(db, OWNER, 'p-9');
+
+        assert.strictEqual(result.released, false, 'release чужого слота отвергнут');
+        assert.strictEqual(db.tables.proxies[0].owner_id, 'other-owner', 'владелец слота не изменился');
+    });
+
+    it('уже свободный слот → released:false (нечего отпускать), пул не тронут', async () => {
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT }] });
+
+        const result = await releaseFreeManagedSlot(db, OWNER, 'p-1');
+
+        assert.strictEqual(result.released, false);
+        assert.strictEqual(db.tables.proxies[0].owner_id, null);
+    });
+
+    it('невалидные аргументы → released:false без похода в БД', async () => {
+        const db = makeMockSupabase({ proxies: [{ ...FULL_SLOT, owner_id: OWNER }] });
+
+        assert.deepStrictEqual(await releaseFreeManagedSlot(db, null, 'p-1'), { released: false, reason: 'invalid_args' });
+        assert.deepStrictEqual(await releaseFreeManagedSlot(db, OWNER, null), { released: false, reason: 'invalid_args' });
+        assert.strictEqual(db.calls.length, 0);
+    });
+});
+
+describe('buildProxyDataFromManagedSlot', () => {
+    it('зеркало loadOwnedProxy: свежий слот (is_working=true, last_check_ip=null) → force_ipv6:true', () => {
+        const proxyData = buildProxyDataFromManagedSlot({ ...FULL_SLOT });
+
+        assert.deepStrictEqual(proxyData, {
+            proxy_host: '2001:db8::10',
+            proxy_port: 25101,
+            proxy_username: 'mp_1',
+            proxy_password: 'slot-pass',
+            proxy_id: 'p-1',
+            is_working: true,
+            last_check_ip: null,
+            last_check_country: null,
+            last_check_city: null,
+            force_ipv6: true,
+            provision_source: 'manual_admin',
+            inventory_group: 'self_use'
+        });
+    });
+
+    it('формула force_ipv6 повторяет роуты: ipv4 → false, ipv6 → true, is_working не true → false', () => {
+        const checkedV4 = buildProxyDataFromManagedSlot({ ...FULL_SLOT, last_check_ip: '203.0.113.9' });
+        assert.strictEqual(checkedV4.force_ipv6, false, 'последний чек по IPv4 — форсить IPv6 не надо');
+
+        const checkedV6 = buildProxyDataFromManagedSlot({ ...FULL_SLOT, last_check_ip: '2001:db8::1' });
+        assert.strictEqual(checkedV6.force_ipv6, true, 'последний чек по IPv6 — форсим');
+
+        const uncheckedDead = buildProxyDataFromManagedSlot({ ...FULL_SLOT, is_working: null });
+        assert.strictEqual(uncheckedDead.force_ipv6, false, 'is_working не true — не форсим');
+    });
+
+    it('мусор на входе → null (роут не должен собирать proxyData из пустоты)', () => {
+        assert.strictEqual(buildProxyDataFromManagedSlot(null), null);
+        assert.strictEqual(buildProxyDataFromManagedSlot('nope'), null);
     });
 });

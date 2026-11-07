@@ -5,7 +5,12 @@
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { encrypt } from '../../utils/crypto.js';
 import { enforceUserbotQuota } from '../../utils/product-tier.js';
-import { allocateManagedProxyForAccount } from '../../services/proxy-allocation.service.js';
+import {
+    PROXY_POOL_EXHAUSTED_ALERT_KEY,
+    buildProxyDataFromManagedSlot,
+    claimFreeManagedSlot,
+    releaseFreeManagedSlot
+} from '../../services/proxy-allocation.service.js';
 import { notifyPlatformAlert } from '../../utils/platform-telegram-alert.js';
 import { FRESH_IMPORT_RUNTIME_REASON, FRESH_IMPORT_RUNTIME_STATUS } from '../../utils/ops-center-selection.js';
 import { buildTelegramProfilePatch } from '../../utils/telegram-profile.js';
@@ -17,6 +22,10 @@ import {
     loadOwnedProxy
 } from './helpers-proxy.js';
 import { reconcileExpiredTrialProxyLease } from './helpers-lease.js';
+
+// BACKLOG §32: единый текст для владельца, когда free-pool claim не удался
+// (pool_empty / race_lost) и своего прокси в запросе не было.
+const PROXY_POOL_EMPTY_MESSAGE = 'Свободных платформенных прокси сейчас нет — подключите свой прокси или попробуйте позже.';
 
 export function registerQr(router, ctx) {
     const { supabase, userbotService } = ctx;
@@ -35,6 +44,9 @@ export function registerQr(router, ctx) {
     });
 
     router.post('/qr-start', authenticateUser, async (req, res) => {
+        // Слот, заклеймленный из платформенного пула (BACKLOG §32) на этом
+        // запросе. Нужен в catch: любой провал после claim возвращает слот в пул.
+        let claimedSlotId = null;
         try {
             await userbotService.sweepStaleQrSessions();
 
@@ -56,39 +68,77 @@ export function registerQr(router, ctx) {
                 !!save_as_preset
             );
 
-            if (!proxy_id) {
-                return res.status(400).json({ error: 'Юзербота можно подключать только через прокси. Сначала выбери живой прокси.' });
-            }
-
-            if (req.profile?.role !== 'admin') {
-                await reconcileExpiredTrialProxyLease(supabase, req.user.id, req.profile);
+            // Ретрай QR: если прошлый запрос заклеймил слот, но до привязки не
+            // дошёл (владелец бросил экран, авторизация не удалась) — вернём его
+            // в пул перед новым claim. Non-fatal: провал не блокирует старт.
+            const previousSession = userbotService.qrSessions.get(req.user.id);
+            if (previousSession?.claimedProxySlotId) {
+                const staleSlotId = previousSession.claimedProxySlotId;
+                previousSession.claimedProxySlotId = null;
+                try {
+                    await releaseFreeManagedSlot(supabase, req.user.id, staleSlotId);
+                    req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: unbound managed slot returned to pool');
+                } catch (releaseError) {
+                    req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: release of previous claimed slot failed (non-fatal)');
+                }
             }
 
             let proxyData = null;
-            const data = await loadOwnedProxy(supabase, req.user.id, proxy_id);
-            if (data) {
-                proxyData = {
-                    proxy_host: data.host,
-                    proxy_port: data.port,
-                    proxy_username: data.username,
-                    proxy_password: data.password,
-                    proxy_id: data.id,
-                    is_working: data.is_working,
-                    last_check_ip: data.last_check_ip,
-                    last_check_country: data.last_check_country,
-                    last_check_city: data.last_check_city,
-                    force_ipv6: data.is_working === true && (!data.last_check_ip || data.last_check_ip.includes(':')),
-                    provision_source: data.provision_source,
-                    inventory_group: data.inventory_group
-                };
-                console.log('[QR-ROUTE] Прокси найден:', proxyData.proxy_host, ':', proxyData.proxy_port);
-                if (data.is_working === false) {
-                    return res.status(400).json({ error: 'Этот прокси уже помечен как мертвый. Сначала почини его или выбери другой.' });
+            if (!proxy_id) {
+                // Бесшовная выдача (BACKLOG §32): proxy_id не передан — пробуем
+                // занять свободный managed-слот ДО подключения к Telegram.
+                // flag_off → ровно прежнее поведение (400 «выбери прокси»).
+                // Алерт не инжектим в claim: текст с контекстом (owner, причина,
+                // поверхность) собирает роут ниже, дедуп notifyPlatformAlert
+                // гасит повтор от сервиса.
+                const claim = await claimFreeManagedSlot(supabase, req.user.id);
+                if (!claim.claimed) {
+                    if (claim.reason === 'pool_empty' || claim.reason === 'race_lost') {
+                        try {
+                            await notifyPlatformAlert(
+                                PROXY_POOL_EXHAUSTED_ALERT_KEY,
+                                `Пул платформенных прокси исчерпан (${claim.reason}): owner ${req.user.id} не смог начать QR-подключение. Пополни пул mp_* слотов.`
+                            );
+                        } catch (alertError) {
+                            req.log.warn({ err: alertError, owner_id: req.user.id }, 'proxy pool alert failed (non-fatal)');
+                        }
+                        return res.status(400).json({ error: PROXY_POOL_EMPTY_MESSAGE });
+                    }
+                    return res.status(400).json({ error: 'Юзербота можно подключать только через прокси. Сначала выбери живой прокси.' });
                 }
-                await ensureExclusiveProxyAssignment(supabase, req.user.id, proxy_id);
-            } else {
-                console.log('[QR-ROUTE] Прокси с ID', proxy_id, 'не найден в БД');
-                return res.status(400).json({ error: 'Выбранный прокси не найден или не принадлежит тебе.' });
+                claimedSlotId = claim.slot.id;
+                proxyData = buildProxyDataFromManagedSlot(claim.slot);
+                req.log.info({ owner_id: req.user.id, slot_id: claimedSlotId, host: claim.slot.host, port: claim.slot.port }, 'QR-ROUTE: claimed managed proxy slot from platform pool');
+            } else if (req.profile?.role !== 'admin') {
+                await reconcileExpiredTrialProxyLease(supabase, req.user.id, req.profile);
+            }
+
+            if (proxy_id) {
+                const data = await loadOwnedProxy(supabase, req.user.id, proxy_id);
+                if (data) {
+                    proxyData = {
+                        proxy_host: data.host,
+                        proxy_port: data.port,
+                        proxy_username: data.username,
+                        proxy_password: data.password,
+                        proxy_id: data.id,
+                        is_working: data.is_working,
+                        last_check_ip: data.last_check_ip,
+                        last_check_country: data.last_check_country,
+                        last_check_city: data.last_check_city,
+                        force_ipv6: data.is_working === true && (!data.last_check_ip || data.last_check_ip.includes(':')),
+                        provision_source: data.provision_source,
+                        inventory_group: data.inventory_group
+                    };
+                    console.log('[QR-ROUTE] Прокси найден:', proxyData.proxy_host, ':', proxyData.proxy_port);
+                    if (data.is_working === false) {
+                        return res.status(400).json({ error: 'Этот прокси уже помечен как мертвый. Сначала почини его или выбери другой.' });
+                    }
+                    await ensureExclusiveProxyAssignment(supabase, req.user.id, proxy_id);
+                } else {
+                    console.log('[QR-ROUTE] Прокси с ID', proxy_id, 'не найден в БД');
+                    return res.status(400).json({ error: 'Выбранный прокси не найден или не принадлежит тебе.' });
+                }
             }
 
             const result = await userbotService.generateQR(req.user.id, proxyData, {
@@ -97,9 +147,23 @@ export function registerQr(router, ctx) {
                 save_as_preset: !!save_as_preset,
                 preset_label: normalizedCustomFingerprint?.label || ''
             }, req.user.id);
+            // Помечаем на qr-сессии, что слот заклеймлен здесь: qr-status по этой
+            // метке привяжет слот к аккаунту или вернёт его в пул при провале.
+            if (claimedSlotId) {
+                const liveSession = userbotService.qrSessions.get(req.user.id);
+                if (liveSession) liveSession.claimedProxySlotId = claimedSlotId;
+            }
             console.log('[QR-ROUTE] QR-сессия запущена, генерация идет в фоне');
             res.json(result);
         } catch (error) {
+            if (claimedSlotId) {
+                try {
+                    await releaseFreeManagedSlot(supabase, req.user.id, claimedSlotId);
+                    req.log.warn({ owner_id: req.user.id, slot_id: claimedSlotId }, 'QR start failed — claimed managed slot returned to pool');
+                } catch (releaseError) {
+                    req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: claimedSlotId }, 'release of claimed managed slot failed (non-fatal)');
+                }
+            }
             console.error('[QR-ROUTE] ❌ ОШИБКА при генерации QR:', error.message);
             const statusCode = String(error.message || '').includes('только через прокси') ? 400 : 500;
             res.status(statusCode).json({
@@ -118,6 +182,18 @@ export function registerQr(router, ctx) {
 
         try {
             if (sessionData.authState === 'failed') {
+                // Подключение не состоялось — заклеймленный managed-слот
+                // возвращаем в пул (BACKLOG §32). Non-fatal: статус failed важнее.
+                if (sessionData.claimedProxySlotId) {
+                    const failedSlotId = sessionData.claimedProxySlotId;
+                    sessionData.claimedProxySlotId = null;
+                    try {
+                        await releaseFreeManagedSlot(supabase, req.user.id, failedSlotId);
+                        req.log.warn({ owner_id: req.user.id, slot_id: failedSlotId }, 'QR auth failed — claimed managed slot returned to pool');
+                    } catch (releaseError) {
+                        req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: failedSlotId }, 'release of claimed managed slot failed (non-fatal)');
+                    }
+                }
                 return res.json({
                     status: 'failed',
                     error: sessionData.authError || 'QR-вход не прошел. Сгенерируй QR заново.'
@@ -184,28 +260,32 @@ export function registerQr(router, ctx) {
                 failover_proxy_ids: []
             }, { onConflict: 'owner_id, tg_account_id' });
 
-            // JIT-выдача managed-слота (BACKLOG §32): аккаунт встал без proxy_id —
-            // пробуем занять свободный mp_* слот из пула. Non-fatal: провал выдачи
-            // не ломает подключение (race_lost/pool_empty — штатные исходы).
-            if (!sessionData.proxyData?.proxy_id) {
+            // Привязка заклеймленного managed-слота (BACKLOG §32): upsert уже
+            // записал proxy_id из proxyData; дообновляем tenant-безопасным
+            // update (where id + owner_id). После привязки слот потреблён —
+            // release больше не делаем. Non-fatal: провал не ломает успех.
+            const claimedSlotId = sessionData.claimedProxySlotId || null;
+            if (claimedSlotId) {
+                sessionData.claimedProxySlotId = null;
                 try {
-                    const { data: createdAccount } = await supabase
+                    const { data: savedAccount } = await supabase
                         .from('tg_accounts')
                         .select('id')
                         .eq('owner_id', req.user.id)
                         .eq('account_type', 'userbot')
                         .eq('tg_account_id', me.id.toString())
                         .maybeSingle();
-                    if (createdAccount?.id) {
-                        const allocation = await allocateManagedProxyForAccount(supabase, {
-                            ownerId: req.user.id,
-                            accountId: createdAccount.id,
-                            alert: notifyPlatformAlert
-                        });
-                        req.log.info({ owner_id: req.user.id, account_id: createdAccount.id, allocation }, 'JIT managed-proxy allocation after QR connect');
+                    if (savedAccount?.id) {
+                        const { error: linkError } = await supabase
+                            .from('tg_accounts')
+                            .update({ proxy_id: claimedSlotId })
+                            .eq('id', savedAccount.id)
+                            .eq('owner_id', req.user.id);
+                        if (linkError) throw linkError;
+                        req.log.info({ owner_id: req.user.id, account_id: savedAccount.id, slot_id: claimedSlotId }, 'claimed managed proxy slot bound to account after QR connect');
                     }
-                } catch (allocationError) {
-                    req.log.warn({ err: allocationError, owner_id: req.user.id }, 'JIT managed-proxy allocation failed (non-fatal)');
+                } catch (linkError) {
+                    req.log.warn({ err: linkError, owner_id: req.user.id, slot_id: claimedSlotId }, 'managed slot binding after QR connect failed (non-fatal)');
                 }
             }
 
@@ -229,6 +309,19 @@ export function registerQr(router, ctx) {
                 || raw.includes('timed out')
             ) {
                 return res.json({ status: 'pending' });
+            }
+
+            // Не-transient провал до привязки аккаунта — слот возвращаем в пул
+            // (BACKLOG §32). Non-fatal: важнее честный 500 наверх.
+            if (sessionData.claimedProxySlotId) {
+                const failedSlotId = sessionData.claimedProxySlotId;
+                sessionData.claimedProxySlotId = null;
+                try {
+                    await releaseFreeManagedSlot(supabase, req.user.id, failedSlotId);
+                    req.log.warn({ owner_id: req.user.id, slot_id: failedSlotId }, 'QR status failed — claimed managed slot returned to pool');
+                } catch (releaseError) {
+                    req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: failedSlotId }, 'release of claimed managed slot failed (non-fatal)');
+                }
             }
 
             return res.status(500).json({ error: 'Не удалось проверить статус QR-входа. Попробуй сгенерировать QR заново.' });
