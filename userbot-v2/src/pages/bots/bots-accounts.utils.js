@@ -163,6 +163,11 @@ export function canRestoreFromFiles(account, recovery) {
 export function normalizeOnboardingErrorMessage(error) {
   const raw = String(error?.message || error || '').trim();
   if (!raw) return 'Подключение не прошло. Попробуй еще раз.';
+  // Исчерпание пула платформенных прокси (BACKLOG §32) — штатный бизнес-исход,
+  // не системный сбой: бэкенд присылает готовый текст для пользователя.
+  if (raw.includes('Свободных платформенных прокси')) {
+    return raw;
+  }
   if (raw.includes('AUTH_KEY_UNREGISTERED')) {
     return 'Этот .session уже мертвый. Нужен свежий логин через QR или новый .session.';
   }

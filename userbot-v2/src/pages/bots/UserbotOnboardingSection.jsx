@@ -143,9 +143,7 @@ export function UserbotOnboardingSection({
                 </Select>
               );
 
-              if (!onConnectProxy) return proxySelect;
-
-              return (
+              const proxySelectBlock = !onConnectProxy ? proxySelect : (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <div className="flex-1 min-w-0">{proxySelect}</div>
                   <button
@@ -157,6 +155,13 @@ export function UserbotOnboardingSection({
                     Подключить прокси
                   </button>
                 </div>
+              );
+
+              return (
+                <>
+                  {proxySelectBlock}
+                  <p className="mt-2 text-sm text-ink-muted">Не выбрали — платформа выдаст свой прокси автоматически.</p>
+                </>
               );
             })()}
           </div>

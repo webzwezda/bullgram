@@ -288,12 +288,19 @@ export function useUserbotOnboarding({
       showUiMessage(`На ${planRules.label} даем только ${planRules.maxUserbots} юзербота. Для следующего аккаунта переводи кабинет на Pro.`, 'error');
       return;
     }
-    if (!onboarding.proxyId) {
-      showUiMessage('Сначала выбери живой прокси. Юзерботы теперь подключаются только через прокси.', 'error');
-      return;
-    }
     const usingCustomFingerprint = onboarding.fingerprintMode === 'custom';
     const customFingerprint = usingCustomFingerprint ? buildCustomFingerprintPayload() : null;
+    // Выбор прокси опционален (BACKLOG §32): выбрал — идем через свой прокси
+    // (payload прежний), не выбрал — платформа сама выдаст managed-слот.
+    const qrStartPayload = {
+      fingerprint_profile_id: usingCustomFingerprint ? '' : onboarding.qrFingerprintProfileId,
+      custom_fingerprint: customFingerprint
+    };
+    if (onboarding.proxyId) {
+      qrStartPayload.proxy_id = onboarding.proxyId;
+    } else {
+      qrStartPayload.use_platform_proxy = true;
+    }
 
     updateOnboarding({
       isGeneratingQr: true,
@@ -314,11 +321,7 @@ export function useUserbotOnboarding({
       const result = await apiRequest('/api/userbot/qr-start', {
         accessToken,
         method: 'POST',
-        body: {
-          proxy_id: onboarding.proxyId,
-          fingerprint_profile_id: usingCustomFingerprint ? '' : onboarding.qrFingerprintProfileId,
-          custom_fingerprint: customFingerprint
-        }
+        body: qrStartPayload
       });
       if (result.success) {
         // Генерация в фоне: картинку и статусы принесет поллинг.
@@ -346,10 +349,6 @@ export function useUserbotOnboarding({
       showUiMessage('Для безопасного импорта обязателен и .json с fingerprint. Без него импорт не даем.', 'error');
       return;
     }
-    if (!onboarding.proxyId) {
-      showUiMessage('Сначала выбери живой прокси.', 'error');
-      return;
-    }
     if (!window.confirm('Импорт `.session + .json` даёт сервису полный доступ к аккаунту. `tdata`, `Password2FA.txt`, `Accounts.txt` и другие соседние файлы сюда грузить не надо. После импорта аккаунт встанет в safe-mode и не пойдёт в автоматику до ручной активации. Продолжить?')) {
       return;
     }
@@ -361,7 +360,13 @@ export function useUserbotOnboarding({
       const formData = new FormData();
       formData.append('sessionFile', onboarding.sessionFile);
       formData.append('jsonFile', onboarding.jsonFile);
-      formData.append('proxy_id', onboarding.proxyId);
+      // Выбор прокси опционален (BACKLOG §32): свой прокси идет как раньше,
+      // пустой выбор — платформа выдаст managed-слот сама.
+      if (onboarding.proxyId) {
+        formData.append('proxy_id', onboarding.proxyId);
+      } else {
+        formData.append('use_platform_proxy', 'true');
+      }
 
       const response = await fetch('/api/userbot/import-session-file'.startsWith('http') ? '/api/userbot/import-session-file' : `${window.location.origin.replace(/\/$/, '')}/api/userbot/import-session-file`, {
         method: 'POST',
