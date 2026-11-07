@@ -150,6 +150,19 @@ if [ "$need_blog_install" = "1" ]; then
   npm --prefix blog-site ci
 fi
 
+# 3a. Backend tests on every push (волна 3, п.3.1: полный прогон ~13-22s;
+# прерываем ДО pm2 reload — красные тесты не уезжают в прод)
+echo "==> backend tests (all *.test.js)"
+if (cd backend && ENCRYPTION_KEY="${ENCRYPTION_KEY:-ci-dummy-key-not-used-tests-mock-everything}" \
+    node --test test/*.test.js > /tmp/backend-tests.log 2>&1); then
+  grep -E "^# (tests|pass|fail)" /tmp/backend-tests.log | tr '\n' ' '
+  echo
+else
+  echo "FAIL: backend tests — деплой прерван до pm2 reload:"
+  tail -30 /tmp/backend-tests.log
+  exit 1
+fi
+
 # 3. Build frontends
 echo "==> npm run build:v2 (site-v2 + admin-v2 + userbot-v2 + bots-v2 + treasury-v2)"
 npm run build:v2

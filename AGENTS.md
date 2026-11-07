@@ -199,7 +199,7 @@ Backend has real test suites now — run the matching one when you touch that ar
 - `test:mcp` — Bullgram MCP shared/dispatch + внешний REST `/api/external/v1`
 - `test:contours` — контурный overview
 
-For UI: `npm run build` in the touched app, then verify on production per the Browser Doctrine below. If you add tests, place them next to the feature (`backend/test/test-*.js`) and wire them into `package.json`. After push: watch the GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; restart PM2 by hand only if you used the emergency rsync fallback.
+For UI: `npm run build` in the touched app, then verify on production per the Browser Doctrine below. If you add tests, place them next to the feature (`backend/test/<name>.test.js`) and wire them into `package.json`. Backend suites run as `node --test test/*.test.js` (переименованы с `test-*.js` 2026-11-07, волна 3.2); gate-01 и deploy-pull гоняют их все (~30s). After push: watch the GitHub Actions tab — `pm2 reload` happens automatically inside `scripts/deploy-pull.sh`; restart PM2 by hand only if you used the emergency rsync fallback.
 
 ## Browser Doctrine (runtime checks)
 

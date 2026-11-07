@@ -28,13 +28,28 @@ if [ "$major" -lt 22 ]; then
   exit 1
 fi
 
-# Run each file separately so a single crash doesn't hide later failures.
-for file in test-mcp-shared test-mcp-dispatch test-external-rest; do
-  echo "── running test/$file.js"
-  if ! node "test/$file.js"; then
-    echo "FAIL: test/$file.js"
-    exit 1
+# Волна 3 (3.1): полный прогон — все 29 сьютов ~22s локально, укладывается
+# в лимит воркфлоу, поэтому гоняем ВСЕ *.test.js на каждый push (правило
+# плана: ≤6 мин → всё на push). Файлы переименованы в *.test.js (3.2, фаза 1
+# node:test); npm-цепочки в package.json работают параллельно.
+# Дамми-значения: сьюты мокают supabase/шифрование — реальные ключи не нужны.
+export ENCRYPTION_KEY="${ENCRYPTION_KEY:-ci-dummy-key-not-used-tests-mock-everything}"
+export SUPABASE_URL="${SUPABASE_URL:-https://dummy.supabase.co}"
+
+total=0
+fail=0
+for file in test/*.test.js; do
+  total=$((total + 1))
+  echo "── running $file"
+  if ! node "$file"; then
+    echo "FAIL: $file"
+    fail=1
   fi
 done
 
-echo "PASS: all backend tests green"
+if [ "$fail" -ne 0 ]; then
+  echo "FAIL: backend tests (${total} suites)"
+  exit 1
+fi
+
+echo "PASS: all backend tests green (${total} suites)"
