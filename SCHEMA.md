@@ -13,6 +13,7 @@
 | [`docs/dev/runbooks.md`](docs/dev/runbooks.md) | **Дежурный runbook**: сигнатуры логов (мёртвый бот-токен 401, 409 getUpdates, деградация прокси, n8n-шум, ETIMEDOUT IPv6, job failed/slow, клиентские ошибки) и реакция на каждую; сюда ведёт лог-дайджест `/opt/alerts/log-digest.sh` на srv |
 | [`docs/dev/security-ritual.md`](docs/dev/security-ritual.md) | **Квартальный ритуал безопасности**: инвентарь секретов, gitleaks, ротация 90 дней, доступы, периметр, restore-драйлл; обслуживание зависимостей (gate-08 / weekly / osv-nightly) и baseline исключений |
 | [`docs/dev/operations.md`](docs/dev/operations.md) | **Операционная карта рантайма**: что где живёт (VDS/home lab/NAS), автостарт после перезагрузки, кроны сервера и их расписание, слои наблюдаемости и самовосстановления (Kuma DMS, дайджесты, reconcile, деплой-смок), известные системные особенности (IPv6-флап, is_working-короткое замыкание), порядок действий при инциденте |
+| [`docs/dev/proxies.md`](docs/dev/proxies.md) | **Прокси-библия**: три вида прокси (managed IPv6-слоты mp_* / IPv4 / пользовательские), архитектура 3proxy (рендер из БД, monitor hot-reload, nofile), каталог из 10 граблей (reuseport-лотерея, is_working-короткое замыкание, IPv6-флап, family mismatch, _updateLoop), карантин лотов и анти-флап, чек-лист диагностики, восстановление, числа масштабирования |
 
 ## Правило пополнения
 
