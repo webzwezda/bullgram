@@ -11,7 +11,12 @@
 
 - План запушен 05c8098; ОК владельца на волну 1 получено словом «действуй»
   (см. историю чата 2026-11-07) — исполнитель может стартовать Волны 1.
-- **Волны 1-3 исполнены 2026-11-07; Волна 4 исполнена 2026-11-07.**
+- **Волны 1-4 исполнены 2026-11-07; Волна 5 исполнена 2026-11-07 —
+  ПОСЛЕДНЯЯ, программа инженерного укрепления завершена.** Дальше —
+  стационар: автоматика волн 1-4 работает (деплой-смок/автороллбек,
+  бэкапы+smoke 8-го, дайджесты, gate-08/weekly/osv-nightly, квартальный
+  ритуал 2027-Q1); открытое вне волн — в BACKLOG (3.3 Playwright prod-smoke,
+  §32-33, B2, Dependabot version-updates).
   Плюс: teleproto-миграция вмержена и задеплоена (14139af) — прод живёт на
   teleproto 1.232.1; карантин двух магазинных лотов 06:53Z — мёртвый прокси-
   хост 193.23.197.169 (A/B: старая библиотека падает идентично; хост режет
@@ -183,15 +188,36 @@
 
 ## Волна 5 — P2: безопасность и дополнения
 
-- [ ] 5.1 Периметр: `docker port supabase-kong`, `ss -tlnp` — Kong/PostgREST/pooler
+- [x] 5.1 Периметр: `docker port supabase-kong`, `ss -tlnp` — Kong/PostgREST/pooler
       только localhost; наружу 80/443. От результата зависит приоритет 5.2.
-- [ ] 5.2 RLS пилот (если периметр требует): 1-2 tenant-таблицы за деплой
+      Исполнено: kong 8000/8444, pooler 5432/6543, analytics 4000 были на
+      0.0.0.0; ufw их НЕ защищал (docker DNAT идёт через FORWARD/DOCKER-USER
+      мимо INPUT, routed=allow) — Postgres-проба из интернета отвечала
+      протоколом. Перебиндены на 127.0.0.1 (бэкап compose
+      `.bak.20261107-perimeter`), внешние пробы → ECONNREFUSED, health 200,
+      err 0. Результат → 5.2 обязательна.
+- [x] 5.2 RLS пилот (если периметр требует): 1-2 tenant-таблицы за деплой
       (ENABLE + политика owner_isolation + индекс (owner_id,id) + FORCE),
       тест под authenticated-JWT (в.15 + поправки: UPDATE требует SELECT,
-      `(select auth.uid())` подзапрос).
-- [ ] 5.3 TG_API_HASH fallback хардкод (server.js:96) — убрать, fail-fast без env.
-- [ ] 5.4 Beszel (~15MB) — опционально, если захочется графиков после месяца
-      дайджестов. По умолчанию — нет.
+      `(select auth.uid())` подзапрос). Исполнено: proxies +
+      userbot_restore_sources (самые чувствительные без RLS); миграция
+      20261107100000; ENABLE+FORCE+FOR ALL owner_isolation с
+      `(select auth.uid())`; отдельный (owner_id,id) индекс НЕ создан — уже
+      есть owner_id-лидирующие (proxies UNIQUE(owner_id,host,port),
+      restore_sources (owner_id)); authenticated-JWT тест 12/12 — харнесс
+      `ops/scripts/db/rls-jwt-smoke.mjs`; service-путь backend не задет
+      (bypassrls). Строки owner_id NULL (магазинный инвентарь) для
+      authenticated скрыты — ожидаемо.
+- [x] 5.3 TG_API_HASH fallback хардкод (server.js:96) — убрать, fail-fast без env.
+      Исполнено: c936b0d — `requireTelegramApiCredentials` (server.js +
+      messaging-router.service.js, оба runtime-fallback), юнит-тест, 30 сьютов
+      зелёные; fingerprint-пресеты (constants.js, sql/) не тронуты — это
+      осознанная эмуляция Telegram Desktop, не env-fallback; тестовый сьют
+      использует публичную тестовую пару — легитимно.
+- [x] 5.4 Beszel (~15MB) — опционально, если захочется графиков после месяца
+      дайджестов. По умолчанию — нет. Решение зафиксировано: НЕ делать
+      (слои наблюдаемости волны 1 достаточны; пересмотр — отдельное слово
+      владельца).
 
 ### Прокси-инцидент и аудит managed-proxies (2026-11-07, сверх волн — по слову владельца)
 
@@ -274,3 +300,45 @@ restrict-shell должен принимать оба варианта (пойм
 Kuma socket.io API: notificationIDList — объект, не массив; поля уведомления
 telegramBotToken/telegramChatID; список мониторов приходит event'ом, а не в
 колбэке getMonitorList (всё поймано тестами и записано в wiki-заметку).
+
+### Волна 5 (2026-11-07) — закрыта, программа укрепления завершена
+
+Сделано (всё верифицировано пробами/тестами):
+
+- 5.1 Периметр: supabase-стек публиковал kong 8000/8444, pooler 5432/6543,
+  analytics 4000 на 0.0.0.0. Ключевой факт: ufw `5432 DENY IN` НЕ защищал —
+  docker DNAT-трафик идёт через FORWARD (DOCKER-USER пуст, routed=allow),
+  минуя INPUT. Доказательство до фиксации: Postgres SSLRequest-проба с Mac
+  ответила протоколом на 5432 и 6543 (голый TCP невалиден — SYN-proxy края
+  хостинга). Исполнено: compose-порты → 127.0.0.1 (бэкап
+  `docker-compose.yml.bak.20261107-perimeter`), `docker compose up -d`
+  пересоздал kong/pooler/analytics; повторные пробы → ECONNREFUSED;
+  health 200, err.jsonl 0, n8n/nginx/backend/MCP-туннель не задеты
+  (nginx и туннель ходят через srv-localhost/контейнерный IP).
+- 5.2 RLS-пилот (периметр требовал): `proxies` (пароли прокси) +
+  `userbot_restore_sources` (шифрованные сессии) — ENABLE+FORCE+FOR ALL
+  owner_isolation с `(select auth.uid())`; миграция 20261107100000.
+  Отступление от плана осознанно: индекс (owner_id,id) не создан — есть
+  owner_id-лидирующие. Тест authenticated-JWT (HS256-токены с JWT_SECRET
+  прода, через Kong): service 18/3 (bypassrls, prod-путь жив), anon 401,
+  A видит 14/3, B видит 3/0, B PATCH строки A данные не меняет (204 = 0
+  строк — проверять по состоянию, не по коду), B INSERT с чужим owner
+  403, junk 0. Харнесс — `ops/scripts/db/rls-jwt-smoke.mjs` (12/12).
+- 5.3 fail-fast TG-кредов: c936b0d, `requireTelegramApiCredentials`
+  в server.js + messaging-router (второй найден тем же свипом), 30 сьютов
+  зелёные, прод .env содержит обе переменные.
+- 5.4 Beszel: НЕ делать (зафиксировано в чекбоксе).
+
+Находки вне объёма волны (владельцу, не исполнено без слова):
+
+- minio 9002/9003 на 0.0.0.0 — ручной контейнер владельца (не supabase-стек,
+  storage работает на stub): закрыть/удалить — решение владельца.
+- ufw `3000 ALLOW IN Anywhere` — backend достижим напрямую мимо nginx
+  (JWT всё равно требуется; сузить до 172.16.0.0/12 — решение владельца).
+- ANON_KEY в supabase/docker/.env не декодируется PostgREST (PGRST301) —
+  пользователи носят свои JWT (всё работает), но ключ в .env устарел;
+  сверить при ритуале §5.
+
+Уроки волны: ufw и docker-порты — разные слои (INPUT не видит DNAT);
+PostgREST PATCH на 0 строк возвращает 204 — результат RLS-патча проверять
+состоянием строки; (select auth.uid()) initplan подтверждён практикой.

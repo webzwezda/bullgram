@@ -50,14 +50,34 @@ gitleaks detect --source . --log-opts="--since=3 months" --verbose  # недав
 - NAS: пароли хост/chroot из вики, gost-креды ru-exit.
 - Supabase: пользователи auth.users с админ-ролью платформы (через Supabase MCP).
 
-## 5. Периметр
+## 5. Периметр (ревизия 2026-11-07, волна 5.1)
 
 - `ssh srv` → `ss -tlnp | grep -v 127.0.0.1` и `docker port` по контейнерам:
-  наружу должны торчать только 22/80/443 (+ известные: 41081 VLESS, wg).
+  наружу должны торчать только 22/80/443 (+ известные: 41081 VLESS, wg,
+  21115-21145 слоты прокси, личные сервисы владельца — 3x-ui 2053/2096,
+  xray/outline/wg-easy/ASF).
   Всё лишнее — вопрос владельцу или ufw-точечное правило
   (риски из [[network-audit-2026-10-18]]: ufw `1024:65535/tcp ALLOW`).
-- Kong/PostgREST/pooler Supabase — только localhost.
+- Kong/PostgREST/pooler Supabase — только localhost: **исполнено 2026-11-07** —
+  kong 8000/8444, pooler 5432/6543, analytics 4000 перебиндены на 127.0.0.1
+  (`/home/n8nuser/supabase/docker/docker-compose.yml`, бэкап
+  `docker-compose.yml.bak.20261107-perimeter`). Проверять, что не откатилось.
+- **ufw НЕ защищает docker-порты**: DNAT-трафик идёт через FORWARD
+  (DOCKER-USER пуст, routed=allow) мимо INPUT — даже явный `DENY IN` не
+  работает. Слушатель на 0.0.0.0 у контейнера = снаружи достижим, если
+  порт не пробит протокольной пробой. Пробы только протокольные
+  (Postgres SSLRequest / HTTP curl), голый TCP невалиден (SYN-proxy края
+  хостинга отвечает всем портам).
+- Остатки на слово владельца: minio 9002/9003 (ручной контейнер владельца,
+  не supabase-стек); ufw `3000 ALLOW` — backend напрямую мимо nginx;
+  ANON_KEY в supabase `.env` не декодируется PostgREST (старый ключ —
+  юзеры работают на своих JWT, но ключ сверить).
 - nginx: актуальные vhostы против `ls /etc/nginx/sites-enabled/`.
+- RLS-пилот (волна 5.2): `proxies`, `userbot_restore_sources` под
+  owner_isolation (`(select auth.uid())`, FORCE; service-ключ bypassrls —
+  backend не задет). Расширение на новые таблицы — миграция + прогон
+  `ops/scripts/db/rls-jwt-smoke.mjs` с srv (12 проверок; PATCH от чужого
+  подтверждать состоянием строки — PostgREST отвечает 204 и на 0 строк).
 
 ## 6. Restore-тест
 

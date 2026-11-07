@@ -17,7 +17,7 @@
 | Backend API | PM2 `bullgram-tg-backend`, :3000 (наружу только через nginx) | `pm2-root` enabled + `pm2 save` (dump после каждого деплоя) |
 | Деплой | push в main → GH Actions → `scripts/deploy-pull.sh` (тесты 29 сьютов → build → pm2 reload → слоёный smoke → автороллбек на PREV_HEAD → semver-тег → GitHub Release) | — |
 | nginx | `/etc/nginx/sites-enabled/*` (конфиг НЕ в репо, бэкапы `/root/nginx-backups/`) | systemd |
-| Supabase | docker-стек `/home/n8nuser/supabase/docker` | `restart=unless-stopped` |
+| Supabase | docker-стек `/home/n8nuser/supabase/docker` | `restart=unless-stopped`; published-порты kong/pooler/analytics — 127.0.0.1 (волна 5.1, бэкап compose `.bak.20261107-perimeter`); nginx ходит в kong через 127.0.0.1:8000 |
 | n8n | контейнер `n8n-n8n-1`, :5678 (127.0.0.1 + tailnet-IP), UI через `https://prsng.ru` | `unless-stopped` |
 | Managed-прокси юзерботов | контейнер `bullgram-managed-3proxy`, host-network, 18 слотов (порты 21115-21145 на 193.23.197.169 — доп. IPv4 нашего VPS), выход per-slot IPv6 | `unless-stopped` + юнит `bullgram-managed-proxies` (enabled) |
 | Tailscale | `vds-prsng` = 100.118.222.13 | tailscaled enabled |
@@ -83,6 +83,10 @@ metrics («тишина = сбой»).
 6. **Диск-алерт** — 80/90% с дедупом 6ч.
 
 ## 5. Известные системные особенности (не баги)
+
+- **RLS-пилот**: `proxies`, `userbot_restore_sources` под owner_isolation —
+  service-ключ backend НЕ задет (bypassrls), anon/authenticated видят только
+  свои строки. Расширение на новые таблицы — security-ritual §5.
 
 - **IPv6→Telegram DC флапает** минутными окнами (сигнатура №5 в runbook) —
   все IPv6-слоты прокси «умирают» разом на окно; анти-флап держит витрину,
