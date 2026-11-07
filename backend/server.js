@@ -7,6 +7,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import { randomUUID } from 'node:crypto';
 import { pinoHttp } from 'pino-http';
+import { requireTelegramApiCredentials } from './utils/telegram-api-credentials.js';
 import { createClient } from '@supabase/supabase-js'; // ВОТ ТОТ САМЫЙ ПОТЕРЯННЫЙ ИМПОРТ!
 import { logger, installConsoleShim } from './utils/logger.js';
 import { optionalAuthenticateUser } from './middlewares/auth.middleware.js';
@@ -95,12 +96,10 @@ const corsOrigins = Array.from(new Set([
 // ==========================================
 // Project-wide UserbotService singleton. One instance per process — multiple
 // instances would each maintain their own QR-session map, SpamBot cache, and
-// GramJS connection pool. The hardcoded api_id=4 was a bug; env vars are source of truth.
-const userbotService = new UserbotService(
-    supabase,
-    Number(process.env.TG_API_ID) || 4,
-    process.env.TG_API_HASH || '014b35b6184100b085b0d0572f9b5103'
-);
+// GramJS connection pool. env — единственный источник API-кредов: без
+// TG_API_ID/TG_API_HASH старт падает (волна 5.3, fallback api_id=4 удалён).
+const { apiId, apiHash } = requireTelegramApiCredentials();
+const userbotService = new UserbotService(supabase, apiId, apiHash);
 export { userbotService };
 const mtprotoBridgeService = new MtprotoBridgeService(supabase, userbotService);
 

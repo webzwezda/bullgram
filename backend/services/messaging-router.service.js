@@ -7,6 +7,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { UserbotService } from './userbot.service.js';
 import { classifyTelegramError } from '../utils/telegram-error-events.js';
+import { requireTelegramApiCredentials } from '../utils/telegram-api-credentials.js';
 
 const DEFAULT_HOURLY_CAP = 20;
 const DEFAULT_DAILY_CAP = 50;
@@ -113,11 +114,8 @@ function createDefaultSupabase() {
 }
 
 function createDefaultSendUserbot(supabase) {
-    const userbotService = new UserbotService(
-        supabase,
-        Number(process.env.TG_API_ID) || 4,
-        process.env.TG_API_HASH || '014b35b6184100b085b0d0572f9b5103'
-    );
+    const { apiId, apiHash } = requireTelegramApiCredentials();
+    const userbotService = new UserbotService(supabase, apiId, apiHash);
     return (account, tgUserId, text, options) =>
         userbotService.sendMessage(account, tgUserId, text, options);
 }
