@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '../../api/client.js';
 import { formatCheckedAgo } from './useAccountLots.js';
-import { ruleFailReason, scanVerdictMeta } from './useSaleScan.js';
+import { ruleFailReason, scanVerdictMeta, useSaleScan } from './useSaleScan.js';
 
 export function ListedLotsPanel({ accessToken, showUiMessage, refreshScan }) {
   // Отдельный скан для уже выставленных в магазине: их сессии проверяются
