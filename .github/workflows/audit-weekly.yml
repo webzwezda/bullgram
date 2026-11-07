@@ -1,0 +1,40 @@
+name: Audit Weekly
+
+# Еженедельный ПОЛНЫЙ npm audit (включая devDependencies) по всем lockfiles.
+# Non-blocking по определению: scheduled-воркфлоу ничего не гейтит, красный
+# крестик = сигнал посмотреть. Разбор находок — по security-ритуалу
+# (docs/dev/security-ritual.md); блокирующий порог high/critical (prod-only)
+# живёт в gate-08.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # понедельник 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: audit-weekly
+  cancel-in-progress: false
+
+jobs:
+  full-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.0"
+
+      - name: npm audit — все рантаймы, полный дерево (prod + dev)
+        run: |
+          set -uo pipefail
+          STATUS=0
+          for rt in . backend admin-v2 site-v2 userbot-v2 bots-v2 treasury-v2 profile-v2 docs-site blog-site; do
+            echo "── npm audit (full tree): $rt"
+            (cd "$rt" && npm audit --audit-level=low --package-lock-only) || STATUS=1
+          done
+          # Красный крестик = сигнал разбора (по docs/dev/security-ritual.md).
+          # Гейтом НЕ является: PR/пуш это не блокирует.
+          exit $STATUS

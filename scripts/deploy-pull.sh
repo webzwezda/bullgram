@@ -49,8 +49,11 @@ echo "    [debug pass2] SELF_DIR=$SELF_DIR DEPLOY_SELF_DIR=${DEPLOY_SELF_DIR:-UN
 echo "==> [$(date -u +%FT%TZ)] deploy-pull start"
 echo "    root: $ROOT"
 
-# 3. Conditional install: only run npm install for runtimes whose package.json changed
-echo "==> checking for package.json changes"
+# 3. Conditional install: npm ci for runtimes whose package.json OR package-lock.json
+#    changed. Полный ci (с devDeps) — фронтам devDeps нужны для сборки (vite/tailwind),
+#    детерминизм по lock (волна 2, п. 2.2; поправка Д-1). Рантайму backend devDeps
+#    не нужны — сразу после ci делаем prune --omit=dev только в нём.
+echo "==> checking for package.json/package-lock.json changes"
 CHANGED_FILES="$(git diff --name-only "$PREV_HEAD" "$NEW_HEAD" 2>/dev/null || echo "")"
 
 need_backend_install=0
@@ -63,31 +66,31 @@ need_profile_v2_install=0
 need_docs_install=0
 need_blog_install=0
 
-if echo "$CHANGED_FILES" | grep -q '^backend/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^backend/(package\.json|package-lock\.json)$'; then
   need_backend_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^admin-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^admin-v2/(package\.json|package-lock\.json)$'; then
   need_admin_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^site-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^site-v2/(package\.json|package-lock\.json)$'; then
   need_site_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^userbot-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^userbot-v2/(package\.json|package-lock\.json)$'; then
   need_userbot_v2_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^bots-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^bots-v2/(package\.json|package-lock\.json)$'; then
   need_bots_v2_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^treasury-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^treasury-v2/(package\.json|package-lock\.json)$'; then
   need_treasury_v2_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^profile-v2/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^profile-v2/(package\.json|package-lock\.json)$'; then
   need_profile_v2_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^docs-site/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^docs-site/(package\.json|package-lock\.json)$'; then
   need_docs_install=1
 fi
-if echo "$CHANGED_FILES" | grep -q '^blog-site/package\.json$'; then
+if echo "$CHANGED_FILES" | grep -qE '^blog-site/(package\.json|package-lock\.json)$'; then
   need_blog_install=1
 fi
 
@@ -110,40 +113,41 @@ if [ ! -d blog-site/node_modules ]; then
 fi
 
 if [ "$need_backend_install" = "1" ]; then
-  echo "==> npm install backend"
-  npm --prefix backend install
+  echo "==> npm ci backend"
+  npm --prefix backend ci
+  npm --prefix backend prune --omit=dev
 fi
 if [ "$need_admin_install" = "1" ]; then
-  echo "==> npm install admin-v2"
-  npm --prefix admin-v2 install
+  echo "==> npm ci admin-v2"
+  npm --prefix admin-v2 ci
 fi
 if [ "$need_site_install" = "1" ]; then
-  echo "==> npm install site-v2"
-  npm --prefix site-v2 install
+  echo "==> npm ci site-v2"
+  npm --prefix site-v2 ci
 fi
 if [ "$need_userbot_v2_install" = "1" ]; then
-  echo "==> npm install userbot-v2"
-  npm --prefix userbot-v2 install
+  echo "==> npm ci userbot-v2"
+  npm --prefix userbot-v2 ci
 fi
 if [ "$need_bots_v2_install" = "1" ]; then
-  echo "==> npm install bots-v2"
-  npm --prefix bots-v2 install
+  echo "==> npm ci bots-v2"
+  npm --prefix bots-v2 ci
 fi
 if [ "$need_treasury_v2_install" = "1" ]; then
-  echo "==> npm install treasury-v2"
-  npm --prefix treasury-v2 install
+  echo "==> npm ci treasury-v2"
+  npm --prefix treasury-v2 ci
 fi
 if [ "$need_profile_v2_install" = "1" ]; then
-  echo "==> npm install profile-v2"
-  npm --prefix profile-v2 install
+  echo "==> npm ci profile-v2"
+  npm --prefix profile-v2 ci
 fi
 if [ "$need_docs_install" = "1" ]; then
-  echo "==> npm install docs-site"
-  npm --prefix docs-site install
+  echo "==> npm ci docs-site"
+  npm --prefix docs-site ci
 fi
 if [ "$need_blog_install" = "1" ]; then
-  echo "==> npm install blog-site"
-  npm --prefix blog-site install
+  echo "==> npm ci blog-site"
+  npm --prefix blog-site ci
 fi
 
 # 3. Build frontends

@@ -1,0 +1,31 @@
+name: OSV Nightly
+
+# Ночное сканирование всех lockfiles через osv-scanner (OSV.dev база:
+# дополняет npm advisory DB другими экосистемами и источниками CVE).
+# Non-blocking: report-only (красный крестик = сигнал, гейтом не является).
+on:
+  schedule:
+    - cron: "0 3 * * *" # ежедневно 03:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: osv-nightly
+  cancel-in-progress: false
+
+jobs:
+  osv-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install osv-scanner (pinned)
+        run: |
+          curl -fsSL -o /tmp/osv-scanner.deb \
+            "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64.deb"
+          sudo dpkg -i /tmp/osv-scanner.deb
+
+      - name: Scan all lockfiles (recursive, report-only)
+        continue-on-error: true
+        run: osv-scanner scan source --recursive --format table .

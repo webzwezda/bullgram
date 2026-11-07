@@ -55,6 +55,12 @@ jobs:
       - name: Gate 06 — secrets scan
         run: ./ops/scripts/ci/gate-06-secrets-scan.sh
 
+      # Gate 8 — npm audit по lockfiles (high/critical в prod-зависимостях).
+      # Аудит по lock без установки (--package-lock-only); исключения —
+      # только в ops/scripts/ci/npm-audit-baseline.json.
+      - name: Gate 08 — npm audit (lockfiles)
+        run: ./ops/scripts/ci/gate-08-npm-audit.sh
+
       # Gates 3, 4, 5 — live surface checks against prod.
       # On a PR, these validate the *currently deployed* API. The deploy
       # workflow is what actually shifts the deployment forward; once it

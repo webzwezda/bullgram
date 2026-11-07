@@ -39,7 +39,7 @@
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
     "qrcode": "^1.5.4",
-    "resend": "^4.8.0",
+    "resend": "^6.37.0",
     "socks-proxy-agent": "^9.0.0",
     "sqlite3": "^6.0.1",
     "telegraf": "^4.16.3",
