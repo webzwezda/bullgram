@@ -5,7 +5,7 @@
  * supabase/deps приходят параметрами. Константы пейсинга (PACE_MS/MAX_ROWS_PER_TICK)
  * остаются в job-файле.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { toBotApiChatId } from '../../services/chat-admin-rights.service.js';
 import { withTimeout } from '../../shared/utils.js';
 

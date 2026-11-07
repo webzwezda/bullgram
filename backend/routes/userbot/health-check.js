@@ -3,8 +3,8 @@
 // и переехали сюда вместе с ней.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { decrypt } from '../../utils/crypto.js';
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { logTelegramErrorEvent } from '../../utils/telegram-error-events.js';
 import { cleanupRestrictedUserbotProxy, unpublishRestrictedUserbotListings } from '../../utils/restricted-userbot-ops.js';
 import {

@@ -2,7 +2,7 @@
 // Разрезка contour-admin-rights.service.js; методы класса делегируются сюда
 // (service-инстанс передаётся первым аргументом вместо this).
 
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { loadReservedUserbotIds } from '../../utils/shop-reservations.js';
 import {
     LEFT_STATUSES,

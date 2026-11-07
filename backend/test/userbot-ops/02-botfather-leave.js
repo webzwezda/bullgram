@@ -6,7 +6,7 @@
  * test-userbot-ops.js в исходном порядке. Экспортирует run() — хост вызывает
  * сценарии строго по порядку.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { botfatherCreateBotHandler } from '../../mcp/tools/account/botfather-create-bot.js';
 import { MCPError, ERROR_CODES } from '../../shared/errors.js';
 import {

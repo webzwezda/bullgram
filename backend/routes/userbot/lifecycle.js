@@ -7,8 +7,8 @@
 // DELETE /proxies/:id должен матчиться раньше дженерика DELETE /:id.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { encrypt, decrypt } from '../../utils/crypto.js';
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { FRESH_IMPORT_RUNTIME_REASON, FRESH_IMPORT_RUNTIME_STATUS } from '../../utils/ops-center-selection.js';
 import { buildTelegramProfilePatch } from '../../utils/telegram-profile.js';
 import {

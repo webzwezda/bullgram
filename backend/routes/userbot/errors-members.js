@@ -3,8 +3,8 @@
 // Зона: GET /error-events, POST /fetch-members.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { decrypt } from '../../utils/crypto.js';
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { loadOperationalUserbot } from './helpers-core.js';
 
 export function registerErrorsMembers(router, ctx) {

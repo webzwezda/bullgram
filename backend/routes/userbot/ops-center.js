@@ -3,7 +3,7 @@
 // Зона: GET /ops-center. Константы USERBOT_CENTER_* использовались только
 // этой зоной — переехали вместе с ней.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { loadReservedUserbotIds } from '../../utils/shop-reservations.js';
 import { resolveOpsCenterSelection } from '../../utils/ops-center-selection.js';
 import {

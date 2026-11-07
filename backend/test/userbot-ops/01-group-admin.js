@@ -6,7 +6,7 @@
  * отзыв по link и текущей). Начальные секции исходного test-userbot-ops.js,
  * порядок сохранён. Экспортирует run() — хост вызывает сценарии строго по порядку.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { parseBotFatherToken } from '../../services/userbot.service.js';
 import { groupCreateHandler } from '../../mcp/tools/dialogs/group-create.js';
 import { memberInviteHandler } from '../../mcp/tools/dialogs/member-invite.js';

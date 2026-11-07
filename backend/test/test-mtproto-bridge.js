@@ -13,8 +13,8 @@
 import 'dotenv/config';
 import { WebSocket as WsClient } from 'ws';
 import { createClient } from '@supabase/supabase-js';
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { Mutex } from 'async-mutex';
 
 const USERBOT_ID = process.argv[2];

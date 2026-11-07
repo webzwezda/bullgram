@@ -4,7 +4,7 @@
 // applyConfirmedTouchpoints. Выделено из broadcast-preparation.service.js при
 // разрезке под pre-commit лимит: методы класса стали однострочными делегатами,
 // инстанс сервиса передаётся первым аргументом (service).
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { ChatAdminRightsService } from '../chat-admin-rights.service.js';
 import { upsertPeerCacheBatch } from '../../utils/peer-cache.js';
 import { withTimeout } from '../../shared/utils.js';

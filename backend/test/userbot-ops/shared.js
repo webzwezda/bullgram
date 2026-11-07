@@ -5,7 +5,7 @@
  * (test/test-userbot-ops.js) читает его в финальной сводке; savedFlags
  * захватывается здесь до любых сценариев и восстанавливается хостом в эпилоге.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { UserbotService } from '../../services/userbot.service.js';
 
 export const counters = { failures: 0 };

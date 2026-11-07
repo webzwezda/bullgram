@@ -3,8 +3,8 @@
 // Зона: POST /profile/:id/sync, POST /profile/:id/update.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { decrypt } from '../../utils/crypto.js';
-import { Api, TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { Api, TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { isFreshImportedUserbot } from '../../utils/ops-center-selection.js';
 import { buildTelegramProfilePatch } from '../../utils/telegram-profile.js';
 import {

@@ -4,7 +4,7 @@
 // из leaf shared.js contour-admin-rights — прямого импорта главного сервиса нет,
 // новых циклов не создаётся (фасадный цикл главных файлов сохранён как был).
 
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { classifyTelegramError } from '../contour-admin-rights/shared.js';
 import {
     ADMIN_MEMBER_STATUSES,

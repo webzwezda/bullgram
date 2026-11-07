@@ -1,7 +1,7 @@
 import { SocksClient } from 'socks';
 import { randomBytes } from 'crypto';
 import net from 'net';
-import { StringSession } from 'telegram/sessions/index.js';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { decrypt } from '../utils/crypto.js';
 
 const TOKEN_TTL_MS = 5 * 60 * 1000;
