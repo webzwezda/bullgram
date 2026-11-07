@@ -9,6 +9,10 @@ import { QrFingerprintConfigurator, SegmentedControl, StepHeader } from './QrFin
 
 // Статичная карта тонов: Tailwind не видит классы, собранные интерполяцией
 // `border-${colorClass}-300`, поэтому все варианты перечислены здесь буквально.
+// Радиксу нельзя value="" у пунктов: сентинел для «платформенного» пункта.
+// В онбординге хранится '' — payload без proxy_id = платформенный режим (§32).
+const PLATFORM_PROXY_ITEM = '__platform_proxy__';
+
 const FILE_BOX_TONES = {
   indigo: {
     box: 'border-indigo-300 bg-indigo-50/30',
@@ -114,16 +118,24 @@ export function UserbotOnboardingSection({
             {(() => {
               const proxySelect = (
                 <Select
-                  value={onboarding.proxyId || ''}
-                  onValueChange={(value) => updateOnboarding({ proxyId: value })}
+                  value={onboarding.proxyId || PLATFORM_PROXY_ITEM}
+                  onValueChange={(value) => updateOnboarding({ proxyId: value === PLATFORM_PROXY_ITEM ? '' : value })}
                 >
                   <SelectTrigger className="w-full data-[size=default]:h-12 bg-white border-slate-200 rounded-xl text-sm font-medium shadow-sm hover:border-indigo-300 transition-colors">
                     <div className="flex items-center gap-2">
                       <Network className="w-4 h-4 text-slate-400" />
-                      <SelectValue placeholder="Выбери живой прокси для подключения" />
+                      <SelectValue placeholder="Свой прокси — или платформенный (авто)" />
                     </div>
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
+                    <SelectItem value={PLATFORM_PROXY_ITEM} className="rounded-lg py-2.5">
+                      <div className="flex items-center justify-between w-full pr-2 gap-4">
+                        <span>Платформенный прокси — выдадим автоматически</span>
+                        <Badge variant="outline" className="bg-feedback-info-bg text-feedback-info-text border-feedback-info-border whitespace-nowrap ml-auto">
+                          Авто
+                        </Badge>
+                      </div>
+                    </SelectItem>
                     {availableOnboardingProxies.map((proxy) => {
                       const isFreeAndPurchased = proxy.provision_source === 'purchased' && Number(proxy.userbot_count || 0) === 0;
                       return (
@@ -160,7 +172,7 @@ export function UserbotOnboardingSection({
               return (
                 <>
                   {proxySelectBlock}
-                  <p className="mt-2 text-sm text-ink-muted">Не выбрали — платформа выдаст свой прокси автоматически.</p>
+                  <p className="mt-2 text-sm text-ink-muted">По умолчанию — платформенный: выдастся сам при подключении. Свой — выбери в списке.</p>
                 </>
               );
             })()}
