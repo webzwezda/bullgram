@@ -9,6 +9,7 @@
 
 | Документ | Что описывает |
 |---|---|
+| [`DESIGN.md`](DESIGN.md) | **Дизайн-система и UI-гайдлайны**: семантические токены (ink/surface/border/feedback/action), кит shadcn/ui, типографика и micro-labels, feedback-пары, правила новых экранов и градиентных иконок; источник значений — [`design/README.md`](design/README.md), гейт — `npm run check:design` |
 | [`docs/dev/logging.md`](docs/dev/logging.md) | **Логер**: как работает (pino → JSONL → PM2 → pm2-logrotate), формат строк и поля, политика уровней, как читать логи на проде (jq), как логировать в новом коде (backend/джобы/фронт), redact секретов, ratchet-гейт на console.*, клиентский capture и `POST /api/log`, антипаттерны |
 | [`docs/dev/runbooks.md`](docs/dev/runbooks.md) | **Дежурный runbook**: сигнатуры логов (мёртвый бот-токен 401, 409 getUpdates, деградация прокси, n8n-шум, ETIMEDOUT IPv6, job failed/slow, клиентские ошибки) и реакция на каждую; сюда ведёт лог-дайджест `/opt/alerts/log-digest.sh` на srv |
 | [`docs/dev/security-ritual.md`](docs/dev/security-ritual.md) | **Квартальный ритуал безопасности**: инвентарь секретов, gitleaks, ротация 90 дней, доступы, периметр, restore-драйлл; обслуживание зависимостей (gate-08 / weekly / osv-nightly) и baseline исключений |
