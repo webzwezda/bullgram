@@ -5,6 +5,7 @@
 // Вынесено дословно из userbot.routes.js на стадии 1 разрезки (2026-11-06).
 // DEFAULT_ADMIN_PROXY_GROUP / MAX_MANAGED_PROXY_BATCH с стадии 2a объявлены
 // в ./constants.js (общая копия, без цикла через userbot.routes.js).
+import fs from 'fs';
 import { MANAGED_PROXY_PENDING_MARKER } from '../../utils/proxy-batch.js';
 import { DEFAULT_ADMIN_PROXY_GROUP, MAX_MANAGED_PROXY_BATCH } from './constants.js';
 
