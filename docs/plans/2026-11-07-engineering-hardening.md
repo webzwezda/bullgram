@@ -92,27 +92,45 @@
 
 ## Волна 2 — P1: зависимости и сборка
 
-- [ ] 2.1 Commit lockfiles: вывести 9 package-lock.json из .gitignore, закоммитить.
-- [ ] 2.2 deploy-pull.sh: условие установки расширить на lock; при изменении —
-      **полный `npm ci`** (devDeps нужны для build:v2 — поправка Д-1), после билда
-      `npm prune --omit=dev` только в backend/. Критерий: деплой с изменённым и
-      с неизменным lock; время деплоя не выросло заметно.
-- [ ] 2.3 Audit-гейт (gate-08): цикл по 9 каталогам `npm ci --quiet &&
-      npm audit --omit=dev --audit-level=high`; полный audit (вкл. dev) —
-      weekly non-blocking (конфиг в.13). Подключить в run-all-gates после gate-07.
-      Предусловие: 2.1 (npm audit требует lockfile).
-- [ ] 2.4 osv-scanner nightly по всем 9 lockfiles (Д-5) — non-blocking отчёт.
-- [ ] 2.5 Dependabot alerts включить (настройка GitHub, действие владельца);
-      version-updates — решить после недели наблюдения (Renovate hosted на
-      приватном репо платный — остаёмся на Dependabot).
-- [ ] 2.6 teleproto спайк (Д-2: именно `teleproto@1.232+` от sanyok12345, НЕ
-      @iam4x): ветка, `npm i teleproto`, import-свайп, `test:userbot-ops` +
-      `test:entity` + ручной QR-коннект и health-check одного юзербота.
-      Отчёт владельцу: совместимость/грабли → решение о миграции в квартал.
-- [ ] 2.7 Ритуал: `docs/dev/security-ritual.md` — квартальный чеклист в.16
-      (инвентарь секретов, gitleaks, ротация 90 дней, доступы, периметр,
-      restore-тест) + nginx rate limit для путей n8n-скана (444/fail2ban —
-      обсудить с владельцем, nginx не в репо).
+- [x] 2.1 Commit lockfiles (готово 2026-11-07, 07e0127): 9 рантаймов + корневой
+      (пустышка) из .gitignore выведены и закоммичены.
+- [x] 2.2 deploy-pull.sh (готово 2026-11-07): детект по package.json ИЛИ
+      package-lock.json; при изменении — полный `npm ci` × 9 + `prune
+      --omit=dev` только в backend (проверено: в node_modules нет vite).
+      Критерий: деплой с изменённым lock — 112 сек суммарно (npm ci × 9 ≈ 37с
+      на тёплом кэше, билд ~60с, смоук зелёный); деплой без изменения лока —
+      следующий, watch-лог в ревью.
+- [x] 2.3 Audit-гейт gate-08 (готово 2026-11-07): `npm audit
+      --package-lock-only --omit=dev --audit-level=high` по всем lockfiles —
+      тот же аудит по локу БЕЗ npm ci (секунды вместо минут, CI-таймаут
+      сохранён; отклонение от буквы плана по его же цели). Исключения — только
+      через ops/scripts/ci/npm-audit-baseline.json (неиспользуемое исключение =
+      FAIL). Вшит в run-all-gates (08 после 07) и ci.yml.
+      Сразу поймал и закрыл: axios 1.21.0, resend 6.37.0, @babel/core,
+      MCP SDK/hono (v2-аппы), html-to-text 10 (docs). Оставлено с обоснованием:
+      zod через @ton/ton (baseline, апстримного фикса нет).
+      Полный аудит (вкл. dev) — weekly workflow audit-weekly.yml (пн 06:00 UTC).
+- [x] 2.4 osv-scanner nightly (готово 2026-11-07): workflow osv-nightly.yml,
+      osv-scanner v2.7.0 (pinned), `scan source --recursive` по репо,
+      report-only (continue-on-error), ежедневно 03:00 UTC.
+- [x] 2.5 Dependabot alerts — включены через GitHub API от имени владельца
+      (2026-11-07, `gh api -X PUT .../vulnerability-alerts`, verify ✓) —
+      действие владельца не потребовалось. Version-updates (dependabot.yml) —
+      решение после недели наблюдения (Renovate на приватном репо платный).
+- [~] 2.6 teleproto спайк (Д-2: `teleproto@1.232.1` от sanyok12345) —
+      офлайн-часть готова 2026-11-07 (ветка `spike/teleproto`, worktree):
+      свап `telegram`→`teleproto` в 41 файле (5 форм импортов), node --check
+      все зелёные, экспорт-surface идентичен; тесты офлайн: test:entity 23✓,
+      test:qr-auth 2✓, userbot-ops 5✓. Найдено: async-mutex — латентная
+      транзитивка gramjs, тесты жили на ней; в спайке объявлена прямой
+      зависимостью (правило «деп в том же коммите»). Осталась живая часть:
+      ручной QR-коннект / health-check одного юзербота на teleproto (трогает
+      реальные сессии — только с ОК владельца). Решение о миграции — после
+      живой части.
+- [x] 2.7 Ритуал (готово 2026-11-07): `docs/dev/security-ritual.md` —
+      квартальный чеклист (инвентарь секретов, gitleaks, ротация 90 дней,
+      доступы, периметр, restore-тест) + строка в SCHEMA.md. Открытый вопрос
+      к владельцу: nginx rate limit/444 для путей n8n-скана (nginx не в репо).
 
 ## Волна 3 — P1: тесты и CI
 
