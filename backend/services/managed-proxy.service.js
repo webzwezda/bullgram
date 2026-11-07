@@ -179,6 +179,10 @@ async function ensureContainer(state) {
     'unless-stopped',
     '--network',
     'host',
+    // nofile: дефолт docker 1024 — потолок слушателей при тысячах слотов
+    // (бенч 2026-11-07: 2000 слушателей = RSS ~93MB, но 1024 fd не хватает)
+    '--ulimit',
+    'nofile=65535:65535',
     '--entrypoint',
     '/bin/3proxy',
     '-v',
