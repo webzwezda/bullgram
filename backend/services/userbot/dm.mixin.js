@@ -4,7 +4,7 @@
 import { Api } from 'teleproto';
 import { logTelegramErrorEvent } from '../../utils/telegram-error-events.js';
 import { getPeerFromCache } from '../../utils/peer-cache.js';
-import { isTimeoutLikeTelegramError } from './telegram-errors.js';
+import { describeTelegramError, isTimeoutLikeTelegramError } from './telegram-errors.js';
 import { normalizeChatIdInput } from './helpers.js';
 import { findPeerByDialogPages } from './botfather-lib.js';
 
