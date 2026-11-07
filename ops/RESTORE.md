@@ -87,7 +87,7 @@ curl -s https://bullgram.xyz/api/external/v1/health                       # JSON
 | Локальная | srv: `/backups/postgres/*.dump` | plaintext `pg_dump -Fc` | 14 суток |
 | Off-site | ORICO NAS: `/sata/bullgram-backups/*.dump.enc` (в chroot: `/media/bullgram-backups/`) | aes-256-cbc + pbkdf2-600k поверх -Fc | 30 суток |
 
-Цепочка: cron srv `0 4 * * *` (Asia/Vladivostok) → `/opt/backups/pg-dump.sh` (pg_dump → sanity-check ≥1MB → шифрование `openssl enc -aes-256-cbc -pbkdf2 -iter 600000` ключом `/opt/backups/.dumpkey` → `/opt/backups/publish/`, держит 3 свежих `.enc`) → cron NAS-chroot `30 18 * * *` UTC (= 04:30 +10) → `/opt/bullgram-backup/pull-backup.sh` (rsync выделенным restrict-ключом, лог `/var/log/bullgram-pull.log`, prune 30 суток). DMS-пинги healthchecks.io закомментированы в обоих скриптах (включить при 1.4). Детали NAS: wiki `infrastructure/orico-nas-cd3510.md`.
+Цепочка: cron srv `0 4 * * *` (Asia/Vladivostok) → `/opt/backups/pg-dump.sh` (pg_dump → sanity-check ≥1MB → шифрование `openssl enc -aes-256-cbc -pbkdf2 -iter 600000` ключом `/opt/backups/.dumpkey` → `/opt/backups/publish/`, держит 3 свежих `.enc`) → cron NAS-chroot `30 18 * * *` UTC (= 04:30 +10) → `/opt/bullgram-backup/pull-backup.sh` (rsync выделенным restrict-ключом, лог `/var/log/bullgram-pull.log`, prune 30 суток). DMS-пинги обеих джобов уходят в **Uptime Kuma на home lab** (LXC 114 на pve: тишина >24ч = Telegram-алерт; детали wiki `infrastructure/uptime-kuma-pve.md`; healthchecks.io — отложенный резерв, строка закомментирована в pg-dump.sh).
 
 Восстановление БД из NAS-копии:
 
