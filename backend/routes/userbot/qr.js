@@ -46,7 +46,9 @@ export function registerQr(router, ctx) {
     router.post('/qr-start', authenticateUser, async (req, res) => {
         // Слот, заклеймленный из платформенного пула (BACKLOG §32) на этом
         // запросе. Нужен в catch: любой провал после claim возвращает слот в пул.
+        // reused = слот переиспользован из осиротевших (в пул не возвращается).
         let claimedSlotId = null;
+        let claimedSlotReused = false;
         try {
             await userbotService.sweepStaleQrSessions();
 
@@ -74,12 +76,20 @@ export function registerQr(router, ctx) {
             const previousSession = userbotService.qrSessions.get(req.user.id);
             if (previousSession?.claimedProxySlotId) {
                 const staleSlotId = previousSession.claimedProxySlotId;
+                const staleWasReused = previousSession.claimedProxySlotReused === true;
                 previousSession.claimedProxySlotId = null;
-                try {
-                    await releaseFreeManagedSlot(supabase, req.user.id, staleSlotId);
-                    req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: unbound managed slot returned to pool');
-                } catch (releaseError) {
-                    req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: release of previous claimed slot failed (non-fatal)');
+                previousSession.claimedProxySlotReused = false;
+                if (staleWasReused) {
+                    // Осиротевший слот владельца — он и остаётся у владельца;
+                    // новый claim ниже переиспользует его же (консервация пула).
+                    req.log.info({ owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: reused orphan slot stays with owner');
+                } else {
+                    try {
+                        await releaseFreeManagedSlot(supabase, req.user.id, staleSlotId);
+                        req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: unbound managed slot returned to pool');
+                    } catch (releaseError) {
+                        req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: staleSlotId }, 'QR retry: release of previous claimed slot failed (non-fatal)');
+                    }
                 }
             }
 
@@ -109,8 +119,9 @@ export function registerQr(router, ctx) {
                     return res.status(400).json({ error: 'Платформенный прокси сейчас недоступен — выбери свой прокси в списке.' });
                 }
                 claimedSlotId = claim.slot.id;
+                claimedSlotReused = claim.reused === true;
                 proxyData = buildProxyDataFromManagedSlot(claim.slot);
-                req.log.info({ owner_id: req.user.id, slot_id: claimedSlotId, host: claim.slot.host, port: claim.slot.port }, 'QR-ROUTE: claimed managed proxy slot from platform pool');
+                req.log.info({ owner_id: req.user.id, slot_id: claimedSlotId, reused: claimedSlotReused, host: claim.slot.host, port: claim.slot.port }, 'QR-ROUTE: claimed managed proxy slot from platform pool');
             } else if (req.profile?.role !== 'admin') {
                 await reconcileExpiredTrialProxyLease(supabase, req.user.id, req.profile);
             }
@@ -153,12 +164,15 @@ export function registerQr(router, ctx) {
             // метке привяжет слот к аккаунту или вернёт его в пул при провале.
             if (claimedSlotId) {
                 const liveSession = userbotService.qrSessions.get(req.user.id);
-                if (liveSession) liveSession.claimedProxySlotId = claimedSlotId;
+                if (liveSession) {
+                    liveSession.claimedProxySlotId = claimedSlotId;
+                    liveSession.claimedProxySlotReused = claimedSlotReused;
+                }
             }
             console.log('[QR-ROUTE] QR-сессия запущена, генерация идет в фоне');
             res.json(result);
         } catch (error) {
-            if (claimedSlotId) {
+            if (claimedSlotId && !claimedSlotReused) {
                 try {
                     await releaseFreeManagedSlot(supabase, req.user.id, claimedSlotId);
                     req.log.warn({ owner_id: req.user.id, slot_id: claimedSlotId }, 'QR start failed — claimed managed slot returned to pool');
@@ -188,12 +202,20 @@ export function registerQr(router, ctx) {
                 // возвращаем в пул (BACKLOG §32). Non-fatal: статус failed важнее.
                 if (sessionData.claimedProxySlotId) {
                     const failedSlotId = sessionData.claimedProxySlotId;
+                    const failedWasReused = sessionData.claimedProxySlotReused === true;
                     sessionData.claimedProxySlotId = null;
-                    try {
-                        await releaseFreeManagedSlot(supabase, req.user.id, failedSlotId);
-                        req.log.warn({ owner_id: req.user.id, slot_id: failedSlotId }, 'QR auth failed — claimed managed slot returned to pool');
-                    } catch (releaseError) {
-                        req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: failedSlotId }, 'release of claimed managed slot failed (non-fatal)');
+                    sessionData.claimedProxySlotReused = false;
+                    if (failedWasReused) {
+                        // Осиротевший слот возвращается в состояние «у владельца,
+                        // без привязки» — в общий пул его не отдаём.
+                        req.log.info({ owner_id: req.user.id, slot_id: failedSlotId }, 'QR auth failed — reused orphan slot stays with owner');
+                    } else {
+                        try {
+                            await releaseFreeManagedSlot(supabase, req.user.id, failedSlotId);
+                            req.log.warn({ owner_id: req.user.id, slot_id: failedSlotId }, 'QR auth failed — claimed managed slot returned to pool');
+                        } catch (releaseError) {
+                            req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: failedSlotId }, 'release of claimed managed slot failed (non-fatal)');
+                        }
                     }
                 }
                 return res.json({
@@ -232,13 +254,33 @@ export function registerQr(router, ctx) {
 
             const { data: existingAccount } = await supabase
                 .from('tg_accounts')
-                .select('id')
+                .select('id, proxy_id')
                 .eq('owner_id', req.user.id)
                 .eq('account_type', 'userbot')
                 .eq('tg_account_id', me.id.toString())
                 .maybeSingle();
 
             existingAccountId = existingAccount?.id || null;
+            // Консервация пула (§32): аккаунт уже имеет прокси — реконнект не
+            // должен выдавать второй слот. Новый клейм возвращаем в пул,
+            // существующая привязка остаётся (в upsert пишем её же).
+            if (sessionData.claimedProxySlotId && existingAccount?.proxy_id && existingAccount.proxy_id !== sessionData.claimedProxySlotId) {
+                const staleSlotId = sessionData.claimedProxySlotId;
+                const staleWasReused = sessionData.claimedProxySlotReused === true;
+                sessionData.claimedProxySlotId = null;
+                sessionData.claimedProxySlotReused = false;
+                sessionData.keepExistingProxyId = existingAccount.proxy_id;
+                if (staleWasReused) {
+                    req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId, account_id: existingAccountId }, 'reconnect: account already has proxy, reused orphan slot stays with owner');
+                } else {
+                    try {
+                        await releaseFreeManagedSlot(supabase, req.user.id, staleSlotId);
+                        req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId, account_id: existingAccountId }, 'reconnect: account already has proxy, claimed slot returned to pool');
+                    } catch (releaseError) {
+                        req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: staleSlotId }, 'reconnect: release of claimed slot failed (non-fatal)');
+                    }
+                }
+            }
             await enforceUserbotQuota({
                 supabase,
                 ownerId: req.user.id,
@@ -250,12 +292,19 @@ export function registerQr(router, ctx) {
                 await ensureExclusiveProxyAssignment(supabase, req.user.id, sessionData.proxyData.proxy_id, existingAccountId);
             }
 
+            const upsertProxyId = sessionData.claimedProxySlotId
+                ? sessionData.claimedProxySlotId
+                : sessionData.keepExistingProxyId
+                    ? sessionData.keepExistingProxyId
+                    : sessionData.proxyData
+                        ? sessionData.proxyData.proxy_id
+                        : null;
             await supabase.from('tg_accounts').upsert({
                 owner_id: req.user.id,
                 account_type: 'userbot',
                 ...buildTelegramProfilePatch(me),
                 session_data: encrypt(userbotService.stringifySessionData(token, sessionData.fingerprint, 'qr')),
-                proxy_id: sessionData.proxyData ? sessionData.proxyData.proxy_id : null,
+                proxy_id: upsertProxyId,
                 runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
                 runtime_error: FRESH_IMPORT_RUNTIME_REASON,
                 allow_proxy_failover: false,

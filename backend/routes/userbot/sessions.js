@@ -74,6 +74,7 @@ export function registerSessions(router, ctx) {
         // что аккаунт встал с этим слотом. Нужны в catch: любой провал после
         // claim до создания аккаунта возвращает слот в пул.
         let claimedSlotId = null;
+        let claimedSlotReused = false;
         let accountBound = false;
 
         try {
@@ -116,8 +117,9 @@ export function registerSessions(router, ctx) {
                     return res.status(400).json({ error: 'Платформенный прокси сейчас недоступен — выбери свой прокси в списке.' });
                 }
                 claimedSlotId = claim.slot.id;
+                claimedSlotReused = claim.reused === true;
                 proxyData = buildProxyDataFromManagedSlot(claim.slot);
-                req.log.info({ owner_id: req.user.id, slot_id: claimedSlotId, host: claim.slot.host, port: claim.slot.port }, 'import: claimed managed proxy slot from platform pool');
+                req.log.info({ owner_id: req.user.id, slot_id: claimedSlotId, reused: claimedSlotReused, host: claim.slot.host, port: claim.slot.port }, 'import: claimed managed proxy slot from platform pool');
             } else if (req.profile?.role !== 'admin') {
                 await reconcileExpiredTrialProxyLease(supabase, req.user.id, req.profile);
             }
@@ -164,13 +166,35 @@ export function registerSessions(router, ctx) {
 
                 const { data: existingAccount } = await supabase
                     .from('tg_accounts')
-                    .select('id')
+                    .select('id, proxy_id')
                     .eq('owner_id', req.user.id)
                     .eq('account_type', 'userbot')
                     .eq('tg_account_id', me.id.toString())
                     .maybeSingle();
 
                 existingAccountId = existingAccount?.id || null;
+                // Консервация пула (§32): реконнект аккаунта с уже имеющимся
+                // прокси не выдаёт второй слот — новый клейм возвращаем в пул,
+                // существующая привязка остаётся. Выбранный пользователем СВОЙ
+                // прокси (без claim'а) приоритетнее существующей привязки.
+                let keepExistingProxyId = null;
+                if (claimedSlotId && existingAccount?.proxy_id && existingAccount.proxy_id !== claimedSlotId) {
+                    keepExistingProxyId = existingAccount.proxy_id;
+                    const staleSlotId = claimedSlotId;
+                    const staleWasReused = claimedSlotReused;
+                    claimedSlotId = null;
+                    claimedSlotReused = false;
+                    if (staleWasReused) {
+                        req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId, account_id: existingAccountId }, 'reconnect: account already has proxy, reused orphan slot stays with owner');
+                    } else {
+                        try {
+                            await releaseFreeManagedSlot(supabase, req.user.id, staleSlotId);
+                            req.log.warn({ owner_id: req.user.id, slot_id: staleSlotId, account_id: existingAccountId }, 'reconnect: account already has proxy, claimed slot returned to pool');
+                        } catch (releaseError) {
+                            req.log.warn({ err: releaseError, owner_id: req.user.id, slot_id: staleSlotId }, 'reconnect: release of claimed slot failed (non-fatal)');
+                        }
+                    }
+                }
                 await enforceUserbotQuota({
                     supabase,
                     ownerId: req.user.id,
@@ -180,12 +204,19 @@ export function registerSessions(router, ctx) {
                 await ensureUserbotNotOwnedByAnotherAdmin(supabase, req.user.id, me.id.toString(), existingAccountId);
                 await ensureExclusiveProxyAssignment(supabase, req.user.id, proxyData.proxy_id, existingAccountId);
 
+                const upsertProxyId = claimedSlotId
+                    ? claimedSlotId
+                    : keepExistingProxyId
+                        ? keepExistingProxyId
+                        : proxyData
+                            ? proxyData.proxy_id
+                            : null;
                 await supabase.from('tg_accounts').upsert({
                     owner_id: req.user.id,
                     account_type: 'userbot',
                     ...buildTelegramProfilePatch(me),
                     session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'session_import')),
-                    proxy_id: proxyData ? proxyData.proxy_id : null,
+                    proxy_id: upsertProxyId,
                     runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
                     runtime_error: FRESH_IMPORT_RUNTIME_REASON,
                     allow_proxy_failover: false,
@@ -263,7 +294,9 @@ export function registerSessions(router, ctx) {
         } catch (error) {
             // Любой провал после claim до создания аккаунта (коннект, getMe,
             // квота, проверки, upsert) — возвращаем слот в пул (BACKLOG §32).
-            if (claimedSlotId && !accountBound) {
+            // Переиспользованный осиротевший слот владельца в пул не уходит —
+            // он остаётся у владельца без привязки (reuse-семантика).
+            if (claimedSlotId && !accountBound && !claimedSlotReused) {
                 try {
                     await releaseFreeManagedSlot(supabase, req.user.id, claimedSlotId);
                     req.log.warn({ owner_id: req.user.id, slot_id: claimedSlotId }, 'import failed — claimed managed slot returned to pool');

@@ -32,6 +32,7 @@ process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://dummy.supabase.c
 const { registerQr } = await import('../routes/userbot/qr.js');
 const { registerSessions } = await import('../routes/userbot/sessions.js');
 const { __resetPlatformAlertDedupForTests } = await import('../utils/platform-telegram-alert.js');
+const { claimFreeManagedSlot } = await import('../services/proxy-allocation.service.js');
 
 const OWNER = 'owner-seamless';
 const FLAG = 'USERBOT_AUTO_ALLOCATE_PROXY_ENABLED';
@@ -101,6 +102,15 @@ function makeMockSupabase({ proxies = [], accounts = [], onAfterSelect = null } 
             },
             neq(col, val) {
                 state.filters.push([col, (cell) => String(cell) !== String(val)]);
+                return builder;
+            },
+            not(col, op, val) {
+                if (op === 'is' && val === null) {
+                    state.filters.push([col, (cell) => !(cell === null || cell === undefined)]);
+                } else {
+                    // Другие not-оперы в этом сюжете не встречаются; не сужаем.
+                    state.filters.push([col, () => true]);
+                }
                 return builder;
             },
             in(col, values) {
@@ -262,11 +272,11 @@ function makeAuthorizedSession({ claimedProxySlotId = 'p-1', getMeError = null }
 
 // Мок userbotService для sessions-роута: файловые валидации проходят,
 // коннект — управляемый тестом.
-function makeImportService({ connectError = null } = {}) {
+function makeImportService({ connectError = null, sessionString = null } = {}) {
     return {
         validateSessionSqliteFile: async () => {},
         validateConfigJsonFile: async () => ({ api_id: 1, api_hash: 'test-hash' }),
-        extractSessionFromSqlite: async () => 'session-string-placeholder',
+        extractSessionFromSqlite: async () => sessionString || 'session-string-placeholder',
         _buildProxy: () => ({ ip: 'x', port: 1, socksType: 5 }),
         _getClientConfig: () => ({}),
         prepareServiceClient: () => {},
@@ -504,5 +514,75 @@ describe('import-session-file: бесшовная выдача managed-слот�
         assert.strictEqual(res.statusCode, 500);
         assert.strictEqual(db.tables.proxies[0].owner_id, null, 'провал коннекта вернул слот в пул');
         assert.strictEqual(db.tables.tg_accounts.length, 0, 'аккаунт не создан');
+    });
+});
+
+describe('консервация пула: reuse orphan + реконнект', () => {
+    it('claim: осиротевший mp_* слот владельца переиспользуется, новый из пула не берётся', async () => {
+        enableFlag();
+        const db = makeMockSupabase({
+            proxies: [{ ...SLOT, id: 'p-orphan', username: 'mp_0', owner_id: OWNER }, { ...SLOT, id: 'p-fresh', username: 'mp_2' }],
+            accounts: []
+        });
+
+        const claim = await claimFreeManagedSlot(db, OWNER);
+
+        assert.strictEqual(claim.claimed, true);
+        assert.strictEqual(claim.reused, true);
+        assert.strictEqual(claim.slot.id, 'p-orphan');
+        assert.strictEqual(db.tables.proxies.find(p => p.id === 'p-orphan').owner_id, OWNER, 'осиротевший остаётся у владельца');
+        assert.strictEqual(db.tables.proxies.find(p => p.id === 'p-fresh').owner_id, null, 'свободный слот не тронут');
+    });
+
+    it('claim: осиротевший уже привязан к аккаунту → берём свежий из пула', async () => {
+        enableFlag();
+        const db = makeMockSupabase({
+            proxies: [{ ...SLOT, id: 'p-orphan', username: 'mp_0', owner_id: OWNER }, { ...SLOT, id: 'p-fresh', username: 'mp_2' }],
+            accounts: [{ id: 'acc-1', owner_id: OWNER, proxy_id: 'p-orphan' }]
+        });
+
+        const claim = await claimFreeManagedSlot(db, OWNER);
+
+        assert.strictEqual(claim.claimed, true);
+        assert.strictEqual(claim.reused, undefined);
+        assert.strictEqual(claim.slot.id, 'p-fresh');
+        assert.strictEqual(db.tables.proxies.find(p => p.id === 'p-fresh').owner_id, OWNER);
+    });
+
+    it('qr-status реконнект: аккаунт с прокси → свежий клейм в пул, привязка сохранена', async () => {
+        enableFlag();
+        const db = makeMockSupabase({
+            proxies: [{ ...SLOT, owner_id: OWNER }],
+            accounts: [{ id: 'acc-1', owner_id: OWNER, account_type: 'userbot', tg_account_id: '777000', proxy_id: 'p-old' }]
+        });
+        const service = makeQrService();
+        service.qrSessions.set(OWNER, makeAuthorizedSession({ claimedProxySlotId: 'p-1' }));
+        const router = makeRouter();
+        registerQr(router, { supabase: db, userbotService: service });
+        const handler = routeHandler(router, 'GET', '/qr-status');
+        const { req, res } = makeReqRes({ body: {} });
+
+        await handler(req, res);
+
+        assert.strictEqual(res.body.status, 'success');
+        assert.strictEqual(db.tables.proxies[0].owner_id, null, 'свежий клейм возвращён в пул');
+        const acc = db.tables.tg_accounts.find(a => a.id === 'acc-1');
+        assert.strictEqual(acc.proxy_id, 'p-old', 'существующая привязка не перезаписана');
+    });
+
+    it('import: провал коннекта на reuse-слоте НЕ отправляет его в общий пул', async () => {
+        enableFlag();
+        const db = makeMockSupabase({ proxies: [{ ...SLOT, owner_id: OWNER }] });
+        const service = makeImportService({ connectError: new Error('socks proxy down') });
+        const router = makeRouter();
+        registerSessions(router, { supabase: db, userbotService: service });
+        const handler = routeHandler(router, 'POST', '/import-session-file');
+        const { req, res } = makeReqRes({ body: {}, files: { sessionFile: [{ path: '/tmp/t-import.session', originalname: 't.session' }], jsonFile: [{ path: '/tmp/t-import.json', originalname: 't.json' }] } });
+
+        await handler(req, res);
+
+        assert.strictEqual(res.statusCode, 500);
+        assert.strictEqual(db.tables.proxies[0].owner_id, OWNER, 'reuse-слот остаётся у владельца, в пул не уходит');
+        assert.strictEqual(db.tables.tg_accounts.length, 0);
     });
 });

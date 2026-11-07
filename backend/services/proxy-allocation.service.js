@@ -115,6 +115,31 @@ export async function claimFreeManagedSlot(supabase, ownerId, { alert } = {}) {
         return { claimed: false, reason: 'disabled' };
     }
 
+    // Консервация пула: выдача «один слот на руки». Если у владельца уже есть
+    // наш платформенный mp_* слот, не привязанный ни к одному его аккаунту
+    // (осиротевший после прошлых подключений), переиспользуем ЕГО — новый из
+    // пула не берём. Иначе реконнекты без своего прокси накапливали слоты.
+    const { data: ownSlots, error: ownError } = await supabase
+        .from('proxies')
+        .select(FREE_SLOT_COLUMNS)
+        .eq('owner_id', ownerId)
+        .like('username', 'mp_%')
+        .order('username', { ascending: true });
+    if (ownError) throw ownError;
+    if (ownSlots?.length) {
+        const { data: boundRows, error: boundError } = await supabase
+            .from('tg_accounts')
+            .select('proxy_id')
+            .eq('owner_id', ownerId)
+            .not('proxy_id', 'is', null);
+        if (boundError) throw boundError;
+        const boundIds = new Set((boundRows || []).map(row => String(row.proxy_id)));
+        const orphan = ownSlots.find(slot => !boundIds.has(String(slot.id)));
+        if (orphan) {
+            return { claimed: true, slot: orphan, reused: true };
+        }
+    }
+
     // Кандидат: младший свободный mp_* слот (детерминированный выбор), читаем
     // только его; сам claim — условный update ниже, как в allocateManagedProxyForAccount.
     const { data: candidates, error: selectError } = await supabase

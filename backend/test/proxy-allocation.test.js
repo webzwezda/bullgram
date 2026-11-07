@@ -310,10 +310,16 @@ describe('claimFreeManagedSlot', () => {
 
     it('гонка (claim update вернул 0) → race_lost, слот остаётся у соперника', async () => {
         enableFlag();
+        // Гонка — между fresh-select кандидата и его claim-update (второй
+        // proxies-select в claimFreeManagedSlot; первый — lookup своих слотов).
+        let proxySelects = 0;
         const db = makeMockSupabase({
             proxies: [{ ...FULL_SLOT }],
             onAfterSelect: ({ table }) => {
-                if (table === 'proxies') db.tables.proxies[0].owner_id = 'rival-owner';
+                if (table === 'proxies') {
+                    proxySelects += 1;
+                    if (proxySelects >= 2) db.tables.proxies[0].owner_id = 'rival-owner';
+                }
             }
         });
 
