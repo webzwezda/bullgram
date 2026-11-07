@@ -86,6 +86,11 @@ function renderConfig(state) {
     'nserver 8.8.8.8',
     'nscache 65536',
     'timeouts 1 5 30 60 180 1800 15 60',
+    // Волна прокси-инцидента 2026-11-07: hot-reload без рестарта контейнера.
+    // 3proxy следит за файлом и перечитывает конфиг в течение минуты после
+    // изменения (документация 3proxy.cfg(3), monitor) — рестарт нужен только
+    // при добавлении НОВЫХ IPv6-адресов (-e кэшируется при старте процесса).
+    'monitor /etc/3proxy/3proxy.cfg',
     'auth strong',
     usersLine,
     ...sections
