@@ -28,7 +28,7 @@
 Цель: данные перестают быть в одном экземпляре; о проблемах узнаём из Telegram,
 а не открывая логи. Всё с нулевой постоянной RAM, 0 ₽ (B2 free до 10 ГБ).
 
-- [x] 1.1 Ghost-диск: локализован 2026-11-07 — ghost-а НЕ БЫЛО: du-vs-df расхождение = containerd 14G (docker-образы на корневой ФС) + /home 19G (n8nuser 13G: supabase-репо 4.2G/живой стек в docker/, paperclip 2.6G/node_modules при inactive-сервисе, hermes-кэши; anna 6.1G: .hermes 4.1G). Очищены кэши (~2.5G): 91%→87%. Кандидаты на решение владельца: paperclip/node_modules 2.1G (inactive), anna/.hermes 4.1G, supabase/apps 695M (du 16.5G vs df 51G). Порядок из в.7:
+- [x] 1.1 Ghost-диск: локализован 2026-11-07 — ghost-а НЕ БЫЛО: du-vs-df расхождение = containerd 14G (docker-образы на корневой ФС) + /home 19G (n8nuser 13G: supabase-репо 4.2G/живой стек в docker/, paperclip 2.6G/node_modules при inactive-сервисе, hermes-кэши; anna 6.1G: .hermes 4.1G). Очищены кэши (~2.5G): 91%→87%. **Решения владельца 2026-11-07 исполнены**: paperclip удалён (2.6G + systemd-юнит), freqtrade удалён (928K скелет в /home/n8nuser), anna/.hermes и supabase-стек — НЕ ТРОГАТЬ (слово владельца). Базовая занятость ~87% (рост дня: дампы/логи) — алерт-крон теперь сторожит порог 80/90. Порядок из в.7:
       `journalctl --disk-usage` → vacuum + SystemMaxUse=500M; `lsof +L1 | grep deleted`;
       `docker system df -v` → prune; логи контейнеров без ротации; `df -i`.
       Критерий: базовая занятость / ≤ 70%.
@@ -152,12 +152,17 @@
 ## Действия владельца (не автоматизируются)
 
 Аккаунты: Backblaze B2 (бакет+ключ, отложено — третья копия по желанию);
-календарные напоминания (monthly smoke-restore, quarterly драйлл/ритуал);
 Dependabot alerts включить в настройках GitHub; решение по Browser Doctrine
 (3.3) и по nginx 444 (2.7). healthchecks.io/UptimeRobot больше не нужны —
 закрыты self-hosted Uptime Kuma (решение владельца 2026-11-07).
-Решения по диску srv: paperclip/node_modules 2.1G (inactive), anna/.hermes
-4.1G, supabase/apps 695M — ничего не удаляется без слова владельца.
+Календарь больше не нужен: месячный smoke-restore автоматизирован
+(cron 8-го числа 06:00 +10, `/opt/backups/smoke-restore.sh` → Telegram;
+в квартальные месяцы напоминает о полном драйлле — решение владельца
+2026-11-07 «календарь скромный, не обслуживать»).
+Диск srv (решения владельца 2026-11-07 исполнены): paperclip удалён
+(2.6G, сервис был disabled; юнит снят), freqtrade удалён (скелет 928K
+в /home/n8nuser, без сервисов/контейнеров), **anna/.hermes — НЕ ТРОГАТЬ
+(слово владельца)**, supabase-стек n8nuser — живой, не трогать.
 
 ## Вне объёма (осознанно)
 
