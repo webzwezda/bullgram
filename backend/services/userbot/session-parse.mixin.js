@@ -46,7 +46,18 @@ export const SessionParseMixin = (Base) => class extends Base {
             client.setLogLevel('none');
         }
 
-        client._updateLoop = async () => {};
+        // teleproto (миграция 2026-11-07): _updateLoop — ОБЪЕКТ UpdateLoop
+        // (start/stop вызываются внутри connect-флоу). Присваивать noop-функцию
+        // НЕЛЬЗЯ — "this._updateLoop.start is not a function" убивает каждое
+        // подключение (инцидент 2026-11-07: /userbot, health-check лотов).
+        // Полиморфно: останавливаем луп и запрещаем рестарт; для gramjs-функции
+        // остаётся старый хак.
+        if (client._updateLoop && typeof client._updateLoop === 'object' && typeof client._updateLoop.start === 'function') {
+            try { client._updateLoop.stop(); } catch {}
+            client._updateLoop.start = () => {};
+        } else {
+            client._updateLoop = async () => {};
+        }
         client._errorHandler = async (error) => {
             const raw = String(error?.errorMessage || error?.message || error || '');
             if (raw.includes('TIMEOUT')) {
