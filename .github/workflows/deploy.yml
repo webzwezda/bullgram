@@ -33,14 +33,15 @@ jobs:
             cd /srv/bullgram
             ./scripts/deploy-pull.sh
 
-      # Волна 4.3: semver-тег на каждый успешный деплой (patch-bump) —
-      # /health отдаёт git describe этого тега; по тегу собирается Release.
+      # Волна 4.3: semver-тег на каждый успешный деплой (patch-bump) +
+      # Release Notes git-cliff'ом. Пуш тега из GITHUB_TOKEN не триггерит
+      # другие воркфлоу (антирекурсия GitHub), поэтому релиз создаётся здесь же.
       - name: Checkout for tagging
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
-      - name: Create semver tag
+      - name: Tag release
         run: |
           LATEST="$(git tag --list 'v*' --sort=-v:refname | head -1)"
           if [ -z "$LATEST" ]; then
@@ -53,7 +54,22 @@ jobs:
           fi
           git tag "$NEXT" "${{ github.sha }}"
           git push origin "$NEXT"
+          echo "NEXT=$NEXT" >> "$GITHUB_ENV"
           echo "tagged $NEXT on ${{ github.sha }}"
+
+      - name: Release notes (git-cliff)
+        uses: orhun/git-cliff-action@v4
+        id: cliff
+        with:
+          args: --latest --strip=all
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES_FILE: /tmp/release-notes.md
+        run: |
+          printf '%s' "${{ steps.cliff.outputs.content }}" > "$NOTES_FILE"
+          gh release create "$NEXT" --title "$NEXT" --notes-file "$NOTES_FILE" --target "${{ github.sha }}"
 
       - name: External smoke check
         run: |

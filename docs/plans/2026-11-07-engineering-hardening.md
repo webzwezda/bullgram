@@ -175,7 +175,9 @@
 - [x] 4.3 Теги (готово 2026-11-07): deploy.yml после успешного деплоя
       ставит semver-тег (patch-bump, contents:write); release.yml на пуш тега
       собирает Release Notes git-cliff'ом (orhun/git-cliff-action@v4) и
-      создаёт GitHub Release; /api/external/v1/health отдаёт `release` из
+      создаёт GitHub Release — всё в deploy.yml (пуш тега из GITHUB_TOKEN
+      не триггерит отдельные воркфлоу: антирекурсия GitHub, первый релизный
+      прогон это показал); /api/external/v1/health отдаёт `release` из
       backend/.release-version (пишет deploy-pull, git describe). Ручной
       CHANGELOG — нет.
 
