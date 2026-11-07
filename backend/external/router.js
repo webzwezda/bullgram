@@ -8,6 +8,8 @@
 // Phase 3 will auto-wire operation routes from the registry (one route per
 // operation with `transports.rest = { method, path }`).
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import express from 'express';
 
 import { restAuthMiddleware } from './auth.js';
@@ -21,10 +23,19 @@ export function buildExternalRouter({ supabase, userbotService }) {
   const router = express.Router();
 
   // --- Public health check --------------------------------------------------
+  // release читается из backend/.release-version (пишет deploy-pull.sh, волна 4.3)
+  const releaseFile = () => {
+    try {
+      return readFileSync(join(process.cwd(), '.release-version'), 'utf8').trim();
+    } catch {
+      return 'dev';
+    }
+  };
   router.get('/health', (_req, res) => {
     res.json({
       service: 'bullgram-external-api',
       version: 'v1',
+      release: releaseFile(),
       mcp_protocol: MCP_PROTOCOL_VERSION,
       time: new Date().toISOString()
     });

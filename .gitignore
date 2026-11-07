@@ -69,3 +69,6 @@ archive/
 /redesign-onboarding.js
 /reformat.js
 /update-lists.js
+
+# Серверный артефакт деплоя (волна 4.3): git describe -> backend/.release-version
+.release-version

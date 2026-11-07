@@ -14,6 +14,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
 
     steps:
       - name: Deploy via SSH
@@ -30,6 +32,28 @@ jobs:
           script: |
             cd /srv/bullgram
             ./scripts/deploy-pull.sh
+
+      # Волна 4.3: semver-тег на каждый успешный деплой (patch-bump) —
+      # /health отдаёт git describe этого тега; по тегу собирается Release.
+      - name: Checkout for tagging
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+      - name: Create semver tag
+        run: |
+          LATEST="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+          if [ -z "$LATEST" ]; then
+            NEXT="v0.1.0"
+          else
+            MAJOR="${LATEST#v}"; MAJOR="${MAJOR%%.*}"
+            MINOR="${LATEST#v*.}"; MINOR="${MINOR%%.*}"
+            PATCH="${LATEST##*.}"
+            NEXT="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+          fi
+          git tag "$NEXT" "${{ github.sha }}"
+          git push origin "$NEXT"
+          echo "tagged $NEXT on ${{ github.sha }}"
 
       - name: External smoke check
         run: |

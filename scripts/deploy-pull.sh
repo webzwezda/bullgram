@@ -181,6 +181,7 @@ cp -r blog-site/dist site-v2/dist/blog
 
 # 4. Reload PM2 backend (zero-downtime if possible, else restart)
 echo "==> pm2 reload bullgram-tg-backend"
+ERR_SIZE_BEFORE="$(stat -c%s backend/logs/app.err.jsonl 2>/dev/null || echo 0)"
 cd backend
 if pm2 reload ecosystem.config.cjs --env production 2>&1; then
   echo "    pm2 reload OK"
@@ -191,16 +192,64 @@ fi
 pm2 save
 cd "$ROOT"
 
-# 5. Sanity: backend HTTP responding
-echo "==> smoke: backend HTTP"
-sleep 2
-HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000/ || echo "000")"
-if [ "$HTTP_CODE" = "000" ]; then
-  echo "    ERROR: backend not responding on localhost:3000"
-  pm2 logs bullgram-tg-backend --lines 20 --nostream || true
-  exit 1
+# 4b. Версия релиза для /health (волна 4.3): git describe -> backend/.release-version
+git describe --tags --always --dirty > backend/.release-version 2>/dev/null || echo "dev" > backend/.release-version
+
+# 5. Слоёный smoke (волна 4.1) + автороллбек (4.2).
+# Д-6: если деплой шёл вместе с РУЧНОЙ миграцией БД — автооткат может увести
+# код от схемы; такие деплои запускаются с DEPLOY_NO_ROLLBACK=1.
+echo "==> smoke: слоёный (boot / api / nginx / pm2 / err-log 90с)"
+sleep 3
+smoke_fail=""
+
+L1="$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000/ || echo 000)"
+[ "$L1" != "000" ] || smoke_fail="boot: localhost:3000 не отвечает"
+echo "    L1 boot (localhost:3000): $L1"
+
+if [ -z "$smoke_fail" ]; then
+  L2="$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:3000/api/external/v1/health || echo 000)"
+  [ "$L2" = "200" ] || smoke_fail="api: /api/external/v1/health → $L2"
+  echo "    L2 api (health): $L2"
 fi
-echo "    backend HTTP $HTTP_CODE (alive)"
+
+if [ -z "$smoke_fail" ]; then
+  L3A="$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://bullgram.xyz/ || echo 000)"
+  L3B="$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://bullgram.xyz/api/external/v1/health || echo 000)"
+  { [ "$L3A" = "200" ] && [ "$L3B" = "200" ]; } || smoke_fail="nginx: / → $L3A, health → $L3B"
+  echo "    L3 nginx (витрина + health через домен): $L3A / $L3B"
+fi
+
+if [ -z "$smoke_fail" ]; then
+  L4="$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="bullgram-tg-backend") | .pm2_env.status' 2>/dev/null)"
+  [ "$L4" = "online" ] || smoke_fail="pm2: статус $L4"
+  echo "    L4 pm2: ${L4:-?}"
+fi
+
+if [ -z "$smoke_fail" ]; then
+  echo "    L5 err-log: тишина 90с…"
+  sleep 90
+  ERR_SIZE_AFTER="$(stat -c%s backend/logs/app.err.jsonl 2>/dev/null || echo 0)"
+  [ "$ERR_SIZE_AFTER" -le "$ERR_SIZE_BEFORE" ] || smoke_fail="err.jsonl вырос за 90с (+$((ERR_SIZE_AFTER - ERR_SIZE_BEFORE)) байт — крэш-уровень)"
+  echo "    L5 err.jsonl: $ERR_SIZE_BEFORE → $ERR_SIZE_AFTER"
+  # информационно: новые error-строки out-лога (известный шум не фейлит деплой)
+  NEW_ERRS=$(tail -400 backend/logs/app.out.jsonl | jq -r --arg since "$(date -u -d '-95 seconds' '+%Y-%m-%dT%H:%M:%S')" 'select(.time > $since and .level=="error") | .msg' 2>/dev/null | head -5)
+  [ -n "$NEW_ERRS" ] && { echo "    ошибки в окне (информационно):"; echo "$NEW_ERRS" | sed 's/^/      /'; }
+fi
+
+if [ -n "$smoke_fail" ]; then
+  if [ -n "${DEPLOY_NO_ROLLBACK:-}" ] || [ ! -f "$PREV_HEAD_FILE" ]; then
+    /opt/alerts/tg-send.sh "🔴 Bullgram деплой $(git rev-parse --short HEAD 2>/dev/null) провалил смоук ($smoke_fail); АВТООТКАТ НЕДОСТУПЕН — нужен ручной откат (см. ops/RESTORE.md)" 2>/dev/null || true
+    echo "FAIL: smoke ($smoke_fail), автороллбек недоступен"
+    exit 1
+  fi
+  PREV="$(cat "$PREV_HEAD_FILE")"
+  /opt/alerts/tg-send.sh "⚠️ Bullgram деплой $(git rev-parse --short HEAD) провалил смоук ($smoke_fail) — автооткат на ${PREV:0:7} и повторный деплой" 2>/dev/null || true
+  echo "FAIL: smoke ($smoke_fail) — откат на $PREV и повторный деплой"
+  git reset --hard "$PREV"
+  rm -f "$PREV_HEAD_FILE"
+  exec env DEPLOY_NO_ROLLBACK=1 DEPLOY_SELF_DIR="$SELF_DIR" bash "$SELF_DIR/deploy-pull.sh"
+fi
+
 rm -f "$PREV_HEAD_FILE"
 
 echo "==> [$(date -u +%FT%TZ)] deploy-pull done"
