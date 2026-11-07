@@ -104,7 +104,9 @@ export function registerQr(router, ctx) {
                         }
                         return res.status(400).json({ error: PROXY_POOL_EMPTY_MESSAGE });
                     }
-                    return res.status(400).json({ error: 'Юзербота можно подключать только через прокси. Сначала выбери живой прокси.' });
+                    // Флаг выключен, а в UI платформенный пункт выбран по умолчанию:
+                    // старый текст «выбери живой прокси» звучал бы как противоречие.
+                    return res.status(400).json({ error: 'Платформенный прокси сейчас недоступен — выбери свой прокси в списке.' });
                 }
                 claimedSlotId = claim.slot.id;
                 proxyData = buildProxyDataFromManagedSlot(claim.slot);

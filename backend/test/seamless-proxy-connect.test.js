@@ -35,8 +35,10 @@ const { __resetPlatformAlertDedupForTests } = await import('../utils/platform-te
 
 const OWNER = 'owner-seamless';
 const FLAG = 'USERBOT_AUTO_ALLOCATE_PROXY_ENABLED';
-const LEGACY_QR_MESSAGE = 'Юзербота можно подключать только через прокси. Сначала выбери живой прокси.';
-const LEGACY_IMPORT_MESSAGE = 'Юзербота можно импортировать только через прокси. Сначала выбери живой прокси.';
+// Флаг выключен, а в UI платформенный пункт выбран по умолчанию — текст
+// подсказывает выбрать свой, не противореча селектору.
+const LEGACY_QR_MESSAGE = 'Платформенный прокси сейчас недоступен — выбери свой прокси в списке.';
+const LEGACY_IMPORT_MESSAGE = 'Платформенный прокси сейчас недоступен — выбери свой прокси в списке.';
 const POOL_EMPTY_MESSAGE = 'Свободных платформенных прокси сейчас нет — подключите свой прокси или попробуйте позже.';
 const ADMIN_PROFILE = { role: 'admin', product_tier: 'pro' };
 
