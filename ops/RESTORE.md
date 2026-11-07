@@ -34,7 +34,13 @@ npm --prefix docs-site install
 - **Прокси (3proxy)**: при загрузке сервера systemd-юнит
   `bullgram-managed-proxies.service` (`ops/systemd/`) сверяет состояние с Supabase,
   рендерит `/var/lib/bullgram/managed-proxies/3proxy.cfg`, возвращает IPv6 на интерфейс
-  и поднимает 3proxy. Юнит должен быть `enabled`. Ручной запуск:
+  и поднимает 3proxy. С 2026-11-07: контейнер с `nofile=65535`, конфиг содержит
+  `monitor` (hot-reload слотов без рестарта); hourly-таймер
+  `bullgram-managed-proxies-reconcile.timer` — самовосстановление слушателей/IPv6
+  с TG-алертом; probe-cron `/opt/alerts/proxy-probe.sh` (*/10) различает «слот
+  мёртв» и «IPv6→Telegram флап». `bullrun-managed-3proxy` остановлен (конфликт
+  портов двух проектов на host-network; откат `docker start`). Детали и грабли:
+  wiki `infrastructure/managed-proxies-bullgram.md`. Юнит должен быть `enabled`. Ручной запуск:
   `cd /srv/bullgram/backend && node scripts/restore-managed-proxies.mjs`
   Бэкенд в pm2 дополнительно следит за процессом 3proxy в рантайме
   (два процесса 3proxy с reuseport — норма после пересозданий).
