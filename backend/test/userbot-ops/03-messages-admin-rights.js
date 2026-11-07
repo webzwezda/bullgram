@@ -7,7 +7,7 @@
  * Секции исходного test-userbot-ops.js в исходном порядке. Экспортирует run() —
  * хост вызывает сценарии строго по порядку.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { ChatAdminRightsService } from '../../services/chat-admin-rights.service.js';
 import { editMessageHandler } from '../../mcp/tools/messages/edit-message.js';
 import { deleteMessageHandler } from '../../mcp/tools/messages/delete-message.js';

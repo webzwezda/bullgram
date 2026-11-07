@@ -4,7 +4,7 @@
 // GET /ops-center/authorizations, POST /ops-center/authorizations/reset-others,
 // POST /ops-center/authorizations/reset-one.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { loadOperationalUserbot, normalizeMessageDate, parseTelegramInvite } from './helpers-core.js';
 
 export function registerOpsCenterFeed(router, ctx) {

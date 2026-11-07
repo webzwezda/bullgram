@@ -1,8 +1,8 @@
 // Стадия 2 разрезки монстра userbot.service.js (план §7.3b): методы перенесены из
 // класса ДОСЛОВНО (тела/JSDoc/комментарии без изменений); this.* зовётся через
 // цепочку прототипов mixin-композиции в services/userbot.service.js.
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import QRCode from 'qrcode';
 import { logger } from '../../utils/logger.js';
 import { withTimeout } from '../../shared/utils.js';

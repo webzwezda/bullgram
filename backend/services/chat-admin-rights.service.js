@@ -1,6 +1,6 @@
 // Выдача юзерботу админ-прав в чате: через официального бота (Bot API) или юзербота-админа из пула (MTProto).
 
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { withTimeout } from '../shared/utils.js';
 
 async function callBotApi(token, method, payload) {

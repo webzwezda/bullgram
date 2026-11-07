@@ -1,5 +1,5 @@
 // Сценарий из test/test-contour-admin-rights.js (разрезка под лимит pre-commit; хост — test/test-contour-admin-rights.js).
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { assertEqual, assertTrue, PLAIN_PARTICIPANT, ADMIN_PARTICIPANT_PARTIAL, makeBotApi, makeUserbotClient, makeMockSupabase, makeService, FULL_BOT_RIGHTS, FIXTURE_BOT, FIXTURE_USERBOT, FIXTURE_CHANNELS, OWNER_ID, BOT_ID, USERBOT_ID, CH1_ID, CH2_ID } from './shared.js';
 
 export async function runOwnerAppointedPartialFlags() {

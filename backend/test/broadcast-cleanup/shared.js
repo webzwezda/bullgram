@@ -4,7 +4,7 @@
  * (crypto.js через userbot.service требует ключ на импорте), поэтому статические
  * импорты джобы и сервиса здесь безопасны. Сами модули сеть не трогают.
  */
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { createBroadcastMembershipCleanup } from '../../jobs/broadcast-membership-cleanup.job.js';
 import {
     recordPreparationJoin,

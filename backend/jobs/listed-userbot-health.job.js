@@ -1,5 +1,5 @@
-import { TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { decrypt } from '../utils/crypto.js';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
 import { cleanupRestrictedUserbotProxy, unpublishRestrictedUserbotListings } from '../utils/restricted-userbot-ops.js';

@@ -1,5 +1,5 @@
 // Общие фикстуры сценариев test/contour-admin-rights/* (вынесено из test/test-contour-admin-rights.js вербатимно).
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { ContourAdminRightsService } from '../../services/contour-admin-rights.service.js';
 
 let failures = 0;

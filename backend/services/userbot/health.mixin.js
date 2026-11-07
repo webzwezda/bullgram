@@ -1,7 +1,7 @@
 // Стадия 2 разрезки монстра userbot.service.js (план §7.3b): методы перенесены из
 // класса ДОСЛОВНО (тела/JSDoc/комментарии без изменений); this.* зовётся через
 // цепочку прототипов mixin-композиции в services/userbot.service.js.
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { detectSpamBlockReason, buildHealthDetails } from './telegram-errors.js';
 import { assertUserbotOperatable } from './botfather-lib.js';
 

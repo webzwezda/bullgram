@@ -3,8 +3,8 @@
 // Зона: POST /sync-channels, GET /admin-audit.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { decrypt } from '../../utils/crypto.js';
-import { Api, TelegramClient } from 'telegram';
-import { StringSession } from 'telegram/sessions/index.js';
+import { Api, TelegramClient } from 'teleproto';
+import { StringSession } from 'teleproto/sessions/index.js';
 import { FRESH_IMPORT_RUNTIME_REASON, isFreshImportedUserbot } from '../../utils/ops-center-selection.js';
 import { getDeadProxyMessage, isUserbotOnDeadProxy, loadOperationalUserbot } from './helpers-core.js';
 

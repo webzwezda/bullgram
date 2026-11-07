@@ -1,5 +1,5 @@
 // Сценарий из test/test-contour-admin-rights.js (разрезка под лимит pre-commit; хост — test/test-contour-admin-rights.js).
-import { Api } from 'telegram';
+import { Api } from 'teleproto';
 import { assertEqual, assertTrue, makeEnv, OWNER_ID, BOT_ID } from './shared.js';
 
 export async function runFloodWaitStopsTargets() {
