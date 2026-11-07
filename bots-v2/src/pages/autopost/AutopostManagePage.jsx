@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
 import { supabase } from '../../lib/supabase.js';
-import { fetchAdmins, fetchChannels, initBot } from './api.js';
+import { deleteBot, fetchAdmins, fetchChannels, initBot, patchBot } from './api.js';
 import { createChannelConfigHandlers } from './sections/ChannelButtons.jsx';
 import BotConnect from './sections/BotConnect.jsx';
 import OnboardingStates from './sections/OnboardingStates.jsx';

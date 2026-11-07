@@ -50,6 +50,7 @@ export function StepSend({
   titleEmpty,
   messageEmpty,
   sendDisabled,
+  sendCampaign,
   planRules,
   setStep
 }) {

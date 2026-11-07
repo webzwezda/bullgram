@@ -426,6 +426,7 @@ export function BroadcastPage() {
         titleEmpty={titleEmpty}
         messageEmpty={messageEmpty}
         sendDisabled={sendDisabled}
+        sendCampaign={sendCampaign}
         planRules={planRules}
         setStep={setStep}
       />
