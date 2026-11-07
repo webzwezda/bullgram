@@ -68,16 +68,23 @@ gitleaks detect --source . --log-opts="--since=3 months" --verbose  # недав
   порт не пробит протокольной пробой. Пробы только протокольные
   (Postgres SSLRequest / HTTP curl), голый TCP невалиден (SYN-proxy края
   хостинга отвечает всем портам).
-- Остатки на слово владельца: minio 9002/9003 (ручной контейнер владельца,
-  не supabase-стек); ufw `3000 ALLOW` — backend напрямую мимо nginx;
-  ANON_KEY в supabase `.env` не декодируется PostgREST (старый ключ —
-  юзеры работают на своих JWT, но ключ сверить).
+- Остатки на слово владельца: minio 9002 (S3 API) осознанно наружу — живой
+  консюмер (wiki-синк Anna, бакеты `wiki-anna`/`wiki-sync`, НЕ Supabase;
+  креды ходят plaintext — TLS/tailnet у консюмера на решение владельца);
+  3002 (bullrun-api) под catch-all — решение владельца bullrun'а.
 - nginx: актуальные vhostы против `ls /etc/nginx/sites-enabled/`.
 - RLS-пилот (волна 5.2): `proxies`, `userbot_restore_sources` под
   owner_isolation (`(select auth.uid())`, FORCE; service-ключ bypassrls —
   backend не задет). Расширение на новые таблицы — миграция + прогон
   `ops/scripts/db/rls-jwt-smoke.mjs` с srv (12 проверок; PATCH от чужого
   подтверждать состоянием строки — PostgREST отвечает 204 и на 0 строк).
+- Закрыто 2026-11-07 (пост-волна 5, план
+  `docs/plans/2026-11-07-post-wave5-decisions.md`): backend :3000 снаружи
+  закрыт ordered-inserts (allow docker/tailnet → deny до catch-all 1024:65535;
+  проверять порядок deny-before-catchall в iptables И ip6tables — ufw insert
+  считает позиции дисплея по семействам); minio-консоль 9003 → 127.0.0.1;
+  ANON-ключ мигрирован на минтованный от живого JWT_SECRET (старый demo
+  отозван в kong; новый везде: .env, kong, 8 фронт-литералов, MCP-конфиг).
 
 ## 6. Restore-тест
 
