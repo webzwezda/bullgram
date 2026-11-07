@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
+import { apiRequest } from '../api/client.js';
 import { LoadingState } from '../ui/LoadingState.jsx';
 import { ProxyStorefrontSection } from '../features/shop-storefront/ProxyStorefrontSection.jsx';
 import { AdminLotsSection } from '../components/shop/AdminLotsSection.jsx';
@@ -9,6 +11,32 @@ import { ProxyTableSection } from './sections/ProxyTableSection.jsx';
 import { OwnProxyCard } from './sections/ProxyOwnForm.jsx';
 import { ServerProxyCard } from './sections/ProxyServerForm.jsx';
 import { MyProxiesList } from './sections/MyProxiesList.jsx';
+
+// Платформенный пул managed-прокси (BACKLOG §32): сколько поднято / занято /
+// свободно. Виден только платформенному админу; числа живые из БД.
+function ProxyPoolBanner({ accessToken }) {
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest('/api/userbot/proxy-pool/stats', { accessToken })
+      .then((data) => { if (!cancelled) setStats(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [accessToken]);
+  if (!stats) return null;
+  return (
+    <div className="toolbar-card proxy-surface-card" style={{ marginBottom: 16 }}>
+      <div className="proxy-surface-card__head">
+        <div className="toolbar-card__title">Платформенный пул прокси</div>
+        <span className="table-subtext" style={{ margin: 0 }}>выдаются автоматически при подключении юзерботов</span>
+      </div>
+      <p style={{ margin: 0 }}>
+        Поднято: <strong>{stats.total}</strong> · Используется: <strong>{stats.used}</strong> · Свободно: <strong>{stats.free}</strong>
+        {stats.reserved > 0 ? <> · Резерв: <strong>{stats.reserved}</strong></> : null}
+      </p>
+    </div>
+  );
+}
 
 export function ProxyManagerPage() {
   const { accessToken, profilePlan } = useAuth();
@@ -105,6 +133,8 @@ export function ProxyManagerPage() {
     <section className="page proxy-page">
 
       {state.error ? <div className="error-card" style={{ marginTop: 20 }}>{state.error}</div> : null}
+
+      {state.support?.profile_role === 'admin' ? <ProxyPoolBanner accessToken={accessToken} /> : null}
 
       {manualQuotaText && state.support?.profile_role === 'admin' ? (
         <div className="toolbar-card proxy-surface-card">

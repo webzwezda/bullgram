@@ -19,7 +19,7 @@
 | nginx | `/etc/nginx/sites-enabled/*` (конфиг НЕ в репо, бэкапы `/root/nginx-backups/`) | systemd |
 | Supabase | docker-стек `/home/n8nuser/supabase/docker` | `restart=unless-stopped`; published-порты kong/pooler/analytics — 127.0.0.1 (волна 5.1, бэкап compose `.bak.20261107-perimeter`); nginx ходит в kong через 127.0.0.1:8000 |
 | n8n | контейнер `n8n-n8n-1`, :5678 (127.0.0.1 + tailnet-IP), UI через `https://prsng.ru` | `unless-stopped` |
-| Managed-прокси юзерботов | контейнер `bullgram-managed-3proxy`, host-network, 18 слотов (порты 21115-21145 на 193.23.197.169 — доп. IPv4 нашего VPS), выход per-slot IPv6 | `unless-stopped` + юнит `bullgram-managed-proxies` (enabled) |
+| Managed-прокси юзерботов | контейнер `bullgram-managed-3proxy`, host-network, 218 слотов (порты 21115-21345 на 193.23.197.169 — доп. IPv4 нашего VPS; 200 — свободный платформенный пул), выход per-slot IPv6 | `unless-stopped` + юнит `bullgram-managed-proxies` (enabled) |
 | Tailscale | `vds-prsng` = 100.118.222.13 | tailscaled enabled |
 | 3x-ui | :2053 — личная панель владельца (осознанно наружу) | — |
 | Кроны сервера | `/opt/backups/*` (дамп, smoke-restore), `/opt/alerts/*` (диск, дайджесты, proxy-probe) — root crontab, см. §3 | cron |

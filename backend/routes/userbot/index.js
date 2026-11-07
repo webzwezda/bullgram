@@ -8,6 +8,7 @@ import { ManagedProxyService } from '../../services/managed-proxy.service.js';
 import { registerProxiesList } from './proxies-list.js';
 import { registerProxiesCrud } from './proxies-crud.js';
 import { registerProxiesCheck } from './proxies-check.js';
+import { registerProxyPoolStats } from './proxy-pool-stats.js';
 import { registerBindProxy } from './bind-proxy.js';
 import { registerSessions } from './sessions.js';
 import { registerIntake } from './intake.js';
@@ -39,6 +40,7 @@ export default function (supabase) {
     registerProxiesList(router, ctx);
     registerProxiesCrud(router, ctx);
     registerProxiesCheck(router, ctx);
+    registerProxyPoolStats(router, ctx);
     registerBindProxy(router, ctx);
     registerSessions(router, ctx);
     registerIntake(router, ctx);

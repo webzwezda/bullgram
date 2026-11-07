@@ -23,7 +23,7 @@ ipv6-выход); `tg_accounts.proxy_id` → строка прокси. Порт
 all userbot onboarding через прокси; пост-покупка = передача владения внутри
 Bullgram, не сырой файл.
 
-## 2. Архитектура managed-слоя (18 слотов, порты 21115-21145)
+## 2. Архитектура managed-слоя (218 слотов, порты 21115-21345; из них 200 — свободный платформенный пул, mp_66..mp_265)
 
 ```
 Supabase proxies (mp_*) ──рендер──> /var/lib/bullgram/managed-proxies/3proxy.cfg
