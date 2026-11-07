@@ -199,6 +199,11 @@ USERBOT_GROUP_ADMIN_ENABLED=false
 # bot creation through the BotFather DM flow via MCP/REST (botfather_create_bot)
 USERBOT_BOTFATHER_ENABLED=false
 
+# JIT managed-proxy allocation for a newly connected userbot (rule «1 proxy = 1
+# userbot»); enable only when the pool has free slots (owner_id is null);
+# pool exhaustion alerts the platform admin (dedup 1h)
+USERBOT_AUTO_ALLOCATE_PROXY_ENABLED=false
+
 # auto-delete restricted userbots after quarantine window
 RESTRICTED_USERBOT_AUTO_DELETE_ENABLED=true
 RESTRICTED_USERBOT_DELETE_AFTER_HOURS=72

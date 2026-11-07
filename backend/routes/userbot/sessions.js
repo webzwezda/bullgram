@@ -9,6 +9,8 @@ import { encrypt } from '../../utils/crypto.js';
 import { TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions/index.js';
 import { enforceUserbotQuota } from '../../utils/product-tier.js';
+import { allocateManagedProxyForAccount } from '../../services/proxy-allocation.service.js';
+import { notifyPlatformAlert } from '../../utils/platform-telegram-alert.js';
 import { FRESH_IMPORT_RUNTIME_REASON, FRESH_IMPORT_RUNTIME_STATUS } from '../../utils/ops-center-selection.js';
 import { buildTelegramProfilePatch } from '../../utils/telegram-profile.js';
 import {
@@ -158,6 +160,22 @@ export function registerSessions(router, ctx) {
                     .eq('account_type', 'userbot')
                     .eq('tg_account_id', me.id.toString())
                     .maybeSingle();
+
+                // JIT-выдача managed-слота (BACKLOG §32): аккаунт встал без proxy_id —
+                // пробуем занять свободный mp_* слот из пула. Non-fatal: провал выдачи
+                // не ломает импорт (race_lost/pool_empty — штатные исходы).
+                if (savedAccount?.id && !proxyData.proxy_id) {
+                    try {
+                        const allocation = await allocateManagedProxyForAccount(supabase, {
+                            ownerId: req.user.id,
+                            accountId: savedAccount.id,
+                            alert: notifyPlatformAlert
+                        });
+                        req.log.info({ owner_id: req.user.id, account_id: savedAccount.id, allocation }, 'JIT managed-proxy allocation after session import');
+                    } catch (allocationError) {
+                        req.log.warn({ err: allocationError, owner_id: req.user.id }, 'JIT managed-proxy allocation failed (non-fatal)');
+                    }
+                }
 
                 if (savedAccount?.id) {
                     try {
