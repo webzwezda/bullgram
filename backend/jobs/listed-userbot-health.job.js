@@ -236,13 +236,31 @@ export async function runListedHealthCheck(supabase, userbotService, { checkFn =
             } else if (QUARANTINE_STATUSES.includes(status)) {
                 // Проблемный, но не Telegram-бан: прокси и аккаунт не трогаем,
                 // уходим только с витрины — восстанавливается после живой проверки.
-                await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || status);
-                console.error('[ListedUserbotHealth] quarantine — лот снят:', {
-                    userbot_id: account.id,
-                    username: account.tg_username,
-                    status,
-                    reason: result.reason
-                });
+                // АНТИ-ФЛАП (инцидент 2026-11-07): инфраструктурная неудача
+                // (dead_proxy/error) снимает лот только со ВТОРОЙ ПОДРЯД неудачи —
+                // одиночный сбой (IPv6-флап до Telegram) не карантинит витрину.
+                // Telegram-авторитетные (restricted/expired/frozen) — сразу.
+                const TRANSIENT = ['dead_proxy', 'error'];
+                const prevStatus = String(account.runtime_status || '').trim();
+                const confirmQuarantine = !TRANSIENT.includes(status)
+                    || TRANSIENT.includes(prevStatus)
+                    || prevStatus === 'restricted' || prevStatus === 'frozen' || prevStatus === 'expired';
+                if (confirmQuarantine) {
+                    await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || status);
+                    console.error('[ListedUserbotHealth] quarantine — лот снят:', {
+                        userbot_id: account.id,
+                        username: account.tg_username,
+                        status,
+                        reason: result.reason
+                    });
+                } else {
+                    console.warn('[ListedUserbotHealth] первая подряд инфра-неудача — лот остаётся на витрине:', {
+                        userbot_id: account.id,
+                        username: account.tg_username,
+                        status,
+                        reason: result.reason
+                    });
+                }
             } else {
                 console.log('[ListedUserbotHealth] ok', {
                     userbot_id: account.id,

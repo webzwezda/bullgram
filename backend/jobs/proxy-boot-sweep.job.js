@@ -81,15 +81,15 @@ export async function runProxyBootSweep(supabase) {
             }).eq('id', proxy.id);
         } else {
             dead += 1;
+            // НЕ переворачиваем is_working=false (волна прокси-инцидента 2026-11-07):
+            // бут-свип стартует через 60с после деплоя и при IPv6-флапе до Telegram
+            // за один заход объявлял мёртвыми ВСЕ managed-слоты, дальше health-check
+            // коротко замыкался на is_working=false и снимал лоты без соединения.
+            // Бут-свип только ПОДТВЕРЖДАЕТ живых; объявлять мёртвым — только
+            // повторным неудачам (прокси-check эндпоинт / failover-механика).
             await supabase.from('proxies').update({
-                is_working: false,
                 last_checked_at: new Date().toISOString(),
-                last_check_error: result.error,
-                last_check_ip: null,
-                last_check_country: null,
-                last_check_country_code: null,
-                last_check_city: null,
-                last_check_isp: null
+                last_check_error: result.error
             }).eq('id', proxy.id);
         }
     });
