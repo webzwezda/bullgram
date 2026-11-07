@@ -1,9 +1,8 @@
 // Тесты статистики платформенного пула (GET /api/userbot/proxy-pool/stats).
 // Офлайн: фейковый express-роутер + мок supabase (proxies, tg_accounts,
-// shop_items, shop_item_assets, shop_purchases; head-count для покупок).
-// Покрывает: admin видит total/used/free/reserved/dead/shop_listed/purchased;
-// не-admin → 403; proxy_id вне пула не считается used; черновик-лот и
-// недоставленная покупка не считаются.
+// shop_items, shop_item_assets). Состояния в сумме дают total:
+// free + used + shop_listed + reserved_other = total; dead/sold/
+// purchased_source — справочные пересекающиеся.
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
@@ -18,14 +17,10 @@ function makeMockSupabase({ tables: seed = {} } = {}) {
     const tables = Object.fromEntries(Object.entries(seed).map(([t, rows]) => [t, rows.map(r => ({ ...r }))]));
     function from(table) {
         const rows = tables[table] || (tables[table] = []);
-        const state = { op: 'select', filters: [], wantSingle: false, wantCount: false, wantHead: false };
+        const state = { op: 'select', filters: [], wantSingle: false };
         const matches = () => rows.filter(row => state.filters.every(([col, test]) => test(row[col])));
         const builder = {
-            select(_cols, opts = {}) {
-                if (opts?.count === 'exact') state.wantCount = true;
-                if (opts?.head) state.wantHead = true;
-                return builder;
-            },
+            select() { return builder; },
             eq(col, val) { state.filters.push([col, cell => String(cell) === String(val)]); return builder; },
             like(col, pattern) {
                 const re = new RegExp('^' + String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.') + '$');
@@ -42,11 +37,7 @@ function makeMockSupabase({ tables: seed = {} } = {}) {
                 return builder;
             },
             maybeSingle() { state.wantSingle = true; return builder; },
-            then(resolve) {
-                const out = matches();
-                if (state.wantCount) resolve({ data: state.wantHead ? null : out, count: out.length, error: null });
-                else resolve({ data: state.wantSingle ? (out[0] ?? null) : out, error: null });
-            }
+            then(resolve) { resolve({ data: state.wantSingle ? (matches()[0] ?? null) : matches(), error: null }); }
         };
         return builder;
     }
@@ -92,42 +83,43 @@ function setup({ tables, role }) {
 describe('GET /proxy-pool/stats', () => {
     const TABLES = {
         proxies: [
-            { id: 'mp-a', username: 'mp_1', owner_id: null, is_working: true },
-            { id: 'mp-shop', username: 'mp_2', owner_id: null, is_working: true },
-            { id: 'mp-res', username: 'mp_3', owner_id: OWNER, is_working: true },
-            { id: 'mp-used', username: 'mp_4', owner_id: OWNER, is_working: true },
-            { id: 'mp-dead', username: 'mp_5', owner_id: null, is_working: false }
+            { id: 'mp-1', username: 'mp_1', owner_id: null, is_working: true, provision_source: 'manual_admin' },
+            { id: 'mp-2', username: 'mp_2', owner_id: null, is_working: true, provision_source: 'manual_admin' },   // висит в магазине
+            { id: 'mp-3', username: 'mp_3', owner_id: OWNER, is_working: true, provision_source: 'manual_admin' },  // осиротевший
+            { id: 'mp-4', username: 'mp_4', owner_id: OWNER, is_working: true, provision_source: 'purchased' },     // используется + закуплен
+            { id: 'mp-5', username: 'mp_5', owner_id: null, is_working: false, provision_source: 'manual_admin' },  // мёртвый
+            { id: 'mp-6', username: 'mp_6', owner_id: OWNER, is_working: true, provision_source: 'manual_admin' }   // продан, у покупателя без привязки
         ],
-        tg_accounts: [{ proxy_id: 'mp-used' }],
+        tg_accounts: [{ proxy_id: 'mp-4' }],
         shop_items: [
             { id: 'item-live', status: 'published', visibility: 'public' },
-            { id: 'item-draft', status: 'draft', visibility: 'private' }
+            { id: 'item-sold', status: 'sold', visibility: 'private' },
+            { id: 'item-draft', status: 'published', visibility: 'private' }   // published, но private → не «в магазине»
         ],
         shop_item_assets: [
-            { shop_item_id: 'item-live', asset_type: 'proxy', asset_id: 'mp-shop' },
-            { shop_item_id: 'item-draft', asset_type: 'proxy', asset_id: 'mp-a' }
-        ],
-        shop_purchases: [
-            { shop_item_id: 'item-live', delivered_at: '2026-11-01T00:00:00Z' },
-            { shop_item_id: 'item-draft', delivered_at: null }
+            { shop_item_id: 'item-live', asset_type: 'proxy', asset_id: 'mp-2' },
+            { shop_item_id: 'item-sold', asset_type: 'proxy', asset_id: 'mp-6' },
+            { shop_item_id: 'item-draft', asset_type: 'proxy', asset_id: 'mp-1' }
         ]
     };
 
-    it('admin видит полный жизненный цикл: total/used/free/reserved/dead/shop_listed/purchased', async () => {
+    it('админ видит непересекающиеся состояния (сумма = total) и справочные', async () => {
         const { handler, req, res } = setup({ tables: TABLES, role: 'admin' });
 
         await handler(req, res);
 
         assert.strictEqual(res.statusCode, 200);
-        assert.deepStrictEqual(res.body, {
-            total: 5,
-            used: 1,
-            free: 3,          // mp-a, mp-shop, mp-dead (owner NULL)
-            reserved: 1,      // mp-res: занят владельцем, не привязан
-            dead: 1,          // mp-dead
-            shop_listed: 1,   // mp-shop в published-лоте; черновик не считается
-            purchased: 1      // доставленная покупка; без delivered_at не считается
-        });
+        const body = res.body;
+        assert.strictEqual(body.total, 6);
+        assert.strictEqual(body.free, 2);            // mp-1 + mp-5 (owner NULL и не в магазине; dead — справочный флаг)
+        assert.strictEqual(body.used, 1);            // mp-4
+        assert.strictEqual(body.shop_listed, 1);     // mp-2 в published/public
+        assert.strictEqual(body.reserved_other, 2);  // mp-3 + mp-6 (у владельцев без привязки)
+        assert.strictEqual(body.dead, 1);            // mp-5
+        assert.strictEqual(body.sold, 1);            // mp-6 в sold-лоте
+        assert.strictEqual(body.purchased_source, 1);// mp-4
+        assert.strictEqual(body.free + body.used + body.shop_listed + body.reserved_other, body.total, 'состояния покрывают весь пул');
+        assert.strictEqual(body.used_share, Math.round((1 / 6) * 100));
     });
 
     it('не-admin получает 403', async () => {
@@ -141,11 +133,10 @@ describe('GET /proxy-pool/stats', () => {
     it('proxy_id вне пула (свой прокси пользователя) не считается used пула', async () => {
         const { handler, req, res } = setup({
             tables: {
-                proxies: [{ id: 'mp-a', username: 'mp_1', owner_id: null, is_working: true }],
+                proxies: [{ id: 'mp-1', username: 'mp_1', owner_id: null, is_working: true, provision_source: 'manual_admin' }],
                 tg_accounts: [{ proxy_id: 'user-own-proxy' }],
                 shop_items: [],
-                shop_item_assets: [],
-                shop_purchases: []
+                shop_item_assets: []
             },
             role: 'admin'
         });
@@ -156,6 +147,6 @@ describe('GET /proxy-pool/stats', () => {
         assert.strictEqual(res.body.total, 1);
         assert.strictEqual(res.body.free, 1);
         assert.strictEqual(res.body.shop_listed, 0);
-        assert.strictEqual(res.body.purchased, 0);
+        assert.strictEqual(res.body.sold, 0);
     });
 });

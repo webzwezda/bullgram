@@ -45,18 +45,21 @@ function ProxyPoolDashboard({ accessToken }) {
 
   if (!stats) return null;
 
+  // Состояния не пересекаются и в сумме дают total (считает бэкенд):
+  // свободно + используется + в магазине + у владельца без привязки.
   const poolTiles = [
     { label: 'Поднято', value: stats.total, hint: 'всего mp_* слотов' },
     { label: 'Свободно для новых', value: stats.free, hint: 'доступно авто-выдаче' },
     { label: 'Используется', value: stats.used, hint: 'привязаны к юзерботам', dimmedZero: true },
-    { label: 'Резерв', value: stats.reserved, hint: 'у владельца без привязки', dimmedZero: true }
+    { label: 'В магазине', value: stats.shop_listed, hint: 'в опубликованных лотах', dimmedZero: true }
   ];
-  const shopTiles = [
-    { label: 'В магазине', value: stats.shop_listed, hint: 'в опубликованных лотах', dimmedZero: true },
-    { label: 'Куплено', value: stats.purchased, hint: 'доставленных покупок', dimmedZero: true },
+  const otherTiles = [
+    { label: 'У владельцев без привязки', value: stats.reserved_other, hint: 'осиротевшие / куплены без юзербота', dimmedZero: true },
+    { label: 'Продано', value: stats.sold, hint: 'слоты в sold-лотах магазина', dimmedZero: true },
+    { label: 'Куплено на стороне', value: stats.purchased_source, hint: 'источник закупки, пересекается с состояниями', dimmedZero: true },
     { label: 'Мёртвые', value: stats.dead, hint: 'is_working = false', dimmedZero: true, error: stats.dead > 0 }
   ];
-  const usedShare = stats.total > 0 ? Math.min(100, Math.round((stats.used / stats.total) * 100)) : 0;
+  const usedShare = typeof stats.used_share === 'number' ? stats.used_share : 0;
 
   const renderTile = (tile) => (
     <div key={tile.label} className={`rounded-xl border px-4 py-3 ${tile.error ? 'border-feedback-error-border bg-feedback-error-bg' : 'border-border-default bg-surface-subtle'}`}>
@@ -100,9 +103,9 @@ function ProxyPoolDashboard({ accessToken }) {
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-border-default">
-          <div className="text-[11px] uppercase tracking-widest text-ink-muted font-semibold mb-2">Магазин и здоровье</div>
+          <div className="text-[11px] uppercase tracking-widest text-ink-muted font-semibold mb-2">Магазин, продажи и здоровье</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {shopTiles.map(renderTile)}
+            {otherTiles.map(renderTile)}
           </div>
           <p className="mt-3 text-xs text-ink-muted">
             При удалении: прокси с привязанным юзерботом удалить нельзя — сначала перепривязка или удаление юзербота.

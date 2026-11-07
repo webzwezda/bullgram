@@ -1,11 +1,14 @@
 // Статистика платформенного пула managed-прокси (BACKLOG §32).
 // Пул = все строки proxies с username mp_* (источник правды reconcile'а).
-// Жизненный цикл одного слота: свободен (owner NULL) → занят владельцем
-// (резерв, не привязан) → используется (привязан к юзерботу) → может висеть
-// в магазине (published-лот с asset_type='proxy') → куплен (доставленная
-// покупка такого лота) → удаление: с привязанным юзерботом запрещено
-// (роут DELETE /proxies/:id), после удаления reconcile снимает слушателя.
-// Только платформенный админ: числа видны изнутри платформы.
+// Непересекающиеся состояния слота (в сумме = total):
+//   free           — свободен для авто-выдачи (owner NULL, вне магазина);
+//   used           — привязан к юзерботу (tg_accounts.proxy_id);
+//   shop_listed    — висит в опубликованном лоте магазина;
+//   reserved_other — у владельца без привязки и вне магазина (осиротевшие).
+// Пересекающиеся (справочные): dead (is_working=false), sold (слот в sold-лоте
+// магазина, исторические продажи тоже), purchased_source (закуплен на стороне).
+// Удаление: с привязанным юзерботом запрещено (DELETE /proxies/:id), после
+// удаления reconcile снимает слушателя и IPv6. Только платформенный админ.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 
 export function registerProxyPoolStats(router, ctx) {
@@ -18,7 +21,7 @@ export function registerProxyPoolStats(router, ctx) {
 
         const { data: poolRows, error: poolError } = await supabase
             .from('proxies')
-            .select('id, owner_id, is_working')
+            .select('id, owner_id, is_working, provision_source')
             .like('username', 'mp_%');
         if (poolError) throw poolError;
 
@@ -28,61 +31,55 @@ export function registerProxyPoolStats(router, ctx) {
             .not('proxy_id', 'is', null);
         if (boundError) throw boundError;
 
-        // Опубликованные лоты магазинов (публичные + unlisted) с прокси-ассетами.
-        const { data: publishedItems, error: itemsError } = await supabase
+        // Лоты с прокси-ассетами: published (public/unlisted = «в магазине»)
+        // и sold («продано» — исторические продажи тоже считаются).
+        const { data: shopItems, error: shopItemsError } = await supabase
             .from('shop_items')
-            .select('id')
-            .eq('status', 'published')
-            .in('visibility', ['public', 'unlisted']);
-        if (itemsError) throw itemsError;
-        const publishedIds = (publishedItems || []).map((row) => row.id);
-        let shopProxyAssetIds = [];
-        if (publishedIds.length) {
-            const { data: assets, error: assetsError } = await supabase
+            .select('id, status, visibility')
+            .in('status', ['published', 'sold']);
+        if (shopItemsError) throw shopItemsError;
+        const listedItemIds = (shopItems || [])
+            .filter((row) => row.status === 'published' && ['public', 'unlisted'].includes(row.visibility))
+            .map((row) => row.id);
+        const soldItemIds = (shopItems || []).filter((row) => row.status === 'sold').map((row) => row.id);
+
+        async function proxyAssetsOf(itemIds) {
+            if (!itemIds.length) return [];
+            const { data: assets, error } = await supabase
                 .from('shop_item_assets')
                 .select('asset_id')
                 .eq('asset_type', 'proxy')
-                .in('shop_item_id', publishedIds);
-            if (assetsError) throw assetsError;
-            shopProxyAssetIds = (assets || []).map((row) => String(row.asset_id));
-        }
-
-        // Куплено: доставленные покупки лотов, в которых есть прокси-ассеты.
-        let purchased = 0;
-        const { data: proxyAssets, error: proxyAssetsError } = await supabase
-            .from('shop_item_assets')
-            .select('shop_item_id')
-            .eq('asset_type', 'proxy');
-        if (proxyAssetsError) throw proxyAssetsError;
-        const proxyItemIds = Array.from(new Set((proxyAssets || []).map((row) => row.shop_item_id)));
-        if (proxyItemIds.length) {
-            const { count, error: purchasesError } = await supabase
-                .from('shop_purchases')
-                .select('id', { count: 'exact', head: true })
-                .in('shop_item_id', proxyItemIds)
-                .not('delivered_at', 'is', null);
-            if (purchasesError) throw purchasesError;
-            purchased = Number(count || 0);
+                .in('shop_item_id', itemIds);
+            if (error) throw error;
+            return (assets || []).map((row) => String(row.asset_id));
         }
 
         const poolIds = new Set((poolRows || []).map((row) => String(row.id)));
         const usedIds = new Set((boundRows || [])
             .map((row) => String(row.proxy_id))
             .filter((id) => poolIds.has(id)));
-        const shopListedIds = new Set(shopProxyAssetIds.filter((id) => poolIds.has(id)));
+        const shopListedIds = new Set((await proxyAssetsOf(listedItemIds)).filter((id) => poolIds.has(id)));
+        const soldIds = new Set((await proxyAssetsOf(soldItemIds)).filter((id) => poolIds.has(id)));
 
         const total = (poolRows || []).length;
         const used = usedIds.size;
-        const free = (poolRows || []).filter((row) => row.owner_id == null).length;
         const dead = (poolRows || []).filter((row) => row.is_working === false).length;
+        const purchasedSource = (poolRows || []).filter((row) => row.provision_source === 'purchased').length;
+        // free = свободен для выдачи: owner NULL и не висит в магазине.
+        const free = (poolRows || []).filter((row) => row.owner_id == null && !shopListedIds.has(String(row.id))).length;
+        // reserved_other = у владельца без привязки и вне магазина (осиротевшие).
+        const reservedOther = Math.max(total - used - shopListedIds.size - free, 0);
+
         return res.json({
             total,
             used,
             free,
-            reserved: Math.max(total - used - free, 0),
+            used_share: total > 0 ? Math.round((used / total) * 100) : 0,
+            reserved_other: reservedOther,
             dead,
             shop_listed: shopListedIds.size,
-            purchased
+            sold: soldIds.size,
+            purchased_source: purchasedSource
         });
     });
 }
