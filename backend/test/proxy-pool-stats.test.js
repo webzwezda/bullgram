@@ -1,7 +1,9 @@
 // Тесты статистики платформенного пула (GET /api/userbot/proxy-pool/stats).
-// Офлайн: фейковый express-роутер + мок supabase (две таблицы, plain select).
-// Покрывает: admin видит total/used/free/reserved; не-admin → 403; proxy_id
-// вне пула (свой прокси пользователя) не считается «используемым» пулом.
+// Офлайн: фейковый express-роутер + мок supabase (proxies, tg_accounts,
+// shop_items, shop_item_assets, shop_purchases; head-count для покупок).
+// Покрывает: admin видит total/used/free/reserved/dead/shop_listed/purchased;
+// не-admin → 403; proxy_id вне пула не считается used; черновик-лот и
+// недоставленная покупка не считаются.
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
@@ -12,18 +14,27 @@ const { registerProxyPoolStats } = await import('../routes/userbot/proxy-pool-st
 
 const OWNER = 'pool-owner';
 
-function makeMockSupabase({ proxies = [], accounts = [] } = {}) {
-    const tables = { proxies: proxies.map(r => ({ ...r })), tg_accounts: accounts.map(r => ({ ...r })) };
+function makeMockSupabase({ tables: seed = {} } = {}) {
+    const tables = Object.fromEntries(Object.entries(seed).map(([t, rows]) => [t, rows.map(r => ({ ...r }))]));
     function from(table) {
         const rows = tables[table] || (tables[table] = []);
-        const state = { filters: [], wantSingle: false };
+        const state = { op: 'select', filters: [], wantSingle: false, wantCount: false, wantHead: false };
         const matches = () => rows.filter(row => state.filters.every(([col, test]) => test(row[col])));
         const builder = {
-            select() { return builder; },
+            select(_cols, opts = {}) {
+                if (opts?.count === 'exact') state.wantCount = true;
+                if (opts?.head) state.wantHead = true;
+                return builder;
+            },
             eq(col, val) { state.filters.push([col, cell => String(cell) === String(val)]); return builder; },
             like(col, pattern) {
                 const re = new RegExp('^' + String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.') + '$');
                 state.filters.push([col, cell => re.test(String(cell ?? ''))]);
+                return builder;
+            },
+            in(col, values) {
+                const set = new Set((values || []).map(v => String(v)));
+                state.filters.push([col, cell => set.has(String(cell))]);
                 return builder;
             },
             not(col, op, val) {
@@ -31,7 +42,11 @@ function makeMockSupabase({ proxies = [], accounts = [] } = {}) {
                 return builder;
             },
             maybeSingle() { state.wantSingle = true; return builder; },
-            then(resolve) { resolve({ data: state.wantSingle ? (matches()[0] ?? null) : matches(), error: null }); }
+            then(resolve) {
+                const out = matches();
+                if (state.wantCount) resolve({ data: state.wantHead ? null : out, count: out.length, error: null });
+                else resolve({ data: state.wantSingle ? (out[0] ?? null) : out, error: null });
+            }
         };
         return builder;
     }
@@ -65,8 +80,8 @@ function makeReqRes({ role = 'admin' } = {}) {
     return { req, res };
 }
 
-function setup({ proxies, accounts, role }) {
-    const db = makeMockSupabase({ proxies, accounts });
+function setup({ tables, role }) {
+    const db = makeMockSupabase({ tables });
     const router = makeRouter();
     registerProxyPoolStats(router, { supabase: db });
     const handler = routeHandler(router, 'GET', '/proxy-pool/stats');
@@ -75,36 +90,64 @@ function setup({ proxies, accounts, role }) {
 }
 
 describe('GET /proxy-pool/stats', () => {
-    const POOL = [
-        { id: 'mp-a', username: 'mp_1', owner_id: null },
-        { id: 'mp-b', username: 'mp_2', owner_id: null },
-        { id: 'mp-c', username: 'mp_3', owner_id: OWNER }
-    ];
+    const TABLES = {
+        proxies: [
+            { id: 'mp-a', username: 'mp_1', owner_id: null, is_working: true },
+            { id: 'mp-shop', username: 'mp_2', owner_id: null, is_working: true },
+            { id: 'mp-res', username: 'mp_3', owner_id: OWNER, is_working: true },
+            { id: 'mp-used', username: 'mp_4', owner_id: OWNER, is_working: true },
+            { id: 'mp-dead', username: 'mp_5', owner_id: null, is_working: false }
+        ],
+        tg_accounts: [{ proxy_id: 'mp-used' }],
+        shop_items: [
+            { id: 'item-live', status: 'published', visibility: 'public' },
+            { id: 'item-draft', status: 'draft', visibility: 'private' }
+        ],
+        shop_item_assets: [
+            { shop_item_id: 'item-live', asset_type: 'proxy', asset_id: 'mp-shop' },
+            { shop_item_id: 'item-draft', asset_type: 'proxy', asset_id: 'mp-a' }
+        ],
+        shop_purchases: [
+            { shop_item_id: 'item-live', delivered_at: '2026-11-01T00:00:00Z' },
+            { shop_item_id: 'item-draft', delivered_at: null }
+        ]
+    };
 
-    it('admin видит total/used/free/reserved', async () => {
-        const { handler, req, res } = setup({
-            proxies: POOL,
-            accounts: [{ proxy_id: 'mp-c' }, { proxy_id: 'user-own-proxy' }]
-        });
+    it('admin видит полный жизненный цикл: total/used/free/reserved/dead/shop_listed/purchased', async () => {
+        const { handler, req, res } = setup({ tables: TABLES, role: 'admin' });
 
         await handler(req, res);
 
         assert.strictEqual(res.statusCode, 200);
-        assert.deepStrictEqual(res.body, { total: 3, used: 1, free: 2, reserved: 0 });
+        assert.deepStrictEqual(res.body, {
+            total: 5,
+            used: 1,
+            free: 3,          // mp-a, mp-shop, mp-dead (owner NULL)
+            reserved: 1,      // mp-res: занят владельцем, не привязан
+            dead: 1,          // mp-dead
+            shop_listed: 1,   // mp-shop в published-лоте; черновик не считается
+            purchased: 1      // доставленная покупка; без delivered_at не считается
+        });
     });
 
     it('не-admin получает 403', async () => {
-        const { handler, req, res } = setup({ proxies: POOL, accounts: [], role: 'user' });
+        const { handler, req, res } = setup({ tables: TABLES, role: 'user' });
 
         await handler(req, res);
 
         assert.strictEqual(res.statusCode, 403);
     });
 
-    it('proxy_id вне пула (свой прокси) не считается used пула', async () => {
+    it('proxy_id вне пула (свой прокси пользователя) не считается used пула', async () => {
         const { handler, req, res } = setup({
-            proxies: [{ id: 'mp-a', username: 'mp_1', owner_id: null }],
-            accounts: [{ proxy_id: 'user-own-proxy' }]
+            tables: {
+                proxies: [{ id: 'mp-a', username: 'mp_1', owner_id: null, is_working: true }],
+                tg_accounts: [{ proxy_id: 'user-own-proxy' }],
+                shop_items: [],
+                shop_item_assets: [],
+                shop_purchases: []
+            },
+            role: 'admin'
         });
 
         await handler(req, res);
@@ -112,5 +155,7 @@ describe('GET /proxy-pool/stats', () => {
         assert.strictEqual(res.body.used, 0);
         assert.strictEqual(res.body.total, 1);
         assert.strictEqual(res.body.free, 1);
+        assert.strictEqual(res.body.shop_listed, 0);
+        assert.strictEqual(res.body.purchased, 0);
     });
 });

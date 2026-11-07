@@ -45,13 +45,26 @@ function ProxyPoolDashboard({ accessToken }) {
 
   if (!stats) return null;
 
-  const tiles = [
+  const poolTiles = [
     { label: 'Поднято', value: stats.total, hint: 'всего mp_* слотов' },
+    { label: 'Свободно для новых', value: stats.free, hint: 'доступно авто-выдаче' },
     { label: 'Используется', value: stats.used, hint: 'привязаны к юзерботам', dimmedZero: true },
-    { label: 'Свободно', value: stats.free, hint: 'доступно выдаче' },
     { label: 'Резерв', value: stats.reserved, hint: 'у владельца без привязки', dimmedZero: true }
   ];
+  const shopTiles = [
+    { label: 'В магазине', value: stats.shop_listed, hint: 'в опубликованных лотах', dimmedZero: true },
+    { label: 'Куплено', value: stats.purchased, hint: 'доставленных покупок', dimmedZero: true },
+    { label: 'Мёртвые', value: stats.dead, hint: 'is_working = false', dimmedZero: true, error: stats.dead > 0 }
+  ];
   const usedShare = stats.total > 0 ? Math.min(100, Math.round((stats.used / stats.total) * 100)) : 0;
+
+  const renderTile = (tile) => (
+    <div key={tile.label} className={`rounded-xl border px-4 py-3 ${tile.error ? 'border-feedback-error-border bg-feedback-error-bg' : 'border-border-default bg-surface-subtle'}`}>
+      <div className="text-[11px] uppercase tracking-widest text-ink-muted font-semibold">{tile.label}</div>
+      <div className={`mt-1 text-2xl font-bold tabular-nums ${tile.error ? 'text-feedback-error-text' : tile.dimmedZero && tile.value === 0 ? 'text-ink-muted' : 'text-ink-strong'}`}>{tile.value}</div>
+      <div className="text-xs text-ink-muted mt-0.5">{tile.hint}</div>
+    </div>
+  );
 
   return (
     <Card className="border-border-default/60 shadow-sm mb-6">
@@ -75,13 +88,7 @@ function ProxyPoolDashboard({ accessToken }) {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {tiles.map((tile) => (
-            <div key={tile.label} className="rounded-xl border border-border-default bg-surface-subtle px-4 py-3">
-              <div className="text-[11px] uppercase tracking-widest text-ink-muted font-semibold">{tile.label}</div>
-              <div className={`mt-1 text-2xl font-bold tabular-nums ${tile.dimmedZero && tile.value === 0 ? 'text-ink-muted' : 'text-ink-strong'}`}>{tile.value}</div>
-              <div className="text-xs text-ink-muted mt-0.5">{tile.hint}</div>
-            </div>
-          ))}
+          {poolTiles.map(renderTile)}
         </div>
         <div className="mt-4">
           <div className="flex items-center justify-between text-xs text-ink-muted">
@@ -91,6 +98,16 @@ function ProxyPoolDashboard({ accessToken }) {
           <div className="mt-1 h-2 rounded-full bg-surface-subtle overflow-hidden">
             <div className="h-full rounded-full bg-action-primary" style={{ width: `${usedShare}%` }} />
           </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-border-default">
+          <div className="text-[11px] uppercase tracking-widest text-ink-muted font-semibold mb-2">Магазин и здоровье</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {shopTiles.map(renderTile)}
+          </div>
+          <p className="mt-3 text-xs text-ink-muted">
+            При удалении: прокси с привязанным юзерботом удалить нельзя — сначала перепривязка или удаление юзербота.
+            После удаления слот уходит из конфига, и reconcile снимает его слушателя и IPv6.
+          </p>
         </div>
       </CardContent>
     </Card>
