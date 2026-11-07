@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+# lockfiles в git с 2026-11-07 (волна 2, п. 2.1): детерминированный npm ci
+# в деплое и npm audit/osv-scanner по lock. Правка зависимостей — только
+# через package.json в том же коммите, что и код (правило AGENTS.md).
 
 # Build outputs
 _site/
