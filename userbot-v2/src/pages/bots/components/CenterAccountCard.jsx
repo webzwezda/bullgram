@@ -55,26 +55,41 @@ export function CenterAccountCard({
   return (
         <div className="relative bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
         <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`shrink-0 border rounded-xl bg-white/80 backdrop-blur-sm border-border-default ${
-              isSafeMode
-                ? 'text-feedback-warning-text hover:bg-feedback-warning-bg hover:text-feedback-warning-text'
-                : 'text-feedback-success-text hover:bg-feedback-success-bg hover:text-feedback-success-text'
-            }`}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!isSafeMode}
+            aria-busy={modeBusy}
             onClick={() => toggleSafeMode(selectedLiveUserbot)}
             disabled={modeBusy}
-            aria-busy={modeBusy}
             title={modeTitle}
             aria-label={modeTitle}
+            className={`h-8 shrink-0 flex items-center gap-2 px-2 rounded-xl border bg-white/80 backdrop-blur-sm border-border-default transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ${
+              isSafeMode
+                ? 'text-feedback-warning-text hover:bg-feedback-warning-bg'
+                : 'text-feedback-success-text hover:bg-feedback-success-bg'
+            }`}
           >
-            {modeBusy
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : isSafeMode
-                ? <ShieldOff className="w-4 h-4" />
-                : <ShieldCheck className="w-4 h-4" />}
-          </Button>
+            <span aria-hidden="true" className="flex items-center">
+              {modeBusy
+                ? <Loader2 className="w-4 h-4 animate-spin text-ink-muted" />
+                : isSafeMode
+                  ? <ShieldOff className="w-4 h-4" />
+                  : <ShieldCheck className="w-4 h-4" />}
+            </span>
+            <span
+              aria-hidden="true"
+              className={`relative inline-flex h-4 w-8 shrink-0 items-center rounded-full transition-colors duration-200 ${
+                isSafeMode ? 'bg-slate-200' : 'bg-emerald-500'
+              }`}
+            >
+              <span
+                className={`ml-0.5 inline-block h-3 w-3 rounded-full bg-white shadow-sm transition duration-200 ${
+                  isSafeMode ? 'translate-x-0' : 'translate-x-4'
+                }`}
+              />
+            </span>
+          </button>
           <Button
             variant="ghost"
             size="icon"
@@ -89,7 +104,7 @@ export function CenterAccountCard({
           </Button>
         </div>
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-3 pr-24 sm:pr-28">
+          <div className="flex flex-wrap items-center gap-3 pr-36">
             <UserbotCombobox
               accounts={liveUserbots}
               value={String(selectedLiveUserbot.id)}
@@ -123,9 +138,9 @@ export function CenterAccountCard({
           </div>
 
           {(() => {
-            // Режим аккаунта (боевой/safe) теперь живёт только в иконке-щите
-            // рядом с «удалить» в правом верхнем углу. Здесь остаются только
-            // диагностические красные баннеры — они не про режим.
+            // Режим аккаунта (боевой/safe) живёт в пилюле-свитче у «удалить»
+            // (правый верхний угол) и в тоггле «Состояния сессии». Здесь
+            // остаются только диагностические красные баннеры — они не про режим.
             const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
             const restrictedBadge = restrictedMarker(selectedLiveUserbot);
             const hasRuntimeError = selectedLiveUserbot.runtime_error
