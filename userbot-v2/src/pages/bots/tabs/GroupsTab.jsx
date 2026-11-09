@@ -55,7 +55,7 @@ export function GroupsTab({ manualInviteLink, setManualInviteLink, joinInviteLin
             <h3 className="text-base font-bold text-slate-900">Написать в ЛС клиенту</h3>
             <p className="text-xs font-medium text-slate-500 mt-0.5">
               Доставка сработает, если у юзербота есть общий чат с этим человеком
-              (например, ваша админ-группа воронки) — холодные рассылки по ID Telegram не дает.
+              (например, ваша админ-группа воронки) — холодные рассылки по ID Telegram не поддерживаются.
             </p>
           </div>
         </div>

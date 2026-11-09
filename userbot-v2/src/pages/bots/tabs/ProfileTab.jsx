@@ -89,7 +89,7 @@ export function ProfileTab({
                     })()}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                   <button
                     type="button"
                     className="h-10 px-3 sm:px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap"

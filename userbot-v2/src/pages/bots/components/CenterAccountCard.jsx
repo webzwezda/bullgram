@@ -150,11 +150,11 @@ export function CenterAccountCard({
         {/* Секции стопкой без табов: профиль → вступление → продажа.
             Разделители border-t; гейт продажи здесь — renderSaleTab его не имеет. */}
         {profileTab}
-        <div id="userbot-groups" className="border-t border-slate-100 scroll-mt-4">
+        <div id="userbot-groups" className="border-t border-border-default scroll-mt-4">
           {groupsTab}
         </div>
         {canSellUserbotAssets && saleTab ? (
-          <div className="border-t border-slate-100">{saleTab}</div>
+          <div className="border-t border-border-default">{saleTab}</div>
         ) : null}
         </div>
   );
