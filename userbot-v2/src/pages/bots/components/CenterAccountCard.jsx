@@ -1,5 +1,4 @@
-import { AlertCircle, Loader2, ShieldCheck, Tag, Trash2, User, UserPlus } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle, Loader2, ShieldCheck, ShieldOff, Tag, Trash2, User, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 import { StatusBadge } from './CenterWidgets.jsx';
@@ -16,7 +15,6 @@ export function CenterAccountCard({
   recovery,
   checkingAccountId,
   togglingSafeModeId,
-  checkAccount,
   toggleSafeMode,
   canSellUserbotAssets,
   activeTab,
@@ -48,22 +46,50 @@ export function CenterAccountCard({
       subtitle: 'Выставить лот в Shop за TON',
     }] : [])
   ];
+  const isSafeMode = String(selectedLiveUserbot.runtime_status || '') === 'pending_activation';
+  const modeBusy = checkingAccountId === String(selectedLiveUserbot.id)
+    || togglingSafeModeId === String(selectedLiveUserbot.id);
+  const modeTitle = isSafeMode
+    ? 'Safe mode — активировать аккаунт'
+    : 'Боевой режим — перевести в Safe mode';
   return (
         <div className="relative bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 shrink-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl bg-white/80 backdrop-blur-sm"
-          onClick={() => deleteAccount(selectedLiveUserbot)}
-          disabled={deletingAccountId === String(selectedLiveUserbot.id)}
-          title="Удалить аккаунт"
-        >
-          {deletingAccountId === String(selectedLiveUserbot.id)
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Trash2 className="w-4 h-4" />}
-        </Button>
+        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`shrink-0 border rounded-xl bg-white/80 backdrop-blur-sm border-border-default ${
+              isSafeMode
+                ? 'text-feedback-warning-text hover:bg-feedback-warning-bg'
+                : 'text-feedback-success-text hover:bg-feedback-success-bg'
+            }`}
+            onClick={() => toggleSafeMode(selectedLiveUserbot)}
+            disabled={modeBusy}
+            aria-busy={modeBusy}
+            title={modeTitle}
+            aria-label={modeTitle}
+          >
+            {modeBusy
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : isSafeMode
+                ? <ShieldOff className="w-4 h-4" />
+                : <ShieldCheck className="w-4 h-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl bg-white/80 backdrop-blur-sm"
+            onClick={() => deleteAccount(selectedLiveUserbot)}
+            disabled={deletingAccountId === String(selectedLiveUserbot.id)}
+            title="Удалить аккаунт"
+          >
+            {deletingAccountId === String(selectedLiveUserbot.id)
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Trash2 className="w-4 h-4" />}
+          </Button>
+        </div>
         <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-3 pr-10 sm:pr-12">
+          <div className="flex flex-wrap items-center gap-3 pr-24 sm:pr-28">
             <UserbotCombobox
               accounts={liveUserbots}
               value={String(selectedLiveUserbot.id)}
@@ -97,42 +123,14 @@ export function CenterAccountCard({
           </div>
 
           {(() => {
+            // Режим аккаунта (боевой/safe) теперь живёт только в иконке-щите
+            // рядом с «удалить» в правом верхнем углу. Здесь остаются только
+            // диагностические красные баннеры — они не про режим.
             const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
-            const isSafeMode = runtimeStatus === 'pending_activation';
             const restrictedBadge = restrictedMarker(selectedLiveUserbot);
             const hasRuntimeError = selectedLiveUserbot.runtime_error
               && ['restricted', 'dead_proxy', 'expired', 'error'].includes(runtimeStatus);
 
-            if (isSafeMode) {
-              const activationBusy = checkingAccountId === String(selectedLiveUserbot.id)
-                || togglingSafeModeId === String(selectedLiveUserbot.id);
-              return (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 text-[10px] uppercase font-bold shrink-0">
-                      <AlertCircle aria-hidden="true" />
-                      Safe mode
-                    </Badge>
-                    <p className="text-sm text-ink-muted truncate">
-                      <span className="sm:hidden">Ждёт ручной активации</span>
-                      <span className="hidden sm:inline">Аккаунт ждёт живой активации перед входом в боевой контур</span>
-                    </p>
-                  </div>
-                  <Button
-                    className="rounded-lg shrink-0"
-                    onClick={() => checkAccount(selectedLiveUserbot)}
-                    disabled={activationBusy}
-                    variant="default"
-                  >
-                    {activationBusy ? (
-                      <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Активация...</>
-                    ) : (
-                      'Выполнить активацию'
-                    )}
-                  </Button>
-                </div>
-              );
-            }
             if (restrictedBadge?.detail) {
               return (
                 <div className="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
@@ -155,38 +153,7 @@ export function CenterAccountCard({
                 </div>
               );
             }
-            // Боевой контур: тихий статус-ряд по канону DESIGN.md — статус это
-            // Badge с feedback-парой, а не заливка-баннер: success-фон живёт для
-            // моментного фидбека («оплачено, сохранено»), нормальное состояние
-            // не кричит. Контейнер — как остальные белые карточки страницы.
-            const combatBusy = checkingAccountId === String(selectedLiveUserbot.id)
-              || togglingSafeModeId === String(selectedLiveUserbot.id);
-            return (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 shadow-sm">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 text-[10px] uppercase font-bold shrink-0">
-                    <ShieldCheck aria-hidden="true" />
-                    Боевой режим
-                  </Badge>
-                  <p className="text-sm text-ink-muted truncate">
-                    <span className="sm:hidden">Автоматика включена</span>
-                    <span className="hidden sm:inline">Автоматика и живые Telegram-действия включены</span>
-                  </p>
-                </div>
-                <Button
-                  className="rounded-lg shrink-0"
-                  onClick={() => toggleSafeMode(selectedLiveUserbot)}
-                  disabled={combatBusy}
-                  variant="outline"
-                >
-                  {combatBusy ? (
-                    <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Переход...</>
-                  ) : (
-                    'Перейти в Safe mode'
-                  )}
-                </Button>
-              </div>
-            );
+            return null;
           })()}
 
           <div className={`grid grid-cols-1 sm:grid-cols-2 ${TAB_OPTIONS.length > 2 ? 'lg:grid-cols-3' : ''} gap-3`}>

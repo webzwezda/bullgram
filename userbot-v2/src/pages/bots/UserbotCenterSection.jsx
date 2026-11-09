@@ -311,7 +311,6 @@ export function UserbotCenterSection({
           recovery={recovery}
           checkingAccountId={checkingAccountId}
           togglingSafeModeId={togglingSafeModeId}
-          checkAccount={checkAccount}
           toggleSafeMode={toggleSafeMode}
           canSellUserbotAssets={canSellUserbotAssets}
           activeTab={activeTab}
