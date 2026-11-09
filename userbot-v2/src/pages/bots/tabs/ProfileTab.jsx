@@ -134,11 +134,11 @@ export function ProfileTab({
                         className="h-10 w-full pl-8 pr-3 rounded-xl bg-surface-subtle text-sm font-medium"
                         value={usernameDraft}
                         maxLength={32}
-                        onChange={(event) => setUsernameDraft(event.target.value.replace(/[^A-Za-z0-9_@]/g, ''))}
+                        onChange={(event) => setUsernameDraft(event.target.value.replace(/^@+/, '').replace(/[^A-Za-z0-9_]/g, ''))}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' && usernameDirty && !usernameSaving) saveUsername();
                         }}
-                        placeholder="webzwezda"
+                        placeholder="username"
                       />
                     </div>
                     {usernameDirty ? (
@@ -148,7 +148,9 @@ export function ProfileTab({
                         onClick={saveUsername}
                         disabled={usernameSaving}
                       >
-                        {usernameSaving ? '...' : 'Сохранить'}
+                        {usernameSaving
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Сохраняю...</>
+                          : 'Сохранить'}
                       </Button>
                     ) : null}
                   </div>
