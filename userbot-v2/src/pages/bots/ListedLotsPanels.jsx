@@ -24,8 +24,6 @@ export function ListedLotsPanel({ accessToken, showUiMessage, refreshScan }) {
   async function removeListedItem(item) {
     const itemId = item?.listed_item_id;
     if (!itemId || !accessToken || removingAccountId) return;
-    const label = item.label || 'аккаунт';
-    if (!window.confirm(`Удалить лот «${label}» с витрины? Аккаунт вернётся в список кандидатов.`)) return;
     setRemovingAccountId(String(item.account_id || ''));
     try {
       await apiRequest(`/api/shop/admin/items/${itemId}`, {

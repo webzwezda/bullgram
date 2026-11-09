@@ -349,9 +349,10 @@ export function useUserbotOnboarding({
       showUiMessage('Для безопасного импорта обязателен и .json с fingerprint. Без него импорт не даем.', 'error');
       return;
     }
-    if (!window.confirm('Импорт `.session + .json` даёт сервису полный доступ к аккаунту. `tdata`, `Password2FA.txt`, `Accounts.txt` и другие соседние файлы сюда грузить не надо. После импорта аккаунт встанет в safe-mode и не пойдёт в автоматику до ручной активации. Продолжить?')) {
-      return;
-    }
+    // Подтверждение импорта переехало из window.confirm в тост (решение
+    // владельца: никаких блокирующих диалогов). Дисклеймер про полный доступ
+    // и гигиену файлов перенесён сюда из текста конфирма, не выброшен.
+    showUiMessage('Импорт .session даёт сервису полный доступ к аккаунту. Грузите только .session + .json — без tdata, Password2FA.txt и соседних файлов. После импорта аккаунт встанет в safe-mode.');
 
     updateOnboarding({
       isImporting: true

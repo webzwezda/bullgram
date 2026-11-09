@@ -43,10 +43,7 @@ export function QuarantinedAccountsPanel({
   // Удаление только аккаунта: DELETE /api/userbot/:id не трогает прокси —
   // он остаётся в инвентаре и может быть перепривязан.
   function deleteQuarantinedAccount() {
-    const label = account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
-    deleteAccount(account, {
-      confirmMessage: `Удалить аккаунт ${label} из отстойника? Сессия удалится безвозвратно. Прокси останется в инвентаре — его можно привязать к другому аккаунту.`
-    });
+    deleteAccount(account);
   }
 
   return (

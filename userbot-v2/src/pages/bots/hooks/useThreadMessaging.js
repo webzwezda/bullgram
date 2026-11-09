@@ -118,9 +118,6 @@ export function useThreadMessaging({ accessToken, selectedLiveUserbotId, convers
       toast.error('Напиши текст ответа.');
       return;
     }
-    if (!window.confirm('Отправить этот ответ через юзербота вручную? Telegram может ограничить аккаунт, если диалог холодный.')) {
-      return;
-    }
 
     setActionState((prev) => ({ ...prev, sendingReply: true }));
     try {
@@ -214,9 +211,6 @@ export function useThreadMessaging({ accessToken, selectedLiveUserbotId, convers
     }
     if (!manualCommonChatId) {
       toast.error('Сначала выбери общий чат. Холодный поиск по TG ID без общей группы больше не даем.');
-      return;
-    }
-    if (!window.confirm('Отправить ЛС по TG ID через юзербота вручную? Делай это только если аккаунт уже знает человека или есть общий чат.')) {
       return;
     }
 

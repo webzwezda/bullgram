@@ -324,7 +324,6 @@ export function useShopStorefront({
       ? targetPurchase.purchase_ids
       : [targetPurchase?.id].filter(Boolean);
     if (!targetIds.length) return;
-    if (!window.confirm('Отменить покупку и снять бронь?')) return;
 
     setCheckoutState((prev) => ({
       ...prev,
@@ -365,6 +364,7 @@ export function useShopStorefront({
         notice: '',
         noticeTone: 'default'
       }));
+      showUiMessage(error.message || 'Не удалось отменить покупку.', 'error');
     }
   }
 

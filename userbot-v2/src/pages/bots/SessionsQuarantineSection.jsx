@@ -69,9 +69,7 @@ export function SessionsQuarantineSection({
       toast.error('Сначала выбери юзербота.');
       return;
     }
-    if (!window.confirm('Разлогинить все остальные устройства этого Telegram-аккаунта и оставить только текущую серверную сессию?')) {
-      return;
-    }
+    toast.info('Разлогиниваю остальные устройства — останется только текущая серверная сессия...');
     setResetBusy((prev) => ({ ...prev, others: true }));
     try {
       const data = await apiRequest('/api/userbot/ops-center/authorizations/reset-others', {
@@ -102,9 +100,7 @@ export function SessionsQuarantineSection({
       return;
     }
     const label = row.device_model || row.app_name || row.platform || 'устройство';
-    if (!window.confirm(`Разлогинить «${label}»? На этом устройстве придётся заново входить в Telegram.`)) {
-      return;
-    }
+    toast.info(`Разлогиниваю «${label}» — на этом устройстве придётся заново войти в Telegram...`);
     setResetBusy((prev) => ({ ...prev, hash: row.hash }));
     try {
       const data = await apiRequest('/api/userbot/ops-center/authorizations/reset-one', {

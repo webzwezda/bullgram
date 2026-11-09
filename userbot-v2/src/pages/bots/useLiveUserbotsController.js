@@ -150,12 +150,7 @@ export function useLiveUserbotsController({
     }
   }
 
-  async function deleteAccount(account, { confirmMessage } = {}) {
-    const fallbackMessage = `Удалить ${account.account_type === 'userbot' ? 'юзербота' : 'бота'} и освободить его контур?`;
-    if (!window.confirm(confirmMessage || fallbackMessage)) {
-      return;
-    }
-
+  async function deleteAccount(account) {
     setAccountDeleteFeedback({ accountId: String(account.id), tone: 'default', text: '' });
     setState((prev) => ({ ...prev, deletingAccountId: String(account.id) }));
     try {
@@ -184,10 +179,12 @@ export function useLiveUserbotsController({
 
   async function checkAccount(account) {
     const isFresh = String(account?.runtime_status || '') === 'pending_activation';
-    const actionLabel = isFresh ? 'Активировать аккаунт' : 'Проверить Telegram';
-    if (!window.confirm(`${actionLabel}: это живая Telegram-проверка, а не просто чтение локальной сессии. Мы проверим, отвечает ли сессия, есть ли ограничения у аккаунта и что показывает пассивная проверка через SpamBot. ${isFresh ? 'Для свежего импорта это снимет safe-mode и переведёт аккаунт в рабочий статус, если Telegram не видит проблем. ' : ''}Продолжить?`)) {
-      return;
-    }
+    showUiMessage(
+      isFresh
+        ? 'Живая проверка Telegram: сессия, ограничения, SpamBot. Если проблем нет, safe-mode снимется.'
+        : 'Запускаю живую проверку Telegram: сессия, ограничения, SpamBot.',
+      'info'
+    );
     const accountId = account?.id;
     setAccountCheckFeedback({ accountId: String(accountId), tone: 'default', text: '' });
     setAccountCheckReport(emptyCheckReport());
@@ -240,10 +237,6 @@ export function useLiveUserbotsController({
 
     if (isSafeMode) {
       await checkAccount(account);
-      return;
-    }
-
-    if (!window.confirm('Вернуть аккаунт в safe-mode? Автоматика и живые Telegram-действия снова будут отключены до следующей ручной активации.')) {
       return;
     }
 

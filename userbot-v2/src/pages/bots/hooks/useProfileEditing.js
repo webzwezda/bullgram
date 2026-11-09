@@ -185,12 +185,6 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     if (!accessToken || !selectedLiveUserbotId || !selectedUserbot) return;
     if (!hasUnsavedChanges) return;
 
-    const parts = [];
-    if (profileDirty) parts.push('профиль');
-    if (bindingDirty) parts.push('настройки прокси');
-
-    if (!window.confirm(`Сохранить ${parts.join(' и ')} в Telegram?`)) return;
-
     if (profileDirty) {
       await saveSelectedUserbotProfile();
     }
