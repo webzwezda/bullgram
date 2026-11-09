@@ -72,7 +72,8 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
       const result = await apiRequest(`/api/userbot/username/${selectedUserbot.id}`, {
         accessToken,
         method: 'POST',
-        body: { username: cleaned }
+        body: { username: cleaned },
+        signal: AbortSignal.timeout(60000)
       });
       patchLiveUserbot(selectedUserbot.id, { tg_username: result.tg_username || cleaned });
       toast.success('Username сохранён в Telegram.');
@@ -121,7 +122,8 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     try {
       const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/sync`, {
         accessToken,
-        method: 'POST'
+        method: 'POST',
+        signal: AbortSignal.timeout(60000)
       });
 
       if (result.account) {
@@ -161,6 +163,7 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
       const result = await apiRequest(`/api/userbot/profile/${selectedLiveUserbotId}/update`, {
         accessToken,
         method: 'POST',
+        signal: AbortSignal.timeout(60000),
         body: {
           first_name: firstName,
           last_name: lastName,

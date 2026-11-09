@@ -14,6 +14,7 @@ import { registerSessions } from './sessions.js';
 import { registerIntake } from './intake.js';
 import { registerQr } from './qr.js';
 import { registerProfile } from './profile.js';
+import { registerProfileUsername } from './profile-username.js';
 import { registerLifecycle } from './lifecycle.js';
 import { registerHealthCheck } from './health-check.js';
 import { registerSyncAudit } from './sync-audit.js';
@@ -56,6 +57,7 @@ export default function (supabase) {
     // 4. УДАЛЕНИЕ И ПРОВЕРКА АККАУНТОВ
     // ==========================================
     registerProfile(router, ctx);
+    registerProfileUsername(router, ctx);
 
     // GET /recovery-status живёт внутри registerLifecycle первым роутом.
     // DELETE /:id, POST /restore/:id, POST /safe-mode/:id, PATCH /custom-label/:id.
