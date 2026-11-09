@@ -58,69 +58,69 @@ export function ProfileTab({
 
     return (
       <>
-        <div className="p-5 sm:p-6">
-          <div className="rounded-2xl bg-surface-card shadow-lg shadow-slate-200/40 ring-1 ring-border-default overflow-hidden">
-            <div className="bg-surface-subtle/50 border-b border-border-default p-5 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl bg-action-primary flex items-center justify-center text-white">
-                    {selectedProfilePhotoSrc ? (
-                      <img src={selectedProfilePhotoSrc} alt="" className="w-12 h-12 object-cover" />
-                    ) : (
-                      <span className="text-base font-black">
-                        {selectedProfileInitial}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-xl font-bold text-slate-900 truncate">
-                      {selectedProfileName || 'Имя пока не подтянуто'}
-                    </h2>
-                    {(() => {
-                      const parts = [
-                        selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '',
-                        selectedUserbot.tg_phone || '',
-                        selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''
-                      ].filter(Boolean);
-                      if (!parts.length) return null;
-                      return (
-                        <p className="text-sm text-ink-muted mt-0.5 truncate">
-                          {parts.join(' • ')}
-                        </p>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 px-3 sm:px-4 rounded-xl shadow-sm whitespace-nowrap"
-                    onClick={syncSelectedUserbotProfile}
-                    disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
-                  >
-                    {profileSyncState.pulling ? 'Тянем...' : 'Стянуть из Telegram'}
-                  </Button>
-                  {telegramWebEnabled ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-10 px-3 sm:px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-700 border-transparent shadow-sm whitespace-nowrap"
-                      onClick={() => {
-                        if (!selectedLiveUserbotId) return;
-                        window.open(`/userbot/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
-                      }}
-                      disabled={!selectedLiveUserbotId}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      Telegram Web
-                    </Button>
-                  ) : null}
-                </div>
+        {/* Секция профиля — без собственной рамки: identity-строка и форма
+            живут прямо в большой карточке, разделитель — border-b. */}
+        <div className="border-b border-border-default p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl bg-action-primary flex items-center justify-center text-white">
+                {selectedProfilePhotoSrc ? (
+                  <img src={selectedProfilePhotoSrc} alt="" className="w-12 h-12 object-cover" />
+                ) : (
+                  <span className="text-base font-black">
+                    {selectedProfileInitial}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-slate-900 truncate">
+                  {selectedProfileName || 'Имя пока не подтянуто'}
+                </h2>
+                {(() => {
+                  const parts = [
+                    selectedUserbot.tg_username ? `@${selectedUserbot.tg_username}` : '',
+                    selectedUserbot.tg_phone || '',
+                    selectedUserbot.tg_account_id ? `ID ${selectedUserbot.tg_account_id}` : ''
+                  ].filter(Boolean);
+                  if (!parts.length) return null;
+                  return (
+                    <p className="text-sm text-ink-muted mt-0.5 truncate">
+                      {parts.join(' • ')}
+                    </p>
+                  );
+                })()}
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 px-3 sm:px-4 rounded-xl shadow-sm whitespace-nowrap"
+                onClick={syncSelectedUserbotProfile}
+                disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
+              >
+                {profileSyncState.pulling ? 'Тянем...' : 'Стянуть из Telegram'}
+              </Button>
+              {telegramWebEnabled ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-10 px-3 sm:px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-700 border-transparent shadow-sm whitespace-nowrap"
+                  onClick={() => {
+                    if (!selectedLiveUserbotId) return;
+                    window.open(`/userbot/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
+                  }}
+                  disabled={!selectedLiveUserbotId}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Telegram Web
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
 
-            <div className="p-5 sm:p-6 space-y-5">
+        <div className="p-5 sm:p-6 space-y-5">
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -214,8 +214,6 @@ export function ProfileTab({
                   Ошибка профиля{selectedProfileAttemptedAt ? ` (${selectedProfileAttemptedAt})` : ''}: {selectedUserbot.tg_profile_sync_error}
                 </div>
               ) : null}
-            </div>
-          </div>
         </div>
 
           <div className="p-6 md:p-8 border-t border-slate-100 grid gap-6">
