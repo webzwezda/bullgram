@@ -88,18 +88,31 @@ export function registerProfile(router, ctx) {
                 }
 
                 try {
-                    const photo = await client.downloadProfilePhoto(me, { isBig: false });
-                    if (Buffer.isBuffer(photo) && photo.length > 0) {
-                        photoUrl = storeUserbotProfilePhoto({
-                            ownerId: req.user.id,
-                            accountId: account.id,
-                            photo
-                        });
-                    } else if (Buffer.isBuffer(photo)) {
-                        photoUrl = null;
+                    // Фото — самый уязвимый кусок синка: длинный поток через IPv6-слот,
+                    // деградирующий путь рвёт его чаще, чем короткие вызовы. 3 попытки
+                    // повышают шанс поймать живое окно; все мимо — старое фото остаётся
+                    // (photoUrl не определён → патч не трогает фото-поля).
+                    for (let photoAttempt = 1; photoAttempt <= 3 && photoUrl === undefined; photoAttempt++) {
+                        if (photoAttempt > 1) {
+                            await new Promise((resolve) => setTimeout(resolve, 1500));
+                        }
+                        try {
+                            const photo = await client.downloadProfilePhoto(me, { isBig: false });
+                            if (Buffer.isBuffer(photo) && photo.length > 0) {
+                                photoUrl = storeUserbotProfilePhoto({
+                                    ownerId: req.user.id,
+                                    accountId: account.id,
+                                    photo
+                                });
+                            } else if (Buffer.isBuffer(photo)) {
+                                photoUrl = null;
+                            }
+                        } catch (photoError) {
+                            console.warn(`[USERBOT_PROFILE_SYNC] photo skipped (attempt ${photoAttempt}/3):`, photoError?.message || photoError);
+                        }
                     }
-                } catch (photoError) {
-                    console.warn('[USERBOT_PROFILE_SYNC] photo skipped:', photoError?.message || photoError);
+                } catch (photoLoopError) {
+                    console.warn('[USERBOT_PROFILE_SYNC] photo loop error:', photoLoopError?.message || photoLoopError);
                 }
 
                 const syncedAt = new Date().toISOString();
