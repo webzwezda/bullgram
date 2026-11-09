@@ -60,8 +60,8 @@ export function CenterAccountCard({
             size="icon"
             className={`shrink-0 border rounded-xl bg-white/80 backdrop-blur-sm border-border-default ${
               isSafeMode
-                ? 'text-feedback-warning-text hover:bg-feedback-warning-bg'
-                : 'text-feedback-success-text hover:bg-feedback-success-bg'
+                ? 'text-feedback-warning-text hover:bg-feedback-warning-bg hover:text-feedback-warning-text'
+                : 'text-feedback-success-text hover:bg-feedback-success-bg hover:text-feedback-success-text'
             }`}
             onClick={() => toggleSafeMode(selectedLiveUserbot)}
             disabled={modeBusy}
