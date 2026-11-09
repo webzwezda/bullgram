@@ -26,7 +26,7 @@ export function CenterAccountCard({
     : 'Боевой режим — перевести в Safe mode';
   return (
         <div className="relative bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
-        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
+        <div className="absolute top-3 right-5 sm:top-4 sm:right-6 z-10 flex items-center gap-2">
           <button
             type="button"
             role="switch"
