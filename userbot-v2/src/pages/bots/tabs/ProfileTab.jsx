@@ -129,7 +129,7 @@ export function ProfileTab({
                   </div>
                   <div className="flex gap-2">
                     <Input
-                      className="h-10 flex-1 px-3 rounded-xl bg-surface-subtle text-sm font-medium shadow-none"
+                      className="h-10 flex-1 px-3 rounded-xl bg-surface-subtle text-sm font-medium"
                       value={labelDraft}
                       maxLength={100}
                       onChange={(event) => setLabelDraft(event.target.value)}
@@ -138,16 +138,16 @@ export function ProfileTab({
                       }}
                       placeholder="Например: Вася, Админ группы, Основной аккаунт"
                     />
-                    <Button
-                      type="button"
-                      className={`h-10 px-4 rounded-xl shadow-sm whitespace-nowrap ${
-                        labelDirty ? 'visible' : 'invisible'
-                      }`}
-                      onClick={saveCustomLabel}
-                      disabled={!labelDirty || labelSaving}
-                    >
-                      {labelSaving ? '...' : 'Сохранить'}
-                    </Button>
+                    {labelDirty ? (
+                      <Button
+                        type="button"
+                        className="h-10 px-4 rounded-xl shadow-sm whitespace-nowrap"
+                        onClick={saveCustomLabel}
+                        disabled={labelSaving}
+                      >
+                        {labelSaving ? '...' : 'Сохранить'}
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
