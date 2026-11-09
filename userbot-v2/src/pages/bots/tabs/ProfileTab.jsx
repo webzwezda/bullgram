@@ -1,5 +1,7 @@
 import { ExternalLink, Loader2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ConnectionPanel, RecoveryPanel, SessionPanel } from './ProfileTabPanels.jsx';
 
 export function ProfileTab({
@@ -57,11 +59,11 @@ export function ProfileTab({
     return (
       <>
         <div className="p-5 sm:p-6">
-          <div className="rounded-2xl bg-white shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 overflow-hidden">
-            <div className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
+          <div className="rounded-2xl bg-surface-card shadow-lg shadow-slate-200/40 ring-1 ring-border-default overflow-hidden">
+            <div className="bg-surface-subtle/50 border-b border-border-default p-5 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                  <div className="w-12 h-12 shrink-0 overflow-hidden rounded-2xl bg-action-primary flex items-center justify-center text-white">
                     {selectedProfilePhotoSrc ? (
                       <img src={selectedProfilePhotoSrc} alt="" className="w-12 h-12 object-cover" />
                     ) : (
@@ -90,18 +92,20 @@ export function ProfileTab({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                  <button
+                  <Button
                     type="button"
-                    className="h-10 px-3 sm:px-4 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50 shadow-sm whitespace-nowrap"
+                    variant="outline"
+                    className="h-10 px-3 sm:px-4 rounded-xl shadow-sm whitespace-nowrap"
                     onClick={syncSelectedUserbotProfile}
                     disabled={profileSyncState.pulling || profileSyncState.saving || !selectedLiveUserbotId}
                   >
                     {profileSyncState.pulling ? 'Тянем...' : 'Стянуть из Telegram'}
-                  </button>
+                  </Button>
                   {telegramWebEnabled ? (
-                    <button
+                    <Button
                       type="button"
-                      className="h-10 px-3 sm:px-4 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-sm whitespace-nowrap"
+                      variant="secondary"
+                      className="h-10 px-3 sm:px-4 rounded-xl bg-slate-900 text-white hover:bg-slate-700 border-transparent shadow-sm whitespace-nowrap"
                       onClick={() => {
                         if (!selectedLiveUserbotId) return;
                         window.open(`/userbot/telegram-web/${selectedLiveUserbotId}`, '_blank', 'noopener');
@@ -110,7 +114,7 @@ export function ProfileTab({
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       Telegram Web
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
@@ -120,12 +124,12 @@ export function ProfileTab({
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-500">Название аккаунта</label>
-                    {labelDirty ? <span className="text-[11px] text-indigo-500">не сохранено</span> : null}
+                    <label className="text-xs font-medium text-ink-muted">Название аккаунта</label>
+                    {labelDirty ? <span className="text-xs text-action-primary">не сохранено</span> : null}
                   </div>
                   <div className="flex gap-2">
-                    <input
-                      className="h-10 flex-1 px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    <Input
+                      className="h-10 flex-1 px-3 rounded-xl bg-surface-subtle text-sm font-medium shadow-none"
                       value={labelDraft}
                       maxLength={100}
                       onChange={(event) => setLabelDraft(event.target.value)}
@@ -134,24 +138,24 @@ export function ProfileTab({
                       }}
                       placeholder="Например: Вася, Админ группы, Основной аккаунт"
                     />
-                    <button
+                    <Button
                       type="button"
-                      className={`h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-all shadow-sm whitespace-nowrap ${
+                      className={`h-10 px-4 rounded-xl shadow-sm whitespace-nowrap ${
                         labelDirty ? 'visible' : 'invisible'
                       }`}
                       onClick={saveCustomLabel}
                       disabled={!labelDirty || labelSaving}
                     >
                       {labelSaving ? '...' : 'Сохранить'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Имя</label>
-                    <input
-                      className="h-10 w-full px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    <label className="text-xs font-medium text-ink-muted">Имя</label>
+                    <Input
+                      className="h-10 w-full px-3 rounded-xl bg-surface-subtle text-sm font-medium shadow-none"
                       value={selectedDraftFirstName}
                       maxLength={64}
                       onChange={(event) => setProfileDraft((prev) => ({ ...prev, firstName: event.target.value }))}
@@ -159,9 +163,9 @@ export function ProfileTab({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Фамилия</label>
-                    <input
-                      className="h-10 w-full px-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15"
+                    <label className="text-xs font-medium text-ink-muted">Фамилия</label>
+                    <Input
+                      className="h-10 w-full px-3 rounded-xl bg-surface-subtle text-sm font-medium shadow-none"
                       value={selectedDraftLastName}
                       maxLength={64}
                       onChange={(event) => setProfileDraft((prev) => ({ ...prev, lastName: event.target.value }))}
@@ -172,11 +176,11 @@ export function ProfileTab({
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-500">Описание</label>
-                    <span className="text-[11px] text-slate-600">{selectedDraftAbout.length}/70</span>
+                    <label className="text-xs font-medium text-ink-muted">Описание</label>
+                    <span className="text-xs text-ink-muted">{selectedDraftAbout.length}/70</span>
                   </div>
-                  <textarea
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-950 outline-none transition shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 resize-none"
+                  <Textarea
+                    className="rounded-xl bg-surface-subtle px-3 py-2.5 text-sm font-medium resize-none field-sizing-fixed border-input"
                     rows={3}
                     value={selectedDraftAbout}
                     maxLength={70}
@@ -187,10 +191,11 @@ export function ProfileTab({
               </div>
 
               {profileDirty ? (
-                <div className="flex justify-end pt-3 border-t border-slate-100">
-                  <button
+                <div className="flex justify-end pt-3 border-t border-border-default">
+                  <Button
                     type="button"
-                    className="h-9 px-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                    variant="ghost"
+                    className="h-9 px-3 rounded-lg text-ink-muted"
                     onClick={() => setProfileDraft({
                       accountId: String(selectedUserbot.id),
                       firstName: selectedUserbot.tg_first_name || '',
@@ -200,7 +205,7 @@ export function ProfileTab({
                     disabled={profileSyncState.pulling || profileSyncState.saving}
                   >
                     Отменить изменения
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
