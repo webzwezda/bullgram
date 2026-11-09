@@ -126,9 +126,21 @@ export function UserbotCenterSection({
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
   const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
-  // Прилетели с handoff «Написать» из CRM — открываем сразу вкладку групп/диалогов,
-  // а не профиль: иначе переход с экрана клиентов выглядит как бесполезная страница.
-  const [activeTab, setActiveTab] = useState(initialThreadUserId ? 'groups' : 'profile');
+  // Прилетели с handoff «Написать» из CRM — секции теперь стопкой без табов,
+  // поэтому вместо открытия вкладки групп просто скроллим к секции «Вступить».
+  // Ретраим по появлению карточки: на холодной загрузке аккаунты приходят
+  // асинхронно, и на первый тик #userbot-groups ещё не существует.
+  const handoffScrollDoneRef = useRef(false);
+  useEffect(() => {
+    if (!initialThreadUserId || handoffScrollDoneRef.current) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById('userbot-groups');
+      if (!el) return;
+      handoffScrollDoneRef.current = true;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [initialThreadUserId, selectedLiveUserbot]);
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
   const [openPanels, setOpenPanels] = useState({ connection: false, session: false });
   function togglePanel(key) {
@@ -194,11 +206,12 @@ export function UserbotCenterSection({
   } = messaging;
 
   useEffect(() => {
-    if (activeTab !== 'sale') return;
+    // Табов больше нет: композер продажи инициализируется под выбранный
+    // аккаунт сразу (раньше это делал вход на вкладку «Продать»).
     if (!selectedLiveUserbot) return;
     if (saleComposer.accountId === String(selectedLiveUserbot.id)) return;
     openSaleComposer(selectedLiveUserbot);
-  }, [activeTab, selectedLiveUserbot, saleComposer.accountId, openSaleComposer]);
+  }, [selectedLiveUserbot, saleComposer.accountId, openSaleComposer]);
 
   const sortedConversations = useMemo(
     () => [...conversations].sort((a, b) => {
@@ -313,8 +326,6 @@ export function UserbotCenterSection({
           togglingSafeModeId={togglingSafeModeId}
           toggleSafeMode={toggleSafeMode}
           canSellUserbotAssets={canSellUserbotAssets}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
           profileTab={
             <ProfileTab
               selectedLiveUserbot={selectedLiveUserbot}

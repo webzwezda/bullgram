@@ -1,4 +1,4 @@
-import { AlertCircle, Loader2, ShieldCheck, ShieldOff, Tag, Trash2, User, UserPlus } from 'lucide-react';
+import { AlertCircle, Loader2, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 import { StatusBadge } from './CenterWidgets.jsx';
@@ -17,35 +17,10 @@ export function CenterAccountCard({
   togglingSafeModeId,
   toggleSafeMode,
   canSellUserbotAssets,
-  activeTab,
-  setActiveTab,
   profileTab,
   groupsTab,
   saleTab,
 }) {
-  const TAB_OPTIONS = [
-    {
-      id: 'profile',
-      label: 'Профиль',
-      icon: User,
-      title: 'Профиль',
-      subtitle: 'Аккаунт, прокси, аватар, описание',
-    },
-    {
-      id: 'groups',
-      label: 'Вступить',
-      icon: UserPlus,
-      title: 'Вступить в группу или чат',
-      subtitle: 'По ссылке t.me/groupname, @username или +hash',
-    },
-    ...(canSellUserbotAssets ? [{
-      id: 'sale',
-      label: 'Продать',
-      icon: Tag,
-      title: 'Продать',
-      subtitle: 'Выставить лот в Shop за TON',
-    }] : [])
-  ];
   const isSafeMode = String(selectedLiveUserbot.runtime_status || '') === 'pending_activation';
   const modeBusy = checkingAccountId === String(selectedLiveUserbot.id)
     || togglingSafeModeId === String(selectedLiveUserbot.id);
@@ -170,40 +145,17 @@ export function CenterAccountCard({
             }
             return null;
           })()}
-
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${TAB_OPTIONS.length > 2 ? 'lg:grid-cols-3' : ''} gap-3`}>
-            {TAB_OPTIONS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`p-4 rounded-2xl border text-left transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer flex items-center gap-3 ${
-                    isActive
-                      ? 'border-indigo-600 bg-white ring-1 ring-indigo-600 shadow-md shadow-indigo-100/55'
-                      : 'border-slate-200 bg-white/60 hover:border-slate-300 hover:bg-white/80 shadow-sm'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all shrink-0 ${
-                    isActive ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-bold text-sm text-slate-900">{tab.title}</h4>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">{tab.subtitle}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        {activeTab === 'profile' ? profileTab : null}
-        {activeTab === 'groups' ? groupsTab : null}
-        {activeTab === 'sale' ? saleTab : null}
+        {/* Секции стопкой без табов: профиль → вступление → продажа.
+            Разделители border-t; гейт продажи здесь — renderSaleTab его не имеет. */}
+        {profileTab}
+        <div id="userbot-groups" className="border-t border-slate-100 scroll-mt-4">
+          {groupsTab}
+        </div>
+        {canSellUserbotAssets && saleTab ? (
+          <div className="border-t border-slate-100">{saleTab}</div>
+        ) : null}
         </div>
   );
 }
