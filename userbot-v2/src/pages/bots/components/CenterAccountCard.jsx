@@ -16,10 +16,7 @@ export function CenterAccountCard({
   checkingAccountId,
   togglingSafeModeId,
   toggleSafeMode,
-  canSellUserbotAssets,
   profileTab,
-  groupsTab,
-  saleTab,
 }) {
   const isSafeMode = String(selectedLiveUserbot.runtime_status || '') === 'pending_activation';
   const modeBusy = checkingAccountId === String(selectedLiveUserbot.id)
@@ -147,15 +144,9 @@ export function CenterAccountCard({
           })()}
         </div>
 
-        {/* Секции стопкой без табов: профиль → вступление → продажа.
-            Разделители border-t; гейт продажи здесь — renderSaleTab его не имеет. */}
+        {/* Единственная секция карточки — профиль. «Вступить» и «Продать»
+            удалены из интерфейса по решению владельца (2026-11-10). */}
         {profileTab}
-        <div id="userbot-groups" className="border-t border-border-default scroll-mt-4">
-          {groupsTab}
-        </div>
-        {canSellUserbotAssets && saleTab ? (
-          <div className="border-t border-border-default">{saleTab}</div>
-        ) : null}
         </div>
   );
 }

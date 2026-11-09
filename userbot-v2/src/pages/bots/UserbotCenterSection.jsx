@@ -5,15 +5,12 @@ import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
 import { UpgradeCallout } from '../../ui/UpgradeCallout.jsx';
-import { UserbotSaleComposer } from './UserbotSaleComposer.jsx';
 import { UserbotConnectPanel } from './UserbotConnectPanel.jsx';
 import { ProxyConnectPanel } from './ProxyConnectPanel.jsx';
 import { loadDraft } from './centerStorage.js';
 import { useProfileEditing } from './hooks/useProfileEditing.js';
 import { useCenterData } from './hooks/useCenterData.js';
-import { useThreadMessaging } from './hooks/useThreadMessaging.js';
 import { ProfileTab } from './tabs/ProfileTab.jsx';
-import { GroupsTab } from './tabs/GroupsTab.jsx';
 import { CenterAccountCard } from './components/CenterAccountCard.jsx';
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
@@ -71,13 +68,7 @@ export function UserbotCenterSection({
   deleteAccount,
   deletingAccountId,
   restrictedMarker,
-  recoveryStatusBadge,
-  canSellUserbotAssets,
-  saleComposer,
-  setSaleComposer,
-  saveUserbotSaleLot,
-  toggleSalePaymentMethod,
-  openSaleComposer
+  recoveryStatusBadge
 }) {
   const location = useLocation();
   const sectionRef = useRef(null);
@@ -124,23 +115,7 @@ export function UserbotCenterSection({
   const initialParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialThreadUserId = String(initialParams.get('tg_user_id') || initialHandoff?.tg_user_id || '').trim();
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
-  const initialDraftMessage = String(initialHandoff?.draft_message || '').trim();
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
-  // Прилетели с handoff «Написать» из CRM — секции теперь стопкой без табов,
-  // поэтому вместо открытия вкладки групп просто скроллим к секции «Вступить».
-  // Ретраим по появлению карточки: на холодной загрузке аккаунты приходят
-  // асинхронно, и на первый тик #userbot-groups ещё не существует.
-  const handoffScrollDoneRef = useRef(false);
-  useEffect(() => {
-    if (!initialThreadUserId || handoffScrollDoneRef.current) return;
-    const timer = setTimeout(() => {
-      const el = document.getElementById('userbot-groups');
-      if (!el) return;
-      handoffScrollDoneRef.current = true;
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [initialThreadUserId, selectedLiveUserbot]);
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
   const [openPanels, setOpenPanels] = useState({ connection: false, session: false });
   function togglePanel(key) {
@@ -183,48 +158,8 @@ export function UserbotCenterSection({
     hasUnsavedChanges,
   } = profile;
 
-  const { state, setState, threadUserId, setThreadUserId, chatHistory, setChatHistory, reloadCenter } = useCenterData({ accessToken, selectedLiveUserbot, selectedLiveUserbotId, initialThreadUserId, initialHandoff, manualCommonChatId, setManualCommonChatId });
-  const data = state.data || {};
-  const userbots = data.userbots || [];
-  const groups = data.groups || [];
-  const conversations = data.conversations || [];
-  const summary = data.summary || {};
-  const signalConfig = data.signal_config || {};
+  const { state } = useCenterData({ accessToken, selectedLiveUserbot, selectedLiveUserbotId, initialThreadUserId, initialHandoff, manualCommonChatId, setManualCommonChatId });
   const selectedUserbot = selectedLiveUserbot;
-
-  const messaging = useThreadMessaging({ accessToken, selectedLiveUserbotId, conversations, threadUserId, setThreadUserId, setChatHistory, setState, reloadCenter, manualCommonChatId, initialThreadUserId, initialDraftMessage });
-  const {
-    actionState,
-    manualInviteLink,
-    setManualInviteLink,
-    manualTgUserId,
-    setManualTgUserId,
-    manualDirectMessage,
-    setManualDirectMessage,
-    joinInviteLink,
-    sendDirectMessage,
-  } = messaging;
-
-  useEffect(() => {
-    // Табов больше нет: композер продажи инициализируется под выбранный
-    // аккаунт сразу (раньше это делал вход на вкладку «Продать»).
-    if (!selectedLiveUserbot) return;
-    if (saleComposer.accountId === String(selectedLiveUserbot.id)) return;
-    openSaleComposer(selectedLiveUserbot);
-  }, [selectedLiveUserbot, saleComposer.accountId, openSaleComposer]);
-
-  const sortedConversations = useMemo(
-    () => [...conversations].sort((a, b) => {
-      if ((b.unread_count || 0) !== (a.unread_count || 0)) return (b.unread_count || 0) - (a.unread_count || 0);
-      return String(b.last_message_at || '').localeCompare(String(a.last_message_at || ''));
-    }),
-    [conversations]
-  );
-
-  const commonChatGroups = useMemo(
-    () => groups.filter((item) => item.chat_id),
-    [groups]
-  );
 
   if (state.loading && !initialHandoff) {
     return <LoadingState text="Тянем живой Центр юзербота..." />;
@@ -250,21 +185,6 @@ export function UserbotCenterSection({
           </div>
         ) : null}
       </section>
-    );
-  }
-
-  function renderSaleTab() {
-    if (!selectedLiveUserbot) return null;
-    return (
-      <div className="p-5 sm:p-6 animate-fade-in">
-        <UserbotSaleComposer
-          account={selectedLiveUserbot}
-          saleComposer={saleComposer}
-          setSaleComposer={setSaleComposer}
-          toggleSalePaymentMethod={toggleSalePaymentMethod}
-          saveUserbotSaleLot={saveUserbotSaleLot}
-        />
-      </div>
     );
   }
 
@@ -325,7 +245,6 @@ export function UserbotCenterSection({
           checkingAccountId={checkingAccountId}
           togglingSafeModeId={togglingSafeModeId}
           toggleSafeMode={toggleSafeMode}
-          canSellUserbotAssets={canSellUserbotAssets}
           profileTab={
             <ProfileTab
               selectedLiveUserbot={selectedLiveUserbot}
@@ -373,22 +292,6 @@ export function UserbotCenterSection({
               bindingAccountId={bindingAccountId}
             />
           }
-          groupsTab={
-            <GroupsTab
-              manualInviteLink={manualInviteLink}
-              setManualInviteLink={setManualInviteLink}
-              joinInviteLink={joinInviteLink}
-              actionState={actionState}
-              manualTgUserId={manualTgUserId}
-              setManualTgUserId={setManualTgUserId}
-              manualCommonChatId={manualCommonChatId}
-              setManualCommonChatId={setManualCommonChatId}
-              manualDirectMessage={manualDirectMessage}
-              setManualDirectMessage={setManualDirectMessage}
-              sendDirectMessage={sendDirectMessage}
-            />
-          }
-          saleTab={renderSaleTab()}
         />
       ) : (
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">

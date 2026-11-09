@@ -225,13 +225,7 @@ function UserbotsPageContent() {
     deleteAccount,
     deletingAccountId: state.deletingAccountId,
     restrictedMarker,
-    recoveryStatusBadge,
-    canSellUserbotAssets,
-    saleComposer,
-    setSaleComposer,
-    saveUserbotSaleLot,
-    toggleSalePaymentMethod,
-    openSaleComposer
+    recoveryStatusBadge
   };
 
   if (state.loading) {
