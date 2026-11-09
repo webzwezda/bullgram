@@ -23,9 +23,9 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     lastName: '',
     about: ''
   });
-  const [labelDraft, setLabelDraft] = useState('');
-  const [labelAccountId, setLabelAccountId] = useState('');
-  const [labelSaving, setLabelSaving] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState('');
+  const [usernameAccountId, setUsernameAccountId] = useState('');
+  const [usernameSaving, setUsernameSaving] = useState(false);
   useEffect(() => {
     setProfileSyncState({ pulling: false, saving: false, tone: 'default', text: '' });
   }, [accessToken, selectedLiveUserbotId]);
@@ -46,32 +46,40 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     selectedUserbot?.tg_last_name,
     selectedUserbot?.tg_about
   ]);
+  // Быстрое редактирование @username: черновик без ведущей @, сохранение —
+  // живой Telegram-вызов POST /api/userbot/username/:id.
   useEffect(() => {
     if (!selectedUserbot?.id) {
-      setLabelDraft('');
-      setLabelAccountId('');
+      setUsernameDraft('');
+      setUsernameAccountId('');
       return;
     }
-    setLabelDraft(selectedUserbot.custom_label || '');
-    setLabelAccountId(String(selectedUserbot.id));
-  }, [selectedUserbot?.id, selectedUserbot?.custom_label]);
-  const labelDirty = labelAccountId === String(selectedUserbot?.id || '') && labelDraft.trim() !== (selectedUserbot?.custom_label || '').trim();
+    setUsernameDraft((selectedUserbot.tg_username || '').replace(/^@/, ''));
+    setUsernameAccountId(String(selectedUserbot.id));
+  }, [selectedUserbot?.id, selectedUserbot?.tg_username]);
+  const usernameDirty = usernameAccountId === String(selectedUserbot?.id || '')
+    && usernameDraft.trim().replace(/^@/, '') !== (selectedUserbot?.tg_username || '').replace(/^@/, '').trim();
 
-  async function saveCustomLabel() {
-    if (!accessToken || !selectedUserbot?.id || !labelDirty) return;
-    const trimmed = labelDraft.trim().slice(0, 100);
-    setLabelSaving(true);
+  async function saveUsername() {
+    if (!accessToken || !selectedUserbot?.id || !usernameDirty) return;
+    const cleaned = usernameDraft.trim().replace(/^@/, '');
+    if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(cleaned)) {
+      toast.error('Username не подходит: 5–32 символа, латиница, цифры и _, начинается с буквы.');
+      return;
+    }
+    setUsernameSaving(true);
     try {
-      const result = await apiRequest(`/api/userbot/custom-label/${selectedUserbot.id}`, {
+      const result = await apiRequest(`/api/userbot/username/${selectedUserbot.id}`, {
         accessToken,
-        method: 'PATCH',
-        body: { custom_label: trimmed }
+        method: 'POST',
+        body: { username: cleaned }
       });
-      patchLiveUserbot(selectedUserbot.id, { custom_label: result.custom_label || '' });
+      patchLiveUserbot(selectedUserbot.id, { tg_username: result.tg_username || cleaned });
+      toast.success('Username сохранён в Telegram.');
     } catch (error) {
-      toast.error(`Не удалось сохранить метку: ${error.message}`);
+      toast.error(`Не удалось сменить username: ${error.message}`);
     } finally {
-      setLabelSaving(false);
+      setUsernameSaving(false);
     }
   }
   const selectedDraftFirstName = profileDraft.accountId === String(selectedUserbot?.id || '') ? profileDraft.firstName : '';
@@ -196,11 +204,11 @@ export function useProfileEditing({ accessToken, selectedUserbot, selectedLiveUs
     profileSyncState,
     profileDraft,
     setProfileDraft,
-    labelDraft,
-    setLabelDraft,
-    labelDirty,
-    labelSaving,
-    saveCustomLabel,
+    usernameDraft,
+    setUsernameDraft,
+    usernameDirty,
+    usernameSaving,
+    saveUsername,
     syncSelectedUserbotProfile,
     saveAllChanges,
     selectedDraftFirstName,

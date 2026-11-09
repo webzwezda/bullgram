@@ -11,11 +11,11 @@ export function ProfileTab({
   recovery,
   profileSyncState,
   telegramWebEnabled,
-  labelDirty,
-  labelDraft,
-  labelSaving,
-  setLabelDraft,
-  saveCustomLabel,
+  usernameDirty,
+  usernameDraft,
+  usernameSaving,
+  setUsernameDraft,
+  saveUsername,
   selectedProfilePhotoSrc,
   selectedProfileInitial,
   selectedProfileName,
@@ -124,31 +124,35 @@ export function ProfileTab({
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-ink-muted">Название аккаунта</label>
-                    {labelDirty ? <span className="text-xs text-action-primary">не сохранено</span> : null}
+                    <label className="text-xs font-medium text-ink-muted">Имя в Telegram (@username)</label>
+                    {usernameDirty ? <span className="text-xs text-action-primary">не сохранено</span> : null}
                   </div>
                   <div className="flex gap-2">
-                    <Input
-                      className="h-10 flex-1 px-3 rounded-xl bg-surface-subtle text-sm font-medium"
-                      value={labelDraft}
-                      maxLength={100}
-                      onChange={(event) => setLabelDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && labelDirty && !labelSaving) saveCustomLabel();
-                      }}
-                      placeholder="Например: Вася, Админ группы, Основной аккаунт"
-                    />
-                    {labelDirty ? (
+                    <div className="relative flex-1">
+                      <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-ink-muted select-none pointer-events-none">@</span>
+                      <Input
+                        className="h-10 w-full pl-8 pr-3 rounded-xl bg-surface-subtle text-sm font-medium"
+                        value={usernameDraft}
+                        maxLength={32}
+                        onChange={(event) => setUsernameDraft(event.target.value.replace(/[^A-Za-z0-9_@]/g, ''))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && usernameDirty && !usernameSaving) saveUsername();
+                        }}
+                        placeholder="webzwezda"
+                      />
+                    </div>
+                    {usernameDirty ? (
                       <Button
                         type="button"
                         className="h-10 px-4 rounded-xl shadow-sm whitespace-nowrap"
-                        onClick={saveCustomLabel}
-                        disabled={labelSaving}
+                        onClick={saveUsername}
+                        disabled={usernameSaving}
                       >
-                        {labelSaving ? '...' : 'Сохранить'}
+                        {usernameSaving ? '...' : 'Сохранить'}
                       </Button>
                     ) : null}
                   </div>
+                  <p className="text-xs text-ink-muted">Меняется прямо в Telegram. «Стянуть из Telegram» подтягивает текущий.</p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">

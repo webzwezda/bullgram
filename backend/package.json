@@ -16,6 +16,7 @@
     "test:broadcast": "node test/broadcast-router.test.js",
     "test:broadcast-cleanup": "node test/broadcast-cleanup.test.js",
     "test:lifecycle": "node test/lifecycle-dm.test.js",
+    "test:profile-username": "node test/telegram-username.test.js",
     "test:mcp": "node test/mcp-shared.test.js && node test/mcp-dispatch.test.js && node test/external-rest.test.js && node test/mcp-userbot-list.test.js",
     "test:logging": "node test/logger.test.js",
     "test:jobs": "node test/job-runner.test.js",

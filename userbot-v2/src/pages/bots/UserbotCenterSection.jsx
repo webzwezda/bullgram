@@ -138,11 +138,11 @@ export function UserbotCenterSection({
     profileSyncState,
     profileDraft,
     setProfileDraft,
-    labelDraft,
-    setLabelDraft,
-    labelDirty,
-    labelSaving,
-    saveCustomLabel,
+    usernameDraft,
+    setUsernameDraft,
+    usernameDirty,
+    usernameSaving,
+    saveUsername,
     syncSelectedUserbotProfile,
     saveAllChanges,
     selectedDraftFirstName,
@@ -254,11 +254,11 @@ export function UserbotCenterSection({
               recovery={recovery}
               profileSyncState={profileSyncState}
               telegramWebEnabled={telegramWebEnabled}
-              labelDirty={labelDirty}
-              labelDraft={labelDraft}
-              labelSaving={labelSaving}
-              setLabelDraft={setLabelDraft}
-              saveCustomLabel={saveCustomLabel}
+              usernameDirty={usernameDirty}
+              usernameDraft={usernameDraft}
+              usernameSaving={usernameSaving}
+              setUsernameDraft={setUsernameDraft}
+              saveUsername={saveUsername}
               selectedProfilePhotoSrc={selectedProfilePhotoSrc}
               selectedProfileInitial={selectedProfileInitial}
               selectedProfileName={selectedProfileName}

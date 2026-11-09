@@ -15,6 +15,16 @@ export function buildTelegramProfilePatch(me, extra = {}) {
     };
 }
 
+// Правила Telegram для юзернейма пользователя: 5–32 символа, латиница/цифры/_
+// и первый символ — буква. Ведущие @ допускаем на входе и срезаем.
+export const TG_USERNAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
+
+// null = не подходит (текст ошибки кладёт вызывающий роут), строка = норм.
+export function normalizeTelegramUsernameInput(raw) {
+    const cleaned = String(raw || '').trim().replace(/^@+/, '');
+    return TG_USERNAME_PATTERN.test(cleaned) ? cleaned : null;
+}
+
 // Единая форма health_summary в tg_accounts: что показываем в карточке
 // аккаунта и «отстойнике». Наполняется из результата inspectAccountHealth
 // ({ status, reason, details }).
