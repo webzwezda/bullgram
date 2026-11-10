@@ -235,6 +235,36 @@ export const ProxyMixin = (Base) => class extends Base {
         }
 
         this._forceIpv6Dc(client);
+        this._forceIpv6OnlyAddressBook(client);
+    }
+
+    // Managed-слоты IPv6-only: SOCKS CONNECT к IPv4-цели через них мгновенно
+    // отказывает (family mismatch). Адресный бук teleproto сортирует адреса
+    // «предпочитая» IPv6, но НЕ фильтрует: если Telegram отдал для DC только
+    // IPv4-эндпоинты (типично для файловых/media DC), качка фото/файлов уходит
+    // в IPv4-коннект → вечный цикл отказов → зависание операции (кейс
+    // @craps_1921: смена аватара положила файл на чужой DC). Вырезаем IPv4
+    // из бука совсем — резолвер остаётся на IPv6 для любого DC.
+    _forceIpv6OnlyAddressBook(client) {
+        if (!client?._addresses || !Array.isArray(client._addresses.options)) {
+            return;
+        }
+        const filterIpv6 = () => {
+            try {
+                client._addresses.options = client._addresses.options.filter((o) => o.ipv6);
+            } catch {
+                // no-op
+            }
+        };
+        filterIpv6();
+        const originalSetConfig = client._setConfig;
+        if (typeof originalSetConfig === 'function') {
+            client._setConfig = (...args) => {
+                const result = originalSetConfig.apply(client, args);
+                filterIpv6();
+                return result;
+            };
+        }
     }
 
     _forceIpv6Dc(client) {
