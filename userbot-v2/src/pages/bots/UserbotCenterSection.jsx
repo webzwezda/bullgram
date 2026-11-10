@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { UserPlus, User } from 'lucide-react';
 import { useAuth } from '../../app/providers/AuthProvider.jsx';
 import { LoadingState } from '../../ui/LoadingState.jsx';
 import { PlanBanner } from '../../ui/PlanBanner.jsx';
@@ -12,6 +11,7 @@ import { useProfileEditing } from './hooks/useProfileEditing.js';
 import { useCenterData } from './hooks/useCenterData.js';
 import { ProfileTab } from './tabs/ProfileTab.jsx';
 import { CenterAccountCard } from './components/CenterAccountCard.jsx';
+import { WelcomeCard } from './components/WelcomeCard.jsx';
 
 const USERBOT_CENTER_HANDOFF_KEY = 'bullgram_userbot_center_handoff';
 
@@ -166,6 +166,47 @@ export function UserbotCenterSection({
     return <LoadingState text="Тянем живой Центр юзербота..." />;
   }
 
+  // Настоящая ошибка (сеть/5xx) — карточка ошибки. «Подключите юзербота» для
+  // новичка — не ошибка, а стартовое состояние: ниже рендерится WelcomeCard.
+  if (state.error && !needsBotsRecovery(state.error)) {
+    return (
+      <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
+        <div className="error-card">{state.error}</div>
+      </section>
+    );
+  }
+
+  // Новичок: юзерботов ещё нет — выбор из двух путей (покупка / подключение).
+  // Онбординг-панели доступны и здесь: «Подключить аккаунт» раскрывает их тут же.
+  if (!selectedLiveUserbot) {
+    return (
+      <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
+        {proxyPanelOpen ? (
+          <ProxyConnectPanel
+            onClose={() => setProxyPanelOpen(false)}
+            onCreated={handleProxyCreated}
+          />
+        ) : null}
+
+        {connectPanelOpen ? (
+          <UserbotConnectPanel
+            availableOnboardingProxies={availableOnboardingProxies}
+            onConnectProxy={() => setProxyPanelOpen(true)}
+            onClose={() => setConnectPanelOpen(false)}
+            preferredProxyId={preferredProxyId}
+            proxyLabel={proxyLabel}
+            reloadAccounts={reloadAccounts}
+            userbotCount={userbotCount}
+          />
+        ) : null}
+
+        <WelcomeCard shopInlineSlot={shopInlineSlot} onConnect={openConnectPanel} />
+      </section>
+    );
+  }
+
+  // Юзерботы есть, но центр недоступен (мёртвый прокси/сессия) — карточка
+  // ошибки с подсказкой «Что делать дальше» (прежнее поведение).
   if (state.error) {
     return (
       <section ref={sectionRef} id="userbot-center" className="scroll-mt-4">
@@ -232,9 +273,7 @@ export function UserbotCenterSection({
         />
       ) : null}
 
-      {selectedLiveUserbot ? (
-        <CenterAccountCard
-          selectedLiveUserbot={selectedLiveUserbot}
+      <CenterAccountCard          selectedLiveUserbot={selectedLiveUserbot}
           deleteAccount={deleteAccount}
           deletingAccountId={deletingAccountId}
           liveUserbots={liveUserbots}
@@ -295,32 +334,6 @@ export function UserbotCenterSection({
           }
           shopInlineSlot={shopInlineSlot}
         />
-      ) : (
-        <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
-          <div className="p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 ring-1 ring-slate-100">
-              <User className="w-8 h-8 text-slate-300" />
-            </div>
-            <h3 className="text-base font-semibold text-slate-900">Боевых аккаунтов пока нет</h3>
-            <p className="mt-1 text-sm text-slate-500 max-w-sm">
-              Подключи аккаунт в разделе «Подключение» — и его профиль, прокси и проверка сессии появятся здесь.
-            </p>
-            <button
-              type="button"
-              onClick={openConnectPanel}
-              className="mt-4 h-10 px-4 inline-flex items-center gap-2 rounded-xl bg-action-primary text-action-primary-text! text-sm font-bold hover:bg-action-primary-hover shadow-sm"
-            >
-              <UserPlus className="w-4 h-4" />
-              Подключить аккаунт
-            </button>
-            {shopInlineSlot ? (
-              <div className="mt-4 w-full max-w-sm">
-                {shopInlineSlot}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
 
     </section>
   );
