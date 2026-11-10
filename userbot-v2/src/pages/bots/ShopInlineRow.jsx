@@ -35,7 +35,7 @@ export function ShopInlineRow({ lot, lots, openCheckout, createBatchCheckout }) 
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-surface-card border border-border-default py-2 pl-3 pr-2 shadow-sm">
+    <div className="flex items-center gap-3">
       <ShoppingCart className="w-4 h-4 shrink-0 text-action-ton" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-bold text-ink-strong truncate">{lot?.title}</div>

@@ -110,9 +110,6 @@ export function CenterAccountCard({
             })()}
           </div>
 
-          {/* Витрина магазина одной строкой (план 2026-11-11-userbot-shop-inline-row) */}
-          {shopInlineSlot}
-
           {(() => {
             // Режим аккаунта (боевой/safe) живёт в пилюле-свитче у «удалить»
             // (правый верхний угол) и в тоггле «Состояния сессии». Здесь
@@ -147,6 +144,15 @@ export function CenterAccountCard({
             return null;
           })()}
         </div>
+
+        {/* Витрина магазина одной строкой (план 2026-11-11-userbot-shop-inline-row):
+            плоская полоса на белом, между волосяными чертами — как блок профиля.
+            Верхняя черта — border-b серой шапки, нижняя — своя. */}
+        {shopInlineSlot ? (
+          <div className="border-b border-border-default px-5 sm:px-6 py-3">
+            {shopInlineSlot}
+          </div>
+        ) : null}
 
         {/* Единственная секция карточки — профиль. «Вступить» и «Продать»
             удалены из интерфейса по решению владельца (2026-11-10). */}
