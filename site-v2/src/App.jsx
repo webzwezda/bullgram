@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { Home } from 'lucide-react';
+import { Home, ShoppingBag } from 'lucide-react';
 import { HomePage } from './pages/HomePage.jsx';
 import { useAuth } from './app/providers/AuthProvider.jsx';
 import { RailProfileCard } from './ui/RailProfileCard.jsx';
@@ -49,7 +49,8 @@ const navSections = [
   {
     title: 'Навигация',
     items: [
-      { to: '/', label: 'userbot', icon: Home }
+      { to: '/', label: 'Telegram User Bot', icon: Home },
+      { to: '/shop', label: 'Shop', icon: ShoppingBag }
     ]
   }
 ];
