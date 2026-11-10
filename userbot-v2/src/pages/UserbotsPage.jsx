@@ -222,19 +222,23 @@ function UserbotsPageContent() {
     <section className="page page--flush">
       <UserbotCenterSection {...userbotCenterSectionProps} shopInlineSlot={shopInlineSlot} />
 
-      <SessionsQuarantineSection
-        accessToken={accessToken}
-        selectedLiveUserbotId={selectedLiveUserbotId}
-        quarantinedUserbots={quarantinedUserbots}
-        selectedQuarantinedUserbot={selectedQuarantinedUserbot}
-        setSelectedQuarantinedUserbotId={setSelectedQuarantinedUserbotId}
-        restrictedMarker={restrictedMarker}
-        formatWhen={formatWhen}
-        checkAccount={checkAccount}
-        checkingAccountId={state.checkingAccountId}
-        deleteAccount={deleteAccount}
-        deletingAccountId={state.deletingAccountId}
-      />
+      {/* Гигиена аккаунтов — только когда аккаунты уже есть: новичку без
+          единого юзербота «Отстойник» не нужен. */}
+      {userbots.length ? (
+        <SessionsQuarantineSection
+          accessToken={accessToken}
+          selectedLiveUserbotId={selectedLiveUserbotId}
+          quarantinedUserbots={quarantinedUserbots}
+          selectedQuarantinedUserbot={selectedQuarantinedUserbot}
+          setSelectedQuarantinedUserbotId={setSelectedQuarantinedUserbotId}
+          restrictedMarker={restrictedMarker}
+          formatWhen={formatWhen}
+          checkAccount={checkAccount}
+          checkingAccountId={state.checkingAccountId}
+          deleteAccount={deleteAccount}
+          deletingAccountId={state.deletingAccountId}
+        />
+      ) : null}
     </section>
   );
 }
