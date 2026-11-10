@@ -35,13 +35,11 @@ export function ShopInlineRow({ lot, lots, openCheckout, createBatchCheckout }) 
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-surface-card border border-border-default p-2.5 pl-3 shadow-sm">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-action-primary/10" aria-hidden="true">
-        <ShoppingCart className="w-4 h-4 text-action-primary" />
-      </span>
+    <div className="flex items-center gap-3 rounded-xl bg-surface-card border border-border-default py-2 pl-3 pr-2 shadow-sm">
+      <ShoppingCart className="w-4 h-4 shrink-0 text-action-ton" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <div className="text-sm font-bold text-ink-strong truncate">{lot?.title}</div>
-        <div className="text-xs font-medium text-ink-muted">
+        <div className="text-xs font-medium text-ink-muted tabular-nums">
           {Number(lot?.price_ton || 0)} TON/шт · Доступно: {items.length} шт.
         </div>
       </div>
@@ -68,8 +66,9 @@ export function ShopInlineRow({ lot, lots, openCheckout, createBatchCheckout }) 
         </button>
       </div>
 
+      {/* TON-экран: action.ton = sky-700 (утверждено в DESIGN.md, не indigo) */}
       <Button
-        className="h-9 px-4 shrink-0 text-xs font-bold"
+        className="h-9 px-4 shrink-0 text-xs font-bold bg-action-ton hover:bg-action-ton-hover text-action-ton-text"
         onClick={handleBuy}
         disabled={buying || !selectedItems.length}
       >
