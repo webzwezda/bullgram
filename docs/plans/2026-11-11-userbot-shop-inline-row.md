@@ -28,8 +28,9 @@ UserbotsPage ужать до одной строки (лот · цена · [−
       хуки; клик «Купить» → window.location.assign('/pay/<id>')
 - [x] Сборки userbot-v2 + site-v2 (PayPage без изменений), check:design,
       test:sales
-- [ ] Пуш, деплой, e2e на проде: single-покупка (создать → /pay view → отмена),
-      batch — ручная проверка владельцем
+- [x] Пуш, деплой, e2e на проде: single-покупка (создать → /pay view → отмена) — ок
+      (6b7cf05, 2026-11-11); batch-роутинг проверен (batch_* → 404 вместо 400);
+      живая покупка qty>1 — ручная проверка владельцем (нужен JWT в кабинете)
 
 ## Не трогаем
 ConnectPage, /shop, purchase flow (кроме read-only public-view/verify),
@@ -41,3 +42,21 @@ ownership-transfer, выдачу архивов.
 - pending-покупка из кабинета и /pay: autoRestore inline-чекаута в
   useShopStorefront остаётся для ConnectPage; на UserbotsPage UI его не
   использует (инертно).
+
+## Ревью (2026-11-11)
+
+Сделано и задеплоено (6b7cf05):
+- UserbotsPage: UserbotStorefrontSection снят; строка магазина + slim-строка
+  неоплаченных покупок собираются в `shopInlineSlot` и рендерятся в шапке
+  CenterAccountCard (под селектором) и в пустой карточке центра.
+- ShopInlineRow (новый файл, семантические токены, ратчет-нейтрально):
+  лот · цена/шт · [− qty +] · «Купить N TON»; клик → openCheckout/
+  createBatchCheckout → window.location.assign('/pay/<id>').
+- useShopStorefront: openCheckout/createBatchCheckout возвращают { id, error }
+  (аддитивно; ConnectPage не менялся).
+- Бэкенд delivery.js: public-view и verify-public принимают batch_token
+  (BATCH_TOKEN_RE + .contains('payload',{batch_token})), агрегат статусов как
+  в authed check-batch, сумма пакета, title «Лот × N», delivery=null.
+- Verified: build userbot-v2/site-v2, check:design PASS, test:sales 7/7,
+  node --check; e2e прод: single view ok, cancel-public ok, batch_* роутится.
+Открытое: живая batch-покупка qty>1 из кабинета — руками владельца.
