@@ -25,6 +25,9 @@ export function PaymentView({
   manualVerifying,
   manualMessage,
   purchaseKind,
+  onCancel,
+  cancelling,
+  cancelError,
 }) {
   const [remaining, setRemaining] = useState(formatExpiry(purchase.expires_at));
   const [method, setMethod] = useState('tonconnect');
@@ -171,6 +174,23 @@ export function PaymentView({
                 onCheck={onVerifyManually}
               />
             )}
+
+            {onCancel ? (
+              <div className="pt-1 space-y-1.5">
+                {cancelError ? (
+                  <p className="text-xs font-medium text-feedback-error-text text-center">{cancelError}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  disabled={cancelling}
+                  className="w-full h-9 rounded-xl text-xs font-bold text-ink-muted hover:text-feedback-error-text hover:bg-feedback-error-bg border border-border-default transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  Отменить покупку и снять бронь
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </Card>

@@ -69,6 +69,62 @@ export function registerPurchaseApi(router, ctx) {
         }
     });
 
+    // Публичная отмена брони со страницы счёта /pay: покупатель может быть
+    // не залогинен, proof — memo счёта (известен только открывшему страницу).
+    // Семантика та же, что в /cancel: paid/переданные права не трогаем.
+    router.post('/public/purchase/cancel-public', async (req, res) => {
+        const ip = req.ip || 'unknown';
+        if (!checkRateLimit(publicPurchaseHitsByIp, ip)) {
+            return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+        }
+
+        const purchaseId = String(req.body?.purchase_id || '').trim();
+        const memoProof = String(req.body?.memo || '').trim();
+        if (!purchaseId || !memoProof) {
+            return res.status(400).json({ error: 'Не передан purchase_id или memo' });
+        }
+
+        try {
+            const { data: purchase, error } = await supabase
+                .from('shop_purchases')
+                .select('id, status, payload, ownership_transfer_status')
+                .eq('id', purchaseId)
+                .maybeSingle();
+
+            if (error) {
+                if (isMissingShopTables(error)) {
+                    return res.status(400).json({ error: 'Сначала примени SQL под shop foundation' });
+                }
+                throw error;
+            }
+            if (!purchase) {
+                return res.status(404).json({ error: 'Покупка не найдена.' });
+            }
+            if (String(purchase.payload?.memo || '').trim() !== memoProof) {
+                return res.status(403).json({ error: 'Memo счёта не совпал — отмена отклонена.' });
+            }
+            if (purchase.status === 'paid' || purchase.ownership_transfer_status === 'completed') {
+                return res.status(400).json({ error: 'Эту покупку уже нельзя отменить. По ней уже есть оплата или передача прав.' });
+            }
+            if (purchase.status === 'expired' || purchase.status === 'rejected') {
+                return res.json({ success: true, cancelled_purchase_id: purchase.id, already_closed: true });
+            }
+
+            const { error: deleteError } = await supabase
+                .from('shop_purchases')
+                .delete()
+                .eq('id', purchase.id)
+                .in('status', ['pending', 'awaiting_receipt']);
+
+            if (deleteError) throw deleteError;
+
+            return res.json({ success: true, cancelled_purchase_id: purchase.id });
+        } catch (error) {
+            console.error('Ошибка публичной отмены shop purchase:', error);
+            return res.status(500).json({ error: 'Не удалось снять бронь.' });
+        }
+    });
+
     router.post('/public/purchase/cancel-batch', authenticateUser, async (req, res) => {
         const buyerOwnerId = req.user.id;
         const purchaseIds = Array.isArray(req.body?.purchase_ids) ? req.body.purchase_ids.map((value) => String(value || '').trim()).filter(Boolean) : [];

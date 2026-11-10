@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client.js';
 import { PaymentView } from './sections/PaymentView.jsx';
-import { SkeletonView, ErrorView, PaidView, ExpiredView } from './sections/PayViews.jsx';
+import { SkeletonView, ErrorView, PaidView, ExpiredView, CancelledView } from './sections/PayViews.jsx';
 
 const POLL_INTERVAL_MS = 10000;
 const MAX_RETRIES = 3;
@@ -42,6 +42,9 @@ export function PayPage() {
   const [verifying, setVerifying] = useState(false);
   const [manualVerifying, setManualVerifying] = useState(false);
   const [manualMessage, setManualMessage] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [cancelError, setCancelError] = useState('');
   const timerRef = useRef(null);
   const retryTimeoutRef = useRef(null);
   const [loadedPurchaseId, setLoadedPurchaseId] = useState(purchaseId);
@@ -54,6 +57,9 @@ export function PayPage() {
     setVerifying(false);
     setManualVerifying(false);
     setManualMessage('');
+    setCancelling(false);
+    setCancelled(false);
+    setCancelError('');
     setError('');
     setLoading(true);
   }
@@ -130,6 +136,8 @@ export function PayPage() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    // покупка отменена — счёт удалён, опрашивать нечего
+    if (cancelled) return;
     const billingAwaitingFulfillment = purchase?.status === 'paid'
       && purchaseKind === 'billing'
       && purchase?.fulfillment_status !== 'completed';
@@ -152,7 +160,26 @@ export function PayPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [purchase?.status, purchase?.id, purchase?.fulfillment_status, error, fetchPurchase, purchaseKind]);
+  }, [purchase?.status, purchase?.id, purchase?.fulfillment_status, error, fetchPurchase, purchaseKind, cancelled]);
+
+  // Снять бронь со страницы счёта: публичная отмена с memo-подтверждением
+  // (покупатель /shop может быть не залогинен).
+  const cancelPurchase = useCallback(async () => {
+    if (purchaseKind !== 'shop' || !purchase) return;
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await apiRequest('/api/shop/public/purchase/cancel-public', {
+        method: 'POST',
+        body: { purchase_id: purchase.id, memo: purchase.memo }
+      });
+      setCancelled(true);
+    } catch (e) {
+      setCancelError(e.message || 'Не удалось отменить покупку');
+    } finally {
+      setCancelling(false);
+    }
+  }, [purchase, purchaseKind]);
 
   const handlePaid = useCallback(() => {
     setVerifying(false);
@@ -185,6 +212,7 @@ export function PayPage() {
   }, [purchase, purchaseKind, fetchPurchase]);
 
   if (loading) return <SkeletonView />;
+  if (cancelled) return <CancelledView />;
   if (error) return <ErrorView message={error} onRetry={() => fetchPurchase(true)} />;
   if (purchase?.status === 'paid' || isProcessingStatus(purchase?.status)) {
     return (
@@ -229,6 +257,9 @@ export function PayPage() {
       manualVerifying={manualVerifying}
       manualMessage={manualMessage}
       purchaseKind={purchaseKind}
+      onCancel={purchaseKind === 'shop' ? cancelPurchase : undefined}
+      cancelling={cancelling}
+      cancelError={cancelError}
     />
   );
 }

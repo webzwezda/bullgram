@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Copy, Download, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Copy, Download, ExternalLink, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import { APP_CONFIG } from '../../config.js';
 import { Card } from '../../components/ui/card.jsx';
 import { SecretRevealBlock } from '../../components/SecretRevealBlock.jsx';
@@ -194,6 +194,36 @@ export function ErrorView({ message, onRetry }) {
             <RefreshCw className="w-4 h-4" />
             Повторить
           </button>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+// Покупатель сам снял бронь со страницы счёта (/pay) — лот вернулся в продажу.
+export function CancelledView() {
+  return (
+    <section className="space-y-6">
+      <Card className="p-0 gap-0">
+        <div className="p-5 sm:p-6 flex flex-row items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-surface-subtle-strong flex items-center justify-center shrink-0">
+            <XCircle className="w-6 h-6 text-ink-muted" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-ink-strong">Покупка отменена</h2>
+            <p className="text-sm font-medium text-ink-muted mt-0.5">
+              Бронь на лот снята — лот снова доступен другим покупателям.
+            </p>
+          </div>
+        </div>
+        <div className="p-5 sm:p-6 pt-0">
+          <a
+            href="/shop"
+            className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-xl bg-action-primary hover:bg-action-primary-hover text-action-primary-text text-sm font-bold transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            В магазин аккаунтов
+          </a>
         </div>
       </Card>
     </section>
