@@ -50,6 +50,33 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 </CardContent>
 ```
 
+### Flat Action Strip (полоса действия внутри карточки)
+Компактные строки действий (витрина магазина, покупка лота) **не** оформляем вложенной карточкой-коробкой: рамка+фон+тень у полосы конкурируют с настоящими карточками страницы. Как и блок профиля, это плоская полоса на белом между волосяными чертами: верхняя черта — нижний бордюр серой шапки (`border-slate-100`), нижняя — своя `border.default` (семантический `border-border-default`, токена под slate-100 нет). Горизонтальные отступы карточки (`px-5 sm:px-6`), вертикаль — `py-3`.
+
+```jsx
+{/* внутри карточки, сразу после серой шапки (CenterAccountCard) */}
+<div className="border-b border-border-default px-5 sm:px-6 py-3">
+  <ShopInlineRow />
+</div>
+
+{/* сама строка: без рамки и тени; контролы утоплены; иконка без плитки */}
+<div className="flex items-center gap-3">
+  <ShoppingCart className="w-4 h-4 text-action-ton" />
+  <div className="min-w-0 flex-1">
+    <div className="text-sm font-bold text-ink-strong truncate">{lot.title}</div>
+    <div className="text-xs font-medium text-ink-muted tabular-nums">{price} TON/шт</div>
+  </div>
+  <div className="… bg-surface-subtle border border-border-default …">[− n +]</div>
+  <Button className="bg-action-ton hover:bg-action-ton-hover text-action-ton-text">Купить {n} TON</Button>
+</div>
+```
+
+Правила полосы:
+- коробка (рамка + фон + тень) — только у контролов внутри строки (степер количества), не у самой полосы;
+- иконки без цветных плиток — плитки-якоря только у крупных секционных иконок (§Visual Flourishes);
+- деньги и числа — `tabular-nums` (§«Деньги и числа»);
+- TON-действие (кнопка «Купить») — `action.ton` = sky-700 (§Actions), не indigo и не kit-primary.
+
 ## 2. Forms & Inputs
 
 **Никогда не используем сырые HTML `<select>`, `<input>`, `<button>`.** Только эквиваленты из `shadcn/ui` — ради доступности, единых focus-состояний (`ring`) и единого стиля.
