@@ -15,7 +15,7 @@ notify() {  # $1=state-file $2=text
   fi
 }
 if [ "$USE" -ge 90 ]; then
-  notify "$ST90" "🔴 Bullgram VDS: диск ${USE}% (критично). Свободно: $(df -h / | awk 'NR==2{print $4}'). Чистка: см. план 1.1 (journal vacuum, docker prune) — решения по /home у владельца."
+  notify "$ST90" "🔴 Серверу совсем тесно: диск ${USE}% занят, свободно $(df -h / | awk 'NR==2{print $4}'). Критично — позови агента: «почисти диск»."
 elif [ "$USE" -ge 80 ]; then
-  notify "$ST80" "🟡 Bullgram VDS: диск ${USE}% (порог 80). Свободно: $(df -h / | awk 'NR==2{print $4}')."
+  notify "$ST80" "⚠️ Серверу тесно: диск ${USE}% занят, свободно $(df -h / | awk 'NR==2{print $4}'). Обычно больше всего места едят docker-образы и старые бэкапы. Скажи агенту: «почисти диск»."
 fi

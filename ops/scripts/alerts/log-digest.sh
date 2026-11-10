@@ -2,11 +2,12 @@
 # Лог-дайджест (план 1.6, поправки Д-6 обязательны): cron 0 */4 * * *.
 # pino-уровни СТРОКОВЫЕ ("level":"error"); фильтр шума: 404-скан /api/v1*, /api/config, /healthz.
 # DMS: сообщение приходит всегда (даже «тихо») — тишина чата = скрипт не работает.
+# Тексты человеческие (решение владельца 2026-11-11): без «request completed»
+# и сырых сигнатур; расшифровки известных причин — словарь в блоке HINTS.
 set -u
 LOG=/srv/bullgram/backend/logs/app.out.jsonl
 SINCE=$(date -u -d '4 hours ago' '+%Y-%m-%dT%H:%M:%S')
-WINDOW="за 4ч (с ${SINCE}Z UTC)"
-[ -f "$LOG" ] || { /opt/alerts/tg-send.sh "⚠️ Bullgram log-digest: лог-файл не найден: $LOG"; exit 0; }
+[ -f "$LOG" ] || { /opt/alerts/tg-send.sh "⚠️ Логи Bullgram: дайджест не нашёл файл $LOG"; exit 0; }
 
 LINES=$(mktemp)
 jq -r --arg since "$SINCE" '
@@ -18,19 +19,48 @@ jq -r --arg since "$SINCE" '
       ((.err.message // .msg) // "-") ]
   | @tsv' "$LOG" 2>/dev/null | cut -c1-80 > "$LINES"
 
+# Человекочитаемая строка: уровень по-русски; «request completed» — это pino-msg
+# успешного ЛОГ-вызова для HTTP >=400, на деле «запросы с ошибками 4xx/5xx».
+pretty() {
+  awk -F'\t' '{
+    lvl = ($1=="error") ? "ошибки" : (($1=="warn") ? "предупр." : "фатальные")
+    what = $3
+    if (what=="request completed" || what=="request errored") what = "запросы с ошибками (4xx/5xx)"
+    print lvl" | "$2" | "what
+  }'
+}
+
 ERR_N=$(grep -c $'^error\t' "$LINES" 2>/dev/null || true)
 WARN_N=$(grep -c $'^warn\t' "$LINES" 2>/dev/null || true)
+KUMA_PUSH='curl -fsS -m 10 "http://100.127.7.20:3004/api/push/B7DA6B6CE797D3BC964F?status=up&msg=OK" >/dev/null 2>&1 || true'
 
 if [ "${ERR_N:-0}" -eq 0 ] && [ "${WARN_N:-0}" -eq 0 ]; then
-  /opt/alerts/tg-send.sh "✅ Bullgram логи тихие ${WINDOW}: 0 error/warn (шум n8n-скана отфильтрован)"
-curl -fsS -m 10 "http://100.127.7.20:3004/api/push/B7DA6B6CE797D3BC964F?status=up&msg=OK" >/dev/null 2>&1 || true
+  /opt/alerts/tg-send.sh "✅ Логи Bullgram за 4ч: тихо — ни ошибок, ни предупреждений"
+  eval "$KUMA_PUSH"
 else
-  TOP=$(sort "$LINES" 2>/dev/null | uniq -c | sort -rn | head -8 | sed 's/^ *//' || true)
-  MSG="🩺 Bullgram логи ${WINDOW}: error=${ERR_N:-0} warn=${WARN_N:-0}
-Top (частота × уровень × место × причина):
-${TOP}
-Реакции по сигнатурам: docs/dev/runbooks.md"
+  TOP=$(pretty < "$LINES" | sort | uniq -c | sort -rn | head -8 | sed 's/^ *//')
+
+  # Расшифровки известных сигнатур (runbooks.md §1-7) — только те, что есть в окне.
+  HINTS=$(mktemp)
+  {
+    grep -q "Proxy connection timed out" "$LINES" && echo "• «Proxy connection timed out» — юзерботы не достучались через прокси: обычно деплой-окно или флап, само проходит"
+    grep -qE "Connection to .* timed out" "$LINES" && echo "• «Connection … timed out» — IPv6-маршрут до Telegram флапает: болячка хостера, витрина защищена"
+    grep -q "Socks5 proxy rejected" "$LINES" && echo "• «Socks5 rejected» — прокси-слот отверг соединение: reconcile поднимет сам"
+    grep -qE "401: Unauthorized|Error checking rights" "$LINES" && echo "• «401 Unauthorized» у бота — мёртвый токен: владельцу бота перевыпустить в BotFather"
+    grep -q "bot_launch_failed" "$LINES" && echo "• «bot_launch_failed» — бот не запустился: чаще всего тот же мёртвый токен"
+    grep -qE "\.env|phpinfo|config\.php" "$LINES" && echo "• Строки с .env/phpinfo — сканеры стучатся в закрытые двери: фон, не нашэ"
+    grep -q "job failed" "$LINES" && echo "• «job failed» — упала фоновая задача: детали в runbooks §6"
+  } > "$HINTS" 2>/dev/null
+  HINT_BLOCK=""
+  [ -s "$HINTS" ] && HINT_BLOCK="
+Что это значит:
+$(cat "$HINTS")"
+
+  MSG="🩺 Логи Bullgram за 4ч: ошибок ${ERR_N:-0}, предупреждений ${WARN_N:-0}
+Чаще всего (раз × что):
+${TOP}${HINT_BLOCK}
+Подробности: docs/dev/runbooks.md — или спроси агента «разбери алерт»."
   /opt/alerts/tg-send.sh "$MSG"
-  curl -fsS -m 10 "http://100.127.7.20:3004/api/push/B7DA6B6CE797D3BC964F?status=up&msg=OK" >/dev/null 2>&1 || true
+  eval "$KUMA_PUSH"
 fi
-rm -f "$LINES"
+rm -f "$LINES" "$HINTS" 2>/dev/null
