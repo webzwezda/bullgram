@@ -26,6 +26,29 @@ export function registerDelivery(router, ctx) {
         publicDownloadHitsByIp
     } = ctx;
 
+    const BATCH_TOKEN_RE = /^batch_[a-z0-9]{2,20}$/;
+
+    // Счёт пакета (batch): все строки пакета несут общий memo и batch_token в
+    // payload. Публичная витрина собирает пакет в один счёт — агрегат статусов
+    // как в authed check-batch, выдача пакетов живёт в кабинете (delivery=null).
+    async function loadBatchPurchaseRows(batchToken) {
+        const { data: rows, error } = await supabase
+            .from('shop_purchases')
+            .select('*')
+            .contains('payload', { batch_token: batchToken })
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return rows || [];
+    }
+
+    function aggregateBatchStatus(statuses) {
+        if (statuses.some((s) => s === 'rejected')) return 'rejected';
+        if (statuses.some((s) => s === 'awaiting_receipt')) return 'awaiting_receipt';
+        if (statuses.length > 0 && statuses.every((s) => s === 'paid')) return 'paid';
+        if (statuses.some((s) => s === 'pending')) return 'pending';
+        return 'expired';
+    }
+
     router.get('/public/purchase/:purchaseId/public-view', async (req, res) => {
         const ip = req.ip || 'unknown';
         if (!checkRateLimit(publicViewHitsByIp, ip)) {
@@ -33,11 +56,61 @@ export function registerDelivery(router, ctx) {
         }
 
         const { purchaseId } = req.params;
-        if (!UUID_RE.test(String(purchaseId))) {
+        const isBatchView = BATCH_TOKEN_RE.test(String(purchaseId));
+        if (!UUID_RE.test(String(purchaseId)) && !isBatchView) {
             return res.status(400).json({ error: 'Некорректный ID счёта' });
         }
 
         try {
+            if (isBatchView) {
+                const rows = await loadBatchPurchaseRows(purchaseId);
+                if (!rows.length) return res.status(404).json({ error: 'Счёт не найден' });
+                await expireStalePendingPurchases(supabase, rows);
+
+                const status = aggregateBatchStatus(rows.map((row) => row.status));
+                const payable = rows.filter((row) => row.status === 'pending');
+                const totalTon = payable.reduce((sum, row) => sum + Number(row.amount_ton || 0), 0);
+                const first = rows[0];
+                const memo = first.payload?.memo || '';
+                const wallet = first.payload?.seller_wallet || siteWallet();
+                const amountNano = tonToNanoString(totalTon);
+                const tonUri = wallet ? `ton://transfer/${wallet}?amount=${amountNano}&text=${encodeURIComponent(memo || '')}` : null;
+
+                const itemIds = Array.from(new Set(rows.map((row) => row.shop_item_id).filter(Boolean)));
+                const { data: itemsRes } = await supabase
+                    .from('shop_items')
+                    .select('id, title')
+                    .in('id', itemIds);
+                const titleById = new Map((itemsRes || []).map((item) => [String(item.id), item.title]));
+                const titles = Array.from(new Set(itemIds.map((id) => titleById.get(String(id))).filter(Boolean)));
+                const itemTitle = titles.length === 1
+                    ? `${titles[0]} × ${rows.length}`
+                    : `Пакет из ${rows.length} лотов`;
+
+                const expiresAtMs = payable.length
+                    ? payable
+                        .map((row) => getPendingPurchaseExpiry(row.created_at).getTime())
+                        .filter(Number.isFinite)
+                        .sort((left, right) => left - right)[0]
+                    : null;
+
+                return res.json({
+                    id: purchaseId,
+                    batch: true,
+                    status,
+                    amount_ton: Number(totalTon || 0),
+                    amount_nanoton: amountNano,
+                    memo,
+                    seller_wallet: wallet,
+                    network: first.payload?.network || 'mainnet',
+                    expires_at: expiresAtMs ? new Date(expiresAtMs).toISOString() : null,
+                    item_title: itemTitle,
+                    ton_uri: tonUri,
+                    ton_qr: first.payload?.ton_qr || null,
+                    delivery: null
+                });
+            }
+
             const { data: purchase, error } = await supabase
                 .from('shop_purchases')
                 .select('id, status, amount_ton, created_at, payload, shop_item_id, seller_owner_id, buyer_owner_id, delivered_at')
@@ -111,11 +184,39 @@ export function registerDelivery(router, ctx) {
         }
 
         const { purchaseId } = req.params;
-        if (!UUID_RE.test(String(purchaseId))) {
+        const isBatchVerify = BATCH_TOKEN_RE.test(String(purchaseId));
+        if (!UUID_RE.test(String(purchaseId)) && !isBatchVerify) {
             return res.status(400).json({ error: 'Некорректный ID счёта' });
         }
 
         try {
+            if (isBatchVerify) {
+                const rows = await loadBatchPurchaseRows(purchaseId);
+                if (!rows.length) return res.status(404).json({ error: 'Счёт не найден' });
+                await expireStalePendingPurchases(supabase, rows);
+
+                const bodies = [];
+                for (const row of rows) {
+                    const result = await runShopPurchaseCheck(supabase, row, {
+                        senderWallet: typeof req.body?.sender_wallet === 'string' ? req.body.sender_wallet : null
+                    });
+                    if (!result.ok) {
+                        return res.status(result.statusCode || 400).json(result.body || { error: 'Ошибка проверки оплаты' });
+                    }
+                    bodies.push(result.body || {});
+                }
+
+                const statuses = bodies.map((body) => body.status || 'pending');
+                const allPaid = statuses.every((status) => status === 'paid');
+                return res.json({
+                    status: allPaid ? 'paid' : 'pending',
+                    success: allPaid,
+                    ownership_transfer_status: bodies.every((body) => body.ownership_transfer_status === 'completed')
+                        ? 'completed'
+                        : 'pending'
+                });
+            }
+
             const { data: purchase, error } = await supabase
                 .from('shop_purchases')
                 .select('*')

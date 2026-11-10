@@ -68,7 +68,8 @@ export function UserbotCenterSection({
   deleteAccount,
   deletingAccountId,
   restrictedMarker,
-  recoveryStatusBadge
+  recoveryStatusBadge,
+  shopInlineSlot
 }) {
   const location = useLocation();
   const sectionRef = useRef(null);
@@ -292,6 +293,7 @@ export function UserbotCenterSection({
               bindingAccountId={bindingAccountId}
             />
           }
+          shopInlineSlot={shopInlineSlot}
         />
       ) : (
         <div className="bg-white border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl overflow-hidden">
@@ -311,6 +313,11 @@ export function UserbotCenterSection({
               <UserPlus className="w-4 h-4" />
               Подключить аккаунт
             </button>
+            {shopInlineSlot ? (
+              <div className="mt-4 w-full max-w-sm">
+                {shopInlineSlot}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

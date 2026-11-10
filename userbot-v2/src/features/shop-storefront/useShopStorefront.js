@@ -213,6 +213,10 @@ export function useShopStorefront({
         noticeTone: 'default',
         purchase: purchaseShapeFromApiResponse(data, selectedPaymentMethod, false)
       });
+
+      // id счёта для редиректа на страницу оплаты /pay (UserbotsPage);
+      // ConnectPage продолжает показывать inline-панель и результат игнорирует.
+      return { id: data?.purchase_id || data?.id || null, error: '' };
     } catch (error) {
       let existingPurchase = null;
       try {
@@ -235,6 +239,8 @@ export function useShopStorefront({
         notice: '',
         noticeTone: 'default'
       });
+
+      return { id: existingPurchase?.id || null, error: error.message };
     }
   }
 
@@ -248,8 +254,7 @@ export function useShopStorefront({
       : (availableMethods[0] || 'ton');
 
     if (batchItems.length === 1) {
-      await openCheckout(batchItems[0], selectedPaymentMethod);
-      return;
+      return openCheckout(batchItems[0], selectedPaymentMethod);
     }
 
     const syntheticItem = {
@@ -290,18 +295,23 @@ export function useShopStorefront({
         notice: '',
         noticeTone: 'default'
       });
+
+      return { id: data?.batch_token || data?.purchase_ids?.[0] || null, error: '' };
     } catch (error) {
       await refreshPurchases().catch(() => null);
+      const message = error.message || 'Не удалось создать общую покупку.';
       setCheckoutState({
         item: null,
         purchase: null,
         paymentMethod: selectedPaymentMethod,
         loading: false,
         checking: false,
-        error: error.message || 'Не удалось создать общую покупку.',
+        error: message,
         notice: '',
         noticeTone: 'default'
       });
+
+      return { id: null, error: message };
     }
   }
 

@@ -17,6 +17,7 @@ export function CenterAccountCard({
   togglingSafeModeId,
   toggleSafeMode,
   profileTab,
+  shopInlineSlot,
 }) {
   const isSafeMode = String(selectedLiveUserbot.runtime_status || '') === 'pending_activation';
   const modeBusy = checkingAccountId === String(selectedLiveUserbot.id)
@@ -108,6 +109,9 @@ export function CenterAccountCard({
               );
             })()}
           </div>
+
+          {/* Витрина магазина одной строкой (план 2026-11-11-userbot-shop-inline-row) */}
+          {shopInlineSlot}
 
           {(() => {
             // Режим аккаунта (боевой/safe) живёт в пилюле-свитче у «удалить»
