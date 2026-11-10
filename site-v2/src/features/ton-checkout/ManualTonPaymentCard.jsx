@@ -78,14 +78,14 @@ function RequisiteRow({ label, value, copyValue }) {
   return (
     <button
       type="button"
-      className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 transition-colors"
+      className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-surface-subtle transition-colors"
       onClick={copy}
       title={copyValue || value}
     >
-      <span className="w-[72px] shrink-0 text-[11px] font-black uppercase tracking-widest text-slate-500">{label}</span>
-      <span className={`min-w-0 flex-1 font-mono text-[12px] font-bold text-slate-700 ${copyFailed ? 'break-all' : 'truncate'}`}>{value}</span>
+      <span className="w-[72px] shrink-0 text-[11px] font-black uppercase tracking-widest text-ink-muted">{label}</span>
+      <span className={`min-w-0 flex-1 font-mono text-[12px] font-bold text-ink-body ${copyFailed ? 'break-all' : 'truncate'}`}>{value}</span>
       <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
-        copied ? 'text-emerald-600' : copyFailed ? 'text-red-700' : 'text-slate-300 group-hover:text-slate-500'
+        copied ? 'text-feedback-success-text' : copyFailed ? 'text-feedback-error-text' : 'text-ink-faint group-hover:text-ink-muted'
       }`}>
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
       </span>
@@ -93,6 +93,8 @@ function RequisiteRow({ label, value, copyValue }) {
   );
 }
 
+// «Тихий счёт» (sketch 2026-11-11): без коробок — реквизиты плоскими строками,
+// QR и кнопки кошельков рядом, предупреждение warning-парой, CTA — action.ton.
 export function ManualTonPaymentCard({ purchase, checking = false, error = '', onCheck }) {
   const [qr, setQr] = useState(null);
   const [qrFailed, setQrFailed] = useState(false);
@@ -122,9 +124,7 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
 
   if (!addr) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-sm text-slate-500">Продавец не указал кошелёк — оплата переводом недоступна</p>
-      </div>
+      <p className="text-sm text-ink-muted">Продавец не указал кошелёк — оплата переводом недоступна</p>
     );
   }
 
@@ -132,11 +132,17 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
   const amountText = String(Number(purchase.amount_ton || 0));
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="flex flex-col sm:flex-row">
-        <div className="sm:w-[240px] sm:shrink-0 p-4 flex flex-col items-center justify-center gap-2.5 border-b sm:border-b-0 sm:border-r border-slate-100 bg-slate-50/50">
+    <div className="space-y-4">
+      <div className="space-y-0.5">
+        <RequisiteRow label="Сумма" value={`${amountText} TON`} copyValue={amountText} />
+        <RequisiteRow label="Memo" value={purchase.memo || ''} />
+        <RequisiteRow label="Кошелёк" value={purchase.seller_wallet} />
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-4">
+        <div className="flex flex-col items-center gap-1.5 shrink-0">
           {qr ? (
-            <div className="w-[180px] aspect-square rounded-xl border border-slate-100 p-2 bg-white shadow-sm">
+            <div className="w-[132px] aspect-square rounded-xl border border-border-default p-2 bg-surface-card shadow-sm">
               <img
                 className="w-full h-full object-contain mix-blend-multiply"
                 src={qr}
@@ -144,71 +150,63 @@ export function ManualTonPaymentCard({ purchase, checking = false, error = '', o
               />
             </div>
           ) : qrFailed ? (
-            <p className="w-[180px] text-[11px] text-slate-500 text-center leading-relaxed">
-              QR не построился — открой кошелёк по ссылке ниже
+            <p className="w-[132px] text-[11px] text-ink-muted text-center leading-relaxed">
+              QR не построился — открой кошелёк по кнопке рядом
             </p>
           ) : (
-            <div className="w-[180px] aspect-square rounded-xl bg-slate-100 animate-pulse" />
+            <div className="w-[132px] aspect-square rounded-xl bg-surface-subtle-strong animate-pulse" />
           )}
-          <p className="text-[11px] text-slate-500 text-center">Отсканируй камерой любого TON-кошелька</p>
+          <p className="text-[11px] text-ink-muted text-center">Камерой TON-кошелька</p>
         </div>
 
-        <div className="flex-1 min-w-0 divide-y divide-slate-100">
-          <div className="p-2 space-y-0.5">
-            <RequisiteRow label="Сумма" value={`${amountText} TON`} copyValue={amountText} />
-            <RequisiteRow label="Memo" value={purchase.memo || ''} />
-            <RequisiteRow label="Кошелёк" value={purchase.seller_wallet} />
-          </div>
-
-          {links.length ? (
-            <div className="px-4 py-3 space-y-2">
-              <div className="text-[11px] font-black uppercase tracking-widest text-slate-500">Или открыть в кошельке</div>
-              <div className="grid grid-cols-2 gap-2">
-                {links.map((link) => (
-                  <a
-                    key={link.key}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-[11px] font-bold hover:bg-slate-50 hover:border-slate-300 transition-all"
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink className="size-3 text-slate-400 shrink-0" />
-                    {link.label}
-                  </a>
-                ))}
-              </div>
+        {links.length ? (
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-black uppercase tracking-widest text-ink-muted mb-2">Открыть в кошельке</div>
+            <div className="grid grid-cols-2 gap-2">
+              {links.map((link) => (
+                <a
+                  key={link.key}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border-default bg-surface-card text-ink-body text-[11px] font-bold hover:bg-surface-subtle transition-all"
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ExternalLink className="size-3 text-ink-faint shrink-0" />
+                  {link.label}
+                </a>
+              ))}
             </div>
-          ) : null}
-
-          <div className="p-4 space-y-2">
-            {error ? (
-              <p className="text-xs text-red-700 text-center">{error}</p>
-            ) : null}
-            <div className="rounded-lg bg-amber-50 px-3 py-2 flex items-start gap-1.5">
-              <AlertTriangle className="size-3 text-amber-600 shrink-0 mt-0.5" />
-              <span className="text-[11px] font-bold text-amber-900 leading-relaxed">
-                Переводи ровно сумму с этим memo — иначе платёж не зачтётся
-              </span>
-            </div>
-            <button
-              type="button"
-              className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-sm shadow-md shadow-sky-700/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={onCheck}
-              disabled={checking}
-            >
-              {checking ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Проверяем...
-                </>
-              ) : 'Проверить оплату'}
-            </button>
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-500">
-              <Loader2 className="size-3 animate-spin shrink-0" />
-              Статус проверяется автоматически каждые 10 секунд
-            </span>
           </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-2.5">
+        {error ? (
+          <p className="text-xs text-feedback-error-text text-center">{error}</p>
+        ) : null}
+        <div className="rounded-lg bg-feedback-warning-bg px-3 py-2 flex items-start gap-1.5">
+          <AlertTriangle className="size-3 text-feedback-warning-text shrink-0 mt-0.5" />
+          <span className="text-[11px] font-bold text-feedback-warning-text leading-relaxed">
+            Переводи ровно {amountText} TON с этим memo — иначе платёж не зачтётся
+          </span>
         </div>
+        <button
+          type="button"
+          className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-action-ton hover:bg-action-ton-hover text-action-ton-text font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={onCheck}
+          disabled={checking}
+        >
+          {checking ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Проверяем...
+            </>
+          ) : 'Проверить оплату'}
+        </button>
+        <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+          <Loader2 className="size-3 animate-spin shrink-0" />
+          Статус проверяется автоматически каждые 10 секунд
+        </span>
       </div>
     </div>
   );
