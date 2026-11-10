@@ -24,8 +24,8 @@ export function UserbotStorefrontSection({
   setSelectedOpenPurchaseId,
   showPurchaseInline,
   storefrontState,
-  bundledUserbotLot,
-  bundledUserbotLots,
+  storefrontLot,
+  storefrontLots,
   buyQuantities,
   setBuyQuantities,
   checkoutState,
@@ -39,20 +39,24 @@ export function UserbotStorefrontSection({
 }) {
   const { accessToken } = useAuth();
 
-  const bundleSlot = useMemo(() => ({
-    slotKey: 'bundle',
-    item: bundledUserbotLot,
-    items: bundledUserbotLots,
-    title: 'Готовый юзербот',
-    emptyText: 'Свободных аккаунтов с прокси сейчас нет.',
+  const slot = useMemo(() => ({
+    slotKey: 'shop',
+    item: storefrontLot,
+    items: storefrontLots,
+    emptyText: 'Свободных лотов в магазине сейчас нет.',
     features: ['Чистая Telegram сессия', 'Индивидуальный IPv4 Proxy', 'Запуск без пересадки', 'Гарантия на первый вход']
-  }), [bundledUserbotLot, bundledUserbotLots]);
+  }), [storefrontLot, storefrontLots]);
+
+  // Комплекты (bundle) — флагманский лот: им достаётся «Хит», чип Proxy
+  // и статичный список фич. Остальные лоты (account/userbot) показывают
+  // реальное preview_text из магазина.
+  const isBundleLot = slot.item?.item_type === 'bundle';
 
   const quantity = Math.min(
-    Math.max(Number(buyQuantities[bundleSlot.slotKey] || 1), 1),
-    Math.max(bundleSlot.items.length, 1)
+    Math.max(Number(buyQuantities[slot.slotKey] || 1), 1),
+    Math.max(slot.items.length, 1)
   );
-  const selectedItems = bundleSlot.items.slice(0, quantity);
+  const selectedItems = slot.items.slice(0, quantity);
   const bundleTotalTon = selectedItems.reduce(
     (sum, item) => sum + Number(item?.price_ton || 0),
     0
@@ -118,7 +122,7 @@ export function UserbotStorefrontSection({
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-900">Магазин аккаунтов</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Готовые юзерботы с прокси. Оплата: TON Connect или перевод вручную.</p>
+              <p className="text-sm text-slate-500 mt-0.5">Аккаунты и готовые комплекты из Shop. Оплата: TON Connect или перевод вручную.</p>
             </div>
           </div>
         </div>
@@ -148,45 +152,52 @@ export function UserbotStorefrontSection({
               <Loader2 className="size-8 animate-spin text-indigo-500" />
               <div className="text-sm font-medium text-slate-500">Загрузка предложений из Shop...</div>
             </div>
-          ) : !bundleSlot.item && !activePurchase ? (
+          ) : !slot.item && !activePurchase ? (
             <div className="flex flex-col items-center justify-center py-10 text-center bg-slate-50/50 rounded-2xl border border-slate-100">
               <div className="size-14 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 border border-slate-100">
                 <Box className="size-7 text-slate-300" />
               </div>
               <h3 className="text-base font-bold text-slate-900 mb-1">Нет в наличии</h3>
-              <p className="text-sm text-slate-500 max-w-sm">{bundleSlot.emptyText}</p>
+              <p className="text-sm text-slate-500 max-w-sm">{slot.emptyText}</p>
             </div>
           ) : (
             <div className="space-y-4">
               {/* [1] HERO ROW — title + Хит + included chips */}
-              {bundleSlot.item ? (
+              {slot.item ? (
                 <>
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-tight flex-1 min-w-0">
-                        {bundleSlot.item.title}
+                        {slot.item.title}
                       </h3>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                        <Star className="size-3 text-indigo-600 fill-indigo-600" /> Хит
-                      </span>
+                      {isBundleLot ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                          <Star className="size-3 text-indigo-600 fill-indigo-600" /> Хит
+                        </span>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
                         <Box className="size-3.5 mr-1 text-slate-400" /> Аккаунт
                       </Badge>
-                      <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
-                        <ShieldCheck className="size-3.5 mr-1 text-slate-400" /> Proxy
-                      </Badge>
-                      <span className="text-[11px] text-slate-500 ml-1">Доступно: {bundleSlot.items.length} шт.</span>
+                      {isBundleLot ? (
+                        <Badge variant="outline" className="bg-white border-slate-200 text-slate-700 py-1 px-2 text-[11px]">
+                          <ShieldCheck className="size-3.5 mr-1 text-slate-400" /> Proxy
+                        </Badge>
+                      ) : null}
+                      <span className="text-[11px] text-slate-500 ml-1">Доступно: {slot.items.length} шт.</span>
                     </div>
                   </div>
 
                   {/* [2] FEATURES — inline trust-line ДО CTA */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-slate-600">
-                    {bundleSlot.features.map((feature, i) => (
+                    {(isBundleLot
+                      ? slot.features
+                      : (slot.item.preview_text ? [slot.item.preview_text] : [])
+                    ).map((line, i) => (
                       <span key={i} className="inline-flex items-center gap-1.5">
                         <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
-                        <span>{feature}</span>
+                        <span>{line}</span>
                       </span>
                     ))}
                   </div>
@@ -252,7 +263,7 @@ export function UserbotStorefrontSection({
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                           onClick={() => setBuyQuantities((prev) => ({
                             ...prev,
-                            [bundleSlot.slotKey]: Math.max(Number(prev[bundleSlot.slotKey] || 1) - 1, 1)
+                            [slot.slotKey]: Math.max(Number(prev[slot.slotKey] || 1) - 1, 1)
                           }))}
                           disabled={quantity <= 1}
                           aria-label="Уменьшить количество"
@@ -265,9 +276,9 @@ export function UserbotStorefrontSection({
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                           onClick={() => setBuyQuantities((prev) => ({
                             ...prev,
-                            [bundleSlot.slotKey]: Math.min(Number(prev[bundleSlot.slotKey] || 1) + 1, Math.max(bundleSlot.items.length, 1))
+                            [slot.slotKey]: Math.min(Number(prev[slot.slotKey] || 1) + 1, Math.max(slot.items.length, 1))
                           }))}
-                          disabled={quantity >= Math.max(bundleSlot.items.length, 1)}
+                          disabled={quantity >= Math.max(slot.items.length, 1)}
                           aria-label="Увеличить количество"
                         >
                           <Plus className="size-4" />

@@ -241,13 +241,20 @@ export function purchaseStatusMeta(status) {
 
 export function isUserbotShopItem(item) {
   if (!item) return false;
-  if (item.item_type === 'userbot' || item.item_type === 'bundle') return true;
+  // account-лоты — тот же магазин; их assets сервер не отдаёт (ревью P1:
+  // asset_id — UUID tg_accounts), поэтому матчим по item_type.
+  if (
+    item.item_type === 'account' ||
+    item.item_type === 'userbot' ||
+    item.item_type === 'bundle'
+  ) return true;
   return Array.isArray(item.assets) && item.assets.some((asset) => asset.asset_type === 'userbot');
 }
 
 export function isUserbotPurchase(purchase) {
   if (!purchase) return false;
-  if (purchase.item?.item_type === 'userbot' || purchase.item?.item_type === 'bundle') return true;
+  const itemType = purchase.item?.item_type;
+  if (itemType === 'account' || itemType === 'userbot' || itemType === 'bundle') return true;
   return Array.isArray(purchase.assets) && purchase.assets.some((asset) => asset.asset_type === 'userbot');
 }
 

@@ -75,8 +75,8 @@ function ConnectPageContent() {
   );
 
   const {
+    accountOnlyUserbotLots,
     availableOnboardingProxies,
-    bundledUserbotLot,
     bundledUserbotLots,
     openUserbotPurchases
   } = useBotsAccountsDerivedState({
@@ -136,13 +136,20 @@ function ConnectPageContent() {
     updateOnboarding
   };
 
+  // Один магазин — одна полка (зеркалит UserbotsPage): комплекты плюс
+  // одиночные лоты account/userbot.
+  const storefrontLots = useMemo(
+    () => [...bundledUserbotLots, ...accountOnlyUserbotLots],
+    [bundledUserbotLots, accountOnlyUserbotLots]
+  );
+
   const buyerStorefrontSectionProps = {
     openPurchases: openUserbotPurchases,
     setSelectedOpenPurchaseId,
     showPurchaseInline,
     storefrontState,
-    bundledUserbotLot,
-    bundledUserbotLots,
+    storefrontLot: storefrontLots[0] || null,
+    storefrontLots,
     buyQuantities,
     setBuyQuantities,
     checkoutState,

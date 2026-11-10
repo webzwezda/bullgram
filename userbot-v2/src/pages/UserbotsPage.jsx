@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../app/providers/AuthProvider.jsx';
@@ -80,8 +80,8 @@ function UserbotsPageContent() {
   });
 
   const {
+    accountOnlyUserbotLots,
     availableOnboardingProxies,
-    bundledUserbotLot,
     bundledUserbotLots,
     canSellUserbotAssets,
     liveUserbots,
@@ -168,13 +168,20 @@ function UserbotsPageContent() {
     });
   }, [openUserbotPurchases]);
 
+  // Один магазин — одна полка: комплекты (флагман) плюс одиночные лоты
+  // (account/userbot). Прокси живут на своей витрине /userbot/proxies.
+  const storefrontLots = useMemo(
+    () => [...bundledUserbotLots, ...accountOnlyUserbotLots],
+    [bundledUserbotLots, accountOnlyUserbotLots]
+  );
+
   const buyerStorefrontSectionProps = {
     openPurchases: openUserbotPurchases,
     setSelectedOpenPurchaseId,
     showPurchaseInline,
     storefrontState,
-    bundledUserbotLot,
-    bundledUserbotLots,
+    storefrontLot: storefrontLots[0] || null,
+    storefrontLots,
     buyQuantities,
     setBuyQuantities,
     checkoutState,
