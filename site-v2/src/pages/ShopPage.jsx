@@ -189,8 +189,10 @@ export function ShopPage() {
         method: 'POST',
         body: { item_id: item.id }
       });
-      if (!data?.id) throw new Error('Не получили номер покупки от сервера');
-      navigate(`/pay/${data.id}`);
+      // бэкенд отдаёт номер покупки в purchase_id (не id)
+      const purchaseId = data?.purchase_id || data?.id;
+      if (!purchaseId) throw new Error('Не получили номер покупки от сервера');
+      navigate(`/pay/${purchaseId}`);
     } catch (e) {
       setBuyErrorId(item.id);
       setBuyError(e.message || 'Не удалось создать счёт. Попробуй ещё раз.');
