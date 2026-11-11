@@ -32,6 +32,11 @@ function shortWallet(addr) {
   return `${addr.slice(0, 6)}…${addr.slice(-8)}`;
 }
 
+// Счёт — узкая колонка по центру (как в скетче «Тихий счёт»), не во всю ширину.
+function PayPageFrame({ children }) {
+  return <div className="mx-auto w-full max-w-xl">{children}</div>;
+}
+
 export function PayPage() {
   const { purchaseId } = useParams();
   const [purchase, setPurchase] = useState(null);
@@ -211,31 +216,37 @@ export function PayPage() {
     }
   }, [purchase, purchaseKind, fetchPurchase]);
 
-  if (loading) return <SkeletonView />;
-  if (cancelled) return <CancelledView />;
-  if (error) return <ErrorView message={error} onRetry={() => fetchPurchase(true)} />;
+  if (loading) return <PayPageFrame><SkeletonView /></PayPageFrame>;
+  if (cancelled) return <PayPageFrame><CancelledView /></PayPageFrame>;
+  if (error) return <PayPageFrame><ErrorView message={error} onRetry={() => fetchPurchase(true)} /></PayPageFrame>;
   if (purchase?.status === 'paid' || isProcessingStatus(purchase?.status)) {
     return (
-      <PaidView
-        purchase={purchase}
-        processing={isProcessingStatus(purchase?.status)}
-        purchaseKind={purchaseKind}
-        fulfillmentStatus={purchase?.fulfillment_status ?? null}
-        onRefresh={fetchPurchase}
-      />
+      <PayPageFrame>
+        <PaidView
+          purchase={purchase}
+          processing={isProcessingStatus(purchase?.status)}
+          purchaseKind={purchaseKind}
+          fulfillmentStatus={purchase?.fulfillment_status ?? null}
+          onRefresh={fetchPurchase}
+        />
+      </PayPageFrame>
     );
   }
   if (purchase && purchaseKind !== 'public_invoice' && isExpired(purchase)) {
     return (
-      <ExpiredView
-        canVerifyPayment={purchaseKind === 'shop'}
-        verifying={manualVerifying}
-        message={manualMessage}
-        onVerify={verifyManually}
-      />
+      <PayPageFrame>
+        <ExpiredView
+          canVerifyPayment={purchaseKind === 'shop'}
+          verifying={manualVerifying}
+          message={manualMessage}
+          onVerify={verifyManually}
+        />
+      </PayPageFrame>
     );
   }
-  if (purchase && purchaseKind === 'public_invoice' && purchase.status === 'expired') return <ExpiredView />;
+  if (purchase && purchaseKind === 'public_invoice' && purchase.status === 'expired') {
+    return <PayPageFrame><ExpiredView /></PayPageFrame>;
+  }
 
   const verifyEndpoint = purchaseKind === 'invoice'
     ? INVOICE_VERIFY_ENDPOINT(purchase.id)
@@ -246,20 +257,22 @@ export function PayPage() {
         : SHOP_VERIFY_ENDPOINT(purchase.id);
 
   return (
-    <PaymentView
-      purchase={purchase}
-      verifying={verifying}
-      verifyEndpoint={verifyEndpoint}
-      onPaymentSent={() => setVerifying(true)}
-      onPaid={handlePaid}
-      onError={handlePayError}
-      onVerifyManually={verifyManually}
-      manualVerifying={manualVerifying}
-      manualMessage={manualMessage}
-      purchaseKind={purchaseKind}
-      onCancel={purchaseKind === 'shop' ? cancelPurchase : undefined}
-      cancelling={cancelling}
-      cancelError={cancelError}
-    />
+    <PayPageFrame>
+      <PaymentView
+        purchase={purchase}
+        verifying={verifying}
+        verifyEndpoint={verifyEndpoint}
+        onPaymentSent={() => setVerifying(true)}
+        onPaid={handlePaid}
+        onError={handlePayError}
+        onVerifyManually={verifyManually}
+        manualVerifying={manualVerifying}
+        manualMessage={manualMessage}
+        purchaseKind={purchaseKind}
+        onCancel={purchaseKind === 'shop' ? cancelPurchase : undefined}
+        cancelling={cancelling}
+        cancelError={cancelError}
+      />
+    </PayPageFrame>
   );
 }
