@@ -55,15 +55,18 @@ Kuma пошлёт алерты «down» на время самого ребут�
 | Расписание | Скрипт | Что делает |
 |---|---|---|
 | `0 4 * * *` | `/opt/backups/pg-dump.sh` | дамп БД → шифрование → publish для NAS; Kuma-push DMS |
-| `*/10 * * * *` | `/opt/alerts/proxy-probe.sh` | слот 21143 жив? IPv6→Telegram флап? (алерты 🔴/🟡, dedup 1ч) |
+| `*/10 * * * *` | `/opt/alerts/proxy-probe.sh` | слот 21143 жив? (🔴, dedup 1ч); IPv6→Telegram флап — режим «начался/кончился», хроника >12ч — сводка раз в сутки |
 | `0 * * * *` | `/opt/alerts/disk-alert.sh` | диск 80/90% → Telegram (dedup 6ч) |
-| `0 */4 * * *` | `/opt/alerts/log-digest.sh` | сводка error/warn из JSONL (фильтр n8n-шума) + Kuma-push |
+| `0 */4 * * *` | `/opt/alerts/log-digest.sh` | сводка error/warn из JSONL (фильтр n8n-шума, человекочитаемые тексты + расшифровки сигнатур) + Kuma-push |
 | `0 9 * * *` | `/opt/alerts/metrics-digest.sh` | диск/мем/load/БД/pm2 одной строкой + Kuma-push |
 | `0 6 8 * *` | `/opt/backups/smoke-restore.sh` | месячный smoke бэкапа (расшифровка + pg_restore -l → Telegram); янв/апр/июл/окт — напоминает о квартальном драйлле |
 
-Креды всех алертов — `TG_BOT_TOKEN`/`TG_ADMIN_CHAT_ID` из `backend/.env`
-(скрипты их не хранят). DMS-пинги Kuma вшиты в pg-dump/nas-pull/log-digest/
-metrics («тишина = сбой»).
+Исходники `/opt/alerts/*.sh` версионированы в репо: `ops/scripts/alerts/`
+(перенос 2026-11-11, решение владельца). На сервер накладываются руками,
+как nginx: `cp /srv/bullgram/ops/scripts/alerts/*.sh /opt/alerts/ && chmod +x
+/opt/alerts/*.sh` — deploy-pull их не трогает. Креды всех алертов —
+`TG_BOT_TOKEN`/`TG_ADMIN_CHAT_ID` из `backend/.env` (скрипты их не хранят).
+DMS-пинги Kuma вшиты в pg-dump/nas-pull/log-digest/metrics («тишина = сбой»).
 
 ## 4. Слои наблюдаемости и самовосстановления
 

@@ -30,6 +30,12 @@ npm --prefix docs-site install
 
 - **nginx**: `/etc/nginx/sites-enabled/bullgram.xyz`. Бэкапы: `/root/nginx-backups/`.
   Конфиг в репозиторий не выносится (решение владельца).
+- **Алерт-скрипты** (`/opt/alerts/*.sh` — log-digest, disk-alert, proxy-probe,
+  metrics-digest, tg-send): исходники в репо `ops/scripts/alerts/` (с 2026-11-11),
+  на сервер накладываются руками: `cp /srv/bullgram/ops/scripts/alerts/*.sh
+  /opt/alerts/ && chmod +x /opt/alerts/*.sh` (deploy-pull их не трогает).
+  State-файлы дедупа/флапа живут в `/var/lib/` (`disk-alert.state*`,
+  `proxy-probe.state*`, `proxy-probe.tg6flap`/`.tg6daily`).
 - **pm2**: `backend/ecosystem.config.cjs` — из репо, релоад: `pm2 reload ecosystem.config.cjs --env production`
 - **Прокси (3proxy)**: при загрузке сервера systemd-юнит
   `bullgram-managed-proxies.service` (`ops/systemd/`) сверяет состояние с Supabase,
