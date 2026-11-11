@@ -35,31 +35,32 @@ WARN_N=$(grep -c $'^warn\t' "$LINES" 2>/dev/null || true)
 KUMA_PUSH='curl -fsS -m 10 "http://100.127.7.20:3004/api/push/B7DA6B6CE797D3BC964F?status=up&msg=OK" >/dev/null 2>&1 || true'
 
 if [ "${ERR_N:-0}" -eq 0 ] && [ "${WARN_N:-0}" -eq 0 ]; then
-  /opt/alerts/tg-send.sh "✅ Логи Bullgram за 4ч: тихо — ни ошибок, ни предупреждений"
+  /opt/alerts/tg-send.sh "✅ [log-digest] за 4ч: тихо — ни ошибок, ни предупреждений"
   eval "$KUMA_PUSH"
 else
   TOP=$(pretty < "$LINES" | sort | uniq -c | sort -rn | head -8 | sed 's/^ *//')
 
-  # Расшифровки известных сигнатур (runbooks.md §1-7) — только те, что есть в окне.
+  # Расшифровки известных сигнатур (runbooks.md §1-7) с реакцией дежурного
+  # агента — читатель дайджеста агент, не человек (решение владельца 2026-11-11).
   HINTS=$(mktemp)
   {
-    grep -q "Proxy connection timed out" "$LINES" && echo "• «Proxy connection timed out» — юзерботы не достучались через прокси: обычно деплой-окно или флап, само проходит"
-    grep -qE "Connection to .* timed out" "$LINES" && echo "• «Connection … timed out» — IPv6-маршрут до Telegram флапает: болячка хостера, витрина защищена"
-    grep -q "Socks5 proxy rejected" "$LINES" && echo "• «Socks5 rejected» — прокси-слот отверг соединение: reconcile поднимет сам"
-    grep -qE "401: Unauthorized|Error checking rights" "$LINES" && echo "• «401 Unauthorized» у бота — мёртвый токен: владельцу бота перевыпустить в BotFather"
-    grep -q "bot_launch_failed" "$LINES" && echo "• «bot_launch_failed» — бот не запустился: чаще всего тот же мёртвый токен"
-    grep -qE "\.env|phpinfo|config\.php" "$LINES" && echo "• Строки с .env/phpinfo — сканеры стучатся в закрытые двери: фон, не нашэ"
-    grep -q "job failed" "$LINES" && echo "• «job failed» — упала фоновая задача: детали в runbooks §6"
+    grep -q "Proxy connection timed out" "$LINES" && echo "• «Proxy connection timed out» — юзерботы не достучались через прокси (деплой-окно или флап). Реакция: сопровождать; эскалировать владельцу при >200/ч."
+    grep -qE "Connection to .* timed out" "$LINES" && echo "• «Connection … timed out» — IPv6 до Telegram флапает (хостер). Реакция: ждать, витрина защищена; хроника >12ч — доложить владельцу."
+    grep -q "Socks5 proxy rejected" "$LINES" && echo "• «Socks5 rejected» — слот отверг соединение. Реакция: ничего, reconcile поднимает сам (hourly)."
+    grep -qE "401: Unauthorized|Error checking rights" "$LINES" && echo "• «401 Unauthorized» у бота — мёртвый токен. Реакция: найти бота по uuid в autopost_bots, проверить getMe, уведомить владельца о перевыпуске в BotFather (runbooks §1)."
+    grep -q "bot_launch_failed" "$LINES" && echo "• «bot_launch_failed» — бот не запустился, чаще мёртвый токен. Реакция: как у 401."
+    grep -qE "\.env|phpinfo|config\.php" "$LINES" && echo "• Строки с .env/phpinfo — сканеры, 404. Реакция: ничего, фон."
+    grep -q "job failed" "$LINES" && echo "• «job failed» — упала фоновая задача. Реакция: вытащить контекст из лога по job+runId (logging.md), runbooks §6."
   } > "$HINTS" 2>/dev/null
   HINT_BLOCK=""
   [ -s "$HINTS" ] && HINT_BLOCK="
-Что это значит:
+Расшифровка и реакции:
 $(cat "$HINTS")"
 
-  MSG="🩺 Логи Bullgram за 4ч: ошибок ${ERR_N:-0}, предупреждений ${WARN_N:-0}
+  MSG="🩺 [log-digest] за 4ч: ошибок ${ERR_N:-0}, предупреждений ${WARN_N:-0}
 Чаще всего (раз × что):
 ${TOP}${HINT_BLOCK}
-Подробности: docs/dev/runbooks.md — или спроси агента «разбери алерт»."
+Полный гайд дежурного: docs/dev/runbooks.md."
   /opt/alerts/tg-send.sh "$MSG"
   eval "$KUMA_PUSH"
 fi

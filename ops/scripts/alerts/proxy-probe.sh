@@ -26,17 +26,20 @@ dedup_alert() {  # $1=ключ $2=текст
 }
 
 if [ -z "$EXIT_IP" ]; then
-  dedup_alert slot "🔴 Прокси-слот платформы (21143) не отвечает — юзерботы без выхода. Контейнер bullgram-managed-3proxy жив? → docker ps; reconcile: systemctl start bullgram-managed-proxies"
+  dedup_alert slot "🔴 [proxy-slot] managed-слот 21143 не отвечает (SOCKS) — юзерботы без выхода.
+Действие: docker ps | grep bullgram-managed-3proxy; systemctl start bullgram-managed-proxies; конфиг /var/lib/bullgram/managed-proxies/3proxy.cfg. Грабли и детали: docs/dev/proxies.md."
 elif [ "$TG6" != "200" ]; then
   started=$(cat "$FLAP" 2>/dev/null)
   if [ -z "$started" ]; then
-    /opt/alerts/tg-send.sh "🟡 Сеть: IPv6 до Telegram флапает. Проверки лотов будут падать, витрина магазина защищена. Сообщу, когда кончится." && date +%s > "$FLAP"
+    /opt/alerts/tg-send.sh "🟡 [net-ipv6] флап до Telegram начался (слот жив, exit $EXIT_IP).
+Реакция: ждать; health-check лотов будут падать — это ожидаемо; витрина защищена анти-флапом. Сообщу, когда кончится." && date +%s > "$FLAP"
   else
     dur=$((now - started))
     today=$(date +%F)
     if [ "$dur" -ge "$CHRONIC_S" ] && [ "$(cat "$DAILY" 2>/dev/null)" != "$today" ]; then
       hrs=$((dur / 3600))
-      /opt/alerts/tg-send.sh "🟡 Сеть: IPv6-флап продолжается уже ~${hrs}ч (хроника, кратится раз в сутки). Витрина защищена." && echo "$today" > "$DAILY"
+      /opt/alerts/tg-send.sh "🟡 [net-ipv6] флап продолжается ~${hrs}ч (хроника, сводка раз в сутки).
+Реакция: доложить владельцу — если держится сутки+, вопрос хостеру (сигнатура №5, runbooks)." && echo "$today" > "$DAILY"
     fi
   fi
 else
@@ -44,7 +47,8 @@ else
   if [ -n "$started" ]; then
     hrs=$(( (now - started) / 3600 ))
     mins=$(( ((now - started) % 3600) / 60 ))
-    /opt/alerts/tg-send.sh "🟢 Сеть: IPv6-флап кончился, длился ~${hrs}ч ${mins}м. Проверки лотов снова в норме."
+    /opt/alerts/tg-send.sh "🟢 [net-ipv6] флап кончился, длился ~${hrs}ч ${mins}м.
+Реакция: убедиться по следующему [log-digest], что таймауты прокси прекратились; лоты вернутся на health-check сами."
     rm -f "$FLAP" "$DAILY"
   fi
 fi
