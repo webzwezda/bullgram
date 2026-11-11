@@ -32,9 +32,10 @@ function shortWallet(addr) {
   return `${addr.slice(0, 6)}…${addr.slice(-8)}`;
 }
 
-// Счёт — узкая колонка по центру (как в скетче «Тихий счёт»), не во всю ширину.
+// Счёт — тихая колонка по центру (sketch «Центр 720»): max-w-2xl ≈ 672px —
+// QR и кнопки кошельков встают в ряд, карточка не теряется и не растягивается.
 function PayPageFrame({ children }) {
-  return <div className="mx-auto w-full max-w-xl">{children}</div>;
+  return <div className="mx-auto w-full max-w-2xl">{children}</div>;
 }
 
 export function PayPage() {
