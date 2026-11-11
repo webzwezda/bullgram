@@ -40,27 +40,27 @@ if [ "${ERR_N:-0}" -eq 0 ] && [ "${WARN_N:-0}" -eq 0 ]; then
 else
   TOP=$(pretty < "$LINES" | sort | uniq -c | sort -rn | head -8 | sed 's/^ *//')
 
-  # Расшифровки известных сигнатур (runbooks.md §1-7) с реакцией дежурного
-  # агента — читатель дайджеста агент, не человек (решение владельца 2026-11-11).
+  # Расшифровки известных сигнатур (runbooks.md §1-7) — только факты и смысл;
+  # без «реакций»: инструкции дежурному агенту живут отдельно (скиллы).
   HINTS=$(mktemp)
   {
-    grep -q "Proxy connection timed out" "$LINES" && echo "• «Proxy connection timed out» — юзерботы не достучались через прокси (деплой-окно или флап). Реакция: сопровождать; эскалировать владельцу при >200/ч."
-    grep -qE "Connection to .* timed out" "$LINES" && echo "• «Connection … timed out» — IPv6 до Telegram флапает (хостер). Реакция: ждать, витрина защищена; хроника >12ч — доложить владельцу."
-    grep -q "Socks5 proxy rejected" "$LINES" && echo "• «Socks5 rejected» — слот отверг соединение. Реакция: ничего, reconcile поднимает сам (hourly)."
-    grep -qE "401: Unauthorized|Error checking rights" "$LINES" && echo "• «401 Unauthorized» у бота — мёртвый токен. Реакция: найти бота по uuid в autopost_bots, проверить getMe, уведомить владельца о перевыпуске в BotFather (runbooks §1)."
-    grep -q "bot_launch_failed" "$LINES" && echo "• «bot_launch_failed» — бот не запустился, чаще мёртвый токен. Реакция: как у 401."
-    grep -qE "\.env|phpinfo|config\.php" "$LINES" && echo "• Строки с .env/phpinfo — сканеры, 404. Реакция: ничего, фон."
-    grep -q "job failed" "$LINES" && echo "• «job failed» — упала фоновая задача. Реакция: вытащить контекст из лога по job+runId (logging.md), runbooks §6."
+    grep -q "Proxy connection timed out" "$LINES" && echo "• «Proxy connection timed out» — юзерботы не достучались через прокси: деплой-окно или флап, обычно само проходит."
+    grep -qE "Connection to .* timed out" "$LINES" && echo "• «Connection … timed out» — IPv6 до Telegram флапает (хостер); витрина защищена анти-флапом."
+    grep -q "Socks5 proxy rejected" "$LINES" && echo "• «Socks5 rejected» — прокси-слот отверг соединение; reconcile поднимает сам (hourly)."
+    grep -qE "401: Unauthorized|Error checking rights" "$LINES" && echo "• «401 Unauthorized» у бота — мёртвый токен (нужен перевыпуск в BotFather)."
+    grep -q "bot_launch_failed" "$LINES" && echo "• «bot_launch_failed» — бот не запустился, чаще всего мёртвый токен."
+    grep -qE "\.env|phpinfo|config\.php" "$LINES" && echo "• Строки с .env/phpinfo — сканеры (404), фон."
+    grep -q "job failed" "$LINES" && echo "• «job failed» — упала фоновая задача (контекст по job+runId — logging.md)."
   } > "$HINTS" 2>/dev/null
   HINT_BLOCK=""
   [ -s "$HINTS" ] && HINT_BLOCK="
-Расшифровка и реакции:
+Что это значит:
 $(cat "$HINTS")"
 
   MSG="🩺 [log-digest] за 4ч: ошибок ${ERR_N:-0}, предупреждений ${WARN_N:-0}
 Чаще всего (раз × что):
 ${TOP}${HINT_BLOCK}
-Полный гайд дежурного: docs/dev/runbooks.md."
+Сигнатуры и реакции: docs/dev/runbooks.md."
   /opt/alerts/tg-send.sh "$MSG"
   eval "$KUMA_PUSH"
 fi
