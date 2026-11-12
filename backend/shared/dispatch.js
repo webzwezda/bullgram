@@ -41,9 +41,9 @@ function currentUsageMonth() {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-function trialMonthlyLimit() {
+export function trialMonthlyLimit() {
   const parsed = Number(process.env.TRIAL_API_REQUESTS_PER_MONTH);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 100;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1000;
 }
 
 // Trial-тариф: N запросов API/MCP в месяц. Pro и админы не считаются.

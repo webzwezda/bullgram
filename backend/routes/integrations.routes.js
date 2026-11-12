@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { authenticateAgentOrUserToken } from '../utils/agent-mcp-auth.js';
+import { trialMonthlyLimit } from '../shared/dispatch.js';
 import {
     authenticateIntegrationToken,
     createIntegrationToken,
@@ -171,8 +172,7 @@ export default function integrationsRoutes(supabase) {
                 return res.json({ success: true, usage: null, tier: isAdmin ? 'admin' : 'pro' });
             }
 
-            const parsedLimit = Number(process.env.TRIAL_API_REQUESTS_PER_MONTH);
-            const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.floor(parsedLimit) : 500;
+            const limit = trialMonthlyLimit();
 
             const now = new Date();
             const month = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
