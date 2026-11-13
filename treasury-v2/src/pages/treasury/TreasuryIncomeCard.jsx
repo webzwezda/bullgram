@@ -25,7 +25,7 @@ export function TreasuryIncomeCard({ rows = [] }) {
         ) : (
           <div className="space-y-2">
             {rows.map((row, index) => (
-              <div key={`${row.source}-${row.when}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3 hover:bg-surface-subtle transition-colors">
+              <div key={`${row.source}-${row.when}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-card px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-ink-strong truncate">{row.title}</span>
@@ -33,12 +33,12 @@ export function TreasuryIncomeCard({ rows = [] }) {
                       {row.source === 'tier' ? 'Тариф' : 'Магазин'}
                     </StatusBadge>
                   </div>
-                  <div className="text-xs text-ink-muted mt-0.5">
-                    {formatWhen(row.when)}
-                    {row.memo ? ` • Мемо: ${row.memo}` : ''}
+                  <div className="text-xs text-ink-muted mt-0.5 flex items-center gap-1 min-w-0">
+                    <span className="shrink-0">{formatWhen(row.when)}</span>
+                    {row.memo ? <span className="font-mono truncate">• Мемо: {row.memo}</span> : null}
                   </div>
                 </div>
-                <span className="text-sm font-bold text-feedback-success-text tabular-nums whitespace-nowrap">
+                <span className="text-sm font-bold text-ink-strong tabular-nums whitespace-nowrap">
                   +{formatTon(row.amount_ton)} TON
                 </span>
               </div>

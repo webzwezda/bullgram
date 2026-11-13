@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Activity, AlertCircle, FileArchive, KeyRound, Loader2, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,13 +10,13 @@ export function ConnectionPanel({ open, onToggle, binding, updateBinding, select
             <div>
               <CollapsiblePanelHeader
                 icon={Network}
-                iconClassName="w-4 h-4 text-indigo-500"
+                iconClassName="w-4 h-4 text-action-primary"
                 title="Соединение"
                 open={open}
                 onToggle={onToggle}
               />
               {open ? (
-              <div className="bg-surface-subtle border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="bg-surface-subtle border border-border-default rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Основной прокси</label>
                   <Select
@@ -101,7 +101,7 @@ export function SessionPanel({ open, onToggle, isCombatMode, toggleSafeMode, sel
                 onToggle={onToggle}
               />
               {open ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="bg-slate-50 border border-border-default rounded-2xl p-4 space-y-4 shadow-sm">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">Боевой режим</p>
@@ -215,6 +215,13 @@ export function SessionFilesPanel({ open, onToggle, purchase, ownFiles, accountI
   const { accessToken } = useAuth();
   const [downloading, setDownloading] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  // Подтверждение — транзиентное: гасим сами, чтобы не висело постоянно.
+  useEffect(() => {
+    if (!feedback) return undefined;
+    const timer = window.setTimeout(() => setFeedback(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
 
   const view = purchase?.delivery_view || null;
   const isOwn = !purchase && Boolean(ownFiles);

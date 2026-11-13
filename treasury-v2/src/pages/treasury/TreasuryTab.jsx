@@ -33,7 +33,7 @@ function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintCla
         </div>
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</span>
       </div>
-      <div className="text-2xl font-bold text-slate-900">{formatValue(value)} TON</div>
+      <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatValue(value)} TON</div>
       <div className={`text-xs mt-1 ${hintClasses}`} title={hintTitle}>{hint}</div>
     </div>
   );
@@ -157,7 +157,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   title="Можно вывести"
                   value={walletSynced ? summary.availableToWithdrawTon : summary.accountingAvailableTon}
                   formatValue={formatTonFloor}
-                  hint={walletSynced ? 'Лимит по кошельку и учету.' : 'Кошелёк не синхронизирован — показываем по учёту. Вывод откроется после «Обновить».'}
+                  hint={walletSynced ? 'Лимит по кошельку и учету, округлён вниз.' : 'Кошелёк не синхронизирован — показываем по учёту. Вывод откроется после «Обновить».'}
                   hintClasses={walletSynced ? 'text-slate-500' : 'text-feedback-warning-text font-medium'}
                 />
                 <TreasuryStatCard
@@ -188,7 +188,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                     {bucketRows.map((row) => (
                       <div key={row.label} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50/50 transition-colors">
                         <span className="text-sm text-slate-600">{row.label}</span>
-                        <span className="text-sm font-bold text-slate-900">{formatTon(row.value)} TON</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums">{formatTon(row.value)} TON</span>
                       </div>
                     ))}
                   </div>
@@ -258,7 +258,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                     </div>
                     <Button
                       type="submit"
-                      className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+                      className="w-full h-11 rounded-xl bg-action-ton hover:bg-action-ton-hover text-action-ton-text"
                       disabled={withdrawing || availableTon <= 0 || !walletSynced || overLimit}
                       title={!walletSynced ? 'Кошелёк не синхронизирован — нажми «Обновить»' : undefined}
                     >
@@ -275,6 +275,10 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
           )}
         </CardContent>
       </Card>
+
+      {/* Поступления — герой-ответ на «деньги пришли?»: сразу после статов,
+          не в подвале страницы. */}
+      <TreasuryIncomeCard rows={recentIncome} />
 
       <Card className="border-0 shadow-lg shadow-slate-200/40 ring-1 ring-slate-200/50 rounded-2xl bg-white overflow-hidden">
         <CardContent className="p-5 sm:p-6 space-y-3">
@@ -319,8 +323,6 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
           )}
         </CardContent>
       </Card>
-
-      <TreasuryIncomeCard rows={recentIncome} />
     </div>
   );
 }
