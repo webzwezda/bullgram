@@ -1,6 +1,7 @@
 import express from 'express';
 import { authenticateUser } from '../middlewares/auth.middleware.js';
 import { getTonReserveSenderConfig, getTonReserveWalletSnapshot } from '../services/ton-reserve-sender.service.js';
+import { loadRecentIncome } from '../services/treasury-income.service.js';
 
 function requireProjectAdmin(req, res, next) {
     if (req.profile?.role !== 'admin') {
@@ -305,15 +306,19 @@ function summarizeWithdrawals(withdrawals) {
     });
 }
 
+// Последние поступления для ленты казны — сервис вынесен отдельно
+// (services/treasury-income.service.js): fail-closed по ошибкам, tier-строки
+// с тем же mainnet-cutoff, что у агрегата тарифов.
 async function buildTreasurySummary(supabase) {
     const adminOwnerIds = await loadAdminOwnerIds(supabase);
-    const [shop, tier, referral, partnerLiability, reserveLiability, withdrawals, walletSnapshotResult] = await Promise.all([
+    const [shop, tier, referral, partnerLiability, reserveLiability, withdrawals, recentIncome, walletSnapshotResult] = await Promise.all([
         loadShopRevenue(supabase, adminOwnerIds),
         loadTierRevenue(supabase),
         loadReferralTreasury(supabase),
         loadPartnerLiability(supabase),
         loadReserveLiability(supabase),
         loadWithdrawals(supabase),
+        loadRecentIncome(supabase, adminOwnerIds),
         getTonReserveWalletSnapshot().then(
             (snapshot) => ({ snapshot, error: null }),
             (error) => ({ snapshot: null, error })
@@ -383,6 +388,7 @@ async function buildTreasurySummary(supabase) {
             paidTierOrders: tier.paidCount
         },
         withdrawals,
+        recentIncome,
         withdrawalsTruncated: withdrawals.length >= WITHDRAWALS_LIST_LIMIT
     };
 }

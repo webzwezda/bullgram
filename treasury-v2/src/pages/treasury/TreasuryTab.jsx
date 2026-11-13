@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { formatTon, formatTonFloor, formatWhen, TONE_COLORS } from './treasury.utils.js';
+import { formatTon, formatTonFloor, formatWhen } from './treasury.utils.js';
+import { StatusBadge } from './StatusBadge.jsx';
+import { TreasuryIncomeCard } from './TreasuryIncomeCard.jsx';
 
 const NETWORK_FEE_TON = 0.05;
 
@@ -17,20 +19,12 @@ const WITHDRAWAL_STATUS = {
   requested: { label: 'Запрошена', tone: 'warning' }
 };
 
-function StatusBadge({ tone, children }) {
-  return (
-    <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold tracking-wide ${TONE_COLORS[tone] || TONE_COLORS.default}`}>
-      {children}
-    </span>
-  );
-}
-
 function formatTime(value) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
 
-function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintClasses = 'text-slate-500', formatValue = formatTon }) {
+function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintClasses = 'text-slate-500', formatValue = formatTon, hintTitle }) {
   return (
     <div className="bg-white rounded-2xl ring-1 ring-slate-200/50 shadow-sm p-5">
       <div className="flex items-center gap-3 mb-3">
@@ -40,9 +34,19 @@ function TreasuryStatCard({ icon: Icon, iconClasses, title, value, hint, hintCla
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</span>
       </div>
       <div className="text-2xl font-bold text-slate-900">{formatValue(value)} TON</div>
-      <div className={`text-xs mt-1 ${hintClasses}`}>{hint}</div>
+      <div className={`text-xs mt-1 ${hintClasses}`} title={hintTitle}>{hint}</div>
     </div>
   );
+}
+
+// Человеческая причина недоступности баланса: walletError с бэкенда — сырой
+// текст ошибки (ENOENT и т.п.), пользователю нужна суть и что делать.
+function walletUnavailableHint(error) {
+  const raw = String(error || '');
+  if (/ENOENT|no such file|wallet_unavailable/i.test(raw)) {
+    return 'Ключ кошелька не найден на сервере — проверь TON_RESERVE_WALLET_SECRET_FILE.';
+  }
+  return 'Снапшот не удался — нажми «Обновить».';
 }
 
 export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal, withdrawing }) {
@@ -52,6 +56,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
   const buckets = data?.buckets || {};
   const counters = data?.counters || {};
   const withdrawals = data?.withdrawals || [];
+  const recentIncome = data?.recentIncome || [];
   const walletSynced = summary.walletStatus === 'synced';
   const availableTon = Number(summary.availableToWithdrawTon || 0);
   const withdrawalsTruncated = Boolean(data?.withdrawalsTruncated);
@@ -109,7 +114,7 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                 Баланс кошелька, резервы и выводы TON.{' '}
                 {summary.walletCheckedAt
                   ? `Обновлено: ${formatTime(summary.walletCheckedAt)}`
-                  : 'Кошелёк не синхронизирован — нажми «Обновить» через пару минут.'}
+                  : 'Кошелёк не синхронизирован — нажми «Обновить».'}
               </p>
             </div>
             <Button variant="outline" size="sm" className="text-xs h-9 rounded-xl shrink-0" onClick={onReload} disabled={loading || withdrawing}>
@@ -140,17 +145,20 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                   icon={Wallet}
                   iconClasses="bg-indigo-100 text-indigo-600"
                   title="На кошельке"
-                  value={summary.walletBalanceTon}
-                  hint={walletSynced ? 'Реальный TON-баланс.' : 'Баланс недоступен.'}
-                  hintClasses={walletSynced ? 'text-slate-500' : 'text-amber-700 font-medium'}
+                  value={walletSynced ? summary.walletBalanceTon : null}
+                  formatValue={(v) => (v == null ? '—' : formatTon(v))}
+                  hint={walletSynced ? `Реальный TON-баланс. Синхронизировано: ${formatTime(summary.walletCheckedAt)}.` : walletUnavailableHint(summary.walletError)}
+                  hintClasses={walletSynced ? 'text-slate-500' : 'text-feedback-warning-text font-medium'}
+                  hintTitle={walletSynced ? undefined : summary.walletError}
                 />
                 <TreasuryStatCard
                   icon={ArrowDownToLine}
                   iconClasses="bg-emerald-100 text-emerald-600"
                   title="Можно вывести"
-                  value={summary.availableToWithdrawTon}
+                  value={walletSynced ? summary.availableToWithdrawTon : summary.accountingAvailableTon}
                   formatValue={formatTonFloor}
-                  hint="Лимит по кошельку и учету."
+                  hint={walletSynced ? 'Лимит по кошельку и учету.' : 'Кошелёк не синхронизирован — показываем по учёту. Вывод откроется после «Обновить».'}
+                  hintClasses={walletSynced ? 'text-slate-500' : 'text-feedback-warning-text font-medium'}
                 />
                 <TreasuryStatCard
                   icon={ShieldCheck}
@@ -252,13 +260,13 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
                       type="submit"
                       className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
                       disabled={withdrawing || availableTon <= 0 || !walletSynced || overLimit}
-                      title={!walletSynced ? 'Кошелёк не синхронизирован — нажми «Обновить» через пару минут' : undefined}
+                      title={!walletSynced ? 'Кошелёк не синхронизирован — нажми «Обновить»' : undefined}
                     >
                       <Send className="w-4 h-4 mr-1.5" />
                       {withdrawing ? 'Создаем...' : 'Запросить вывод'}
                     </Button>
                     {!walletSynced ? (
-                      <p className="text-xs text-slate-500 text-center">Кошелёк не синхронизирован — нажми «Обновить» через пару минут.</p>
+                      <p className="text-xs text-slate-500 text-center">Кошелёк не синхронизирован — вывод заблокирован до успешного «Обновить».</p>
                     ) : null}
                   </div>
                 </form>
@@ -311,6 +319,8 @@ export function TreasuryTab({ data, loading, error, onReload, onSubmitWithdrawal
           )}
         </CardContent>
       </Card>
+
+      <TreasuryIncomeCard rows={recentIncome} />
     </div>
   );
 }
