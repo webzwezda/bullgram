@@ -206,23 +206,29 @@ function formatBytes(bytes) {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
-// Панель «Файлы сессии»: повторное скачивание архива покупки аккаунта
-// (files — окно + квота, hybrid — бессрочно). Доступность приходит посчитанной
-// с бэкенда в delivery_view (my-purchases), роут скачивания — JWT, владелец.
-export function SessionFilesPanel({ open, onToggle, purchase, refreshPurchases }) {
+// Панель «Файлы сессии»: скачивание архива файлов сессии. Два источника:
+// purchase — покупка аккаунта (окно/квота/счётчики из delivery_view, роут
+// my-purchases/:id/download); ownFiles — свой аккаунт с restore-source
+// (бессрочно, роут /api/userbot/restore-sources/:accountId/archive).
+// Доступность purchase-варианта приходит посчитанной с бэкенда.
+export function SessionFilesPanel({ open, onToggle, purchase, ownFiles, accountId, refreshPurchases }) {
   const { accessToken } = useAuth();
   const [downloading, setDownloading] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   const view = purchase?.delivery_view || null;
+  const isOwn = !purchase && Boolean(ownFiles);
   const isHybrid = view?.mode === 'hybrid';
+  const archiveUrl = isOwn
+    ? `/api/userbot/restore-sources/${accountId}/archive`
+    : `/api/shop/public/my-purchases/${purchase?.id}/download`;
 
   async function downloadArchive() {
-    if (!purchase?.id || downloading) return;
+    if (downloading || (isOwn && !accountId) || (!isOwn && !purchase?.id)) return;
     setDownloading(true);
     setFeedback(null);
     try {
-      const response = await fetch(`/api/shop/public/my-purchases/${purchase.id}/download`, {
+      const response = await fetch(archiveUrl, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       if (!response.ok) {
@@ -247,7 +253,7 @@ export function SessionFilesPanel({ open, onToggle, purchase, refreshPurchases }
       anchor.remove();
       URL.revokeObjectURL(url);
       setFeedback({ tone: 'success', text: 'Архив скачан' });
-      if (refreshPurchases) await refreshPurchases();
+      if (!isOwn && refreshPurchases) await refreshPurchases();
     } catch (error) {
       setFeedback({ tone: 'error', text: error.message || 'Не удалось скачать архив' });
     } finally {
@@ -255,12 +261,15 @@ export function SessionFilesPanel({ open, onToggle, purchase, refreshPurchases }
     }
   }
 
-  const windowLabel = isHybrid
-    ? 'бессрочно — аккаунт передан в кабинет'
-    : (view?.window_ends_at
-      ? `до ${new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(view.window_ends_at))}`
-      : null);
+  const windowLabel = isOwn
+    ? null
+    : (isHybrid
+      ? 'бессрочно — аккаунт передан в кабинет'
+      : (view?.window_ends_at
+        ? `до ${new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(view.window_ends_at))}`
+        : null));
   const sizeLabel = formatBytes(view?.size_bytes);
+  const canDownload = isOwn || Boolean(view?.available);
 
   return (
     <div>
@@ -273,28 +282,32 @@ export function SessionFilesPanel({ open, onToggle, purchase, refreshPurchases }
       />
       {open ? (
         <div className="bg-surface-subtle border border-border-default rounded-2xl p-4 space-y-4 shadow-sm">
-          <div className="flex flex-col gap-2 text-sm">
-            {windowLabel ? (
+          {isOwn ? (
+            <p className="text-sm text-ink-body">Файлы сессии сохранены на сервере — доступны в любой момент.</p>
+          ) : (
+            <div className="flex flex-col gap-2 text-sm">
+              {windowLabel ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Выдача</span>
+                  <span className="font-medium text-ink-body text-right">{windowLabel}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Выдача</span>
-                <span className="font-medium text-ink-body text-right">{windowLabel}</span>
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Скачано</span>
+                <span className="font-medium text-ink-body tabular-nums">
+                  {view?.downloads_used ?? 0}{view?.downloads_max ? ` из ${view.downloads_max}` : ' — без лимита'}
+                </span>
               </div>
-            ) : null}
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Скачано</span>
-              <span className="font-medium text-ink-body tabular-nums">
-                {view?.downloads_used ?? 0}{view?.downloads_max ? ` из ${view.downloads_max}` : ' — без лимита'}
-              </span>
+              {sizeLabel ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Размер</span>
+                  <span className="font-medium text-ink-body tabular-nums">{sizeLabel}</span>
+                </div>
+              ) : null}
             </div>
-            {sizeLabel ? (
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Размер</span>
-                <span className="font-medium text-ink-body tabular-nums">{sizeLabel}</span>
-              </div>
-            ) : null}
-          </div>
+          )}
 
-          {view?.available ? (
+          {canDownload ? (
             <Button
               type="button"
               className="w-full rounded-xl shadow-sm"

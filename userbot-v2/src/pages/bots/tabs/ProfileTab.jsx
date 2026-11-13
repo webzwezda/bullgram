@@ -248,11 +248,13 @@ export function ProfileTab({
               defaultCheckLines={defaultCheckLines}
               checkAccount={checkAccount}
             />
-            {sessionFilesDelivery ? (
+            {(sessionFilesDelivery || recovery) ? (
               <SessionFilesPanel
                 open={openPanels.files}
                 onToggle={() => togglePanel('files')}
                 purchase={sessionFilesDelivery}
+                ownFiles={!sessionFilesDelivery && recovery}
+                accountId={selectedLiveUserbot.id}
                 refreshPurchases={refreshPurchases}
               />
             ) : null}

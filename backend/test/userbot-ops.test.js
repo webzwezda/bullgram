@@ -29,11 +29,15 @@ import { run as run01 } from './userbot-ops/01-group-admin.js';
 import { run as run02 } from './userbot-ops/02-botfather-leave.js';
 import { run as run03 } from './userbot-ops/03-messages-admin-rights.js';
 import { run as run04 } from './userbot-ops/04-bot-init.js';
+import { runRestoreArchive } from './userbot-ops/05-restore-archive.js';
 
 await run01();
 await run02();
 await run03();
 await run04();
+// Сценарий роутовый (свой мок supabase из shop-delivery/shared.js), флаги
+// не трогает — падение бросает исключение и валит хост с ненулевым кодом.
+await runRestoreArchive();
 
 // --- Восстановление окружения ---
 setFlags({});

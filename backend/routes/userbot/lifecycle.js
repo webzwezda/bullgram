@@ -7,6 +7,7 @@
 // DELETE /proxies/:id должен матчиться раньше дженерика DELETE /:id.
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { encrypt, decrypt } from '../../utils/crypto.js';
+import { buildShopFileArchive } from '../../services/shop-delivery.service.js';
 import { TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions/index.js';
 import { FRESH_IMPORT_RUNTIME_REASON, FRESH_IMPORT_RUNTIME_STATUS } from '../../utils/ops-center-selection.js';
@@ -22,6 +23,24 @@ import { ensureExclusiveProxyAssignment, ensureUserbotNotOwnedByAnotherAdmin } f
 
 export function registerLifecycle(router, ctx) {
     const { supabase, userbotService } = ctx;
+
+    // Свой rate-limit для тяжёлой операции (архив собирается в памяти):
+    // 10 запусков в минуту на пользователя.
+    const archiveHitsByUser = new Map();
+    function archiveRateLimit(userId) {
+        const now = Date.now();
+        const windowStart = now - 60_000;
+        for (const [key, hits] of archiveHitsByUser) {
+            const fresh = hits.filter((t) => t > windowStart);
+            if (fresh.length > 0) archiveHitsByUser.set(key, fresh);
+            else archiveHitsByUser.delete(key);
+        }
+        const hits = archiveHitsByUser.get(userId) || [];
+        if (hits.length >= 10) return false;
+        hits.push(now);
+        archiveHitsByUser.set(userId, hits);
+        return true;
+    }
 
     router.get('/recovery-status', authenticateUser, async (req, res) => {
         try {
@@ -43,6 +62,49 @@ export function registerLifecycle(router, ctx) {
             });
         } catch (error) {
             res.status(500).json({ error: error.message || 'Ошибка загрузки recovery status' });
+        }
+    });
+
+    // Скачивание архива файлов сессии владельцем своего аккаунта (панель
+    // «Файлы сессии» в кабинете). Это данные владельца — без окон и квот;
+    // состав архива тот же, что увыдачи покупателю (buildShopFileArchive).
+    // Чужие/несуществующие аккаунты отвечают 404 без деталей.
+    router.get('/restore-sources/:accountId/archive', authenticateUser, async (req, res) => {
+        const { accountId } = req.params;
+        try {
+            if (!archiveRateLimit(req.user.id)) {
+                return res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+            }
+
+            const { data: account, error: accountError } = await supabase
+                .from('tg_accounts')
+                .select('id, custom_label')
+                .eq('id', accountId)
+                .eq('owner_id', req.user.id)
+                .eq('account_type', 'userbot')
+                .maybeSingle();
+            if (accountError) throw accountError;
+            if (!account) return res.status(404).json({ error: 'Аккаунт не найден' });
+
+            const { data: source, error: sourceError } = await supabase
+                .from('userbot_restore_sources')
+                .select('session_blob_encrypted, json_blob_encrypted, tdata_blob_encrypted, two_fa_secret_encrypted')
+                .eq('account_id', accountId)
+                .eq('owner_id', req.user.id)
+                .maybeSingle();
+            if (sourceError) throw sourceError;
+            if (!source?.session_blob_encrypted) {
+                return res.status(404).json({ error: 'Файлы сессии для этого аккаунта не сохранены' });
+            }
+
+            const archive = buildShopFileArchive({ label: account.custom_label, source });
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', `attachment; filename="${archive.basename}.zip"`);
+            res.setHeader('X-Archive-Sha256', archive.sha256);
+            return res.send(archive.buffer);
+        } catch (error) {
+            console.error('Ошибка выдачи архива файлов сессии владельцу:', error);
+            return res.status(500).json({ error: 'Ошибка выдачи архива' });
         }
     });
 

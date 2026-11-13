@@ -148,10 +148,12 @@ export function proxyTelegramModeLabel(proxy) {
 }
 
 export function recoveryStatusBadge(recovery) {
+  // Наличие файлов — не событие, а постоянное состояние: показывает панель
+  // «Файлы сессии». Бейджем остаются только события восстановления.
   if (!recovery) return null;
   if (recovery.last_restore_status === 'failed') return { text: 'Восстановление упало', className: 'pill pill--danger' };
   if (recovery.last_restore_status === 'restored') return { text: 'Уже поднимали', className: 'pill pill--ok' };
-  return { text: 'Файлы сохранены', className: 'pill pill--warning' };
+  return null;
 }
 
 export function canRestoreFromFiles(account, recovery) {
