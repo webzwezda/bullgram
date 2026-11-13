@@ -1,6 +1,8 @@
-import { Activity, AlertCircle, KeyRound, Loader2, Network } from 'lucide-react';
+import { useState } from 'react';
+import { Activity, AlertCircle, FileArchive, KeyRound, Loader2, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '../../../app/providers/AuthProvider.jsx';
 import { CollapsiblePanelHeader, ModernSwitch, StatusBadge } from '../components/CenterWidgets.jsx';
 
 export function ConnectionPanel({ open, onToggle, binding, updateBinding, selectedLiveUserbot, availableBindingProxiesForAccount, proxyLabel, availableFailoverProxiesForAccount }) {
@@ -186,5 +188,143 @@ export function RecoveryPanel({ recovery, formatWhen, showRecoveryNextStep, canR
                 )}
               </div>
             </div>
+  );
+}
+
+// Форматирование размера архива для панели «Файлы сессии» (числа компактные,
+// tabular-nums задаётся на строке ниже).
+function formatBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+// Панель «Файлы сессии»: повторное скачивание архива покупки аккаунта
+// (files — окно + квота, hybrid — бессрочно). Доступность приходит посчитанной
+// с бэкенда в delivery_view (my-purchases), роут скачивания — JWT, владелец.
+export function SessionFilesPanel({ open, onToggle, purchase, refreshPurchases }) {
+  const { accessToken } = useAuth();
+  const [downloading, setDownloading] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+
+  const view = purchase?.delivery_view || null;
+  const isHybrid = view?.mode === 'hybrid';
+
+  async function downloadArchive() {
+    if (!purchase?.id || downloading) return;
+    setDownloading(true);
+    setFeedback(null);
+    try {
+      const response = await fetch(`/api/shop/public/my-purchases/${purchase.id}/download`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (!response.ok) {
+        let message = 'Не удалось скачать архив';
+        try {
+          const body = await response.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // не JSON — оставляем общий текст
+        }
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || 'account.zip';
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setFeedback({ tone: 'success', text: 'Архив скачан' });
+      if (refreshPurchases) await refreshPurchases();
+    } catch (error) {
+      setFeedback({ tone: 'error', text: error.message || 'Не удалось скачать архив' });
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const windowLabel = isHybrid
+    ? 'бессрочно — аккаунт передан в кабинет'
+    : (view?.window_ends_at
+      ? `до ${new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long' }).format(new Date(view.window_ends_at))}`
+      : null);
+  const sizeLabel = formatBytes(view?.size_bytes);
+
+  return (
+    <div>
+      <CollapsiblePanelHeader
+        icon={FileArchive}
+        iconClassName="w-4 h-4 text-action-primary"
+        title="Файлы сессии"
+        open={open}
+        onToggle={onToggle}
+      />
+      {open ? (
+        <div className="bg-surface-subtle border border-border-default rounded-2xl p-4 space-y-4 shadow-sm">
+          <div className="flex flex-col gap-2 text-sm">
+            {windowLabel ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Выдача</span>
+                <span className="font-medium text-ink-body text-right">{windowLabel}</span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Скачано</span>
+              <span className="font-medium text-ink-body tabular-nums">
+                {view?.downloads_used ?? 0}{view?.downloads_max ? ` из ${view.downloads_max}` : ' — без лимита'}
+              </span>
+            </div>
+            {sizeLabel ? (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Размер</span>
+                <span className="font-medium text-ink-body tabular-nums">{sizeLabel}</span>
+              </div>
+            ) : null}
+          </div>
+
+          {view?.available ? (
+            <Button
+              type="button"
+              className="w-full rounded-xl shadow-sm"
+              size="lg"
+              onClick={downloadArchive}
+              disabled={downloading || !accessToken}
+            >
+              {downloading ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Собираем архив...</>
+              ) : (
+                'Скачать файлы сессии'
+              )}
+            </Button>
+          ) : (
+            <div className="rounded-xl bg-feedback-warning-bg text-feedback-warning-text px-4 py-3 text-sm font-medium">
+              {view?.reason || 'Архив сейчас недоступен'}
+            </div>
+          )}
+
+          {feedback ? (
+            <div className={`rounded-xl px-3 py-2 text-sm font-medium ${
+              feedback.tone === 'error'
+                ? 'bg-feedback-error-bg text-feedback-error-text'
+                : 'bg-feedback-success-bg text-feedback-success-text'
+            }`}>
+              {feedback.text}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }

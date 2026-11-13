@@ -10,6 +10,7 @@ import { registerItemsCreate } from './items-create.js';
 import { registerItemsLots } from './items-lots.js';
 import { registerItemsLifecycle } from './items-lifecycle.js';
 import { registerCatalogPublic } from './catalog-public.js';
+import { registerMyPurchasesDownload } from './catalog-my-download.js';
 import { registerPurchaseApi } from './purchase-api.js';
 import { registerPurchaseChecks } from './purchase-checks.js';
 import { registerDelivery } from './delivery.js';
@@ -27,6 +28,9 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
     const publicVerifyHitsByIp = new Map();
     const publicPurchaseHitsByIp = new Map();
     const publicDownloadHitsByIp = new Map();
+    // Отдельный бакет для JWT-скачиваний владельцем из кабинета: чужой трафик
+    // публичного роута не должен выедать лимит владельца (и наоборот).
+    const ownerDownloadHitsByIp = new Map();
     const PUBLIC_RATE_LIMIT_RPM = 60;
     const PUBLIC_DOWNLOAD_RATE_LIMIT_RPM = 10;
 
@@ -55,7 +59,8 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
         publicPurchaseHitsByIp,
         publicViewHitsByIp,
         publicVerifyHitsByIp,
-        publicDownloadHitsByIp
+        publicDownloadHitsByIp,
+        ownerDownloadHitsByIp
     };
 
     registerCatalogAdmin(router, ctx);    // GET assets / reserved-assets / market-lots
@@ -64,6 +69,7 @@ export default function shopRoutes(supabase, { userbotService = null } = {}) {
     registerItemsLots(router, ctx);       // batch-proxy, account-lots batch + scan
     registerItemsLifecycle(router, ctx);  // DELETE items/:id, POST items/:id/unpublish
     registerCatalogPublic(router, ctx);   // listVisibleShopItems + public/items, app/items, my-purchases
+    registerMyPurchasesDownload(router, ctx); // my-purchases/:id/download (владелец, JWT)
     registerPurchaseApi(router, ctx);     // purchase cancel(+batch), purchase, purchase-anon
     registerPurchaseChecks(router, ctx);  // purchase/batch, check, verify-ton-connect, check-batch
     registerDelivery(router, ctx);        // public-view, verify-public, download

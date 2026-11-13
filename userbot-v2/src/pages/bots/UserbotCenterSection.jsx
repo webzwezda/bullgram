@@ -69,7 +69,9 @@ export function UserbotCenterSection({
   deletingAccountId,
   restrictedMarker,
   recoveryStatusBadge,
-  shopInlineSlot
+  shopInlineSlot,
+  sessionFilesDelivery,
+  refreshPurchases
 }) {
   const location = useLocation();
   const sectionRef = useRef(null);
@@ -118,7 +120,7 @@ export function UserbotCenterSection({
   const initialCommonChatId = String(initialHandoff?.common_chat_id || '').trim();
   const [manualCommonChatId, setManualCommonChatId] = useState(initialCommonChatId || loadDraft('manual_chat'));
   const [telegramWebEnabled, setTelegramWebEnabled] = useState(true);
-  const [openPanels, setOpenPanels] = useState({ connection: false, session: false });
+  const [openPanels, setOpenPanels] = useState({ connection: false, session: false, files: false });
   function togglePanel(key) {
     setOpenPanels((prev) => ({ ...prev, [key]: !prev[key] }));
   }
@@ -330,6 +332,8 @@ export function UserbotCenterSection({
               hasUnsavedChanges={hasUnsavedChanges}
               saveAllChanges={saveAllChanges}
               bindingAccountId={bindingAccountId}
+              sessionFilesDelivery={sessionFilesDelivery}
+              refreshPurchases={refreshPurchases}
             />
           }
           shopInlineSlot={shopInlineSlot}

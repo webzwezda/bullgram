@@ -2,7 +2,7 @@ import { ExternalLink, Loader2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ConnectionPanel, RecoveryPanel, SessionPanel } from './ProfileTabPanels.jsx';
+import { ConnectionPanel, RecoveryPanel, SessionFilesPanel, SessionPanel } from './ProfileTabPanels.jsx';
 
 export function ProfileTab({
   selectedLiveUserbot,
@@ -48,6 +48,8 @@ export function ProfileTab({
   saveAllChanges,
   bindingAccountId,
   checkAccount,
+  sessionFilesDelivery,
+  refreshPurchases,
 }) {
     if (!selectedLiveUserbot) return null;
     const runtimeStatus = String(selectedLiveUserbot.runtime_status || '');
@@ -246,6 +248,14 @@ export function ProfileTab({
               defaultCheckLines={defaultCheckLines}
               checkAccount={checkAccount}
             />
+            {sessionFilesDelivery ? (
+              <SessionFilesPanel
+                open={openPanels.files}
+                onToggle={() => togglePanel('files')}
+                purchase={sessionFilesDelivery}
+                refreshPurchases={refreshPurchases}
+              />
+            ) : null}
           </div>
 
           {(hasRecoveryInfo || showRecoveryNextStep) && (

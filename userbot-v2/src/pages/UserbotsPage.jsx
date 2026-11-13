@@ -53,6 +53,7 @@ function UserbotsPageContent() {
   const {
     openCheckout,
     createBatchCheckout,
+    refreshPurchases,
     storefrontState
   } = useShopStorefront({
     accessToken,
@@ -73,6 +74,7 @@ function UserbotsPageContent() {
     quarantinedUserbots,
     selectedLiveUserbot,
     selectedQuarantinedUserbot,
+    sessionFilesDelivery,
     usedUserbotProxyIds,
     userbots
   } = useBotsAccountsDerivedState({
@@ -199,7 +201,9 @@ function UserbotsPageContent() {
     deleteAccount,
     deletingAccountId: state.deletingAccountId,
     restrictedMarker,
-    recoveryStatusBadge
+    recoveryStatusBadge,
+    sessionFilesDelivery,
+    refreshPurchases
   };
 
   if (state.loading) {

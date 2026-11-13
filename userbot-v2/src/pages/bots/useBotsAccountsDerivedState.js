@@ -64,6 +64,24 @@ export function useBotsAccountsDerivedState({
 
   const planRules = useMemo(() => getProductTierRules(profilePlan), [profilePlan]);
 
+  // Покупка с файловой выдачей для выбранного аккаунта (панель «Файлы
+  // сессии»): последняя оплаченная с payload.delivery, где этот аккаунт —
+  // выдаваемый asset. Доступность уже посчитана бэкендом (delivery_view).
+  const sessionFilesDelivery = useMemo(() => {
+    if (!selectedLiveUserbot) return null;
+    let latest = null;
+    for (const purchase of storefrontState.purchases || []) {
+      if (purchase.status !== 'paid' || !purchase.payload?.delivery) continue;
+      const assetId = (purchase.assets || []).find((asset) => asset.asset_type === 'userbot')?.asset_id;
+      if (String(assetId) !== String(selectedLiveUserbot.id)) continue;
+      const when = new Date(purchase.delivered_at || purchase.created_at || 0).getTime();
+      if (!latest || when > new Date(latest.delivered_at || latest.created_at || 0).getTime()) {
+        latest = purchase;
+      }
+    }
+    return latest;
+  }, [selectedLiveUserbot, storefrontState.purchases]);
+
   const deadProxyUserbots = useMemo(() => {
     return liveUserbots.filter((account) => {
       if (!account.proxy_id) return true;
@@ -165,6 +183,7 @@ export function useBotsAccountsDerivedState({
     selectedLiveUserbot,
     selectedOpenPurchase,
     selectedShopUserbot,
+    sessionFilesDelivery,
     selfUseProxies,
     usedUserbotProxyIds,
     userbots,

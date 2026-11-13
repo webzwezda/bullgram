@@ -4,6 +4,7 @@
 import QRCode from 'qrcode';
 import { authenticateUser } from '../../middlewares/auth.middleware.js';
 import { tonToNanoString } from '../../utils/ton.js';
+import { buildAccountDeliveryView } from '../../services/shop-delivery.service.js';
 import {
     buildAvailablePaymentMethods,
     buildTonUri,
@@ -330,6 +331,20 @@ export function registerCatalogPublic(router, ctx) {
                     width: 360
                 }) : null;
 
+                // Каноническая доступность файловой выдачи (гейты те же, что у
+                // скачивания): UI кабинета показывает её как есть, не дублируя
+                // логику окна/квоты/purge.
+                const deliveryView = row.status === 'paid' && row.payload?.delivery
+                    ? buildAccountDeliveryView({
+                        status: row.status,
+                        deliveredAt: row.delivered_at,
+                        itemDeliveryMode: null,
+                        payloadDelivery: row.payload.delivery,
+                        label: (assetsByItem.get(row.shop_items?.id) || [])
+                            .find(asset => asset.asset_type === 'userbot')?.label || null
+                    })
+                    : null;
+
                 return {
                     id: row.id,
                     status: row.status === 'pending' && isPendingPurchaseExpired(row) ? 'expired' : row.status,
@@ -357,7 +372,8 @@ export function registerCatalogPublic(router, ctx) {
                             payment_methods: normalizePaymentMethods(row.shop_items.payment_methods)
                         }
                         : null,
-                    assets: row.shop_items?.id ? (assetsByItem.get(row.shop_items.id) || []) : []
+                    assets: row.shop_items?.id ? (assetsByItem.get(row.shop_items.id) || []) : [],
+                    delivery_view: deliveryView
                 };
             }));
 
