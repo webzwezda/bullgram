@@ -39,7 +39,7 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
 
     const { data: accountRows, error: accountsError } = await supabase
         .from('tg_accounts')
-        .select('id, custom_label, runtime_status, last_checked_at, health_summary, tg_phone, created_at')
+        .select('id, custom_label, runtime_status, last_checked_at, health_summary, tg_phone, created_at, proxy_id')
         .eq('owner_id', ownerId)
         .eq('account_type', 'userbot')
         .in('id', ids);
@@ -119,6 +119,12 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
         });
         if (!rule.sellable) {
             results.push({ asset_id: assetId, status: 'failed', error: rule.reasons[0] || ACCOUNT_LOT_NOT_READY_MESSAGE });
+            continue;
+        }
+        // 1 прокси = 1 юзербот: аккаунт уходит покупателю вместе со своим
+        // прокси (трансфер переводит владение), без прокси лот не выставляем.
+        if (!account.proxy_id) {
+            results.push({ asset_id: assetId, status: 'failed', error: 'К аккаунту не привязан прокси — продажа без прокси запрещена (1 прокси = 1 юзербот).' });
             continue;
         }
         if (listedAssetKeys.has(`userbot:${assetId}`)) {

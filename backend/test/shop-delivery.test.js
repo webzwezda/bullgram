@@ -36,6 +36,7 @@ await (await import('./shop-delivery/purchase-anon.js')).runPurchaseAnon();
 await (await import('./shop-delivery/purchase-kind-aware-quarantine.js')).runPurchaseKindAwareQuarantine();
 await (await import('./shop-delivery/purchase-check-delivery.js')).runPurchaseCheckDelivery();
 await (await import('./shop-delivery/public-archive-download.js')).runPublicArchiveDownload();
+await (await import('./shop-delivery/transfer-proxy-follows.js')).runTransferProxyFollows();
 await (await import('./shop-delivery/public-delivery-view.js')).runPublicDeliveryView();
 await (await import('./shop-delivery/sold-files-purge.js')).runSoldFilesPurgeScenario();
 

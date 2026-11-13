@@ -1,5 +1,38 @@
 import { isTransferableAccountLot } from './shop-delivery.service.js';
 
+// Перевод владения прокси аккаунта покупателю при трансфере. По замыслу
+// (docs/plans/2026-10-26-account-shop.md) продажа уходит «аккаунт + его прокси»,
+// но пачковые лоты прокси-ассет не добавляют — поэтому переводим здесь.
+// Возвращает id прокси, если он перешёл покупателю; null при изоляционном
+// фолбэке (прокси не найден, не у продавца или разделяется другим аккаунтом —
+// тогда отклеиваем: покупателю нельзя указывать на чужой прокси).
+async function claimAccountProxyForBuyer(supabase, { proxyId, sellerOwnerId, buyerOwnerId, accountId }) {
+    const { data: proxy, error: proxyError } = await supabase
+        .from('proxies')
+        .select('id, owner_id')
+        .eq('id', proxyId)
+        .eq('owner_id', sellerOwnerId)
+        .maybeSingle();
+    if (proxyError) throw proxyError;
+    if (!proxy) return null;
+
+    const { data: linkedAccounts, error: sharedError } = await supabase
+        .from('tg_accounts')
+        .select('id')
+        .eq('proxy_id', proxyId);
+    if (sharedError) throw sharedError;
+    const sharedWithOthers = (linkedAccounts || []).some((row) => String(row.id) !== String(accountId));
+    if (sharedWithOthers) return null;
+
+    const { error } = await supabase
+        .from('proxies')
+        .update({ owner_id: buyerOwnerId, provision_source: 'purchased' })
+        .eq('id', proxyId)
+        .eq('owner_id', sellerOwnerId);
+    if (error) throw error;
+    return proxyId;
+}
+
 export async function transferShopAssets(supabase, purchase, item, assets) {
     const buyerOwnerId = purchase.buyer_owner_id;
     const sellerOwnerId = purchase.seller_owner_id;
@@ -53,7 +86,15 @@ export async function transferShopAssets(supabase, purchase, item, assets) {
             };
 
             if (account.proxy_id && !includedProxyIds.has(String(account.proxy_id))) {
-                updatePayload.proxy_id = null;
+                const claimedProxyId = await claimAccountProxyForBuyer(supabase, {
+                    proxyId: String(account.proxy_id),
+                    sellerOwnerId,
+                    buyerOwnerId,
+                    accountId: account.id
+                });
+                if (!claimedProxyId) {
+                    updatePayload.proxy_id = null;
+                }
             }
 
             const { error } = await supabase

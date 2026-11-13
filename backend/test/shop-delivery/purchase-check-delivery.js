@@ -1,6 +1,6 @@
 // Сценарий из test/test-shop-delivery.js (разрезка под лимит pre-commit; хост — test/test-shop-delivery.js).
 import { runShopPurchaseCheck } from '../../routes/shop.routes.js';
-import { assert, makeMockSupabase, baseTables, accountItemRow, pendingPurchase, filesDelivery, BUYER, OWNER } from './shared.js';
+import { assert, makeMockSupabase, baseTables, accountItemRow, pendingPurchase, filesDelivery, BUYER, OWNER, PROXY_ID } from './shared.js';
 
 export async function runPurchaseCheckDelivery() {
 console.log('— Выдача при оплате (runShopPurchaseCheck) —');
@@ -37,7 +37,7 @@ console.log('— Выдача при оплате (runShopPurchaseCheck) —');
     assert(Boolean(purchaseRow.delivered_at), 'hybrid+buyer: delivered_at проставлен');
     assert(purchaseRow.payload.delivery?.mode === 'hybrid' && purchaseRow.payload.delivery?.transferred === true, 'hybrid+buyer: payload.delivery гибрид');
     assert(supabase._tables.tg_accounts[0].owner_id === BUYER, 'hybrid+buyer: аккаунт передан покупателю');
-    assert(supabase._tables.tg_accounts[0].proxy_id === null && supabase._tables.proxies[0].owner_id === OWNER, 'hybrid+buyer: прокси без актива в лоте отвязан и остаётся у продавца (легаси-семантика transferShopAssets)');
+    assert(supabase._tables.tg_accounts[0].proxy_id === PROXY_ID && supabase._tables.proxies[0].owner_id === BUYER && supabase._tables.proxies[0].provision_source === 'purchased', 'hybrid+buyer: прокси без актива в лоте следует за аккаунтом (решение владельца 2026-11-13)');
     assert(supabase._tables.shop_items[0].status === 'sold', 'hybrid+buyer: лот продан');
 }
 {
