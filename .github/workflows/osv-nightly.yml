@@ -21,10 +21,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install osv-scanner (pinned)
+        # v2.7.1: Google убрал .deb из релизов — ставим бинарь с проверкой SHA256.
         run: |
-          curl -fsSL -o /tmp/osv-scanner.deb \
-            "https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64.deb"
-          sudo dpkg -i /tmp/osv-scanner.deb
+          curl -fsSL -o /tmp/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64"
+          echo "fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8  /tmp/osv-scanner" | sha256sum -c -
+          sudo install -m 0755 /tmp/osv-scanner /usr/local/bin/osv-scanner
 
       - name: Scan all lockfiles (recursive, report-only)
         continue-on-error: true
