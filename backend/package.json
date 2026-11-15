@@ -10,6 +10,7 @@
     "test:sales": "node test/contour-admin-rights.test.js && node test/shop-quarantine.test.js && node --test test/listed-health-auto-restore.test.js",
     "test:shop-delivery": "node test/shop-delivery.test.js && node test/shop-owner-download.test.js",
     "test:intake": "node test/account-intake.test.js",
+    "test:botfather": "node test/botfather-probe.test.js",
     "test:qr-auth": "node test/qr-auth.test.js",
     "test:sale-scan": "node test/sale-scan.test.js",
     "test:messaging": "node test/messaging-router.test.js",

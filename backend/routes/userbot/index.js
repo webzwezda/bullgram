@@ -24,6 +24,7 @@ import { registerOpsCenterFeed } from './ops-center-feed.js';
 import { registerErrorsMembers } from './errors-members.js';
 import { registerCrm } from './crm.js';
 import { registerMessaging } from './messaging.js';
+import { registerBotfatherProbe } from './botfather-probe.js';
 
 export default function (supabase) {
     const router = express.Router();
@@ -87,6 +88,7 @@ export default function (supabase) {
 
     // 9-11. POST /send-message, POST /crm/import, GET /crm/presence.
     registerMessaging(router, ctx);
+    registerBotfatherProbe(router, ctx);
 
     return router;
 }

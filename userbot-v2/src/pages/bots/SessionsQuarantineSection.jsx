@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Loader2, LogOut, RefreshCw, ShieldAlert, Smartphone
+  Bot, Loader2, LogOut, RefreshCw, ShieldAlert, Smartphone
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -39,6 +39,26 @@ export function SessionsQuarantineSection({
     rows: []
   });
   const [resetBusy, setResetBusy] = useState({ others: false, hash: '' });
+  const [bfProbeBusy, setBfProbeBusy] = useState(false);
+
+  // Проба BotFather по всему стоку: скан фоном (минуты), вердикты падают в
+  // health_summary аккаунтов и видны в селекторе/гигиене после обновления.
+  async function startBotFatherProbe() {
+    if (!accessToken) return;
+    setBfProbeBusy(true);
+    try {
+      await apiRequest('/api/userbot/botfather-probe', {
+        accessToken,
+        method: 'POST',
+        body: {}
+      });
+      toast.success('Проба BotFather запущена: аккаунты проверяются по очереди, verdict появится в карточках через несколько минут.');
+    } catch (error) {
+      toast.error(error?.message || 'Не удалось запустить пробу BotFather.');
+    } finally {
+      setBfProbeBusy(false);
+    }
+  }
 
   async function loadAuthorizations() {
     if (!accessToken || !selectedLiveUserbotId) {
@@ -160,6 +180,17 @@ export function SessionsQuarantineSection({
           <div className="flex items-center gap-2">
             {renderTabButton('sessions', 'Активные сессии', <Smartphone className="w-4 h-4" />)}
             {renderTabButton('quarantine', 'Отстойник', <ShieldAlert className="w-4 h-4" />, quarantinedUserbots.length)}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-xl text-ink-muted"
+              disabled={bfProbeBusy}
+              onClick={startBotFatherProbe}
+              title="Проверить, могут ли аккаунты писать BotFather (скрытый лимит свежих аккаунтов SpamBot не показывает)"
+            >
+              {bfProbeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+              Проверить BotFather
+            </Button>
           </div>
         </div>
       </div>

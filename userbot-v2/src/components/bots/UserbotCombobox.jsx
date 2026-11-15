@@ -61,6 +61,24 @@ function labelFor(account) {
   return account?.tg_username ? `@${account.tg_username}` : `ID ${account?.tg_account_id}`;
 }
 
+// Проба BotFather (health_summary.botfather_state): ok — аккаунт может писать
+// сервисным ботам; send_error/refused/no_reply — скрытый лимит свежего аккаунта.
+function botFatherBadge(account) {
+  const state = String(account?.health_summary?.botfather_state || '').trim();
+  if (!state) return null;
+  if (state === 'ok') {
+    return { text: 'BotFather ✓', tone: 'text-ink-muted', title: 'Проба BotFather: аккаунт может писать ботам' };
+  }
+  if (['send_error', 'refused', 'no_reply'].includes(state)) {
+    return {
+      text: 'BotFather ✕',
+      tone: 'text-feedback-error-text',
+      title: 'Проба BotFather: аккаунт не может писать ботам (скрытый лимит свежего аккаунта)'
+    };
+  }
+  return null;
+}
+
 export function UserbotCombobox({
   accounts,
   value,
@@ -114,6 +132,7 @@ export function UserbotCombobox({
             <CommandGroup>
               {accounts.map((account) => {
                 const isSelected = String(account.id) === String(value);
+                const bfBadge = botFatherBadge(account);
                 return (
                   <CommandItem
                     key={account.id}
@@ -153,6 +172,14 @@ export function UserbotCombobox({
                         title="Причина карантина — аккаунт в отстойнике, продажа закрыта"
                       >
                         {quarantineStatusShortLabel(account)}
+                      </span>
+                    ) : null}
+                    {!QUARANTINE_STATUSES.includes(String(account.runtime_status || '').trim().toLowerCase()) && bfBadge ? (
+                      <span
+                        className={`ml-auto shrink-0 text-[11px] font-semibold ${bfBadge.tone}`}
+                        title={bfBadge.title}
+                      >
+                        {bfBadge.text}
                       </span>
                     ) : null}
                   </CommandItem>
