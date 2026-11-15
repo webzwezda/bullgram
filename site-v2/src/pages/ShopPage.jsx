@@ -44,6 +44,15 @@ function formatTon(value) {
 
 function HealthRow({ preview }) {
   if (!preview) return null;
+  // Лимит SpamBot'а («только контакты») — красный бейдж. Гейт магазина такие
+  // лоты с витрины снимает; бейдж — defense-in-depth, если карточка ещё видна.
+  if (preview.spambot_state === 'limited') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-feedback-error-bg px-2 py-0.5 text-xs font-bold text-feedback-error-text">
+        Лимитирован Telegram
+      </span>
+    );
+  }
   const healthy = FRESH_HEALTH_STATES.includes(preview.health_status);
   const fresh = isCheckFresh(preview.last_checked_at);
   const checkedAt = formatCheckedAt(preview.last_checked_at);

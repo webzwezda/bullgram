@@ -17,6 +17,7 @@ import { registerProfile } from './profile.js';
 import { registerProfileUsername } from './profile-username.js';
 import { registerLifecycle } from './lifecycle.js';
 import { registerHealthCheck } from './health-check.js';
+import { registerAppeal } from './appeal.js';
 import { registerSyncAudit } from './sync-audit.js';
 import { registerOpsCenter } from './ops-center.js';
 import { registerOpsCenterFeed } from './ops-center-feed.js';
@@ -65,6 +66,9 @@ export default function (supabase) {
     registerLifecycle(router, ctx);
 
     registerHealthCheck(router, ctx);
+
+    // POST /appeal/:id — полуавтоматическая апелляция лимита SpamBot'а.
+    registerAppeal(router, ctx);
 
     // 5. CRM И СИНХРОНИЗАЦИЯ КАНАЛОВ: POST /sync-channels, GET /admin-audit.
     registerSyncAudit(router, ctx);

@@ -22,7 +22,8 @@
     "test:jobs": "node test/job-runner.test.js",
     "test:client-log": "node test/client-log.test.js",
     "test:contours": "node test/contours-overview.test.js",
-    "test:entity": "node test/userbot-entity-resolution.test.js"
+    "test:entity": "node test/userbot-entity-resolution.test.js",
+    "test:spambot": "node --test test/spambot-verdict.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",

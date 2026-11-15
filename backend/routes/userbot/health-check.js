@@ -202,9 +202,13 @@ export function registerHealthCheck(router, ctx) {
                 });
                 const health = await withTimeout(
                     userbotService.inspectAccountHealth(client, {
-                        userbotId: account.id
+                        userbotId: account.id,
+                        // Ручная проверка — единственный источник активной пробы
+                        // /start SpamBot'у (решение владельца 2026-11-15).
+                        activeSpamProbe: true,
+                        persistedHealthSummary: account.health_summary || null
                     }),
-                    USERBOT_HEALTH_INSPECT_TIMEOUT_MS,
+                    USERBOT_HEALTH_INSPECT_TIMEOUT_MS + 15000,
                     'Telegram health-check завис на SpamBot/profile check. Проверь прокси и повтори проверку.'
                 );
                 await supabase.from('tg_accounts').update({
@@ -228,19 +232,42 @@ export function registerHealthCheck(router, ctx) {
                 if (String(health.status || '') === 'frozen') {
                     await unpublishRestrictedUserbotListings(supabase, req.user.id, account.id, health.reason || 'account_frozen');
                 }
+                // Лимит SpamBot'а: с витрины снять, прокси/аккаунт не трогать —
+                // лимит снимается сам или через апелляцию (план 2026-11-15).
+                // healthy_streak=-1 — sentinel «верdict от Telegram», чтобы
+                // авто-restore джобы не вернул лот на витрину до чистой пробы.
+                if (String(health.status || '') === 'limited') {
+                    await unpublishRestrictedUserbotListings(supabase, req.user.id, account.id, health.reason || 'spambot_limited');
+                    await supabase.from('tg_accounts').update({ healthy_streak: -1 })
+                        .eq('id', account.id).eq('owner_id', req.user.id);
+                }
+                // Чистая активная проба — доказанный «здоров»: сбрасываем
+                // sentinel healthy_streak, чтобы авто-возврат джобы (BACKLOG
+                // §33, две здоровые проверки) снова стал возможен.
+                if (String(health.status || '') === 'online'
+                    && health.details?.spambot?.state === 'clear'
+                    && health.details?.spambot?.source === 'spambot_probe') {
+                    await supabase.from('tg_accounts').update({ healthy_streak: 0 })
+                        .eq('id', account.id).eq('owner_id', req.user.id);
+                }
                 res.json(buildCheckResponse(
                     health.status,
                     health.reason || null,
                     health.details || null
                 ));
-                if (['restricted', 'expired', 'error', 'frozen'].includes(String(health.status || ''))) {
+                if (['restricted', 'expired', 'error', 'frozen', 'limited'].includes(String(health.status || ''))) {
                     await logTelegramErrorEvent(supabase, {
                         owner_id: req.user.id,
                         userbot_id: account.id,
                         event_source: 'userbot_health',
                         event_type: 'health_check',
-                        restriction_kind: health.status === 'restricted' ? 'account_restricted' : (health.status || 'error'),
+                        restriction_kind: health.status === 'restricted'
+                            ? 'account_restricted'
+                            : (health.status === 'limited' ? 'spambot_limited' : (health.status || 'error')),
                         severity: ['restricted', 'frozen'].includes(health.status) ? 'danger' : 'warning',
+                        // is_restriction=false для limited: 72h-автопурга читает
+                        // только is_restriction-события — лимитированный аккаунт
+                        // никогда не удаляется (лимит поднимается сам).
                         is_restriction: health.status === 'restricted',
                         error_message: health.reason || 'Проблема при health-check.',
                         meta: {
@@ -268,10 +295,13 @@ export function registerHealthCheck(router, ctx) {
                 );
                 const isDegradedAfterAlive = getMeOk && isInspectTimeout;
                 const isFrozenDetected = normalizedCheckError.includes('FROZEN_METHOD_INVALID');
+                // Липкость limited: таймаут пробы не доказательство чистоты —
+                // сохранённый limited переживает деградацию (план 2026-11-15).
+                const persistedLimited = String(account.health_summary?.spambot_state || '') === 'limited';
                 const nextStatus = isFrozenDetected ? 'frozen'
                     : isConnectFailure ? 'dead_proxy'
                     : (isSessionInvalid ? 'expired'
-                        : (isDegradedAfterAlive ? 'online'
+                        : (isDegradedAfterAlive ? (persistedLimited ? 'limited' : 'online')
                             : (isInspectTimeout ? 'error' : 'expired')));
                 const nextReason = isDegradedAfterAlive
                     ? 'Сессия отвечает, но SpamBot/profile check не успел завершиться.'

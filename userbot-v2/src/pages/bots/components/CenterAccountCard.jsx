@@ -2,6 +2,7 @@ import { AlertCircle, Loader2, ShieldCheck, ShieldOff, Trash2, UserPlus } from '
 import { Button } from '@/components/ui/button';
 import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
 import { StatusBadge } from './CenterWidgets.jsx';
+import { SpamBotAppealCard } from './SpamBotAppealCard.jsx';
 
 export function CenterAccountCard({
   selectedLiveUserbot,
@@ -16,6 +17,8 @@ export function CenterAccountCard({
   checkingAccountId,
   togglingSafeModeId,
   toggleSafeMode,
+  checkAccount,
+  accessToken,
   profileTab,
   shopInlineSlot,
 }) {
@@ -123,12 +126,27 @@ export function CenterAccountCard({
               && ['restricted', 'dead_proxy', 'expired', 'error'].includes(runtimeStatus);
 
             if (restrictedBadge?.detail) {
+              const showAppeal = ['limited', 'frozen'].includes(runtimeStatus);
               return (
                 <div className="flex gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
                   <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
-                  <div>
+                  <div className="min-w-0">
                     <h4 className="text-sm font-semibold text-rose-900">Ограничения</h4>
                     <p className="text-sm text-rose-800 mt-0.5">{restrictedBadge.detail}</p>
+                    {/* Апелляция @SpamBot: limited — полуавтомат (клики до
+                        шага «человек»), frozen — только гид (read-only).
+                        План 2026-11-15-spambot-verdicts-appeals.md. */}
+                    {showAppeal ? (
+                      <div className="rounded-lg bg-white/70 p-3 mt-2">
+                        <SpamBotAppealCard
+                          accountId={selectedLiveUserbot.id}
+                          status={runtimeStatus}
+                          accessToken={accessToken}
+                          checking={checkingAccountId === String(selectedLiveUserbot.id)}
+                          onRecheck={checkAccount ? () => checkAccount(selectedLiveUserbot) : null}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

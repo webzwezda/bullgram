@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Sketch: баннер «Лимитирован Telegram» + карточка апелляции</title>
+<style>
+  body { font-family: Manrope, system-ui, sans-serif; background: #f8fafc; padding: 32px; display: flex; gap: 40px; flex-wrap: wrap; }
+  .frame { width: 560px; background: #fff; border-radius: 16px; box-shadow: 0 4px 16px rgba(15,23,42,.08); overflow: hidden; }
+  .frame > .inner { padding: 20px 24px; }
+  h2 { font-size: 13px; color: #64748b; margin: 0 0 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+  .banner { display: flex; gap: 12px; border-radius: 12px; padding: 16px; border: 1px solid #fecdd3; background: #fff1f2; }
+  .banner svg { flex-shrink: 0; width: 20px; height: 20px; color: #f43f5e; margin-top: 2px; }
+  .banner h4 { margin: 0; font-size: 14px; font-weight: 700; color: #881337; }
+  .banner p { margin: 4px 0 0; font-size: 13px; color: #9f1239; line-height: 1.45; }
+  .quote { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid #fda4af; background: #fff; border-radius: 6px; font-size: 12px; color: #9f1239; white-space: pre-line; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; }
+  .btn--primary { background: #4f46e5; color: #fff; }
+  .btn--ghost { background: #fff; color: #334155; border-color: #e2e8f0; }
+  .btn--ghost:hover { background: #f8fafc; }
+  .result { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.45; }
+  .result--ok { background: #ecfdf5; color: #065f46; }
+  .result--warn { background: #fffbeb; color: #92400e; }
+  .badge { display: inline-flex; padding: 2px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .badge--danger { background: #fff1f2; color: #9f1239; }
+  .steps { margin: 10px 0 0; padding: 0; list-style: none; counter-reset: step; }
+  .steps li { counter-increment: step; position: relative; padding-left: 30px; font-size: 12.5px; color: #475569; margin-bottom: 6px; line-height: 1.4; }
+  .steps li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 20px; height: 20px; border-radius: 50%; background: #eef2ff; color: #4f46e5; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+
+<!-- Вариант A: кнопки прямо в баннере (компактно, дефолт) -->
+<div class="frame">
+  <div class="inner">
+    <h2>Вариант A — кнопки в баннере</h2>
+    <div class="banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div style="min-width:0">
+        <div class="badge badge--danger">Лимитирован Telegram</div>
+        <p>Писать может только тем, у кого номер аккаунта в контактах. Продажа закрыта до снятия лимита.</p>
+        <p class="quote">While the account is limited, you will not be able to send messages to people who do not have your number in their phone contacts…</p>
+        <div class="actions">
+          <button class="btn btn--primary">Подать апелляцию</button>
+          <button class="btn btn--ghost">Открыть @SpamBot в Telegram Web</button>
+          <button class="btn btn--ghost">Перепроверить</button>
+        </div>
+        <div class="result result--warn">Остановился на шаге «человек»: Telegram требует подтверждение. Открой Telegram Web и заверши шаг вручную — чат @SpamBot откроется сразу.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Вариант B: баннер + раскрываемая карточка-шаги (для frozen, где автоклика нет) -->
+<div class="frame">
+  <div class="inner">
+    <h2>Вариант B — баннер + шаги вручную (frozen)</h2>
+    <div class="banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <div style="min-width:0">
+        <div class="badge badge--danger">Заморожен Telegram</div>
+        <p>Read-only: читать можно, действовать нет. Продажа закрыта, сессия хранится.</p>
+        <div class="actions">
+          <button class="btn btn--primary">Открыть @SpamBot в Telegram Web</button>
+        </div>
+        <ol class="steps">
+          <li>Открой чат @SpamBot — ссылка приведёт прямо в него.</li>
+          <li>Напиши /start, дождись ответа.</li>
+          <li>Нажми «Подать жалобу» → «Это ошибка».</li>
+          <li>Дождись ответа модераторов в этом же чате.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

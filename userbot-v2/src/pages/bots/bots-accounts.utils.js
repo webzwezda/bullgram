@@ -13,6 +13,7 @@ export function summarizeCheckStatus(result = {}, fallbackAccount = null) {
   if (status === 'online') return { tone: 'success', title: 'Сессия жива' };
   if (status === 'frozen') return { tone: 'error', title: 'Заморожен Telegram' };
   if (status === 'restricted') return { tone: 'error', title: 'Есть ограничения Telegram' };
+  if (status === 'limited') return { tone: 'error', title: 'Лимитирован Telegram' };
   if (status === 'expired') return { tone: 'error', title: 'Сессия умерла' };
   if (status === 'dead_proxy' || status === 'inactive_proxy') return { tone: 'error', title: 'Прокси мертвый' };
   if (status === 'pending_activation') return { tone: 'warning', title: 'Ждет активации' };
@@ -44,10 +45,15 @@ export function buildCheckLines(result = {}, fallbackAccount = null) {
   }
 
   const spambotState = String(details?.spambot?.state || '').trim().toLowerCase();
+  const spambotSource = String(details?.spambot?.source || '').trim().toLowerCase();
   if (spambotState === 'blocked') {
     lines.push(checkLine('SpamBot', '', 'error'));
+  } else if (spambotState === 'limited') {
+    lines.push(checkLine('SpamBot', '', 'error'));
   } else if (spambotState === 'clear') {
-    lines.push(checkLine('SpamBot', '', 'success'));
+    // Зелёный бейдж — только живая проба /start. Пассивное чтение хвоста
+    // диалога «чистоту» не доказывает (инцидент 2026-11-15: зелёный при лимите).
+    lines.push(checkLine('SpamBot', '', spambotSource === 'spambot_probe' ? 'success' : 'warning'));
   } else if (spambotState === 'error') {
     lines.push(checkLine('SpamBot', '', 'warning'));
   } else {
@@ -65,7 +71,7 @@ export function defaultCheckLines() {
   ];
 }
 
-export const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen'];
+export const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen', 'limited'];
 
 export function isQuarantinedAccount(account) {
   return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
@@ -79,6 +85,14 @@ export function restrictedMarker(account) {
     return {
       text: 'Заморожен Telegram',
       detail: 'Read-only: читать можно, действовать нет. Продажа закрыта, сессия хранится — апелляция через @SpamBot в Telegram Web.',
+      className: 'pill pill--danger'
+    };
+  }
+
+  if (status === 'limited') {
+    return {
+      text: 'Лимитирован Telegram',
+      detail: 'SpamBot подтвердил лимит: писать может только тем, у кого его номер в контактах. Продажа закрыта до снятия — апелляция кнопкой ниже или само по времени.',
       className: 'pill pill--danger'
     };
   }

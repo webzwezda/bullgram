@@ -21,7 +21,8 @@ import {
 
 import {
     ACCOUNT_NOT_READY_MESSAGE,
-    isFreshHealthyAccount
+    isFreshHealthyAccount,
+    isSpambotLimited
 } from '../utils/account-sale-rules.js';
 
 export const ACCOUNT_LOT_NOT_READY_MESSAGE = ACCOUNT_NOT_READY_MESSAGE;
@@ -49,7 +50,9 @@ export function findUnsellableAccountLot(rows) {
 
 // Гейт трансфера аккаунт-лота (shop-transfer.service): 'online' пропускается
 // как и раньше; pending_activation — только со свежей чистой проверкой отлёжки.
+// Лимит SpamBot'а блокирует трансфер даже при формальном online (2026-11-15).
 export function isTransferableAccountLot(account) {
+    if (isSpambotLimited(account)) return false;
     const status = String(account?.runtime_status || '').trim().toLowerCase();
     if (status === 'online') return true;
     if (status !== 'pending_activation') return false;

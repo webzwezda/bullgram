@@ -1,13 +1,15 @@
 import { ChevronDown } from 'lucide-react';
 
 export function StatusBadge({ tone, children, className = '' }) {
+  // Feedback-пары дизайн-токенов (DESIGN.md): success emerald-50+700,
+  // warning amber-50+700, error red-50+700. Тон-контракт прежний.
   const colorMap = {
-    success: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    warning: 'bg-amber-100 text-amber-800 border-amber-200',
-    error: 'bg-rose-100 text-rose-800 border-rose-200',
-    danger: 'bg-rose-100 text-rose-800 border-rose-200',
-    ok: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    default: 'bg-slate-100 text-slate-700 border-slate-200'
+    success: 'bg-feedback-success-bg text-feedback-success-text border-transparent',
+    warning: 'bg-feedback-warning-bg text-feedback-warning-text border-transparent',
+    error: 'bg-feedback-error-bg text-feedback-error-text border-transparent',
+    danger: 'bg-feedback-error-bg text-feedback-error-text border-transparent',
+    ok: 'bg-feedback-success-bg text-feedback-success-text border-transparent',
+    default: 'bg-surface-subtle text-ink-muted border-border-default'
   };
   return (
     <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold tracking-wide transition-colors ${colorMap[tone] || colorMap.default} ${className}`}>

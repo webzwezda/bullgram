@@ -7,6 +7,7 @@ import { withTimeout } from '../../shared/utils.js';
 import { wrapTelegramError } from './telegram-errors.js';
 import { safeDisconnect } from './helpers.js';
 import { assertUserbotOperatable } from './botfather-lib.js';
+import { upsertPeerCache } from '../../utils/peer-cache.js';
 
 export const ResolversMixin = (Base) => class extends Base {
     /**
@@ -49,13 +50,26 @@ export const ResolversMixin = (Base) => class extends Base {
                     { auditStatus: 'telegram_error' }
                 );
             }
+            const accessHash = entity.accessHash != null ? String(entity.accessHash) : '';
+            // Свежий access_hash пишем в peer-cache (source 'resolve'): после
+            // этого message_send адресует пира без диалога и общего чата.
+            if (accessHash) {
+                await upsertPeerCache(this.supabase, {
+                    owner_id: userbot.owner_id,
+                    userbot_id: userbot.id,
+                    tg_user_id: String(entity.id),
+                    access_hash: accessHash,
+                    username: entity.username || null,
+                    source: 'resolve'
+                });
+            }
             return {
                 id: String(entity.id),
                 username: entity.username || null,
                 first_name: entity.firstName || entity.first_name || null,
                 last_name: entity.lastName || entity.last_name || null,
                 verified: entity.verified === true,
-                access_hash: entity.accessHash != null ? String(entity.accessHash) : ''
+                access_hash: accessHash
             };
         } catch (error) {
             throw await wrapTelegramError(this.supabase, userbot, error, 'resolveTelegramUser');

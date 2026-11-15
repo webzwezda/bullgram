@@ -53,6 +53,49 @@ export function detectSpamBlockReason(messages = []) {
     return '';
 }
 
+// Честная классификация вердикта @SpamBot по тексту ответа. В отличие от
+// detectSpamBlockReason (легаси: «нашёл знакомую фразу — верни её») здесь три
+// исхода: clear / limited / blocked. Английские формулировки — из реальных
+// ответов SpamBot'а (проверка 2026-11-15); русские — те же экраны для
+// русскоязычных сессий. Порядок проверки: blocked → limited → clear.
+export function classifySpambotReply(text = '') {
+    const normalized = String(text || '').toLowerCase();
+    if (!normalized) return { state: 'unknown', reason: '' };
+
+    const blockedPhrases = [
+        'your account was blocked',
+        'violations of the telegram terms of service',
+        'confirmed by our moderators',
+        'ваш аккаунт был заблокирован'
+    ];
+    const limitedPhrases = [
+        'do not have your number',
+        'while the account is limited',
+        'нет вашего номера',
+        'пока аккаунт ограничен'
+    ];
+    const clearPhrases = [
+        'no limits',
+        'free as a bird',
+        'нет ограничений',
+        'никаких ограничений',
+        'свободен как птица',
+        'свободны как птица'
+    ];
+
+    const trimmed = String(text).trim();
+    for (const phrase of blockedPhrases) {
+        if (normalized.includes(phrase)) return { state: 'blocked', reason: trimmed };
+    }
+    for (const phrase of limitedPhrases) {
+        if (normalized.includes(phrase)) return { state: 'limited', reason: trimmed };
+    }
+    for (const phrase of clearPhrases) {
+        if (normalized.includes(phrase)) return { state: 'clear', reason: trimmed };
+    }
+    return { state: 'unknown', reason: trimmed };
+}
+
 export function buildHealthDetails({
     session = 'unknown',
     restriction = 'unknown',

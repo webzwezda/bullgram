@@ -91,7 +91,7 @@ export async function createOrRefreshBuyerPurchase({
             // Аккаунт-лоты (intake): pending_activation со свежей чистой проверкой —
             // продаваемый сток, а не карантин (см. shop-delivery.service).
             const isAccountLot = item.item_type === 'account';
-            const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen'];
+            const quarantineStatuses = ['restricted', 'expired', 'dead_proxy', 'error', 'pending_activation', 'frozen', 'limited'];
             const quarantined = isAccountLot
                 ? findUnsellableAccountLot(userbotRows)
                 : (userbotRows || []).find(row =>

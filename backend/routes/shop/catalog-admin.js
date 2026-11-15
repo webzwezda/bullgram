@@ -199,6 +199,34 @@ export function registerCatalogAdmin(router, ctx) {
                 assetsByItem.set(asset.shop_item_id, bucket);
             }
 
+            // Health userbot-активов для колонки статуса в обзоре витрины:
+            // runtime_status + spambot_state, чтобы лимитированный лот был виден
+            // платформенному админу сразу (план 2026-11-15). Read-only, non-fatal.
+            const userbotAssetIds = Array.from(new Set((assets || [])
+                .filter(asset => asset.asset_type === 'userbot')
+                .map(asset => String(asset.asset_id))));
+            const healthByAssetId = new Map();
+            if (userbotAssetIds.length) {
+                const { data: healthRows } = await supabase
+                    .from('tg_accounts')
+                    .select('id, runtime_status, health_summary')
+                    .in('id', userbotAssetIds);
+                for (const row of healthRows || []) {
+                    healthByAssetId.set(String(row.id), {
+                        runtime_status: row.runtime_status || null,
+                        spambot_state: row.health_summary?.spambot_state || null,
+                        checked_at: row.health_summary?.checked_at || null
+                    });
+                }
+            }
+            for (const bucket of assetsByItem.values()) {
+                for (const asset of bucket) {
+                    if (asset.asset_type === 'userbot') {
+                        asset.health = healthByAssetId.get(String(asset.asset_id)) || null;
+                    }
+                }
+            }
+
             const activeReservationByItem = new Map();
             for (const purchase of purchases) {
                 if (purchase.status !== 'pending' || isPendingPurchaseExpired(purchase)) continue;

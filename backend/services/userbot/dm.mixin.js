@@ -41,6 +41,13 @@ export const DmMixin = (Base) => class extends Base {
                 spamBlockError.resolution_source = 'spambot';
                 throw spamBlockError;
             }
+            // Лимит «только контакты»: холодный DM всё равно не дойдёт —
+            // отказываем сразу с внятным текстом, а не ловим ответ Telegram.
+            if (spamBlock.state === 'limited') {
+                const limitedError = new Error(spamBlock.reason || 'Аккаунт лимитирован Telegram: писать можно только тем, у кого его номер в контактах.');
+                limitedError.resolution_source = 'spambot_limited';
+                throw limitedError;
+            }
 
             targetResolution = await this.resolveDirectMessageTarget(client, userbot, tg_user_id, options);
             if (!targetResolution?.peer) {
@@ -353,6 +360,15 @@ export const DmMixin = (Base) => class extends Base {
             || ''
         );
         const normalized = raw.toUpperCase();
+
+        if (
+            normalized.includes('ЛИМИТИРОВАН')
+            || normalized.includes('WHILE THE ACCOUNT IS LIMITED')
+            || normalized.includes('DO NOT HAVE YOUR NUMBER')
+            || normalized.includes('НЕТ ВАШЕГО НОМЕРА')
+        ) {
+            return 'Аккаунт лимитирован Telegram: писать можно только тем, у кого его номер в контактах. Апелляция — через @SpamBot в Telegram Web этой сессии.';
+        }
 
         if (
             normalized.includes('YOUR ACCOUNT WAS BLOCKED')

@@ -33,8 +33,13 @@ to attempt a Telegram-touching operation.
 }
 ```
 
-`spambot_signal` is non-null only when an admin has manually triggered a
-SpamBot check that returned a restriction. `null` means no signal cached.
+`spambot_signal` — последний вердикт @SpamBot: `{blocked, state, reason, source}`.
+С 2026-11-15 вердикт персистится в `tg_accounts.health_summary` (spambot_state /
+spambot_reason / spambot_source / spambot_checked_at) и переживает рестарт;
+`source` различает `spambot_probe` (живой /start, авторитетный), `spambot_read`
+(пассивное чтение хвоста диалога), `persisted`, `spambot_error`. `state`:
+`clear` / `limited` («только контакты») / `blocked` / `unknown`. `null` —
+проверок не было.
 
 ## Examples
 

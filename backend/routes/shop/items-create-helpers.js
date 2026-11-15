@@ -162,7 +162,7 @@ export async function validateLotAssets({
                     // неактивный аккаунт (расширение правила AGENTS.md про blocked/restricted).
                     // error — проверка не прошла (например, заморозка Telegram, когда
                     // getMe не укладывается в таймаут): такие тоже в отстойник.
-                    const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error', 'frozen'];
+                    const quarantineStatuses = ['restricted', 'pending_activation', 'expired', 'dead_proxy', 'error', 'frozen', 'limited'];
                     const blockedUserbot = (rows || []).find(row =>
                         quarantineStatuses.includes(String(row.runtime_status || '').trim().toLowerCase())
                     );

@@ -27,12 +27,19 @@ export function normalizeTelegramUsernameInput(raw) {
 
 // Единая форма health_summary в tg_accounts: что показываем в карточке
 // аккаунта и «отстойнике». Наполняется из результата inspectAccountHealth
-// ({ status, reason, details }).
+// ({ status, reason, details }). 2026-11-15: + spambot_reason/source/checked_at
+// (план docs/plans/2026-11-15-spambot-verdicts-appeals.md) — вердикт SpamBot
+// персистится, липкость limited и MCP-сигнал читают отсюда.
 export function buildHealthSummary(health, checkedAt = new Date().toISOString()) {
     const details = health?.details || null;
+    const spambotState = String(details?.spambot?.state || 'not_checked');
+    const definitiveSpambot = ['clear', 'limited', 'blocked'].includes(spambotState);
     return {
         status: String(health?.status || 'error'),
-        spambot_state: details?.spambot?.state || 'not_checked',
+        spambot_state: spambotState,
+        spambot_reason: definitiveSpambot ? String(details?.spambot?.reason || '').slice(0, 500) : '',
+        spambot_source: details?.spambot?.source || '',
+        spambot_checked_at: definitiveSpambot ? checkedAt : null,
         restriction: details?.restriction || 'unknown',
         restriction_reason: details?.restriction_reason || health?.reason || '',
         checked_at: checkedAt

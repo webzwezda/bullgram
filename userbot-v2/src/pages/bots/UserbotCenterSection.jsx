@@ -287,6 +287,8 @@ export function UserbotCenterSection({
           checkingAccountId={checkingAccountId}
           togglingSafeModeId={togglingSafeModeId}
           toggleSafeMode={toggleSafeMode}
+          checkAccount={checkAccount}
+          accessToken={accessToken}
           profileTab={
             <ProfileTab
               selectedLiveUserbot={selectedLiveUserbot}

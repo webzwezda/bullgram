@@ -218,6 +218,17 @@ USERBOT_LISTED_HEALTH_INTERVAL_MS=21600000
 USERBOT_INTAKE_RESTING_ENABLED=true
 USERBOT_INTAKE_RESTING_INTERVAL_MS=43200000
 USERBOT_INTAKE_RESTING_SLEEP_MS=25000
+
+# SpamBot active probe (2026-11-15): активная проба /start + разбор вердикта —
+# ТОЛЬКО ручные сценарии («Проверить Telegram», скан продажи, апелляция).
+# Расписаний с пробой нет: джобы пассивны и держат липкий limited до чистой
+# пробы. Состояния: clear / limited («только контакты») / blocked; вердикт
+# персистится в tg_accounts.health_summary (spambot_state/reason/source/checked_at),
+# событие spambot_limited пишется с is_restriction=false — 72h-пурга limited
+# аккаунты НЕ удаляет. POST /api/userbot/appeal/:id — полуавто-апелляция
+# («Подать жалобу» → «Это ошибка», финал человеком в Telegram Web сессии).
+USERBOT_SPAMBOT_PROBE_ENABLED=true
+USERBOT_SPAMBOT_PROBE_TIMEOUT_MS=12000
 ```
 
 `USERBOT_DM_ENABLED` включает только ручные действия из интерфейса.  

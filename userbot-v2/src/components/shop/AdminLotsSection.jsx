@@ -10,11 +10,27 @@ const TYPE_LABELS = {
   userbot: 'Юзербот',
   bundle: 'Комплект',
   channel_audience_asset: 'База',
-  text_offer: 'Оффер'
+  text_offer: 'Оффер',
+  account: 'Аккаунт'
 };
 
 function typeLabel(itemType) {
   return TYPE_LABELS[String(itemType || '')] || 'Лот';
+}
+
+// Точка здоровья userbot-актива в обзоре витрины: limited/проблемный статус —
+// красная, unknown — серая, остальное — зелёная (план 2026-11-15).
+const HEALTH_BAD_STATUSES = ['limited', 'restricted', 'frozen', 'expired', 'dead_proxy', 'error'];
+
+function assetHealthMeta(asset) {
+  const health = asset?.health;
+  if (!health || (!health.runtime_status && !health.spambot_state)) {
+    return { dotClass: 'bg-surface-subtle-strong', title: 'Статус неизвестен' };
+  }
+  if (health.spambot_state === 'limited' || HEALTH_BAD_STATUSES.includes(String(health.runtime_status || ''))) {
+    return { dotClass: 'bg-feedback-error-text', title: `Статус: ${health.runtime_status || 'limited'} — лот снят с витрины гейтом` };
+  }
+  return { dotClass: 'bg-feedback-success-text', title: 'Статус: здоров' };
 }
 
 const LOTS_PAGE_SIZE = 20;
@@ -110,6 +126,19 @@ export function AdminLotsSection({ accessToken, types, title, emptyText, onChang
                       <Clock className="w-3 h-3" /> Бронь
                     </span>
                   ) : null}
+                  {(item.assets || []).filter((asset) => asset.asset_type === 'userbot').map((asset) => {
+                    const meta = assetHealthMeta(asset);
+                    return (
+                      <span
+                        key={asset.id}
+                        title={meta.title}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-surface-card border border-border-default px-2 py-0.5 text-xs font-black uppercase tracking-wide text-ink-muted"
+                      >
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} aria-hidden="true" />
+                        Health
+                      </span>
+                    );
+                  })}
                 </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
                   <span className="inline-flex items-center gap-1 font-bold text-slate-900">

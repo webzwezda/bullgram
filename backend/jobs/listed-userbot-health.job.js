@@ -11,10 +11,12 @@ const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const MIN_INTERVAL_MS = 10 * 60 * 1000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 25_000;
 const DEFAULT_INSPECT_TIMEOUT_MS = 35_000;
-const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen'];
+const QUARANTINE_STATUSES = ['restricted', 'expired', 'dead_proxy', 'error', 'frozen', 'limited'];
 // Telegram-авторитетные статусы: карантин сразу и healthy_streak=-1 (sentinel —
-// авто-возврат запрещён, восстановление только вручную).
-const TELEGRAM_AUTHORITATIVE_STATUSES = ['restricted', 'frozen', 'expired'];
+// авто-возврат запрещён, восстановление только вручную). limited тоже
+// авторитетен: лимит подтверждает SpamBot, снимается чистой активной пробой
+// или апелляцией (план 2026-11-15).
+const TELEGRAM_AUTHORITATIVE_STATUSES = ['restricted', 'frozen', 'expired', 'limited'];
 // Карантинный лот = ровно то, что пишет unpublishShopItemsByUserbotId
 // (utils/shop-reservations.js): status='draft' + visibility='private'.
 const QUARANTINE_ITEM_STATUS = 'draft';
@@ -80,7 +82,7 @@ async function loadListedUserbots(supabase) {
 
     const { data: accounts, error: accountsError } = await supabase
         .from('tg_accounts')
-        .select('id, owner_id, tg_username, proxy_id, runtime_status, session_data, last_checked_at, healthy_streak')
+        .select('id, owner_id, tg_username, proxy_id, runtime_status, session_data, last_checked_at, healthy_streak, health_summary')
         .eq('account_type', 'userbot')
         .in('id', ids);
     if (accountsError) throw accountsError;
@@ -118,7 +120,7 @@ async function loadQuarantinedUserbots(supabase) {
 
     const { data: accounts, error: accountsError } = await supabase
         .from('tg_accounts')
-        .select('id, owner_id, tg_username, proxy_id, runtime_status, session_data, last_checked_at, healthy_streak')
+        .select('id, owner_id, tg_username, proxy_id, runtime_status, session_data, last_checked_at, healthy_streak, health_summary')
         .eq('account_type', 'userbot')
         .in('id', ids);
     if (accountsError) throw accountsError;
@@ -255,7 +257,13 @@ async function checkUserbotHealth(supabase, userbotService, account, proxy) {
         await withTimeout(client.getMe(), getInspectTimeoutMs(), 'Telegram не отдал профиль аккаунта за отведенное время.');
         getMeOk = true;
         const health = await withTimeout(
-            userbotService.inspectAccountHealth(client, { userbotId: account.id }),
+            userbotService.inspectAccountHealth(client, {
+                userbotId: account.id,
+                // Джоба пассивна: активная проба /start только в ручных
+                // сценариях (решение владельца 2026-11-15). Липкость limited
+                // держится по сохранённому health_summary.
+                persistedHealthSummary: account.health_summary || null
+            }),
             getInspectTimeoutMs(),
             'Telegram health-check завис на SpamBot/profile check.'
         );
@@ -267,9 +275,13 @@ async function checkUserbotHealth(supabase, userbotService, account, proxy) {
     } catch (error) {
         // Как в ручной проверке (userbot.routes.js): сессия отвечает, но
         // SpamBot/profile check не успел — это деградация, а не смерть,
-        // с витрины такой лот снимать нельзя.
+        // с витрины такой лот снимать нельзя. Липкость limited: таймаут не
+        // доказательство чистоты, сохранённый лимит держим.
         if (getMeOk) {
-            return { status: 'online', reason: null, details: null };
+            const persistedLimited = String(account.health_summary?.spambot_state || '') === 'limited';
+            return persistedLimited
+                ? { status: 'limited', reason: 'Аккаунт лимитирован Telegram (сохранённый вердикт).', details: null }
+                : { status: 'online', reason: null, details: null };
         }
         const classified = classifyCheckFailure(error, connectOk);
         return { ...classified, details: null };
@@ -393,6 +405,27 @@ export async function runListedHealthCheck(supabase, userbotService, { checkFn =
                 });
                 await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || 'account_frozen');
                 console.error('[ListedUserbotHealth] frozen — лот снят, аккаунт и прокси сохранены:', {
+                    userbot_id: account.id,
+                    username: account.tg_username,
+                    reason: result.reason
+                });
+            } else if (status === 'limited') {
+                // Лимит SpamBot'а: с витрины снять, сессию и прокси храним —
+                // лимит снимается сам или через апелляцию. Пуржа не существует.
+                await logTelegramErrorEvent(supabase, {
+                    owner_id: account.owner_id,
+                    userbot_id: account.id,
+                    event_source: 'userbot_health',
+                    event_type: 'health_check',
+                    restriction_kind: 'spambot_limited',
+                    severity: 'warning',
+                    // is_restriction=false: 72h-автопурга limited не удаляет.
+                    is_restriction: false,
+                    happened_at: checkedAt,
+                    error_message: result.reason || 'Аккаунт лимитирован Telegram (автопроверка лота).'
+                });
+                await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || 'spambot_limited');
+                console.error('[ListedUserbotHealth] limited — лот снят, аккаунт и прокси сохранены:', {
                     userbot_id: account.id,
                     username: account.tg_username,
                     reason: result.reason

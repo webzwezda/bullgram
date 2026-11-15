@@ -1,4 +1,7 @@
-const PEER_CACHE_SOURCES = ['get_participants', 'dialogs'];
+// 'resolve' добавлен 2026-11-15: bullgram_userbot_user_resolve отдаёт свежий
+// access_hash, и message_send должен его переиспользовать (иначе «Юзербот не
+// знает этот TG ID» для пиров без диалога — план spambot-verdicts-appeals).
+const PEER_CACHE_SOURCES = ['get_participants', 'dialogs', 'resolve'];
 
 export function normalizePeerCacheEntry(entry = {}) {
     const accessHash = entry.access_hash != null ? String(entry.access_hash) : null;

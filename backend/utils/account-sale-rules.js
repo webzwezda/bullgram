@@ -17,6 +17,10 @@ export const ACCOUNT_FRESH_CHECK_WINDOW_MS = 6 * 60 * 60 * 1000;
 
 export const ACCOUNT_NO_TDATA_MESSAGE = 'Нет tdata-архива';
 export const ACCOUNT_CHECK_STALE_MESSAGE = 'Проверка устарела — запусти скан заново';
+// Лимит SpamBot'а «только контакты» (2026-11-15): продажа закрыта до снятия
+// лимита (чистая активная проба или апелляция). Проверяется и по статусу, и
+// по health_summary.spambot_state — на случай устаревшей строки статуса.
+export const ACCOUNT_LIMITED_MESSAGE = 'Аккаунт лимитирован Telegram — продажа закрыта до снятия лимита';
 // Тот же текст, что ACCOUNT_LOT_NOT_READY_MESSAGE в shop-delivery.service.js
 // (там он реэкспортируется) — один источник, чтобы формулировки не расползлись.
 export const ACCOUNT_NOT_READY_MESSAGE = 'Аккаунт не готов к продаже: запусти проверку Telegram (Гигиена аккаунтов)';
@@ -48,10 +52,19 @@ function accountHealthStatus(row) {
     return String(row?.health_summary?.status || '').trim().toLowerCase();
 }
 
+// Лимит SpamBot'а по любому из следов: runtime_status='limited' или
+// spambot_state='limited' в health_summary (план 2026-11-15).
+export function isSpambotLimited(row) {
+    return String(row?.runtime_status || '').trim().toLowerCase() === 'limited'
+        || String(row?.health_summary?.spambot_state || '').trim().toLowerCase() === 'limited';
+}
+
 // «Живой» статус со свежей проверкой — прежняя семантика гейта аккаунт-лотов:
 // online со свежим чеком; pending_activation только со свежим чеком и
 // health_summary.status='online'. Всё остальное — отстойник/неизвестное.
+// Лимит SpamBot'а не «живой» даже при формальном online (гейт выдачи/брони).
 export function isFreshHealthyAccount(row, nowMs = Date.now()) {
+    if (isSpambotLimited(row)) return false;
     const status = String(row?.runtime_status || '').trim().toLowerCase();
     if (status === 'online') return isFreshCheck(row, nowMs);
     if (status === 'pending_activation') {
@@ -68,6 +81,12 @@ export function accountSaleRuleState(account, { now = Date.now(), minRestHours =
     const nowMs = Number(now) || Date.now();
     const minRest = Number(minRestHours);
     const reasons = [];
+
+    // Лимит SpamBot'а — первая и самая конкретная причина: продажа закрыта,
+    // даже если статус/свежесть формально ок.
+    if (isSpambotLimited(account)) {
+        reasons.push(ACCOUNT_LIMITED_MESSAGE);
+    }
 
     const status = String(account?.runtime_status || '').trim().toLowerCase();
     const statusOk = status === 'online' || status === 'pending_activation';

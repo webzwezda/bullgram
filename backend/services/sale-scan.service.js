@@ -183,7 +183,10 @@ export async function runSaleScan(supabase, userbotService, { ownerId, scanId, c
                         sellable: false
                     };
                 } else {
-                    const result = await checkFn(supabase, userbotService, account, proxy);
+                    // Скан — ручной сценарий владельца: активная проба SpamBot
+                    // включена, лимитированные аккаунты честно уходят в
+                    // «Проблемные» (план 2026-11-15). Джоба отлёжки пассивна.
+                    const result = await checkFn(supabase, userbotService, account, proxy, { activeProbe: true });
 
                     // Боевые QR-импорты без restore source — report-only: вердикт
                     // показываем в списке, но статусы в базе не трогаем (флак

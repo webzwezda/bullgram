@@ -31,7 +31,9 @@ const DEFAULT_INSPECT_TIMEOUT_MS = 35_000;
 
 // Статусы карантина: всё, что не «здоровый сток» (online / safe-mode с чистой
 // проверкой). Скан продажи этими же статусом группирует «Проблемные».
-export const QUARANTINE_STATUSES = ['restricted', 'frozen', 'expired', 'dead_proxy', 'error'];
+// limited (SpamBot «только контакты», 2026-11-15) — тоже карантин: с витрины
+// снять, сессию и прокси хранить (лимит снимается сам или через апелляцию).
+export const QUARANTINE_STATUSES = ['restricted', 'frozen', 'limited', 'expired', 'dead_proxy', 'error'];
 
 // Анти-флуд пауза между проверками (общая с джобой отлёжки, новых env нет).
 export function getIntakeRestingSleepMs() {
@@ -75,7 +77,11 @@ function classifyCheckFailure(rawError, connectOk) {
 // inspectAccountHealth (frozen-проба → SpamBot). Та же проверка, что и у
 // ручной «Проверить Telegram». Деградация: если getMe ответил, но SpamBot/
 // profile check завис — считаем аккаунт живым, дозаполним в следующий заход.
-export async function checkStockAccount(supabase, userbotService, account, proxy) {
+// options.activeProbe — активная проба SpamBot (/start): только ручные
+// сценарии (скан продажи); джоба отлёжки пассивна (решение владельца
+// 2026-11-15). persistedHealthSummary берём из строки аккаунта — липкость
+// limited переживает пассивные проверки.
+export async function checkStockAccount(supabase, userbotService, account, proxy, options = {}) {
     // Полное зеркало loadOwnedProxy (userbot.routes.js): без provision_source/
     // force_ipv6 не срабатывает форс IPv6-DC (_shouldUseIpv6TelegramDc), и сессия
     // продавца уходит на IPv4-адрес, недостижимый с IPv6-only managed-слота —
@@ -138,8 +144,12 @@ export async function checkStockAccount(supabase, userbotService, account, proxy
         }
         getMeOk = true;
         const health = await withTimeout(
-            userbotService.inspectAccountHealth(client, { userbotId: account.id }),
-            getInspectTimeoutMs(),
+            userbotService.inspectAccountHealth(client, {
+                userbotId: account.id,
+                activeSpamProbe: options.activeProbe === true,
+                persistedHealthSummary: account.health_summary || null
+            }),
+            getInspectTimeoutMs() + (options.activeProbe === true ? 15000 : 0),
             'Telegram health-check завис на SpamBot/profile check.'
         );
         return {
@@ -151,9 +161,18 @@ export async function checkStockAccount(supabase, userbotService, account, proxy
     } catch (error) {
         // Как в ручной проверке: сессия отвечает, но SpamBot/profile check не
         // успел — деградация, а не смерть. Аккаунт считаем живым, safe-mode
-        // остаётся, в следующий заход дозаполнится health.
+        // остаётся, в следующий заход дозаполнится health. Липкость limited:
+        // таймаут не доказательство чистоты, сохранённый лимит держим.
         if (getMeOk) {
-            return { status: 'online', reason: null, details: null, me };
+            const persistedLimited = String(account.health_summary?.spambot_state || '') === 'limited';
+            return persistedLimited
+                ? {
+                    status: 'limited',
+                    reason: 'Аккаунт лимитирован Telegram: писать может только тем, у кого его номер в контактах.',
+                    details: null,
+                    me
+                }
+                : { status: 'online', reason: null, details: null, me };
         }
         const classified = classifyCheckFailure(error, connectOk);
         return { ...classified, details: null, me: null };
@@ -274,6 +293,37 @@ export async function applyStockVerdict(supabase, userbotService, {
             reason: result.reason
         });
         return { verdictStatus: 'restricted', quarantined: true };
+    }
+
+    if (status === 'limited') {
+        // Лимит SpamBot'а «только контакты»: с витрины снять, сессию и прокси
+        // храним (лимит снимается сам или через апелляцию), пуржи нет.
+        // healthy_streak=-1 — sentinel «вердикт от Telegram»: авто-restore
+        // джоба не вернёт лот на витрину до чистой активной пробы.
+        await supabase
+            .from('tg_accounts')
+            .update({ ...baseUpdate, runtime_status: 'limited', runtime_error: result.reason || null, healthy_streak: -1 })
+            .eq('id', account.id)
+            .eq('owner_id', account.owner_id);
+        await logTelegramErrorEvent(supabase, {
+            owner_id: account.owner_id,
+            userbot_id: account.id,
+            event_source: eventSource,
+            event_type: 'health_check',
+            restriction_kind: 'spambot_limited',
+            severity: 'warning',
+            // is_restriction=false: 72h-автопурга читает только
+            // is_restriction-события — лимитированный аккаунт не удаляется.
+            is_restriction: false,
+            happened_at: checkedAt,
+            error_message: result.reason || 'Аккаунт лимитирован Telegram (проверка стока).'
+        });
+        await unpublishRestrictedUserbotListings(supabase, account.owner_id, account.id, result.reason || 'spambot_limited');
+        console.error('[IntakeStock] limited — аккаунт снят с витрины до снятия лимита:', {
+            account_id: account.id,
+            reason: result.reason
+        });
+        return { verdictStatus: 'limited', quarantined: true };
     }
 
     if (status === 'frozen') {
