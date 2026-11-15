@@ -20,9 +20,15 @@ const STEP_TIMEOUT_MS = 30_000;
 const REPLY_TIMEOUT_MS = 25_000;
 const POLL_INTERVAL_MS = 1500;
 const BOTFATHER_ID = '93372553';
+// Общий дедлайн скана: зависший на одном аккаунте probe (прод-инцидент
+// 2026-11-15: два мартовских аккаунта заморозили скан, гард держал 409)
+// не должен навсегда блокировать следующие запуски.
+const SCAN_DEADLINE_MS = 40 * 60_000;
 
-// Активные сканы по владельцам: защита от параллельного запуска.
-const runningScans = new Set();
+// Активные сканы по владельцам: защита от параллельного запуска. Гард с TTL:
+// навсегда зависший скан (не возвращающийся await внутри probe) не должен
+// вечно держать 409 — после SCAN_DEADLINE_MS запись протухает.
+const runningScans = new Map();
 
 function proxyDataOf(proxy) {
     if (!proxy) return undefined;
@@ -138,7 +144,12 @@ export async function runBotFatherProbeScan({
     if (error) throw error;
 
     const results = [];
+    const scanDeadline = Date.now() + SCAN_DEADLINE_MS;
     for (const account of accounts || []) {
+        if (Date.now() > scanDeadline) {
+            logger.warn({ remaining: (accounts || []).length - results.length }, '[botfather-probe] дедлайн скана — хвост пропущен');
+            break;
+        }
         let verdict;
         if (SKIP_STATUSES.has(account.runtime_status)) {
             verdict = { state: 'skipped', reason: `Статус ${account.runtime_status}: карантин, проба не имеет смысла.` };
@@ -162,11 +173,12 @@ export async function runBotFatherProbeScan({
     return results;
 }
 
-// Запуск фоном с гардом; возвращает false, если скан уже идёт.
+// Запуск фоном с гардом; возвращает false, если скан уже идёт (не протухший).
 export function launchBotFatherProbeScan(params) {
     const key = String(params.ownerId);
-    if (runningScans.has(key)) return false;
-    runningScans.add(key);
+    const startedAt = runningScans.get(key);
+    if (startedAt != null && Date.now() - startedAt < SCAN_DEADLINE_MS) return false;
+    runningScans.set(key, Date.now());
     runBotFatherProbeScan(params)
         .catch((error) => logger.error({ err: error }, '[botfather-probe] скан упал'))
         .finally(() => runningScans.delete(key));
