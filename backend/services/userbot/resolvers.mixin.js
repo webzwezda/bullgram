@@ -53,15 +53,20 @@ export const ResolversMixin = (Base) => class extends Base {
             const accessHash = entity.accessHash != null ? String(entity.accessHash) : '';
             // Свежий access_hash пишем в peer-cache (source 'resolve'): после
             // этого message_send адресует пира без диалога и общего чата.
+            // Запись non-fatal: кэш — оптимизация, падение БД не роняет резолв.
             if (accessHash) {
-                await upsertPeerCache(this.supabase, {
-                    owner_id: userbot.owner_id,
-                    userbot_id: userbot.id,
-                    tg_user_id: String(entity.id),
-                    access_hash: accessHash,
-                    username: entity.username || null,
-                    source: 'resolve'
-                });
+                try {
+                    await upsertPeerCache(this.supabase, {
+                        owner_id: userbot.owner_id,
+                        userbot_id: userbot.id,
+                        tg_user_id: String(entity.id),
+                        access_hash: accessHash,
+                        username: entity.username || null,
+                        source: 'resolve'
+                    });
+                } catch (cacheError) {
+                    console.error('resolveTelegramUser: не удалось записать peer cache:', cacheError?.message || cacheError);
+                }
             }
             return {
                 id: String(entity.id),
