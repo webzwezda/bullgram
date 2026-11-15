@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, ChevronDown, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ChevronDown, MessageSquareOff, ShieldAlert, ShieldCheck, Snowflake } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { QUARANTINE_STATUSES } from '../../pages/bots/bots-accounts.utils.js';
+import { QUARANTINE_STATUSES, quarantineStatusShortLabel } from '../../pages/bots/bots-accounts.utils.js';
 
 const BASE_BUTTON_CLASSES = 'group inline-flex items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -13,23 +13,38 @@ function isSafeModeAccount(account) {
   return String(account?.runtime_status || '').trim().toLowerCase() === SAFE_MODE_RUNTIME_STATUS;
 }
 
-function isQuarantinedAccount(account) {
-  return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
-}
-
-// Индикатор режима аккаунта: щит = боевой контур, круг-алерт = safe-mode,
-// щит-алерт (красный) = отстойник — заморозка/бан/мёртвая сессия/упавшая проверка.
+// Индикатор режима аккаунта: щит = боевой контур, круг-алерт = safe-mode.
+// Отстойник различает ПРИЧИНУ (решение владельца 2026-11-15): снежинка =
+// заморожен Telegram, перечёркнутое сообщение = спам-блок (лимит «только
+// контакты»), красный щит-алерт = прочий карантин (бан/мёртвая сессия/прокси).
 // Иконки lucide (единственный источник иконок на сайте), цвета — только
 // семантические пары feedback-*, чтобы не растить hardcodes-ratchet файла.
+function quarantineMode(account) {
+  const status = String(account?.runtime_status || '').trim().toLowerCase();
+  if (status === 'limited') {
+    return {
+      Icon: MessageSquareOff,
+      title: 'Спам-блок: писать может только тем, у кого номер в контактах — продажа закрыта'
+    };
+  }
+  if (status === 'frozen') {
+    return { Icon: Snowflake, title: 'Заморожен Telegram (read-only) — продажа закрыта' };
+  }
+  if (QUARANTINE_STATUSES.includes(status)) {
+    return { Icon: ShieldAlert, title: `В отстойнике — продажа закрыта (${quarantineStatusShortLabel(account)})` };
+  }
+  return null;
+}
+
 function AccountModeIcon({ account, iconClassName }) {
   const safeMode = isSafeModeAccount(account);
-  const quarantined = !safeMode && isQuarantinedAccount(account);
-  const Icon = quarantined ? ShieldAlert : (safeMode ? AlertCircle : ShieldCheck);
-  const tone = quarantined
+  const quarantine = !safeMode && quarantineMode(account);
+  const Icon = quarantine ? quarantine.Icon : (safeMode ? AlertCircle : ShieldCheck);
+  const tone = quarantine
     ? 'text-feedback-error-text'
     : (safeMode ? 'text-feedback-warning-text' : 'text-feedback-success-text');
-  const title = quarantined
-    ? 'В отстойнике — продажа закрыта'
+  const title = quarantine
+    ? quarantine.title
     : (safeMode ? 'Safe mode — ждёт ручной активации' : 'Боевой режим');
   return (
     <span
@@ -114,7 +129,8 @@ export function UserbotCombobox({
                       account.tg_first_name || '',
                       account.tg_last_name || '',
                       account.tg_phone || '',
-                      String(account.tg_account_id || '')
+                      String(account.tg_account_id || ''),
+                      quarantineStatusShortLabel(account)
                     ].filter(Boolean)}
                     className="rounded-lg"
                   >
@@ -131,6 +147,14 @@ export function UserbotCombobox({
                         {account.tg_username ? `@${account.tg_username}` : `ID ${account.tg_account_id}`}
                       </span>
                     )}
+                    {QUARANTINE_STATUSES.includes(String(account.runtime_status || '').trim().toLowerCase()) ? (
+                      <span
+                        className="ml-auto shrink-0 text-xs font-bold text-feedback-error-text"
+                        title="Причина карантина — аккаунт в отстойнике, продажа закрыта"
+                      >
+                        {quarantineStatusShortLabel(account)}
+                      </span>
+                    ) : null}
                   </CommandItem>
                 );
               })}

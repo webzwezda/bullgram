@@ -77,6 +77,21 @@ export function isQuarantinedAccount(account) {
   return QUARANTINE_STATUSES.includes(String(account?.runtime_status || '').trim().toLowerCase());
 }
 
+// Короткая метка причины карантина для селекторов («не заморожен, а спам-блок»):
+// полные тексты — в restrictedMarker, тут слова, которые влезают в строку списка.
+export function quarantineStatusShortLabel(account) {
+  const status = String(account?.runtime_status || '').trim().toLowerCase();
+  const labels = {
+    limited: 'Спам-блок',
+    frozen: 'Заморожен',
+    restricted: 'Ограничен',
+    expired: 'Сессия умерла',
+    dead_proxy: 'Прокси мёртвый',
+    error: 'Ошибка проверки'
+  };
+  return labels[status] || 'В отстойнике';
+}
+
 export function restrictedMarker(account) {
   const status = String(account?.runtime_status || '').trim().toLowerCase();
   if (!QUARANTINE_STATUSES.includes(status)) return null;
