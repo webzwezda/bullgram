@@ -95,7 +95,10 @@ export async function probeBotFatherAbility(userbotService, { account, proxy }, 
         const stage = String(error?.message || '').includes('resolve') ? 'resolve_error' : 'connect_error';
         return { state: stage, reason: String(error?.errorMessage || error?.message || error).slice(0, 300) };
     } finally {
-        await client.disconnect().catch(() => {});
+        // disconnect на невставшем соединении может повиснуть сам по себе
+        // (прод-скан 2026-11-15 остановился на мартовских аккаунтах) — границу
+        // ставим и ему.
+        await withTimeout(client.disconnect(), 10_000, 'disconnect').catch(() => {});
     }
 }
 
