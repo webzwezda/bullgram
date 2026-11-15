@@ -140,7 +140,12 @@ export async function runBotFatherProbeScan({
         if (SKIP_STATUSES.has(account.runtime_status)) {
             verdict = { state: 'skipped', reason: `Статус ${account.runtime_status}: карантин, проба не имеет смысла.` };
         } else {
-            verdict = await probe(account, account.proxies);
+            // Ошибка одного аккаунта не должна убивать скан: verdict 'error'.
+            try {
+                verdict = await probe(account, account.proxies);
+            } catch (probeError) {
+                verdict = { state: 'error', reason: String(probeError?.message || probeError).slice(0, 300) };
+            }
         }
         await supabase
             .from('tg_accounts')
