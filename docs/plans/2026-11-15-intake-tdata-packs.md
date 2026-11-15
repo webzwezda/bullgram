@@ -145,3 +145,14 @@
 прилетела из чужих коммитов, базлайн поднят осознанно); вызов приватного
 `_normalizeFingerprint` из intake-сервиса (тест-стаб это зеркалит) — при
 следующей разрезке userbot-миксинов вынести публичный акцессор.
+
+**Прод-приёмка 2026-11-15 (деплой 207e29d):** реальный `account-1-tdata.zip`
+загружен через прод (`POST /api/userbot/intake/batch` из сессии владельца) —
+`success, total=1, rejected=[]`, батч `ff4f5796…` → `completed 1/0`, аккаунт
+`8024e504-99a1-4573-9471-060d3654d130`. Supabase: `custom_label
+'account-1-tdata'`, safe-mode `pending_activation`, прокси «intake #1»
+привязан и is_working, restore source со всеми тремя блобами
+(session/json/tdata), `intake_batch_id` проставлен, fingerprint
+`tdata_import`/`bullgram_android_a52`. Отлёжка/resting-джоба подхватит
+аккаунт по расписанию; безопасные локальные копии сессии (Desktop-папка,
+зипы, /tmp-скрипты) вычищены, кроме оригиналов на рабочем столе владельца.
