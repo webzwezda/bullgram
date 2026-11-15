@@ -11,7 +11,7 @@ import { buildShopFileArchive } from '../../services/shop-delivery.service.js';
 import { TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions/index.js';
 import { FRESH_IMPORT_RUNTIME_REASON, FRESH_IMPORT_RUNTIME_STATUS } from '../../utils/ops-center-selection.js';
-import { buildTelegramProfilePatch } from '../../utils/telegram-profile.js';
+import { buildTelegramProfilePatch, tdataIdentityLabel } from '../../utils/telegram-profile.js';
 import {
     getDeadProxyMessage,
     getFailoverCooldownMessage,
@@ -200,10 +200,20 @@ export function registerLifecycle(router, ctx) {
                     await ensureExclusiveProxyAssignment(supabase, req.user.id, targetAccount.proxy_id, targetAccount.id);
                 }
 
+                // tdata-лейбл: restore-активация часто узнаёт личность ПЕРВОЙ
+                // (до джобы отлёжки) — если не переименовать здесь, одноразовый
+                // синк в отлёжке уже не стрельнет (tg_account_id заполнен).
+                // Условия те же: tdata-происхождение (fingerprint restore source)
+                // и первая идентичность. Ручные лейблы не трогаем.
+                const tdataLabelPatch = !targetAccount.tg_account_id && restoreSource?.fingerprint?.source === 'tdata_import'
+                    ? { custom_label: tdataIdentityLabel(me) }
+                    : {};
+
                 await supabase
                     .from('tg_accounts')
                     .update({
                         ...buildTelegramProfilePatch(me),
+                        ...tdataLabelPatch,
                         session_data: encrypt(userbotService.stringifySessionData(client.session.save(), fingerprint, 'restored')),
                         runtime_status: activateNow ? 'online' : FRESH_IMPORT_RUNTIME_STATUS,
                         runtime_error: activateNow ? null : FRESH_IMPORT_RUNTIME_REASON,

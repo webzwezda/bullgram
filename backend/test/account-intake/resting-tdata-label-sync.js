@@ -4,6 +4,7 @@
 // папок/архивов).
 import { runIntakeRestingCheck } from '../../jobs/intake-resting.job.js';
 import { encrypt } from '../../utils/crypto.js';
+import { tdataIdentityLabel } from '../../utils/telegram-profile.js';
 import { makeMockSupabase, assert, restingTables, realService, ME_ONLINE, ONLINE_DETAILS, noSleep } from './shared.js';
 
 function tdataSessionData() {
@@ -97,5 +98,12 @@ console.log('— runIntakeRestingCheck: tdata-лейбл → идентично�
         sleepFn: noSleep
     });
     assert(supabase._tables.tg_accounts[0].custom_label === '@freshacc', 'без телефона — @username');
+}
+
+{
+    // Чистый билдер (общий для отлёжки и restore-активации)
+    assert(tdataIdentityLabel({ phone: '+56 979 373 849', id: 1 }) === '+56…849', 'телефон → маска');
+    assert(tdataIdentityLabel({ phone: '', username: 'clara', id: 2 }) === '@clara', 'фолбэк username');
+    assert(tdataIdentityLabel({ phone: '123', id: 9082082481 }) === 'ID 9082082481', 'фолбэк ID (короткий «телефон» не считается)');
 }
 }

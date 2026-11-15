@@ -19,6 +19,20 @@ export function buildTelegramProfilePatch(me, extra = {}) {
 // и первый символ — буква. Ведущие @ допускаем на входе и срезаем.
 export const TG_USERNAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
 
+// Лейбл-идентичность для tdata-импортов: вместо имени папки/зипа — маскированный
+// телефон (как у полных пачек, maskPhone-форма), фолбэки @username / ID.
+// Применяется ОДНОРАЗОВО при первом заполнении tg_account_id — и в отлёжке
+// (intake-stock.service), и в restore-активации (lifecycle.js): кто первый
+// узнает личность, тот и переименует.
+export function tdataIdentityLabel(me) {
+    const phoneDigits = String(me?.phone || '').replace(/\D+/g, '');
+    if (phoneDigits.length >= 6) {
+        return `+${phoneDigits.slice(0, 2)}…${phoneDigits.slice(-3)}`;
+    }
+    if (me?.username) return `@${me.username}`;
+    return `ID ${me?.id ?? ''}`;
+}
+
 // null = не подходит (текст ошибки кладёт вызывающий роут), строка = норм.
 export function normalizeTelegramUsernameInput(raw) {
     const cleaned = String(raw || '').trim().replace(/^@+/, '');
