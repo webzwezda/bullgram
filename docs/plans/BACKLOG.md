@@ -65,3 +65,17 @@ published/public + proxies.is_working=true + TG-алерт. restricted/frozen/
 expired → sentinel −1 (авто-возврат запрещён навсегда, только вручную).
 Тесты 7/7 (test:sales). Триггер сработал сам: деплой 2026-11-07; живой
 дрилл случится при первом реальном инфра-карантине.
+
+## §34. Волна миграции console.* → logger (рост базлайна 596→606, 2026-11-15)
+Приёмка tdata-пачек упёрлась в gate-07: +10 `console.*` прилетели из волн
+апелляций/peer-cache/SpamBot-вердиктов (коммиты 842e99d, 6709025, d533df6,
+cc180d7-era) без обновления базлайна — авторы брали `--no-verify`. Базлайн
+осознанно поднят до 606 (коммит-обоснование в истории), чтобы не легализовать
+молча. Решение: очередная волна миграции на `backend/utils/logger.js` по
+правилу «трогаешь файл — мигрируешь», цель — вернуть total к 596 и ниже.
+Решение: агент. Триггер: ближайшая сессия, трогающая любой из файлов —
+`backend/jobs/listed-userbot-health.job.js` (11), `backend/routes/userbot/profile.js` (8),
+`backend/services/intake-stock.service.js` (6), `backend/routes/userbot/lifecycle.js` (6),
+`backend/routes/shop/purchase-api.js` (5), `backend/routes/userbot/appeal.js` (1),
+`backend/routes/userbot/profile-username.js` (2), `backend/routes/shop/catalog-my-download.js` (1),
+`backend/services/userbot/resolvers.mixin.js` (1).
