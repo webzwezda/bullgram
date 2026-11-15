@@ -185,6 +185,7 @@ function makeManagedProxyStub(records) {
 const intakeUserbotStub = {
     validateSessionSqliteBuffer: (buffer) => realService.validateSessionSqliteBuffer(buffer),
     parseConfigJsonContent: (raw) => realService.parseConfigJsonContent(raw),
+    _normalizeFingerprint: (fingerprint) => realService._normalizeFingerprint(fingerprint),
     stringifySessionData: (token, fingerprint, source) => JSON.stringify({ token, source }),
     saveRecoverySource: async () => {}
 };

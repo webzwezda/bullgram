@@ -111,6 +111,19 @@ export const TELEGRAM_DC_IPV6 = Object.freeze({
     5: '2001:b28:f23f:f005::a'
 });
 
+// IPv4-адреса продакшн-DC Telegram (порт 443). Нужны tdata-конвертеру
+// (services/tdata.service.js): строка сессии пакуем как у обычных импортов
+// (IPv4), а живой коннект через managed-слот всё равно форсит IPv6-DC
+// (см. docs/dev/proxies.md, грабля 6). Те же адреса — в ALLOWED_DC_IPS
+// mtproto-bridge.service.js.
+export const TELEGRAM_DC_IPV4 = Object.freeze({
+    1: '149.154.175.50',
+    2: '149.154.167.51',
+    3: '149.154.175.100',
+    4: '149.154.167.91',
+    5: '91.108.56.130'
+});
+
 // Права для channels.EditAdmin. Имена флагов сверены с api.d.ts
 // (telegram 2.26.22) class ChatAdminRights: changeInfo/postMessages/editMessages/
 // deleteMessages/banUsers/inviteUsers/pinMessages/addAdmins/anonymous/manageCall/

@@ -111,6 +111,7 @@ export function BatchIntakeSection({
             </h2>
             <p className="text-sm text-ink-muted mt-0.5">
               Скинь сразу много паков — zip-архивы или папки. Пачка разберётся на отдельные аккаунты автоматически.
+              Папка tdata без .session тоже подойдёт — конвертируем в сессию сами.
             </p>
           </div>
         </div>
@@ -141,7 +142,7 @@ export function BatchIntakeSection({
           </div>
           <p className="text-sm font-semibold text-ink-body">Перетащи сюда zip-архивы или папки с аккаунтами</p>
           <p className="mt-1 max-w-md text-sm text-ink-muted">
-            Можно бросить сразу несколько паков, в том числе папку целиком — до 400 файлов за раз.
+            Можно бросить сразу несколько паков, в том числе папку tdata целиком — до 400 файлов за раз.
           </p>
         </div>
 

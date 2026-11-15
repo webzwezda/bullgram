@@ -12,9 +12,12 @@ console.log('— groupAccountPacks: неполные пачки и tdata по sc
         { relPath: 'loose/folder_x/tdata/key_datas', name: 'key_datas', buffer: Buffer.from('kd'), scope: 'loose' }
     ];
     const { packs, rejects } = groupAccountPacks(expanded);
-    assert(packs.length === 0, '.session без .json — пачки нет');
-    assert(rejects.some((r) => String(r.reason).includes('.json')), 'reject с подсказкой доложить .json');
-    assert(rejects.some((r) => String(r.name).includes('tdata')), 'осиротевший tdata в rejects');
+    // Семантика tdata-only (план 2026-11-15): битая пачка .session-без-.json
+    // по-прежнему reject, но осиротевший tdata больше не мусор — из него
+    // собирается самостоятельная пачка с конвертацией внутри приёмки.
+    assert(packs.length === 1 && packs[0].tdataOnly === true && packs[0].label === 'folder_x', '.session без .json — reject, но tdata стал tdata-only пачкой');
+    assert(rejects.length === 1 && String(rejects[0].reason).includes('.json'), 'reject только про .json');
+    assert(!rejects.some((r) => String(r.name).includes('tdata')), 'tdata больше не уходит в rejects');
 }
 
 {

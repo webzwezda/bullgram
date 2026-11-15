@@ -22,6 +22,16 @@ const intakeUpload = multer({
 // Лимит одной приёмки пачек аккаунтов (POST /intake/batch): 100 аккаунтов за раз.
 const MAX_INTAKE_BATCH = 100;
 
+// Роль-чек ОБЯЗАН стоять перед multer: иначе любой владелец валидного JWT
+// сможет залить до 400×30 МБ в os.tmpdir() до получения 403 (CWE-400,
+// находка security-аудита 2026-11-15). До тела запроса не доходит ни байта.
+function requireIntakeAdmin(req, res, next) {
+    if (req.profile?.role !== 'admin') {
+        return res.status(403).json({ error: 'Приёмка пачек доступна только платформенному админу.' });
+    }
+    next();
+}
+
 export function registerIntake(router, ctx) {
     const { supabase, userbotService, managedProxyService } = ctx;
     // Зависшие «processing» — обработка жила в памяти и умерла вместе с
@@ -37,18 +47,14 @@ export function registerIntake(router, ctx) {
             .lt('updated_at', staleBefore);
     }
 
-    router.post('/intake/batch', authenticateUser, intakeUpload.fields([
+    router.post('/intake/batch', authenticateUser, requireIntakeAdmin, intakeUpload.fields([
         { name: 'files', maxCount: 400 }
     ]), async (req, res) => {
         const uploadedFiles = req.files?.files || [];
         try {
-            if (req.profile?.role !== 'admin') {
-                return res.status(403).json({ error: 'Приёмка пачек доступна только платформенному админу.' });
-            }
-
             const files = req.files?.files || [];
             if (!files.length) {
-                return res.status(400).json({ error: 'Загрузи zip или файлы пачек: .session + .json, опционально папки tdata и заметка с паролем.' });
+                return res.status(400).json({ error: 'Загрузи zip или файлы пачек: .session + .json, опционально папки tdata и заметка с паролем. Или папку tdata целиком — конвертируем в сессию сами.' });
             }
 
             let relPaths = [];
@@ -79,7 +85,7 @@ export function registerIntake(router, ctx) {
             const { packs, rejects } = groupAccountPacks(expanded);
             if (!packs.length) {
                 return res.status(400).json({
-                    error: 'В загрузке не нашлось ни одной полной пачки (.session + .json). Проверь состав файлов.',
+                    error: 'В загрузке не нашлось ни одной полной пачки (.session + .json или папка tdata). Проверь состав файлов.',
                     rejects
                 });
             }

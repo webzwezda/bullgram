@@ -3,8 +3,9 @@
 // account_import_batches, дальше вся работа идёт здесь, fire-and-forget:
 //
 //   1. под N пачек поднимается ОДИН батч managed-прокси (self_use);
-//   2. на каждую пачку — валидация без Telegram (validatePack), вставка
-//      tg_accounts в safe-mode (pending_activation) с обязательными
+//   2. на каждую пачку — валидация без Telegram (validatePack; tdata-only
+//      пачки идут через validateTdataPack — конвертация tdata → сессия),
+//      вставка tg_accounts в safe-mode (pending_activation) с обязательными
 //      зашифрованными blob'ами восстановления (session/json/tdata/2FA);
 //   3. прогресс пишется в батч после КАЖДОГО айтема — UI поллит строку батча;
 //   4. упавшая пачка освобождает ровно свой прокси и не мешает остальным.
@@ -15,6 +16,8 @@ import { encrypt } from '../utils/crypto.js';
 import { FRESH_IMPORT_RUNTIME_STATUS, FRESH_IMPORT_RUNTIME_REASON } from '../utils/ops-center-selection.js';
 import { buildBatchProxyNames, buildManagedProxyPendingMessage } from '../utils/proxy-batch.js';
 import { maskPhone, parseTwoFaPassword, validatePack, zipTdataEntries } from './account-pack.service.js';
+import { extractTdataAccount } from './tdata.service.js';
+import { DEFAULT_QR_FINGERPRINT_PROFILE_ID, QR_FINGERPRINT_PROFILES } from './userbot/constants.js';
 
 // Миграция backend/sql/account-shop-intake.sql не применена — айтем откатывается.
 export const INTAKE_MISSING_MIGRATION_MESSAGE = 'Сначала примени SQL под account shop intake.';
@@ -30,6 +33,40 @@ function isMissingRecoveryTableError(error) {
         || raw.includes('relation')
         || raw.includes('column')
     );
+}
+
+// tdata-only пачка: офлайн-конвертация Telegram Desktop → сессия. В самом tdata
+// api_id/api_hash не хранятся — fingerprint выбираем ЯВНО (дефолтный профиль
+// платформы, источник 'tdata_import'), а не молчаливым дефолтом, как того
+// требует философия validatePack. Пароль из заметки пробуем и как 2FA, и как
+// локальный пин tdata.
+export async function validateTdataPack(pack, userbotService) {
+    try {
+        const passcodes = [Buffer.alloc(0)];
+        const notePassword = pack.passwordEntry ? parseTwoFaPassword(pack.passwordEntry.buffer) : null;
+        if (notePassword) passcodes.push(Buffer.from(notePassword, 'utf8'));
+
+        const account = await extractTdataAccount(pack.tdataEntries, passcodes);
+
+        const profile = QR_FINGERPRINT_PROFILES[DEFAULT_QR_FINGERPRINT_PROFILE_ID];
+        const fingerprint = userbotService._normalizeFingerprint({
+            ...profile.fingerprint,
+            profileId: profile.id,
+            profileLabel: profile.label,
+            source: 'tdata_import'
+        });
+
+        return {
+            ok: true,
+            fingerprint,
+            sessionString: account.sessionString,
+            // Синтезированный, но настоящий Telethon-совместимый sqlite — он же
+            // уйдёт покупателю в архиве рядом с оригинальным tdata.zip.
+            sessionBuffer: account.sessionSqliteBuffer
+        };
+    } catch (error) {
+        return { ok: false, error: String(error?.message || error || 'tdata не удалось расшифровать.') };
+    }
 }
 
 export async function processIntakeBatch({
@@ -144,7 +181,10 @@ export async function processIntakeBatch({
             let insertedAccountId = null;
 
             try {
-                const validation = await validate(pack);
+                const isTdataPack = Boolean(pack.tdataOnly);
+                const validation = isTdataPack
+                    ? await validateTdataPack(pack, userbotService)
+                    : await validate(pack);
                 if (!validation.ok) {
                     item.status = 'failed';
                     item.error = validation.error;
@@ -153,14 +193,17 @@ export async function processIntakeBatch({
                     continue;
                 }
 
-                let insertedAccountId = null;
                 const { data: accountRow, error: accountError } = await supabase
                     .from('tg_accounts')
                     .insert({
                         owner_id: ownerId,
                         account_type: 'userbot',
-                        custom_label: maskPhone(pack.key),
-                        session_data: encrypt(userbotService.stringifySessionData(validation.sessionString, validation.fingerprint, 'session_import')),
+                        custom_label: isTdataPack ? pack.label : maskPhone(pack.key),
+                        session_data: encrypt(userbotService.stringifySessionData(
+                            validation.sessionString,
+                            validation.fingerprint,
+                            isTdataPack ? 'tdata_import' : 'session_import'
+                        )),
                         proxy_id: proxy.id,
                         runtime_status: FRESH_IMPORT_RUNTIME_STATUS,
                         runtime_error: FRESH_IMPORT_RUNTIME_REASON,
@@ -184,10 +227,14 @@ export async function processIntakeBatch({
                         ownerId,
                         tgAccountId: null,
                         sessionFilePath: null,
-                        sessionOriginalName: pack.sessionEntry.name,
+                        // tdata-only: синтезированные имена (и нефальшивое
+                        // содержимое — sessionBuffer настоящий sqlite, json —
+                        // нормализованный fingerprint) — покупатель получает
+                        // рабочую пару .session/.json плюс оригинальный tdata.zip.
+                        sessionOriginalName: pack.sessionEntry ? pack.sessionEntry.name : `${pack.label}.session`,
                         jsonFilePath: null,
-                        jsonOriginalName: pack.jsonEntry.name,
-                        jsonBuffer: pack.jsonEntry.buffer,
+                        jsonOriginalName: pack.jsonEntry ? pack.jsonEntry.name : `${pack.label}.json`,
+                        jsonBuffer: pack.jsonEntry ? pack.jsonEntry.buffer : Buffer.from('{}'),
                         fingerprint: validation.fingerprint,
                         sessionBuffer: validation.sessionBuffer,
                         tdataZipBuffer,

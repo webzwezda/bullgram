@@ -101,6 +101,12 @@ export function unpackZipEntries(entries = []) {
                 if (lowerPath.endsWith('.zip') || lowerPath.endsWith('.rar')) {
                     throw new Error(`Внутри архива «${name}» лежит вложенный архив «${innerPath}». Распакуй всё вручную: приёмка принимает zip только одним уровнем.`);
                 }
+                // Бюджет проверяем ДО getData(): inflater честно капится
+                // заявленным size, но сама аллокация должна влезать в лимит.
+                expandedBytes += zipEntry.header.size;
+                if (expandedBytes > MAX_EXPANDED_TOTAL_BYTES) {
+                    throw new Error(`Распакованный архив слишком большой (больше ${Math.round(MAX_EXPANDED_TOTAL_BYTES / 1024 / 1024)} МБ). Разбей загрузку на части.`);
+                }
                 result.push({
                     relPath: scope ? `${scope}/${innerPath}` : innerPath,
                     name: basenameOfPath(innerPath),
@@ -108,12 +114,8 @@ export function unpackZipEntries(entries = []) {
                     scope
                 });
                 expandedCount += 1;
-                expandedBytes += zipEntry.header.size;
                 if (expandedCount > MAX_EXPANDED_ENTRIES) {
                     throw new Error(`В архиве слишком много файлов (больше ${MAX_EXPANDED_ENTRIES}). Разбей загрузку на части.`);
-                }
-                if (expandedBytes > MAX_EXPANDED_TOTAL_BYTES) {
-                    throw new Error(`Распакованный архив слишком большой (больше ${Math.round(MAX_EXPANDED_TOTAL_BYTES / 1024 / 1024)} МБ). Разбей загрузку на части.`);
                 }
             }
         } else {
@@ -128,7 +130,9 @@ export function unpackZipEntries(entries = []) {
 
 // --- 3. groupAccountPacks: собираем пачки из плоского списка файлов -------
 
-// pack = { key, label, sessionEntry, jsonEntry, tdataEntries[], passwordEntry, scope }
+// pack = { key, label, sessionEntry, jsonEntry, tdataEntries[], passwordEntry, scope }.
+// tdata-only пачка (нет .session/.json, только tdata) дополнительно несёт
+// tdataOnly: true — приёмка конвертирует её в сессию сама.
 export function groupAccountPacks(entries = []) {
     const sessions = [];
     const jsons = [];
@@ -211,6 +215,9 @@ export function groupAccountPacks(entries = []) {
     const sameScope = (pack, scope) => Boolean(scope) && String(pack.scope || '').toLowerCase() === String(scope).toLowerCase();
 
     // tdata: сначала по имени ближайшей папки, иначе — если в scope ровно одна пачка.
+    // Непривязавшиеся tdata — не мусор, а самостоятельные tdata-only пачки:
+    // приёмка конвертирует их в сессию сама (services/tdata.service.js).
+    const tdataOnlyByKey = new Map();
     for (const { entry, dirName } of tdatas) {
         let pack = dirName ? packByKey.get(normalizePackKey(stripExtension(dirName))) : null;
         if (!completePacks.includes(pack)) pack = null;
@@ -220,12 +227,30 @@ export function groupAccountPacks(entries = []) {
         }
         if (pack) {
             pack.tdataEntries.push(entry);
-        } else {
-            rejects.push({ name: entry.relPath, reason: 'Файлы tdata не удалось привязать ни к одной пачке — переименуй папку под номер телефона или грузи одну пачку на архив.' });
+            continue;
         }
+        const label = (dirName && stripExtension(dirName)) || entry.scope || 'tdata';
+        const key = entry.scope ? `tdata:${entry.scope}/${label}`.toLowerCase() : `tdata:${label}`.toLowerCase();
+        let onlyPack = tdataOnlyByKey.get(key);
+        if (!onlyPack) {
+            onlyPack = {
+                key,
+                label,
+                sessionEntry: null,
+                jsonEntry: null,
+                tdataEntries: [],
+                passwordEntry: null,
+                scope: entry.scope || null,
+                tdataOnly: true
+            };
+            tdataOnlyByKey.set(key, onlyPack);
+        }
+        onlyPack.tdataEntries.push(entry);
     }
+    const tdataOnlyPacks = [...tdataOnlyByKey.values()];
 
-    // Заметка с паролем: сначала scope (ровно одна пачка), иначе по basename.
+    // Заметка с паролем: сначала scope (ровно одна пачка), иначе по basename;
+    // неприбившиеся — к tdata-only пачке (пароль там может быть и 2FA, и локальным пином).
     for (const entry of texts) {
         let pack = null;
         const scopePacks = completePacks.filter((candidate) => sameScope(candidate, entry.scope));
@@ -234,6 +259,17 @@ export function groupAccountPacks(entries = []) {
             const byKey = packByKey.get(normalizePackKey(stripExtension(entry.name)));
             if (completePacks.includes(byKey)) pack = byKey;
         }
+        if (!pack) {
+            const scopeOnly = tdataOnlyPacks.filter((candidate) => sameScope(candidate, entry.scope));
+            if (scopeOnly.length === 1) pack = scopeOnly[0];
+        }
+        if (!pack) {
+            // Как у полных пачек — фолбэк по basename: в мультипачечном zip
+            // все файлы делят один scope, заметка «account-1.txt» должна найти
+            // свою tdata-папку «account-1».
+            const noteLabel = stripExtension(entry.name).toLowerCase();
+            pack = tdataOnlyPacks.find((candidate) => String(candidate.label).toLowerCase() === noteLabel) || null;
+        }
         if (pack) {
             if (!pack.passwordEntry) pack.passwordEntry = entry;
         } else {
@@ -241,7 +277,7 @@ export function groupAccountPacks(entries = []) {
         }
     }
 
-    return { packs: completePacks, rejects };
+    return { packs: [...completePacks, ...tdataOnlyPacks], rejects };
 }
 
 // --- 4. parseTwoFaPassword: пароль 2FA из текстовой заметки ---------------
