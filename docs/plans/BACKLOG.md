@@ -79,3 +79,19 @@ cc180d7-era) без обновления базлайна — авторы бр�
 `backend/routes/shop/purchase-api.js` (5), `backend/routes/userbot/appeal.js` (1),
 `backend/routes/userbot/profile-username.js` (2), `backend/routes/shop/catalog-my-download.js` (1),
 `backend/services/userbot/resolvers.mixin.js` (1).
+
+## §35. Telegram Web: коллизия сессий при двух вкладках (найдено 2026-11-15)
+Два таба `/userbot/telegram-web/<id>` (разные аккаунты) делят один origin:
+localStorage/IndexedDB у форка один — второй таб рендерит сессию ПЕРВОГО
+под URL второго (воспроизведено на проде: вкладка Сандры показывала чаты
+Elizabeth). Решение: ключовать хранилище форка по id аккаунта из URL
+(префикс БД/ключей) либо открывать Telegram Web в вынесенном origin
+(`telegram-web.<domain>`). Решение: агент. Триггер: первый пользователь,
+который откроет двух юзерботов рядом (владелец уже столкнулся).
+## §36. DM-резолвер: whitelist сервисных ботов (BotFather/SpamBot) (2026-11-15)
+`resolveDirectMessageTarget` требует существующий диалог/общий чат —
+легитимно для холодных DM, но делает неосуществимым завязку диалога с
+сервисными ботами платформы; при этом `botfather.mixin` умеет
+(`getInputEntity('botfather')`). Диагностика инцидента BotFather упёрлась
+в это. Решение: в резолвер — whitelist известных id (BotFather 93372553,
+SpamBot 178220800) с прямым resolveUsername. Решение: по слову владельца.
