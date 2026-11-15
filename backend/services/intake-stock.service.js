@@ -23,6 +23,7 @@ import { decrypt } from '../utils/crypto.js';
 import { logTelegramErrorEvent } from '../utils/telegram-error-events.js';
 import { cleanupRestrictedUserbotProxy, unpublishRestrictedUserbotListings } from '../utils/restricted-userbot-ops.js';
 import { buildHealthSummary, buildTelegramProfilePatch } from '../utils/telegram-profile.js';
+import { maskPhone } from './account-pack.service.js';
 import { ManagedProxyService } from './managed-proxy.service.js';
 
 export const INTAKE_RESTING_DEFAULT_SLEEP_MS = 25_000;
@@ -181,6 +182,25 @@ export async function checkStockAccount(supabase, userbotService, account, proxy
     }
 }
 
+// tdata-импорты приходят с лейблом-именем папки/зипа («account-1-tdata (3)»).
+// При ПЕРВОМ заполнении идентичности (tg_account_id в строке был пуст) меняем
+// лейбл на личность — маскированный телефон, как у полных пачек. Одноразово:
+// ручные переименования после (и повторы с уже заполненным id) не трогаем.
+// Нерасшифровываемая/чужая session_data (включая тестовую «enc») — не tdata.
+function buildFirstIdentityLabelPatch(userbotService, account, me) {
+    if (!me?.id || account.tg_account_id) return {};
+    try {
+        const parsed = userbotService.parseSessionData(decrypt(account.session_data));
+        if (parsed?.fingerprint?.source !== 'tdata_import') return {};
+    } catch {
+        return {};
+    }
+    const phoneDigits = String(me.phone || '').replace(/\D+/g, '');
+    if (phoneDigits.length >= 6) return { custom_label: maskPhone(me.phone) };
+    if (me.username) return { custom_label: `@${me.username}` };
+    return { custom_label: `ID ${me.id}` };
+}
+
 // Применяет результат checkStockAccount к строке tg_accounts: identity-патч из
 // getMe, страж от дублей, запись runtime_status/health_summary с карантинными
 // эффектами (restricted → событие + снятие с витрины + чистка прокси; frozen →
@@ -233,6 +253,7 @@ export async function applyStockVerdict(supabase, userbotService, {
 
     const baseUpdate = {
         ...identityPatch,
+        ...buildFirstIdentityLabelPatch(userbotService, account, result.me),
         last_checked_at: checkedAt,
         health_summary: buildHealthSummary(result, checkedAt)
     };

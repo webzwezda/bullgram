@@ -37,6 +37,7 @@ import { runProcessIntakeFailedPack } from './account-intake/process-intake-fail
 import { runProcessIntakeMissingRestoreTable } from './account-intake/process-intake-missing-restore-table.js';
 import { runProcessIntakeProxyInsertFails } from './account-intake/process-intake-proxy-insert-fails.js';
 import { runRestingOnlineIdentity } from './account-intake/resting-online-identity.js';
+import { runRestingTdataLabelSync } from './account-intake/resting-tdata-label-sync.js';
 import { runRestingProductionStock } from './account-intake/resting-production-stock.js';
 import { runRestingRestrictedFrozenExpiredDuplicate } from './account-intake/resting-restricted-frozen-expired-duplicate.js';
 import { runRestingFreshAndNonAdmin } from './account-intake/resting-fresh-and-non-admin.js';
@@ -57,6 +58,7 @@ await runProcessIntakeFailedPack();
 await runProcessIntakeMissingRestoreTable();
 await runProcessIntakeProxyInsertFails();
 await runRestingOnlineIdentity();
+await runRestingTdataLabelSync();
 await runRestingProductionStock();
 await runRestingRestrictedFrozenExpiredDuplicate();
 await runRestingFreshAndNonAdmin();
