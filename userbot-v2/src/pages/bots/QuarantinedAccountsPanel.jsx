@@ -4,6 +4,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { UserbotCombobox } from '@/components/bots/UserbotCombobox';
+import { SpamBotAppealCard } from './components/SpamBotAppealCard.jsx';
 
 function StatusBadge({ tone, children }) {
   const pairMap = {
@@ -27,7 +28,8 @@ export function QuarantinedAccountsPanel({
   checkAccount,
   checkingAccountId,
   deleteAccount,
-  deletingAccountId
+  deletingAccountId,
+  accessToken
 }) {
   function openTelegramWeb() {
     if (!selectedQuarantinedUserbot?.id) return;
@@ -82,6 +84,18 @@ export function QuarantinedAccountsPanel({
                   {marker?.detail ? <div className="font-medium text-ink-body">{marker.detail}</div> : null}
                   {account.runtime_error ? <div>{account.runtime_error}</div> : null}
                   <div>Проверялся: {formatWhen(account.last_checked_at)}</div>
+                </div>
+                {/* Апелляция @SpamBot для limited (полуавтомат) и frozen (гид):
+                    лимитированные/замороженные аккаунты живут только здесь —
+                    в основном селекторе их нет. План 2026-11-15. */}
+                <div className="mt-3 border-t border-border-default pt-3">
+                  <SpamBotAppealCard
+                    accountId={account.id}
+                    status={account.runtime_status}
+                    accessToken={accessToken}
+                    checking={isChecking}
+                    onRecheck={() => checkAccount(account)}
+                  />
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">

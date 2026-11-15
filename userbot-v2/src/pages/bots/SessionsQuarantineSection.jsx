@@ -288,6 +288,7 @@ export function SessionsQuarantineSection({
           checkingAccountId={checkingAccountId}
           deleteAccount={deleteAccount}
           deletingAccountId={deletingAccountId}
+          accessToken={accessToken}
         />
       )}
     </Card>
