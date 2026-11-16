@@ -200,6 +200,17 @@ function ConnectPageContent() {
         />
       ) : null}
 
+      {/* Все опубликованные аккаунт-лоты с кнопкой «Снять с продажи»: не зависит
+          от скана/ассетов, поэтому видит и лоты-призраки (инцидент 2026-11-16). */}
+      {profileRole === 'admin' ? (
+        <AdminLotsSection
+          accessToken={accessToken}
+          types="account"
+          title="Аккаунты на витрине"
+          emptyText="Опубликованных аккаунт-лотов нет."
+        />
+      ) : null}
+
       {state.proxySupport?.profile_role === 'admin' ? (
         <AdminLotsSection
           accessToken={accessToken}

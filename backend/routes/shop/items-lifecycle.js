@@ -16,6 +16,28 @@ export function registerItemsLifecycle(router, ctx) {
         const itemId = req.params.id;
 
         try {
+            // Владение проверяем ДО ассетов: удаление ассетов не скоупится по
+            // owner (ассет-строки без owner_id), и без этой проверки чужой
+            // пользователь мог бы ободрать чужой лот до честного 404
+            // (P0 ревью 2026-11-16 — вероятный источник лот-призраков).
+            let ownedItemQuery = supabase
+                .from('shop_items')
+                .select('id')
+                .eq('id', itemId);
+            if (req.profile?.role !== 'admin') {
+                ownedItemQuery = ownedItemQuery.eq('owner_id', ownerId);
+            }
+            const { data: ownedItem, error: ownedItemError } = await ownedItemQuery.maybeSingle();
+            if (ownedItemError) {
+                if (isMissingShopTables(ownedItemError)) {
+                    return res.status(400).json({ error: 'Сначала примени SQL под shop foundation' });
+                }
+                throw ownedItemError;
+            }
+            if (!ownedItem?.id) {
+                return res.status(404).json({ error: 'Лот не найден или уже удален' });
+            }
+
             const { data: purchaseRows, error: purchasesError } = await supabase
                 .from('shop_purchases')
                 .select('id, status, created_at')

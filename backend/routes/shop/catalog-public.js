@@ -108,7 +108,15 @@ export function registerCatalogPublic(router, ctx) {
 
             const publicItems = (items || []).filter((item) => isVisibleInSalesChannel(item, channel));
 
-            const visibleItems = publicItems.filter((item) => {
+            // Аккаунт-лот без userbot-ассета — «призрак» (лот остался published,
+            // а ассет потерялся): наружу не показываем — купить его всё равно
+            // нельзя, доставка невозможна (инцидент 2026-11-16).
+            const sellablePublicItems = publicItems.filter((item) => {
+                if (item.item_type !== 'account') return true;
+                return (assetsByItem.get(item.id) || []).some((asset) => asset.asset_type === 'userbot');
+            });
+
+            const visibleItems = sellablePublicItems.filter((item) => {
                 if (isTextServiceItem(item)) return true;
                 return !reservationByItem.has(item.id);
             });
@@ -243,7 +251,7 @@ export function registerCatalogPublic(router, ctx) {
                 }
             });
         } catch (error) {
-            console.error('Ошибка публичной витрины shop:', error);
+            req.log.error({ err: error }, 'public storefront failed');
             res.status(500).json({ error: 'Ошибка загрузки витрины' });
         }
     }
@@ -385,7 +393,7 @@ export function registerCatalogPublic(router, ctx) {
                 }
             });
         } catch (error) {
-            console.error('Ошибка загрузки моих покупок shop:', error);
+            req.log.error({ err: error }, 'my shop purchases failed');
             res.status(500).json({ error: 'Ошибка загрузки покупок' });
         }
     });

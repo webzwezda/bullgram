@@ -2,6 +2,7 @@ import {
     ACCOUNT_LOT_NOT_READY_MESSAGE,
     findUnsellableAccountLot
 } from '../../services/shop-delivery.service.js';
+import { logger } from '../../utils/logger.js';
 import { getTierRules } from '../../utils/product-tier.js';
 import {
     buildAvailablePaymentMethods,
@@ -79,6 +80,15 @@ export async function createOrRefreshBuyerPurchase({
         const purchaseUserbotIds = (purchaseAssets || [])
             .filter(asset => asset.asset_type === 'userbot')
             .map(asset => String(asset.asset_id));
+
+        // Аккаунт-лот без userbot-ассета — «призрак»: доставить покупку нельзя
+        // (инцидент 2026-11-16). Раньше пустой список ассетов просто пропускал
+        // гейт, и призрак можно было оплатить.
+        if (item.item_type === 'account' && purchaseUserbotIds.length === 0) {
+            const ghost = new Error('Лот без привязанного аккаунта — продажа приостановлена');
+            ghost.statusCode = 400;
+            throw ghost;
+        }
 
         if (purchaseUserbotIds.length > 0) {
             const { data: userbotRows, error: userbotRowsError } = await supabase
@@ -361,7 +371,7 @@ async function applyShopOfferUnlock(supabase, purchase, item) {
     const now = new Date();
 
     if (offerCode === 'normal') {
-        console.warn('[Shop] Игнорируем Normal unlock из Shop. Normal теперь выдается только через Bullgram billing.');
+        logger.warn({ offer_code: offerCode, buyer_owner_id: ownerId }, 'shop normal unlock ignored — normal is issued via bullgram billing only');
         return;
     }
 

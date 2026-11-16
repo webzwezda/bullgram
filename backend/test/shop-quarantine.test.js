@@ -11,8 +11,11 @@
  * expired → только unpublish; online → ничего; свежий аккаунт — скип).
  */
 import { transferShopAssets } from '../services/shop-transfer.service.js';
+import { ACCOUNT_LOT_NOT_READY_MESSAGE } from '../services/shop-delivery.service.js';
 import { hasActiveShopPurchases, purgeRestrictedUserbotAccount } from '../utils/restricted-userbot-ops.js';
 import { runListedHealthCheck } from '../jobs/listed-userbot-health.job.js';
+import { createOrRefreshBuyerPurchase } from '../routes/shop/purchase-core.js';
+import { registerCatalogPublic } from '../routes/shop/catalog-public.js';
 
 let failures = 0;
 function assert(condition, label) {
@@ -305,6 +308,72 @@ const userbotServiceStub = {};
         checkFn: async () => { checkCalls += 1; return { status: 'error', reason: 'x' }; }
     });
     assert(checkCalls === 0, 'свежая проверка (< 1ч) не повторяется');
+}
+
+console.log('— createOrRefreshBuyerPurchase: лот-призрак (account без ассетов) —');
+
+{
+    // Лот published/public без ассетов: раньше гейт пропускался и призрак был продаваем.
+    const supabase = makeMockSupabase(baseTables({
+        shop_items: [{
+            id: ITEM_ID, owner_id: OWNER, status: 'published', visibility: 'public',
+            title: 'Призрак', item_type: 'account', price_ton: 1, transfer_mode: 'ownership_transfer'
+        }],
+        shop_item_assets: []
+    }));
+    const error = await capture(createOrRefreshBuyerPurchase({
+        supabase, buyerOwnerId: BUYER, itemId: ITEM_ID, paymentMethod: 'ton'
+    }));
+    assert(error, 'account-лот без ассетов: покупка падает');
+    assert(error?.statusCode === 400, 'statusCode 400');
+    assert(String(error?.message || '').includes('без привязанного аккаунта'), 'сообщение про отсутствие актива');
+    assert((supabase._tables.shop_purchases || []).length === 0, 'бронь не создаётся');
+}
+
+{
+    // Регресс: аккаунт-лот С ассетом, но аккаунт limited — прежний гейт отстойника
+    // работает как раньше (тот же путь сразу после новой проверки).
+    const supabase = makeMockSupabase(baseTables({
+        shop_items: [{
+            id: ITEM_ID, owner_id: OWNER, status: 'published', visibility: 'public',
+            title: 'Лот', item_type: 'account', price_ton: 1, transfer_mode: 'ownership_transfer'
+        }],
+        tg_accounts: baseTables().tg_accounts.map((row) => ({ ...row, runtime_status: 'limited' }))
+    }));
+    const error = await capture(createOrRefreshBuyerPurchase({
+        supabase, buyerOwnerId: BUYER, itemId: ITEM_ID, paymentMethod: 'ton'
+    }));
+    assert(error, 'limited-аккаунт: покупка падает');
+    assert(error?.message === ACCOUNT_LOT_NOT_READY_MESSAGE, 'прежнее сообщение отстойника сохранено');
+}
+
+console.log('— публичная витрина: account-лот без ассетов не показывается —');
+
+{
+    // sales_channel: 'both' обязателен: без него account-лот = admin_only и не виден на site.
+    async function runCatalog(tables) {
+        const supabase = makeMockSupabase(tables);
+        const handlers = {};
+        registerCatalogPublic({ get: (path, fn) => { handlers[path] = fn; } }, { supabase });
+        const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(body) { this.body = body; } };
+        await handlers['/public/items']({ query: {} }, res);
+        return res;
+    }
+    const ghost = await runCatalog(baseTables({
+        shop_items: [
+            { id: ITEM_ID, owner_id: OWNER, status: 'published', visibility: 'public', item_type: 'account', sales_channel: 'both', title: 'Призрак', created_at: '2026-11-01T00:00:00Z' }
+        ],
+        shop_item_assets: []
+    }));
+    assert(Array.isArray(ghost.body?.items) && ghost.body.items.length === 0, 'призрак не отдаётся на витрину');
+
+    // Здоровый лот с ассетом остаётся виден — фильтр не перегибает.
+    const healthy = await runCatalog(baseTables({
+        shop_items: [
+            { id: ITEM_ID, owner_id: OWNER, status: 'published', visibility: 'public', item_type: 'account', sales_channel: 'both', title: 'Живой лот', created_at: '2026-11-01T00:00:00Z' }
+        ]
+    }));
+    assert(Array.isArray(healthy.body?.items) && healthy.body.items.length === 1, 'живой account-лот остаётся на витрине');
 }
 
 console.log(failures === 0 ? '\nВсе проверки отстойника прошли' : `\nПровалено проверок: ${failures}`);

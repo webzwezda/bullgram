@@ -5,6 +5,7 @@
 // Контракт: saveTextServiceItem/saveAssetItem сами отправляют ответ на всех
 // не-throw путях; validateLotAssets возвращает res, если отправил ответ 400
 // (вызов в items-create.js прерывает хендлер), иначе undefined.
+import { logger } from '../../utils/logger.js';
 import {
     isMissingDeliveryModeColumn,
     isMissingPaymentMethodsColumn,
@@ -343,7 +344,26 @@ export async function saveAssetItem({
             const { error: assetInsertError } = await supabase
                 .from('shop_item_assets')
                 .insert(assetRows);
-            if (assetInsertError) throw assetInsertError;
+            if (assetInsertError) {
+                // Ассеты уже стёрты: не откатывая статус, оставим на витрине
+                // «призрак» — лот без актива, который нельзя ни выдать, ни снять
+                // через скан (инцидент 2026-11-16). Уводим в черновики.
+                const { error: draftFallbackError } = await supabase
+                    .from('shop_items')
+                    .update({
+                        status: 'draft',
+                        visibility: 'private',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', savedItem.id);
+                if (draftFallbackError) {
+                    logger.error({
+                        err: draftFallbackError,
+                        item_id: savedItem.id
+                    }, 'asset insert failed and draft fallback failed too — ghost lot left on storefront');
+                }
+                throw assetInsertError;
+            }
 
             res.json({
                 success: true,

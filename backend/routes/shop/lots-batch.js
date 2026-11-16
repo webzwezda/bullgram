@@ -1,3 +1,4 @@
+import { logger } from '../../utils/logger.js';
 import { ACCOUNT_LOT_NOT_READY_MESSAGE } from '../../services/shop-delivery.service.js';
 import { buildAccountLotTitle } from '../../utils/phone-country.js';
 import { accountSaleRuleState } from '../../utils/account-sale-rules.js';
@@ -198,7 +199,16 @@ export async function createAccountLotsBatch(supabase, { ownerId, assetIds, pric
                 sort_order: 0
             }]);
         if (assetInsertError) {
-            await supabase.from('shop_items').delete().eq('id', itemId);
+            // Откат: лот без ассета — «призрак» на витрине (инцидент 2026-11-16),
+            // поэтому неудачный откат нельзя глушить.
+            const { error: itemDeleteError } = await supabase.from('shop_items').delete().eq('id', itemId);
+            if (itemDeleteError) {
+                logger.error({
+                    err: itemDeleteError,
+                    item_id: itemId,
+                    asset_id: account.id
+                }, 'rollback lot delete failed — ghost lot left on storefront');
+            }
             results.push({ asset_id: assetId, status: 'failed', error: 'Не удалось привязать аккаунт к лоту' });
             continue;
         }
