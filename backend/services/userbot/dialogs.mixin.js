@@ -10,6 +10,17 @@ import { wrapTelegramError } from './telegram-errors.js';
 import { clampLimit, normalizeChatIdInput, safeDisconnect, matchesDialogType, normalizeTelegramDate } from './helpers.js';
 import { assertUserbotOperatable } from './botfather-lib.js';
 
+// Telegram dates are unix SECONDS (GramJS keeps m.date numeric); since/until
+// args are ISO strings. Normalize everything to epoch ms before comparing.
+// (The pre-2026-11-21 post-filter did new Date(seconds) — 1970, matched all.)
+function telegramDateToMs(value) {
+    if (value == null) return null;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value * 1000 : null;
+    const parsed = Date.parse(String(value));
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
 export const DialogsMixin = (Base) => class extends Base {
     /**
      * Enumerate dialogs the userbot is a member of.
@@ -53,44 +64,93 @@ export const DialogsMixin = (Base) => class extends Base {
 
     /**
      * Fetch messages from a chat with optional time-window filter.
-     * Cursor payload: { offset_id } — GramJS standard pagination.
+     *
+     * Window semantics (fixed 2026-11-21 — the old build ignored `until` and
+     * inverted `since`; see docs/integrations/operations/userbot-messages.md):
+     *   - `until` (ISO) — upper bound of the window AND the pagination start
+     *     point. Telegram's offsetDate/maxDate is an upper bound ("return
+     *     messages older than this date"), so we start the feed at until+1s
+     *     to keep the boundary second inclusive.
+     *   - `since` (ISO) — lower bound; pagination pages back until messages
+     *     older than `since` appear, then stops (has_more=false).
+     *   - No bounds — newest-first from the top, as before.
+     * Bounds travel inside the cursor payload so follow-up pages keep the
+     * window: { offset_id, since?, until? }. Legacy { offset_id } cursors
+     * still decode (bounds then come from the call args).
      */
-    async fetchMessages(userbot, { chatId, since, until, limit = 50, cursor } = {}) {
+    async fetchMessages(userbot, { chatId, since, until, limit = 50, cursor, textLimit } = {}) {
         assertUserbotOperatable(userbot);
         const id = normalizeChatIdInput(chatId);
         const pageLimit = clampLimit(limit, 1, 200);
+        const maxTextLength = clampLimit(textLimit, 200, 200000);
         const decoded = decodeCursor(cursor);
+        const sinceIso = since || decoded?.since || null;
+        const untilIso = until || decoded?.until || null;
+        const sinceMs = sinceIso ? telegramDateToMs(sinceIso) : null;
+        const untilMs = untilIso ? telegramDateToMs(untilIso) : null;
         const offsetId = decoded?.offset_id ? Number(decoded.offset_id) : undefined;
-        const offsetDate = since ? Math.floor(new Date(since).getTime() / 1000) : undefined;
+        const offsetDate = untilMs !== null ? Math.floor(untilMs / 1000) + 1 : undefined;
 
         const client = await this.createAuthorizedClient(userbot);
         try {
             const peer = await this.resolveChatPeerForRead(client, userbot, id);
-            const messages = await withTimeout(
-                client.getMessages(peer, {
-                    limit: pageLimit + 1,
-                    offsetId,
-                    offsetDate,
-                    ...(until ? { maxId: 0, minId: undefined } : {})
-                }),
-                30_000,
-                'fetchMessages'
-            );
-            const filtered = until
-                ? messages.filter((m) => {
-                    if (!m?.date) return true;
-                    const ts = m.date instanceof Date ? m.date.getTime() : new Date(m.date).getTime();
-                    return ts <= new Date(until).getTime() + 1000;
-                })
-                : messages;
-            const hasMore = filtered.length > pageLimit;
-            const trimmed = filtered.slice(0, pageLimit);
-            const items = trimmed.map((m) => sanitizeMessage(m)).filter(Boolean);
+            const collected = [];
+            let feedExhausted = false;
+            let windowExhausted = false;
+            let nextPageOffsetId = offsetId;
+            let pages = 0;
+            while (collected.length <= pageLimit && pages < 10 && !feedExhausted && !windowExhausted) {
+                const batch = await withTimeout(
+                    client.getMessages(peer, {
+                        limit: pageLimit + 1,
+                        offsetId: nextPageOffsetId,
+                        ...(pages === 0 && offsetDate !== undefined ? { offsetDate } : {})
+                    }),
+                    30_000,
+                    'fetchMessages'
+                );
+                pages += 1;
+                if (!batch || batch.length === 0) {
+                    feedExhausted = true;
+                    break;
+                }
+                let oldestInBatch = Infinity;
+                for (const m of batch) {
+                    if (!m?.id) continue;
+                    const mid = Number(m.id);
+                    if (Number.isFinite(mid) && mid < oldestInBatch) oldestInBatch = mid;
+                    const ts = telegramDateToMs(m.date);
+                    if (sinceMs !== null && ts !== null && ts < sinceMs) {
+                        windowExhausted = true;
+                        break;
+                    }
+                    if (untilMs !== null && ts !== null && ts > untilMs) continue;
+                    collected.push(m);
+                    if (collected.length > pageLimit) break;
+                }
+                if (windowExhausted || collected.length > pageLimit) break;
+                if (!Number.isFinite(oldestInBatch) || batch.length < pageLimit + 1) {
+                    feedExhausted = true;
+                    break;
+                }
+                nextPageOffsetId = oldestInBatch;
+            }
+
+            const hasMore = collected.length > pageLimit && !windowExhausted;
+            const trimmed = collected.slice(0, pageLimit);
+            const items = trimmed.map((m) => sanitizeMessage(m, { maxTextLength })).filter(Boolean);
 
             const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
+            const cursorPayload = nextOffsetId
+                ? {
+                    offset_id: nextOffsetId,
+                    ...(sinceIso ? { since: sinceIso } : {}),
+                    ...(untilIso ? { until: untilIso } : {})
+                }
+                : null;
             return {
                 messages: items,
-                cursor: nextOffsetId ? encodeCursor({ offset_id: nextOffsetId }) : null,
+                cursor: cursorPayload ? encodeCursor(cursorPayload) : null,
                 has_more: hasMore && items.length > 0
             };
         } catch (error) {
@@ -103,10 +163,11 @@ export const DialogsMixin = (Base) => class extends Base {
     /**
      * Server-side text search within a chat.
      */
-    async searchMessages(userbot, { chatId, query, limit = 50, cursor } = {}) {
+    async searchMessages(userbot, { chatId, query, limit = 50, cursor, textLimit } = {}) {
         assertUserbotOperatable(userbot);
         const id = normalizeChatIdInput(chatId);
         const pageLimit = clampLimit(limit, 1, 200);
+        const maxTextLength = clampLimit(textLimit, 200, 200000);
         const decoded = decodeCursor(cursor);
         const offsetId = decoded?.offset_id ? Number(decoded.offset_id) : undefined;
 
@@ -124,7 +185,7 @@ export const DialogsMixin = (Base) => class extends Base {
             );
             const hasMore = messages.length > pageLimit;
             const trimmed = messages.slice(0, pageLimit);
-            const items = trimmed.map((m) => sanitizeMessage(m)).filter(Boolean);
+            const items = trimmed.map((m) => sanitizeMessage(m, { maxTextLength })).filter(Boolean);
             const nextOffsetId = hasMore && trimmed.length ? Number(trimmed[trimmed.length - 1]?.id) || null : null;
             return {
                 messages: items,

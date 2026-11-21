@@ -1,4 +1,5 @@
 import { authenticateIntegrationToken } from '../services/integration-tokens.service.js';
+import { MCPError, ERROR_CODES } from '../shared/errors.js';
 
 function proExpired(profile) {
     if (String(profile?.product_tier || '').trim().toLowerCase() !== 'pro') return false;
@@ -86,6 +87,17 @@ export async function authenticateAgentOrUserToken({ supabase, authorizationHead
     }
 
     const token = authHeader.split(' ')[1];
+
+    // Symmetric guard to external/auth.js (which rejects brmcp_ on REST):
+    // a brapi_ token can never pass the purpose='mcp' lookup below, but the
+    // generic "Недействительный токен" error sends the agent on a wrong trail.
+    if (typeof token === 'string' && token.startsWith('brapi_')) {
+        throw new MCPError(
+            ERROR_CODES.INTEGRATION_TOKEN_REQUIRED,
+            'This token is for the REST API (/api/external/v1/*). Issue a brmcp_ token for MCP access at /app/integrations or /userbot/mcp.',
+            { auditStatus: 'integration_token_required' }
+        );
+    }
 
     const integrationToken = await authenticateIntegrationToken(supabase, {
         authorizationHeader: authHeader,

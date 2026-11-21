@@ -21,6 +21,8 @@ import './dialogs/member-promote.js';
 import './dialogs/group-invite-link.js';
 import './messages/fetch-messages.js';
 import './messages/search-messages.js';
+import './messages/media-save.js';
+import './messages/media-download.js';
 import './messages/send-message.js';
 import './messages/edit-message.js';
 import './messages/delete-message.js';

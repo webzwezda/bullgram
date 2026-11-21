@@ -10,6 +10,7 @@ import { DialogsMixin } from './userbot/dialogs.mixin.js';
 import { ResolversMixin } from './userbot/resolvers.mixin.js';
 import { GroupsMixin } from './userbot/groups.mixin.js';
 import { MessagesOpsMixin } from './userbot/messages-ops.mixin.js';
+import { MediaMixin } from './userbot/media.mixin.js';
 import { BotfatherMixin } from './userbot/botfather.mixin.js';
 
 // Стадия 1 разрезки монстра (план §7.3b): не-методный код переехал в
@@ -25,7 +26,7 @@ export { isBotFatherRefusal, isBotFatherGreeting, findPeerByDialogPages, parseBo
  * Сервис для работы с юзерботами (GramJS)
  * Содержит бизнес-логику для работы с Telegram через юзербота
  */
-export class UserbotService extends BotfatherMixin(MessagesOpsMixin(GroupsMixin(ResolversMixin(DialogsMixin(HealthMixin(MembersMixin(DmMixin(QrMixin(FingerprintMixin(SessionParseMixin(ProxyMixin(class UserbotBase {})))))))))))) {
+export class UserbotService extends BotfatherMixin(MessagesOpsMixin(GroupsMixin(ResolversMixin(DialogsMixin(HealthMixin(MembersMixin(MediaMixin(DmMixin(QrMixin(FingerprintMixin(SessionParseMixin(ProxyMixin(class UserbotBase {}))))))))))))) {
     constructor(supabase, apiId, apiHash) {
         super(); // mixin-композиция: базовый конструктор пуст
         this.supabase = supabase;

@@ -26,6 +26,9 @@ MCP or REST.
 | `-32011` | `DM_DISABLED` | `USERBOT_DM_ENABLED=false` on backend | 403 |
 | `-32012` | `TOOL_DISABLED` | Feature flag disabled this tool | 503 |
 | `-32013` | `INVALID_CURSOR` | Pagination cursor malformed | 400 |
+| `-32014` | `MEDIA_NOT_FOUND` | Message not found or has no media | 404 |
+| `-32015` | `MEDIA_TOO_LARGE` | Media above the size cap (`MEDIA_MAX_BYTES`) | 413 |
+| `-32016` | `MEDIA_UNSUPPORTED` | Media kind not downloadable (contact/geo/poll/…) | 415 |
 
 ## Envelope shape
 
@@ -69,6 +72,14 @@ again. For sustained throughput, reduce your polling frequency.
 
 Drop the cursor and refetch the first page. Cursors are opaque strings
 that may change format between releases; never persist them across runs.
+
+### `MEDIA_TOO_LARGE` (-32015)
+
+The cap (`MEDIA_MAX_BYTES`, default 200 MB) protects the backend — `max_bytes`
+on the call can only lower it, not raise it. Download smaller media or ask the
+Bullgram admin to raise the env for the deployment. Signed links for
+already-stored media can also return `410 Gone` once the store TTL (~1h)
+sweeps the file — re-run `media_save` in that case.
 
 ### `TELEGRAM_ERROR` (-32006)
 

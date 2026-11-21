@@ -106,6 +106,31 @@ function buildManualPathItems() {
           200: { description: 'HTML explorer page' }
         }
       }
+    },
+    '/media/{token}': {
+      get: {
+        operationId: 'mediaLink',
+        summary: 'Signed, expiring media link (no auth)',
+        description: 'Public byte path for media saved via POST /userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media/save. '
+          + 'The token is HMAC-signed and expires (default 15 min); the underlying file is wiped from the store after ~1h. '
+          + '10 Gone = link or file expired, 403 = bad signature.',
+        tags: ['infra'],
+        security: [],
+        parameters: [
+          { name: 'token', in: 'path', required: true, schema: { type: 'string' }, description: 'Signed token from media_save.download_url' }
+        ],
+        responses: {
+          200: {
+            description: 'Binary media stream',
+            content: {
+              'application/octet-stream': { schema: { type: 'string', format: 'binary' } }
+            }
+          },
+          400: { description: 'Malformed token or path' },
+          403: { description: 'Bad signature' },
+          410: { description: 'Link expired or file swept from the store' }
+        }
+      }
     }
   };
 }
@@ -156,6 +181,37 @@ function extractPathParamNames(path) {
   return names;
 }
 
+function buildSuccessResponse(operation) {
+  if (operation.transports.rest?.binaryResponse) {
+    return {
+      200: {
+        description: 'Binary media stream',
+        headers: {
+          'Content-Disposition': { schema: { type: 'string' }, description: 'attachment with UTF-8 filename' },
+          'X-Media-SHA256': { schema: { type: 'string' }, description: 'SHA-256 of the stored file (integrity check)' }
+        },
+        content: {
+          'application/octet-stream': { schema: { type: 'string', format: 'binary' } }
+        }
+      }
+    };
+  }
+  return {
+    200: {
+      description: 'Success',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Operation-specific result. See operation description.'
+          }
+        }
+      }
+    }
+  };
+}
+
 function buildPathItem(operation) {
   const { method, path, summary, tags } = operation.transports.rest;
   const upperMethod = method.toLowerCase();
@@ -203,20 +259,7 @@ function buildPathItem(operation) {
     description: operation.description || operation.title,
     tags: Array.isArray(tags) && tags.length ? tags : ['bullgram'],
     security: [{ BearerAuth: [] }],
-    responses: {
-      200: {
-        description: 'Success',
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              additionalProperties: true,
-              description: 'Operation-specific result. See operation description.'
-            }
-          }
-        }
-      }
-    }
+    responses: buildSuccessResponse(operation)
   };
 
   if (parameters.length) opDef.parameters = parameters;

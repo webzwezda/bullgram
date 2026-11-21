@@ -30,6 +30,8 @@ backed by the same handler. Pick the surface that fits your consumer:
 | [`bullgram_userbot_dialogs`](./userbot-dialogs.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/dialogs` | Enumerate chats/channels/DMs the userbot is in |
 | [`bullgram_userbot_messages`](./userbot-messages.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages` | Fetch messages from a chat (newest-first, paginated) |
 | [`bullgram_userbot_messages_search`](./userbot-messages-search.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/messages/search` | Server-side text search in a chat |
+| [`bullgram_userbot_media_save`](./userbot-media.md) | `mcp:userbot:read` / `api:userbot:read` | `POST /userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media/save` | Download chat media to a temp store, return a signed expiring URL |
+| [`bullgram_userbot_media_download`](./userbot-media.md) | `api:userbot:read` | `GET /userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media` | Stream chat media bytes (REST-only binary) |
 | [`bullgram_userbot_participants`](./userbot-participants.md) | `mcp:userbot:read` / `api:userbot:read` | `GET /userbots/{userbot_id}/participants` | List chat participants (hard-capped at 5000) |
 | [`bullgram_userbot_message_send`](./userbot-message-send.md) | `mcp:userbot:write` / `api:userbot:write` | `POST /userbots/{userbot_id}/messages` | Send a text message to a chat |
 
@@ -55,3 +57,6 @@ backed by the same handler. Pick the surface that fits your consumer:
 | `-32010` | 401 | Integration token required |
 | `-32011` | 403 | DM disabled (USERBOT_DM_ENABLED=false) |
 | `-32013` | 400 | Cursor malformed — refetch first page |
+| `-32014` | 404 | Media not found — message missing or has no media |
+| `-32015` | 413 | Media above the size cap (see [userbot-media](./userbot-media.md)) |
+| `-32016` | 415 | Media kind not downloadable |

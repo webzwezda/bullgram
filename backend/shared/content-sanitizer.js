@@ -10,18 +10,25 @@
 //   media.photo / media.document / media.webpage / media.contact / media.geo / media.poll / media.game / media.invoice
 
 const MAX_TEXT_LENGTH = 4096;
+// Caller may raise the limit via opts.maxTextLength (fetch/search `text_limit`).
+// Ceiling guards against accidental multi-megabyte tool responses.
+const MAX_TEXT_LENGTH_CEILING = 200000;
 
-export function sanitizeMessage(rawMessage) {
+export function sanitizeMessage(rawMessage, { maxTextLength = MAX_TEXT_LENGTH } = {}) {
   if (!rawMessage) return null;
   try {
     const text = String(rawMessage.text || rawMessage.message || '');
-    const truncated = text.length > MAX_TEXT_LENGTH;
+    const requested = Number(maxTextLength);
+    const limit = Number.isFinite(requested) && requested > 0
+      ? Math.min(MAX_TEXT_LENGTH_CEILING, Math.max(200, Math.floor(requested)))
+      : MAX_TEXT_LENGTH;
+    const truncated = text.length > limit;
 
     return {
       id: String(rawMessage.id),
       date: normalizeDate(rawMessage.date),
       sender: summarizeSender(rawMessage.sender, rawMessage.senderId),
-      text: truncated ? text.slice(0, MAX_TEXT_LENGTH) + '…[truncated]' : text,
+      text: truncated ? text.slice(0, limit) + '…[truncated]' : text,
       text_truncated: truncated,
       has_media: Boolean(rawMessage.media),
       media: summarizeMedia(rawMessage.media),

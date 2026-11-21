@@ -11,6 +11,11 @@ admin-v2/dist/
 site-v2/dist/
  .output/
 
+# Runtime upload stores (never committable): public shop receipts/profiles
+# and the INTERNAL chat-media temp store (signed links only, TTL-wiped)
+backend/uploads/
+backend/uploads-internal/
+
 # Environment files
 .env
 .env.local

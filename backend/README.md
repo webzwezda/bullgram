@@ -119,6 +119,9 @@ Internal `/api/*` routes below are for the web app only and are not documented e
 - `bullgram_userbot_message_pin` — `POST /userbots/{userbot_id}/messages/{chat_id}/pin` — закрепить/открепить (`unpin`)
 - `bullgram_userbot_chat_read` — `POST /userbots/{userbot_id}/chats/{chat_id}/read` — отметить чат прочитанным
 - `bullgram_userbot_user_resolve` — `POST /userbots/{userbot_id}/resolve` — живой резолв по `username` | `tg_user_id` (ровно один), отдаёт `access_hash` для invite/promote
+- `bullgram_userbot_media_save` — `POST /userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media/save` — скачать медиа сообщения во внутреннее хранилище, JSON с подписанной expiring-ссылкой (MCP-агентам) и sha256
+- `bullgram_userbot_media_download` — `GET /userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media` — бинарный стрим того же файла (только REST, brapi_), заголовок `X-Media-SHA256`
+- `bullgram_userbot_messages` / `..._search` — параметр `text_limit` (200–200000, дефолт 4096) и честное окно `since`/`until` (`until` = верхняя граница+старт, `since` = нижняя-стоп, границы едут в курсоре; до 2026-11-21 окно не работало)
 
 Волна 1 там же: `group_create`, `member_invite`, `member_promote`, `group_invite_link` (гейт `USERBOT_GROUP_ADMIN_ENABLED`), `botfather_create_bot` (гейт `USERBOT_BOTFATHER_ENABLED`; отказы BotFather — «taken», лимит аккаунта 20 ботов и другие «Sorry, you can't…» — отдают INVALID_PARAMS с причиной сразу на первом шаге) и `bot_init` в autopost.
 

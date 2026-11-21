@@ -41,6 +41,7 @@ required_files=(
   "operations/userbot-dialogs.md"
   "operations/userbot-messages.md"
   "operations/userbot-messages-search.md"
+  "operations/userbot-media.md"
   "operations/userbot-participants.md"
   "operations/userbot-message-send.md"
   "transports/mcp.md"

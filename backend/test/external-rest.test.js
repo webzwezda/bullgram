@@ -21,10 +21,12 @@ import { counters } from './external-rest/shared.js';
 import { run as run01 } from './external-rest/01-public-surface.js';
 import { run as run02 } from './external-rest/02-auth.js';
 import { run as run03 } from './external-rest/03-ops-errors.js';
+import { run as run04 } from './external-rest/04-media.js';
 
 await run01();
 await run02();
 await run03();
+await run04();
 
 console.log(`\n${counters.passes} passed, ${counters.failures} failed`);
 process.exit(counters.failures > 0 ? 1 : 0);

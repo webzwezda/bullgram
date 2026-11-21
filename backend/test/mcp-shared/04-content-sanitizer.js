@@ -47,6 +47,26 @@ console.log('--- content-sanitizer.sanitizeMessage ---');
   assertEqual(t.text.length < 5000, true, 'truncated shorter than original');
 }
 {
+  // text_limit opt-out (2026-11-21): default 4096, custom raise, clamps
+  const def = sanitizeMessage({ id: 1, text: 'Y'.repeat(5000) });
+  assertEqual(def.text_truncated, true, 'default cap 4096 still truncates 5000');
+  assertEqual(def.text.length, 4096 + '…[truncated]'.length, 'default cap is 4096');
+
+  const raised = sanitizeMessage({ id: 2, text: 'Z'.repeat(5000) }, { maxTextLength: 200000 });
+  assertEqual(raised.text_truncated, false, 'raised limit keeps full text');
+  assertEqual(raised.text.length, 5000, 'raised limit preserves length');
+
+  const partial = sanitizeMessage({ id: 3, text: 'Q'.repeat(1000) }, { maxTextLength: 500 });
+  assertEqual(partial.text_truncated, true, 'custom smaller limit truncates');
+  assertEqual(partial.text.length, 500 + '…[truncated]'.length, 'custom limit respected');
+
+  const belowMin = sanitizeMessage({ id: 4, text: 'W'.repeat(1000) }, { maxTextLength: 10 });
+  assertEqual(belowMin.text.length, 200 + '…[truncated]'.length, 'limit clamped to min 200');
+
+  const garbage = sanitizeMessage({ id: 5, text: 'G'.repeat(1000) }, { maxTextLength: 'banana' });
+  assertEqual(garbage.text_truncated, false, 'non-numeric limit falls back to default 4096 (no truncation)');
+}
+{
   // Missing sender falls back to senderId
   const s = sanitizeMessage({ id: 1, senderId: 999, text: '' });
   assertEqual(s.sender.id, '999', 'fallback to senderId');

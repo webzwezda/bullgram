@@ -13,6 +13,7 @@
 // The dispatcher's scope/allowlist/rate-limit/audit checks all run; we just
 // marshal args and translate the result into a JSON response.
 
+import fs from 'node:fs';
 import express from 'express';
 
 import { dispatchOperation } from '../shared/dispatch.js';
@@ -101,6 +102,18 @@ export function mountOperationRoutes(parentRouter, { supabase, userbotService })
           userbotService,
           source: 'rest'
         });
+        if (result && result.__binary) {
+          // Binary ops (media download) stream stored bytes instead of JSON.
+          const stat = fs.statSync(result.filePath);
+          if (result.contentType) res.setHeader('Content-Type', result.contentType);
+          res.setHeader('Content-Length', String(stat.size));
+          const name = result.fileName || 'media';
+          const asciiName = name.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+          res.setHeader('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`);
+          if (result.sha256) res.setHeader('X-Media-SHA256', result.sha256);
+          fs.createReadStream(result.filePath).pipe(res);
+          return;
+        }
         res.json(result);
       } catch (e) {
         if (e instanceof MCPError) {
