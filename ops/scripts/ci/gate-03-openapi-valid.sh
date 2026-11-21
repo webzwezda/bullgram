@@ -52,6 +52,10 @@ declare -a expected=(
   "POST:/proxies/preview"
   "POST:/proxies/import"
 )
+# NOTE: adding a NEW REST operation here breaks PR CI — this gate checks the
+# LIVE prod spec, and prod only updates after the merge+deploy. Sequence:
+# merge the op first, then extend this list in a follow-up commit (see the
+# media ops of 2026-11-21 — added post-deploy).
 
 missing=0
 for entry in "${expected[@]}"; do

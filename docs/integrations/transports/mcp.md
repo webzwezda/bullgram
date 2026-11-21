@@ -104,16 +104,10 @@ doesn't appear, your token doesn't have any of its required scopes.
 
 ## Batched requests
 
-JSON-RPC 2.0 supports batching — pass an array of requests in one POST. The
-server processes them in order and returns an array of responses. Useful for
-"fetch dialogs, then fetch messages for the first dialog" patterns.
-
-```json
-[
-  { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "bullgram_userbot_list", "arguments": {} } },
-  { "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": "bullgram_infra_summary", "arguments": {} } }
-]
-```
+Not supported. Despite JSON-RPC 2.0 allowing batch arrays, Bullgram's MCP
+endpoint processes a single request object per POST — an array body is
+rejected with `-32600` (Invalid Request). Send sequential POSTs instead
+(each still subject to the same rate bucket).
 
 ## Notification semantics
 

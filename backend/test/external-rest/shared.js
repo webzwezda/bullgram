@@ -5,6 +5,8 @@
  */
 import express from 'express';
 import crypto from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
 
 import { buildExternalRouter } from '../../external/router.js';
 
@@ -138,6 +140,16 @@ export function makeMockUserbotService(overrides = {}) {
     searchMessages: async () => ({ messages: [], cursor: null, has_more: false }),
     listParticipants: async () => ({ participants: [], cursor: null, has_more: false }),
     sendTextMessage: async () => ({ message_id: '1', date: '2026-07-27T00:00:00Z' }),
+    downloadChatMedia: async (userbot, { chatId, messageId, ownerId } = {}) => ({
+      file_path: `${ownerId}/${userbot?.id ?? 'ub'}/${chatId}/${messageId}-sample.bin`,
+      absolute_path: overrides.mediaAbsolutePath ?? path.join(os.tmpdir(), `bullgram-rest-media-${messageId ?? 'x'}.bin`),
+      file_name: 'sample.bin',
+      mime: 'application/octet-stream',
+      size_bytes: 4,
+      sha256: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+      chat_id: chatId ?? '-100123',
+      message_id: messageId ?? 1
+    }),
     ...overrides
   };
 }

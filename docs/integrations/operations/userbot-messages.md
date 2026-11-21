@@ -19,10 +19,24 @@ LLM tool-decision prompt without sanitization.
 |---|---|---|---|---|
 | `userbot_id` | uuid | yes | — | Path param |
 | `chat_id` | string | yes | — | Telegram chat ID (channels start with `-100`) |
-| `since` | date-time | no | — | Lower bound (inclusive) |
-| `until` | date-time | no | — | Upper bound (inclusive, 1s slack) |
+| `since` | date-time | no | — | Lower bound (inclusive). Paging stops below it (`has_more: false`) |
+| `until` | date-time | no | — | Upper bound (inclusive) AND the pagination start point |
 | `limit` | integer | no | 50 | 1–200 |
+| `text_limit` | integer | no | 4096 | Per-message text cap in chars, 200–200000 |
 | `cursor` | string | no | — | Opaque pagination cursor |
+
+### Time window (`since` / `until`)
+
+- `until` sets the upper edge of the window **and** the point the feed starts
+  from — pass it alone to read "history as of that moment".
+- `since` sets the lower edge: pages go back until messages older than
+  `since` appear, then `has_more` flips to `false`.
+- Both bounds travel inside the cursor, so follow-up pages keep the window
+  without re-passing `since`/`until`. (Bounds from the call args always win
+  over the ones stored in the cursor.)
+- Fixed 2026-11-21: earlier builds ignored `until` and treated `since` as the
+  feed start (returning messages **older** than `since`). If you relied on
+  that behavior, pass `until=since` explicitly.
 
 ## Result
 
@@ -48,8 +62,11 @@ LLM tool-decision prompt without sanitization.
 }
 ```
 
-Text is truncated at 4096 chars (Telegram's own limit). Media is summarized
-structurally — see [content safety](../safety.md) for the shapes.
+Text is capped at `text_limit` chars (default 4096 — Telegram's own limit,
+max 200000). When capped, the message carries `text_truncated: true` and ends
+with `…[truncated]`; raise `text_limit` to read long messages in full. Media
+is summarized structurally — see [content safety](../safety.md) for the
+shapes, and [userbot-media](./userbot-media.md) to download the bytes.
 
 ## Examples
 

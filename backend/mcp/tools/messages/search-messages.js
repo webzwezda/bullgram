@@ -26,7 +26,8 @@ export async function searchMessagesHandler({ supabase, req, args, userbotServic
     chatId: args.chat_id,
     query,
     limit: args?.limit,
-    cursor: args?.cursor
+    cursor: args?.cursor,
+    textLimit: args?.text_limit
   });
 }
 
@@ -36,7 +37,8 @@ registerOperation('bullgram_userbot_messages_search', {
   requiresIntegrationToken: true,
   rateLimitClass: 'read',
   title: 'Search messages',
-  description: 'Server-side text search within a chat. Returns matching messages newest-first.',
+  description: 'Server-side text search within a chat. Returns matching messages newest-first. '
+    + 'Text is capped at `text_limit` chars (default 4096, max 200000).',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -46,6 +48,13 @@ registerOperation('bullgram_userbot_messages_search', {
       chat_id: { type: 'string' },
       query: { type: 'string', minLength: 2, maxLength: 200 },
       limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
+      text_limit: {
+        type: 'integer',
+        minimum: 200,
+        maximum: 200000,
+        default: 4096,
+        description: 'Per-message text cap in chars. Raise above 4096 to get full text of long messages.'
+      },
       cursor: { type: 'string' }
     }
   },
