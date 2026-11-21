@@ -33,8 +33,12 @@ fi
 # плана: ≤6 мин → всё на push). Файлы переименованы в *.test.js (3.2, фаза 1
 # node:test); npm-цепочки в package.json работают параллельно.
 # Дамми-значения: сьюты мокают supabase/шифрование — реальные ключи не нужны.
+# SUPABASE_SERVICE_KEY нужен тоже: messaging-router.service создаёт
+# @supabase/supabase-js клиент на уровне модуля (PR #1: contours/proxy-pool/
+# seamless-proxy падали в CI без .env — createClient валидирует непустой ключ).
 export ENCRYPTION_KEY="${ENCRYPTION_KEY:-ci-dummy-key-not-used-tests-mock-everything}"
 export SUPABASE_URL="${SUPABASE_URL:-https://dummy.supabase.co}"
+export SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-ci-dummy-service-key-not-used-tests-mock-everything}"
 
 total=0
 fail=0
