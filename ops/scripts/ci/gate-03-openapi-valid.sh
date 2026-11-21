@@ -48,7 +48,9 @@ declare -a expected=(
   "GET:/userbots/{userbot_id}/messages"
   "GET:/userbots/{userbot_id}/messages/search"
   "GET:/userbots/{userbot_id}/participants"
+  "GET:/userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media"
   "POST:/userbots/{userbot_id}/messages"
+  "POST:/userbots/{userbot_id}/chats/{chat_id}/messages/{message_id}/media/save"
   "POST:/proxies/preview"
   "POST:/proxies/import"
 )
